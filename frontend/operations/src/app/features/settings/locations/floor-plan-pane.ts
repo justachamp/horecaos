@@ -22,15 +22,21 @@ import {
 import { TablePrintCard } from '../../../shared/ui/table-print-card/table-print-card';
 import { describeApiError } from '../../orders/order-errors';
 import { ReservationsApi } from '../../orders/reservations-api';
-import { SESSION_CURRENCY, SessionView, TableSessionsApi } from '../../orders/table-sessions-api';
+import {
+  SESSION_CURRENCY,
+  SessionView,
+  TableSessionsApi,
+  isUnconfirmedClaim,
+} from '../../orders/table-sessions-api';
 import { DineInApi, DineInSettingsView, QrMode, SectionView, TableView } from './dinein-api';
 
 /**
  * How far ahead a confirmed booking counts as "soon" when seating a walk-in.
  * Advisory only -- `table-availability`'s `booked` flag is, in its own words,
  * a read and not a hold, and a host who knows the party will be gone by then may
- * seat them regardless. Nothing here refuses; ADR 0047 states no override rule
- * and the guest-side horizon of ADR 0143 is Proposed, not built.
+ * seat them regardless. Nothing here refuses: staff keep every override (ADR 0143,
+ * Decision 8), and the guest-side horizon is the branch's own setting, which the
+ * server applies to a guest's self-seating and never to this screen.
  */
 const BOOKED_SOON_WINDOW_MINUTES = 90;
 
@@ -89,6 +95,13 @@ export class FloorPlanPane {
   protected readonly draftTurnaroundMinutes = signal(15);
   protected readonly draftGuestSessionTtlMinutes = signal(240);
   protected readonly draftServiceChargeRateBp = signal(0);
+  /** ADR 0143: the self-seating switch and its numbers, as the proposal's own defaults until a branch's are loaded. */
+  protected readonly draftWalkInSelfSeat = signal(false);
+  protected readonly draftWalkInClaimTtlMinutes = signal(15);
+  protected readonly draftWalkInHorizonMinutes = signal(90);
+  protected readonly draftWalkInMaxUnconfirmed = signal(5);
+  protected readonly draftWalkInDailyClaimsPerAccount = signal(3);
+  protected readonly draftWalkInPaymentDeferMinutes = signal(30);
   protected readonly draftSettingsReason = signal('');
 
   // ------------------------------------------------------- sections/tables
@@ -105,9 +118,18 @@ export class FloorPlanPane {
       return [];
     }
     const occupied = this.occupiedTableIds();
+    const claims = this.claimByTableId();
     return this.tables()
       .filter((table) => table.sectionId === sectionId)
-      .map((table) => ({ ...table, occupied: occupied.has(table.tableId) }));
+      .map((table) => {
+        const claim = claims.get(table.tableId);
+        return {
+          ...table,
+          occupied: occupied.has(table.tableId),
+          selfSeated: claim !== undefined,
+          claimUnconfirmed: claim !== undefined && isUnconfirmedClaim(claim),
+        };
+      });
   });
 
   // ---------------------------------------------------------------- seating
@@ -116,6 +138,22 @@ export class FloorPlanPane {
   protected readonly liveSessions = signal<readonly SessionView[] | null>(null);
   /** Tables a confirmed booking holds inside {@link BOOKED_SOON_WINDOW_MINUTES}. */
   private readonly bookedSoonTableIds = signal<ReadonlySet<string>>(new Set());
+
+  /**
+   * The guest-opened sessions (ADR 0143), by the table each sits at -- the host sees at a
+   * glance which parties seated themselves and which of those nobody has confirmed.
+   */
+  private readonly claimByTableId = computed<ReadonlyMap<string, SessionView>>(() => {
+    const byTable = new Map<string, SessionView>();
+    for (const session of this.liveSessions() ?? []) {
+      if (session.origin === 'GUEST_QR') {
+        for (const table of session.tables) {
+          byTable.set(table.tableId, session);
+        }
+      }
+    }
+    return byTable;
+  });
 
   private readonly occupiedTableIds = computed<ReadonlySet<string>>(
     () =>
@@ -206,6 +244,12 @@ export class FloorPlanPane {
       this.draftTurnaroundMinutes.set(current.turnaroundMinutes);
       this.draftGuestSessionTtlMinutes.set(current.guestSessionTtlMinutes);
       this.draftServiceChargeRateBp.set(current.serviceChargeRateBp);
+      this.draftWalkInSelfSeat.set(current.walkInSelfSeat);
+      this.draftWalkInClaimTtlMinutes.set(current.walkInClaimTtlMinutes);
+      this.draftWalkInHorizonMinutes.set(current.walkInHorizonMinutes);
+      this.draftWalkInMaxUnconfirmed.set(current.walkInMaxUnconfirmed);
+      this.draftWalkInDailyClaimsPerAccount.set(current.walkInDailyClaimsPerAccount);
+      this.draftWalkInPaymentDeferMinutes.set(current.walkInPaymentDeferMinutes);
     }
     this.draftSettingsReason.set('');
     this.settingsSaveError.set(null);
@@ -232,13 +276,25 @@ export class FloorPlanPane {
     this.settingsSaving.set(true);
     this.settingsSaveError.set(null);
     try {
-      const updated = await this.api.configure(this.scope(), {
-        qrMode: this.draftQrMode(),
-        turnaroundMinutes: this.draftTurnaroundMinutes(),
-        guestSessionTtlMinutes: this.draftGuestSessionTtlMinutes(),
-        serviceChargeRateBp: this.draftServiceChargeRateBp(),
-        reason: this.draftSettingsReason().trim(),
-      });
+      const updated = await this.api.configure(
+        this.scope(),
+        {
+          qrMode: this.draftQrMode(),
+          turnaroundMinutes: this.draftTurnaroundMinutes(),
+          guestSessionTtlMinutes: this.draftGuestSessionTtlMinutes(),
+          serviceChargeRateBp: this.draftServiceChargeRateBp(),
+          walkInSelfSeat: this.draftWalkInSelfSeat(),
+          walkInClaimTtlMinutes: this.draftWalkInClaimTtlMinutes(),
+          walkInHorizonMinutes: this.draftWalkInHorizonMinutes(),
+          walkInMaxUnconfirmed: this.draftWalkInMaxUnconfirmed(),
+          walkInDailyClaimsPerAccount: this.draftWalkInDailyClaimsPerAccount(),
+          walkInPaymentDeferMinutes: this.draftWalkInPaymentDeferMinutes(),
+          reason: this.draftSettingsReason().trim(),
+        },
+        // The version the screen read: a never-configured branch reads as 0, and a
+        // second manager's edit since then is a refusal here, not a silent overwrite.
+        this.settings()?.version ?? 0,
+      );
       this.settings.set(updated);
       this.editingSettings.set(false);
     } catch (error) {
@@ -481,9 +537,121 @@ export class FloorPlanPane {
     }
   }
 
+  // ------------------------------------------------- a guest's self-seated claim
+
+  /** The live session at a table, if a party is there. */
+  protected sessionAt(table: TableView): SessionView | null {
+    return (
+      (this.liveSessions() ?? []).find((session) =>
+        session.tables.some((t) => t.tableId === table.tableId),
+      ) ?? null
+    );
+  }
+
+  /** The party at this table seated themselves from its code and nobody has confirmed it (ADR 0143). */
+  protected unconfirmedClaimAt(table: TableView): SessionView | null {
+    const session = this.sessionAt(table);
+    return session && isUnconfirmedClaim(session) ? session : null;
+  }
+
+  /** The party at this table seated themselves, confirmed or not. */
+  protected selfSeatedAt(table: TableView): boolean {
+    return this.sessionAt(table)?.origin === 'GUEST_QR';
+  }
+
+  protected readonly claimReason = signal('');
+  protected readonly claimBusy = signal(false);
+  protected readonly claimError = signal<string | null>(null);
+  protected readonly claimNotice = signal<string | null>(null);
+
+  protected canActOnClaim(): boolean {
+    return this.canManageSessions() && this.claimReason().trim().length > 0 && !this.claimBusy();
+  }
+
+  /** Keeps a guest's self-seated table for them, so it does not lapse under a host who has taken charge. */
+  protected async confirmClaim(table: TableView): Promise<void> {
+    const claim = this.unconfirmedClaimAt(table);
+    if (!claim || !this.canActOnClaim()) {
+      return;
+    }
+    this.claimBusy.set(true);
+    this.claimError.set(null);
+    this.claimNotice.set(null);
+    try {
+      const confirmed = await firstValueFrom(
+        this.sessionsApi.confirmClaim(
+          this.scope(),
+          claim.sessionId,
+          this.claimReason().trim(),
+          claim.version,
+        ),
+      );
+      this.liveSessions.set(
+        (this.liveSessions() ?? []).map((session) =>
+          session.sessionId === confirmed.sessionId ? confirmed : session,
+        ),
+      );
+      this.claimNotice.set(
+        this.i18n.t('settings.locations.floorPlan.claim.kept', { table: table.code }),
+      );
+    } catch (error) {
+      this.claimError.set(this.describe(error));
+      // Somebody moved it first (a round confirmed it, the sweeper gave it back): read the room again.
+      await this.loadRoom(this.scope());
+    } finally {
+      this.claimBusy.set(false);
+    }
+  }
+
+  /** Gives a guest's unconfirmed claim back to the room now, rather than at its window's end. */
+  protected async releaseClaim(table: TableView): Promise<void> {
+    const claim = this.unconfirmedClaimAt(table);
+    if (!claim || !this.canActOnClaim()) {
+      return;
+    }
+    this.claimBusy.set(true);
+    this.claimError.set(null);
+    this.claimNotice.set(null);
+    try {
+      await firstValueFrom(
+        this.sessionsApi.release(
+          this.scope(),
+          claim.sessionId,
+          this.claimReason().trim(),
+          claim.version,
+        ),
+      );
+      this.liveSessions.set(
+        (this.liveSessions() ?? []).filter((session) => session.sessionId !== claim.sessionId),
+      );
+      this.claimNotice.set(
+        this.i18n.t('settings.locations.floorPlan.claim.released', { table: table.code }),
+      );
+    } catch (error) {
+      this.claimError.set(this.describe(error));
+      await this.loadRoom(this.scope());
+    } finally {
+      this.claimBusy.set(false);
+    }
+  }
+
+  /** When the claim gives the table back, as a time the host reads off a clock. */
+  protected claimEndsAt(claim: SessionView): string {
+    if (!claim.claimExpiresAt) {
+      return '';
+    }
+    return new Date(claim.claimExpiresAt).toLocaleTimeString(this.i18n.locale(), {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
   // ------------------------------------------------------------------- QR
 
   protected onTableSelected(tableId: string): void {
+    this.claimReason.set(this.i18n.t('settings.locations.floorPlan.claim.defaultReason'));
+    this.claimError.set(null);
+    this.claimNotice.set(null);
     this.selectedTableId.set(tableId);
     const chosen = this.tables().find((table) => table.tableId === tableId);
     this.seatPartySize.set(chosen ? Math.min(2, Math.max(1, chosen.seats)) : 2);

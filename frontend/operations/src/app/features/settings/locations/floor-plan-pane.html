@@ -34,6 +34,40 @@
             <dt class="q-caption">{{ 'settings.locations.floorPlan.field.serviceCharge' | t }}</dt>
             <dd class="q-body">{{ current.serviceChargeRateBp / 100 }}%</dd>
           </div>
+          <div class="field">
+            <dt class="q-caption">{{ 'settings.locations.floorPlan.field.selfSeat' | t }}</dt>
+            <dd class="q-body" data-testid="floorplan-self-seat-value">
+              {{
+                current.walkInSelfSeat
+                  ? ('settings.locations.floorPlan.selfSeat.on' | t)
+                  : ('settings.locations.floorPlan.selfSeat.off' | t)
+              }}
+            </dd>
+          </div>
+          @if (current.walkInSelfSeat) {
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.locations.floorPlan.field.claimTtl' | t }}</dt>
+              <dd class="q-body">{{ current.walkInClaimTtlMinutes }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.locations.floorPlan.field.horizon' | t }}</dt>
+              <dd class="q-body">{{ current.walkInHorizonMinutes }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">
+                {{ 'settings.locations.floorPlan.field.maxUnconfirmed' | t }}
+              </dt>
+              <dd class="q-body">{{ current.walkInMaxUnconfirmed }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.locations.floorPlan.field.dailyClaims' | t }}</dt>
+              <dd class="q-body">{{ current.walkInDailyClaimsPerAccount }}</dd>
+            </div>
+            <div class="field">
+              <dt class="q-caption">{{ 'settings.locations.floorPlan.field.paymentDefer' | t }}</dt>
+              <dd class="q-body">{{ current.walkInPaymentDeferMinutes }}</dd>
+            </div>
+          }
         </dl>
       }
     } @else {
@@ -101,6 +135,92 @@
           [value]="draftServiceChargeRateBp() / 100"
           (input)="setServiceChargePercent(+$any($event.target).value)"
         />
+
+        <label class="q-caption" for="floorplan-self-seat">
+          <input
+            id="floorplan-self-seat"
+            type="checkbox"
+            [checked]="draftWalkInSelfSeat()"
+            (change)="draftWalkInSelfSeat.set($any($event.target).checked)"
+            data-testid="floorplan-self-seat-toggle"
+          />
+          {{ 'settings.locations.floorPlan.field.selfSeat' | t }}
+        </label>
+        <p class="q-caption hint" data-testid="floorplan-self-seat-hint">
+          {{ 'settings.locations.floorPlan.selfSeat.hint' | t }}
+        </p>
+
+        @if (draftWalkInSelfSeat()) {
+          <label class="q-caption" for="floorplan-claim-ttl">{{
+            'settings.locations.floorPlan.field.claimTtl' | t
+          }}</label>
+          <input
+            id="floorplan-claim-ttl"
+            class="q-body field"
+            type="number"
+            min="2"
+            max="60"
+            [value]="draftWalkInClaimTtlMinutes()"
+            (input)="draftWalkInClaimTtlMinutes.set(+$any($event.target).value)"
+            data-testid="floorplan-claim-ttl"
+          />
+
+          <label class="q-caption" for="floorplan-horizon">{{
+            'settings.locations.floorPlan.field.horizon' | t
+          }}</label>
+          <input
+            id="floorplan-horizon"
+            class="q-body field"
+            type="number"
+            min="0"
+            max="480"
+            [value]="draftWalkInHorizonMinutes()"
+            (input)="draftWalkInHorizonMinutes.set(+$any($event.target).value)"
+            data-testid="floorplan-horizon"
+          />
+
+          <label class="q-caption" for="floorplan-max-unconfirmed">{{
+            'settings.locations.floorPlan.field.maxUnconfirmed' | t
+          }}</label>
+          <input
+            id="floorplan-max-unconfirmed"
+            class="q-body field"
+            type="number"
+            min="0"
+            max="100"
+            [value]="draftWalkInMaxUnconfirmed()"
+            (input)="draftWalkInMaxUnconfirmed.set(+$any($event.target).value)"
+            data-testid="floorplan-max-unconfirmed"
+          />
+
+          <label class="q-caption" for="floorplan-daily-claims">{{
+            'settings.locations.floorPlan.field.dailyClaims' | t
+          }}</label>
+          <input
+            id="floorplan-daily-claims"
+            class="q-body field"
+            type="number"
+            min="1"
+            max="20"
+            [value]="draftWalkInDailyClaimsPerAccount()"
+            (input)="draftWalkInDailyClaimsPerAccount.set(+$any($event.target).value)"
+            data-testid="floorplan-daily-claims"
+          />
+
+          <label class="q-caption" for="floorplan-payment-defer">{{
+            'settings.locations.floorPlan.field.paymentDefer' | t
+          }}</label>
+          <input
+            id="floorplan-payment-defer"
+            class="q-body field"
+            type="number"
+            min="0"
+            max="120"
+            [value]="draftWalkInPaymentDeferMinutes()"
+            (input)="draftWalkInPaymentDeferMinutes.set(+$any($event.target).value)"
+            data-testid="floorplan-payment-defer"
+          />
+        }
 
         <label class="q-caption" for="floorplan-settings-reason">{{
           'settings.locations.floorPlan.reason' | t
@@ -248,6 +368,70 @@
                     <p class="q-body-sm" data-testid="floorplan-seat-occupied">
                       {{ 'settings.locations.floorPlan.seat.occupied' | t }}
                     </p>
+                    @if (selfSeatedAt(table)) {
+                      <div class="seat__claim" data-testid="floorplan-claim">
+                        @if (unconfirmedClaimAt(table); as claim) {
+                          <p
+                            class="q-body-sm seat__warning"
+                            data-testid="floorplan-claim-unconfirmed"
+                          >
+                            {{
+                              'settings.locations.floorPlan.claim.unconfirmed'
+                                | t: { time: claimEndsAt(claim) }
+                            }}
+                          </p>
+                          <label class="q-caption" for="floorplan-claim-reason">{{
+                            'settings.locations.floorPlan.reason' | t
+                          }}</label>
+                          <input
+                            id="floorplan-claim-reason"
+                            class="q-body field"
+                            type="text"
+                            [value]="claimReason()"
+                            (input)="claimReason.set($any($event.target).value)"
+                            data-testid="floorplan-claim-reason"
+                          />
+                          <div class="form__actions">
+                            <button
+                              type="button"
+                              class="q-body secondary"
+                              (click)="releaseClaim(table)"
+                              [disabled]="!canActOnClaim()"
+                              data-testid="floorplan-claim-release"
+                            >
+                              {{ 'settings.locations.floorPlan.claim.release' | t }}
+                            </button>
+                            <button
+                              type="button"
+                              class="q-body primary"
+                              (click)="confirmClaim(table)"
+                              [disabled]="!canActOnClaim()"
+                              data-testid="floorplan-claim-keep"
+                            >
+                              {{ 'settings.locations.floorPlan.claim.keep' | t }}
+                            </button>
+                          </div>
+                        } @else {
+                          <p class="q-body-sm" data-testid="floorplan-claim-confirmed">
+                            {{ 'settings.locations.floorPlan.claim.confirmed' | t }}
+                          </p>
+                        }
+                        @if (claimError(); as error) {
+                          <p
+                            class="q-body-sm error"
+                            role="alert"
+                            data-testid="floorplan-claim-error"
+                          >
+                            {{ error }}
+                          </p>
+                        }
+                        @if (claimNotice(); as notice) {
+                          <p class="q-body-sm" role="status" data-testid="floorplan-claim-done">
+                            {{ notice }}
+                          </p>
+                        }
+                      </div>
+                    }
                   } @else {
                     @if (isBookedSoon(table)) {
                       <p class="q-body-sm seat__warning" data-testid="floorplan-seat-booked-soon">

@@ -15,6 +15,17 @@ export interface TableTokenView {
    * and false read the same, a free table.
    */
   readonly occupied?: boolean;
+  /**
+   * The party here seated themselves from the table's code (ADR 0143). Optional like
+   * `occupied`: absent reads as a party a host seated.
+   */
+  readonly selfSeated?: boolean;
+  /**
+   * A self-seated claim nobody has confirmed -- it gives the table back at its window's
+   * end unless a round the restaurant accepted lands on it or staff keep it. The host
+   * sees it at a glance, drawn apart from a seated party.
+   */
+  readonly claimUnconfirmed?: boolean;
 }
 
 /** The position `(positionChange)` emits — always the token's real canvas coordinates, never a delta. */

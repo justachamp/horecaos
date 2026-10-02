@@ -4,6 +4,7 @@
   [class.token--outOfService]="table().status === 'OUT_OF_SERVICE'"
   [class.token--archived]="table().status === 'ARCHIVED'"
   [class.token--occupied]="table().occupied === true"
+  [class.token--claim]="table().claimUnconfirmed === true"
   [class.token--disabled]="disabled()"
   [style.transform]="'translate(' + renderX() + 'px, ' + renderY() + 'px)'"
   (pointerdown)="onPointerDown($event)"
@@ -23,6 +24,15 @@
       data-testid="table-token-occupied-badge"
       aria-hidden="true"
     ></span>
+  }
+  @if (table().selfSeated === true) {
+    <span
+      class="token__selfSeated"
+      data-testid="table-token-self-seated-badge"
+      [attr.data-claim]="table().claimUnconfirmed === true ? 'unconfirmed' : 'confirmed'"
+      aria-hidden="true"
+      >●</span
+    >
   }
   @if (table().qrIssued) {
     <span class="token__qr" data-testid="table-token-qr-badge" aria-hidden="true">▦</span>

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,8 @@ import uz.horecaos.platform.dinein.application.port.SessionOrderSource.OrderForS
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource.SessionBill;
 import uz.horecaos.platform.dinein.domain.DineInStateMachine;
 import uz.horecaos.platform.dinein.domain.ReservationStatus;
+import uz.horecaos.platform.dinein.domain.RoundStatuses;
+import uz.horecaos.platform.dinein.domain.SessionOrigin;
 import uz.horecaos.platform.dinein.domain.SessionStatus;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.ReservationRow;
@@ -63,23 +66,40 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @Service
 public class TableSessionService {
 
+    /** The {@code close_reason_code} of a claim that lapsed (ADR 0143). */
+    public static final String CLAIM_LAPSED = "CLAIM_LAPSED";
+
     private final JdbcDineInStore store;
     private final FloorPlanService floorPlan;
     private final SessionOrderSource orders;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final ClaimMetrics metrics;
 
+    /** Wired by hand (tests, tools): the claim counters go nowhere. */
     public TableSessionService(
             JdbcDineInStore store,
             FloorPlanService floorPlan,
             SessionOrderSource orders,
             AuditRecorder audit,
             Clock clock) {
+        this(store, floorPlan, orders, audit, clock, ClaimMetrics.none());
+    }
+
+    @Autowired
+    public TableSessionService(
+            JdbcDineInStore store,
+            FloorPlanService floorPlan,
+            SessionOrderSource orders,
+            AuditRecorder audit,
+            Clock clock,
+            ClaimMetrics metrics) {
         this.store = store;
         this.floorPlan = floorPlan;
         this.orders = orders;
         this.audit = audit;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     /**
@@ -88,6 +108,9 @@ public class TableSessionService {
      * @param reservationId null for a walk-in, which is most covers. A reservation
      *                      and an occupancy are different facts, and this is the
      *                      column where they meet
+     * @param claim         non-null only for a session a guest opened for themselves
+     *                      (ADR 0143): who, and when the claim lapses. Null is the
+     *                      staff path, which is unchanged
      */
     public record OpenSession(
             UUID tenantId,
@@ -97,7 +120,28 @@ public class TableSessionService {
             List<UUID> tableIds,
             Integer partySize,
             String currency,
-            String openedBy) {}
+            String openedBy,
+            @Nullable Claim claim) {
+
+        /** The staff path: no claim. */
+        public OpenSession(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID reservationId,
+                List<UUID> tableIds,
+                Integer partySize,
+                String currency,
+                String openedBy) {
+            this(tenantId, brandId, locationId, reservationId, tableIds, partySize, currency, openedBy, null);
+        }
+    }
+
+    /**
+     * A guest's provisional occupancy (ADR 0143): the claimant and the instant the
+     * table goes back to the room if nothing the restaurant accepted is on it.
+     */
+    public record Claim(UUID accountId, Instant expiresAt) {}
 
     /**
      * Seats a party.
@@ -113,10 +157,21 @@ public class TableSessionService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A session sits at at least one table");
         }
 
+        // Every table the party sits at is locked first, in id order (ADR 0143,
+        // Decision 5). A host confirming or amending a booking over one of these
+        // takes the same lock, so the two serialize instead of both succeeding on
+        // stale reads; and the hold and capacity facts read below are read under it.
+        List<TableRow> locked = store.lockTables(request.tenantId(), request.tableIds());
+        Map<UUID, TableRow> lockedById = new HashMap<>();
+        for (TableRow row : locked) {
+            lockedById.put(row.id(), row);
+        }
+
         SettingsRow settings = floorPlan.settings(request.tenantId(), request.brandId(), request.locationId());
 
         Instant now = clock.instant();
         UUID sessionId = UUID.randomUUID();
+        Claim claim = request.claim();
 
         SessionRow session = new SessionRow(
                 sessionId,
@@ -134,7 +189,12 @@ public class TableSessionService {
                 null,
                 null,
                 null,
-                1);
+                1,
+                claim == null ? SessionOrigin.STAFF : SessionOrigin.GUEST_QR,
+                claim == null ? null : claim.accountId(),
+                claim == null ? null : claim.expiresAt(),
+                null,
+                null);
 
         if (request.reservationId() != null) {
             // At this branch, not merely in this tenant: seating moves the booking to
@@ -161,7 +221,13 @@ public class TableSessionService {
 
         try {
             store.insertSession(session, now);
-        } catch (DuplicateKeyException alreadySeated) {
+        } catch (DuplicateKeyException refused) {
+            if (isClaimAccountViolation(refused)) {
+                // ux_claim_account_branch: one live unconfirmed claim per account per
+                // branch, whatever the application read. Answers exactly as a reached
+                // cap does -- no reason (ADR 0143, Eligibility).
+                throw tableNotAvailable();
+            }
             // The partial unique index on (tenant_id, reservation_id). A booking
             // seated twice is two parties charged for one reservation, and the
             // second party is sitting at somebody else's table.
@@ -181,13 +247,31 @@ public class TableSessionService {
         // (ck_session_table_window).
         Instant lastJoinedAt = now.truncatedTo(ChronoUnit.MICROS);
         int joinedAfterThisOne = request.tableIds().size();
+        int seats = 0;
+        boolean bookedOver = false;
         for (UUID tableId : request.tableIds()) {
             joinedAfterThisOne--;
-            TableRow table = store.findTable(request.tenantId(), tableId)
-                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+            TableRow table = lockedById.get(tableId);
+            if (table == null) {
+                table = store.findTable(request.tenantId(), tableId)
+                        .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
+            }
             if (!table.locationId().equals(request.locationId())) {
                 throw new ApiException(
                         ErrorCode.INVALID_REQUEST, "Table %s is at another branch".formatted(table.code()));
+            }
+            seats += table.seats();
+            if (claim == null && request.reservationId() == null && !bookedOver) {
+                // The staff walk-in is the host's judgement and stays so; what changes is
+                // that the audit fact now says when that judgement went over a hold
+                // (ADR 0143, Decision 8). A seated booking is excluded: its own hold
+                // is what put the party here, and the exclusion constraint keeps every
+                // other hold clear of it.
+                bookedOver = store.tableHeldByConfirmedBooking(
+                        request.tenantId(),
+                        tableId,
+                        now,
+                        now.plus(java.time.Duration.ofMinutes(settings.walkIn().horizonMinutes())));
             }
             try {
                 store.occupyTable(
@@ -206,22 +290,36 @@ public class TableSessionService {
                 throw occupied;
             }
         }
+        boolean overCapacity = request.partySize() != null && request.partySize() > seats;
 
-        audit.record(AuditFact.of("dinein.session.opened", AuditClass.BUSINESS)
+        Map<String, Object> opened = new HashMap<>();
+        opened.put("tables", request.tableIds().size());
+        opened.put("walkIn", request.reservationId() == null);
+        opened.put("origin", session.origin().name());
+        opened.put("businessDate", session.businessDate().toString());
+        if (claim == null) {
+            opened.put("bookedOver", bookedOver);
+            opened.put("overCapacity", overCapacity);
+        } else {
+            opened.put("claimExpiresAt", claim.expiresAt().toString());
+        }
+
+        AuditFact.Builder fact = AuditFact.of("dinein.session.opened", AuditClass.BUSINESS)
                 .by(ActorRef.user(request.openedBy(), null))
                 .at(ResourceScope.location(request.tenantId(), request.brandId(), request.locationId()))
                 .target("dinein.table_session", sessionId)
                 .targetVersion(1L)
                 .because(reason)
                 // Staff 9.3a: a freshly inserted session has no prior state.
-                .changed(ChangeDocuments.created(Map.of(
-                        "tables", request.tableIds().size(),
-                        "walkIn", request.reservationId() == null,
-                        "businessDate", session.businessDate().toString())))
-                .usingCapability("dinein.session.manage")
+                .changed(ChangeDocuments.created(opened))
                 .correlatedBy(sessionId.toString())
-                .occurredAt(now)
-                .build());
+                .occurredAt(now);
+        if (claim == null) {
+            // A guest holds no ADR 0025 capability; the table's token and the
+            // customer's session are what authorised the claim.
+            fact.usingCapability("dinein.session.manage");
+        }
+        audit.record(fact.build());
 
         return session;
     }
@@ -266,7 +364,11 @@ public class TableSessionService {
             String actorSubject,
             String reason) {
 
-        SessionRow session = require(tenantId, sessionId);
+        // Locked, not merely read: a claim's sweeper and an attach to it can disagree
+        // about the claim's fate on this very row, and serialized on it they have one
+        // outcome (JdbcDineInStore#lockSession).
+        SessionRow session = store.lockSession(tenantId, sessionId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such session"));
 
         // A retry of a write that already landed is not a second attach. The New
         // Order screen places the order and then calls this; a dropped response
@@ -354,7 +456,45 @@ public class TableSessionService {
                 .occurredAt(now)
                 .build());
 
+        if (session.unconfirmedClaim() && RoundStatuses.accepted(order.status())) {
+            // A round the restaurant has already accepted -- a cash order at an
+            // auto-accepting branch, say -- makes the claim an ordinary session at
+            // once (ADR 0143, Decision 4). Attaching alone confirms nothing:
+            // BILLABLE counts PAYMENT_AUTHORIZING orders, and a claim a guest could
+            // turn into a held table by starting a payment and abandoning it is the
+            // denial the design exists to bound. A round still in flight is left to
+            // the sweeper, which decides when the claim's own window ends.
+            confirmClaimOfRound(session, orderId, now);
+        }
+
         return sequence;
+    }
+
+    /**
+     * The sweeper's confirmation: a round the restaurant accepted is on this claim.
+     *
+     * @return whether this call confirmed it; false when somebody (a host, the guest's
+     *         own attach, a close) decided first
+     */
+    @Transactional
+    public boolean confirmClaimByRound(SessionRow claim, UUID orderId) {
+        Instant now = clock.instant();
+        boolean confirmed = store.confirmClaim(claim.tenantId(), claim.id(), claim.version(), "round:" + orderId, now);
+        if (confirmed) {
+            auditClaimConfirmed(claim, "round:" + orderId, "A round the restaurant accepted is on the claim", now);
+        }
+        return confirmed;
+    }
+
+    /**
+     * Confirms a claim because an accepted round is on it. No version predicate: the
+     * conditional on "still live and unconfirmed" is the whole question, and the
+     * attach that got us here does not itself move the session's version.
+     */
+    private void confirmClaimOfRound(SessionRow session, UUID orderId, Instant now) {
+        if (store.confirmClaim(session.tenantId(), session.id(), null, "round:" + orderId, now)) {
+            auditClaimConfirmed(session, "round:" + orderId, "A round the restaurant accepted is on the claim", now);
+        }
     }
 
     /** The running bill: what table seven owes, right now. */
@@ -419,6 +559,10 @@ public class TableSessionService {
      * it. Reaching {@link SessionStatus#FORCE_CLOSED} is the walkout, and it needs
      * a reason code and its own capability — an unpaid table that quietly
      * disappears is how a shift's cash shortfall becomes unattributable.
+     *
+     * <p>This is the staff path. A staff move of a guest's unconfirmed claim past
+     * {@code OPEN} confirms it (ADR 0143, Decision 4): someone in the room has taken
+     * charge of the table, so the claim must not lapse under them.
      */
     @Transactional
     public SessionRow move(
@@ -428,6 +572,46 @@ public class TableSessionService {
             int expectedVersion,
             @Nullable String closeReasonCode,
             String actorSubject,
+            String reason) {
+        return doMove(
+                tenantId,
+                sessionId,
+                to,
+                expectedVersion,
+                closeReasonCode,
+                ActorRef.user(actorSubject, null),
+                true,
+                reason);
+    }
+
+    /**
+     * A guest's own move, from the table's token alone ({@code QrEntryController}).
+     *
+     * <p>Separate from {@link #move} so that "somebody in the room has taken charge"
+     * can never be read off a guest's tap: a guest moving a claim past {@code OPEN}
+     * confirms nothing. {@code BILL_REQUESTED} is refused for an unconfirmed claim
+     * outright, because there is nothing the restaurant has accepted to bill
+     * (ADR 0143, Decision 4).
+     */
+    @Transactional
+    public SessionRow moveByGuest(
+            UUID tenantId, UUID sessionId, SessionStatus to, int expectedVersion, UUID tableId, String reason) {
+        SessionRow session = require(tenantId, sessionId);
+        if (session.unconfirmedClaim() && to == SessionStatus.BILL_REQUESTED) {
+            throw claimUnconfirmed();
+        }
+        return doMove(
+                tenantId, sessionId, to, expectedVersion, null, ActorRef.user("guest:" + tableId, null), false, reason);
+    }
+
+    private SessionRow doMove(
+            UUID tenantId,
+            UUID sessionId,
+            SessionStatus to,
+            int expectedVersion,
+            @Nullable String closeReasonCode,
+            ActorRef actor,
+            boolean staff,
             String reason) {
 
         SessionRow session = require(tenantId, sessionId);
@@ -457,6 +641,14 @@ public class TableSessionService {
             settledTotal = 0L;
         }
 
+        // A member of staff moving a claim to the bill or to settling has taken charge
+        // of the table. Moving it back to OPEN, or closing it, does not confirm: the
+        // first is the lapse's own intermediate hop and the second releases the table.
+        boolean takesCharge = staff
+                && session.unconfirmedClaim()
+                && (to == SessionStatus.BILL_REQUESTED || to == SessionStatus.SETTLING);
+        String confirmedBy = takesCharge ? actor.subject() : null;
+
         if (!store.moveSession(
                 tenantId,
                 sessionId,
@@ -466,6 +658,7 @@ public class TableSessionService {
                 closedAt,
                 settledTotal,
                 closeReasonCode,
+                confirmedBy,
                 now)) {
             throw ApiException.staleVersion(expectedVersion, session.version());
         }
@@ -481,10 +674,13 @@ public class TableSessionService {
             after.put("unsettledMinor", bill.totalMinor());
             after.put("closeReasonCode", closeReasonCode);
         }
+        if (to == SessionStatus.CLOSED && closeReasonCode != null) {
+            after.put("closeReasonCode", closeReasonCode);
+        }
 
-        audit.record(AuditFact.of(
+        AuditFact.Builder fact = AuditFact.of(
                         "dinein.session." + to.name().toLowerCase(Locale.ROOT).replace('_', '-'), AuditClass.BUSINESS)
-                .by(ActorRef.user(actorSubject, null))
+                .by(actor)
                 .at(ResourceScope.location(tenantId, session.brandId(), session.locationId()))
                 .target("dinein.table_session", sessionId)
                 .targetVersion((long) expectedVersion + 1)
@@ -494,11 +690,17 @@ public class TableSessionService {
                 // transition's own billing snapshot, with no prior value to
                 // diff against.
                 .changed(ChangeDocuments.diff(Map.of("status", session.status().name()), after))
-                .usingCapability(
-                        to == SessionStatus.FORCE_CLOSED ? "dinein.session.force_close" : "dinein.session.manage")
                 .correlatedBy(sessionId.toString())
-                .occurredAt(now)
-                .build());
+                .occurredAt(now);
+        if (actor.type() == ActorRef.Type.USER) {
+            fact.usingCapability(
+                    to == SessionStatus.FORCE_CLOSED ? "dinein.session.force_close" : "dinein.session.manage");
+        }
+        audit.record(fact.build());
+
+        if (takesCharge) {
+            auditClaimConfirmed(session, actor.subject(), reason, now);
+        }
 
         // Closing a session ends its guests' access as well as its occupancy. The
         // occupancy is V0034's trigger; the tokens are here, because a table token
@@ -511,6 +713,107 @@ public class TableSessionService {
         }
 
         return store.findSession(tenantId, sessionId).orElseThrow();
+    }
+
+    /**
+     * Confirms a guest's claim on a member of staff's say-so, keeping the table for a
+     * guest who has not ordered yet (ADR 0143, Staff surface).
+     *
+     * @throws ApiException {@code STALE_VERSION} when the session moved since it was
+     *                      read; {@code RESOURCE_CONFLICT {conflict: NOT_AN_UNCONFIRMED_CLAIM}}
+     *                      when it is a staff session, is already confirmed, or is over
+     */
+    @Transactional
+    public SessionRow confirmClaim(
+            UUID tenantId, UUID locationId, UUID sessionId, int expectedVersion, String actorSubject, String reason) {
+
+        SessionRow session = findAtLocation(tenantId, locationId, sessionId);
+        if (!session.unconfirmedClaim() || !session.status().live()) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This session is not a guest's unconfirmed claim",
+                    Map.of("conflict", "NOT_AN_UNCONFIRMED_CLAIM"));
+        }
+        Instant now = clock.instant();
+        if (!store.confirmClaim(tenantId, sessionId, expectedVersion, actorSubject, now)) {
+            throw ApiException.staleVersion(expectedVersion, session.version());
+        }
+        auditClaimConfirmed(session, actorSubject, reason, now);
+        return store.findSession(tenantId, sessionId).orElseThrow();
+    }
+
+    /**
+     * Gives an unconfirmed claim's table back to the room (ADR 0143, Decision 4).
+     *
+     * <p>From {@code OPEN} or {@code SETTLING} that is {@code move} to {@code CLOSED}
+     * with {@code CLAIM_LAPSED}. From {@code BILL_REQUESTED} it is {@code move} to
+     * {@code OPEN} (the machine's existing return-to-service edge, so ADR 0047's
+     * machine is untouched) and then to {@code CLOSED}, in this one transaction, both
+     * hops under the system actor. The price is one intermediate
+     * {@code dinein.session.open} fact, which reads as a reopening and carries the
+     * same reason. The audit fact for the table release and the revocation of the
+     * table's guest tokens then happen exactly as for a staff close.
+     *
+     * <p>A lapse racing an attach, a bill request or a staff move loses cleanly:
+     * every hop is a conditional update on the version it read, and a loss is a
+     * {@link ApiException} {@code STALE_VERSION} the caller treats as "somebody else
+     * decided; look again next sweep".
+     */
+    @Transactional
+    public SessionRow lapseClaim(UUID tenantId, UUID sessionId, ActorRef systemActor) {
+        SessionRow session = require(tenantId, sessionId);
+        if (!session.unconfirmedClaim() || !session.status().live()) {
+            return session;
+        }
+        String reason = "claim lapsed";
+        int version = session.version();
+        if (session.status() == SessionStatus.BILL_REQUESTED) {
+            SessionRow reopened =
+                    doMove(tenantId, sessionId, SessionStatus.OPEN, version, null, systemActor, false, reason);
+            version = reopened.version();
+        }
+        SessionRow closed =
+                doMove(tenantId, sessionId, SessionStatus.CLOSED, version, CLAIM_LAPSED, systemActor, false, reason);
+
+        metrics.lapsed();
+        audit.record(AuditFact.of("dinein.session.claim-lapsed", AuditClass.BUSINESS)
+                .by(systemActor)
+                .at(ResourceScope.location(tenantId, session.brandId(), session.locationId()))
+                .target("dinein.table_session", sessionId)
+                .targetVersion((long) closed.version())
+                .because(reason)
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "claim",
+                                "UNCONFIRMED",
+                                "status",
+                                session.status().name()),
+                        Map.of("claim", "LAPSED", "status", closed.status().name())))
+                .correlatedBy(sessionId.toString())
+                .occurredAt(clock.instant())
+                .build());
+        return closed;
+    }
+
+    private void auditClaimConfirmed(SessionRow session, String confirmedBy, String reason, Instant now) {
+        metrics.confirmed();
+        AuditFact.Builder fact = AuditFact.of("dinein.session.claim-confirmed", AuditClass.BUSINESS)
+                .by(
+                        confirmedBy.startsWith("round:")
+                                ? ActorRef.systemJob("dinein.claim-confirmation")
+                                : ActorRef.user(confirmedBy, null))
+                .at(ResourceScope.location(session.tenantId(), session.brandId(), session.locationId()))
+                .target("dinein.table_session", session.id())
+                .targetVersion((long) session.version() + 1)
+                .because(reason)
+                .changed(ChangeDocuments.diff(
+                        Map.of("claim", "UNCONFIRMED"), Map.of("claim", "CONFIRMED", "confirmedBy", confirmedBy)))
+                .correlatedBy(session.id().toString())
+                .occurredAt(now);
+        if (!confirmedBy.startsWith("round:")) {
+            fact.usingCapability("dinein.session.manage");
+        }
+        audit.record(fact.build());
     }
 
     private SessionRow require(UUID tenantId, UUID sessionId) {
@@ -538,14 +841,45 @@ public class TableSessionService {
 
     /** Matched on the index name V0034 gives the one-party-per-table guarantee. */
     static boolean isTableOccupied(DataIntegrityViolationException conflict) {
+        return mentions(conflict, JdbcDineInStore.TABLE_OCCUPIED_INDEX);
+    }
+
+    /** Matched on the index name V0467 gives the one-live-claim-per-account-per-branch guarantee. */
+    static boolean isClaimAccountViolation(DataIntegrityViolationException conflict) {
+        return mentions(conflict, JdbcDineInStore.CLAIM_ACCOUNT_INDEX);
+    }
+
+    private static boolean mentions(DataIntegrityViolationException conflict, String constraint) {
         Throwable cursor = conflict;
         while (cursor != null) {
             String message = cursor.getMessage();
-            if (message != null && message.contains(JdbcDineInStore.TABLE_OCCUPIED_INDEX)) {
+            if (message != null && message.contains(constraint)) {
                 return true;
             }
             cursor = cursor.getCause();
         }
         return false;
+    }
+
+    /**
+     * The one answer for every reason a guest cannot seat themselves: the feature is
+     * off, the table is held, a cap is reached, the account is blacklisted, the table
+     * is not in service. No reason, because each reason is a fact about the room or
+     * about another guest that the caller has no business learning (ADR 0143).
+     */
+    static ApiException tableNotAvailable() {
+        return new ApiException(ErrorCode.RESOURCE_CONFLICT, NOT_AVAILABLE_MESSAGE, NOT_AVAILABLE);
+    }
+
+    static final String NOT_AVAILABLE_MESSAGE =
+            "This table cannot be taken from here. Ask a member of staff to seat you.";
+
+    static final Map<String, Object> NOT_AVAILABLE = Map.of("conflict", "TABLE_NOT_AVAILABLE");
+
+    public static ApiException claimUnconfirmed() {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                "There is nothing to bill yet. Place an order first, or ask a member of staff.",
+                Map.of("conflict", "CLAIM_UNCONFIRMED"));
     }
 }

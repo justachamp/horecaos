@@ -1836,6 +1836,29 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.floorPlan.seat.unavailable': 'Стол не в работе, посадить гостей нельзя.',
   'settings.locations.floorPlan.seat.done': 'Гости посажены за стол {table}.',
   'settings.locations.floorPlan.seat.errorOccupied': 'За этим столом только что посадили гостей.',
+  'settings.locations.floorPlan.field.selfSeat': 'Гости могут садиться сами',
+  'settings.locations.floorPlan.selfSeat.on': 'Включено',
+  'settings.locations.floorPlan.selfSeat.off': 'Выключено',
+  'settings.locations.floorPlan.selfSeat.hint':
+    'Гость, отсканировавший код свободного стола и вошедший в аккаунт, может сесть, не дожидаясь персонала. Когда время удержания истекает, стол возвращается в зал, если на нём нет принятого рестораном заказа и вы его не закрепили. Работает только в режиме «заказ и оплата»; посадить, закрепить или освободить стол вы можете сами в любой момент.',
+  'settings.locations.floorPlan.field.claimTtl':
+    'Сколько минут держится стол, занятый гостем самостоятельно',
+  'settings.locations.floorPlan.field.horizon':
+    'Не пускать гостей за столы, забронированные в ближайшие, минут',
+  'settings.locations.floorPlan.field.maxUnconfirmed':
+    'Максимум неподтверждённых самостоятельно занятых столов',
+  'settings.locations.floorPlan.field.dailyClaims': 'Самостоятельных посадок на гостя в сутки',
+  'settings.locations.floorPlan.field.paymentDefer': 'Дополнительные минуты, пока идёт оплата',
+  'settings.locations.floorPlan.claim.unconfirmed':
+    'Гость сел сам. Стол вернётся в зал в {time}, если не будет принят заказ или вы не закрепите стол.',
+  'settings.locations.floorPlan.claim.confirmed': 'Гость сел сам, и теперь это обычный стол.',
+  'settings.locations.floorPlan.claim.keep': 'Закрепить стол',
+  'settings.locations.floorPlan.claim.release': 'Освободить стол',
+  'settings.locations.floorPlan.claim.kept': 'Стол {table} закреплён за гостем.',
+  'settings.locations.floorPlan.claim.released': 'Стол {table} снова в зале.',
+  'settings.locations.floorPlan.claim.defaultReason': 'Гость сел сам; обработано с плана зала',
+  'reservations.notice.tableOccupiedNow':
+    'Подтверждено. За одним из этих столов уже сидят гости — проверьте зал до прихода брони.',
 
   'finance.scope.denied': 'Этому аккаунту не разрешён раздел «Финансы».',
 

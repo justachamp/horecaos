@@ -26,6 +26,9 @@ function party(overrides: Partial<SessionView> = {}): SessionView {
     closeReasonCode: null,
     version: 1,
     tables: [{ tableId: 'tb-7', code: 'T7', displayName: 'Table 7' }],
+    origin: 'STAFF',
+    claimExpiresAt: null,
+    confirmedAt: null,
     ...overrides,
   };
 }

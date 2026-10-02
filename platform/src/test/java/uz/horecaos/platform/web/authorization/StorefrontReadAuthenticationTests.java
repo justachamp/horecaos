@@ -21,6 +21,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -180,6 +181,28 @@ class StorefrontReadAuthenticationTests {
         assertThat(statusOf("/api/v1/storefront/dine-in/sessions/" + UUID.randomUUID()))
                 .as("ADR 0047: authorised by the guest token the handler resolves, not by Keycloak")
                 .isNotEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("ADR 0143: the self-seating route is turned away by its handler, never by the filter chain")
+    void theSelfSeatingRouteIsReachedWithoutAPrincipal() throws Exception {
+        // No principal at all: a guest holds a table token and, to sit, a customer session --
+        // neither is a Keycloak principal. A filter-chain rejection would be a 401 before the
+        // handler ever ran; this reaches it, and it says what is missing.
+        assertThat(postStatusOf("/api/v1/storefront/dine-in/sessions", "{\"partySize\":2}"))
+                .as("no X-Dine-In-Token: the handler's own 400, not the chain's 401")
+                .isEqualTo(400);
+
+        MvcResult withAToken = mvc.perform(post("/api/v1/storefront/dine-in/sessions")
+                        .header("X-Dine-In-Token", "not-a-live-guest-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"partySize\":2}"))
+                .andReturn();
+        assertThat(withAToken.getResponse().getStatus()).isEqualTo(401);
+        assertThat(withAToken.getResponse().getContentAsString())
+                .as("the 401 is the handler's, in the platform's own problem shape")
+                .contains("UNAUTHENTICATED")
+                .contains("table session has ended");
     }
 
     @Test

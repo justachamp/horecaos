@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../environments/environment';
-import { TableSessionsApi } from './table-sessions-api';
+import { SessionView, TableSessionsApi, isUnconfirmedClaim } from './table-sessions-api';
 
 const SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 const URL = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions`;
@@ -32,6 +32,9 @@ function session(overrides: Partial<Record<string, unknown>> = {}) {
     closeReasonCode: null,
     version: 1,
     tables: [{ tableId: 't1', code: 'T1', displayName: 'Table 1' }],
+    origin: 'STAFF',
+    claimExpiresAt: null,
+    confirmedAt: null,
     ...overrides,
   };
 }
@@ -290,5 +293,50 @@ describe('TableSessionsApi.attachRound', () => {
     expect(secondRequest.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
     secondRequest.flush({ sessionId: 's1', orderId: 'o2', sequence: 2 });
     await second;
+  });
+});
+
+describe("TableSessionsApi -- a guest's self-seated claim (ADR 0143)", () => {
+  it('confirms a claim with a reason, the session version and a fresh Idempotency-Key', async () => {
+    const { api, http } = setUp();
+
+    const confirmed = firstValueFrom(api.confirmClaim(SCOPE, 's1', 'Guest is at the bar', 4));
+    const request = http.expectOne(`${URL}/s1/claim-confirmations`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('If-Match')).toContain('4');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ reason: 'Guest is at the bar' });
+    request.flush(session({ origin: 'GUEST_QR', confirmedAt: '2026-09-29T14:05:00Z', version: 5 }));
+    expect((await confirmed).confirmedAt).toBe('2026-09-29T14:05:00Z');
+  });
+
+  it('releases a claim by closing the session through the state-action endpoint', async () => {
+    const { api, http } = setUp();
+
+    const released = firstValueFrom(api.release(SCOPE, 's1', 'Nobody came', 4));
+    const request = http.expectOne(`${URL}/s1/state-actions`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('If-Match')).toContain('4');
+    expect(request.request.body).toEqual({ targetStatus: 'CLOSED', reason: 'Nobody came' });
+    request.flush(session({ status: 'CLOSED', version: 5 }));
+    await released;
+  });
+
+  it('knows an unconfirmed claim from a staff session and from a confirmed claim', () => {
+    const staff = session() as unknown as SessionView;
+    const unconfirmed = session({
+      origin: 'GUEST_QR',
+      claimExpiresAt: '2026-09-22T10:15:00Z',
+    }) as unknown as SessionView;
+    const confirmed = session({
+      origin: 'GUEST_QR',
+      confirmedAt: '2026-09-22T10:05:00Z',
+    }) as unknown as SessionView;
+
+    expect(isUnconfirmedClaim(staff)).toBe(false);
+    expect(isUnconfirmedClaim(unconfirmed)).toBe(true);
+    expect(isUnconfirmedClaim(confirmed)).toBe(false);
   });
 });

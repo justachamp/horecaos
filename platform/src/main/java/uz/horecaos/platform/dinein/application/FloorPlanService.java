@@ -22,6 +22,7 @@ import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SectionRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SettingsRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.TableRow;
+import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.WalkInPolicy;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -42,6 +43,9 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 @Service
 public class FloorPlanService {
+
+    /** ADR 0055's single-currency pilot, until a location-currency read exists. */
+    static final String DEFAULT_SESSION_CURRENCY = "UZS";
 
     private final JdbcDineInStore store;
     private final AuditRecorder audit;
@@ -67,6 +71,8 @@ public class FloorPlanService {
      *                          a branch never configured) in place
      * @param guestSessionTtlMinutes null to leave the current value in place
      * @param serviceChargeRateBp null to leave the current value in place
+     * @param walkIn ADR 0143's per-branch switch and numbers, every one optional;
+     *               null leaves them all as they are
      */
     public record BranchSettings(
             UUID tenantId,
@@ -75,12 +81,88 @@ public class FloorPlanService {
             String qrMode,
             @Nullable Integer turnaroundMinutes,
             @Nullable Integer guestSessionTtlMinutes,
-            @Nullable Integer serviceChargeRateBp) {}
+            @Nullable Integer serviceChargeRateBp,
+            @Nullable WalkInChange walkIn) {
 
+        /** The settings before ADR 0143: nothing about self-seating is touched. */
+        public BranchSettings(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                String qrMode,
+                @Nullable Integer turnaroundMinutes,
+                @Nullable Integer guestSessionTtlMinutes,
+                @Nullable Integer serviceChargeRateBp) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    qrMode,
+                    turnaroundMinutes,
+                    guestSessionTtlMinutes,
+                    serviceChargeRateBp,
+                    null);
+        }
+    }
+
+    /**
+     * A change to ADR 0143's walk-in settings. Every field is optional; null leaves
+     * the current value in place, so the console can flip the switch without
+     * re-sending four numbers it did not edit.
+     */
+    public record WalkInChange(
+            @Nullable Boolean selfSeat,
+            @Nullable Integer claimTtlMinutes,
+            @Nullable Integer horizonMinutes,
+            @Nullable Integer maxUnconfirmed,
+            @Nullable Integer dailyClaimsPerAccount,
+            @Nullable Integer paymentDeferMinutes,
+            @Nullable String sessionCurrency) {}
+
+    /**
+     * Configures a branch without a precondition: the caller takes whatever version
+     * is there. For code that owns a branch's settings outright (a seed, a fixture);
+     * a person at a screen goes through {@link #configure(BranchSettings, int, String,
+     * String)} and its {@code If-Match}.
+     */
     @Transactional
     public SettingsRow configure(BranchSettings request, String actorSubject, String reason) {
         SettingsRow current =
                 store.findSettings(request.tenantId(), request.locationId()).orElse(null);
+        return configure(request, current == null ? 0 : current.version(), actorSubject, reason);
+    }
+
+    /**
+     * Configures a branch conditionally on the version the caller read (ADR 0031).
+     *
+     * <p>A branch that was never configured reads as version {@code 0} -- it has no
+     * row -- and the first write must say so; the version it then creates is
+     * {@code 1}. Two managers configuring a never-configured branch in the same second
+     * therefore produce one row and one stale-version refusal.
+     */
+    @Transactional
+    public SettingsRow configure(BranchSettings request, int expectedVersion, String actorSubject, String reason) {
+        SettingsRow current =
+                store.findSettings(request.tenantId(), request.locationId()).orElse(null);
+        int currentVersion = current == null ? 0 : current.version();
+        if (expectedVersion != currentVersion) {
+            throw ApiException.staleVersion(expectedVersion, currentVersion);
+        }
+
+        WalkInPolicy currentWalkIn = current == null ? WalkInPolicy.OFF : current.walkIn();
+        WalkInChange change = request.walkIn();
+        WalkInPolicy walkIn = change == null
+                ? currentWalkIn
+                : new WalkInPolicy(
+                        orDefault(change.selfSeat(), currentWalkIn.selfSeat()),
+                        orDefault(change.claimTtlMinutes(), currentWalkIn.claimTtlMinutes()),
+                        orDefault(change.horizonMinutes(), currentWalkIn.horizonMinutes()),
+                        orDefault(change.maxUnconfirmed(), currentWalkIn.maxUnconfirmed()),
+                        orDefault(change.dailyClaimsPerAccount(), currentWalkIn.dailyClaimsPerAccount()),
+                        orDefault(change.paymentDeferMinutes(), currentWalkIn.paymentDeferMinutes()));
+        String currency = change == null || change.sessionCurrency() == null
+                ? (current == null ? DEFAULT_SESSION_CURRENCY : current.sessionCurrency())
+                : change.sessionCurrency();
 
         SettingsRow desired = new SettingsRow(
                 request.tenantId(),
@@ -90,9 +172,24 @@ public class FloorPlanService {
                 orDefault(request.turnaroundMinutes(), current == null ? 15 : current.turnaroundMinutes()),
                 orDefault(request.guestSessionTtlMinutes(), current == null ? 240 : current.guestSessionTtlMinutes()),
                 orDefault(request.serviceChargeRateBp(), current == null ? 0 : current.serviceChargeRateBp()),
-                1);
+                currentVersion + 1,
+                walkIn,
+                currency);
 
-        SettingsRow saved = store.upsertSettings(desired, clock.instant());
+        Instant now = clock.instant();
+        boolean written = current == null
+                ? store.insertSettings(desired, now)
+                : store.updateSettings(desired, expectedVersion, now);
+        if (!written) {
+            // Somebody wrote between the read above and this statement. The row they
+            // left is the one the caller must look at, so report it.
+            int actual = store.findSettings(request.tenantId(), request.locationId())
+                    .map(SettingsRow::version)
+                    .orElse(0);
+            throw ApiException.staleVersion(expectedVersion, actual);
+        }
+        SettingsRow saved =
+                store.findSettings(request.tenantId(), request.locationId()).orElseThrow();
 
         audit.record(AuditFact.of("dinein.settings.configured", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
@@ -106,7 +203,7 @@ public class FloorPlanService {
                 .changed(ChangeDocuments.diff(branchSettingsDiffMap(current), branchSettingsDiffMap(saved)))
                 .usingCapability("dinein.floorplan.manage")
                 .correlatedBy(saved.locationId().toString())
-                .occurredAt(clock.instant())
+                .occurredAt(now)
                 .build());
 
         return saved;
@@ -117,11 +214,23 @@ public class FloorPlanService {
      *
      * <p>A branch that has never been configured still has to answer "what does a
      * code do here", and the honest answer is the safest mode rather than an
-     * empty optional every caller would have to interpret.
+     * empty optional every caller would have to interpret. Its version is
+     * {@code 0}: there is no row, and an {@code If-Match} of {@code 0} is how a
+     * caller says "create it".
      */
     public SettingsRow settings(UUID tenantId, UUID brandId, UUID locationId) {
         return store.findSettings(tenantId, locationId)
-                .orElseGet(() -> new SettingsRow(tenantId, brandId, locationId, QrMode.VIEW_ONLY, 15, 240, 0, 1));
+                .orElseGet(() -> new SettingsRow(
+                        tenantId,
+                        brandId,
+                        locationId,
+                        QrMode.VIEW_ONLY,
+                        15,
+                        240,
+                        0,
+                        0,
+                        WalkInPolicy.OFF,
+                        DEFAULT_SESSION_CURRENCY));
     }
 
     // -------------------------------------------------------------- sections
@@ -424,6 +533,10 @@ public class FloorPlanService {
         return supplied == null ? fallback : supplied;
     }
 
+    private static boolean orDefault(@Nullable Boolean supplied, boolean fallback) {
+        return supplied == null ? fallback : supplied;
+    }
+
     /** A {@code {tableCode, qrTokenHash}} snapshot for {@link #rotateQrToken}'s diff -- {@code qrTokenHash} may be null. */
     private static Map<String, Object> qrRotationDiffMap(String tableCode, @Nullable String qrTokenHash) {
         Map<String, Object> map = new LinkedHashMap<>();
@@ -440,7 +553,7 @@ public class FloorPlanService {
         return map;
     }
 
-    /** A {@code {qrMode, turnaroundMinutes, guestSessionTtlMinutes, serviceChargeRateBp}} snapshot, or empty when no settings row exists yet. */
+    /** A snapshot of every settings field, or empty when no settings row exists yet. */
     private static Map<String, Object> branchSettingsDiffMap(@Nullable SettingsRow row) {
         if (row == null) {
             return Map.of();
@@ -450,6 +563,13 @@ public class FloorPlanService {
         map.put("turnaroundMinutes", row.turnaroundMinutes());
         map.put("guestSessionTtlMinutes", row.guestSessionTtlMinutes());
         map.put("serviceChargeRateBp", row.serviceChargeRateBp());
+        map.put("walkInSelfSeat", row.walkIn().selfSeat());
+        map.put("walkInClaimTtlMinutes", row.walkIn().claimTtlMinutes());
+        map.put("walkInHorizonMinutes", row.walkIn().horizonMinutes());
+        map.put("walkInMaxUnconfirmed", row.walkIn().maxUnconfirmed());
+        map.put("walkInDailyClaimsPerAccount", row.walkIn().dailyClaimsPerAccount());
+        map.put("walkInPaymentDeferMinutes", row.walkIn().paymentDeferMinutes());
+        map.put("sessionCurrency", row.sessionCurrency());
         return map;
     }
 }

@@ -52,6 +52,7 @@ export interface AdmissionResponse {
   openSessionId?: string;
   tableCode?: string;
   tenantId?: string;
+  walkInAvailable?: boolean;
 }
 
 export interface AnalyticsConfigResponse {
@@ -240,8 +241,24 @@ export interface GrantResponse {
 }
 
 export interface GuestBillResponse {
+  claimExpiresAt?: string;
+  confirmed?: boolean;
   currency?: string;
   orderIds?: Array<string>;
+  origin?: string;
+  roundCount?: number;
+  sessionId?: string;
+  status?: string;
+  totalMinor?: number;
+}
+
+export interface GuestSeatingResponse {
+  claimExpiresAt?: string;
+  confirmed?: boolean;
+  created?: boolean;
+  currency?: string;
+  orderIds?: Array<string>;
+  origin?: string;
   roundCount?: number;
   sessionId?: string;
   status?: string;
@@ -529,6 +546,10 @@ export interface SaveAddressRequest {
   longitude?: number;
 }
 
+export interface SeatRequest {
+  partySize: number;
+}
+
 export interface ServiceabilityView {
   acceptsScheduledOrders?: boolean;
   available?: boolean;
@@ -673,6 +694,7 @@ export interface TermsView {
 export interface Operations {
   "resolve_1": { method: "GET"; path: "/api/v1/storefront/channel-hostnames/{hostname}"; request: { parameters: { path: { hostname: string } } }; responses: { "200": HostnameLookupView } };
   "exchange": { method: "POST"; path: "/api/v1/storefront/dine-in/qr/token-exchanges"; request: { parameters: Record<string, never>; body: ExchangeRequest }; responses: { "200": AdmissionResponse } };
+  "seat": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions"; request: { parameters: { header: { "X-Dine-In-Token": string } }; body: SeatRequest }; responses: { "200": GuestSeatingResponse } };
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "addRound": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } }; body: AddRoundRequest }; responses: { "200": GuestBillResponse } };

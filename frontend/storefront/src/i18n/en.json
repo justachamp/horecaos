@@ -314,7 +314,21 @@
     "roundAttachRetry": "Order sent to the kitchen, but it is not on the table bill yet. Tap Try again.",
     "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
     "roundRetry": "Try again",
-    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff."
+    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff.",
+    "sitHere": "Sit at this table",
+    "sitHereHint": "Tell us how many of you there are and sit down without waiting. We hold the table while you choose, and keep it once your order is accepted.",
+    "partySize": "How many of you",
+    "fewerGuests": "Fewer guests",
+    "moreGuests": "More guests",
+    "sitDown": "Sit down",
+    "sitting": "Seating you...",
+    "signInToSit": "Sign in to sit down",
+    "joinedExisting": "Someone at this table is already seated, so your orders go on the same bill.",
+    "claimHeld": "This table is held for you for {{minutes}} more minutes. Place an order to keep it.",
+    "claimEnding": "Your hold on this table is ending. Place an order now to keep it.",
+    "tableNotAvailable": "This table cannot be taken from here. Please ask a member of staff to seat you.",
+    "tooManyForTable": "This table seats {{seats}}. Please ask a member of staff for a larger table.",
+    "seatRateLimited": "Too many tries. Please wait a moment and try again."
   },
   "action": {
     "yourAddress": "Your address",

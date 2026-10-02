@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   type OnInit,
   computed,
   inject,
@@ -47,6 +48,12 @@ import type {
 } from '../../../types/home.types';
 import { variantAvailability } from '../../../utils/item-availability';
 import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
+
+/** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
+const CLAIM_CLOCK_MS = 15_000;
+
+/** The most a guest can say they are (the platform's own ceiling for a party). */
+const MAX_PARTY = 200;
 
 /** U+2014. Shown where the platform has not priced the basket, so a zero is never read as free. */
 const UNRESOLVED = '—';
@@ -114,12 +121,23 @@ const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
  *
  * <h2>Why an `ORDER_AND_PAY` table can still have nothing to order onto</h2>
  *
- * Opening a session is `TableSessionController.open`, capability-gated to an
- * operator at `LOCATION` scope; there is no guest-facing path to it. Creating a
- * real table occupancy from an unauthenticated scan is a product decision about
- * self-seating (ADR 0143, Proposed) that this screen does not make. Until a host
- * seats the table, `admission.openSessionId` is null, and this renders the menu
- * with an explanation rather than a basket with nothing to bind to.
+ * A session is what an order is put on, and until one exists
+ * `admission.openSessionId` is null: this renders the menu with ordering
+ * disabled, rather than a basket with nothing to bind to. Two things end that.
+ *
+ * - **A member of staff seats the table** (`TableSessionController.open`), the
+ *   path that was always there and stays: a guest with no phone, a branch that has
+ *   not turned the next thing on.
+ * - **The guest sits down themselves** (ADR 0143), when the platform said at the
+ *   scan that it could (`admission.walkInAvailable`): the screen offers "Sit at this
+ *   table" with a party-size stepper, needs the guest signed in first, and opens a
+ *   *claim* -- a provisional session. The claim is the guest's for a short window
+ *   and becomes an ordinary session once an order the restaurant accepts is on it;
+ *   if nothing follows it lapses and the table goes back to the room. Until then
+ *   there is nothing to bill, so "ask for the bill" is not offered. The platform
+ *   decides again when the guest asks and answers every "no" with one sentence, so
+ *   this screen never explains *why* a table cannot be taken -- it says to ask a
+ *   member of staff.
  *
  * <h2>Dishes with options to choose</h2>
  *
@@ -162,6 +180,8 @@ export class DineInTableComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly returnDestination = inject(ReturnDestination);
 
+  private readonly destroyRef = inject(DestroyRef);
+
   protected readonly admission = computed(() => this.dineIn.admission());
   /** Only `ORDER_AND_PAY` orders; `VIEW_ONLY` -- and any mode this build does not know -- is a menu. */
   protected readonly canOrder = computed(() => this.admission()?.mode === 'ORDER_AND_PAY');
@@ -176,6 +196,39 @@ export class DineInTableComponent implements OnInit {
   protected readonly ordering = computed(
     () => this.canOrder() && this.isSeated() && !this.sessionEnded(),
   );
+
+  // --------------------------------------------- sitting down (ADR 0143)
+
+  /** The platform said, at the scan, that this table could be taken from here. */
+  protected readonly walkInAvailable = computed(() => this.admission()?.walkInAvailable === true);
+  /** The invitation to sit: an ordering table nobody sits at, which the platform would let this guest take. */
+  protected readonly canSitHere = computed(
+    () => this.canOrder() && !this.isSeated() && this.walkInAvailable(),
+  );
+  protected readonly partySize = signal(2);
+  protected readonly seating = signal(false);
+  /** Why the guest could not sit down, as a translation key; null when nothing went wrong. */
+  protected readonly seatErrorKey = signal<string | null>(null);
+  /** The seat the platform handed back was somebody else's: orders go on their bill. */
+  protected readonly joinedExisting = signal(false);
+  /** The seat count the platform reported for "too many for this table". */
+  protected readonly tooManySeats = signal<number | null>(null);
+  /** Ticks, so the claim's countdown follows the clock (a `computed` alone never would). */
+  private readonly now = signal(Date.now());
+  /** The guest's claim has not been confirmed: nothing the restaurant accepted is on it yet. */
+  protected readonly claimUnconfirmed = computed(() => {
+    const bill = this.bill();
+    return !!bill && bill.confirmed === false;
+  });
+  /** Whole minutes until an unconfirmed claim gives the table back; null when there is no claim to lose. */
+  protected readonly claimMinutesLeft = computed(() => {
+    const bill = this.bill();
+    if (!bill || bill.confirmed !== false || !bill.claimExpiresAt) {
+      return null;
+    }
+    return Math.max(0, Math.ceil((Date.parse(bill.claimExpiresAt) - this.now()) / 60_000));
+  });
+  private claimReadAfterExpiry = false;
 
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
@@ -296,6 +349,9 @@ export class DineInTableComponent implements OnInit {
   private boundCartId: string | null = null;
 
   async ngOnInit(): Promise<void> {
+    const clock = setInterval(() => this.tick(), CLAIM_CLOCK_MS);
+    this.destroyRef.onDestroy(() => clearInterval(clock));
+
     const admission = this.admission();
     if (!admission) {
       this.loading.set(false);
@@ -311,6 +367,95 @@ export class DineInTableComponent implements OnInit {
       }
     }
     await Promise.all(work);
+  }
+
+  /**
+   * Moves the countdown on, and once a claim's window has passed reads the bill once:
+   * the platform may have given the table back, and a screen still offering a table
+   * that is no longer the guest's would let them order onto a bill that is gone.
+   */
+  private tick(): void {
+    this.now.set(Date.now());
+    const bill = this.bill();
+    if (
+      bill?.confirmed === false &&
+      bill.claimExpiresAt &&
+      Date.parse(bill.claimExpiresAt) <= Date.now() &&
+      !this.claimReadAfterExpiry
+    ) {
+      this.claimReadAfterExpiry = true;
+      void this.refreshBill();
+    }
+  }
+
+  protected stepParty(by: number): void {
+    this.partySize.set(Math.min(MAX_PARTY, Math.max(1, this.partySize() + by)));
+  }
+
+  /**
+   * Sits the guest at the table (ADR 0143). A signed-out guest is sent to sign in first
+   * and comes back here; the platform needs the customer's own session beside the
+   * table's token.
+   */
+  protected async sitDown(): Promise<void> {
+    if (!this.canSitHere() || this.seating()) {
+      return;
+    }
+    if (!this.session.isAuthenticated()) {
+      this.signIn();
+      return;
+    }
+    this.seating.set(true);
+    this.seatErrorKey.set(null);
+    try {
+      const seating = await this.dineIn.seat(this.partySize());
+      this.joinedExisting.set(!seating.created);
+      this.claimReadAfterExpiry = false;
+      this.sessionEnded.set(false);
+      this.bill.set(seating);
+      this.now.set(Date.now());
+    } catch (failure) {
+      this.onSeatFailure(failure);
+    } finally {
+      this.seating.set(false);
+    }
+  }
+
+  private onSeatFailure(failure: unknown): void {
+    if (!(failure instanceof HorecaOSApiError)) {
+      this.seatErrorKey.set('errors.generic');
+      return;
+    }
+    if (failure.status === 401) {
+      // Two different 401s: the customer's own session lapsed (sign in again and come
+      // back) and the table's guest token is dead (scan the code again). Only the
+      // second ends the visit.
+      if (
+        failure.problem?.reason === 'CUSTOMER_SESSION_REQUIRED' ||
+        !this.session.isAuthenticated()
+      ) {
+        this.signIn();
+      } else {
+        this.dineIn.clear();
+      }
+      return;
+    }
+    if (failure.status === 409 && failure.problem?.conflict === 'TABLE_NOT_AVAILABLE') {
+      // One answer for every reason (off, held, a cap, a refused account): ask staff.
+      this.dineIn.markWalkInUnavailable();
+      this.seatErrorKey.set('dineIn.tableNotAvailable');
+      return;
+    }
+    if (failure.status === 400 && typeof failure.problem?.seats === 'number') {
+      this.tooManySeats.set(failure.problem.seats);
+      this.seatErrorKey.set('dineIn.tooManyForTable');
+      return;
+    }
+    if (failure.status === 429) {
+      this.seatErrorKey.set('dineIn.seatRateLimited');
+      return;
+    }
+    this.seatErrorKey.set(failureKey(failure));
   }
 
   private async loadMenu(admission: DineInAdmission): Promise<void> {
@@ -638,7 +783,9 @@ export class DineInTableComponent implements OnInit {
         }
         quote = fresh;
       }
-      const result = await this.carts.checkout({
+      // The binding is remembered state; the guest token is what proves the guest is
+      // still at the table it names, and checkout refuses a bound basket without it.
+      const result = await this.dineIn.checkoutAtTable(this.carts, {
         priced: quote,
         paymentMethodCode,
         idempotencyKey: this.checkoutKey(),
@@ -663,6 +810,27 @@ export class DineInTableComponent implements OnInit {
         await this.openPaymentSession(result.orderId);
       }
     } catch (failure) {
+      const reason = failure instanceof HorecaOSApiError ? failure.problem?.reason : undefined;
+      if (reason === 'TABLE_TOKEN_ENDED' || reason === 'TABLE_TOKEN_REQUIRED') {
+        // The same cue as a guest token the platform stopped recognising: the party this
+        // device scanned for is over, so scan the code again.
+        this.pendingCheckoutKey = null;
+        this.dineIn.clear();
+        return;
+      }
+      if (reason === 'TABLE_BINDING_STALE') {
+        // The basket still says the table the guest left: bind it to this one (which
+        // reprices it) and ask them to look before ordering again.
+        this.pendingCheckoutKey = null;
+        this.boundCartId = null;
+        try {
+          await this.bindToTable(this.carts.cart()?.cartId ?? '');
+        } catch {
+          // The next change to the basket tries again.
+        }
+        this.checkoutErrorKey.set('dineIn.tableChanged');
+        return;
+      }
       if (isStaleQuote(failure)) {
         // The platform no longer honours the price the guest was shown. Price the
         // basket again so the screen holds the platform's number, and say so:
@@ -778,6 +946,11 @@ export class DineInTableComponent implements OnInit {
   private failBill(failure: unknown): void {
     if (this.dineIn.isGuestSessionEnded(failure)) {
       this.dineIn.clear();
+    } else if (isNotFound(failure) && this.claimUnconfirmed()) {
+      // The claim lapsed and the table went back to the room. Offer to sit down again;
+      // the platform re-decides when the guest asks.
+      this.bill.set(null);
+      this.dineIn.sessionEnded();
     } else if (isNotFound(failure)) {
       this.sessionEnded.set(true);
     } else {

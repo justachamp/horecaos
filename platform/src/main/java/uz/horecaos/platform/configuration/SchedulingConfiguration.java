@@ -234,9 +234,13 @@ public class SchedulingConfiguration {
      * DNS-TXT hostname challenge (V0428) and promotes it once the tenant's
      * DNS answers, closing row 10.5's WEB verification gap that otherwise
      * left a submitted hostname stuck at PENDING forever with nothing to
-     * ever re-check it.
+     * ever re-check it. Batch 17 added one: {@code
+     * TableSessionClaimSweeper.sweepOnce} (ADR 0143), which gives a guest's
+     * self-seated table back to the room when nothing the restaurant accepted
+     * follows the claim -- without it an abandoned phone holds a table until a
+     * person notices.
      */
-    static final int DEFAULT_POOL_SIZE = 69;
+    static final int DEFAULT_POOL_SIZE = 70;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

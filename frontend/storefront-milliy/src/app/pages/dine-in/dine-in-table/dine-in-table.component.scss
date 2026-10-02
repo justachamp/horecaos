@@ -43,6 +43,7 @@
 /* The pill buttons on this screen share one look; each rule after adds only its size. */
 .table__signin,
 .table__pending-retry,
+.table__sit-cta,
 .bill__ask,
 .order__cta {
   border: 0;
@@ -53,6 +54,35 @@
   cursor: pointer;
 
   &:disabled { background: var(--line-default); color: var(--text-muted); box-shadow: none; cursor: not-allowed; }
+}
+
+/* The invitation to sit down at a free table (ADR 0143). */
+.table__sit {
+  margin: 14px 24px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-accent-wash);
+}
+
+.table__sit-title { margin: 0 0 4px; font: 800 16px/1.2 var(--font-display); }
+.table__sit-hint { margin: 0 0 12px; color: var(--text-secondary); font: 400 13px/1.5 var(--font-ui); }
+.table__sit-party { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.table__sit-label { font: 600 14px/1.2 var(--font-ui); }
+.table__sit-cta { display: block; width: 100%; height: 48px; font-size: 15px; }
+.table__stepper { display: flex; align-items: center; gap: 10px; }
+.table__step-count { min-width: 18px; text-align: center; font: 700 15px/1 var(--font-display); }
+
+.table__step {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card, #fff);
+  color: var(--text-primary);
+  font: 700 18px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled { color: var(--text-muted); cursor: not-allowed; }
 }
 
 .table__signin { display: block; margin: 14px 24px 0; width: calc(100% - 48px); height: 52px; font-size: 15px; }

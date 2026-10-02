@@ -331,6 +331,12 @@ export class CartService {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
+    /**
+     * Extra headers, for a basket bound to a table: the guest's `X-Dine-In-Token`, which
+     * checkout re-proves the table from (ADR 0047). `DineInService.checkoutAtTable` builds
+     * them; no screen holds the token itself.
+     */
+    headers?: Readonly<Record<string, string>>;
   }): Promise<CheckoutResult> {
     return this.api.mutate<CheckoutResult>('POST', `${this.brandPath}/checkouts`, {
       body: {
@@ -341,6 +347,7 @@ export class CartService {
         paymentMethodCode: input.paymentMethodCode,
       },
       idempotencyKey: input.idempotencyKey,
+      ...(input.headers ? { headers: input.headers } : {}),
     });
   }
 

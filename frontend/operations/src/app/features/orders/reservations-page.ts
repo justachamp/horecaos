@@ -540,6 +540,12 @@ export class ReservationsPage implements OnInit {
       );
       this.applyUpdate(updated);
       this.pendingAction.set(null);
+      if (updated.tableOccupiedNow === true) {
+        // Not an error: the booking is confirmed, and a party is sitting at one of its
+        // tables now -- a self-seated guest or a walk-in. The host decides what to do
+        // about it, with the room in view (ADR 0143).
+        this.actionNotice.set(this.i18n.t('reservations.notice.tableOccupiedNow'));
+      }
     } catch (error) {
       this.actionNotice.set(
         error instanceof ApiError

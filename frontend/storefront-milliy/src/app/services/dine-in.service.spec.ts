@@ -350,6 +350,126 @@ describe('DineInService (ADR 0047)', () => {
     });
   });
 
+  describe('seat -- sitting down at a free table (ADR 0143)', () => {
+    const seating = {
+      ...bill({ sessionId: 'session-new', totalMinor: 0, roundCount: 0, orderIds: [] }),
+      origin: 'GUEST_QR',
+      created: true,
+      claimExpiresAt: '2026-10-01T10:15:00Z',
+      confirmed: false,
+    };
+
+    function scanned() {
+      return seated({ openSessionId: null, walkInAvailable: true });
+    }
+
+    it('posts the party size with the guest token, signed in as the customer -- never anonymous', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      const result = await service.seat(3);
+
+      expect(api.mutate).toHaveBeenLastCalledWith(
+        'POST',
+        '/storefront/dine-in/sessions',
+        expect.objectContaining({
+          body: { partySize: 3 },
+          headers: { 'X-Dine-In-Token': 'guest-token-1' },
+        }),
+      );
+      const options = api.mutate.mock.calls.at(-1)?.[2] as { anonymous?: boolean };
+      expect(options.anonymous).toBeUndefined();
+      expect(result.created).toBe(true);
+    });
+
+    it('moves the stored visit onto the new session, and a reload lands on the seated table', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      await service.seat(2);
+
+      expect(service.admission()?.openSessionId).toBe('session-new');
+      expect(service.admission()?.walkInAvailable).toBe(false);
+      TestBed.resetTestingModule();
+      const { service: resumed } = setUp();
+      expect(resumed.admission()?.openSessionId).toBe('session-new');
+    });
+
+    it('never exposes the guest token on the admission a screen reads', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      await service.seat(2);
+
+      expect(JSON.stringify(service.admission())).not.toContain('guest-token-1');
+    });
+
+    it('leaves the visit alone when the platform refuses', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockRejectedValueOnce(
+        new HorecaOSApiError({
+          status: 409,
+          code: 'RESOURCE_CONFLICT',
+          detail: 'This table cannot be taken from here.',
+          problem: { conflict: 'TABLE_NOT_AVAILABLE' },
+        }),
+      );
+
+      await expect(service.seat(2)).rejects.toBeInstanceOf(HorecaOSApiError);
+
+      expect(service.admission()?.openSessionId).toBeNull();
+      expect(service.admission()?.walkInAvailable).toBe(true);
+    });
+
+    it('refuses without a scanned table, rather than posting with no proof of where', async () => {
+      const { service, api } = setUp();
+
+      await expect(service.seat(2)).rejects.toThrow('No table has been scanned');
+      expect(api.mutate).not.toHaveBeenCalled();
+    });
+
+    it('stops offering the table after a refusal, and offers it again when a session ends', () => {
+      const { service } = scanned();
+
+      service.markWalkInUnavailable();
+      expect(service.admission()?.walkInAvailable).toBe(false);
+
+      service.sessionEnded();
+      expect(service.admission()?.openSessionId).toBeNull();
+      expect(service.admission()?.walkInAvailable).toBe(true);
+    });
+  });
+
+  describe('checkoutAtTable -- the guest token beside the order', () => {
+    it('hands the cart the token as a header and nothing else', async () => {
+      const { service } = seated();
+      const checkout = vi.fn().mockResolvedValue({ orderId: 'order-1' });
+
+      const result = await service.checkoutAtTable(
+        { checkout },
+        { priced: { cartId: 'cart-1' }, paymentMethodCode: 'CASH', idempotencyKey: 'key-1' },
+      );
+
+      expect(checkout).toHaveBeenCalledWith({
+        priced: { cartId: 'cart-1' },
+        paymentMethodCode: 'CASH',
+        idempotencyKey: 'key-1',
+        headers: { 'X-Dine-In-Token': 'guest-token-1' },
+      });
+      expect(result).toEqual({ orderId: 'order-1' });
+    });
+
+    it('refuses when no table has been scanned, so an order cannot go out claiming one', async () => {
+      const { service } = setUp();
+      const checkout = vi.fn();
+
+      await expect(service.checkoutAtTable({ checkout }, {})).rejects.toThrow(
+        'No table has been scanned',
+      );
+      expect(checkout).not.toHaveBeenCalled();
+    });
+  });
+
   describe('isGuestSessionEnded', () => {
     it('is true for UNAUTHENTICATED and false for anything else', () => {
       const { service } = setUp();

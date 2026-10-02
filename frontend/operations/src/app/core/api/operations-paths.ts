@@ -740,9 +740,29 @@ export const operationsPaths = {
   },
 
   /**
+   * Keep a guest's self-seated table for them (ADR 0143, `TableSessionController#confirmClaim`).
+   * `POST` with a reason and `If-Match`; `DINEIN_SESSION_MANAGE`, `Idempotency-Key` required.
+   */
+  dineInSessionClaimConfirmations(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/claim-confirmations`;
+  },
+
+  /**
+   * Ask for the bill, start settling, return to open, or close (ADR 0047,
+   * `TableSessionController#stateAction`). `POST` with a target status, a reason and
+   * `If-Match`; `DINEIN_SESSION_MANAGE`, `Idempotency-Key` required. The console's one
+   * caller releases a guest's unconfirmed claim by closing it (ADR 0143).
+   */
+  dineInSessionStateActions(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/state-actions`;
+  },
+
+  /**
    * Floor plan settings (ADR 0047, `FloorPlanController`, rows `10.2d`/
    * `10.5b`, wave P38): `qrMode`, turnaround buffer, guest-session TTL,
-   * service-charge rate. `GET`/`PUT`, both `DINEIN_FLOORPLAN_MANAGE`.
+   * service-charge rate, and (ADR 0143) self-seating. `GET`/`PUT`, both
+   * `DINEIN_FLOORPLAN_MANAGE`; the `PUT` carries `If-Match` (a never-configured
+   * branch reads as version 0).
    */
   dineInSettings(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/settings`;

@@ -7,7 +7,13 @@ import { HorecaOSApiError } from '../../../core/api/problem-details';
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { CartService, type PlatformCart } from '../../../services/cart.service';
-import { DineInAdmission, DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
+import {
+  DineInAdmission,
+  DineInBill,
+  DineInSeating,
+  DineInService,
+  type RoundFlush,
+} from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
 import { MenuService, type PublishedMenu } from '../../../services/menu.service';
@@ -44,7 +50,8 @@ class FakeDineInService {
   queueRound = vi.fn((sessionId: string, orderId: string) => {
     this.queued.push({ sessionId, orderId });
   });
-  pendingRoundCount = (sessionId: string) => this.queued.filter((round) => round.sessionId === sessionId).length;
+  pendingRoundCount = (sessionId: string) =>
+    this.queued.filter((round) => round.sessionId === sessionId).length;
   /** The real service's queue-then-attach, minus its storage and failure classification. */
   flushPendingRounds = vi.fn(async (sessionId: string): Promise<RoundFlush> => {
     let latest: DineInBill | null = null;
@@ -56,6 +63,19 @@ class FakeDineInService {
   });
   isGuestSessionEnded = vi.fn().mockReturnValue(false);
   clear = vi.fn(() => this.admissionSig.set(null));
+  seat = vi.fn<(partySize: number) => Promise<DineInSeating>>();
+  markWalkInUnavailable = vi.fn(() => {
+    const current = this.admissionSig();
+    if (current) {
+      this.admissionSig.set({ ...current, walkInAvailable: false });
+    }
+  });
+  sessionEnded = vi.fn(() => {
+    const current = this.admissionSig();
+    if (current) {
+      this.admissionSig.set({ ...current, openSessionId: null, walkInAvailable: true });
+    }
+  });
 
   admission = () => this.admissionSig();
 
@@ -70,7 +90,9 @@ class FakeCartService {
   putLine = vi.fn();
   removeLine = vi.fn();
   price = vi.fn();
-  paymentMethods = vi.fn().mockResolvedValue({ cartId: 'cart-1', currency: 'UZS', methodCodes: [], warnings: [] });
+  paymentMethods = vi
+    .fn()
+    .mockResolvedValue({ cartId: 'cart-1', currency: 'UZS', methodCodes: [], warnings: [] });
   checkout = vi.fn();
   discard = vi.fn();
   bindTable = vi.fn().mockResolvedValue(null);
@@ -378,7 +400,15 @@ describe('DineInTableComponent', () => {
         quoteId: null,
         contextHash: null,
         expiresAt: null,
-        lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+        lines: [
+          {
+            lineKey: 'variant-1',
+            variantId: 'variant-1',
+            quantity: 1,
+            commentPresetCodes: [],
+            hasCustomerNote: false,
+          },
+        ],
       };
       cartService.ensure.mockResolvedValue(cartAfterAdd);
       cartService.putLine.mockImplementation(async () => {
@@ -432,7 +462,9 @@ describe('DineInTableComponent', () => {
         expect.objectContaining({ variantId: 'variant-1', quantity: 1 }),
       );
 
-      const checkoutButton = host.querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]');
+      const checkoutButton = host.querySelector<HTMLButtonElement>(
+        '[data-testid="dine-in-checkout"]',
+      );
       expect(checkoutButton).not.toBeNull();
       checkoutButton?.click();
       await flush();
@@ -509,7 +541,12 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
         { provide: TranslateService, useClass: FakeTranslateService },
       ],
     });
-    return { fixture: TestBed.createComponent(DineInTableComponent), cartService, notification, session };
+    return {
+      fixture: TestBed.createComponent(DineInTableComponent),
+      cartService,
+      notification,
+      session,
+    };
   }
 
   async function settle(): Promise<void> {
@@ -527,7 +564,15 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
       quoteId: null,
       contextHash: null,
       expiresAt: null,
-      lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'variant-1',
+          variantId: 'variant-1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     };
     cartService.ensure.mockResolvedValue(cart);
     cartService.putLine.mockImplementation(async () => {
@@ -588,7 +633,11 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
   }
 
   const offline = () =>
-    new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+    new HorecaOSApiError({
+      status: 0,
+      code: 'NETWORK_UNREACHABLE',
+      detail: 'The request did not reach the platform.',
+    });
 
   beforeEach(() => {
     localStorage.clear();
@@ -648,14 +697,26 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
   it('stops retrying an order the platform refuses for good, and tells the guest to ask staff', async () => {
     const api = newApi();
     api.mutate.mockRejectedValue(
-      new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'The session is closed.' }),
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'The session is closed.',
+      }),
     );
     const first = setUpReal(api);
     await placeOrder(first.fixture, first.cartService);
 
     expect(first.notification.show).toHaveBeenCalledWith('dineIn.roundAttachFailed');
-    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-lost"]')).not.toBeNull();
-    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+    expect(
+      (first.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="dine-in-round-lost"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      (first.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="dine-in-round-pending"]',
+      ),
+    ).toBeNull();
 
     first.fixture.destroy();
     TestBed.resetTestingModule();
@@ -700,7 +761,11 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
     const first = setUpReal(api);
     await placeOrder(first.fixture, first.cartService);
 
-    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+    expect(
+      (first.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="dine-in-round-pending"]',
+      ),
+    ).not.toBeNull();
     expect(first.notification.show).not.toHaveBeenCalledWith('dineIn.roundAttachFailed');
   });
 });
@@ -716,7 +781,15 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     quoteId: null,
     contextHash: null,
     expiresAt: null,
-    lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+    lines: [
+      {
+        lineKey: 'variant-1',
+        variantId: 'variant-1',
+        quantity: 1,
+        commentPresetCodes: [],
+        hasCustomerNote: false,
+      },
+    ],
   };
 
   /**
@@ -729,13 +802,15 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     parts.dineIn.seed(admission());
     parts.dineIn.bill.mockResolvedValue(bill());
     parts.menuService.menu.mockResolvedValue(menu());
-    parts.cartService.ensure.mockImplementation(async (_location: string, _mode: string, create = true) => {
-      if (!create && !options.existingCart) {
-        return null;
-      }
-      parts.cartService.cart.set(create ? { ...CART, lines: [] } : CART);
-      return CART;
-    });
+    parts.cartService.ensure.mockImplementation(
+      async (_location: string, _mode: string, create = true) => {
+        if (!create && !options.existingCart) {
+          return null;
+        }
+        parts.cartService.cart.set(create ? { ...CART, lines: [] } : CART);
+        return CART;
+      },
+    );
     parts.cartService.putLine.mockImplementation(async () => {
       parts.cartService.cart.set(CART);
       return CART;
@@ -747,7 +822,9 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
   }
 
   async function tapAdd(fixture: { detectChanges(): void; nativeElement: unknown }): Promise<void> {
-    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')?.click();
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')
+      ?.click();
     await flush();
     fixture.detectChanges();
     await flush();
@@ -791,7 +868,9 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
 
     await tapAdd(fixture);
 
-    expect(cartService.putLine).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'variant-1' }));
+    expect(cartService.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'variant-1' }),
+    );
   });
 
   it('a guest token the platform no longer recognises, met while binding, clears the visit instead of adding', async () => {
@@ -873,7 +952,10 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     });
   }
 
-  async function pressCheckout(fixture: { detectChanges(): void; nativeElement: unknown }): Promise<void> {
+  async function pressCheckout(fixture: {
+    detectChanges(): void;
+    nativeElement: unknown;
+  }): Promise<void> {
     (fixture.nativeElement as HTMLElement)
       .querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]')
       ?.click();
@@ -968,5 +1050,294 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     expect(fixture.componentInstance.checkoutError()).toBe('dineIn.tableChanged');
     expect(dineIn.queueRound).not.toHaveBeenCalled();
     expect(cartService.discard).not.toHaveBeenCalled();
+  });
+});
+
+describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () => {
+  const FREE = { mode: 'ORDER_AND_PAY', openSessionId: null, walkInAvailable: true } as const;
+
+  function seatingOf(overrides: Partial<DineInSeating> = {}): DineInSeating {
+    return {
+      ...bill({ sessionId: 'session-new' }),
+      origin: 'GUEST_QR',
+      claimExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      confirmed: false,
+      created: true,
+      ...overrides,
+    };
+  }
+
+  /** The platform seated the guest: the stored admission now names the session, as the real service does. */
+  function platformSeats(dineIn: FakeDineInService, seating: DineInSeating): void {
+    dineIn.seat.mockImplementation(async () => {
+      dineIn.seed(admission({ openSessionId: seating.sessionId, walkInAvailable: false }));
+      return seating;
+    });
+  }
+
+  async function render(admissionOverrides: Partial<DineInAdmission> = FREE, signedIn = true) {
+    const parts = setUp();
+    parts.session.setAuthenticated(signedIn);
+    parts.dineIn.seed(admission(admissionOverrides));
+    parts.menuService.menu.mockResolvedValue(menu());
+    parts.fixture.detectChanges();
+    await flush();
+    parts.fixture.detectChanges();
+    return { ...parts, host: parts.fixture.nativeElement as HTMLElement };
+  }
+
+  async function press(
+    parts: { fixture: { detectChanges(): void }; host: HTMLElement },
+    testId: string,
+  ) {
+    parts.host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click();
+    await flush();
+    parts.fixture.detectChanges();
+  }
+
+  it('invites the guest to sit when the platform said at the scan that the table could be taken', async () => {
+    const { host } = await render();
+
+    expect(host.querySelector('[data-testid="dine-in-sit"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="dine-in-not-seated"]')).toBeNull();
+    // Still no ordering controls: nothing is sat at yet.
+    expect(host.querySelector('[data-testid="dine-in-add"]')).toBeNull();
+  });
+
+  it.each([
+    ['the branch has not turned it on', { walkInAvailable: false }],
+    ['an admission stored by an earlier build', { walkInAvailable: undefined }],
+  ])('keeps the old "ask a member of staff" notice when %s', async (_name, overrides) => {
+    const { host } = await render({ mode: 'ORDER_AND_PAY', openSessionId: null, ...overrides });
+
+    expect(host.querySelector('[data-testid="dine-in-sit"]')).toBeNull();
+    expect(host.querySelector('[data-testid="dine-in-not-seated"]')).not.toBeNull();
+  });
+
+  it('never offers it at a table that is already seated, or on a menu-only code', async () => {
+    const seated = await render({
+      mode: 'ORDER_AND_PAY',
+      openSessionId: 'session-1',
+      walkInAvailable: true,
+    });
+    seated.dineIn.bill.mockResolvedValue(bill());
+    expect(seated.host.querySelector('[data-testid="dine-in-sit"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const menuOnly = await render({
+      mode: 'VIEW_ONLY',
+      openSessionId: null,
+      walkInAvailable: true,
+    });
+    expect(menuOnly.host.querySelector('[data-testid="dine-in-sit"]')).toBeNull();
+  });
+
+  it('counts the party from two, never below one', async () => {
+    const parts = await render();
+
+    expect(parts.host.querySelector('[data-testid="dine-in-party-size"]')?.textContent).toContain(
+      '2',
+    );
+    await press(parts, 'dine-in-party-increase');
+    expect(parts.host.querySelector('[data-testid="dine-in-party-size"]')?.textContent).toContain(
+      '3',
+    );
+    await press(parts, 'dine-in-party-decrease');
+    await press(parts, 'dine-in-party-decrease');
+    expect(parts.host.querySelector('[data-testid="dine-in-party-size"]')?.textContent).toContain(
+      '1',
+    );
+    expect(
+      parts.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-party-decrease"]')!
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('sends a signed-out guest to sign in first and remembers to come back to the table', async () => {
+    sessionStorage.clear();
+    const parts = await render(FREE, false);
+    const navigate = vi.spyOn(parts.router, 'navigate').mockResolvedValue(true);
+
+    expect(parts.host.querySelector('[data-testid="dine-in-sit-button"]')?.textContent).toContain(
+      'dineIn.signInToSit',
+    );
+    await press(parts, 'dine-in-sit-button');
+
+    expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+    expect(parts.dineIn.seat).not.toHaveBeenCalled();
+    expect(TestBed.inject(ReturnDestination).consume()).toBe('/dine-in/table');
+  });
+
+  it('sits a signed-in guest down with their party size, and then shows the table, the hold and no bill to ask for', async () => {
+    const parts = await render();
+    platformSeats(parts.dineIn, seatingOf());
+    await press(parts, 'dine-in-party-increase');
+
+    await press(parts, 'dine-in-sit-button');
+
+    expect(parts.dineIn.seat).toHaveBeenCalledWith(3);
+    expect(parts.host.querySelector('[data-testid="dine-in-sit"]')).toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-cart"]')).not.toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-claim-held"]')?.textContent).toContain(
+      '"minutes":10',
+    );
+    // There is nothing the restaurant has accepted to bill, so the control is not offered.
+    expect(parts.host.querySelector('[data-testid="dine-in-bill"]')).not.toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-request-bill"]')).toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-joined-existing"]')).toBeNull();
+  });
+
+  it('offers "ask for the bill" again once the claim is confirmed', async () => {
+    const parts = await render();
+    platformSeats(
+      parts.dineIn,
+      seatingOf({ confirmed: true, claimExpiresAt: null, roundCount: 1, totalMinor: 45000 }),
+    );
+
+    await press(parts, 'dine-in-sit-button');
+
+    expect(parts.host.querySelector('[data-testid="dine-in-claim-held"]')).toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-request-bill"]')).not.toBeNull();
+  });
+
+  it("says so when the seat the platform handed back is somebody else's: orders go on their bill", async () => {
+    const parts = await render();
+    platformSeats(
+      parts.dineIn,
+      seatingOf({ created: false, confirmed: true, claimExpiresAt: null }),
+    );
+
+    await press(parts, 'dine-in-sit-button');
+
+    expect(parts.host.querySelector('[data-testid="dine-in-joined-existing"]')).not.toBeNull();
+  });
+
+  it('answers every "no" with one sentence and stops offering the table', async () => {
+    const parts = await render();
+    parts.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'This table cannot be taken from here.',
+        problem: { conflict: 'TABLE_NOT_AVAILABLE' },
+      }),
+    );
+
+    await press(parts, 'dine-in-sit-button');
+
+    expect(parts.dineIn.markWalkInUnavailable).toHaveBeenCalled();
+    expect(parts.host.querySelector('[data-testid="dine-in-sit"]')).toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-not-seated"]')).not.toBeNull();
+    expect(parts.host.querySelector('[data-testid="dine-in-seat-error"]')?.textContent).toContain(
+      'dineIn.tableNotAvailable',
+    );
+  });
+
+  it('tells a guest whose party is too big how many the table seats', async () => {
+    const parts = await render();
+    parts.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 400,
+        code: 'VALIDATION_FAILED',
+        detail: 'This table seats 4.',
+        problem: { seats: 4 },
+      }),
+    );
+
+    await press(parts, 'dine-in-sit-button');
+
+    const error = parts.host.querySelector('[data-testid="dine-in-seat-error"]')?.textContent ?? '';
+    expect(error).toContain('dineIn.tooManyForTable');
+    expect(error).toContain('"seats":4');
+    // The invitation stays: a smaller party is a fair retry.
+    expect(parts.host.querySelector('[data-testid="dine-in-sit"]')).not.toBeNull();
+  });
+
+  it('sends a guest whose own sign-in lapsed to sign in, without ending the table visit', async () => {
+    sessionStorage.clear();
+    const parts = await render();
+    const navigate = vi.spyOn(parts.router, 'navigate').mockResolvedValue(true);
+    parts.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 401,
+        code: 'UNAUTHENTICATED',
+        detail: 'Sit at this table once you have signed in',
+        problem: { reason: 'CUSTOMER_SESSION_REQUIRED' },
+      }),
+    );
+
+    await press(parts, 'dine-in-sit-button');
+
+    expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+    expect(parts.dineIn.clear).not.toHaveBeenCalled();
+  });
+
+  it("ends the visit when the table's own guest token is what the platform no longer knows", async () => {
+    const parts = await render();
+    parts.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 401,
+        code: 'UNAUTHENTICATED',
+        detail: 'This table session has ended. Scan the code again.',
+      }),
+    );
+
+    await press(parts, 'dine-in-sit-button');
+
+    expect(parts.dineIn.clear).toHaveBeenCalled();
+  });
+
+  describe('the hold runs out', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('reads the bill once the window has passed, and offers to sit again when the table went back to the room', async () => {
+      // Capture the countdown's own timer (15 s) and drive it by hand, so the clock the
+      // component reads is a clock this test moves.
+      const timers: Array<() => void> = [];
+      const realSetInterval = globalThis.setInterval;
+      vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+        handler: () => void,
+        delay?: number,
+      ) => {
+        if (delay === 15_000) {
+          timers.push(handler);
+          return 0 as unknown as ReturnType<typeof setInterval>;
+        }
+        return realSetInterval(handler, delay);
+      }) as typeof setInterval);
+
+      const parts = await render();
+      const claim = seatingOf({ claimExpiresAt: new Date(Date.now() + 60_000).toISOString() });
+      platformSeats(parts.dineIn, claim);
+      await press(parts, 'dine-in-sit-button');
+      expect(parts.host.querySelector('[data-testid="dine-in-claim-held"]')).not.toBeNull();
+      expect(parts.dineIn.bill).not.toHaveBeenCalled();
+
+      // Two minutes later the window is behind us: the next tick reads the bill once.
+      const later = Date.now() + 2 * 60_000;
+      vi.spyOn(Date, 'now').mockReturnValue(later);
+      parts.dineIn.bill.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 404,
+          code: 'RESOURCE_NOT_FOUND',
+          detail: 'No open bill at this table',
+        }),
+      );
+      timers.forEach((tick) => tick());
+      await flush();
+      parts.fixture.detectChanges();
+
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
+      expect(parts.dineIn.bill).toHaveBeenCalledWith('session-new');
+      expect(parts.dineIn.sessionEnded).toHaveBeenCalled();
+      expect(parts.host.querySelector('[data-testid="dine-in-sit"]')).not.toBeNull();
+
+      // And a further tick does not read it again.
+      timers.forEach((tick) => tick());
+      await flush();
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -26,14 +26,38 @@ export interface DineInSettingsView {
    * token with a warning when it is null. A public DNS name, not a secret.
    */
   readonly storefrontHostname?: string | null;
+  /**
+   * ADR 0143: whether a guest who has scanned a free table may seat themselves. Off
+   * until a manager turns it on with a reason; it does anything only while `qrMode`
+   * is `ORDER_AND_PAY`.
+   */
+  readonly walkInSelfSeat: boolean;
+  /** How long an unconfirmed claim holds its table (2..60). */
+  readonly walkInClaimTtlMinutes: number;
+  /** How far ahead a confirmed booking's hold keeps a self-seating guest off the table (0..480). */
+  readonly walkInHorizonMinutes: number;
+  /** The most live unconfirmed claims the branch allows at once (0..100). */
+  readonly walkInMaxUnconfirmed: number;
+  /** How many claims one account may open at this branch in a day (1..20). */
+  readonly walkInDailyClaimsPerAccount: number;
+  /** How long past its window a claim with a payment still in flight is kept (0..120). */
+  readonly walkInPaymentDeferMinutes: number;
+  /** The currency a self-seated session bills in (interim, ADR 0055). */
+  readonly sessionCurrency: string;
 }
 
-/** Mirrors `FloorPlanController.SettingsRequest`. */
+/** Mirrors `FloorPlanController.SettingsRequest`. The self-seating fields are optional: omitted leaves them as they are. */
 export interface DineInSettingsInput {
   readonly qrMode: QrMode;
   readonly turnaroundMinutes: number;
   readonly guestSessionTtlMinutes: number;
   readonly serviceChargeRateBp: number;
+  readonly walkInSelfSeat?: boolean;
+  readonly walkInClaimTtlMinutes?: number;
+  readonly walkInHorizonMinutes?: number;
+  readonly walkInMaxUnconfirmed?: number;
+  readonly walkInDailyClaimsPerAccount?: number;
+  readonly walkInPaymentDeferMinutes?: number;
   readonly reason: string;
 }
 
@@ -110,11 +134,21 @@ export class DineInApi {
     return result.value;
   }
 
-  async configure(scope: LocationScope, input: DineInSettingsInput): Promise<DineInSettingsView> {
+  /**
+   * `expectedVersion` is the version `settings` last returned (a never-configured branch
+   * reads as 0): two managers editing one branch's settings produce one change and one
+   * stale-version refusal, not a silent last-writer-wins (ADR 0031).
+   */
+  async configure(
+    scope: LocationScope,
+    input: DineInSettingsInput,
+    expectedVersion: number,
+  ): Promise<DineInSettingsView> {
     return firstValueFrom(
       this.api.put<DineInSettingsInput, DineInSettingsView>(
         operationsPaths.dineInSettings(scope),
         command(input),
+        { expectedVersion },
       ),
     );
   }

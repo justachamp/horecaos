@@ -50,6 +50,13 @@ export interface ProblemDetails {
   readonly expectedVersion?: number;
   /** Checkout rejections carry a business reason beside the code. */
   readonly reason?: string;
+  /**
+   * A conflict names which rule refused it (`TABLE_OCCUPIED`, `TABLE_NOT_AVAILABLE`,
+   * `CLAIM_UNCONFIRMED`, ...): the platform's dine-in vocabulary, beside `reason`.
+   */
+  readonly conflict?: string;
+  /** A 422 about a party too large for the table carries the table's seat count. */
+  readonly seats?: number;
 }
 
 export function isProblemDetails(body: unknown): body is ProblemDetails {

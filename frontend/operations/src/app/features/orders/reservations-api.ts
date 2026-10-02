@@ -34,6 +34,13 @@ export interface ReservationResponse {
   readonly guestName: string | null;
   readonly guestPhone: string | null;
   readonly note: string | null;
+  /**
+   * Only on the answer to a confirmation or an amendment of a confirmed booking
+   * (ADR 0143): whether a party is already sitting at one of its tables. Confirming
+   * never bumps them -- the host decides -- so the fact reaches the host here rather
+   * than as a refusal. Absent or null everywhere else.
+   */
+  readonly tableOccupiedNow?: boolean | null;
 }
 
 export interface NewReservation {

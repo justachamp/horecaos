@@ -1869,6 +1869,29 @@ export const messagesEn = {
   'settings.locations.floorPlan.seat.done': 'Seated at {table}.',
   'settings.locations.floorPlan.seat.errorOccupied':
     'A party was seated at this table a moment ago.',
+  'settings.locations.floorPlan.field.selfSeat': 'Guests may seat themselves',
+  'settings.locations.floorPlan.selfSeat.on': 'On',
+  'settings.locations.floorPlan.selfSeat.off': 'Off',
+  'settings.locations.floorPlan.selfSeat.hint':
+    'A guest who scans a free table and signs in can sit down without waiting for staff. The table goes back to the room when its window ends, unless an order the restaurant accepts is on it or you keep it. It works only in the order-and-pay mode, and you can always seat, keep or release a table yourself.',
+  'settings.locations.floorPlan.field.claimTtl': 'How long a self-seated table is held, minutes',
+  'settings.locations.floorPlan.field.horizon': 'Keep guests off tables booked within, minutes',
+  'settings.locations.floorPlan.field.maxUnconfirmed':
+    'Most unconfirmed self-seated tables at once',
+  'settings.locations.floorPlan.field.dailyClaims': 'Self-seatings per guest per day',
+  'settings.locations.floorPlan.field.paymentDefer': 'Extra minutes while a payment is in progress',
+  'settings.locations.floorPlan.claim.unconfirmed':
+    'The guest seated themselves. This table goes back to the room at {time} unless an order is accepted or you keep it.',
+  'settings.locations.floorPlan.claim.confirmed':
+    'The guest seated themselves, and the table is now an ordinary one.',
+  'settings.locations.floorPlan.claim.keep': 'Keep the table',
+  'settings.locations.floorPlan.claim.release': 'Release the table',
+  'settings.locations.floorPlan.claim.kept': '{table} is kept for the guest.',
+  'settings.locations.floorPlan.claim.released': '{table} is back in the room.',
+  'settings.locations.floorPlan.claim.defaultReason':
+    'Guest seated themselves; handled from the floor plan',
+  'reservations.notice.tableOccupiedNow':
+    'Confirmed. A party is already sitting at one of these tables, so check the room before the booking arrives.',
 
   'finance.scope.denied': 'This account is not permitted to see Finance.',
 

@@ -188,6 +188,37 @@ public class TableSessionController {
                         body.reason())));
     }
 
+    @PostMapping("/{sessionId}/claim-confirmations")
+    @RequiresCapability(value = Capability.DINEIN_SESSION_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Keep a guest's self-seated table for them",
+            description = "A guest who seated themselves holds a provisional claim that lapses if "
+                    + "nothing the restaurant has accepted is on it (ADR 0143). A member of staff "
+                    + "who sees the guest standing there, or who has taken charge of the table, "
+                    + "confirms the claim so it does not lapse under them. Moving a claim to the "
+                    + "bill or to settling through state-actions confirms it too; closing it "
+                    + "releases the table instead. A session that is not an unconfirmed claim is a "
+                    + "409 NOT_AN_UNCONFIRMED_CLAIM.")
+    public ResponseEntity<SessionResponse> confirmClaim(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody ClaimConfirmationRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        return ResponseEntity.ok(respond(
+                tenantId,
+                sessions.confirmClaim(
+                        tenantId,
+                        locationId,
+                        sessionId,
+                        (int) expected,
+                        currentActor.get().subject(),
+                        body.reason())));
+    }
+
     @PostMapping("/{sessionId}/force-closures")
     @RequiresCapability(value = Capability.DINEIN_SESSION_FORCE_CLOSE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -252,7 +283,10 @@ public class TableSessionController {
             @Nullable Instant closedAt,
             @Nullable String closeReasonCode,
             int version,
-            List<SessionTableResponse> tables) {
+            List<SessionTableResponse> tables,
+            String origin,
+            @Nullable Instant claimExpiresAt,
+            @Nullable Instant confirmedAt) {
 
         static SessionResponse of(SessionRow row, List<TableSessionService.SessionTable> tables) {
             return new SessionResponse(
@@ -270,7 +304,13 @@ public class TableSessionController {
                     row.version(),
                     tables.stream()
                             .map(table -> new SessionTableResponse(table.tableId(), table.code(), table.displayName()))
-                            .toList());
+                            .toList(),
+                    // Never the claimant's account id: the floor plan shows that a table was
+                    // self-seated, when its claim ends and whether anyone has confirmed it,
+                    // not who sat down (ADR 0143, Staff surface; ADR 0029).
+                    row.origin().name(),
+                    row.claimExpiresAt(),
+                    row.confirmedAt());
         }
     }
 
@@ -297,6 +337,9 @@ public class TableSessionController {
             @NotBlank @Size(max = 500) String reason) {}
 
     record RoundResponse(UUID sessionId, UUID orderId, int sequence) {}
+
+    record ClaimConfirmationRequest(
+            @NotBlank @Size(max = 500) String reason) {}
 
     record StateActionRequest(
             @NotBlank @Size(max = 20) String targetStatus,

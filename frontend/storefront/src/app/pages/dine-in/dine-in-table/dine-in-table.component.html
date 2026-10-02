@@ -17,16 +17,92 @@
       </h1>
     </header>
 
-    @if (canOrder() && !isSeated()) {
+    @if (canSitHere()) {
+      <div class="table__sit" data-testid="dine-in-sit">
+        <p class="table__sit-title">{{ 'dineIn.sitHere' | t }}</p>
+        <p class="table__sit-hint">{{ 'dineIn.sitHereHint' | t }}</p>
+        <div class="table__sit-party">
+          <span class="table__sit-label">{{ 'dineIn.partySize' | t }}</span>
+          <div class="table__stepper">
+            <button
+              type="button"
+              class="table__step"
+              data-testid="dine-in-party-decrease"
+              [attr.aria-label]="'dineIn.fewerGuests' | t"
+              [disabled]="partySize() <= 1 || seating()"
+              (click)="stepParty(-1)"
+            >
+              −
+            </button>
+            <span class="table__step-count" data-testid="dine-in-party-size">{{
+              partySize()
+            }}</span>
+            <button
+              type="button"
+              class="table__step"
+              data-testid="dine-in-party-increase"
+              [attr.aria-label]="'dineIn.moreGuests' | t"
+              [disabled]="seating()"
+              (click)="stepParty(1)"
+            >
+              +
+            </button>
+          </div>
+        </div>
+        @if (seatErrorKey(); as errorKey) {
+          <p class="table__checkout-error" role="alert" data-testid="dine-in-seat-error">
+            {{ errorKey | t: { seats: tooManySeats() ?? 0 } }}
+          </p>
+        }
+        <button
+          type="button"
+          class="table__checkout"
+          data-testid="dine-in-sit-button"
+          [disabled]="seating()"
+          (click)="sitDown()"
+        >
+          @if (!session.isAuthenticated()) {
+            {{ 'dineIn.signInToSit' | t }}
+          } @else if (seating()) {
+            {{ 'dineIn.sitting' | t }}
+          } @else {
+            {{ 'dineIn.sitDown' | t }}
+          }
+        </button>
+      </div>
+    } @else if (canOrder() && !isSeated()) {
       <div class="table__notice" data-testid="dine-in-not-seated">
         {{ 'dineIn.notSeated' | t }}
+      </div>
+      @if (seatErrorKey(); as errorKey) {
+        <p class="table__checkout-error" role="alert" data-testid="dine-in-seat-error">
+          {{ errorKey | t }}
+        </p>
+      }
+    }
+
+    @if (canOrder() && isSeated() && joinedExisting()) {
+      <div class="table__notice" data-testid="dine-in-joined-existing">
+        {{ 'dineIn.joinedExisting' | t }}
+      </div>
+    }
+
+    @if (claimMinutesLeft(); as minutes) {
+      <div class="table__notice" data-testid="dine-in-claim-held">
+        {{ 'dineIn.claimHeld' | t: { minutes: minutes } }}
+      </div>
+    } @else if (claimMinutesLeft() === 0) {
+      <div class="table__notice" data-testid="dine-in-claim-ending">
+        {{ 'dineIn.claimEnding' | t }}
       </div>
     }
 
     @if (loading()) {
       <p class="table__loading" data-testid="dine-in-menu-loading">{{ 'common.loading' | t }}</p>
     } @else if (!menu() || rows().length === 0) {
-      <p class="table__empty-menu" data-testid="dine-in-menu-empty">{{ 'dineIn.menuUnavailable' | t }}</p>
+      <p class="table__empty-menu" data-testid="dine-in-menu-empty">
+        {{ 'dineIn.menuUnavailable' | t }}
+      </p>
     } @else {
       <div class="table__menu" data-testid="dine-in-menu">
         @for (row of rows(); track row.categoryId) {
@@ -90,7 +166,12 @@
     @if (canOrder() && isSeated()) {
       <div class="table__cart" data-testid="dine-in-cart">
         @if (!session.isAuthenticated()) {
-          <button type="button" class="table__signin" data-testid="dine-in-signin" (click)="signIn()">
+          <button
+            type="button"
+            class="table__signin"
+            data-testid="dine-in-signin"
+            (click)="signIn()"
+          >
             {{ 'dineIn.signInToOrder' | t }}
           </button>
         } @else {
@@ -151,7 +232,9 @@
         }
 
         @if (roundLost()) {
-          <p class="table__lost" data-testid="dine-in-round-lost">{{ 'dineIn.roundAttachFailed' | t }}</p>
+          <p class="table__lost" data-testid="dine-in-round-lost">
+            {{ 'dineIn.roundAttachFailed' | t }}
+          </p>
         }
 
         @if (bill(); as currentBill) {
@@ -163,15 +246,17 @@
             <p class="table__bill-rounds" data-testid="dine-in-bill-rounds">
               {{ 'dineIn.roundCount' | t: { count: currentBill.roundCount } }}
             </p>
-            <button
-              type="button"
-              class="table__ask-for-bill"
-              data-testid="dine-in-request-bill"
-              [disabled]="billBusy()"
-              (click)="requestBill()"
-            >
-              {{ 'dineIn.askForBill' | t }}
-            </button>
+            @if (!claimUnconfirmed()) {
+              <button
+                type="button"
+                class="table__ask-for-bill"
+                data-testid="dine-in-request-bill"
+                [disabled]="billBusy()"
+                (click)="requestBill()"
+              >
+                {{ 'dineIn.askForBill' | t }}
+              </button>
+            }
           </div>
         }
       </div>

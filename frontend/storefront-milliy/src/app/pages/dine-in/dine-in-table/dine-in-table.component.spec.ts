@@ -19,6 +19,7 @@ import {
   DineInService,
   type DineInAdmission,
   type DineInBill,
+  type DineInSeating,
   type RoundFlush,
 } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
@@ -77,8 +78,30 @@ class FakeDineInService {
       bindTable(headers: Readonly<Record<string, string>>): Promise<PlatformCart>;
     }) => carts.bindTable({ 'X-Dine-In-Token': 'guest-token' }),
   );
+  /** The real service hands the checkout the guest token as a header; the fake hands it a stand-in. */
+  checkoutAtTable = vi.fn(
+    async <I, T>(
+      carts: {
+        checkout(input: I & { headers: Readonly<Record<string, string>> }): Promise<T>;
+      },
+      input: I,
+    ) => carts.checkout({ ...input, headers: { 'X-Dine-In-Token': 'guest-token' } }),
+  );
   isGuestSessionEnded = vi.fn().mockReturnValue(false);
   clear = vi.fn(() => this.admissionSig.set(null));
+  seat = vi.fn<(partySize: number) => Promise<DineInSeating>>();
+  markWalkInUnavailable = vi.fn(() => {
+    const current = this.admissionSig();
+    if (current) {
+      this.admissionSig.set({ ...current, walkInAvailable: false });
+    }
+  });
+  sessionEnded = vi.fn(() => {
+    const current = this.admissionSig();
+    if (current) {
+      this.admissionSig.set({ ...current, openSessionId: null, walkInAvailable: true });
+    }
+  });
 
   seed(value: DineInAdmission | null): void {
     this.admissionSig.set(value);
@@ -165,7 +188,12 @@ class FakeCartService {
   }));
 
   checkout = vi.fn(
-    async (_input?: { priced: PricedCart; paymentMethodCode: string; idempotencyKey: string }) => ({
+    async (_input?: {
+      priced: PricedCart;
+      paymentMethodCode: string;
+      idempotencyKey: string;
+      headers?: Readonly<Record<string, string>>;
+    }) => ({
       orderId: 'order-1',
       publicOrderNumber: '0001',
       status: 'CONFIRMED',
@@ -1444,6 +1472,8 @@ describe('DineInTableComponent', () => {
         priced: expect.objectContaining({ quoteId: 'quote-1', contextHash: 'hash-1' }),
         paymentMethodCode: 'CASH',
         idempotencyKey: expect.any(String),
+        // The guest token beside it: checkout re-proves the table a bound basket names.
+        headers: { 'X-Dine-In-Token': 'guest-token' },
       });
       expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
       expect(view.dineIn.attachRound).toHaveBeenCalledWith(SESSION, 'order-1');
@@ -2369,5 +2399,324 @@ describe('DineInTableComponent -- a dish with options against the real DineInCar
     expect(q('modifier-picker')).toBeNull();
     expect(q('dine-in-cart-total')?.textContent).toContain('53\u00a0000');
     expect(q('dine-in-custom-line-options')?.textContent).toContain('Large');
+  });
+});
+
+describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () => {
+  const FREE = { openSessionId: null, walkInAvailable: true } as const;
+
+  function seatingOf(overrides: Partial<DineInSeating> = {}): DineInSeating {
+    return {
+      ...bill({ sessionId: 'session-new' }),
+      origin: 'GUEST_QR',
+      claimExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      confirmed: false,
+      created: true,
+      ...overrides,
+    };
+  }
+
+  /** The platform seated the guest: the stored admission now names the session, as the real service does. */
+  function platformSeats(view: View, seating: DineInSeating): void {
+    view.dineIn.seat.mockImplementation(async () => {
+      view.dineIn.seed(admission({ openSessionId: seating.sessionId, walkInAvailable: false }));
+      return seating;
+    });
+  }
+
+  async function arrive(
+    overrides: Partial<DineInAdmission> = FREE,
+    signedIn = true,
+  ): Promise<View> {
+    const view = setUp();
+    view.session.setAuthenticated(signedIn);
+    view.dineIn.seed(admission(overrides));
+    await settle(view.fixture);
+    return view;
+  }
+
+  it('invites the guest to sit when the platform said at the scan that the table could be taken', async () => {
+    const view = await arrive();
+
+    expect(view.q('dine-in-sit')).not.toBeNull();
+    expect(view.q('dine-in-not-seated')).toBeNull();
+    // Still no ordering controls: nobody sits here yet.
+    expect(view.q('dine-in-order')).toBeNull();
+    expect(view.q('dine-in-signin')).toBeNull();
+  });
+
+  it.each([
+    ['the branch has not turned it on', { walkInAvailable: false }],
+    ['a visit stored by an earlier build', { walkInAvailable: undefined }],
+  ])('keeps the old "ask a member of staff" notice when %s', async (_name, overrides) => {
+    const view = await arrive({ openSessionId: null, ...overrides });
+
+    expect(view.q('dine-in-sit')).toBeNull();
+    expect(view.q('dine-in-not-seated')).not.toBeNull();
+  });
+
+  it('never offers it at a table that is already seated, or on a menu-only code', async () => {
+    const seated = await arrive({ openSessionId: SESSION, walkInAvailable: true });
+    expect(seated.q('dine-in-sit')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const menuOnly = await arrive({
+      mode: 'VIEW_ONLY',
+      openSessionId: null,
+      walkInAvailable: true,
+    });
+    expect(menuOnly.q('dine-in-sit')).toBeNull();
+  });
+
+  it('counts the party from two, never below one', async () => {
+    const view = await arrive();
+
+    expect(view.q('dine-in-party-size')?.textContent).toContain('2');
+    await view.click('dine-in-party-increase');
+    expect(view.q('dine-in-party-size')?.textContent).toContain('3');
+    await view.click('dine-in-party-decrease');
+    await view.click('dine-in-party-decrease');
+    expect(view.q('dine-in-party-size')?.textContent).toContain('1');
+    expect((view.q('dine-in-party-decrease') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('sends a signed-out guest to sign in first and remembers to come back to the table', async () => {
+    sessionStorage.clear();
+    const view = await arrive(FREE, false);
+    const navigate = vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+
+    expect(view.q('dine-in-sit-button')?.textContent).toContain('dineIn.signInToSit');
+    await view.click('dine-in-sit-button');
+
+    expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+    expect(view.dineIn.seat).not.toHaveBeenCalled();
+    expect(TestBed.inject(ReturnDestination).consume()).toBe('/dine-in/table');
+  });
+
+  it('sits a signed-in guest down with their party size, then shows the table, the hold and no bill to ask for', async () => {
+    const view = await arrive();
+    platformSeats(view, seatingOf());
+    await view.click('dine-in-party-increase');
+
+    await view.click('dine-in-sit-button');
+
+    expect(view.dineIn.seat).toHaveBeenCalledWith(3);
+    expect(view.q('dine-in-sit')).toBeNull();
+    expect(view.q('dine-in-bill')).not.toBeNull();
+    expect(view.q('dine-in-claim-held')?.textContent).toContain('"minutes":10');
+    // There is nothing the restaurant has accepted to bill, so the control is not offered.
+    expect(view.q('dine-in-request-bill')).toBeNull();
+    expect(view.q('dine-in-joined-existing')).toBeNull();
+  });
+
+  it('offers "ask for the bill" again once the claim is confirmed and a round is on it', async () => {
+    const view = await arrive();
+    platformSeats(
+      view,
+      seatingOf({ confirmed: true, claimExpiresAt: null, roundCount: 1, totalMinor: 45_000 }),
+    );
+
+    await view.click('dine-in-sit-button');
+
+    expect(view.q('dine-in-claim-held')).toBeNull();
+    expect(view.q('dine-in-request-bill')).not.toBeNull();
+  });
+
+  it("says so when the seat the platform handed back is somebody else's: orders go on their bill", async () => {
+    const view = await arrive();
+    platformSeats(view, seatingOf({ created: false, confirmed: true, claimExpiresAt: null }));
+
+    await view.click('dine-in-sit-button');
+
+    expect(view.q('dine-in-joined-existing')).not.toBeNull();
+  });
+
+  it('answers every "no" with one sentence and stops offering the table', async () => {
+    const view = await arrive();
+    view.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'This table cannot be taken from here.',
+        problem: { conflict: 'TABLE_NOT_AVAILABLE' },
+      }),
+    );
+
+    await view.click('dine-in-sit-button');
+
+    expect(view.dineIn.markWalkInUnavailable).toHaveBeenCalled();
+    expect(view.q('dine-in-sit')).toBeNull();
+    expect(view.q('dine-in-not-seated')).not.toBeNull();
+    expect(view.q('dine-in-seat-error')?.textContent).toContain('dineIn.tableNotAvailable');
+  });
+
+  it('tells a guest whose party is too big how many the table seats, and keeps the invitation', async () => {
+    const view = await arrive();
+    view.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 400,
+        code: 'VALIDATION_FAILED',
+        detail: 'This table seats 4.',
+        problem: { seats: 4 },
+      }),
+    );
+
+    await view.click('dine-in-sit-button');
+
+    const error = view.q('dine-in-seat-error')?.textContent ?? '';
+    expect(error).toContain('dineIn.tooManyForTable');
+    expect(error).toContain('"seats":4');
+    expect(view.q('dine-in-sit')).not.toBeNull();
+  });
+
+  it('sends a guest whose own sign-in lapsed to sign in, without ending the table visit', async () => {
+    sessionStorage.clear();
+    const view = await arrive();
+    const navigate = vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+    view.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 401,
+        code: 'UNAUTHENTICATED',
+        detail: 'Sit at this table once you have signed in',
+        problem: { reason: 'CUSTOMER_SESSION_REQUIRED' },
+      }),
+    );
+
+    await view.click('dine-in-sit-button');
+
+    expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+    expect(view.dineIn.clear).not.toHaveBeenCalled();
+  });
+
+  it("ends the visit when the table's own guest token is what the platform no longer knows", async () => {
+    const view = await arrive();
+    view.dineIn.seat.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 401,
+        code: 'UNAUTHENTICATED',
+        detail: 'This table session has ended. Scan the code again.',
+      }),
+    );
+
+    await view.click('dine-in-sit-button');
+
+    expect(view.dineIn.clear).toHaveBeenCalled();
+  });
+
+  describe('the hold runs out', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('reads the bill once the window has passed, and offers to sit again when the table went back to the room', async () => {
+      // Capture the countdown's own timer (15 s) and drive it by hand, so the clock the
+      // component reads is a clock this test moves.
+      const timers: Array<() => void> = [];
+      const realSetInterval = globalThis.setInterval;
+      vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+        handler: () => void,
+        delay?: number,
+      ) => {
+        if (delay === 15_000) {
+          timers.push(handler);
+          return 0 as unknown as ReturnType<typeof setInterval>;
+        }
+        return realSetInterval(handler, delay);
+      }) as typeof setInterval);
+
+      const view = await arrive();
+      platformSeats(
+        view,
+        seatingOf({ claimExpiresAt: new Date(Date.now() + 60_000).toISOString() }),
+      );
+      await view.click('dine-in-sit-button');
+      expect(view.q('dine-in-claim-held')).not.toBeNull();
+      view.dineIn.bill.mockClear();
+
+      // Two minutes later the window is behind us: the next tick reads the bill once.
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * 60_000);
+      view.dineIn.bill.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 404,
+          code: 'RESOURCE_NOT_FOUND',
+          detail: 'No open bill at this table',
+        }),
+      );
+      timers.forEach((tick) => tick());
+      await settle(view.fixture);
+
+      expect(view.dineIn.bill).toHaveBeenCalledTimes(1);
+      expect(view.dineIn.bill).toHaveBeenCalledWith('session-new');
+      expect(view.dineIn.sessionEnded).toHaveBeenCalled();
+      expect(view.q('dine-in-sit')).not.toBeNull();
+      // The ordinary "this visit has ended" notice is for a session a host closed, not for a lapsed claim.
+      expect(view.q('dine-in-session-ended')).toBeNull();
+
+      // And a further tick does not read it again.
+      timers.forEach((tick) => tick());
+      await settle(view.fixture);
+      expect(view.dineIn.bill).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('DineInTableComponent -- checkout re-proves the table (ADR 0047)', () => {
+  async function withBasket(): Promise<View> {
+    const view = setUp();
+    view.dineIn.seed(admission());
+    view.dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+    await settle(view.fixture);
+    await view.click('dine-in-add');
+    return view;
+  }
+
+  it('sends the guest token with the checkout, so a bound basket is not refused for want of one', async () => {
+    const view = await withBasket();
+
+    await view.click('dine-in-checkout');
+
+    expect(view.dineIn.checkoutAtTable).toHaveBeenCalledTimes(1);
+    expect(view.carts.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: { 'X-Dine-In-Token': 'guest-token' } }),
+    );
+  });
+
+  it.each(['TABLE_TOKEN_ENDED', 'TABLE_TOKEN_REQUIRED'])(
+    'a checkout refused with %s clears the visit: scan the code again',
+    async (reason) => {
+      const view = await withBasket();
+      view.carts.checkout.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 409,
+          code: 'RESOURCE_CONFLICT',
+          detail: 'Scan the code again.',
+          problem: { reason },
+        }),
+      );
+
+      await view.click('dine-in-checkout');
+
+      expect(view.dineIn.clear).toHaveBeenCalled();
+      expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a checkout refused because the basket is bound to another table rebinds it and asks the guest to look again', async () => {
+    const view = await withBasket();
+    view.carts.checkout.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'This cart was started at another table.',
+        problem: { reason: 'TABLE_BINDING_STALE' },
+      }),
+    );
+    expect(view.carts.bindTable).toHaveBeenCalledTimes(1);
+
+    await view.click('dine-in-checkout');
+
+    expect(view.carts.bindTable).toHaveBeenCalledTimes(2);
+    expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.tableChanged');
+    expect(view.dineIn.queueRound).not.toHaveBeenCalled();
   });
 });

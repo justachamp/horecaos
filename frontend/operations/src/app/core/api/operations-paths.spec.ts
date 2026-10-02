@@ -163,6 +163,15 @@ describe('operationsPaths dine-in sessions (ADR 0047, TableSessionController)', 
       '/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions/a%2Fb/rounds',
     );
   });
+
+  it('dineInSessionClaimConfirmations and dineInSessionStateActions name the session, encoded (ADR 0143)', () => {
+    expect(operationsPaths.dineInSessionClaimConfirmations(SCOPE, 's1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions/s1/claim-confirmations',
+    );
+    expect(operationsPaths.dineInSessionStateActions(SCOPE, 'a/b')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions/a%2Fb/state-actions',
+    );
+  });
 });
 
 /**
