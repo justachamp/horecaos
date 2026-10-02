@@ -171,6 +171,21 @@
         },
         "type" : "object"
       },
+      "AppliedPromotionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "effect" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApplyPromoCodeRequest" : {
         "properties" : {
           "code" : {
@@ -238,8 +253,7 @@
             "type" : "array"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -280,6 +294,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "paymentMethodCode" : {
+            "type" : "string"
+          },
           "quoteId" : {
             "format" : "uuid",
             "type" : "string"
@@ -288,6 +305,30 @@
             "type" : "string"
           },
           "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CatchweightLineResponse" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nominalGramsPerUnit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pricePerQuantumMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "quantumGrams" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -1156,6 +1197,9 @@
           "orderable" : {
             "type" : "boolean"
           },
+          "physical" : {
+            "$ref" : "#/components/schemas/PhysicalFacts"
+          },
           "remainingQuantity" : {
             "type" : "number"
           },
@@ -1230,6 +1274,23 @@
         },
         "type" : "object"
       },
+      "NutritionPer100" : {
+        "properties" : {
+          "caloriesKcalPer100" : {
+            "type" : "number"
+          },
+          "carbohydratesGramsPer100" : {
+            "type" : "number"
+          },
+          "fatGramsPer100" : {
+            "type" : "number"
+          },
+          "proteinGramsPer100" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
           "autoSelectedCharges" : {
@@ -1243,6 +1304,9 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "catchweight" : {
+            "$ref" : "#/components/schemas/CatchweightLineResponse"
           },
           "comboName" : {
             "type" : "string"
@@ -1280,8 +1344,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "unitAmountMinor" : {
             "format" : "int64",
@@ -1299,6 +1362,12 @@
       },
       "OrderResponse" : {
         "properties" : {
+          "appliedPromotions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppliedPromotionResponse"
+            },
+            "type" : "array"
+          },
           "confirmedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -1309,6 +1378,10 @@
           },
           "currency" : {
             "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "feeMinor" : {
             "format" : "int64",
@@ -1488,6 +1561,39 @@
         },
         "type" : "object"
       },
+      "PhysicalFacts" : {
+        "properties" : {
+          "catchweight" : {
+            "type" : "boolean"
+          },
+          "catchweightNominalGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "catchweightQuantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netVolumeMillilitres" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nutrition" : {
+            "$ref" : "#/components/schemas/NutritionPer100"
+          },
+          "portionSize" : {
+            "type" : "number"
+          },
+          "splittable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "PickupLocation" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -1563,6 +1669,12 @@
       },
       "PricedCartResponse" : {
         "properties" : {
+          "appliedPromotions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppliedPromotionResponse"
+            },
+            "type" : "array"
+          },
           "cartId" : {
             "format" : "uuid",
             "type" : "string"
@@ -1597,6 +1709,9 @@
               "$ref" : "#/components/schemas/HiddenChargeResponse"
             },
             "type" : "array"
+          },
+          "promoCodeOutcome" : {
+            "type" : "string"
           },
           "quoteId" : {
             "format" : "uuid",
@@ -1708,9 +1823,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
             "maximum" : 999,
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -1810,8 +1924,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "status" : {
             "type" : "string"
@@ -1917,6 +2030,16 @@
           }
         },
         "required" : [ "partySize" ],
+        "type" : "object"
+      },
+      "SelectPaymentMethodRequest" : {
+        "properties" : {
+          "paymentMethodCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ServiceabilityView" : {
@@ -3080,6 +3203,61 @@
           }
         },
         "summary" : "Rebuild this cart at another location",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method" : {
+      "put" : {
+        "description" : "ADR 0140. The method is an input to the price whenever a promotion reads it (\"5% off when paying by Click\"), so it is stored on the cart before pricing, and clears any attached quote the same way a line edit does. A null code clears the selection, and an unselected method never earns a payment-method promotion. Checkout with a different method than the cart was priced with is refused PRICE_CHANGED when such a promotion exists, which is the re-quote the customer app has to design around.",
+        "operationId" : "setPaymentMethod",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SelectPaymentMethodRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Select how the cart will be paid",
         "tags" : [ "Storefront ordering" ]
       }
     },

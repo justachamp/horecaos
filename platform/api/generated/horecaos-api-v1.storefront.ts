@@ -66,6 +66,12 @@ export interface ApiMoney {
   currency?: string;
 }
 
+export interface AppliedPromotionResponse {
+  amountMinor?: number;
+  effect?: string;
+  source?: string;
+}
+
 export interface ApplyPromoCodeRequest {
   code: string;
 }
@@ -99,9 +105,18 @@ export interface CartResponse {
   fulfillmentMode?: string;
   lines?: Array<CartLineResponse>;
   locationId?: string;
+  paymentMethodCode?: string;
   quoteId?: string;
   status?: string;
   version?: number;
+}
+
+export interface CatchweightLineResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
 }
 
 export interface ChallengeResponse {
@@ -388,6 +403,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   onSaleNow?: boolean;
   orderable?: boolean;
+  physical?: PhysicalFacts;
   remainingQuantity?: number;
   sku?: string;
   unitCode?: string;
@@ -417,9 +433,17 @@ export interface NestedModifierResponse {
   parentOptionId?: string;
 }
 
+export interface NutritionPer100 {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  fatGramsPer100?: number;
+  proteinGramsPer100?: number;
+}
+
 export interface OrderLineResponse {
   autoSelectedCharges?: Array<StorefrontOrderingControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
+  catchweight?: CatchweightLineResponse;
   comboName?: string;
   comboSelectionId?: string;
   finalAmountMinor?: number;
@@ -435,9 +459,11 @@ export interface OrderLineResponse {
 }
 
 export interface OrderResponse {
+  appliedPromotions?: Array<AppliedPromotionResponse>;
   confirmedAt?: string;
   createdAt?: string;
   currency?: string;
+  discountMinor?: number;
   feeMinor?: number;
   fulfillmentMode?: string;
   lines?: Array<OrderLineResponse>;
@@ -493,6 +519,17 @@ export interface PaymentSessionRequest {
   returnUrl?: string;
 }
 
+export interface PhysicalFacts {
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  nutrition?: NutritionPer100;
+  portionSize?: number;
+  splittable?: boolean;
+}
+
 export interface PickupLocation {
   acceptsScheduledOrders?: boolean;
   addressLine?: string;
@@ -519,6 +556,7 @@ export interface PickupLocations {
 }
 
 export interface PricedCartResponse {
+  appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
   cartVersion?: number;
   contextHash?: string;
@@ -528,6 +566,7 @@ export interface PricedCartResponse {
   expiresAt?: string;
   feeMinor?: number;
   hiddenCharges?: Array<HiddenChargeResponse>;
+  promoCodeOutcome?: string;
   quoteId?: string;
   subtotalMinor?: number;
   taxMinor?: number;
@@ -619,6 +658,10 @@ export interface SaveAddressRequest {
 
 export interface SeatRequest {
   partySize: number;
+}
+
+export interface SelectPaymentMethodRequest {
+  paymentMethodCode?: string;
 }
 
 export interface ServiceabilityView {
@@ -786,6 +829,7 @@ export interface Operations {
   "removeLine": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "putLine": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } }; body: PutLineRequest }; responses: { "200": CartResponse } };
   "moveLocation": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/location"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: MoveLocationRequest }; responses: { "200": CartResponse } };
+  "setPaymentMethod": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: SelectPaymentMethodRequest }; responses: { "200": CartResponse } };
   "paymentMethods": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-methods"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PaymentMethodsResponse } };
   "price": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/pricing"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PricedCartResponse } };
   "removePromoCode": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
