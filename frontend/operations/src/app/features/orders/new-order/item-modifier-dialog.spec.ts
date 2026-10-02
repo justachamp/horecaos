@@ -314,4 +314,38 @@ describe('ItemModifierDialog', () => {
     fixture.componentInstance['close']();
     expect(fixture.componentInstance['isPresetChecked']('NO_ONIONS')).toBe(false);
   });
+
+  it('ADR 0136: shows an option by its name when the menu names it, and by its code when it does not', () => {
+    const named: MenuModifierGroup = {
+      ...EXTRAS_GROUP,
+      options: [
+        {
+          optionId: 'o-cheese',
+          code: 'CHEESE',
+          maximumQuantity: 1,
+          amountMinor: 3_000,
+          name: 'Cheddar',
+        },
+        { optionId: 'o-bacon', code: 'BACON', maximumQuantity: 1, amountMinor: 4_000 },
+      ],
+    };
+    const fixture = render([named]);
+    const host: HTMLElement = fixture.nativeElement;
+    const confirmations: ModifierDialogConfirmation[] = [];
+    fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+
+    expect(host.textContent).toContain('Cheddar');
+    expect(host.textContent).not.toContain('CHEESE');
+    expect(host.textContent).toContain('BACON');
+
+    host
+      .querySelectorAll<HTMLInputElement>('[data-testid="item-modifier-checkbox"]')[0]
+      .dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+
+    expect(confirmations[0].selections).toEqual([
+      { optionId: 'o-cheese', code: 'CHEESE', name: 'Cheddar', quantity: 1, amountMinor: 3_000 },
+    ]);
+  });
 });

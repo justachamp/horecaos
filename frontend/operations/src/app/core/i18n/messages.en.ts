@@ -282,6 +282,7 @@ export const messagesEn = {
 
   'orders.dialog.changeQuantity.line': 'Item',
   'orders.dialog.changeQuantity.newQuantity': 'New quantity (at least {min})',
+  'orders.dialog.changeQuantity.comboOption': '{name} (combos: {count})',
 
   'orders.dialog.changeAddress.line2': 'Address line 2',
   'orders.dialog.changeAddress.city': 'City',
@@ -337,6 +338,8 @@ export const messagesEn = {
   'orders.detail.lines.column.name': 'Item',
   'orders.detail.lines.column.quantity': 'Qty',
   'orders.detail.lines.column.amount': 'Amount',
+  'orders.detail.lines.combo.caption': 'Combo',
+  'orders.detail.lines.autoAdded': 'added automatically',
   'orders.detail.lines.snapshotNotice':
     'Names and prices are fixed at the moment the order was placed.',
   'orders.detail.lines.note.hidden': '💬 has a note',
@@ -2877,6 +2880,8 @@ export const messagesEn = {
   'kitchen.item.column.quantity': 'Qty',
   'kitchen.item.column.status': 'Status',
   'kitchen.item.lineUnresolved': 'Line —',
+  'kitchen.item.combo': 'Combo',
+  'kitchen.item.comboCaption': 'each part goes to its own station',
   'kitchen.item.status.QUEUED': 'Queued',
   'kitchen.item.status.STARTED': 'Started',
   'kitchen.item.status.READY': 'Ready',
@@ -5839,6 +5844,16 @@ export const messagesEn = {
   'orders.newOrder.modifiers.selectAtLeast': 'Choose at least {min}',
   'orders.newOrder.modifiers.confirm': 'Add to order',
   'orders.newOrder.modifiers.cancel': 'Cancel',
+  'orders.newOrder.combo.title': 'Build {product}',
+  'orders.newOrder.combo.pickExactly': 'Pick {min}',
+  'orders.newOrder.combo.pickBetween': 'Pick {min} to {max}',
+  'orders.newOrder.combo.pickAtLeast': 'Pick at least {min}',
+  'orders.newOrder.combo.notPriced': 'not priced',
+  'orders.newOrder.combo.included': 'included',
+  'orders.newOrder.combo.cannotBeFilled':
+    'This combo cannot be completed right now: one of its choices has nothing in stock.',
+  'orders.newOrder.combo.total': 'Combo total: {total}',
+  'orders.newOrder.combo.totalPending': 'Total pending: a picked component has no price',
   // Row 2.1b: the optional checkbox section beneath the modifier groups.
   'orders.newOrder.presets.title': 'Comments',
   'orders.newOrder.basket.title': 'Basket',

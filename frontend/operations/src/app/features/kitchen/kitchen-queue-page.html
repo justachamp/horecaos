@@ -174,68 +174,78 @@
                 </tr>
               </thead>
               <tbody>
-                @for (item of ticket.items; track item.itemId) {
-                  <tr>
-                    <td>
-                      @if (lineFor(ticket, item); as line) {
-                        <div>{{ line.productName }}</div>
-                        @if (line.variantName) {
-                          <div class="q-caption">{{ line.variantName }}</div>
-                        }
-                        @if (line.commentPresets.length > 0) {
-                          <ul class="ticket__line-presets" data-testid="kitchen-line-presets">
-                            @for (preset of line.commentPresets; track preset.code) {
-                              <li class="chip ticket__preset-chip">{{ presetLabel(preset) }}</li>
-                            }
-                          </ul>
-                        }
-                        @if (line.hasNote) {
-                          @if (revealedNote(item.orderLineId) !== undefined) {
-                            <div
-                              class="q-caption ticket__note-revealed"
-                              data-testid="kitchen-line-note"
-                            >
-                              {{ noteDisplayText(item.orderLineId) }}
-                            </div>
-                          } @else {
-                            <button
-                              type="button"
-                              class="ticket__reveal-note"
-                              [disabled]="isRevealingNote(item.orderLineId)"
-                              (click)="revealLineNote(ticket, item.orderLineId)"
-                              data-testid="kitchen-reveal-note"
-                            >
-                              {{
-                                (isRevealingNote(item.orderLineId)
-                                  ? 'kitchen.item.revealingNote'
-                                  : 'kitchen.item.revealNote'
-                                ) | t
-                              }}
-                            </button>
+                @for (row of itemRows(ticket); track row.key) {
+                  @if (row.kind === 'combo') {
+                    <tr class="ticket__combo-head" data-testid="kitchen-combo-head">
+                      <td colspan="5">
+                        <span class="q-body-sm">{{ row.name ?? ('kitchen.item.combo' | t) }}</span>
+                        <span class="q-caption">{{ 'kitchen.item.comboCaption' | t }}</span>
+                      </td>
+                    </tr>
+                  } @else {
+                    @let item = row.item;
+                    <tr [class.ticket__item--component]="row.inCombo">
+                      <td>
+                        @if (lineFor(ticket, item); as line) {
+                          <div>{{ line.productName }}</div>
+                          @if (line.variantName) {
+                            <div class="q-caption">{{ line.variantName }}</div>
                           }
+                          @if (line.commentPresets.length > 0) {
+                            <ul class="ticket__line-presets" data-testid="kitchen-line-presets">
+                              @for (preset of line.commentPresets; track preset.code) {
+                                <li class="chip ticket__preset-chip">{{ presetLabel(preset) }}</li>
+                              }
+                            </ul>
+                          }
+                          @if (line.hasNote) {
+                            @if (revealedNote(item.orderLineId) !== undefined) {
+                              <div
+                                class="q-caption ticket__note-revealed"
+                                data-testid="kitchen-line-note"
+                              >
+                                {{ noteDisplayText(item.orderLineId) }}
+                              </div>
+                            } @else {
+                              <button
+                                type="button"
+                                class="ticket__reveal-note"
+                                [disabled]="isRevealingNote(item.orderLineId)"
+                                (click)="revealLineNote(ticket, item.orderLineId)"
+                                data-testid="kitchen-reveal-note"
+                              >
+                                {{
+                                  (isRevealingNote(item.orderLineId)
+                                    ? 'kitchen.item.revealingNote'
+                                    : 'kitchen.item.revealNote'
+                                  ) | t
+                                }}
+                              </button>
+                            }
+                          }
+                        } @else {
+                          <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
                         }
-                      } @else {
-                        <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
-                      }
-                    </td>
-                    <td>{{ stationLabel(item.stationId) }}</td>
-                    <td class="kitchen__num-col q-tnum">{{ item.quantity }}</td>
-                    <td>
-                      <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
-                    </td>
-                    <td class="ticket__item-actions">
-                      @for (action of itemActions(ticket, item); track action) {
-                        <button
-                          type="button"
-                          class="ticket__action"
-                          [disabled]="isItemBusy(item)"
-                          (click)="onItemAction(item, action)"
-                        >
-                          {{ itemActionLabel(action) }}
-                        </button>
-                      }
-                    </td>
-                  </tr>
+                      </td>
+                      <td>{{ stationLabel(item.stationId) }}</td>
+                      <td class="kitchen__num-col q-tnum">{{ item.quantity }}</td>
+                      <td>
+                        <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
+                      </td>
+                      <td class="ticket__item-actions">
+                        @for (action of itemActions(ticket, item); track action) {
+                          <button
+                            type="button"
+                            class="ticket__action"
+                            [disabled]="isItemBusy(item)"
+                            (click)="onItemAction(item, action)"
+                          >
+                            {{ itemActionLabel(action) }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
                 }
               </tbody>
             </table>

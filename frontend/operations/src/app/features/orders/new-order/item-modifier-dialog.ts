@@ -91,6 +91,11 @@ export class ItemModifierDialog {
     return this.quantities().get(optionId) ?? 0;
   }
 
+  /** What the operator reads on an option: its name in the menu's language, else the authoring code the platform published before options carried one. */
+  protected optionLabel(option: MenuModifierOption): string {
+    return option.name || option.code;
+  }
+
   /** A radio-style single choice — exactly one option, never a stepper. */
   protected isSingleChoice(group: MenuModifierGroup): boolean {
     return group.maximumSelections === 1;
@@ -200,6 +205,8 @@ export class ItemModifierDialog {
           selections.push({
             optionId: option.optionId,
             code: option.code,
+            // Carried only when the menu names the option, so the basket reads what the customer would.
+            ...(option.name ? { name: option.name } : {}),
             quantity,
             amountMinor: option.amountMinor,
           });

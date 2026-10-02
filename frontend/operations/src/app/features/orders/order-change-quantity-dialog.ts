@@ -17,6 +17,18 @@ export interface QuantitySubmission {
   readonly quantity: number;
 }
 
+/** One thing the operator can raise: a line, or a whole combo counted in combos (ADR 0136). */
+export interface QuantityChoice {
+  /** The line the amendment is sent against: for a combo, its first component line. */
+  readonly lineId: string;
+  readonly name: string;
+  /** The count the operator reads and raises: the line's quantity, or the number of combos. */
+  readonly current: number;
+  /** Units on the sent line for one step of {@link current}: one, or a combo's units on that component. */
+  readonly unitsPerStep: number;
+  readonly isCombo: boolean;
+}
+
 /**
  * `CHANGE_LINE_QUANTITY` (ADR 0039, wave 10, row `1.2c`) — increase only.
  * `OrderAmendmentService#repriceFor` refuses `quantity <= line.quantity()`
@@ -49,14 +61,55 @@ export class OrderChangeQuantityDialog {
   protected readonly quantity = signal(1);
   private lastSeededLines: readonly OrderLine[] = [];
 
-  protected readonly selectedLine = computed(
-    () => this.lines().find((line) => line.lineId === this.selectedLineId()) ?? null,
+  /**
+   * What the operator can raise: each ordinary line, and each combo once (ADR 0136). A combo is
+   * several lines of one purchase and its quantity is a count of whole combos — the platform refuses
+   * a fraction of one — so it is offered as a single choice, counted in combos, and the quantity
+   * sent is that count times the units one combo puts on the component line it is sent against.
+   */
+  protected readonly choices = computed<readonly QuantityChoice[]>(() => {
+    const choices: QuantityChoice[] = [];
+    const seen = new Set<string>();
+    for (const line of this.lines()) {
+      const combo = line.combo;
+      if (!combo) {
+        choices.push({
+          lineId: line.lineId,
+          name: line.productName,
+          current: line.quantity,
+          unitsPerStep: 1,
+          isCombo: false,
+        });
+        continue;
+      }
+      if (seen.has(combo.selectionId)) {
+        continue;
+      }
+      seen.add(combo.selectionId);
+      choices.push({
+        lineId: line.lineId,
+        name: combo.name,
+        current: combo.quantity,
+        // The component's units for one combo; a line that is not a multiple of the combo count
+        // (it cannot be, from checkout) falls back to one so the stepper still moves.
+        unitsPerStep:
+          combo.quantity > 0 && line.quantity % combo.quantity === 0
+            ? line.quantity / combo.quantity
+            : 1,
+        isCombo: true,
+      });
+    }
+    return choices;
+  });
+
+  protected readonly selectedChoice = computed(
+    () => this.choices().find((choice) => choice.lineId === this.selectedLineId()) ?? null,
   );
 
-  protected readonly minQuantity = computed(() => (this.selectedLine()?.quantity ?? 0) + 1);
+  protected readonly minQuantity = computed(() => (this.selectedChoice()?.current ?? 0) + 1);
 
   protected readonly canSubmit = computed(
-    () => this.selectedLine() !== null && this.quantity() >= this.minQuantity(),
+    () => this.selectedChoice() !== null && this.quantity() >= this.minQuantity(),
   );
 
   constructor() {
@@ -66,16 +119,16 @@ export class OrderChangeQuantityDialog {
         return;
       }
       this.lastSeededLines = lines;
-      const first = lines[0] ?? null;
+      const first = this.choices()[0] ?? null;
       this.selectedLineId.set(first?.lineId ?? null);
-      this.quantity.set((first?.quantity ?? 0) + 1);
+      this.quantity.set((first?.current ?? 0) + 1);
     });
   }
 
   protected selectLine(lineId: string): void {
     this.selectedLineId.set(lineId);
-    const line = this.lines().find((candidate) => candidate.lineId === lineId);
-    this.quantity.set((line?.quantity ?? 0) + 1);
+    const choice = this.choices().find((candidate) => candidate.lineId === lineId);
+    this.quantity.set((choice?.current ?? 0) + 1);
   }
 
   protected setQuantity(value: string): void {
@@ -86,10 +139,13 @@ export class OrderChangeQuantityDialog {
   }
 
   protected submit(): void {
-    const line = this.selectedLine();
-    if (!line || !this.canSubmit()) {
+    const choice = this.selectedChoice();
+    if (!choice || !this.canSubmit()) {
       return;
     }
-    this.confirm.emit({ orderLineId: line.lineId, quantity: this.quantity() });
+    this.confirm.emit({
+      orderLineId: choice.lineId,
+      quantity: this.quantity() * choice.unitsPerStep,
+    });
   }
 }

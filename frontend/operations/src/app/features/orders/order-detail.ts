@@ -38,6 +38,32 @@ export interface OrderLine {
    * is the separate, audited call that returns it (§3.4).
    */
   readonly hasNote: boolean;
+  /**
+   * ADR 0136: set on each component line of a combo, null on every other line. The lines of one
+   * combo purchase share a `selectionId`; the container is never a line, so the console groups on
+   * the id and shows the name as the header.
+   */
+  readonly combo?: OrderLineCombo | null;
+  /** ADR 0136: the names, within {@link modifiers}, of the options the server applied for this order's fulfilment mode. */
+  readonly autoSelectedModifiers?: readonly string[];
+  /** ADR 0136: the same options with what each cost for the whole line — already inside {@link finalAmountMinor}. */
+  readonly autoSelectedCharges?: readonly OrderLineAutoCharge[];
+}
+
+/** `OperationsOrderController.ComboResponse` — the combo a line was bought as part of. */
+export interface OrderLineCombo {
+  readonly selectionId: string;
+  readonly containerVariantId: string;
+  /** The combo's name as it was sold: copied at checkout, so a rename cannot change an old receipt. */
+  readonly name: string;
+  /** How many combos this purchase was. */
+  readonly quantity: number;
+}
+
+/** `OperationsOrderController.AutoSelectedChargeResponse` — an option the server applied, and what it cost. */
+export interface OrderLineAutoCharge {
+  readonly name: string;
+  readonly amountMinor: number;
 }
 
 /** `OperationsOrderController.CommentPresetChip`. */

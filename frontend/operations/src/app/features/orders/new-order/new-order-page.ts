@@ -39,6 +39,8 @@ import {
 } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { accessRefusal, describeApiError } from '../order-errors';
+import { ComboDialogConfirmation, ComboPickerDialog } from './combo-picker-dialog';
+import { resolvePicks } from './combo-selection';
 import { DineInTablePicker, TablePick } from './dine-in-table-picker';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
 import {
@@ -48,6 +50,7 @@ import {
   CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
+  MenuComboGroup,
   MenuModifierGroup,
   MenuProduct,
   MenuVariant,
@@ -59,7 +62,7 @@ import {
 import { BasketLineView, NewOrderBasket } from './new-order-basket';
 import { NewOrderHeader } from './new-order-header';
 import { NewOrderMenuGrid } from './new-order-menu-grid';
-import { BasketLine, computeBasketTotal } from './new-order-total';
+import { BasketLine, comboAmountMinor, computeBasketTotal } from './new-order-total';
 
 /**
  * The tenant's operator/call-centre channel is `tenant.sales_channels` data
@@ -147,6 +150,13 @@ interface PendingModifierSelection {
   readonly product: MenuProduct;
   readonly variant: MenuVariant;
   readonly groups: readonly MenuModifierGroup[];
+}
+
+/** A combo the operator has opened and not yet confirmed (ADR 0136). */
+interface PendingComboSelection {
+  readonly product: MenuProduct;
+  readonly variant: MenuVariant;
+  readonly groups: readonly MenuComboGroup[];
 }
 
 /**
@@ -261,6 +271,7 @@ interface PendingModifierSelection {
     Combobox,
     CreateCustomerDialog,
     ItemModifierDialog,
+    ComboPickerDialog,
     DeniedState,
     MoneyInput,
     DineInTablePicker,
@@ -427,19 +438,46 @@ export class NewOrderPage implements OnInit {
       new Map((this.menu()?.modifierGroups ?? []).map((group) => [group.modifierGroupId, group])),
   );
 
+  /**
+   * The groups a product offers, each with this product's own required/min/max where it overrides
+   * the shared group's (ADR 0136) — the same values the cart enforces, so the dialog never offers a
+   * range the platform then refuses.
+   */
   protected modifierGroupsFor(product: MenuProduct): readonly MenuModifierGroup[] {
     const index = this.modifierGroupIndex();
+    const policies = new Map(
+      (product.modifierGroupPolicies ?? []).map((policy) => [policy.modifierGroupId, policy]),
+    );
     return product.modifierGroupIds
       .map((id) => index.get(id))
-      .filter((group): group is MenuModifierGroup => group !== undefined);
+      .filter((group): group is MenuModifierGroup => group !== undefined)
+      .map((group) => {
+        const policy = policies.get(group.modifierGroupId);
+        return policy
+          ? {
+              ...group,
+              required: policy.required,
+              minimumSelections: policy.minimumSelections,
+              maximumSelections: policy.maximumSelections,
+            }
+          : group;
+      });
+  }
+
+  /** The combo groups a variant is the container of, in the author's order; empty when it is no combo. */
+  protected comboGroupsFor(variantId: string): readonly MenuComboGroup[] {
+    return (this.menu()?.comboGroups ?? []).filter(
+      (group) => group.containerVariantId === variantId,
+    );
   }
 
   /** `LARGE, EXTRA_SHOT×3` — a compact summary of one basket line's chosen modifiers. */
   protected modifierSummary(line: BasketLine): string {
     return line.modifiers
-      .map((modifier) =>
-        modifier.quantity > 1 ? `${modifier.code}×${modifier.quantity}` : modifier.code,
-      )
+      .map((modifier) => {
+        const label = modifier.name || modifier.code;
+        return modifier.quantity > 1 ? `${label}×${modifier.quantity}` : label;
+      })
       .join(', ');
   }
 
@@ -470,12 +508,20 @@ export class NewOrderPage implements OnInit {
       .join(', ');
   }
 
+  /** `Burger, Cola×2` — a combo line's picks, the components it will become on the order. */
+  protected comboSummary(line: BasketLine): string {
+    return (line.combo?.picks ?? [])
+      .map((pick) => (pick.pickQuantity > 1 ? `${pick.name}×${pick.pickQuantity}` : pick.name))
+      .join(', ');
+  }
+
   /** The basket with each line's summaries worded, for the basket component. */
   protected readonly basketView = computed<readonly BasketLineView[]>(() =>
     this.basket().map((line) => ({
       ...line,
       modifierText: this.modifierSummary(line),
       presetText: this.presetSummary(line),
+      comboText: this.comboSummary(line),
     })),
   );
 
@@ -676,28 +722,56 @@ export class NewOrderPage implements OnInit {
         return;
       }
       const available = plan.lines.filter((line) => line.status === 'AVAILABLE');
-      const added: BasketLine[] = available.map((line) => ({
-        lineKey: nextLineKey(),
-        variantId: line.variantId,
-        productName: line.productName,
-        quantity: line.quantity,
-        unitAmountMinor: line.unitAmountMinor,
-        modifiers: [],
-        // Row 2.1b: `ReorderPlan`'s own line carries no preset codes — a
-        // repeat order starts from the product's plain state, same as it
-        // already drops the original line's modifiers above.
-        commentPresetCodes: [],
-        customerNote: null,
-        orderable: true,
-        // Row 4.2g: `plan.verdict`/`line.status` answer whether the item
-        // still exists to reorder, not whether its own sale schedule
-        // currently excludes it — `submit`'s server-side check is what
-        // actually catches that, the same as every other line here.
-        onSaleNow: true,
-      }));
+      let dropped = 0;
+      const added: BasketLine[] = [];
+      for (const line of available) {
+        // ADR 0136: a combo repeats as a combo — its container with the picks the order named,
+        // resolved against today's menu. One the menu no longer offers is left out and said so.
+        if (line.comboPicks && line.comboPicks.length > 0) {
+          const picks = resolvePicks(this.comboGroupsFor(line.variantId), line.comboPicks);
+          if (picks === null) {
+            dropped += 1;
+            continue;
+          }
+          const combo = { picks };
+          added.push({
+            lineKey: nextLineKey(),
+            variantId: line.variantId,
+            productName: line.productName,
+            quantity: line.quantity,
+            unitAmountMinor: comboAmountMinor(combo),
+            combo,
+            modifiers: [],
+            commentPresetCodes: [],
+            customerNote: null,
+            orderable: true,
+            onSaleNow: true,
+          });
+          continue;
+        }
+        added.push({
+          lineKey: nextLineKey(),
+          variantId: line.variantId,
+          productName: line.productName,
+          quantity: line.quantity,
+          unitAmountMinor: line.unitAmountMinor,
+          modifiers: [],
+          // Row 2.1b: `ReorderPlan`'s own line carries no preset codes — a
+          // repeat order starts from the product's plain state, same as it
+          // already drops the original line's modifiers above.
+          commentPresetCodes: [],
+          customerNote: null,
+          orderable: true,
+          // Row 4.2g: `plan.verdict`/`line.status` answer whether the item
+          // still exists to reorder, not whether its own sale schedule
+          // currently excludes it — `submit`'s server-side check is what
+          // actually catches that, the same as every other line here.
+          onSaleNow: true,
+        });
+      }
       this.basket.set([...this.basket(), ...added]);
       this.historyOpen.set(false);
-      if (plan.verdict === 'PARTIAL') {
+      if (plan.verdict === 'PARTIAL' || dropped > 0) {
         this.reorderError.set(this.i18n.t('orders.newOrder.reorder.partial'));
       }
     } catch (error) {
@@ -887,6 +961,7 @@ export class NewOrderPage implements OnInit {
 
   protected readonly basket = signal<readonly BasketLine[]>([]);
   protected readonly pendingModifiers = signal<PendingModifierSelection | null>(null);
+  protected readonly pendingCombo = signal<PendingComboSelection | null>(null);
 
   protected onItemQueryChange(value: string): void {
     this.itemQuery.set(value);
@@ -959,12 +1034,48 @@ export class NewOrderPage implements OnInit {
       });
       return;
     }
+    // ADR 0136: a combo's container is never sold on its own — what goes into the basket is the
+    // components the operator picks from its groups.
+    const combos = this.comboGroupsFor(variant.variantId);
+    if (combos.length > 0) {
+      this.pendingCombo.set({ product, variant, groups: combos });
+      return;
+    }
     const groups = this.modifierGroupsFor(product);
     if (groups.length === 0 && product.commentPresets.length === 0) {
       this.addToBasket(product, variant, [], []);
       return;
     }
     this.pendingModifiers.set({ product, variant, groups });
+  }
+
+  protected onComboConfirm(confirmation: ComboDialogConfirmation): void {
+    const pending = this.pendingCombo();
+    if (!pending) {
+      return;
+    }
+    const combo = { picks: confirmation.picks };
+    this.basket.set([
+      ...this.basket(),
+      {
+        lineKey: nextLineKey(),
+        variantId: pending.variant.variantId,
+        productName: pending.product.name,
+        quantity: 1,
+        unitAmountMinor: comboAmountMinor(combo),
+        combo,
+        modifiers: [],
+        commentPresetCodes: [],
+        customerNote: null,
+        orderable: pending.variant.orderable,
+        onSaleNow: pending.variant.onSaleNow,
+      },
+    ]);
+    this.pendingCombo.set(null);
+  }
+
+  protected onComboDismiss(): void {
+    this.pendingCombo.set(null);
   }
 
   protected onModifierConfirm(confirmation: ModifierDialogConfirmation): void {
@@ -1523,6 +1634,15 @@ export class NewOrderPage implements OnInit {
         modifierOptionIds: flattenModifiers(line),
         commentPresetCodes: line.commentPresetCodes,
         customerNote: line.customerNote,
+        // ADR 0136: a combo goes as its container with the components picked; `quantity` counts combos.
+        ...(line.combo
+          ? {
+              comboPicks: line.combo.picks.map((pick) => ({
+                componentId: pick.componentId,
+                quantity: pick.pickQuantity,
+              })),
+            }
+          : {}),
       }));
       const request: PlaceOrderRequest = {
         customerAccountId: customer.accountId,

@@ -1030,6 +1030,135 @@ describe('KitchenQueuePage', () => {
 
     expect(navigateByUrl).toHaveBeenCalledWith('/orders/new');
   });
+
+  // --------------------------------------------------------------- ADR 0136
+
+  it('ADR 0136: a combo’s items sit under one header named from the order line, each still on its own station', async () => {
+    const comboTicket: TicketResponse = {
+      ...DELIVERY_TICKET,
+      items: [
+        {
+          itemId: 'item-burger',
+          orderLineId: 'line-burger',
+          stationId: 'grill',
+          quantity: 2,
+          routedBy: 'LOCATION_VARIANT',
+          status: 'QUEUED',
+          version: 1,
+          comboSelectionId: 'sel-1',
+          comboContainerVariantId: 'cv-1',
+        },
+        {
+          itemId: 'item-cola',
+          orderLineId: 'line-cola',
+          stationId: 'bar',
+          quantity: 2,
+          routedBy: 'LOCATION_VARIANT',
+          status: 'QUEUED',
+          version: 1,
+          comboSelectionId: 'sel-1',
+          comboContainerVariantId: 'cv-1',
+        },
+        {
+          itemId: 'item-soup',
+          orderLineId: 'line-soup',
+          stationId: 'grill',
+          quantity: 1,
+          routedBy: 'LOCATION_VARIANT',
+          status: 'QUEUED',
+          version: 1,
+        },
+      ],
+    };
+    const orderLine = (lineId: string, productName: string, extra: object = {}) => ({
+      lineNumber: 1,
+      productName,
+      quantity: 1,
+      finalAmountMinor: 1000,
+      modifiers: [],
+      commentPresets: [],
+      lineId,
+      hasNote: false,
+      ...extra,
+    });
+    const combo = {
+      selectionId: 'sel-1',
+      containerVariantId: 'cv-1',
+      name: 'Lunch box',
+      quantity: 2,
+    };
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([comboTicket])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('n/a')) },
+        },
+        {
+          provide: ApiClient,
+          useValue: {
+            get: () =>
+              of({
+                value: {
+                  lines: [
+                    orderLine('line-burger', 'Burger', { combo }),
+                    orderLine('line-cola', 'Cola', { combo }),
+                    orderLine('line-soup', 'Soup'),
+                  ],
+                  kitchenNote: null,
+                },
+                version: null,
+              }),
+          },
+        },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        {
+          provide: DispatchApi,
+          useValue: { queue: vi.fn(() => Promise.resolve([])), assign: vi.fn() },
+        },
+        { provide: CouriersApi, useValue: { roster: vi.fn(() => Promise.resolve([])) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(KitchenQueuePage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('.ticket__header') as HTMLElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const heads = host.querySelectorAll('[data-testid="kitchen-combo-head"]');
+    expect(heads).toHaveLength(1);
+    expect(heads[0].textContent).toContain('Lunch box');
+    const names = [...host.querySelectorAll('.ticket__items tbody tr')].map((row) =>
+      row.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(names[0]).toContain('Lunch box');
+    expect(names[1]).toContain('Burger');
+    expect(names[1]).toContain('grill');
+    expect(names[2]).toContain('Cola');
+    expect(names[2]).toContain('bar');
+    expect(names[3]).toContain('Soup');
+  });
 });
 
 // ================================================================ wave 10: «Изменить оплату» (row 2.1d)
