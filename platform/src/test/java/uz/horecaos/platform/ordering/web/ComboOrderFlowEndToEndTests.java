@@ -638,8 +638,10 @@ class ComboOrderFlowEndToEndTests {
                         .asText())
                 .isEqualTo("Delivery box");
 
-        // It is never offered as a choice, and a customer cannot pick it either.
-        assertThat(refusalOf(pickupCart, "x", saladVariant, List.of(), List.of(boxOption)))
+        // It is never offered as a choice, and a customer cannot pick it either (on a cart that is
+        // still open: the pickup cart above has been checked out).
+        UUID openPickupCart = openCart(FulfillmentMode.PICKUP);
+        assertThat(refusalOf(openPickupCart, "x", saladVariant, List.of(), List.of(boxOption)))
                 .isEqualTo("MODIFIER_NOT_OFFERED");
 
         // A repeat is built from what the customer chose; the server applies the box again by itself.
@@ -771,9 +773,7 @@ class ComboOrderFlowEndToEndTests {
 
         assertThat(catchThrowable(() -> jdbc.sql("""
                                 UPDATE ordering.cart_lines SET combo_picks = '{}'::jsonb WHERE cart_id = :cart
-                                """)
-                        .param("cart", cart)
-                        .update()))
+                                """).param("cart", cart).update()))
                 .hasMessageContaining("ck_cart_line_combo_picks_array");
 
         assertThat(catchThrowable(() -> jdbc.sql("""

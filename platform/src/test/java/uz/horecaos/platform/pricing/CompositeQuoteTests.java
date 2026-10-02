@@ -368,7 +368,9 @@ class CompositeQuoteTests {
                 .extracting(QuoteSnapshot.Line::comboQuantity)
                 .as("the combos the customer bought, which the units alone cannot give back")
                 .containsOnly(3);
-        assertThat(stored.lines()).extracting(QuoteSnapshot.Line::comboPickQuantity).containsOnly(1);
+        assertThat(stored.lines())
+                .extracting(QuoteSnapshot.Line::comboPickQuantity)
+                .containsOnly(1);
         assertThat(stored.lines())
                 .extracting(QuoteSnapshot.Line::cartLineKey)
                 .as("an order reads the cart line's note and presets through the key without the position")
@@ -389,12 +391,13 @@ class CompositeQuoteTests {
                 new NewComboGroup(TENANT, BRAND, big, "MANY", "Many", "en", 0, 12, true, 0), "tester");
         List<ComboComponent> components = new java.util.ArrayList<>();
         for (int position = 0; position < 11; position++) {
-            ComboComponent component =
-                    composites.addComponent(TENANT, BRAND, group.id(), variant("PIECE-" + position), 1, position, "tester");
+            ComboComponent component = composites.addComponent(
+                    TENANT, BRAND, group.id(), variant("PIECE-" + position), 1, position, "tester");
             priceAuthoring.setPrice(TENANT, BRAND, priceBook, PriceableType.COMBO_COMPONENT, component.id(), 1_000L);
             components.add(component);
         }
-        PickSpec[] picks = components.stream().map(component -> pick(component, 1)).toArray(PickSpec[]::new);
+        PickSpec[] picks =
+                components.stream().map(component -> pick(component, 1)).toArray(PickSpec[]::new);
         QuoteRequest.Line eleven = new QuoteRequest.Line(
                 "big",
                 big,
@@ -411,17 +414,20 @@ class CompositeQuoteTests {
         assertThat(stored.lines())
                 .extracting(QuoteSnapshot.Line::lineKey)
                 .as("position 10 sorts as the number it is, not as the text '10' before '2'")
-                .containsExactly("big~1", "big~2", "big~3", "big~4", "big~5", "big~6", "big~7", "big~8", "big~9", "big~10", "big~11");
+                .containsExactly(
+                        "big~1", "big~2", "big~3", "big~4", "big~5", "big~6", "big~7", "big~8", "big~9", "big~10",
+                        "big~11");
         assertThat(stored.lines())
                 .extracting(QuoteSnapshot.Line::comboComponentId)
-                .containsExactlyElementsOf(components.stream().map(ComboComponent::id).toList());
+                .containsExactlyElementsOf(
+                        components.stream().map(ComboComponent::id).toList());
     }
 
     @Test
     @DisplayName("the cart can ask whether a selection is allowed without pricing or storing anything")
     void aSelectionCanBeCheckedWithoutPricingIt() {
-        CartPricingPort.SelectionCheck combo = quotes.checkSelection(
-                TENANT, BRAND, item("l", lunch, 2, pick(wrapInLunch, 1), pick(colaInLunch, 1)));
+        CartPricingPort.SelectionCheck combo =
+                quotes.checkSelection(TENANT, BRAND, item("l", lunch, 2, pick(wrapInLunch, 1), pick(colaInLunch, 1)));
 
         assertThat(combo.combo()).isTrue();
         assertThat(combo.soldVariantIds())
@@ -432,7 +438,9 @@ class CompositeQuoteTests {
         assertThat(plain.combo()).isFalse();
         assertThat(plain.soldVariantIds()).containsExactly(burger);
 
-        assertThat(jdbc.sql("SELECT count(*) FROM pricing.quotes").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM pricing.quotes")
+                        .query(Long.class)
+                        .single())
                 .as("a check writes nothing")
                 .isZero();
 
