@@ -10,11 +10,16 @@
   @if (unresolvedMessage(); as unresolved) {
     <p class="summary__note" data-testid="delivery-unresolved">{{ unresolved }}</p>
   }
-  @if (hasDiscount()) {
-    <div class="summary__row summary__row--discount">
-      <span>{{ 'cart.promoCode' | t }}</span>
-      <span>−{{ discount() }}</span>
+  @for (row of discountRows(); track $index) {
+    <div class="summary__row summary__row--discount" data-testid="discount-row">
+      <span>{{ row.labelKey | t }}{{ row.code ? ' ' + row.code : '' }}</span>
+      <span>−{{ row.amount }}</span>
     </div>
+  }
+  @for (note of notes(); track $index) {
+    <p class="summary__note" data-testid="promotion-note">
+      {{ note.labelKey | t: { amount: note.amount } }}
+    </p>
   }
   <div class="summary__divider"></div>
   <div class="summary__row summary__row--total">

@@ -130,7 +130,10 @@
     "recipient": "Qabul qiluvchi",
     "recipientName": "Qabul qiluvchi ismi",
     "recipientPhone": "Qabul qiluvchi telefoni",
-    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting."
+    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
+    "offerDiscount": "Aksiya",
+    "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
+    "surchargeNote": "Ustama {{amount}} hisobga olingan"
   },
   "checkout": {
     "title": "To'lov",
@@ -155,7 +158,11 @@
     "emptyCartTitle": "Savatda buyurtma uchun hech narsa yo'q",
     "emptyCartSubtitle": "Avval savatga taom qo'shing.",
     "loadError": "To'lov sahifasini yuklab bo'lmadi",
-    "onlinePaymentFailed": "To'lov sahifasini ochib bo'lmadi. \"Buyurtmalar\" bo'limini tekshiring."
+    "onlinePaymentFailed": "To'lov sahifasini ochib bo'lmadi. \"Buyurtmalar\" bo'limini tekshiring.",
+    "promoCodeLabel": "Kod {{code}}",
+    "promoOffersBetter": "Hozirgi aksiyalaringiz bu promokoddan foydaliroq, shuning uchun u qoʻllanmadi.",
+    "promoNotApplicable": "Bu promokod ushbu buyurtmaga mos kelmaydi.",
+    "promoNoLongerValid": "Bu promokod endi amal qilmaydi."
   },
   "orders": {
     "title": "Buyurtmalar",

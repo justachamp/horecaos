@@ -3,7 +3,11 @@ import { Router, provideRouter } from '@angular/router';
 import { Component, signal } from '@angular/core';
 
 import { CheckoutComponent } from './checkout.component';
-import { UiCartService } from '../../services/ui-cart.service';
+import {
+  UiCartService,
+  type PromotionNote,
+  type PromotionRow,
+} from '../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { AddressBookService } from '../../services/address-book.service';
 import { PaymentSessionService } from '../../services/payment-session.service';
@@ -90,6 +94,9 @@ class FakeUiCartService {
   hasDiscount = () => false;
   discountFormatted = () => "0 so'm";
   appliedPromoCode = (): string | null => null;
+  discountRows = (): PromotionRow[] => [];
+  promotionNotes = (): PromotionNote[] => [];
+  promoOutcomeKey = (): string | null => null;
   deliveryTimeDisplay = (): string | null => null;
   deliveryUnresolvedMessage = (): string | null => null;
 
@@ -347,6 +354,41 @@ describe('CheckoutComponent -- promo code (ADR 0072)', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('checkout.promoExpired');
+  });
+
+  it('says why a code on the cart did not move the price, and does not claim it applied or took off a discount', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.appliedPromoCode = () => 'SMALL5';
+      cart.hasDiscount = () => true;
+      cart.discountFormatted = () => "18 000 so'm";
+      cart.promoOutcomeKey = () => 'checkout.promoOffersBetter';
+    });
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(
+      (
+        fixture.nativeElement.querySelector('[data-testid="promo-outcome"]') as HTMLElement
+      ).textContent?.trim(),
+    ).toBe('checkout.promoOffersBetter');
+    expect(text).toContain('checkout.promoCodeLabel');
+    expect(text).not.toContain('checkout.promoApplied');
+    expect(fixture.nativeElement.querySelector('.promo-applied__sub')?.textContent).not.toContain(
+      '18 000',
+    );
+  });
+
+  it('shows the applied code with its discount when the platform says it applied', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.appliedPromoCode = () => 'BIG30';
+      cart.hasDiscount = () => true;
+      cart.discountFormatted = () => "27 000 so'm";
+    });
+
+    expect(fixture.nativeElement.querySelector('[data-testid="promo-outcome"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('checkout.promoApplied');
+    expect(fixture.nativeElement.querySelector('.promo-applied__sub')?.textContent).toContain(
+      '27 000',
+    );
   });
 
   it('removing an applied code calls removePromoCode', async () => {

@@ -4,6 +4,7 @@ import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
+import type { AppliedPromotion, PromoCodeOutcome } from './applied-promotions';
 
 /**
  * The platform cart, which is a different thing from the legacy one.
@@ -542,6 +543,18 @@ export interface PricedCart {
    * right now.
    */
   readonly discountMinor: number;
+  /**
+   * ADR 0140. The kinds of promotion behind the price, in the platform's words:
+   * whether the customer asked for each by typing a code, what it did to the total
+   * and how much. Names no promotion. Absent from an answer that predates it.
+   */
+  readonly appliedPromotions?: readonly AppliedPromotion[];
+  /**
+   * ADR 0140. What became of the code on the cart: applied, beaten by offers that
+   * apply without it, not applicable to this basket, or no longer valid. Null when
+   * the cart carries no code.
+   */
+  readonly promoCodeOutcome?: PromoCodeOutcome | null;
 }
 
 export interface PaymentMethods {
