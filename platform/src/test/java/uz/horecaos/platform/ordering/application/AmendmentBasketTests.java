@@ -77,7 +77,7 @@ class AmendmentBasketTests {
         assertThat(item.lineKey()).isEqualTo(SELECTION.toString());
         assertThat(item.quantity())
                 .as("combos bought, not units of any component")
-                .isEqualTo(2);
+                .isEqualByComparingTo("2");
         assertThat(item.comboPicks())
                 .extracting(PricingCommand.ComboPick::componentId, PricingCommand.ComboPick::quantity)
                 .containsExactly(
@@ -127,7 +127,7 @@ class AmendmentBasketTests {
 
         assertThat(item.quantity())
                 .as("5 burgers at one per combo is 5 combos, and the drink follows")
-                .isEqualTo(5);
+                .isEqualByComparingTo("5");
         assertThat(item.comboPicks()).hasSize(2);
     }
 

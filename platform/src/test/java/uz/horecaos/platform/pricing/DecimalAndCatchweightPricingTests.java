@@ -90,7 +90,7 @@ class DecimalAndCatchweightPricingTests {
         // PricingEngine#contextHash wrote when quantity was an int. If the widening changed a
         // single byte of it -- "x3" becoming "x3.000", say -- every quote in flight at deploy
         // time would fail checkout with PRICE_CHANGED.
-        String canonical = "v=2|tenant=" + TENANT + "|brand=" + BRAND + "|location=" + LOCATION
+        String canonical = "v=3|tenant=" + TENANT + "|brand=" + BRAND + "|location=" + LOCATION
                 + "|channel=STOREFRONT|customer=null|publication=" + PUBLICATION
                 + "|priceBook=" + PRICE_BOOK + ":1|tax=" + TAX_PROFILE + ":1:1200:INCLUSIVE|currency=UZS"
                 + "|delivery=none|promotions=none"

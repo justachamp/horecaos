@@ -161,7 +161,7 @@ class CompositePricingEngineTests {
                 .filter(line -> WINGS.equals(line.variantId()))
                 .findFirst()
                 .orElseThrow();
-        assertThat(wings.quantity()).isEqualTo(24);
+        assertThat(wings.quantity()).isEqualByComparingTo("24");
         assertThat(wings.unitAmount().minor()).isEqualTo(2_000L);
         assertThat(wings.finalAmount().minor()).isEqualTo(48_000L);
     }
@@ -228,7 +228,7 @@ class CompositePricingEngineTests {
                 .hasSize(1)
                 .first()
                 .extracting(Quote.QuoteLine::quantity)
-                .isEqualTo(2);
+                .satisfies(quantity -> assertThat(quantity).isEqualByComparingTo("2"));
     }
 
     @Test
@@ -339,7 +339,7 @@ class CompositePricingEngineTests {
         assertThat(result.lines().stream().filter(line -> FRIES.equals(line.variantId())))
                 .singleElement()
                 .extracting(Quote.QuoteLine::quantity)
-                .isEqualTo(2);
+                .satisfies(quantity -> assertThat(quantity).isEqualByComparingTo("2"));
     }
 
     @Test
@@ -490,8 +490,9 @@ class CompositePricingEngineTests {
                 Map.of());
 
         assertThat(engine.price(request, legacy, NOW).contextHash())
-                .as("computed from the pre-record formula: an in-flight quote's hash must not move under a deploy")
-                .isEqualTo("766e47f65fdeec302b32ce9203e92757fdff005a17ff7257c5c58eb2dbae3039");
+                .as("computed from the pre-record formula at calculation version 3 (ADR 0140's bump): the "
+                        + "composite record adds nothing to a cart with no composite product")
+                .isEqualTo("11d4fbdc8da7374a45d9f117e9e52812fff3bf1b33613c0a2300f35556ddd4c3");
     }
 
     @Test
