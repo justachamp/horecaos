@@ -5,6 +5,7 @@
     @for (item of items(); track item.id; let i = $index) {
       <li
         class="rule-list__row"
+        [class.rule-list__row--selected]="selectable() && item.id === selectedId()"
         draggable="true"
         (dragstart)="onDragStart(i, $event)"
         (dragover)="onDragOver($event)"
@@ -36,7 +37,16 @@
           </button>
         </div>
 
-        <div class="rule-list__body">
+        <div
+          class="rule-list__body"
+          [class.rule-list__body--selectable]="selectable()"
+          [attr.role]="selectable() ? 'button' : null"
+          [attr.tabindex]="selectable() ? 0 : null"
+          [attr.aria-pressed]="selectable() ? item.id === selectedId() : null"
+          (click)="onSelect(item)"
+          (keydown.enter)="onSelect(item)"
+          (keydown.space)="onSelect(item); $event.preventDefault()"
+        >
           <span class="q-body-sm rule-list__label">{{ item.label }}</span>
           @if (item.description; as description) {
             <span class="q-caption rule-list__description">{{ description }}</span>

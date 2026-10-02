@@ -284,6 +284,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     uz: 'Buyurtma qabul qilish qoidalarini sozlash',
     en: 'Manage the order acceptance policy',
   },
+  'order.payment-window.manage': {
+    area: 'order',
+    ru: 'Настраивать срок ожидания оплаты заказа',
+    uz: 'Buyurtma toʻlovini kutish muddatini sozlash',
+    en: 'Manage how long an unpaid order is waited for',
+  },
 
   'payment.read': {
     area: 'payment',
@@ -378,6 +384,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Включать зоны доставки в работу',
     uz: 'Yetkazib berish zonalarini kuchga kiritish',
     en: 'Activate delivery zones',
+  },
+  'delivery.dispatch_rules.read': {
+    area: 'delivery',
+    ru: 'Смотреть правила диспетчеризации и тайминги подбора курьера',
+    uz: 'Dispetcherlik qoidalari va kuryer qidirish vaqtlarini koʻrish',
+    en: 'View the dispatch rules and courier-search timing',
+  },
+  'delivery.dispatch_rules.write': {
+    area: 'delivery',
+    ru: 'Менять правила диспетчеризации и тайминги подбора курьера',
+    uz: 'Dispetcherlik qoidalari va kuryer qidirish vaqtlarini oʻzgartirish',
+    en: 'Change the dispatch rules and courier-search timing',
   },
   'delivery.tariff.manage': {
     area: 'delivery',

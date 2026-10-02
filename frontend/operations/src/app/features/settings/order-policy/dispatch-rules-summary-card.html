@@ -1,0 +1,29 @@
+<div class="summary" data-testid="dispatch-summary">
+  @if (loading()) {
+    <div class="summary__skeleton" [attr.aria-label]="'delivery.rules.loading' | t"></div>
+  } @else if (error(); as message) {
+    <p class="q-body-sm summary__error" role="alert" data-testid="dispatch-summary-error">
+      {{ message }}
+    </p>
+  } @else if (builtIn()) {
+    <p class="q-body-sm summary__muted" data-testid="dispatch-summary-built-in">
+      {{ 'settings.orderPolicy.dispatchSummary.builtIn' | t }}
+    </p>
+  } @else {
+    <ol class="summary__rules" data-testid="dispatch-summary-rules">
+      @for (rule of rules(); track rule.id) {
+        <li class="q-body-sm" [class.summary__off]="!rule.enabled">
+          <span>{{ rule.name || rule.id }}</span>
+          <span class="q-caption summary__muted">{{ modeLabel(rule.then.mode) | t }}</span>
+        </li>
+      }
+    </ol>
+  }
+  <a
+    class="q-body-sm summary__link"
+    routerLink="/delivery/dispatch-rules"
+    data-testid="dispatch-summary-link"
+  >
+    {{ 'settings.orderPolicy.dispatchSummary.link' | t }}
+  </a>
+</div>

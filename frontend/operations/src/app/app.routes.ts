@@ -13,10 +13,9 @@ import { NAV_ITEMS } from './shell/navigation';
  * rail item that does nothing when clicked is a bug report — and because a
  * placeholder that names its specification is more useful to the next
  * developer than a screen half-built against it. The same principle applies
- * one level down inside a built section's own children: `catalog/import` and
- * `delivery/dispatch-rules` are each a not-built placeholder for exactly this
- * reason (see their own comments below), even though the section around them
- * is "built".
+ * one level down inside a built section's own children: `catalog/import` is
+ * a not-built placeholder for exactly this reason (see its own comment below),
+ * even though the section around it is "built".
  *
  * Everything except `/login` and `/invite` is behind {@link authGuard}, which
  * proves only that somebody is signed in, and — for every route beneath the
@@ -929,8 +928,7 @@ export const routes: Routes = [
       },
       {
         // IA §3: 3.1 Dispatch board, 3.6 Delivery zones, 3.7 Delivery tariffs
-        // are built; 3.8 Dispatch rules is an honest not-built placeholder —
-        // see `delivery-shell.ts`'s own doc for why. 3.3 Couriers is its own
+        // and 3.8 Dispatch rules are built. 3.3 Couriers is its own
         // top-level route below, per `navigation.ts`'s existing rail grouping.
         path: 'delivery',
         loadComponent: () =>
@@ -994,15 +992,11 @@ export const routes: Routes = [
               import('./features/delivery/courier-policy-page').then((m) => m.CourierPolicyPage),
           },
           {
+            // IA 3.8 / ADR 0142: the ordered rule document per scope, the simulator that runs the
+            // live evaluator, the sourcing timings' writer and the unpaid-order window.
             path: 'dispatch-rules',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'operations-spec/couriers.md §3.8 (Dispatch rules) — the sourcing policy is ' +
-                'already resolved via ADR 0030 (DeliverySourcingPolicies.SOURCING); only a ' +
-                'write endpoint and this screen are missing, over q-condition-builder/q-rule-list',
-            },
+              import('./features/delivery/dispatch-rules-page').then((m) => m.DispatchRulesPage),
           },
         ],
       },

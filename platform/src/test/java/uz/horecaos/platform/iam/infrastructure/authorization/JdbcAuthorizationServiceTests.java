@@ -276,6 +276,10 @@ class JdbcAuthorizationServiceTests {
                 // ADR 0042, gap map row 10.13, wave P38: reading the courier
                 // compensation/delivery policy document takes nothing out.
                 Capability.DELIVERY_POLICY_READ,
+                // ADR 0142, gap map row 3.8: reading the dispatch rules and the simulator's answers
+                // changes nothing -- the simulator evaluates and reports, it books no one -- so a
+                // suspended tenant reading its own rules takes nothing out.
+                Capability.DELIVERY_DISPATCH_RULES_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
                 Capability.RESERVATION_READ,

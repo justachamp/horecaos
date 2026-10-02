@@ -1,0 +1,88 @@
+<section class="card" data-testid="payment-window-card">
+  <h2 class="q-subhead">{{ 'delivery.paymentWindow.heading' | t }}</h2>
+  <p class="q-caption card__muted">{{ 'delivery.paymentWindow.hint' | t }}</p>
+
+  @if (loading()) {
+    <div class="card__skeleton" [attr.aria-label]="'delivery.rules.loading' | t"></div>
+  } @else if (loadError(); as error) {
+    <p class="q-body-sm card__error" role="alert" data-testid="window-load-error">{{ error }}</p>
+  } @else {
+    @if (isDefault()) {
+      <p class="q-caption card__muted" data-testid="window-default">
+        {{ 'delivery.paymentWindow.default' | t }}
+      </p>
+    }
+
+    <div class="card__row">
+      <label class="card__field q-caption">
+        {{ 'delivery.paymentWindow.minutes' | t }}
+        <input
+          class="q-body field"
+          type="number"
+          min="1"
+          max="1440"
+          [disabled]="!canWrite()"
+          [value]="minutes() ?? ''"
+          (change)="setMinutes($any($event.target).value)"
+          data-testid="window-minutes"
+        />
+      </label>
+      <label class="card__field q-caption">
+        {{ 'delivery.paymentWindow.action' | t }}
+        <select class="q-body field" disabled data-testid="window-action">
+          <option value="FLAG_ONLY" selected>
+            {{ 'delivery.paymentWindow.action.FLAG_ONLY' | t }}
+          </option>
+          <option value="CANCEL" disabled>
+            {{ 'delivery.paymentWindow.action.CANCEL' | t }}
+          </option>
+        </select>
+      </label>
+    </div>
+    <p class="q-caption card__muted" data-testid="window-cancel-locked">
+      {{ 'delivery.paymentWindow.cancelLocked' | t }}
+    </p>
+
+    @if (canWrite()) {
+      <label class="card__field q-caption">
+        {{ 'delivery.rules.reason' | t }}
+        <input
+          class="q-body field"
+          type="text"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+          data-testid="window-reason"
+        />
+      </label>
+
+      @if (saveError(); as error) {
+        <p class="q-body-sm card__error" role="alert" data-testid="window-error">{{ error }}</p>
+      }
+      @if (notice(); as message) {
+        <p class="q-body-sm card__notice" role="status" data-testid="window-notice">
+          {{ message }}
+        </p>
+      }
+
+      <div class="card__actions">
+        <button
+          type="button"
+          class="q-body secondary"
+          [disabled]="!dirty() || saving()"
+          (click)="discard()"
+        >
+          {{ 'delivery.rules.discard' | t }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          [disabled]="!canPublish()"
+          (click)="publish()"
+          data-testid="window-publish"
+        >
+          {{ saving() ? ('delivery.rules.publishing' | t) : ('delivery.paymentWindow.save' | t) }}
+        </button>
+      </div>
+    }
+  }
+</section>

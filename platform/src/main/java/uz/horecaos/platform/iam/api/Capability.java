@@ -212,6 +212,17 @@ public enum Capability {
     ORDER_ACCEPTANCE_POLICY_MANAGE("order.acceptance-policy.manage", "order", "acceptance-policy.manage"),
 
     /**
+     * ADR 0142 Decision 7: publishing the {@code ordering.payment_window} policy -- how long an order
+     * may sit in {@code PAYMENT_AUTHORIZING} before it reaches the stuck list, and what is done then.
+     *
+     * <p>Its own capability rather than {@link #ORDER_ACCEPTANCE_POLICY_MANAGE}: the acceptance policy
+     * decides whether an order is taken, this decides how long an unpaid one is waited for, and the
+     * record names the borrowing it declines. Held by the same roles, for the same argument that
+     * capability's documentation makes.
+     */
+    ORDER_PAYMENT_WINDOW_MANAGE("order.payment-window.manage", "order", "payment-window.manage"),
+
+    /**
      * ADR 0039: an operator entering an order on a customer's behalf — a
      * phone call taken at the counter or on a call-centre line.
      *
@@ -446,6 +457,29 @@ public enum Capability {
      * consumers and no controller injected it for this key.
      */
     DELIVERY_POLICY_WRITE("delivery.policy.write", "delivery", "policy.write"),
+
+    /**
+     * ADR 0142, gap map row {@code 3.8}: reading the dispatch rules -- which delivery installation
+     * serves an order by source, zone and branch, whether the in-house fleet or the partners are asked
+     * first, and when sourcing starts -- together with the {@code fulfillment.sourcing} timing numbers,
+     * the simulator that says which rule an order would match, and the per-rule usage counts.
+     *
+     * <p>Not {@link #DELIVERY_POLICY_READ}: that capability's own documentation names it as the
+     * <em>courier compensation policy</em> grant and says why that document got its own -- "different
+     * objects read by different people". A rule that routes orders to a paying partner is a third
+     * object, and the codebase already gives each policy family its own grant ({@code
+     * ORDER_ACCEPTANCE_POLICY_MANAGE}, {@code LOYALTY_POLICY_MANAGE}, {@code REFERRAL_POLICY_MANAGE}).
+     * The timing document reuses this pair, which is one conversation between operations and the branch.
+     */
+    DELIVERY_DISPATCH_RULES_READ("delivery.dispatch_rules.read", "delivery", "dispatch_rules.read"),
+
+    /**
+     * ADR 0142: publishing the next version of the dispatch rules or of the sourcing timing numbers,
+     * over {@code PolicyAuthor}. A wrong rule can send every order to the most expensive partner or to
+     * nobody, so this is held by the roles that already decide delivery policy and by nobody below
+     * them; the record leaves publication unapproved by default and registers no approval action.
+     */
+    DELIVERY_DISPATCH_RULES_WRITE("delivery.dispatch_rules.write", "delivery", "dispatch_rules.write"),
     SHIPMENT_CANCEL("shipment.cancel", "shipment", "cancel"),
 
     /**

@@ -88,6 +88,20 @@ class CamelShipmentBookingPortTests {
     }
 
     @Test
+    @DisplayName(
+            "a partner is listed with the installation it belongs to, which is what a dispatch rule names (ADR 0142)")
+    void partnersCarryTheirInstallation() throws Exception {
+        ShipmentBookingPort port = port(onePhase(), twoPhase());
+
+        // A rule names an ADR 0026 installation, never a provider and never a binding: a renamed or second
+        // installation of one provider would otherwise need a release. Without this id on the option, a
+        // named partner could never be found among the bindings the branch has.
+        assertThat(port.partners(TENANT, BRAND, LOCATION))
+                .extracting(PartnerOption::installationId)
+                .containsOnly(INSTALLATION);
+    }
+
+    @Test
     @DisplayName("booking now on a one-phase partner is a single live create")
     void onePhaseBookingIsOneCall() throws Exception {
         ScriptedPartner noor = onePhase();

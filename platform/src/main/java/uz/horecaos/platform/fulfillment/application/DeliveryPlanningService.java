@@ -2,22 +2,30 @@ package uz.horecaos.platform.fulfillment.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort.DeliveryOrder;
 import uz.horecaos.platform.fulfillment.api.DeliveryPlanner;
+import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
+import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.Haversine;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchDecision;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchFacts;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRuleEvaluator;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PlanStatus;
-import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore.DispatchBranch;
@@ -57,9 +65,36 @@ public class DeliveryPlanningService implements DeliveryPlanner {
     private final JdbcDeliveryPlanStore plans;
     private final JdbcSourcingJobStore jobs;
     private final JdbcDispatchBranchStore branches;
+    private final @Nullable ShipmentBookingPort bookings;
     private final PolicyResolver policies;
+    private final DispatchMetrics metrics;
     private final Clock clock;
 
+    @Autowired
+    public DeliveryPlanningService(
+            DeliveryOrderPort orders,
+            JdbcDeliveryPlanStore plans,
+            JdbcSourcingJobStore jobs,
+            JdbcDispatchBranchStore branches,
+            ShipmentBookingPort bookings,
+            PolicyResolver policies,
+            DispatchMetrics metrics,
+            Clock clock) {
+        this.orders = orders;
+        this.plans = plans;
+        this.jobs = jobs;
+        this.branches = branches;
+        this.bookings = bookings;
+        this.policies = policies;
+        this.metrics = metrics;
+        this.clock = clock;
+    }
+
+    /**
+     * Planning that does not know which partners the branch has bound: the dispatch rules are still
+     * evaluated and stored, but a rule's named installations that have no binding cannot be recorded
+     * as skipped. For a caller that never reaches a partner lane.
+     */
     public DeliveryPlanningService(
             DeliveryOrderPort orders,
             JdbcDeliveryPlanStore plans,
@@ -71,7 +106,9 @@ public class DeliveryPlanningService implements DeliveryPlanner {
         this.plans = plans;
         this.jobs = jobs;
         this.branches = branches;
+        this.bookings = null;
         this.policies = policies;
+        this.metrics = DispatchMetrics.none();
         this.clock = clock;
     }
 
@@ -142,10 +179,32 @@ public class DeliveryPlanningService implements DeliveryPlanner {
         }
 
         ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(tenantId, brandId, locationId);
-        PickupPlan pickup = PickupPlan.forOrder(
-                confirmedAt, order.get().preparation(), branch.get().timezone(), policy.document());
-
         DeliveryOrder details = order.get();
+        int distanceMeters = Haversine.metersBetween(
+                origin.point(),
+                new GeoPoint(details.dropoff().latitude(), details.dropoff().longitude()));
+
+        // ADR 0142 Decision 3: the dispatch rules are evaluated ONCE, here, and the result is stored
+        // on the plan beside the document version it ran under. Every later tick applies that stored
+        // decision, so editing a rule never reroutes an order already in flight.
+        ResolvedPolicy<DispatchRulesDocument> dispatchDocument = resolveDispatchRules(tenantId, brandId, locationId);
+        DispatchRulesDocument document =
+                dispatchDocument == null ? DispatchRulesDocument.builtIn() : dispatchDocument.document();
+        DispatchFacts facts = dispatchFacts(
+                details,
+                brandId,
+                locationId,
+                distanceMeters,
+                confirmedAt,
+                branch.get().timezone());
+        List<PartnerOption> bound = bookings == null ? null : bookings.partners(tenantId, brandId, locationId);
+        DispatchDecision decision =
+                DispatchRuleEvaluator.evaluate(document, facts, bound).decision();
+        metrics.recorded(decision);
+
+        PickupPlan pickup = PickupPlan.forOrder(
+                confirmedAt, details.preparation(), branch.get().timezone(), policy.document(), decision.dispatchAt());
+
         DeliveryPlan created = plans.create(new DeliveryPlan(
                 UUID.randomUUID(),
                 tenantId,
@@ -153,7 +212,7 @@ public class DeliveryPlanningService implements DeliveryPlanner {
                 locationId,
                 orderId,
                 PlanStatus.PLANNED,
-                SourcingMode.FLEET_FIRST,
+                decision.mode(),
                 DeliveryPlan.STANDARD,
                 details.deliveryFeeMinor(),
                 details.currency(),
@@ -161,15 +220,15 @@ public class DeliveryPlanningService implements DeliveryPlanner {
                 pickup,
                 null,
                 null,
-                Haversine.metersBetween(
-                        origin.point(),
-                        new GeoPoint(
-                                details.dropoff().latitude(), details.dropoff().longitude())),
+                distanceMeters,
                 RADIUS,
                 policy.policyId(),
                 policy.policyVersion(),
                 1,
-                details.destinationLabel()));
+                details.destinationLabel(),
+                dispatchDocument == null ? null : dispatchDocument.policyId(),
+                dispatchDocument == null ? null : dispatchDocument.policyVersion(),
+                decision));
 
         if (jobs.enqueue(
                 UUID.randomUUID(), tenantId, created.id(), created.pickup().sourceAt())) {
@@ -200,8 +259,47 @@ public class DeliveryPlanningService implements DeliveryPlanner {
         }
         DeliveryPlan plan = existing.get();
         ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(tenantId, plan.brandId(), plan.locationId());
-        PickupPlan revisedPickup = plan.pickup().withPreparation(revised, policy.document());
+        // Under the dispatch start the plan was created with: a revised estimate moves the clock the
+        // start is measured from, never the rule that chose the start (ADR 0142 Decision 3).
+        PickupPlan revisedPickup = plan.pickup()
+                .withPreparation(revised, policy.document(), plan.dispatch().dispatchAt());
         return jobs.moveDueTime(tenantId, planId, revisedPickup.sourceAt(), clock.instant());
+    }
+
+    /**
+     * The dispatch rules in force for a branch, or null when none was ever published -- in which
+     * case the built-in default applies and the plan pins no dispatch document.
+     */
+    private @Nullable ResolvedPolicy<DispatchRulesDocument> resolveDispatchRules(
+            UUID tenantId, UUID brandId, UUID locationId) {
+        return policies.resolve(
+                        DeliverySourcingPolicies.DISPATCH_RULES, ResourceScope.location(tenantId, brandId, locationId))
+                .orElse(null);
+    }
+
+    /**
+     * The facts a rule can ask about this order. Nothing personal: a channel, a zone, a number of
+     * minutes and metres, an instant, whether it is prepaid.
+     */
+    static DispatchFacts dispatchFacts(
+            DeliveryOrder order,
+            UUID brandId,
+            UUID locationId,
+            int distanceMeters,
+            Instant confirmedAt,
+            java.time.ZoneId branchZone) {
+        DeliveryOrderPort.DispatchOrderFacts channel = order.dispatchFacts();
+        return new DispatchFacts(
+                channel == null ? null : channel.channelSystemType(),
+                channel == null ? null : channel.channelId(),
+                channel == null ? null : channel.zoneId(),
+                brandId,
+                locationId,
+                order.preparation(),
+                distanceMeters,
+                confirmedAt,
+                branchZone,
+                order.prepaid());
     }
 
     private ResolvedPolicy<DeliverySourcingPolicy> resolvePolicy(UUID tenantId, UUID brandId, UUID locationId) {

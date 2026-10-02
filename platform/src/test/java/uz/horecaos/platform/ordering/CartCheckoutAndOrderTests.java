@@ -91,6 +91,7 @@ import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.PaymentCaptureConfirmationTrigger;
 import uz.horecaos.platform.ordering.application.PaymentProjectionTrigger;
+import uz.horecaos.platform.ordering.application.PaymentWindowAuthoringService;
 import uz.horecaos.platform.ordering.application.PosApprovalDecisionPortAdapter;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
@@ -101,6 +102,7 @@ import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
+import uz.horecaos.platform.ordering.domain.PaymentWindowPolicy;
 import uz.horecaos.platform.ordering.domain.PromiseBasis;
 import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
@@ -4014,6 +4016,99 @@ class CartCheckoutAndOrderTests {
         assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
                 .as("still well inside the staleness threshold")
                 .isEqualTo("WAITING");
+    }
+
+    @Test
+    @DisplayName(
+            "a published payment window replaces the deploy threshold: flagged after the window, not after the property")
+    void aPublishedPaymentWindowReplacesTheDeployThreshold() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-window-short", "CLICK")));
+        PaymentWindowAuthoringService windows = paymentWindows();
+        windows.author(
+                uz.horecaos.platform.iam.api.ResourceScope.location(TENANT, BRAND, LOCATION),
+                new PaymentWindowPolicy(5, PaymentWindowPolicy.Action.FLAG_ONLY),
+                0,
+                uz.horecaos.platform.audit.api.ActorRef.user("window-author", null),
+                "Wait five minutes, not thirty",
+                Duration.ofMinutes(30));
+        OrderPaymentProcess sweeping = new OrderPaymentProcess(new JdbcOrderProcessStore(jdbc), objectMapper, windows);
+
+        clock.advance(Duration.ofMinutes(6));
+        int checked = sweeping.sweep(clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10);
+
+        assertThat(checked).isEqualTo(1);
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
+                .as(
+                        "six minutes is past this location's five-minute window though well inside the deploy property's thirty")
+                .isEqualTo("MANUAL_ACTION_REQUIRED");
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
+                .as("FLAG_ONLY: an order is flagged for a person, never decided for one")
+                .isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+    }
+
+    @Test
+    @DisplayName("a longer published window holds an order the deploy threshold would already have flagged")
+    void aLongerPaymentWindowKeepsWaiting() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-window-long", "CLICK")));
+        PaymentWindowAuthoringService windows = paymentWindows();
+        windows.author(
+                uz.horecaos.platform.iam.api.ResourceScope.location(TENANT, BRAND, LOCATION),
+                new PaymentWindowPolicy(120, PaymentWindowPolicy.Action.FLAG_ONLY),
+                0,
+                uz.horecaos.platform.audit.api.ActorRef.user("window-author", null),
+                "Wait two hours for the bank transfer",
+                Duration.ofMinutes(30));
+        OrderPaymentProcess sweeping = new OrderPaymentProcess(new JdbcOrderProcessStore(jdbc), objectMapper, windows);
+
+        clock.advance(Duration.ofMinutes(31));
+        sweeping.sweep(clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10);
+
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed)))
+                .as("thirty-one minutes is past the deploy property and well inside the published two hours")
+                .isEqualTo("WAITING");
+    }
+
+    @Test
+    @DisplayName("with no window published anywhere the deploy property is the window, exactly as before")
+    void theDeployPropertyIsTheFallbackWindow() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-window-none", "CLICK")));
+        OrderPaymentProcess sweeping =
+                new OrderPaymentProcess(new JdbcOrderProcessStore(jdbc), objectMapper, paymentWindows());
+
+        clock.advance(Duration.ofMinutes(31));
+        sweeping.sweep(clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10);
+
+        assertThat(orderPaymentProcessStatus(orderIdOf(placed))).isEqualTo("MANUAL_ACTION_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("cancelling an unpaid order is refused at publish, so no document can ever carry it")
+    void cancelIsRefusedAtPublish() {
+        PaymentWindowAuthoringService windows = paymentWindows();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> windows.author(
+                        uz.horecaos.platform.iam.api.ResourceScope.location(TENANT, BRAND, LOCATION),
+                        new PaymentWindowPolicy(30, PaymentWindowPolicy.Action.CANCEL),
+                        0,
+                        uz.horecaos.platform.audit.api.ActorRef.user("window-author", null),
+                        "Cancel them",
+                        Duration.ofMinutes(30)))
+                .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class)
+                .hasMessageContaining("ADR 0019");
+    }
+
+    private PaymentWindowAuthoringService paymentWindows() {
+        var audit = new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper);
+        return new PaymentWindowAuthoringService(
+                new JdbcPolicyResolver(jdbc, objectMapper),
+                new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                        jdbc, objectMapper, audit, clock, (keyCode, scope) -> {}),
+                jdbc,
+                audit,
+                clock);
     }
 
     @Test

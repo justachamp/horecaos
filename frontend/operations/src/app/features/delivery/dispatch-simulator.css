@@ -1,0 +1,150 @@
+:host {
+  display: block;
+}
+
+.sim {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.sim h3,
+.sim h4 {
+  margin: 0;
+}
+
+.sim h4 {
+  color: var(--q-ink-muted);
+}
+
+.sim__muted {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.sim__modes {
+  display: flex;
+  gap: 6px;
+}
+
+.sim__mode {
+  padding: 4px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.sim__mode--on {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.sim__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.sim__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--q-ink-muted);
+}
+
+.sim__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sim__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sim__error,
+.sim__problems {
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-radius: var(--q-radius);
+}
+
+.sim__problems ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.sim__result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.sim__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.sim__facts dd {
+  margin: 0;
+}
+
+.sim__facts dt {
+  color: var(--q-ink-muted);
+}
+
+.sim__ladder,
+.sim__trace,
+.sim__list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.sim__trace li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.sim__trace--matched .sim__ruleName {
+  font-weight: 600;
+}
+
+.field {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

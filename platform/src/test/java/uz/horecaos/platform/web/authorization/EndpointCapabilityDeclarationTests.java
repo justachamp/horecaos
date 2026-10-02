@@ -190,7 +190,8 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
-                    || isDeliveryFeePreviewEndpoint(handler)) {
+                    || isDeliveryFeePreviewEndpoint(handler)
+                    || isDispatchRuleSimulationEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -522,7 +523,37 @@ class EndpointCapabilityDeclarationTests {
      * {@code @Idempotent} rather than {@code RequiresCapability.mutating()}.
      */
     private static boolean isScopeResolvedCourierPolicyEndpoint(Method handler) {
-        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/courier-policy");
+        String path = pathOf(handler);
+        return path.equals("/api/v1/operations/tenants/{tenantId}/courier-policy")
+                || isScopeResolvedDispatchRulesEndpoint(path);
+    }
+
+    /**
+     * ADR 0142: the dispatch rules and the sourcing timings, which mirror the courier policy above for
+     * the identical reason -- one document per scope, with {@code brandId}/{@code locationId} optional
+     * request parameters and the tenant-wide call a real one, so a single declared scope is either too
+     * wide (a brand manager is refused a grant the role bundle gives them) or crashes the call that
+     * omits it. Each handler calls {@code authorization.require} against the scope it resolves
+     * ({@code OperationsDispatchRulesController.scopeOf}, or the {@code POST}'s body), and the two
+     * {@code PUT}s keep replay protection via {@code @Idempotent}.
+     *
+     * <p>The simulator is a {@code POST} only because its body can carry a whole draft document. It
+     * writes nothing, calls no provider and asks no quote, which is why it is also exempt from replay
+     * protection below. Matched on exact paths, the discipline every exemption here keeps.
+     */
+    private static boolean isScopeResolvedDispatchRulesEndpoint(String path) {
+        String base = "/api/v1/operations/tenants/{tenantId}";
+        return path.equals(base + "/dispatch-rules")
+                || path.equals(base + "/dispatch-rules/simulations")
+                || path.equals(base + "/sourcing-policy")
+                // ADR 0142 Decision 7: the unpaid-order window, an ordering policy shown on the same
+                // screen and authored by the identical scope-resolved shape.
+                || path.equals(base + "/payment-window");
+    }
+
+    /** The side-effect-free {@code POST}: a simulation needs no {@code Idempotency-Key}, there is nothing to replay. */
+    private static boolean isDispatchRuleSimulationEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/dispatch-rules/simulations");
     }
 
     /**

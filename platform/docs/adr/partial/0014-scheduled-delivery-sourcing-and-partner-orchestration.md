@@ -148,6 +148,15 @@
   `DELIVERY_COST_SUBSIDY` fact an automated booking would have. No migration:
   both seams are built entirely on V0054's existing tables and V0186's
   `delivery_cost_subsidies`.
+  **Operator-authored since ADR 0142 (2026-10-01).** The "service zone" filter and
+  the sourcing-mode choice that "Provider selection" leaves to configuration are
+  now decided by the operator: `fulfillment.dispatch_rules` names, per scope, which
+  installation serves which zone, source or branch, in what order, with the fleet
+  before or after the partners (`SourcingMode.PARTNER_FIRST`), and when sourcing
+  starts; the decision is evaluated once at plan creation and stored on
+  `delivery_plans`, so the selection stays reproducible from stored evidence. The
+  single winner, the uncertain-attempt stop and the refusal of a booking race are
+  unchanged.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), operations, legal

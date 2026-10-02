@@ -143,12 +143,27 @@ public interface ShipmentBookingPort {
      * @param supportsScheduling whether the partner accepts a future pickup time.
      *                     Without it an advance booking has to wait until the
      *                     pickup window is near enough to book on demand
+     * @param installationId the ADR 0026 installation this binding belongs to, which is what a
+     *                     dispatch rule names (ADR 0142): a rule never names a provider and
+     *                     never a binding, because a renamed or second installation of one
+     *                     provider would otherwise need a release. Null only for an adapter
+     *                     that cannot say
      */
-    record PartnerOption(UUID bindingId, String providerType, boolean supportsHold, boolean supportsScheduling) {
+    record PartnerOption(
+            UUID bindingId,
+            String providerType,
+            boolean supportsHold,
+            boolean supportsScheduling,
+            @Nullable UUID installationId) {
 
         public PartnerOption {
             Objects.requireNonNull(bindingId, "A binding id is required");
             Objects.requireNonNull(providerType, "A provider type is required");
+        }
+
+        /** An option no rule can name: what a test double or an adapter that does not know its installation builds. */
+        public PartnerOption(UUID bindingId, String providerType, boolean supportsHold, boolean supportsScheduling) {
+            this(bindingId, providerType, supportsHold, supportsScheduling, null);
         }
     }
 

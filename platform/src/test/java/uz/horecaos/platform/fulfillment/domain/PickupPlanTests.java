@@ -9,6 +9,8 @@ import java.time.ZonedDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Start;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.StartBasis;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 
 /**
@@ -103,5 +105,94 @@ class PickupPlanTests {
         // operations exception rather than another sourcing retry.
         assertThat(plan.latestAssignmentAt())
                 .isEqualTo(plan.pickupWindowEnd().plusSeconds(POLICY.latestAssignmentSlackSeconds()));
+    }
+
+    // ------------------------------------------------- a dispatch rule's start (ADR 0142 Decision 8)
+
+    @Test
+    @DisplayName(
+            "the default start reproduces version 1's number exactly, under a calculation version that says which formula made it")
+    void theDefaultStartIsTheOriginalFormula() {
+        Instant confirmed = Instant.parse("2026-08-24T12:00:00Z");
+
+        PickupPlan implicit = PickupPlan.forOrder(confirmed, Duration.ofHours(2), TASHKENT, POLICY);
+        PickupPlan explicit = PickupPlan.forOrder(confirmed, Duration.ofHours(2), TASHKENT, POLICY, Start.lead());
+
+        assertThat(explicit).isEqualTo(implicit);
+        // ready 14:00 - 10 min lead - 5 min buffer.
+        assertThat(implicit.sourceAt()).isEqualTo(Instant.parse("2026-08-24T13:45:00Z"));
+        assertThat(implicit.calculationVersion())
+                .as("a formula change is a visible bump: the rule engine shipped as version 2")
+                .isEqualTo(2)
+                .isEqualTo(PickupPlan.CALCULATION_VERSION);
+    }
+
+    @Test
+    @DisplayName("starting at confirmation sources at once, however long the kitchen takes")
+    void confirmationStartsAtOnce() {
+        Instant confirmed = Instant.parse("2026-08-24T12:00:00Z");
+
+        PickupPlan plan = PickupPlan.forOrder(
+                confirmed, Duration.ofHours(2), TASHKENT, POLICY, new Start(StartBasis.CONFIRMATION, 0));
+
+        assertThat(plan.sourceAt()).isEqualTo(confirmed);
+        assertThat(plan.estimatedReadyAt()).isEqualTo(confirmed.plus(Duration.ofHours(2)));
+    }
+
+    @Test
+    @DisplayName("starting at the ready time sources when the food is ready")
+    void readyStartsWhenTheFoodIsReady() {
+        Instant confirmed = Instant.parse("2026-08-24T12:00:00Z");
+
+        PickupPlan plan =
+                PickupPlan.forOrder(confirmed, Duration.ofHours(2), TASHKENT, POLICY, new Start(StartBasis.READY, 0));
+
+        assertThat(plan.sourceAt()).isEqualTo(plan.estimatedReadyAt());
+    }
+
+    @Test
+    @DisplayName("the offset moves the start from its basis, and a start before confirmation is floored at it")
+    void theOffsetMovesTheStartAndNeverBeforeConfirmation() {
+        Instant confirmed = Instant.parse("2026-08-24T12:00:00Z");
+
+        PickupPlan earlier = PickupPlan.forOrder(
+                confirmed, Duration.ofHours(2), TASHKENT, POLICY, new Start(StartBasis.READY, -1_800));
+        PickupPlan later =
+                PickupPlan.forOrder(confirmed, Duration.ofHours(2), TASHKENT, POLICY, new Start(StartBasis.LEAD, 300));
+        PickupPlan floored = PickupPlan.forOrder(
+                confirmed, Duration.ofMinutes(10), TASHKENT, POLICY, new Start(StartBasis.READY, -1_800));
+
+        assertThat(earlier.sourceAt()).isEqualTo(earlier.estimatedReadyAt().minusSeconds(1_800));
+        assertThat(later.sourceAt()).isEqualTo(Instant.parse("2026-08-24T13:50:00Z"));
+        assertThat(floored.sourceAt())
+                .as("a start 30 minutes before a 10-minute order's ready time would precede its confirmation")
+                .isEqualTo(confirmed);
+    }
+
+    @Test
+    @DisplayName("a revised estimate keeps the dispatch start the plan was created with")
+    void aRevisionKeepsTheDispatchStart() {
+        Instant confirmed = Instant.parse("2026-08-24T12:00:00Z");
+        Start start = new Start(StartBasis.READY, -600);
+        PickupPlan original = PickupPlan.forOrder(confirmed, Duration.ofHours(2), TASHKENT, POLICY, start);
+
+        PickupPlan revised = original.withPreparation(Duration.ofHours(3), POLICY, start);
+
+        assertThat(revised.sourceAt()).isEqualTo(revised.estimatedReadyAt().minusSeconds(600));
+        assertThat(original.withPreparation(Duration.ofHours(3), POLICY).sourceAt())
+                .as("the two-argument revision is the lead formula, which is why the planning service passes the start")
+                .isNotEqualTo(revised.sourceAt());
+    }
+
+    @Test
+    @DisplayName("seconds-from-ready is the same arithmetic as the plan, before the confirmation floor")
+    void secondsFromReadyFollowsThePlan() {
+        assertThat(PickupPlan.secondsFromReady(Duration.ofHours(1), POLICY, Start.lead()))
+                .isEqualTo(-900);
+        assertThat(PickupPlan.secondsFromReady(Duration.ofHours(1), POLICY, new Start(StartBasis.READY, 120)))
+                .isEqualTo(120);
+        assertThat(PickupPlan.secondsFromReady(Duration.ofMinutes(20), POLICY, new Start(StartBasis.CONFIRMATION, 0)))
+                .as("confirmation is twenty minutes before ready for a twenty-minute order")
+                .isEqualTo(-1_200);
     }
 }

@@ -52,8 +52,16 @@ export class RuleList {
   protected readonly i18n = inject(I18n);
 
   readonly items = input.required<readonly RuleListItem[]>();
+  /**
+   * Whether a row's body can be chosen (ADR 0142, the first host that needs to *edit* the rule it is
+   * looking at). Off by default, so every existing host renders exactly as before; on, the body is a
+   * button and {@link selected} reports the choice. The list still owns nothing but the gesture.
+   */
+  readonly selectable = input(false);
+  readonly selectedId = input<string | null>(null);
   readonly reorder = output<RuleReorder>();
   readonly enabledChange = output<RuleEnabledChange>();
+  readonly selected = output<string>();
 
   private dragIndex: number | null = null;
 
@@ -98,6 +106,12 @@ export class RuleList {
 
   protected onToggle(item: RuleListItem, enabled: boolean): void {
     this.enabledChange.emit({ id: item.id, enabled });
+  }
+
+  protected onSelect(item: RuleListItem): void {
+    if (this.selectable()) {
+      this.selected.emit(item.id);
+    }
   }
 
   private moveTo(from: number, to: number): void {

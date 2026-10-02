@@ -90,6 +90,14 @@ public sealed interface SourcingDecision {
     /** The tenant configured partners only. */
     String PARTNER_ONLY_MODE = "PARTNER_ONLY_MODE";
 
+    /**
+     * The plan's rule asks the partner lane first (ADR 0142, Decision 9). Carried by
+     * the partner booking; the {@link OfferInternal} that follows a partner lane
+     * which ended carries {@link #PARTNERS_EXHAUSTED} or {@link #NO_PARTNER_CONFIGURED}
+     * instead, so the attempt journal says why a courier was asked.
+     */
+    String PARTNER_FIRST_MODE = "PARTNER_FIRST_MODE";
+
     /** No delivery binding exists for this branch at all. */
     String NO_PARTNER_CONFIGURED = "NO_PARTNER_CONFIGURED";
 

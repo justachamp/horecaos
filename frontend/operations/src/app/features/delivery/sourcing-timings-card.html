@@ -1,0 +1,75 @@
+<section class="card" data-testid="timings-card">
+  <h2 class="q-subhead">{{ 'delivery.timings.heading' | t }}</h2>
+  <p class="q-caption card__muted">{{ 'delivery.timings.hint' | t }}</p>
+
+  @if (loading()) {
+    <div class="card__skeleton" [attr.aria-label]="'delivery.rules.loading' | t"></div>
+  } @else if (loadError(); as error) {
+    <p class="q-body-sm card__error" role="alert" data-testid="timings-load-error">{{ error }}</p>
+  } @else if (draft(); as d) {
+    @if (isDefaults()) {
+      <p class="q-caption card__muted" data-testid="timings-defaults">
+        {{ 'delivery.timings.defaults' | t }}
+      </p>
+    }
+
+    <div class="card__grid">
+      @for (spec of fields; track spec.field) {
+        <label class="card__field q-caption">
+          {{ spec.labelKey | t }}
+          <input
+            class="q-body field"
+            type="number"
+            [attr.min]="spec.unit === 'minutes' ? spec.min / 60 : spec.min"
+            [disabled]="!canWrite()"
+            [value]="shown(spec)"
+            (change)="set(spec, $any($event.target).value)"
+            [attr.data-testid]="'timings-' + spec.field"
+          />
+        </label>
+      }
+    </div>
+
+    @if (canWrite()) {
+      <label class="card__field q-caption">
+        {{ 'delivery.rules.reason' | t }}
+        <input
+          class="q-body field"
+          type="text"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+          data-testid="timings-reason"
+        />
+      </label>
+
+      @if (saveError(); as error) {
+        <p class="q-body-sm card__error" role="alert" data-testid="timings-error">{{ error }}</p>
+      }
+      @if (notice(); as message) {
+        <p class="q-body-sm card__notice" role="status" data-testid="timings-notice">
+          {{ message }}
+        </p>
+      }
+
+      <div class="card__actions">
+        <button
+          type="button"
+          class="q-body secondary"
+          [disabled]="!dirty() || saving()"
+          (click)="discard()"
+        >
+          {{ 'delivery.rules.discard' | t }}
+        </button>
+        <button
+          type="button"
+          class="q-body primary"
+          [disabled]="!canPublish()"
+          (click)="publish()"
+          data-testid="timings-publish"
+        >
+          {{ saving() ? ('delivery.rules.publishing' | t) : ('delivery.timings.save' | t) }}
+        </button>
+      </div>
+    }
+  }
+</section>

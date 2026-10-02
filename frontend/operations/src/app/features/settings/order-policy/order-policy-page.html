@@ -202,6 +202,12 @@
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.orderPolicy.card3.title' | t }}</h2>
     <p class="q-body-sm">{{ 'settings.orderPolicy.card3.body' | t }}</p>
+    <q-dispatch-rules-summary-card
+      [tenantId]="tenantId()"
+      [scopeType]="scope.level()"
+      [brandId]="scope.brandId()"
+      [locationId]="scope.locationId()"
+    />
     <div class="field-list">
       <ng-container
         *ngTemplateOutlet="fieldEditor; context: { fields: card3Fields }"

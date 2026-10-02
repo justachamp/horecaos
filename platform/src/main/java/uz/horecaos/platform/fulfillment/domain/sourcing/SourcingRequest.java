@@ -34,6 +34,9 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
  *                        DELIVERY_COST_SUBSIDY} — comparing a winning partner
  *                        quote against it, never for anything that could move
  *                        the fee itself
+ * @param dispatch        what the dispatch rules decided for this plan when it was
+ *                        created (ADR 0142), applied by every tick. The built-in
+ *                        default is today's behaviour
  */
 public record SourcingRequest(
         UUID tenantId,
@@ -51,7 +54,49 @@ public record SourcingRequest(
         long itemValueMinor,
         String currency,
         long customerDeliveryFeeMinor,
-        String correlationId) {
+        String correlationId,
+        DispatchDecision dispatch) {
+
+    /**
+     * A request sourced under the built-in default decision: what every plan was before dispatch
+     * rules existed, and what a caller that knows nothing about them still gets.
+     */
+    public SourcingRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            UUID planId,
+            String orderReference,
+            PickupPlan plan,
+            SourcingMode mode,
+            int distanceMeters,
+            Waypoint pickup,
+            Waypoint dropoff,
+            boolean prepaid,
+            long itemValueMinor,
+            String currency,
+            long customerDeliveryFeeMinor,
+            String correlationId) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                orderId,
+                planId,
+                orderReference,
+                plan,
+                mode,
+                distanceMeters,
+                pickup,
+                dropoff,
+                prepaid,
+                itemValueMinor,
+                currency,
+                customerDeliveryFeeMinor,
+                correlationId,
+                DispatchDecision.builtInDefault());
+    }
 
     public SourcingRequest {
         Objects.requireNonNull(tenantId, "A tenant is required");
@@ -64,6 +109,7 @@ public record SourcingRequest(
         Objects.requireNonNull(pickup, "A pickup waypoint is required");
         Objects.requireNonNull(dropoff, "A dropoff waypoint is required");
         Objects.requireNonNull(currency, "A currency is required");
+        Objects.requireNonNull(dispatch, "A dispatch decision is required");
         if (distanceMeters < 0) {
             throw new IllegalArgumentException("A delivery distance cannot be negative, was " + distanceMeters);
         }

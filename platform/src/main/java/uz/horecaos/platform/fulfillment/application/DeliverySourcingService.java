@@ -29,6 +29,8 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryExceptionReason;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyPolicy;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchDecision;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
 import uz.horecaos.platform.fulfillment.domain.sourcing.QuoteScoring;
 import uz.horecaos.platform.fulfillment.domain.sourcing.QuoteScoring.ScoredPartner;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingDecision;
@@ -125,25 +127,43 @@ public class DeliverySourcingService {
     public Outcome source(SourcingRequest request, SourcingProgress progress) {
         Instant now = clock.instant();
         ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(request);
+        DispatchDecision dispatch = request.dispatch();
 
         List<FleetCandidate> candidates = request.mode().usesFleet()
                 ? fleet.candidates(
                         request.tenantId(), request.brandId(), request.locationId(), request.distanceMeters())
                 : List.of();
+        // The live binding list is narrowed and ordered by the decision the plan was created
+        // with (ADR 0142 Decision 3): the rule document is never re-read here, so editing a
+        // rule cannot reroute an order already in flight. A rule can only remove or reorder what
+        // ShipmentBookingPort returned, so it cannot book a partner the branch has no active
+        // binding for -- the live list is what is asked, every tick.
         List<PartnerOption> partners = request.mode().usesPartners()
-                ? bookings.partners(request.tenantId(), request.brandId(), request.locationId())
+                ? dispatch.partners()
+                        .apply(bookings.partners(request.tenantId(), request.brandId(), request.locationId()))
+                        .options()
                 : List.of();
 
         SourcingDecision decision = SourcingPlanner.decide(
-                request.plan(), policy.document(), request.mode(), candidates, partners, progress, now);
+                request.plan(),
+                policy.document(),
+                request.mode(),
+                candidates,
+                partners,
+                progress,
+                now,
+                dispatch.grouping());
 
         List<ScoredPartner> scored = List.of();
-        if (decision instanceof SourcingDecision.BookPartner && partners.size() > 1) {
-            // Quoted only once the fleet lane has been conceded, and only when
-            // there is a choice to make. A quote is an API call and a partner's
-            // patience; spending both on every tick of an order one of our own
-            // couriers takes thirty seconds later buys nothing, and asking a
-            // single configured partner what it costs cannot change who is booked.
+        boolean mayQuote = dispatch.partners().selection() == DispatchRulesDocument.PartnerSelection.CHEAPEST;
+        if (mayQuote && decision instanceof SourcingDecision.BookPartner && partners.size() > 1) {
+            // Quoted only once the lane before the partners has been conceded -- the fleet lane
+            // under FLEET_FIRST, nothing at all under PARTNER_FIRST and PARTNER_ONLY, where the
+            // partner lane is the first one -- and only when there is a choice to make. A quote is
+            // an API call and a partner's patience; spending both on every tick of an order one of
+            // our own couriers takes thirty seconds later buys nothing, and asking a single
+            // configured partner what it costs cannot change who is booked. A LADDER rule asks no
+            // quote at all: the order the operator gave is the answer.
             scored = quoteAndScore(request, partners, progress, now);
             decision = SourcingPlanner.decide(
                     request.plan(),
@@ -152,7 +172,8 @@ public class DeliverySourcingService {
                     candidates,
                     QuoteScoring.ranked(scored),
                     ineligibleAsAttempted(progress, scored),
-                    now);
+                    now,
+                    dispatch.grouping());
         }
 
         return switch (decision) {
