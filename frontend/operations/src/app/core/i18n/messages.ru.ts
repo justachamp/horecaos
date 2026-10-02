@@ -2298,6 +2298,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.tab.recommendations': 'Рекомендованные товары',
   'catalog.editor.tab.commentPresets': 'Готовые комментарии',
   'catalog.editor.tab.history': 'История',
+  'catalog.editor.tab.physical': 'Вес и питательность',
   'catalog.editor.locale.label': 'Язык редактирования',
   'catalog.editor.save': 'Сохранить',
   'catalog.editor.saving': 'Сохранение…',
@@ -2360,6 +2361,58 @@ export const messagesRu: MessageCatalogue = {
     'Схема маркировки, акциз, крепость и возрастной ценз хранятся, но пока не проверяются при публикации — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Пустой результат означает, что официальный справочник ИКПУ/MXIK ещё не загружен на платформу — а не что ничего не найдено.',
+  'catalog.editor.physical.intro':
+    'Что собой физически представляет вариант: вес или объём, продаётся ли он на вес (точный вес известен только при выдаче), можно ли заказать его порциями, и пищевая ценность. Для обычной штучной позиции оставьте всё пустым.',
+  'catalog.editor.physical.loading': 'Загрузка…',
+  'catalog.editor.physical.loadFailed': 'Не удалось загрузить эти характеристики',
+  'catalog.editor.physical.retry': 'Повторить',
+  'catalog.editor.physical.denied': 'Нет доступа к этим характеристикам',
+  'catalog.editor.physical.measure': 'Мера',
+  'catalog.editor.physical.measure.none': 'Не задана',
+  'catalog.editor.physical.measure.weight': 'Вес',
+  'catalog.editor.physical.measure.volume': 'Объём',
+  'catalog.editor.physical.weightGrams': 'Вес нетто, г',
+  'catalog.editor.physical.volumeMl': 'Объём нетто, мл',
+  'catalog.editor.physical.catchweight': 'Продаётся на вес (весовой товар)',
+  'catalog.editor.physical.catchweightHelp':
+    'Цена в прайс-листе тогда означает цену за указанное ниже количество граммов. Гость видит оценку; точный вес фиксируется при выдаче, и сумма пересчитывается.',
+  'catalog.editor.physical.quantum': 'Цена указана за, г',
+  'catalog.editor.physical.nominal': 'Ориентировочный вес единицы, г',
+  'catalog.editor.physical.nominalHint': 'Пусто — берётся вес нетто',
+  'catalog.editor.physical.splittable': 'Можно продавать частями',
+  'catalog.editor.physical.splittableHelp':
+    'С размером порции гость или оператор могут заказать долю, например 0,5.',
+  'catalog.editor.physical.portion': 'Размер порции',
+  'catalog.editor.physical.portionHint': 'Шаг, с которым меняется количество, например 0,5',
+  'catalog.editor.physical.nutrition': 'Пищевая ценность (КБЖУ)',
+  'catalog.editor.physical.per100g': 'на 100 г',
+  'catalog.editor.physical.per100ml': 'на 100 мл',
+  'catalog.editor.physical.calories': 'Калории, ккал',
+  'catalog.editor.physical.protein': 'Белки, г',
+  'catalog.editor.physical.fat': 'Жиры, г',
+  'catalog.editor.physical.carbs': 'Углеводы, г',
+  'catalog.editor.physical.markingConflict':
+    'Для этого варианта на вкладке «Фискальные данные» включена маркировка (Data Matrix). Маркированный товар нельзя продавать на вес или частями, поэтому каталог не опубликуется, пока что-то одно не изменится.',
+  'catalog.editor.physical.clearHint': 'Всё пусто: сохранение удалит эти характеристики',
+  'catalog.editor.physical.save': 'Сохранить характеристики',
+  'catalog.editor.physical.stale':
+    'Эти характеристики уже изменил кто-то другой. Загружены актуальные значения: проверьте и сохраните снова.',
+  'catalog.editor.physical.error.notANumber': 'Введите число',
+  'catalog.editor.physical.error.wholePositive': 'Введите целое число больше нуля',
+  'catalog.editor.physical.error.weightAndVolume': 'Нельзя задать и вес, и объём',
+  'catalog.editor.physical.error.needsQuantum':
+    'Весовому товару нужно указать, за сколько граммов цена',
+  'catalog.editor.physical.error.needsWeight': 'Укажите ориентировочный вес или вес нетто',
+  'catalog.editor.physical.error.catchweightFields':
+    'Граммы цены и ориентировочный вес относятся только к весовому товару',
+  'catalog.editor.physical.error.portionPositive': 'Размер порции должен быть больше нуля',
+  'catalog.editor.physical.error.portionPrecision':
+    'В размере порции не больше трёх знаков после запятой',
+  'catalog.editor.physical.error.portionTooLarge': 'Размер порции не больше 999',
+  'catalog.editor.physical.error.portionNeedsSplittable':
+    'Размер порции относится к товару, который продаётся частями',
+  'catalog.editor.physical.error.caloriesRange': 'Калории — от 0 до 99999,9',
+  'catalog.editor.physical.error.macroRange': 'Граммов на 100 г — от 0 до 100',
   'catalog.editor.availability.location': 'Филиал',
   'catalog.editor.availability.state': 'Состояние',
   'catalog.editor.availability.empty': 'Товар пока не предложен ни в одном филиале',
@@ -2440,6 +2493,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.finding.FISCAL_CLASSIFICATION_NOT_ENFORCED':
     '{count} позиций без ИКПУ — агрегаторы отклонят меню',
   'catalog.editor.finding.PRICING_VALIDATION_NOT_WIRED': 'Проверка цен не выполнялась',
+  'catalog.editor.finding.PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING':
+    'Маркированный товар нельзя продавать на вес или частями',
 
   'catalog.publish.action': 'Опубликовать',
   'catalog.publish.title': 'Публикация каталога',

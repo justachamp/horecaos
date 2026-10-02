@@ -2332,6 +2332,7 @@ export const messagesEn = {
   'catalog.editor.tab.recommendations': 'Recommended products',
   'catalog.editor.tab.commentPresets': 'Preset comments',
   'catalog.editor.tab.history': 'History',
+  'catalog.editor.tab.physical': 'Weight and nutrition',
   'catalog.editor.locale.label': 'Editing language',
   'catalog.editor.save': 'Save',
   'catalog.editor.saving': 'Saving…',
@@ -2394,6 +2395,58 @@ export const messagesEn = {
     'Marking scheme, excise, alcohol % and age gate are stored but not yet enforced by publication — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Empty results mean the official ИКПУ/MXIK list has never been imported for this platform — not that nothing matched.',
+  'catalog.editor.physical.intro':
+    'What the variant physically is: its weight or volume, whether it is sold by a weight known only at handover, whether it can be ordered by the portion, and its nutrition. Leave everything empty for an ordinary fixed unit.',
+  'catalog.editor.physical.loading': 'Loading…',
+  'catalog.editor.physical.loadFailed': 'Could not load these attributes',
+  'catalog.editor.physical.retry': 'Retry',
+  'catalog.editor.physical.denied': 'You do not have access to these attributes',
+  'catalog.editor.physical.measure': 'Measured by',
+  'catalog.editor.physical.measure.none': 'Not set',
+  'catalog.editor.physical.measure.weight': 'Weight',
+  'catalog.editor.physical.measure.volume': 'Volume',
+  'catalog.editor.physical.weightGrams': 'Net weight, g',
+  'catalog.editor.physical.volumeMl': 'Net volume, ml',
+  'catalog.editor.physical.catchweight': 'Sold by weight (catchweight)',
+  'catalog.editor.physical.catchweightHelp':
+    'The price in the price list is then the price per the quantum below. The customer sees an estimate; the final weight is captured at handover and the total is corrected.',
+  'catalog.editor.physical.quantum': 'Price is per, g',
+  'catalog.editor.physical.nominal': 'Estimated weight of one unit, g',
+  'catalog.editor.physical.nominalHint': 'Empty means the net weight',
+  'catalog.editor.physical.splittable': 'Can be sold in parts',
+  'catalog.editor.physical.splittableHelp':
+    'With a portion size, a customer or an operator can order a fraction of it, such as 0.5.',
+  'catalog.editor.physical.portion': 'Portion size',
+  'catalog.editor.physical.portionHint': 'The step the quantity moves in, for example 0.5',
+  'catalog.editor.physical.nutrition': 'Nutrition (КБЖУ)',
+  'catalog.editor.physical.per100g': 'per 100 g',
+  'catalog.editor.physical.per100ml': 'per 100 ml',
+  'catalog.editor.physical.calories': 'Calories, kcal',
+  'catalog.editor.physical.protein': 'Protein, g',
+  'catalog.editor.physical.fat': 'Fat, g',
+  'catalog.editor.physical.carbs': 'Carbohydrates, g',
+  'catalog.editor.physical.markingConflict':
+    'This variant requires marking (Data Matrix) on the Fiscal data tab. A marked good cannot be sold by weight or in parts, so the catalogue will not publish until one of them changes.',
+  'catalog.editor.physical.clearHint': 'Everything is empty: saving removes these attributes',
+  'catalog.editor.physical.save': 'Save attributes',
+  'catalog.editor.physical.stale':
+    'Someone else changed these attributes. The latest values are loaded; review them and save again.',
+  'catalog.editor.physical.error.notANumber': 'Enter a number',
+  'catalog.editor.physical.error.wholePositive': 'Enter a whole number above zero',
+  'catalog.editor.physical.error.weightAndVolume': 'Weight and volume cannot both be set',
+  'catalog.editor.physical.error.needsQuantum':
+    'A catchweight variant needs the weight its price is quoted per',
+  'catalog.editor.physical.error.needsWeight':
+    'Enter the estimated weight, or a net weight to quote against',
+  'catalog.editor.physical.error.catchweightFields':
+    'A pricing quantum and an estimated weight only apply to a catchweight variant',
+  'catalog.editor.physical.error.portionPositive': 'A portion size must be above zero',
+  'catalog.editor.physical.error.portionPrecision': 'A portion size has at most three decimals',
+  'catalog.editor.physical.error.portionTooLarge': 'A portion size is at most 999',
+  'catalog.editor.physical.error.portionNeedsSplittable':
+    'A portion size belongs to a variant sold in parts',
+  'catalog.editor.physical.error.caloriesRange': 'Calories are between 0 and 99999.9',
+  'catalog.editor.physical.error.macroRange': 'Grams per 100 g are between 0 and 100',
   'catalog.editor.availability.location': 'Location',
   'catalog.editor.availability.state': 'State',
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
@@ -2473,6 +2526,8 @@ export const messagesEn = {
   'catalog.editor.finding.FISCAL_CLASSIFICATION_NOT_ENFORCED':
     '{count} items with no ИКПУ — aggregators will reject the menu',
   'catalog.editor.finding.PRICING_VALIDATION_NOT_WIRED': 'Price validation did not run',
+  'catalog.editor.finding.PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING':
+    'Marked goods cannot be sold by weight or in parts',
 
   'catalog.publish.action': 'Publish',
   'catalog.publish.title': 'Publish the catalog',

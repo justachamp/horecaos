@@ -190,6 +190,11 @@
   gap: 16px;
 }
 
+.editor__physical {
+  max-width: none;
+  gap: 16px;
+}
+
 .editor__fiscal-card {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

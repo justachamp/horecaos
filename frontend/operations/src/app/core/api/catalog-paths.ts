@@ -135,6 +135,15 @@ export const catalogPaths = {
     return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/fiscal-classification`;
   },
 
+  /**
+   * Weight or volume, catchweight, portions and КБЖУ for a variant (ADR 0137, row 4.2c). `GET` reads
+   * the set with its version (0 when the variant has none); `PUT` writes the whole set under
+   * `If-Match`, and an empty set clears the row.
+   */
+  variantPhysicalAttributes(scope: BrandScope, variantId: string): string {
+    return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/physical-attributes`;
+  },
+
   /** ИКПУ/MXIK and packaging for a modifier option. */
   modifierOptionFiscalClassification(scope: BrandScope, optionId: string): string {
     return `${this.base(scope)}/modifier-options/${encodeURIComponent(optionId)}/fiscal-classification`;
