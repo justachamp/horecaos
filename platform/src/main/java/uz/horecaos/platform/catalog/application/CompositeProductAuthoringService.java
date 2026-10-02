@@ -210,8 +210,16 @@ public class CompositeProductAuthoringService {
                         .stream()
                         .collect(Collectors.groupingBy(
                                 ComboComponent::comboGroupId, LinkedHashMap::new, Collectors.toList()));
+        Map<UUID, Map<String, String>> names = catalogStore.namesFor(
+                tenantId,
+                brandId,
+                EntityType.COMBO_GROUP,
+                groups.stream().map(ComboGroup::id).toList());
         return groups.stream()
-                .map(group -> new ComboGroupDetail(group, components.getOrDefault(group.id(), List.of())))
+                .map(group -> new ComboGroupDetail(
+                        group,
+                        components.getOrDefault(group.id(), List.of()),
+                        names.getOrDefault(group.id(), Map.of())))
                 .toList();
     }
 
@@ -576,5 +584,14 @@ public class CompositeProductAuthoringService {
             @Nullable Integer minimumOverride,
             @Nullable Integer maximumOverride) {}
 
-    public record ComboGroupDetail(ComboGroup group, List<ComboComponent> components) {}
+    /**
+     * @param names the group's heading in every locale it has one in. A group read back by the
+     *     console carries it, because the name lives in translations and not on the group
+     */
+    public record ComboGroupDetail(ComboGroup group, List<ComboComponent> components, Map<String, String> names) {
+
+        public ComboGroupDetail(ComboGroup group, List<ComboComponent> components) {
+            this(group, components, Map.of());
+        }
+    }
 }

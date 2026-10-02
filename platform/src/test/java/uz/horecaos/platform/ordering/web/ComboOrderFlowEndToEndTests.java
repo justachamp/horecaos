@@ -747,6 +747,17 @@ class ComboOrderFlowEndToEndTests {
         UUID pickupCart = openCart(FulfillmentMode.PICKUP);
         put(pickupCart, "salad", saladVariant, 1, List.of());
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, pickupCart, cartVersion(pickupCart)));
+        linkCustomerPrincipal();
+        MvcResult pickupPriced = mvc.perform(post("/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND
+                                + "/carts/" + pickupCart + "/pricing")
+                        .with(customerToken())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "price-no-box")
+                        .header("If-Match", "\"" + cartVersion(pickupCart) + "\""))
+                .andReturn();
+        assertThat(JSON.readTree(pickupPriced.getResponse().getContentAsString())
+                        .get("hiddenCharges"))
+                .as("collected: nothing was added, and the field is there to say so")
+                .isEmpty();
         UUID pickupOrder = checkOut(pickupCart);
         assertThat(modifierRows(pickupOrder)).as("collected: no box").isEmpty();
         assertThat(totalOf(pickupOrder)).isEqualTo(SALAD);
@@ -762,6 +773,29 @@ class ComboOrderFlowEndToEndTests {
                 cartVersion(deliveryCart),
                 new CartService.DestinationCommand(addressId, "Dilnoza", "+998901112233", null)));
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, deliveryCart, cartVersion(deliveryCart)));
+
+        // What the storefront is told before the customer confirms: the box itemised, so the
+        // total can be read against the lines. It is already inside the subtotal, never on top.
+        String base = "/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND;
+        MvcResult pricedOverHttp = mvc.perform(post(base + "/carts/" + deliveryCart + "/pricing")
+                        .with(customerToken())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "price-hidden-box")
+                        .header("If-Match", "\"" + cartVersion(deliveryCart) + "\""))
+                .andReturn();
+        assertThat(pricedOverHttp.getResponse().getStatus())
+                .as(pricedOverHttp.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode itemised = JSON.readTree(pricedOverHttp.getResponse().getContentAsString());
+        assertThat(itemised.get("hiddenCharges")).hasSize(1);
+        assertThat(itemised.get("hiddenCharges").get(0).get("lineKey").asText()).isEqualTo("salad");
+        assertThat(itemised.get("hiddenCharges").get(0).get("optionId").asText())
+                .isEqualTo(boxOption.toString());
+        assertThat(itemised.get("hiddenCharges").get(0).get("amountMinor").asLong())
+                .isEqualTo(BOX);
+        assertThat(itemised.get("totalMinor").asLong())
+                .as("the box is inside the total that includes it, not an addition to it")
+                .isEqualTo(SALAD + BOX);
+
         UUID deliveryOrder = checkOut(deliveryCart);
 
         assertThat(totalOf(deliveryOrder))
@@ -789,6 +823,26 @@ class ComboOrderFlowEndToEndTests {
                         .get(0)
                         .asText())
                 .isEqualTo("Delivery box");
+        JsonNode operatorCharge =
+                detail.get("lines").get(0).get("autoSelectedCharges").get(0);
+        assertThat(operatorCharge.get("name").asText()).isEqualTo("Delivery box");
+        assertThat(operatorCharge.get("amountMinor").asLong())
+                .as("the console can itemise a charge the customer never chose")
+                .isEqualTo(BOX);
+
+        MvcResult customerRead = mvc.perform(
+                        get(base + "/orders/" + deliveryOrder).with(customerToken()))
+                .andReturn();
+        assertThat(customerRead.getResponse().getStatus())
+                .as(customerRead.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode customerCharge = JSON.readTree(customerRead.getResponse().getContentAsString())
+                .get("lines")
+                .get(0)
+                .get("autoSelectedCharges")
+                .get(0);
+        assertThat(customerCharge.get("name").asText()).isEqualTo("Delivery box");
+        assertThat(customerCharge.get("amountMinor").asLong()).isEqualTo(BOX);
 
         // It is never offered as a choice, and a customer cannot pick it either (on a cart that is
         // still open: the pickup cart above has been checked out).

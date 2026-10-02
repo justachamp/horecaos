@@ -2827,6 +2827,11 @@ public class OperationsOrderController {
                             line.modifiers().stream()
                                     .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
                                     .map(m -> m.optionName())
+                                    .toList(),
+                            line.modifiers().stream()
+                                    .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                    .map(m -> new AutoSelectedChargeResponse(
+                                            m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
                                     .toList()))
                     .toList();
         }
@@ -3067,7 +3072,13 @@ public class OperationsOrderController {
             @Nullable ComboResponse combo,
             // ADR 0136: the names, within {@code modifiers}, of the options the server applied
             // for this order's fulfilment mode -- a delivery box the customer was never shown.
-            List<String> autoSelectedModifiers) {}
+            List<String> autoSelectedModifiers,
+            // ADR 0136: the same options with what each cost, already inside {@code
+            // finalAmountMinor}, so the console can itemise a charge the customer never chose.
+            List<AutoSelectedChargeResponse> autoSelectedCharges) {}
+
+    /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
+    public record AutoSelectedChargeResponse(String name, long amountMinor) {}
 
     /**
      * The combo a line was bought as part of (ADR 0136).

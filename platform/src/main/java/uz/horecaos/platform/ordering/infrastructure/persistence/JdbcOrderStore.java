@@ -1993,6 +1993,36 @@ public class JdbcOrderStore {
                 .optional();
     }
 
+    /**
+     * What each hidden auto-selected option charged, by order line and then option (ADR 0136):
+     * the order's own itemisation of a charge the customer never chose.
+     *
+     * <p>Read from the adjustments and not from the modifier rows: a modifier row records which
+     * option the server applied and stores no amount (every modifier's price is folded into its
+     * line's unit price), while the adjustment is where the charge was itemised.
+     */
+    public Map<UUID, Map<UUID, Long>> hiddenCharges(UUID tenantId, UUID orderId) {
+        Map<UUID, Map<UUID, Long>> byLine = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT order_line_id, source_id, SUM(amount_minor) AS amount_minor
+                FROM ordering.order_adjustments
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND order_line_id IS NOT NULL AND source_type = :sourceType
+                GROUP BY order_line_id, source_id
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("sourceType", uz.horecaos.platform.pricing.api.QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE)
+                .query((row, number) -> {
+                    byLine.computeIfAbsent(
+                                    row.getObject("order_line_id", UUID.class), id -> new java.util.LinkedHashMap<>())
+                            .put(row.getObject("source_id", UUID.class), row.getLong("amount_minor"));
+                    return Boolean.TRUE;
+                })
+                .list();
+        return byLine;
+    }
+
     public List<OrderModifierRow> lineModifiers(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT m.id, m.order_line_id, m.source_group_id, m.source_option_id,

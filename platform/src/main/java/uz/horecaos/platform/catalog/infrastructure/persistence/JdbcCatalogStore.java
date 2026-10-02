@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -2103,6 +2104,39 @@ public class JdbcCatalogStore {
                 .param("groupIds", groupIds.toArray(UUID[]::new))
                 .query(JdbcCatalogStore::mapModifierOption)
                 .list();
+    }
+
+    /**
+     * The names of some entities of one type, by entity and then by locale -- for a screen that
+     * reads a handful of entities and has no use for the brand's whole translation table.
+     */
+    public Map<UUID, Map<String, String>> namesFor(
+            UUID tenantId, UUID brandId, EntityType entityType, Collection<UUID> entityIds) {
+        if (entityIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> names = new LinkedHashMap<>();
+        for (TranslationRow row : jdbc.sql("""
+                        SELECT entity_id, locale, name
+                        FROM catalog.translations
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND entity_type = :entityType AND entity_id = ANY(:ids)
+                        ORDER BY locale
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityType", entityType.name())
+                .param("ids", entityIds.toArray(UUID[]::new))
+                .query((row, number) -> new TranslationRow(
+                        entityType,
+                        row.getObject("entity_id", UUID.class),
+                        row.getString("locale"),
+                        row.getString("name"),
+                        null))
+                .list()) {
+            names.computeIfAbsent(row.entityId(), id -> new LinkedHashMap<>()).put(row.locale(), row.name());
+        }
+        return names;
     }
 
     public List<TranslationRow> translations(UUID tenantId, UUID brandId) {

@@ -44,6 +44,12 @@ public interface CartMenuRules {
     }
 
     /**
+     * What one product's attachment says about a group it offers, already resolved against the
+     * shared group's own values (ADR 0136).
+     */
+    record Policy(boolean required, int minimumSelections, int maximumSelections) {}
+
+    /**
      * One group as published.
      *
      * @param maximumQuantityByOption the per-option repeat cap, which only means
@@ -60,6 +66,21 @@ public interface CartMenuRules {
 
         public boolean offers(UUID optionId) {
             return maximumQuantityByOption.containsKey(optionId);
+        }
+
+        /**
+         * This group as one product uses it (ADR 0136): the product's own required, minimum and
+         * maximum in place of the shared group's, everything else unchanged.
+         */
+        public GroupRules withPolicy(Policy policy) {
+            return new GroupRules(
+                    groupId,
+                    code,
+                    policy.required(),
+                    policy.minimumSelections(),
+                    policy.maximumSelections(),
+                    allowSameOptionMultipleTimes,
+                    maximumQuantityByOption);
         }
 
         public int maximumQuantityOf(UUID optionId) {

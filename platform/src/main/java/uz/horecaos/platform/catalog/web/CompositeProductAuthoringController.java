@@ -105,7 +105,7 @@ public class CompositeProductAuthoringController {
                         Boolean.TRUE.equals(request.allowSameComponentMultipleTimes()),
                         request.sortOrder() == null ? 0 : request.sortOrder()),
                 subject());
-        return respond(new ComboGroupDetail(group, List.of()));
+        return respond(new ComboGroupDetail(group, List.of(), java.util.Map.of(request.locale(), request.name())));
     }
 
     @GetMapping("/combo-groups/{comboGroupId}")
@@ -394,7 +394,10 @@ public class CompositeProductAuthoringController {
             int sortOrder,
             Status status,
             int version,
-            List<ComboComponentResponse> components) {
+            List<ComboComponentResponse> components,
+            // The heading in every locale it has one in, keyed by locale. Absent from a group read
+            // before this field existed means nothing but "ask again": names are read on every read.
+            java.util.Map<String, String> names) {
 
         static ComboGroupResponse of(ComboGroupDetail detail) {
             ComboGroup group = detail.group();
@@ -408,7 +411,8 @@ public class CompositeProductAuthoringController {
                     group.sortOrder(),
                     group.status(),
                     group.version(),
-                    detail.components().stream().map(ComboComponentResponse::of).toList());
+                    detail.components().stream().map(ComboComponentResponse::of).toList(),
+                    detail.names());
         }
     }
 

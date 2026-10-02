@@ -176,11 +176,15 @@ public class OrderQueryService implements OrderCountsQuery {
                     orders.lineCommentPresets(tenantId, orderId).stream()
                             .collect(Collectors.groupingBy(OrderCommentPresetRow::orderLineId));
 
+            // ADR 0136: what each hidden auto-selected option charged, itemised on the order.
+            Map<UUID, Map<UUID, Long>> hiddenCharges = orders.hiddenCharges(tenantId, orderId);
+
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
             lines.forEach(line -> detailLines.add(new DetailLine(
                     line,
                     modifiers.getOrDefault(line.lineId(), List.of()),
-                    commentPresets.getOrDefault(line.lineId(), List.of()))));
+                    commentPresets.getOrDefault(line.lineId(), List.of()),
+                    hiddenCharges.getOrDefault(line.lineId(), Map.of()))));
 
             return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
@@ -704,8 +708,21 @@ public class OrderQueryService implements OrderCountsQuery {
 
     public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings, CustomerDetail customer) {}
 
+    /**
+     * @param hiddenChargeByOption what each hidden auto-selected option on this line charged, by
+     *     option id, for the whole line (ADR 0136). It is already inside the line's final amount
+     */
     public record DetailLine(
-            OrderLineRow line, List<OrderModifierRow> modifiers, List<OrderCommentPresetRow> commentPresets) {}
+            OrderLineRow line,
+            List<OrderModifierRow> modifiers,
+            List<OrderCommentPresetRow> commentPresets,
+            Map<UUID, Long> hiddenChargeByOption) {
+
+        /** What the option the server applied cost for this line, zero when it was free. */
+        public long hiddenChargeOf(UUID optionId) {
+            return hiddenChargeByOption.getOrDefault(optionId, 0L);
+        }
+    }
 
     /**
      * The customer block an ordinary detail read may show (orders.md

@@ -24,6 +24,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.CompositeProducts;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
@@ -343,6 +344,17 @@ public class CatalogSnapshotLoader {
             content.put(
                     "modifierGroupIds",
                     idStrings(snapshot.modifierGroupIdsByProduct().getOrDefault(product.id(), List.of())));
+            // ADR 0136. Written only when there is something to say, so a product with no
+            // combo and no override publishes exactly the content it always has and the
+            // draft's content hash does not move for a brand that authored neither.
+            List<UUID> comboGroups = comboGroupIdsOf(snapshot, product.id());
+            if (!comboGroups.isEmpty()) {
+                content.put("comboGroupIds", idStrings(comboGroups));
+            }
+            List<Map<String, Object>> policies = modifierGroupPolicies(snapshot, product.id());
+            if (!policies.isEmpty()) {
+                content.put("modifierGroupPolicies", policies);
+            }
 
             items.add(new PublicationItem(EntityType.PRODUCT, product.id(), product.version(), content));
         }
@@ -355,6 +367,14 @@ public class CatalogSnapshotLoader {
                                 entry.put("optionId", option.id().toString());
                                 entry.put("code", option.code());
                                 putIfPresent(entry, "linkedVariantId", option.linkedVariantId());
+                                // What the customer reads on the option. Written only when the
+                                // option has a name in some locale, so an option nobody named
+                                // publishes as it always did and a client falls back to the code.
+                                Map<String, Map<String, String>> optionNames =
+                                        names(snapshot, EntityType.MODIFIER_OPTION, option.id());
+                                if (!optionNames.isEmpty()) {
+                                    entry.put("names", optionNames);
+                                }
                                 putClassification(entry, snapshot.effectiveClassification(option));
                                 entry.put("maximumQuantity", option.maximumQuantity());
                                 entry.put("sortOrder", option.sortOrder());
@@ -376,7 +396,125 @@ public class CatalogSnapshotLoader {
             items.add(new PublicationItem(EntityType.MODIFIER_GROUP, group.id(), group.version(), content));
         }
 
+        for (ComboGroup group : snapshot.composite().comboGroups()) {
+            if (group.status() != Status.ACTIVE) {
+                continue;
+            }
+            items.add(new PublicationItem(
+                    EntityType.COMBO_GROUP, group.id(), group.version(), comboGroupContent(snapshot, group)));
+        }
+
         return List.copyOf(items);
+    }
+
+    /**
+     * What a channel needs to render one combo choice screen with no reach back into
+     * authoring (ADR 0136): the range, the repeat rule, and each active component with the
+     * wording of the dish it stands for.
+     *
+     * <p>No price is written. A component's price is a {@code COMBO_COMPONENT} row on the
+     * price book that resolves at the location and channel, read when the menu is served
+     * exactly as a variant's and an option's are, so the number a customer reads is the
+     * number the quote charges. A copy frozen here would disagree with checkout the moment
+     * a price book moved, which is the one thing the quote exists to prevent.
+     */
+    private static Map<String, Object> comboGroupContent(CatalogValidator.Snapshot snapshot, ComboGroup group) {
+        CatalogValidator.CompositeContext composite = snapshot.composite();
+        List<Map<String, Object>> components =
+                composite.componentsByGroup().getOrDefault(group.id(), List.of()).stream()
+                        .filter(component -> component.status() == Status.ACTIVE)
+                        .sorted(java.util.Comparator.comparingInt(ComboComponent::sortOrder))
+                        .map(component -> {
+                            Map<String, Object> entry = new LinkedHashMap<>();
+                            entry.put("componentId", component.id().toString());
+                            entry.put(
+                                    "variantId", component.componentVariantId().toString());
+                            UUID productId = composite.productIdByVariant().get(component.componentVariantId());
+                            putIfPresent(entry, "productId", productId);
+                            entry.put("defaultQuantity", component.defaultQuantity());
+                            entry.put("sortOrder", component.sortOrder());
+                            // The dish and the size, in every locale they are named in: a
+                            // component is a real variant and its name is its product's,
+                            // with the variant's own wording after it when it has one.
+                            if (productId != null) {
+                                Map<String, Map<String, String>> productNames =
+                                        names(snapshot, EntityType.PRODUCT, productId);
+                                if (!productNames.isEmpty()) {
+                                    entry.put("productNames", productNames);
+                                }
+                            }
+                            Map<String, Map<String, String>> variantNames =
+                                    names(snapshot, EntityType.VARIANT, component.componentVariantId());
+                            if (!variantNames.isEmpty()) {
+                                entry.put("variantNames", variantNames);
+                            }
+                            return entry;
+                        })
+                        .toList();
+
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("code", group.code());
+        content.put("containerVariantId", group.containerVariantId().toString());
+        content.put("minimumSelections", group.minimumSelections());
+        content.put("maximumSelections", group.maximumSelections());
+        content.put("allowSameComponentMultipleTimes", group.allowSameComponentMultipleTimes());
+        content.put("sortOrder", group.sortOrder());
+        content.put("status", group.status().name());
+        content.put("names", names(snapshot, EntityType.COMBO_GROUP, group.id()));
+        content.put("components", components);
+        return content;
+    }
+
+    /**
+     * The active combo groups whose container is one of this product's variants, in the
+     * order the author set.
+     */
+    private static List<UUID> comboGroupIdsOf(CatalogValidator.Snapshot snapshot, UUID productId) {
+        Set<UUID> variantIds = snapshot.variantsByProduct().getOrDefault(productId, List.of()).stream()
+                .map(Variant::id)
+                .collect(Collectors.toSet());
+        return snapshot.composite().comboGroups().stream()
+                .filter(group -> group.status() == Status.ACTIVE)
+                .filter(group -> variantIds.contains(group.containerVariantId()))
+                .sorted(java.util.Comparator.comparingInt(ComboGroup::sortOrder).thenComparing(ComboGroup::code))
+                .map(ComboGroup::id)
+                .toList();
+    }
+
+    /**
+     * The selection rules this product's own use of a shared group states, for every visible
+     * attachment that overrides at least one of them (ADR 0136).
+     *
+     * <p>The three values written are the effective ones -- the override where there is
+     * one, the shared group's own where there is not -- so a client replaces the group's
+     * values outright and never has to know which was which. The shared group is not edited
+     * and is published unchanged, so a second product attaching it is unaffected.
+     */
+    private static List<Map<String, Object>> modifierGroupPolicies(CatalogValidator.Snapshot snapshot, UUID productId) {
+        Map<UUID, ModifierGroup> groups = snapshot.composite().modifierGroupsById();
+        List<Map<String, Object>> policies = new ArrayList<>();
+        for (CompositeProducts.ModifierAttachment attachment :
+                snapshot.composite().attachments()) {
+            if (attachment.ownerType() != CompositeProducts.AttachmentOwnerType.PRODUCT
+                    || !attachment.ownerId().equals(productId)
+                    || attachment.hidden()
+                    || (attachment.requiredOverride() == null
+                            && attachment.minimumOverride() == null
+                            && attachment.maximumOverride() == null)) {
+                continue;
+            }
+            ModifierGroup group = groups.get(attachment.modifierGroupId());
+            if (group == null) {
+                continue;
+            }
+            Map<String, Object> policy = new LinkedHashMap<>();
+            policy.put("groupId", group.id().toString());
+            policy.put("required", attachment.effectiveRequired(group));
+            policy.put("minimumSelections", attachment.effectiveMinimum(group));
+            policy.put("maximumSelections", attachment.effectiveMaximum(group));
+            policies.add(policy);
+        }
+        return List.copyOf(policies);
     }
 
     /**

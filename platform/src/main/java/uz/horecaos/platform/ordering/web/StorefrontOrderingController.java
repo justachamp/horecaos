@@ -1076,7 +1076,11 @@ public class StorefrontOrderingController {
             long feeMinor,
             long totalMinor,
             Instant expiresAt,
-            @Nullable DeliveryChargeResponse delivery) {
+            @Nullable DeliveryChargeResponse delivery,
+            // ADR 0136: what the server added by itself for this cart's fulfilment mode -- a
+            // delivery box the customer never chose -- itemised so the total can be read
+            // against the lines. Each is already inside its line's price and the total.
+            List<HiddenChargeResponse> hiddenCharges) {
 
         static PricedCartResponse of(CartService.PricedCart priced) {
             QuoteSnapshot quote = priced.quote();
@@ -1092,9 +1096,27 @@ public class StorefrontOrderingController {
                     quote.feeMinor(),
                     quote.totalMinor(),
                     quote.expiresAt(),
-                    DeliveryChargeResponse.of(quote));
+                    DeliveryChargeResponse.of(quote),
+                    quote.adjustments().stream()
+                            .filter(adjustment -> adjustment.lineKey() != null
+                                    && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType()))
+                            .map(adjustment -> new HiddenChargeResponse(
+                                    adjustment.lineKey(), adjustment.sourceId(), adjustment.amountMinor()))
+                            .toList());
         }
     }
+
+    /**
+     * One option the server applied to a line by itself (ADR 0136).
+     *
+     * @param lineKey the cart line it was applied to; for a combo, that line's key followed by
+     *     the component's position, which is how pricing names each component line
+     * @param optionId the modifier option, which the published menu names in the customer's
+     *     language
+     * @param amountMinor its charge for the whole line, zero when the option is free. Already
+     *     inside the line's price and the cart's total, never added on top
+     */
+    public record HiddenChargeResponse(String lineKey, UUID optionId, long amountMinor) {}
 
     /**
      * The ADR 0037 delivery charge, as far as the resolver got.
@@ -1233,6 +1255,11 @@ public class StorefrontOrderingController {
                                     line.modifiers().stream()
                                             .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
                                             .map(m -> m.optionName())
+                                            .toList(),
+                                    line.modifiers().stream()
+                                            .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                            .map(m -> new AutoSelectedChargeResponse(
+                                                    m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
                                             .toList()))
                             .toList(),
                     detail.warnings());
@@ -1259,6 +1286,8 @@ public class StorefrontOrderingController {
      * @param comboName the combo's name as sold, set exactly when {@code comboSelectionId} is
      * @param autoSelectedModifiers the names, within {@code modifiers}, of the options the server
      *     applied for this order's fulfilment mode
+     * @param autoSelectedCharges the same options with what each cost, itemised so a receipt can
+     *     show a charge the customer never chose rather than leave it inside the line's price
      */
     public record OrderLineResponse(
             int lineNumber,
@@ -1273,7 +1302,15 @@ public class StorefrontOrderingController {
             List<UUID> modifierOptionIds,
             @Nullable UUID comboSelectionId,
             @Nullable String comboName,
-            List<String> autoSelectedModifiers) {}
+            List<String> autoSelectedModifiers,
+            List<AutoSelectedChargeResponse> autoSelectedCharges) {}
+
+    /**
+     * An option the server applied to an order line, with what it cost (ADR 0136).
+     *
+     * @param amountMinor the charge for the whole line, already inside the line's final amount
+     */
+    public record AutoSelectedChargeResponse(String name, long amountMinor) {}
 
     /**
      * ADR 0074's answer to "can this be ordered again".

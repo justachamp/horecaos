@@ -81,7 +81,34 @@ public class JdbcCartMenuRules implements CartMenuRules {
         if (groupIds.isEmpty()) {
             return Optional.of(new ProductRules(product.get().entityId(), List.of()));
         }
-        return Optional.of(new ProductRules(product.get().entityId(), groups(publicationId.get(), groupIds)));
+        Map<UUID, Policy> policies = policies(product.get().content());
+        List<GroupRules> rules = groups(publicationId.get(), groupIds).stream()
+                .map(group ->
+                        policies.containsKey(group.groupId()) ? group.withPolicy(policies.get(group.groupId())) : group)
+                .toList();
+        return Optional.of(new ProductRules(product.get().entityId(), rules));
+    }
+
+    /**
+     * This product's own use of the groups it attaches, where it overrides the shared group's
+     * rules (ADR 0136). The published values are already the effective ones, so they replace
+     * the group's outright -- the cart then enforces exactly what the storefront showed.
+     */
+    private static Map<UUID, Policy> policies(Map<String, Object> content) {
+        Map<UUID, Policy> byGroup = new LinkedHashMap<>();
+        if (content.get("modifierGroupPolicies") instanceof List<?> published) {
+            for (Object element : published) {
+                if (element instanceof Map<?, ?> policy) {
+                    byGroup.put(
+                            UUID.fromString(String.valueOf(policy.get("groupId"))),
+                            new Policy(
+                                    Boolean.TRUE.equals(policy.get("required")),
+                                    intOf(policy.get("minimumSelections"), 0),
+                                    intOf(policy.get("maximumSelections"), 1)));
+                }
+            }
+        }
+        return byGroup;
     }
 
     private List<GroupRules> groups(UUID publicationId, List<UUID> groupIds) {
