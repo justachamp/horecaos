@@ -1458,8 +1458,42 @@ export interface ChannelMatrices {
   socialLinks?: { [key: string]: string };
 }
 
+export interface ChannelMediaImageRequest {
+  mediaAssetId: string;
+  role: string;
+  sortOrder?: number;
+}
+
+export interface ChannelMediaOverrideView {
+  entityId?: string;
+  entityType?: string;
+  mediaAssetId?: string;
+  role?: string;
+  sortOrder?: number;
+  version?: number;
+}
+
+export interface ChannelMediaOverridesResponse {
+  images?: Array<ChannelMediaOverrideView>;
+}
+
 export interface ChannelPagesControllerPublishRequest {
   contentsByLocale: { [key: string]: string };
+}
+
+export interface ChannelPreviewResponse {
+  binding?: PreviewBindingView;
+  categories?: Array<ProjectedCategory>;
+  channel?: PreviewChannelView;
+  channelReady?: boolean;
+  findings?: Array<PreviewFindingView>;
+  items?: Array<ProjectedProduct>;
+  locale?: string;
+  locationId?: string;
+  modifierGroups?: Array<MenuModifierGroup>;
+  nextCursor?: string;
+  pricing?: PreviewPricing;
+  publishable?: boolean;
 }
 
 export interface ChannelResponse {
@@ -6019,6 +6053,44 @@ export interface PresetResponse {
   version?: number;
 }
 
+export interface PreviewBindingView {
+  bindingId?: string;
+  displayName?: string;
+  providerType?: string;
+  rulesetCode?: string;
+  status?: string;
+}
+
+export interface PreviewChannelView {
+  code?: string;
+  displayName?: string;
+  externallyPriced?: boolean;
+  id?: string;
+  status?: string;
+  systemType?: string;
+}
+
+export interface PreviewFindingView {
+  code?: string;
+  detail?: string;
+  entityCode?: string;
+  entityId?: string;
+  entityType?: string;
+  productId?: string;
+  severity?: string;
+  source?: string;
+}
+
+export interface PreviewPricing {
+  authority?: string;
+  currency?: string;
+}
+
+export interface PreviewTargetView {
+  binding?: PreviewBindingView;
+  locationId?: string;
+}
+
 export interface PriceBookMatrixRowResponse {
   basePriceMinor?: number;
   bookPriceMinor?: number;
@@ -6158,6 +6230,44 @@ export interface ProgramView {
   status?: "PLANNING" | "ACTIVE" | "COMPLETED" | "ABANDONED";
   targetEnvironment?: string;
   version?: number;
+}
+
+export interface ProjectedCategory {
+  categoryId?: string;
+  code?: string;
+  imageUrls?: Array<string>;
+  mediaAssetIds?: Array<string>;
+  mediaSource?: "DEFAULT" | "CHANNEL_RELATION" | "CHANNEL_OVERRIDE";
+  name?: string;
+  parentCategoryId?: string;
+  productIds?: Array<string>;
+  sortOrder?: number;
+}
+
+export interface ProjectedProduct {
+  code?: string;
+  description?: string;
+  imageUrls?: Array<string>;
+  mediaAssetIds?: Array<string>;
+  mediaSource?: "DEFAULT" | "CHANNEL_RELATION" | "CHANNEL_OVERRIDE";
+  modifierGroupIds?: Array<string>;
+  name?: string;
+  productId?: string;
+  variants?: Array<ProjectedVariant>;
+}
+
+export interface ProjectedVariant {
+  amountMinor?: number;
+  imageUrls?: Array<string>;
+  isDefault?: boolean;
+  mediaAssetIds?: Array<string>;
+  mediaSource?: "DEFAULT" | "CHANNEL_RELATION" | "CHANNEL_OVERRIDE";
+  onSaleNow?: boolean;
+  orderable?: boolean;
+  remainingQuantity?: number;
+  sku?: string;
+  unitCode?: string;
+  variantId?: string;
 }
 
 export interface PromoCodeRedemptionResponse {
@@ -6792,6 +6902,10 @@ export interface ReorderPlanResponse {
   orderId?: string;
   publicOrderNumber?: string;
   verdict?: string;
+}
+
+export interface ReplaceChannelMediaRequest {
+  images: Array<ChannelMediaImageRequest>;
 }
 
 export interface ReplayRequest {
@@ -9040,6 +9154,7 @@ export interface Operations {
   "createCategory": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateCategoryRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "updateCategory": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories/{categoryId}"; request: { parameters: { path: { brandId: string; catalogId: string; categoryId: string; tenantId: string } }; body: UpdateCategoryRequest }; responses: { "200": unknown } };
   "archiveCategory": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories/{categoryId}/archive"; request: { parameters: { path: { brandId: string; catalogId: string; categoryId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "channelPreview": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/channels/{channelId}/preview"; request: { parameters: { path: { brandId: string; catalogId: string; channelId: string; tenantId: string }; query: { bindingId?: string; cursor?: string; limit?: number; locale?: string; locationId?: string } } }; responses: { "200": ChannelPreviewResponse } };
   "draftPreview": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/draft-preview"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": DraftPreviewResponse } };
   "products": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string }; query: { cursor?: string; limit?: number; query?: string; status?: "ACTIVE" | "DRAFT" | "ARCHIVED" | "NO_MXIK" } } }; responses: { "200": PageProductSummaryResponse } };
   "createProduct": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateProductRequest }; responses: { "200": ProductResponse } };
@@ -9051,6 +9166,9 @@ export interface Operations {
   "channelExclusions": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { locationId: string } } }; responses: { "200": ChannelExclusionsResponse } };
   "bulkSetChannelOffering": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/bulk"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string } }; body: BulkChannelOfferingRequest }; responses: { "200": BulkChannelOfferingResponse } };
   "setChannelOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/variants/{variantId}"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string; variantId: string } }; body: SetChannelOfferingRequest }; responses: { "200": unknown } };
+  "channelMediaOverrides": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { entityId?: string; entityType?: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "FEE" } } }; responses: { "200": ChannelMediaOverridesResponse } };
+  "replaceChannelMediaOverrides": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides/{entityType}/{entityId}"; request: { parameters: { path: { brandId: string; channelId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "FEE"; tenantId: string } }; body: ReplaceChannelMediaRequest }; responses: { "200": ChannelMediaOverridesResponse } };
+  "previewTargets": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/preview-targets"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string } } }; responses: { "200": Array<PreviewTargetView> } };
   "export_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/export"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { catalogId: string } } }; responses: { "200": string } };
   "classifyFee": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fees/{feeCode}/fiscal-classification"; request: { parameters: { path: { brandId: string; feeCode: string; tenantId: string } }; body: FiscalClassificationRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "bulkClassify": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BulkClassifyRequest }; responses: { "200": BulkClassifyResponse } };

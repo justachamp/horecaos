@@ -17,6 +17,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.ChannelFindings;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -61,6 +62,37 @@ public class CatalogValidator {
         validateFiscalClassification(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
+    }
+
+    /**
+     * The partner-specific findings a marketplace ruleset raises over what a
+     * channel would receive (ADR 0138) — the ruleset-gated half of validation.
+     *
+     * <p>Separate from {@link #validate} on purpose: {@code validate} is the
+     * universal rule set every publication path shares, and a rule one
+     * marketplace enforces may not apply to another. A binding that names no
+     * ruleset yields nothing here, so the four reserved {@code MARKETPLACE_*}
+     * codes cannot fire for it — and none of them fires for anyone until a
+     * ruleset that raises them is authored.
+     *
+     * @param ruleset the binding's ruleset, or null when it names none
+     * @throws IllegalStateException when a ruleset raises a code outside the
+     *     {@code MARKETPLACE_} family — a programming error in the ruleset, caught
+     *     by its own test rather than allowed to pass as a universal rule
+     */
+    public List<ValidationFinding> marketplaceFindings(
+            @Nullable MarketplaceRuleset ruleset, ChannelProjection projection) {
+        if (ruleset == null) {
+            return List.of();
+        }
+        List<ValidationFinding> findings = ruleset.check(projection);
+        for (ValidationFinding finding : findings) {
+            if (!finding.code().startsWith(ChannelFindings.MARKETPLACE_PREFIX)) {
+                throw new IllegalStateException("Marketplace ruleset %s raised %s, which is outside the %s family"
+                        .formatted(ruleset.code(), finding.code(), ChannelFindings.MARKETPLACE_PREFIX));
+            }
+        }
+        return List.copyOf(findings);
     }
 
     /**

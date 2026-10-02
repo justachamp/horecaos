@@ -685,6 +685,14 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/catalog/publication-page').then((m) => m.PublicationPage),
           },
+          // catalog.md §4.10's preview region, extended by ADR 0138: what one channel
+          // would receive at one branch, with the findings that would stop it. Reached
+          // from a channel card on the publication screen, not from the sub-nav.
+          {
+            path: 'preview',
+            loadComponent: () =>
+              import('./features/catalog/channel-preview-page').then((m) => m.ChannelPreviewPage),
+          },
           {
             path: 'prices',
             loadComponent: () =>

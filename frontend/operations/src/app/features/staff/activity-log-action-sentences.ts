@@ -150,6 +150,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'catalog.channelMediaOverride.replaced': {
+      en: 'Photos shown on a channel replaced',
+      ru: 'Фото для канала заменены',
+      'uz-Latn': 'Kanal uchun rasmlar almashtirildi',
+    },
     'catalog.channelOffering.bulkSet': {
       en: 'Catalog channel offering bulk set',
       ru: 'Каталог канал предложение массовое установлено',

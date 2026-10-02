@@ -263,6 +263,48 @@ describe('PublicationPage', () => {
     expect(status?.textContent).toContain('Draft differs');
   });
 
+  it('links each channel card to its own preview, by channel id', async () => {
+    await render(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Main', status: 'ACTIVE' }]),
+        listPublicationHistory: () => of([]),
+        draftPreview: NO_DRAFT_PREVIEW,
+        validate: () => of({ publishable: true, findings: [] }),
+      },
+      {
+        list: () =>
+          Promise.resolve(
+            ['chan-uzum', 'chan-wolt'].map((id) => ({
+              id,
+              code: id.toUpperCase(),
+              systemType: 'AGGREGATOR',
+              displayName: id,
+              status: 'ACTIVE',
+              pricePlaneChannelId: null,
+              externallyPriced: false,
+              guestOrdersAllowed: true,
+              providerInstallationId: null,
+              version: 1,
+              locationCount: 0,
+              enabledPaymentMethodCount: 0,
+              enabledFulfillmentModes: [],
+            })),
+          ),
+      },
+    );
+
+    const links = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLAnchorElement>(
+        '[data-testid="publication-preview-link"]',
+      ),
+    );
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/catalog/preview?channel=chan-uzum',
+      '/catalog/preview?channel=chan-wolt',
+    ]);
+  });
+
   it('publishes to a channel and shows the result', async () => {
     const publish = vi.fn().mockReturnValue(
       of({

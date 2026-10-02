@@ -4594,6 +4594,64 @@
         },
         "type" : "object"
       },
+      "ChannelMediaImageRequest" : {
+        "properties" : {
+          "mediaAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role" : {
+            "minLength" : 1,
+            "pattern" : "PRIMARY|GALLERY",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "mediaAssetId", "role" ],
+        "type" : "object"
+      },
+      "ChannelMediaOverrideView" : {
+        "properties" : {
+          "entityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entityType" : {
+            "type" : "string"
+          },
+          "mediaAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ChannelMediaOverridesResponse" : {
+        "properties" : {
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChannelMediaOverrideView"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "ChannelPagesControllerPublishRequest" : {
         "properties" : {
           "contentsByLocale" : {
@@ -4605,6 +4663,60 @@
           }
         },
         "required" : [ "contentsByLocale" ],
+        "type" : "object"
+      },
+      "ChannelPreviewResponse" : {
+        "properties" : {
+          "binding" : {
+            "$ref" : "#/components/schemas/PreviewBindingView"
+          },
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ProjectedCategory"
+            },
+            "type" : "array"
+          },
+          "channel" : {
+            "$ref" : "#/components/schemas/PreviewChannelView"
+          },
+          "channelReady" : {
+            "type" : "boolean"
+          },
+          "findings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PreviewFindingView"
+            },
+            "type" : "array"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ProjectedProduct"
+            },
+            "type" : "array"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "modifierGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroup"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          },
+          "pricing" : {
+            "$ref" : "#/components/schemas/PreviewPricing"
+          },
+          "publishable" : {
+            "type" : "boolean"
+          }
+        },
         "type" : "object"
       },
       "ChannelResponse" : {
@@ -18873,6 +18985,105 @@
         },
         "type" : "object"
       },
+      "PreviewBindingView" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "rulesetCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PreviewChannelView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "externallyPriced" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "systemType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PreviewFindingView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "type" : "string"
+          },
+          "entityCode" : {
+            "type" : "string"
+          },
+          "entityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entityType" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PreviewPricing" : {
+        "properties" : {
+          "authority" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PreviewTargetView" : {
+        "properties" : {
+          "binding" : {
+            "$ref" : "#/components/schemas/PreviewBindingView"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PriceBookMatrixRowResponse" : {
         "properties" : {
           "basePriceMinor" : {
@@ -19325,6 +19536,146 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ProjectedCategory" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "imageUrls" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaAssetIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaSource" : {
+            "enum" : [ "DEFAULT", "CHANNEL_RELATION", "CHANNEL_OVERRIDE" ],
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "parentCategoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ProjectedProduct" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "imageUrls" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaAssetIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaSource" : {
+            "enum" : [ "DEFAULT", "CHANNEL_RELATION", "CHANNEL_OVERRIDE" ],
+            "type" : "string"
+          },
+          "modifierGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ProjectedVariant"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ProjectedVariant" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "imageUrls" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "mediaAssetIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaSource" : {
+            "enum" : [ "DEFAULT", "CHANNEL_RELATION", "CHANNEL_OVERRIDE" ],
+            "type" : "string"
+          },
+          "onSaleNow" : {
+            "type" : "boolean"
+          },
+          "orderable" : {
+            "type" : "boolean"
+          },
+          "remainingQuantity" : {
+            "type" : "number"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "unitCode" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -21410,6 +21761,20 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "ReplaceChannelMediaRequest" : {
+        "properties" : {
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChannelMediaImageRequest"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "images" ],
         "type" : "object"
       },
       "ReplayRequest" : {
@@ -31028,6 +31393,97 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/channels/{channelId}/preview" : {
+      "get" : {
+        "description" : "A dry run of the publication pipeline addressed at a channel: the draft is snapshotted and validated as publish does it, then assembled by the same code a customer's menu read goes through, so the gates apply in ADR 0138's order -- the branch's offerings (or its bound named menu), the channel's exclusions, the channel's price plane (or no price at all when the aggregator sets it), and the channel's images over the item's own. Nothing is written, no hash is minted, and the result cannot be fetched again by reference. Name the branch with locationId or the marketplace binding with bindingId; a channel that sells at exactly one branch needs neither. Products are cursor-paginated; findings, categories and modifier groups ride the first page only.",
+        "operationId" : "channelPreview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "catalogId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "bindingId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelPreviewResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What one channel would receive at one branch if the draft were published now (ADR 0138)",
+        "tags" : [ "Catalog publication" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/draft-preview" : {
       "get" : {
         "description" : "Nothing is written. A channel card compares this against the hash of its own last PUBLISHED history entry to render \"Черновик отличается от опубликованного\" versus \"Актуально\" before an operator commits to publishing.",
@@ -31607,6 +32063,186 @@
         },
         "summary" : "Sets whether a variant is offered on one sales channel",
         "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides" : {
+      "get" : {
+        "description" : "Every override this brand has written for the channel, or only one item's when entityType and entityId are both given. Empty means every item shows its own images on that channel.",
+        "operationId" : "channelMediaOverrides",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "entityType",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "entityId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelMediaOverridesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The images one channel shows instead of an item's own (ADR 0138)",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides/{entityType}/{entityId}" : {
+      "put" : {
+        "description" : "The whole set every time, matching the photo editor's own whole-set save: what the screen shows is what is stored. An empty list removes every override and the item goes back to showing its own images on that channel. Every image must be a verified asset of this tenant; at most one is PRIMARY. A channel override wins over the item's per-channel relation (IA 4.2f), which wins over its universal images; prices are an independent axis and are never affected. It edits the draft: a preview reads it at once and a live menu changes when next published.",
+        "operationId" : "replaceChannelMediaOverrides",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityType",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entityId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReplaceChannelMediaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelMediaOverridesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replaces the images one channel shows for a product, variant or category (ADR 0138)",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/preview-targets" : {
+      "get" : {
+        "description" : "What a console offers to preview: one entry per branch the channel is active at, carrying the binding that covers it (and the ruleset it names) when the channel is backed by a marketplace installation.",
+        "operationId" : "previewTargets",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PreviewTargetView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The branches a channel sells at, with the marketplace binding at each (ADR 0138)",
+        "tags" : [ "Catalog publication" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/export" : {
