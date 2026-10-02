@@ -18,6 +18,7 @@ interface Inputs {
   discount: string;
   total: string;
   hiddenCharges: readonly HiddenChargeRow[];
+  provisional: boolean;
 }
 
 function setUp(overrides: Partial<Inputs> = {}) {
@@ -33,6 +34,7 @@ function setUp(overrides: Partial<Inputs> = {}) {
     discount: '',
     total: '32 000 so‘m',
     hiddenCharges: [],
+    provisional: false,
     ...overrides,
   };
   for (const [name, value] of Object.entries(inputs)) {
@@ -44,7 +46,11 @@ function setUp(overrides: Partial<Inputs> = {}) {
     [...host.querySelectorAll('.summary__row')].map((row) =>
       [...row.querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
     );
-  return { host, rows };
+  return {
+    host,
+    rows,
+    notice: () => host.querySelector('[data-testid="summary-provisional-notice"]'),
+  };
 }
 
 describe('OrderSummaryComponent', () => {
@@ -112,5 +118,19 @@ describe('OrderSummaryComponent', () => {
 
       expect(host.querySelector('[data-testid="hidden-charges"]')).toBeNull();
     });
+  });
+});
+
+describe('OrderSummaryComponent -- items sold by weight (ADR 0137)', () => {
+  it('says the total is an estimate when the basket holds an item sold by weight', () => {
+    const { notice } = setUp({ provisional: true });
+
+    expect(notice()?.textContent).toContain('physical.cartNotice');
+  });
+
+  it('says nothing of the kind for a basket of fixed units', () => {
+    const { notice } = setUp();
+
+    expect(notice()).toBeNull();
   });
 });

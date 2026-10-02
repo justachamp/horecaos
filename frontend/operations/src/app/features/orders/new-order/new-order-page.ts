@@ -62,7 +62,13 @@ import {
 import { BasketLineView, NewOrderBasket } from './new-order-basket';
 import { NewOrderHeader } from './new-order-header';
 import { NewOrderMenuGrid } from './new-order-menu-grid';
-import { BasketLine, comboAmountMinor, computeBasketTotal } from './new-order-total';
+import {
+  BasketLine,
+  basketFactsFor,
+  comboAmountMinor,
+  computeBasketTotal,
+  lineUnitAmountMinor,
+} from './new-order-total';
 
 /**
  * The tenant's operator/call-centre channel is `tenant.sales_channels` data
@@ -722,6 +728,7 @@ export class NewOrderPage implements OnInit {
         return;
       }
       const available = plan.lines.filter((line) => line.status === 'AVAILABLE');
+      const index = this.variantIndex();
       let dropped = 0;
       const added: BasketLine[] = [];
       for (const line of available) {
@@ -749,12 +756,16 @@ export class NewOrderPage implements OnInit {
           });
           continue;
         }
+        // ADR 0137: the line is ordered from today's menu, so it takes today's portion and weight rules.
+        const facts = basketFactsFor(index.get(line.variantId)?.variant.physical);
         added.push({
           lineKey: nextLineKey(),
           variantId: line.variantId,
           productName: line.productName,
           quantity: line.quantity,
           unitAmountMinor: line.unitAmountMinor,
+          portionStep: facts.portionStep,
+          catchweight: facts.catchweight,
           modifiers: [],
           // Row 2.1b: `ReorderPlan`'s own line carries no preset codes — a
           // repeat order starts from the product's plain state, same as it
@@ -1102,12 +1113,17 @@ export class NewOrderPage implements OnInit {
     modifiers: BasketLine['modifiers'],
     commentPresetCodes: readonly string[],
   ): void {
+    // ADR 0137: a splittable variant is ordered in its portion size, and a weighed one is priced
+    // per quantum at its nominal weight until the kitchen weighs it.
+    const facts = basketFactsFor(variant.physical);
     const line: BasketLine = {
       lineKey: nextLineKey(),
       variantId: variant.variantId,
       productName: product.name,
-      quantity: 1,
+      quantity: facts.initialQuantity,
       unitAmountMinor: variant.amountMinor,
+      portionStep: facts.portionStep,
+      catchweight: facts.catchweight,
       modifiers,
       commentPresetCodes,
       customerNote: null,
@@ -1850,7 +1866,9 @@ export class NewOrderPage implements OnInit {
         variantId: line.variantId,
         nameSnapshot: line.productName,
         quantity: line.quantity,
-        unitAmountMinor: line.unitAmountMinor ?? 0,
+        // One unit's price: for a weighed variant the menu price is per quantum, which is not
+        // what an aggregator's ticket states for a line.
+        unitAmountMinor: lineUnitAmountMinor(line) ?? 0,
       }));
       const result = await this.api.aggregatorEntry(scope, {
         channelCode,

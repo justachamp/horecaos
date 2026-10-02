@@ -1,0 +1,251 @@
+<fieldset class="physical" data-testid="physical-card">
+  <legend>{{ label() }}</legend>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-caption physical__wide">{{ 'catalog.editor.physical.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm physical__wide" data-testid="physical-denied">
+        {{ 'catalog.editor.physical.denied' | t }}
+      </p>
+    }
+    @case ('failed') {
+      <div class="physical__wide physical__failed">
+        <p class="q-body-sm">{{ 'catalog.editor.physical.loadFailed' | t }}</p>
+        <button type="button" (click)="retry()" data-testid="physical-retry">
+          {{ 'catalog.editor.physical.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <label class="physical__field">
+        <span class="q-caption">{{ 'catalog.editor.physical.measure' | t }}</span>
+        <select
+          [value]="form().measure"
+          (change)="setMeasure($any($event.target).value)"
+          data-testid="physical-measure"
+        >
+          <option value="NONE">{{ 'catalog.editor.physical.measure.none' | t }}</option>
+          <option value="WEIGHT">{{ 'catalog.editor.physical.measure.weight' | t }}</option>
+          <option value="VOLUME">{{ 'catalog.editor.physical.measure.volume' | t }}</option>
+        </select>
+      </label>
+
+      @if (form().measure !== 'NONE') {
+        <label class="physical__field">
+          <span class="q-caption">
+            {{
+              (form().measure === 'WEIGHT'
+                ? 'catalog.editor.physical.weightGrams'
+                : 'catalog.editor.physical.volumeMl'
+              ) | t
+            }}
+          </span>
+          <input
+            type="text"
+            inputmode="numeric"
+            class="q-mono"
+            [value]="form().measureValue"
+            (input)="setMeasureValue($any($event.target).value)"
+            data-testid="physical-measure-value"
+          />
+        </label>
+      }
+      @if (errorText('measure'); as message) {
+        <p class="q-caption physical__error physical__wide" data-testid="physical-error-measure">
+          {{ message }}
+        </p>
+      }
+
+      <div class="physical__group physical__wide">
+        <label class="physical__check">
+          <input
+            type="checkbox"
+            [checked]="form().catchweight"
+            (change)="setCatchweight($any($event.target).checked)"
+            data-testid="physical-catchweight"
+          />
+          <span class="q-body-sm">{{ 'catalog.editor.physical.catchweight' | t }}</span>
+        </label>
+        @if (form().catchweight) {
+          <p class="q-caption physical__help">
+            {{ 'catalog.editor.physical.catchweightHelp' | t }}
+          </p>
+          <div class="physical__row">
+            <label class="physical__field">
+              <span class="q-caption">{{ 'catalog.editor.physical.quantum' | t }}</span>
+              <input
+                type="text"
+                inputmode="numeric"
+                class="q-mono"
+                [value]="form().quantum"
+                (input)="setQuantum($any($event.target).value)"
+                data-testid="physical-quantum"
+              />
+              @if (errorText('catchweightQuantum'); as message) {
+                <span
+                  class="q-caption physical__error"
+                  data-testid="physical-error-catchweightQuantum"
+                  >{{ message }}</span
+                >
+              }
+            </label>
+            <label class="physical__field">
+              <span class="q-caption">{{ 'catalog.editor.physical.nominal' | t }}</span>
+              <input
+                type="text"
+                inputmode="numeric"
+                class="q-mono"
+                [value]="form().nominal"
+                [placeholder]="'catalog.editor.physical.nominalHint' | t"
+                (input)="setNominal($any($event.target).value)"
+                data-testid="physical-nominal"
+              />
+              @if (errorText('catchweightNominal'); as message) {
+                <span
+                  class="q-caption physical__error"
+                  data-testid="physical-error-catchweightNominal"
+                  >{{ message }}</span
+                >
+              }
+            </label>
+          </div>
+        }
+      </div>
+
+      <div class="physical__group physical__wide">
+        <label class="physical__check">
+          <input
+            type="checkbox"
+            [checked]="form().splittable"
+            (change)="setSplittable($any($event.target).checked)"
+            data-testid="physical-splittable"
+          />
+          <span class="q-body-sm">{{ 'catalog.editor.physical.splittable' | t }}</span>
+        </label>
+        @if (form().splittable) {
+          <p class="q-caption physical__help">{{ 'catalog.editor.physical.splittableHelp' | t }}</p>
+          <label class="physical__field">
+            <span class="q-caption">{{ 'catalog.editor.physical.portion' | t }}</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              class="q-mono"
+              [value]="form().portion"
+              [placeholder]="'catalog.editor.physical.portionHint' | t"
+              (input)="setPortion($any($event.target).value)"
+              data-testid="physical-portion"
+            />
+            @if (errorText('portion'); as message) {
+              <span class="q-caption physical__error" data-testid="physical-error-portion">{{
+                message
+              }}</span>
+            }
+          </label>
+        }
+      </div>
+
+      @if (markingConflict()) {
+        <q-inline-alert
+          class="physical__wide"
+          severity="warning"
+          [messageKey]="'catalog.editor.physical.markingConflict'"
+          data-testid="physical-marking-conflict"
+        />
+      }
+
+      <div class="physical__group physical__wide">
+        <span class="q-body-sm physical__heading">
+          {{ 'catalog.editor.physical.nutrition' | t }}, {{ perUnitKey() | t }}
+        </span>
+        <div class="physical__row">
+          <label class="physical__field">
+            <span class="q-caption">{{ 'catalog.editor.physical.calories' | t }}</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              class="q-mono"
+              [value]="form().calories"
+              (input)="setNutrient('calories', $any($event.target).value)"
+              data-testid="physical-calories"
+            />
+            @if (errorText('calories'); as message) {
+              <span class="q-caption physical__error" data-testid="physical-error-calories">{{
+                message
+              }}</span>
+            }
+          </label>
+          <label class="physical__field">
+            <span class="q-caption">{{ 'catalog.editor.physical.protein' | t }}</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              class="q-mono"
+              [value]="form().protein"
+              (input)="setNutrient('protein', $any($event.target).value)"
+              data-testid="physical-protein"
+            />
+            @if (errorText('protein'); as message) {
+              <span class="q-caption physical__error" data-testid="physical-error-protein">{{
+                message
+              }}</span>
+            }
+          </label>
+          <label class="physical__field">
+            <span class="q-caption">{{ 'catalog.editor.physical.fat' | t }}</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              class="q-mono"
+              [value]="form().fat"
+              (input)="setNutrient('fat', $any($event.target).value)"
+              data-testid="physical-fat"
+            />
+            @if (errorText('fat'); as message) {
+              <span class="q-caption physical__error" data-testid="physical-error-fat">{{
+                message
+              }}</span>
+            }
+          </label>
+          <label class="physical__field">
+            <span class="q-caption">{{ 'catalog.editor.physical.carbs' | t }}</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              class="q-mono"
+              [value]="form().carbs"
+              (input)="setNutrient('carbs', $any($event.target).value)"
+              data-testid="physical-carbs"
+            />
+            @if (errorText('carbs'); as message) {
+              <span class="q-caption physical__error" data-testid="physical-error-carbs">{{
+                message
+              }}</span>
+            }
+          </label>
+        </div>
+      </div>
+
+      @if (clearing()) {
+        <p class="q-caption physical__wide" data-testid="physical-clear-hint">
+          {{ 'catalog.editor.physical.clearHint' | t }}
+        </p>
+      }
+      @if (notice(); as current) {
+        <q-inline-alert
+          class="physical__wide"
+          [severity]="current.kind"
+          [text]="current.text"
+          data-testid="physical-notice"
+        />
+      }
+
+      <div class="physical__actions physical__wide">
+        <button type="button" [disabled]="!canSave()" (click)="save()" data-testid="physical-save">
+          {{ (saving() ? 'catalog.editor.saving' : 'catalog.editor.physical.save') | t }}
+        </button>
+      </div>
+    }
+  }
+</fieldset>

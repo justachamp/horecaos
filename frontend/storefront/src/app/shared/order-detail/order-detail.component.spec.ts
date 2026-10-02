@@ -23,8 +23,8 @@ class FakeTranslateService {
   get(key: string): string {
     return key;
   }
-  getWithParams(key: string): string {
-    return key;
+  getWithParams(key: string, params?: Record<string, string | number>): string {
+    return params ? `${key}|${Object.values(params).join('|')}` : key;
   }
   current(): Record<string, unknown> {
     return {};
@@ -530,5 +530,95 @@ describe('OrderDetailComponent: combos and what the server added (ADR 0136)', ()
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(cartAdd).toHaveBeenCalledWith('v-lunch', 2, undefined, [], undefined, picks);
+  });
+});
+
+describe('OrderDetailComponent: portions and weighed lines (ADR 0137)', () => {
+  const NBSP = ' ';
+
+  async function open(items: ApiOrderDetail['items']) {
+    const { fixture, comp } = setUp('o1', apiOrderDetail({ items }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const text = () =>
+      ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+    return { fixture, comp, text, host: fixture.nativeElement as HTMLElement };
+  }
+
+  const CAKE = {
+    quantumGrams: 100,
+    nominalGramsPerUnit: 1_200,
+    pricePerQuantumMinor: 15_000,
+    provisional: true,
+    actualWeightGrams: null,
+  };
+
+  it('writes a half portion with the language’s decimal mark, and a whole quantity as before', async () => {
+    const { text } = await open([
+      { name: 'Plov', quantity: 0.5, price: 38_000, lineAmount: 19_000 },
+      { name: 'Cola', quantity: 3, price: 9_000, lineAmount: 27_000 },
+    ]);
+
+    expect(text()).toContain('0,5 physical.portionsUnit');
+    expect(text()).toContain('3 common.itemsUnit');
+  });
+
+  it('shows a weighed line as an estimate, with its estimated weight, until it is weighed', async () => {
+    const { host, text } = await open([
+      { name: 'Medovik', quantity: 1, price: 180_000, lineAmount: 180_000, catchweight: CAKE },
+    ]);
+
+    const weight = host.querySelector('[data-testid="order-line-weight"]');
+    expect(weight?.textContent).toContain('physical.estimateLine');
+    expect(weight?.textContent).toContain(`1,2${NBSP}kg`);
+    expect(text()).toContain('≈ 180');
+  });
+
+  it('shows what a line weighed and its own corrected amount once it is weighed', async () => {
+    const { host, text } = await open([
+      {
+        name: 'Medovik',
+        quantity: 1,
+        price: 180_000,
+        lineAmount: 201_000,
+        catchweight: { ...CAKE, provisional: false, actualWeightGrams: 1_340 },
+      },
+    ]);
+
+    const weight = host.querySelector('[data-testid="order-line-weight"]');
+    expect(weight?.textContent).toContain('physical.weighedLine');
+    expect(weight?.textContent).toContain(`1,34${NBSP}kg`);
+    expect(text()).toContain('201');
+    expect(text()).not.toContain('≈');
+  });
+
+  it('says the final weight and price are set at handover while any line is unweighed', async () => {
+    const { host } = await open([
+      { name: 'Medovik', quantity: 1, price: 180_000, lineAmount: 180_000, catchweight: CAKE },
+    ]);
+
+    expect(host.querySelector('[data-testid="order-final-weight-notice"]')).not.toBeNull();
+  });
+
+  it('says nothing of the kind once every weighed line is weighed, or when there is none', async () => {
+    const weighed = await open([
+      {
+        name: 'Medovik',
+        quantity: 1,
+        price: 180_000,
+        lineAmount: 201_000,
+        catchweight: { ...CAKE, provisional: false, actualWeightGrams: 1_340 },
+      },
+    ]);
+
+    expect(weighed.host.querySelector('[data-testid="order-final-weight-notice"]')).toBeNull();
+  });
+
+  it('says nothing about weight on a fixed unit', async () => {
+    const { host } = await open([{ name: 'Cola', quantity: 3, price: 9_000, lineAmount: 27_000 }]);
+
+    expect(host.querySelector('[data-testid="order-line-weight"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-final-weight-notice"]')).toBeNull();
   });
 });

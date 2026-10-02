@@ -14,7 +14,8 @@ import type {
 
 class FakeTranslateService {
   get = (key: string): string => key;
-  getWithParams = (key: string): string => key;
+  getWithParams = (key: string, params?: Record<string, string | number>): string =>
+    params ? `${key}|${Object.values(params).join('|')}` : key;
   current = (): Record<string, unknown> => ({});
 }
 
@@ -474,5 +475,112 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
       expect(view.q('dine-in-choose')).toBeNull();
       expect(view.q('dine-in-needs-staff')).not.toBeNull();
     });
+  });
+});
+
+describe('DishCardComponent -- portions and weighed items (ADR 0137)', () => {
+  const NBSP = '\u00a0';
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+  const CAKE = {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+    netWeightGrams: 1_200,
+  } as const;
+
+  it('shows a variant’s weight on the card', () => {
+    const view = render({
+      item: dish([
+        variant({ physical: { catchweight: false, splittable: false, netWeightGrams: 350 } }),
+      ]),
+      ordering: false,
+      linked: true,
+    });
+
+    expect(view.host.querySelector('[data-testid="physical-measure"]')?.textContent?.trim()).toBe(
+      `350${NBSP}g`,
+    );
+  });
+
+  it('shows no weight on a fixed unit', () => {
+    const view = render({ ordering: false });
+
+    expect(view.host.querySelector('[data-testid="physical-measure"]')).toBeNull();
+  });
+
+  it('prices a weighed variant per quantum, not as if the price were per unit', () => {
+    const view = render({
+      item: dish([variant({ price: 15_000, physical: CAKE })]),
+      ordering: false,
+      linked: true,
+    });
+
+    expect(view.host.querySelector('.dish__price')?.textContent).toContain(
+      'physical.pricePerQuantum',
+    );
+  });
+
+  it('starts a splittable variant at one whole portion', () => {
+    const view = render({ item: dish([variant({ physical: SPLITTABLE })]) });
+
+    view.q('dine-in-add')!.click();
+
+    expect(view.changes).toEqual([{ variantId: 'v1', quantity: 1 }]);
+  });
+
+  it('starts a variant whose portion does not divide one at the first quantity the cart accepts', () => {
+    const view = render({
+      item: dish([
+        variant({ physical: { catchweight: false, splittable: true, portionSize: 0.3 } }),
+      ]),
+    });
+
+    view.q('dine-in-add')!.click();
+
+    expect(view.changes).toEqual([{ variantId: 'v1', quantity: 1.2 }]);
+  });
+
+  it('steps a held splittable portion by its portion size, up and down', () => {
+    const view = render({
+      item: dish([variant({ physical: SPLITTABLE })]),
+      quantities: { v1: 1 },
+    });
+
+    view.q('dine-in-increase')!.click();
+    view.q('dine-in-decrease')!.click();
+
+    expect(view.changes).toEqual([
+      { variantId: 'v1', quantity: 1.5 },
+      { variantId: 'v1', quantity: 0.5 },
+    ]);
+  });
+
+  it('asks for zero when the last portion is taken out', () => {
+    const view = render({
+      item: dish([variant({ physical: SPLITTABLE })]),
+      quantities: { v1: 0.5 },
+    });
+
+    view.q('dine-in-decrease')!.click();
+
+    expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
+  });
+
+  it('keeps a plain variant in whole units, as before', () => {
+    const view = render({ quantities: { v1: 2 } });
+
+    view.q('dine-in-increase')!.click();
+
+    expect(view.changes).toEqual([{ variantId: 'v1', quantity: 3 }]);
+  });
+
+  it('writes a half portion with the language’s decimal mark', () => {
+    const view = render({
+      item: dish([variant({ physical: SPLITTABLE })]),
+      quantities: { v1: 0.5 },
+    });
+
+    expect(view.q('dine-in-quantity')?.textContent?.trim()).toBe('0,5');
   });
 });

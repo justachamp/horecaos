@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.pricing.application.CatalogPricingContext;
 import uz.horecaos.platform.pricing.application.PriceableType;
+import uz.horecaos.platform.pricing.domain.CatchweightFacts;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 
 /**
@@ -64,6 +65,46 @@ public class JdbcCatalogPricingContext implements CatalogPricingContext {
                 .param("channel", channelCode)
                 .query(UUID.class)
                 .optional();
+    }
+
+    @Override
+    public Map<UUID, CatchweightFacts> catchweightFacts(UUID publicationId, Set<UUID> variantIds) {
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        // The variant entries of every PRODUCT item of this publication, unnested and
+        // narrowed to the ordered variants that published a catchweight block. The
+        // publication id is the tenant and brand boundary: a quote only ever names its
+        // own, and the item rows are keyed under it.
+        Map<UUID, CatchweightFacts> facts = new HashMap<>();
+        jdbc.sql("""
+                SELECT (variant ->> 'variantId')::uuid AS variant_id,
+                       (variant -> 'physical' ->> 'catchweightQuantumGrams')::integer AS quantum_grams,
+                       COALESCE(
+                           (variant -> 'physical' ->> 'catchweightNominalGrams')::integer,
+                           (variant -> 'physical' ->> 'netWeightGrams')::integer) AS nominal_grams
+                FROM catalog.publication_items item
+                CROSS JOIN LATERAL jsonb_array_elements(item.immutable_content_json -> 'variants') AS variant
+                WHERE item.publication_id = :publicationId
+                  AND item.entity_type = 'PRODUCT'
+                  AND (variant -> 'physical' ->> 'catchweight') = 'true'
+                  AND (variant ->> 'variantId')::uuid = ANY(:ids)
+                """)
+                .param("publicationId", publicationId)
+                .param("ids", variantIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    Integer quantum = row.getObject("quantum_grams", Integer.class);
+                    Integer nominal = row.getObject("nominal_grams", Integer.class);
+                    // The authoring constraints make both present for a catchweight
+                    // variant. A publication written by something that did not honour
+                    // them prices per unit rather than guessing a weight.
+                    if (quantum != null && nominal != null) {
+                        facts.put(row.getObject("variant_id", UUID.class), new CatchweightFacts(quantum, nominal));
+                    }
+                    return quantum;
+                })
+                .list();
+        return facts;
     }
 
     @Override

@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -628,6 +629,7 @@ public class OrderStateService {
         if (!OrderStateMachine.permits(order.status(), target, order.fulfillmentMode())) {
             throw new OrderStateMachine.IllegalTransitionException(order.status(), target);
         }
+        requireCatchweightReconciled(tenantId, orderId, target);
 
         Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
         if (won.isEmpty()) {
@@ -680,6 +682,35 @@ public class OrderStateService {
                 correlationId,
                 now);
         return new DecisionResult(true, target, version, null);
+    }
+
+    /**
+     * The handover of ADR 0137: the order leaves the pass for the customer or a courier, or
+     * is completed at the counter. Both are the moment the charge has to be final.
+     */
+    private static boolean isHandover(OrderStatus target) {
+        return target == OrderStatus.FULFILLING || target == OrderStatus.COMPLETED;
+    }
+
+    /**
+     * {@code CATCHWEIGHT_NOT_RECONCILED} (ADR 0137): an order does not leave the pass while a
+     * line sold by weight is still priced against its nominal weight.
+     *
+     * <p>The direct analogue of ADR 0038's {@code MARKS_INCOMPLETE}, and for the same reason:
+     * a receipt for an amount nobody has confirmed is wrong in a way nothing downstream can
+     * detect. It is a blocker on the order moving, not on the catalog publishing -- the fact it
+     * waits for does not exist until the scale is read.
+     *
+     * @throws CatchweightNotReconciledException naming the lines still to weigh
+     */
+    private void requireCatchweightReconciled(UUID tenantId, UUID orderId, OrderStatus target) {
+        if (!isHandover(target)) {
+            return;
+        }
+        List<UUID> unweighed = orders.unreconciledCatchweightLines(tenantId, orderId);
+        if (!unweighed.isEmpty()) {
+            throw new CatchweightNotReconciledException(unweighed);
+        }
     }
 
     /**
@@ -958,6 +989,14 @@ public class OrderStateService {
             // ADR 0019 does not have this edge from where the order actually is.
             // The ticket is not rolled back: the food is where the food is.
             log.info("Order {} is {} and refuses a kitchen proposal of {}", orderId, order.status(), target);
+            outcome = ProgressProposal.REFUSED;
+            resultStatus = order.status();
+        } else if (isHandover(target)
+                && !orders.unreconciledCatchweightLines(tenantId, orderId).isEmpty()) {
+            // ADR 0137: the pass hands the food over, and a weighed line has not been weighed.
+            // Refused the way an impossible edge is -- the ticket carries on holding the food it
+            // has -- and the order stays where it is until somebody captures the weight.
+            log.info("Order {} still has catchweight lines nobody has weighed; refusing {}", orderId, target);
             outcome = ProgressProposal.REFUSED;
             resultStatus = order.status();
         } else {
@@ -1543,6 +1582,27 @@ public class OrderStateService {
     /** An order's status and effective decision, read rather than acted on (wave 24, {@link #currentState}). */
     public record CurrentState(
             OrderStatus status, int orderVersion, @Nullable ApprovalDecisionRow effectiveDecision) {}
+
+    /**
+     * ADR 0137's {@code CATCHWEIGHT_NOT_RECONCILED}: the order cannot be handed over because
+     * these lines are sold by weight and have not been weighed.
+     */
+    public static class CatchweightNotReconciledException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final transient List<UUID> lineIds;
+
+        public CatchweightNotReconciledException(List<UUID> lineIds) {
+            super("%d line(s) sold by weight have not been weighed yet".formatted(lineIds.size()));
+            this.lineIds = List.copyOf(lineIds);
+        }
+
+        /** The order lines still priced against their nominal weight. */
+        public List<UUID> lineIds() {
+            return lineIds;
+        }
+    }
 
     public static class OrderNotFoundException extends RuntimeException {
         public OrderNotFoundException(UUID orderId) {

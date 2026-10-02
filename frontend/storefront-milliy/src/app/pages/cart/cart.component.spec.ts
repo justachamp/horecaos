@@ -9,7 +9,8 @@ import type { CartResponseItem } from '../../types/cart.types';
 
 class FakeTranslateService {
   get = (key: string): string => key;
-  getWithParams = (key: string): string => key;
+  getWithParams = (key: string, params?: Record<string, string | number>): string =>
+    params ? `${key}|${Object.values(params).join('|')}` : key;
   current = (): Record<string, unknown> => ({});
 }
 
@@ -47,6 +48,8 @@ class FakeUiCartService {
   increaseQuantity = vi.fn();
   decreaseQuantity = vi.fn();
   formatPrice = (value: number) => `${value} so'm`;
+  hasProvisionalLines = () => false;
+  lineAmount = vi.fn((item: CartResponseItem) => item.price * item.quantity);
 }
 
 async function setUp(fake = new FakeUiCartService()) {
@@ -335,5 +338,80 @@ describe('CartComponent -- a basket the platform would not price', () => {
 
       expect(fixture.nativeElement.querySelector('[data-testid="hidden-charges"]')).toBeNull();
     });
+  });
+});
+
+describe('CartComponent -- portions and weighed items (ADR 0137)', () => {
+  const NBSP = '\u00a0';
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+  const CAKE = {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+  } as const;
+
+  const normalised = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ');
+
+  it('writes a half portion with the language’s decimal mark', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ quantity: 0.5, physical: SPLITTABLE })]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('.qty__value')?.textContent?.trim()).toBe('0,5');
+  });
+
+  it('writes a whole quantity without decimals', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ quantity: 3 })]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('.qty__value')?.textContent?.trim()).toBe('3');
+  });
+
+  it('prices a line through the cart, so a portion is priced as the platform will price it', async () => {
+    const fake = new FakeUiCartService();
+    fake.lineAmount.mockReturnValue(12_501);
+    fake.items.set([line({ price: 25_000, quantity: 0.5, physical: SPLITTABLE })]);
+    const { fixture } = await setUp(fake);
+
+    expect(normalised(fixture.nativeElement.querySelector('.line__price')?.textContent)).toBe(
+      "12501 so'm",
+    );
+  });
+
+  it('marks a weighed line’s amount as an estimate and says what weight it is estimated at', async () => {
+    const fake = new FakeUiCartService();
+    fake.lineAmount.mockReturnValue(360_000);
+    fake.items.set([line({ price: 15_000, quantity: 2, physical: CAKE })]);
+    const { fixture } = await setUp(fake);
+
+    expect(normalised(fixture.nativeElement.querySelector('.line__price')?.textContent)).toContain(
+      '≈ 360000',
+    );
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-line-estimate"]')?.textContent,
+    ).toContain(`2,4${NBSP}kg`);
+  });
+
+  it('says the total is an estimate while the basket holds anything sold by weight', async () => {
+    const fake = new FakeUiCartService();
+    fake.hasProvisionalLines = () => true;
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-provisional-notice"]'),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-provisional-notice"]'),
+    ).toBeNull();
   });
 });

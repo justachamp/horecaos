@@ -327,7 +327,9 @@ class CheckoutOrderWriter {
                     // combo, and the station that cooks the burger and the one that pours the
                     // drink each need to read it.
                     reEncryptNote(command.tenantId(), cartLine, orderLineId),
-                    comboFacts(line, variants));
+                    comboFacts(line, variants),
+                    // ADR 0137: what a provisional figure was provisional against.
+                    line.catchweight());
 
             orderLineIdsByKey.put(line.lineKey(), orderLineId);
 

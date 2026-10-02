@@ -8,10 +8,12 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { Versioned } from '../../core/api/aggregate-version';
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { formatQuantity } from '../../core/format/quantity';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
@@ -19,8 +21,10 @@ import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chi
 import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
 import { ChallengeState } from '../orders/order-handover-api';
 import { OrderHandoverPanel } from '../orders/order-handover-panel';
+import { OrderWeighingPanel } from '../orders/order-weighing-panel';
 import { KitchenApi, StationResponse, TicketItemView, TicketResponse } from './kitchen-api';
 import { TicketItemRow, ticketItemRows } from './kitchen-ticket';
+import { lineWeightText } from './kitchen-line-weight';
 
 /** One department's own ready count on one ticket — the roll-up gap map row 2.3 asks for. */
 export interface DepartmentRollupRow {
@@ -54,7 +58,7 @@ const POLL_INTERVAL_MS = 10_000;
  */
 @Component({
   selector: 'q-expo-page',
-  imports: [TPipe, OrderHandoverPanel, OrderTableChip],
+  imports: [TPipe, OrderHandoverPanel, OrderTableChip, OrderWeighingPanel],
   templateUrl: './expo-page.html',
   styleUrl: './expo-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -68,9 +72,13 @@ export class ExpoPage implements OnInit {
 
   protected readonly tickets = signal<readonly TicketResponse[]>([]);
   protected readonly stationsById = signal<ReadonlyMap<string, StationResponse>>(new Map());
-  protected readonly orderLinesByOrderId = signal<
-    ReadonlyMap<string, ReadonlyMap<string, OrderLine>>
-  >(new Map());
+  /**
+   * Each ticket's order as last read: its lines (names and, for a weighed line, its weight — the
+   * kitchen's own board carries neither), and the status and version the scale writes under.
+   */
+  protected readonly ordersById = signal<ReadonlyMap<string, Versioned<OrderDetailResponse>>>(
+    new Map(),
+  );
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
@@ -125,7 +133,9 @@ export class ExpoPage implements OnInit {
       const board = await this.kitchen.board(scope, 'pass');
       this.tickets.set(board.tickets);
       for (const ticket of board.tickets) {
-        void this.ensureOrderLoaded(ticket.orderId);
+        // An order still waiting to be weighed is read again each poll: another screen may have
+        // weighed it, and this one would otherwise hold the handover for ever.
+        void this.ensureOrderLoaded(ticket.orderId, this.hasUnweighedLine(ticket.orderId));
       }
       this.denied.set(false);
       this.lastError.set(null);
@@ -143,8 +153,8 @@ export class ExpoPage implements OnInit {
     }
   }
 
-  private async ensureOrderLoaded(orderId: string): Promise<void> {
-    if (this.orderLinesByOrderId().has(orderId)) {
+  private async ensureOrderLoaded(orderId: string, force = false): Promise<void> {
+    if (!force && this.ordersById().has(orderId)) {
       return;
     }
     const scope = this.location.scope();
@@ -155,13 +165,16 @@ export class ExpoPage implements OnInit {
       const result = await firstValueFrom(
         this.api.get<OrderDetailResponse>(operationsPaths.order(scope, orderId)),
       );
-      const lines = new Map<string, OrderLine>(
-        result.value.lines.map((line) => [line.lineId, line]),
-      );
-      this.orderLinesByOrderId.update((current) => new Map(current).set(orderId, lines));
+      this.ordersById.update((current) => new Map(current).set(orderId, result));
     } catch {
-      // The item list still renders with generic line labels — see the template.
+      // The item list still renders with generic line labels — see the template. The handover
+      // stays held (see `weighingState`) until a read succeeds on a later poll.
     }
+  }
+
+  /** The scale recorded a weight, or found the order had moved: read it again. */
+  protected onOrderChanged(orderId: string): void {
+    void this.ensureOrderLoaded(orderId, true);
   }
 
   /**
@@ -175,7 +188,57 @@ export class ExpoPage implements OnInit {
   }
 
   protected lineFor(ticket: TicketResponse, item: TicketItemView): OrderLine | null {
-    return this.orderLinesByOrderId().get(ticket.orderId)?.get(item.orderLineId) ?? null;
+    return (
+      this.ordersById()
+        .get(ticket.orderId)
+        ?.value.lines.find((line) => line.lineId === item.orderLineId) ?? null
+    );
+  }
+
+  /** The order as last read — for the scale's status, version and lines. */
+  protected orderFor(ticket: TicketResponse): Versioned<OrderDetailResponse> | null {
+    return this.ordersById().get(ticket.orderId) ?? null;
+  }
+
+  /**
+   * ADR 0137: whether the order may leave the pass as far as weighing goes. `unknown` until the
+   * order has been read — the pass does not guess there is nothing to weigh, because a ticket
+   * handed over while a line is unweighed leaves the order itself on the pass (the platform
+   * refuses the order's own completion), the same fail-closed choice the handover compare makes.
+   */
+  protected weighingState(ticket: TicketResponse): 'unknown' | 'pending' | 'done' {
+    const order = this.ordersById().get(ticket.orderId);
+    if (!order) {
+      return 'unknown';
+    }
+    return order.value.lines.some((line) => line.catchweight?.provisional) ? 'pending' : 'done';
+  }
+
+  private hasUnweighedLine(orderId: string): boolean {
+    return (
+      this.ordersById()
+        .get(orderId)
+        ?.value.lines.some((line) => line.catchweight?.provisional) ?? false
+    );
+  }
+
+  /** Whether the order has any line sold by weight at all — what decides if the scale is drawn. */
+  protected hasWeighedLines(ticket: TicketResponse): boolean {
+    return (
+      this.ordersById()
+        .get(ticket.orderId)
+        ?.value.lines.some((line) => line.catchweight) ?? false
+    );
+  }
+
+  /** `0,5`, `2` — never `2.000`. */
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
+  }
+
+  /** The estimated weight of the line (what to cut) or what it weighed, for the kitchen. */
+  protected weightText(line: OrderLine): string | null {
+    return lineWeightText(line, this.i18n.locale(), (key, values) => this.i18n.t(key, values));
   }
 
   /** The ticket's items with a header ahead of each combo's components (ADR 0136). */
@@ -292,7 +355,11 @@ export class ExpoPage implements OnInit {
   }
 
   protected canHandOver(ticket: TicketResponse): boolean {
-    return this.isPacked(ticket) && this.canHandOverProof(ticket);
+    return (
+      this.isPacked(ticket) &&
+      this.canHandOverProof(ticket) &&
+      this.weighingState(ticket) === 'done'
+    );
   }
 
   protected async handOver(ticket: TicketResponse): Promise<void> {

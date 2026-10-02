@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -294,9 +295,9 @@ public class ReorderPlanService {
         }
 
         /** How many of it: the combos bought, or the line's own quantity. */
-        int quantity() {
+        BigDecimal quantity() {
             return combo()
-                    ? Objects.requireNonNull(first().line().comboQuantity())
+                    ? BigDecimal.valueOf(Objects.requireNonNull(first().line().comboQuantity()))
                     : first().line().quantity();
         }
 
@@ -308,7 +309,7 @@ public class ReorderPlanService {
             long gross = lines.stream()
                     .mapToLong(line -> line.line().baseAmountMinor())
                     .sum();
-            return gross / quantity();
+            return gross / quantity().longValueExact();
         }
 
         /** The product name the customer bought: the combo's name, or the line's snapshot. */
@@ -429,7 +430,7 @@ public class ReorderPlanService {
             @Nullable String variantName,
             @Nullable UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             LineStatus status,
             @Nullable Long unitAmountMinor,

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.catalog;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,16 +78,17 @@ public class JdbcCartMenuRules implements CartMenuRules {
             return Optional.empty();
         }
 
+        Map<UUID, PhysicalRules> physical = physicalRules(product.get().content());
         List<UUID> groupIds = idList(product.get().content(), "modifierGroupIds");
         if (groupIds.isEmpty()) {
-            return Optional.of(new ProductRules(product.get().entityId(), List.of()));
+            return Optional.of(new ProductRules(product.get().entityId(), List.of(), physical));
         }
         Map<UUID, Policy> policies = policies(product.get().content());
         List<GroupRules> rules = groups(publicationId.get(), groupIds).stream()
                 .map(group ->
                         policies.containsKey(group.groupId()) ? group.withPolicy(policies.get(group.groupId())) : group)
                 .toList();
-        return Optional.of(new ProductRules(product.get().entityId(), rules));
+        return Optional.of(new ProductRules(product.get().entityId(), rules, physical));
     }
 
     /**
@@ -109,6 +111,30 @@ public class JdbcCartMenuRules implements CartMenuRules {
             }
         }
         return byGroup;
+    }
+
+    /**
+     * Each of the product's variants that published a physical block (ADR 0137): whether
+     * it is splittable and in what step. A variant without one is absent, which the rules
+     * read as whole units only.
+     */
+    private static Map<UUID, PhysicalRules> physicalRules(Map<String, Object> content) {
+        Map<UUID, PhysicalRules> byVariant = new LinkedHashMap<>();
+        if (!(content.get("variants") instanceof List<?> variants)) {
+            return byVariant;
+        }
+        for (Object element : variants) {
+            if (!(element instanceof Map<?, ?> variant) || !(variant.get("physical") instanceof Map<?, ?> block)) {
+                continue;
+            }
+            Object portion = block.get("portionSize");
+            byVariant.put(
+                    UUID.fromString(String.valueOf(variant.get("variantId"))),
+                    new PhysicalRules(
+                            Boolean.TRUE.equals(block.get("splittable")),
+                            portion instanceof Number number ? new BigDecimal(number.toString()) : null));
+        }
+        return byVariant;
     }
 
     private List<GroupRules> groups(UUID publicationId, List<UUID> groupIds) {

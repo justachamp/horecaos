@@ -150,6 +150,7 @@
       [discount]="cart.discountFormatted()"
       [total]="cart.totalAmount()"
       [hiddenCharges]="cart.hiddenCharges()"
+      [provisional]="cart.hasProvisionalLines()"
     />
 
     @if (pricingNoteKey(); as pricingRefusal) {

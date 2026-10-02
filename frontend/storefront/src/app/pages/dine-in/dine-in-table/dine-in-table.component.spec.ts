@@ -1602,3 +1602,152 @@ describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
     expect(charge?.textContent).toMatch(/4.000/);
   });
 });
+
+describe('DineInTableComponent -- portions and weighed items (ADR 0137)', () => {
+  const NBSP = ' ';
+
+  function menuWith(physical: unknown, amountMinor = 45000): PublishedMenu {
+    const base = menu();
+    return {
+      ...base,
+      products: [
+        {
+          ...base.products[0],
+          variants: [
+            {
+              ...base.products[0].variants[0],
+              amountMinor,
+              physical,
+            } as PublishedMenu['products'][number]['variants'][number],
+          ],
+        },
+      ],
+    };
+  }
+
+  async function open(physical: unknown, quantity?: number) {
+    const parts = setUp();
+    parts.dineIn.seed(admission());
+    parts.dineIn.bill.mockResolvedValue(bill());
+    parts.menuService.menu.mockResolvedValue(menuWith(physical));
+    if (quantity !== undefined) {
+      parts.cartService.cart.set({
+        cartId: 'cart-1',
+        locationId: 'location-1',
+        status: 'OPEN',
+        currency: 'UZS',
+        fulfillmentMode: 'DINE_IN',
+        version: 1,
+        quoteId: null,
+        contextHash: null,
+        expiresAt: null,
+        lines: [
+          {
+            lineKey: 'variant-1',
+            variantId: 'variant-1',
+            quantity,
+            commentPresetCodes: [],
+            hasCustomerNote: false,
+          },
+        ],
+      });
+    }
+    parts.cartService.putLine.mockImplementation(async () => parts.cartService.cart());
+    parts.cartService.price.mockResolvedValue({
+      cartId: 'cart-1',
+      cartVersion: 1,
+      quoteId: 'q',
+      contextHash: 'h',
+      currency: 'UZS',
+      subtotalMinor: 0,
+      taxMinor: 0,
+      discountMinor: 0,
+      feeMinor: 0,
+      totalMinor: 0,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      delivery: null,
+    });
+    parts.fixture.detectChanges();
+    await flush();
+    parts.fixture.detectChanges();
+    const host = parts.fixture.nativeElement as HTMLElement;
+    const click = async (testId: string) => {
+      host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)?.click();
+      await flush();
+      parts.fixture.detectChanges();
+      await flush();
+    };
+    return { ...parts, host, click };
+  }
+
+  it('starts a splittable item at one whole portion and steps it by its portion size', async () => {
+    const { cartService, click } = await open({
+      catchweight: false,
+      splittable: true,
+      portionSize: 0.5,
+    });
+
+    await click('dine-in-add');
+
+    expect(cartService.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'variant-1', quantity: 1 }),
+    );
+  });
+
+  it('adds one portion more to a line already in the basket', async () => {
+    const { cartService, click } = await open(
+      { catchweight: false, splittable: true, portionSize: 0.5 },
+      1,
+    );
+
+    await click('dine-in-increase');
+
+    expect(cartService.putLine).toHaveBeenCalledWith(expect.objectContaining({ quantity: 1.5 }));
+  });
+
+  it('takes one portion off, and the last portion off removes the line', async () => {
+    const { cartService, click } = await open(
+      { catchweight: false, splittable: true, portionSize: 0.5 },
+      0.5,
+    );
+
+    await click('dine-in-decrease');
+
+    expect(cartService.removeLine).toHaveBeenCalledWith('variant-1');
+  });
+
+  it('keeps a plain item in whole units, as before', async () => {
+    const { cartService, click } = await open(null, 2);
+
+    await click('dine-in-increase');
+
+    expect(cartService.putLine).toHaveBeenCalledWith(expect.objectContaining({ quantity: 3 }));
+  });
+
+  it('writes a half portion with the language’s decimal mark', async () => {
+    const { host } = await open({ catchweight: false, splittable: true, portionSize: 0.5 }, 0.5);
+
+    expect(host.querySelector('[data-testid="dine-in-quantity"]')?.textContent?.trim()).toBe('0.5');
+  });
+
+  it('prices a weighed item per quantum on the menu, and shows its weight', async () => {
+    const { host } = await open({
+      catchweight: true,
+      catchweightQuantumGrams: 100,
+      catchweightNominalGrams: 1_200,
+      splittable: false,
+      netWeightGrams: 1_200,
+    });
+
+    const item = host.querySelector('[data-testid="dine-in-menu-item"]')!;
+    expect(item.textContent).toContain('physical.pricePerQuantum');
+    expect(item.textContent).toContain(`1.2${NBSP}kg`);
+  });
+
+  it('shows a fixed unit’s price as before', async () => {
+    const { host } = await open(null);
+
+    expect(host.querySelector('.table__item-price')?.textContent).toContain('45');
+    expect(host.querySelector('.table__item-price')?.textContent).not.toContain('physical');
+  });
+});

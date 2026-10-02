@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -14,6 +15,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Cart persistence (ADR 0019).
@@ -160,7 +162,7 @@ public class JdbcCartStore {
                         row.getObject("id", UUID.class),
                         row.getString("line_key"),
                         row.getObject("variant_id", UUID.class),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getString("modifiers"),
                         commentPresetCodes(row.getArray("comment_preset_codes")),
                         row.getString("customer_note_encrypted"),
@@ -199,7 +201,7 @@ public class JdbcCartStore {
             UUID cartId,
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String modifiersJson,
             List<String> commentPresetCodes,
             @Nullable String noteEncrypted,
@@ -229,7 +231,7 @@ public class JdbcCartStore {
             UUID cartId,
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String modifiersJson,
             List<String> commentPresetCodes,
             String comboPicksJson,
@@ -744,12 +746,17 @@ public class JdbcCartStore {
             UUID lineId,
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String selectedModifiersJson,
             List<String> commentPresetCodes,
             @Nullable String customerNoteEncrypted,
             String comboPicksJson,
-            String nestedModifiersJson) {}
+            String nestedModifiersJson) {
+
+        public CartLineRow {
+            quantity = Quantities.normalise(quantity);
+        }
+    }
 
     /**
      * A cart's destination as it is stored: four ciphertexts and a point.

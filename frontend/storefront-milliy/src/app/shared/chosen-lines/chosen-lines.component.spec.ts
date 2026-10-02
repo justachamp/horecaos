@@ -130,3 +130,47 @@ describe('ChosenLinesComponent', () => {
     expect(view.state.changes).toEqual([{ lineKey: 'v1+opt-large', quantity: 0 }]);
   });
 });
+
+describe('ChosenLinesComponent -- portions (ADR 0137)', () => {
+  it('steps a splittable line by its portion size, up and down', () => {
+    const view = render([chosen({ quantity: 1, step: 0.5 })]);
+
+    view.q('dine-in-custom-increase')!.click();
+    view.q('dine-in-custom-decrease')!.click();
+
+    expect(view.state.changes).toEqual([
+      { lineKey: 'v1+opt-large', quantity: 1.5 },
+      { lineKey: 'v1+opt-large', quantity: 0.5 },
+    ]);
+  });
+
+  it('asks for zero when the last portion is taken out', () => {
+    const view = render([chosen({ quantity: 0.5, step: 0.5 })]);
+
+    view.q('dine-in-custom-decrease')!.click();
+
+    expect(view.state.changes).toEqual([{ lineKey: 'v1+opt-large', quantity: 0 }]);
+  });
+
+  it('does not let floating-point noise reach the basket: 0.2 + 0.1 is asked for as 0.3', () => {
+    const view = render([chosen({ quantity: 0.2, step: 0.1 })]);
+
+    view.q('dine-in-custom-increase')!.click();
+
+    expect(view.state.changes).toEqual([{ lineKey: 'v1+opt-large', quantity: 0.3 }]);
+  });
+
+  it('keeps a plain line in whole units, as before', () => {
+    const view = render([chosen({ quantity: 2 })]);
+
+    view.q('dine-in-custom-increase')!.click();
+
+    expect(view.state.changes).toEqual([{ lineKey: 'v1+opt-large', quantity: 3 }]);
+  });
+
+  it('writes a half portion with the language’s decimal mark', () => {
+    const view = render([chosen({ quantity: 0.5, step: 0.5 })]);
+
+    expect(view.q('dine-in-custom-quantity')?.textContent?.trim()).toBe('0,5');
+  });
+});

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -379,6 +380,56 @@ public class OrderSettlementService implements CashDueLookupPort {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A refund cannot exceed what the tenders settled");
         }
         return asMoney;
+    }
+
+    /**
+     * Restates a not-yet-settled settlement to a corrected order total (ADR 0137): the
+     * cash an order was planned to collect changes because a catchweight line was weighed
+     * at handover.
+     *
+     * <p>Only a settlement that is still {@code PLANNED} with exactly one money tender that
+     * is still {@code PLANNED} and has no payment intent -- the shape of an order whose money
+     * arrives at the door. Anything else has money in motion, and moving the plan underneath
+     * it would leave the tenders summing to a different figure than the intent the provider
+     * was asked to collect.
+     *
+     * @return true when the settlement now sums to {@code newTotalMinor} or there is none
+     */
+    @Transactional
+    public boolean restateTotal(UUID tenantId, UUID orderId, long newTotalMinor, String actor) {
+        Optional<SettlementRow> found = store.findSettlement(tenantId, orderId);
+        if (found.isEmpty()) {
+            return true;
+        }
+        SettlementRow settlement = found.get();
+        if (settlement.totalDueMinor() == newTotalMinor) {
+            return true;
+        }
+        if (settlement.status() != SettlementStatus.PLANNED || settlement.settledMinor() != 0L) {
+            return false;
+        }
+        List<TenderRow> money = store.tendersOf(tenantId, settlement.id()).stream()
+                .filter(tender -> !tender.settlesFromBalance())
+                .toList();
+        if (money.size() != 1
+                || money.get(0).status() != TenderStatus.PLANNED
+                || money.get(0).paymentIntentId() != null) {
+            return false;
+        }
+        long newMoney = Math.addExact(money.get(0).amountMinor(), newTotalMinor - settlement.totalDueMinor());
+        if (newMoney <= 0) {
+            // ADR 0046: an order settles at least one som in money. A correction that would
+            // leave only points paying for it is refused, not rounded up.
+            return false;
+        }
+        return store.restatePlanned(
+                tenantId,
+                settlement.id(),
+                settlement.version(),
+                newTotalMinor,
+                money.get(0).id(),
+                newMoney,
+                clock.instant());
     }
 
     /** The figure the courier app is shown, snapshotted onto the ADR 0014 assignment. */

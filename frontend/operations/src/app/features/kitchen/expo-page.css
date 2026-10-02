@@ -182,3 +182,12 @@
 .ticket__item--component td:first-child {
   padding-left: 20px;
 }
+
+.expo__weight {
+  color: var(--q-ink-subtle);
+}
+
+.expo__weigh-first {
+  color: var(--q-warning);
+  margin: 8px 0 0;
+}

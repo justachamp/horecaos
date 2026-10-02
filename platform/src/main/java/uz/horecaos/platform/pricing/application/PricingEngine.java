@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pricing.application;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -14,12 +15,15 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.pricing.domain.CatchweightFacts;
+import uz.horecaos.platform.pricing.domain.CatchweightPricing;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.Quote.Adjustment;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.domain.TaxCalculation;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The deterministic pricing pipeline (ADR 0018).
@@ -347,9 +351,29 @@ public class PricingEngine {
 
         HiddenTotal hidden = hiddenCharges(line.variantId(), inputs, composite, strict);
 
+        // ADR 0137. For a catchweight variant the price row is per quantum of
+        // weight, not per unit: the line is priced at its nominal weight until a
+        // weight is captured, and at the captured weight after. Everything else
+        // about the line (modifiers, promotions, tax) is unchanged.
+        CatchweightFacts catchweight = inputs.catchweight().get(line.variantId());
+        if (catchweight == null && line.actualWeightGrams() != null && strict) {
+            throw new NotCatchweightException(line.variantId());
+        }
+        long unitPrice = catchweight == null ? unit : unitPriceOf(unit, catchweight);
+        long baseLine = baseLineMinor(unit, line, catchweight);
+        Quote.Catchweight lineCatchweight = catchweight == null
+                ? null
+                : new Quote.Catchweight(
+                        catchweight.quantumGrams(), catchweight.nominalGramsPerUnit(), unit, line.actualWeightGrams());
+
+        // Each charge is rounded once, on the line, so the adjustments below sum to the
+        // line's gross exactly whatever the quantity is.
+        long modifiersLine = Quantities.times(modifierTotal, line.quantity());
+        long nestedLine = Quantities.times(nestedTotal, line.quantity());
+        long hiddenLine = hiddenLineMinor(hidden, line.quantity());
         long unitWithModifiers =
-                Math.addExact(Math.addExact(Math.addExact(unit, modifierTotal), nestedTotal), hidden.totalMinor());
-        long lineGross = Math.multiplyExact(unitWithModifiers, (long) line.quantity());
+                Math.addExact(Math.addExact(Math.addExact(unitPrice, modifierTotal), nestedTotal), hidden.totalMinor());
+        long lineGross = Math.addExact(Math.addExact(Math.addExact(baseLine, modifiersLine), nestedLine), hiddenLine);
 
         drafts.add(new AdjustmentDraft(
                 line.lineId(),
@@ -357,7 +381,7 @@ public class PricingEngine {
                 "PRICE_BOOK",
                 inputs.priceBookId(),
                 inputs.priceBookVersion(),
-                Math.multiplyExact(unit, (long) line.quantity()),
+                baseLine,
                 "BASE_PRICE"));
         if (modifierTotal > 0) {
             drafts.add(new AdjustmentDraft(
@@ -366,7 +390,7 @@ public class PricingEngine {
                     "PRICE_BOOK",
                     inputs.priceBookId(),
                     inputs.priceBookVersion(),
-                    Math.multiplyExact(modifierTotal, (long) line.quantity()),
+                    modifiersLine,
                     "MODIFIERS"));
         }
         if (nestedTotal > 0) {
@@ -376,7 +400,7 @@ public class PricingEngine {
                     "PRICE_BOOK",
                     inputs.priceBookId(),
                     inputs.priceBookVersion(),
-                    Math.multiplyExact(nestedTotal, (long) line.quantity()),
+                    nestedLine,
                     "NESTED_MODIFIERS"));
         }
         addHiddenDrafts(drafts, line.lineId(), hidden, line.quantity());
@@ -390,7 +414,8 @@ public class PricingEngine {
                 Money.of(unitWithModifiers, currency),
                 Money.of(lineGross, currency),
                 Money.of(lineGross, currency),
-                Money.zero(currency));
+                Money.zero(currency),
+                lineCatchweight);
         return new PricedLine(List.of(quoteLine), drafts, lineGross);
     }
 
@@ -424,6 +449,19 @@ public class PricingEngine {
             throw new IllegalStateException("No combo selection id was supplied for line " + line.lineId());
         }
 
+        // A combo is bought a whole number of times: there is no half of a "Комбо №1", and
+        // the selection id, the per-combo quantity and every component's units hang on it.
+        if (!Quantities.isWhole(line.quantity())) {
+            throw new CompositePricing.CompositeSelectionException(
+                    "COMBO_QUANTITY_NOT_WHOLE",
+                    line.variantId(),
+                    "A combo is ordered a whole number of times: " + Quantities.plain(line.quantity()));
+        }
+        long combos = line.quantity().longValueExact();
+        if (combos > Integer.MAX_VALUE) {
+            throw new ArithmeticException("combo quantity overflows an order line");
+        }
+
         List<Quote.QuoteLine> lines = new ArrayList<>();
         List<AdjustmentDraft> drafts = new ArrayList<>();
         long gross = 0;
@@ -439,7 +477,7 @@ public class PricingEngine {
             }
             HiddenTotal hidden = hiddenCharges(component.componentVariantId(), inputs, composite, strict);
 
-            long units = Math.multiplyExact((long) line.quantity(), (long) pick.unitsPerCombo());
+            long units = Math.multiplyExact(combos, (long) pick.unitsPerCombo());
             if (units > Integer.MAX_VALUE) {
                 throw new ArithmeticException("combo component quantity overflows an order line");
             }
@@ -453,7 +491,7 @@ public class PricingEngine {
             lines.add(Quote.QuoteLine.comboComponent(
                     childId,
                     component.componentVariantId(),
-                    (int) units,
+                    BigDecimal.valueOf(units),
                     inputs.descriptions()
                             .getOrDefault(
                                     component.componentVariantId(),
@@ -465,7 +503,7 @@ public class PricingEngine {
                     selectionId,
                     line.variantId(),
                     component.id(),
-                    line.quantity(),
+                    (int) combos,
                     pick.pickQuantity()));
             drafts.add(new AdjustmentDraft(
                     childId,
@@ -475,7 +513,7 @@ public class PricingEngine {
                     inputs.priceBookVersion(),
                     Math.multiplyExact(componentPrice, units),
                     "COMBO_COMPONENT_PRICE"));
-            addHiddenDrafts(drafts, childId, hidden, units);
+            addHiddenDrafts(drafts, childId, hidden, BigDecimal.valueOf(units));
         }
         return new PricedLine(lines, drafts, gross);
     }
@@ -513,7 +551,8 @@ public class PricingEngine {
      * option to snapshot, and an adjustment that vanished at zero would make a free
      * hidden option indistinguishable from none.
      */
-    private static void addHiddenDrafts(List<AdjustmentDraft> drafts, String lineId, HiddenTotal hidden, long units) {
+    private static void addHiddenDrafts(
+            List<AdjustmentDraft> drafts, String lineId, HiddenTotal hidden, BigDecimal units) {
         for (HiddenApplied charge : hidden.applied()) {
             drafts.add(new AdjustmentDraft(
                     lineId,
@@ -521,9 +560,18 @@ public class PricingEngine {
                     HIDDEN_MODIFIER_SOURCE,
                     charge.optionId(),
                     null,
-                    Math.multiplyExact(charge.priceMinor(), units),
+                    Quantities.times(charge.priceMinor(), units),
                     "HIDDEN_MODIFIER"));
         }
+    }
+
+    /** What the hidden charges add to a line of {@code units}, each rounded once as its adjustment is. */
+    private static long hiddenLineMinor(HiddenTotal hidden, BigDecimal units) {
+        long total = 0;
+        for (HiddenApplied charge : hidden.applied()) {
+            total = Math.addExact(total, Quantities.times(charge.priceMinor(), units));
+        }
+        return total;
     }
 
     /**
@@ -551,6 +599,34 @@ public class PricingEngine {
         static PricedLine empty() {
             return new PricedLine(List.of(), List.of(), 0L);
         }
+    }
+
+    /**
+     * What one unit costs before modifiers: the price row itself, or for a catchweight
+     * variant the price of one nominal-weight unit (ADR 0137).
+     */
+    static long unitPriceOf(long priceRowMinor, CatchweightFacts catchweight) {
+        return CatchweightPricing.priceOf(priceRowMinor, catchweight.quantumGrams(), catchweight.nominalGramsPerUnit());
+    }
+
+    /**
+     * The base price of a whole line, before modifiers, discounts and tax.
+     *
+     * <p>A priced-per-unit line is {@code unit * quantity}, rounded once. A catchweight
+     * line is {@code price * grams / quantum}, rounded once, where {@code grams} is the
+     * captured weight of the whole line when there is one and the nominal weight of all
+     * its units when there is not -- so a provisional quote and a reconciled one differ
+     * only in which weight they were given. Shared with the goods-subtotal the delivery
+     * fee is resolved against, which must be the figure this method gives.
+     */
+    static long baseLineMinor(long priceRowMinor, QuoteRequest.Line line, @Nullable CatchweightFacts catchweight) {
+        if (catchweight == null) {
+            return Quantities.times(priceRowMinor, line.quantity());
+        }
+        BigDecimal grams = line.actualWeightGrams() != null
+                ? BigDecimal.valueOf(line.actualWeightGrams())
+                : line.quantity().multiply(BigDecimal.valueOf(catchweight.nominalGramsPerUnit()));
+        return CatchweightPricing.priceOf(priceRowMinor, catchweight.quantumGrams(), grams);
     }
 
     /**
@@ -768,7 +844,7 @@ public class PricingEngine {
                 DELIVERY_FEE_LINE_ID,
                 Quote.LineType.DELIVERY_FEE,
                 null,
-                1,
+                BigDecimal.ONE,
                 DELIVERY_FEE_DESCRIPTION,
                 Money.of(gross, currency),
                 Money.of(gross, currency),
@@ -898,7 +974,13 @@ public class PricingEngine {
                             .append(":")
                             .append(line.variantId())
                             .append("x")
-                            .append(line.quantity());
+                            // Plain digits of the normalised quantity: a whole number
+                            // hashes exactly as the int it replaced, so no in-flight
+                            // quote is invalidated by the type widening.
+                            .append(Quantities.plain(line.quantity()));
+                    if (line.actualWeightGrams() != null) {
+                        canonical.append("@").append(line.actualWeightGrams()).append("g");
+                    }
                     line.modifierOptionIds().stream()
                             .map(UUID::toString)
                             .sorted()
@@ -977,9 +1059,87 @@ public class PricingEngine {
              * facts, or null when the cart has none of them -- every cart before the
              * record, and every test with nothing to say about composite products.
              */
-            CompositePricing.@Nullable CompositeInputs composite) {
+            CompositePricing.@Nullable CompositeInputs composite,
+            /*
+             * ADR 0137: the catchweight variants among the lines, by variant id, read
+             * from the published menu. A variant absent from the map is priced per
+             * unit exactly as before.
+             */
+            Map<UUID, CatchweightFacts> catchweight) {
 
-        /** A cart with no composite products, and every call site that predates ADR 0136. */
+        public PricingInputs {
+            catchweight = catchweight == null ? Map.of() : Map.copyOf(catchweight);
+        }
+
+        /** Composite products and nothing sold by weight, and every call site that predates ADR 0137. */
+        public PricingInputs(
+                String currency,
+                UUID catalogPublicationId,
+                UUID priceBookId,
+                int priceBookVersion,
+                UUID taxProfileId,
+                int taxProfileVersion,
+                int taxRateBasisPoints,
+                TaxMode taxMode,
+                Map<UUID, Long> variantPrices,
+                Map<UUID, Long> modifierPrices,
+                Map<UUID, String> descriptions,
+                @Nullable ResolvedDeliveryCharge deliveryCharge,
+                @Nullable PromotionInputs promotions,
+                CompositePricing.@Nullable CompositeInputs composite) {
+            this(
+                    currency,
+                    catalogPublicationId,
+                    priceBookId,
+                    priceBookVersion,
+                    taxProfileId,
+                    taxProfileVersion,
+                    taxRateBasisPoints,
+                    taxMode,
+                    variantPrices,
+                    modifierPrices,
+                    descriptions,
+                    deliveryCharge,
+                    promotions,
+                    composite,
+                    Map.of());
+        }
+
+        /** Catchweight facts and no composite products, and every call site that predates ADR 0136. */
+        public PricingInputs(
+                String currency,
+                UUID catalogPublicationId,
+                UUID priceBookId,
+                int priceBookVersion,
+                UUID taxProfileId,
+                int taxProfileVersion,
+                int taxRateBasisPoints,
+                TaxMode taxMode,
+                Map<UUID, Long> variantPrices,
+                Map<UUID, Long> modifierPrices,
+                Map<UUID, String> descriptions,
+                @Nullable ResolvedDeliveryCharge deliveryCharge,
+                @Nullable PromotionInputs promotions,
+                Map<UUID, CatchweightFacts> catchweight) {
+            this(
+                    currency,
+                    catalogPublicationId,
+                    priceBookId,
+                    priceBookVersion,
+                    taxProfileId,
+                    taxProfileVersion,
+                    taxRateBasisPoints,
+                    taxMode,
+                    variantPrices,
+                    modifierPrices,
+                    descriptions,
+                    deliveryCharge,
+                    promotions,
+                    null,
+                    catchweight);
+        }
+
+        /** A cart with no composite products and nothing sold by weight, and every call site that predates them. */
         public PricingInputs(
                 String currency,
                 UUID catalogPublicationId,
@@ -1008,7 +1168,8 @@ public class PricingEngine {
                     descriptions,
                     deliveryCharge,
                     promotions,
-                    null);
+                    null,
+                    Map.of());
         }
 
         /** A cart with no promotions in play, and every call site that predates them. */
@@ -1113,6 +1274,26 @@ public class PricingEngine {
             List<Adjustment> adjustments,
             @Nullable Long deliveryShortfallMinor,
             String contextHash) {}
+
+    /**
+     * A weighed amount arrived for a variant that is not sold by weight (ADR 0137).
+     *
+     * <p>A refusal rather than an ignored field: capturing a weight against a
+     * fixed-price line would look accepted and change nothing, and the operator
+     * would believe a total had been corrected that had not.
+     */
+    public static class NotCatchweightException extends RuntimeException {
+        private final UUID variantId;
+
+        public NotCatchweightException(UUID variantId) {
+            super("Variant " + variantId + " is not sold by weight, so it has no weight to capture");
+            this.variantId = variantId;
+        }
+
+        public UUID variantId() {
+            return variantId;
+        }
+    }
 
     /** Thrown when a cart contains something with no active price. */
     public static class UnpricedItemException extends RuntimeException {

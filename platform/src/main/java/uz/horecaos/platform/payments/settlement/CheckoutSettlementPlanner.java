@@ -252,6 +252,13 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
         settleWhenMoneyArrives(tenantId, orderId, CaptureTiming.ON_HANDOVER, actor);
     }
 
+    /** ADR 0137: see {@link OrderSettlementService#restateTotal}. */
+    @Override
+    @Transactional
+    public boolean restateTotal(UUID tenantId, UUID orderId, long newTotalMinor, String actor) {
+        return settlements.restateTotal(tenantId, orderId, newTotalMinor, actor);
+    }
+
     /**
      * Unwinds the settlement of an order that ended without a handover.
      *

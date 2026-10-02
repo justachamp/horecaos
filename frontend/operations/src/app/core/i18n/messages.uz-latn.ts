@@ -331,6 +331,38 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.lines.snapshotNotice': 'Nomlar va narxlar buyurtma berilgan paytda qayd etilgan.',
   'orders.detail.lines.note.hidden': '💬 izoh bor',
   'orders.detail.lines.note.empty': 'izoh yoʻq',
+  'orders.detail.lines.weight.estimate': '≈ {weight}, taxminiy · {price}, {quantum} uchun',
+  'orders.detail.lines.weight.weighed': 'Tortildi: {weight} · {price}, {quantum} uchun',
+  'orders.weigh.title': 'Tortish',
+  'orders.weigh.intro':
+    'Ogʻirlik boʻyicha sotiladigan pozitsiyalar tortilmaguncha taxminiy ogʻirlik boʻyicha hisoblanadi. Har bir pozitsiyaning umumiy ogʻirligini kiriting: buyurtma summasi qayta hisoblanadi. Biror pozitsiya tortilmaguncha buyurtmani topshirib boʻlmaydi.',
+  'orders.weigh.closed':
+    'Buyurtma tarqatishdan chiqib ketgan: ogʻirlikni endi oʻzgartirib boʻlmaydi.',
+  'orders.weigh.state.pending': 'Taxminiy {weight}, hali tortilmagan',
+  'orders.weigh.state.done': 'Tortildi {weight}',
+  'orders.weigh.input.label': 'Umumiy ogʻirlik, g',
+  'orders.weigh.input.error': 'Noldan katta butun gramm sonini kiriting',
+  'orders.weigh.save': 'Ogʻirlikni yozish',
+  'orders.weigh.saving': 'Saqlanmoqda…',
+  'orders.weigh.result.changed': 'Yozildi: {weight}. Buyurtma summasi endi {total} ({delta}).',
+  'orders.weigh.result.unchanged': 'Yozildi: {weight}. Buyurtma summasi oʻzgarmadi.',
+  'orders.weigh.result.same': 'Allaqachon yozilgan: {weight}. Hech narsa oʻzgarmadi.',
+  'orders.weigh.error.paymentTaken':
+    'Ogʻirlikni yozib boʻlmaydi: buyurtma allaqachon onlayn toʻlangan, bu ogʻirlik esa uning summasini oʻzgartirgan boʻlardi. Farqni qoʻshimcha undirish yoki qaytarish hozircha mavjud emas.',
+  'orders.weigh.error.notWeighable':
+    'Buyurtma tarqatishdan chiqib ketgan: ogʻirlikni endi oʻzgartirib boʻlmaydi.',
+  'orders.weigh.error.priceChanged':
+    'Buyurtma berilgandan keyin menyudagi narx oʻzgardi, shuning uchun ogʻirlik qoʻllanmadi. Menejerga murojaat qiling.',
+  'orders.weigh.error.stale':
+    'Siz tortayotganingizda buyurtma oʻzgardi va qayta yuklandi. Ogʻirlikni tekshirib, qayta yozing.',
+  'orders.weigh.error.settlement':
+    'Undiriladigan summani qayta hisoblab boʻlmaydi: buyurtma boʻyicha pul harakati allaqachon boshlangan.',
+  'orders.weigh.error.lapsed':
+    'Qayta hisoblash qoʻllanishga ulgurmay eskirdi. Ogʻirlikni qayta yozing.',
+  'orders.action.catchweightNotReconciled':
+    'Buyurtmani topshirishdan oldin ogʻirlik boʻyicha sotiladigan pozitsiyalarni torting',
+  'orders.queue.bulk.problem.CATCHWEIGHT_NOT_RECONCILED':
+    'Ogʻirlik boʻyicha sotiladigan pozitsiyalar hali tortilmagan',
 
   'orders.detail.money.subtotal': 'Pozitsiyalar summasi',
   'orders.detail.money.discount': 'Chegirma',
@@ -2373,6 +2405,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.tab.recommendations': 'Tavsiya etilgan tovarlar',
   'catalog.editor.tab.commentPresets': 'Tayyor izohlar',
   'catalog.editor.tab.history': 'Tarix',
+  'catalog.editor.tab.physical': 'Ogʻirlik va ozuqaviy qiymat',
   'catalog.editor.locale.label': 'Tahrirlash tili',
   'catalog.editor.save': 'Saqlash',
   'catalog.editor.saving': 'Saqlanmoqda…',
@@ -2435,6 +2468,58 @@ export const messagesUzLatn: MessageCatalogue = {
     'Markirovka sxemasi, aksiz, spirt darajasi va yosh chegarasi saqlanadi, lekin chop etishda hali tekshirilmaydi — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Boʻsh natija rasmiy ИКПУ/MXIK roʻyxati platformaga hali yuklanmaganini bildiradi — hech narsa topilmagani emas.',
+  'catalog.editor.physical.intro':
+    'Variantning jismoniy tavsifi: ogʻirligi yoki hajmi, ogʻirlik boʻyicha sotiladimi (aniq ogʻirlik faqat topshirishda maʻlum boʻladi), ulushlab buyurtma qilish mumkinmi va ozuqaviy qiymati. Oddiy donali mahsulot uchun hammasini boʻsh qoldiring.',
+  'catalog.editor.physical.loading': 'Yuklanmoqda…',
+  'catalog.editor.physical.loadFailed': 'Bu tavsiflarni yuklab boʻlmadi',
+  'catalog.editor.physical.retry': 'Qayta urinish',
+  'catalog.editor.physical.denied': 'Bu tavsiflarga ruxsatingiz yoʻq',
+  'catalog.editor.physical.measure': 'Oʻlchov',
+  'catalog.editor.physical.measure.none': 'Belgilanmagan',
+  'catalog.editor.physical.measure.weight': 'Ogʻirlik',
+  'catalog.editor.physical.measure.volume': 'Hajm',
+  'catalog.editor.physical.weightGrams': 'Sof ogʻirlik, g',
+  'catalog.editor.physical.volumeMl': 'Sof hajm, ml',
+  'catalog.editor.physical.catchweight': 'Ogʻirlik boʻyicha sotiladi',
+  'catalog.editor.physical.catchweightHelp':
+    'Narxlar roʻyxatidagi narx quyida koʻrsatilgan gramm uchun narx hisoblanadi. Mijoz taxminiy summani koʻradi; aniq ogʻirlik topshirishda qayd etiladi va summa qayta hisoblanadi.',
+  'catalog.editor.physical.quantum': 'Narx quyidagi gramm uchun, g',
+  'catalog.editor.physical.nominal': 'Bir birlikning taxminiy ogʻirligi, g',
+  'catalog.editor.physical.nominalHint': 'Boʻsh boʻlsa sof ogʻirlik olinadi',
+  'catalog.editor.physical.splittable': 'Ulushlab sotish mumkin',
+  'catalog.editor.physical.splittableHelp':
+    'Ulush hajmi bilan mijoz yoki operator uning bir qismini, masalan 0,5 ni, buyurtma qilishi mumkin.',
+  'catalog.editor.physical.portion': 'Ulush hajmi',
+  'catalog.editor.physical.portionHint': 'Miqdor oʻzgaradigan qadam, masalan 0,5',
+  'catalog.editor.physical.nutrition': 'Ozuqaviy qiymat (KBJU)',
+  'catalog.editor.physical.per100g': '100 g uchun',
+  'catalog.editor.physical.per100ml': '100 ml uchun',
+  'catalog.editor.physical.calories': 'Kaloriya, kkal',
+  'catalog.editor.physical.protein': 'Oqsillar, g',
+  'catalog.editor.physical.fat': 'Yogʻlar, g',
+  'catalog.editor.physical.carbs': 'Uglevodlar, g',
+  'catalog.editor.physical.markingConflict':
+    'Bu variant uchun “Fiskal maʻlumotlar” ichida markirovka (Data Matrix) yoqilgan. Markirovkalangan mahsulotni ogʻirlik boʻyicha yoki ulushlab sotib boʻlmaydi, shuning uchun biri oʻzgarmaguncha katalog chop etilmaydi.',
+  'catalog.editor.physical.clearHint': 'Hammasi boʻsh: saqlash bu tavsiflarni oʻchiradi',
+  'catalog.editor.physical.save': 'Tavsiflarni saqlash',
+  'catalog.editor.physical.stale':
+    'Bu tavsiflarni boshqa kishi oʻzgartirgan. Eng soʻnggi qiymatlar yuklandi: tekshirib, qayta saqlang.',
+  'catalog.editor.physical.error.notANumber': 'Raqam kiriting',
+  'catalog.editor.physical.error.wholePositive': 'Noldan katta butun son kiriting',
+  'catalog.editor.physical.error.weightAndVolume': 'Ogʻirlik va hajmni birga belgilab boʻlmaydi',
+  'catalog.editor.physical.error.needsQuantum':
+    'Ogʻirlik boʻyicha sotiladigan mahsulot uchun narx necha gramm uchunligini koʻrsating',
+  'catalog.editor.physical.error.needsWeight': 'Taxminiy yoki sof ogʻirlikni kiriting',
+  'catalog.editor.physical.error.catchweightFields':
+    'Narx grammi va taxminiy ogʻirlik faqat ogʻirlik boʻyicha sotiladigan mahsulotga tegishli',
+  'catalog.editor.physical.error.portionPositive': 'Ulush hajmi noldan katta boʻlishi kerak',
+  'catalog.editor.physical.error.portionPrecision':
+    'Ulush hajmida kasr qismi uchtadan oshmasligi kerak',
+  'catalog.editor.physical.error.portionTooLarge': 'Ulush hajmi 999 dan oshmasligi kerak',
+  'catalog.editor.physical.error.portionNeedsSplittable':
+    'Ulush hajmi ulushlab sotiladigan mahsulotga tegishli',
+  'catalog.editor.physical.error.caloriesRange': 'Kaloriya 0 dan 99999,9 gacha',
+  'catalog.editor.physical.error.macroRange': '100 g uchun gramm 0 dan 100 gacha',
   'catalog.editor.availability.location': 'Filial',
   'catalog.editor.availability.state': 'Holati',
   'catalog.editor.availability.empty': 'Mahsulot hali birorta filialda taklif qilinmagan',
@@ -2595,6 +2680,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.nested.none': 'Variantga guruhlar biriktirilmagan',
   'catalog.editor.nested.attach': 'Guruh biriktirish',
   'catalog.editor.nested.choose': 'Guruhni tanlang',
+  'catalog.editor.finding.PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING':
+    'Markirovkalangan mahsulotni ogʻirlik boʻyicha yoki ulushlab sotib boʻlmaydi',
 
   'catalog.publish.action': 'Chop etish',
   'catalog.publish.title': 'Katalogni chop etish',
@@ -3029,6 +3116,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.expo.empty': 'Topshirish uchun hech narsa yoʻq',
   'kitchen.expo.packedConfirm': 'Qadoqlangan va topshirishga tayyor',
   'kitchen.expo.packedWaiting': 'Qadoqlashdan oldin barcha qatorlar tayyor boʻlishi kutilmoqda',
+  'kitchen.item.weight.estimate': '≈ {weight} (taxminiy)',
+  'kitchen.item.weight.weighed': '{weight}, tortilgan',
+  'kitchen.expo.weighFirst':
+    'Topshirishdan oldin ogʻirlik boʻyicha sotiladigan pozitsiyalarni torting.',
 
   'kitchen.stopList.tab.all': 'Barchasi',
   'kitchen.stopList.tab.available': 'Sotuvda',
@@ -6255,6 +6346,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.basket.title': 'Savat',
   'orders.newOrder.basket.empty': 'Hozircha boʻsh',
   'orders.newOrder.basket.remove': 'Olib tashlash',
+  'orders.newOrder.basket.weighed': '≈ {weight}, aniq ogʻirlik topshirishda',
+  'orders.newOrder.order.totalProvisional':
+    'Summada ogʻirlik boʻyicha sotiladigan pozitsiyalar bor: bu taxminiy summa, aniq summa topshirishda tortilgach maʻlum boʻladi',
   'orders.newOrder.basket.notePlaceholder': 'Oshxona uchun izoh',
   'orders.newOrder.basket.unavailable': 'Endi mavjud emas — davom etish uchun olib tashlang',
   'orders.newOrder.order.title': 'Buyurtma',

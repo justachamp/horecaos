@@ -1,3 +1,5 @@
+import type { PhysicalFacts } from '../utils/physical';
+
 /** Menu item variant (size/option) */
 export interface MenuItemVariant {
   id: string;
@@ -21,6 +23,13 @@ export interface MenuItemVariant {
    * QUANTITY-tracked at all), never "unlimited".
    */
   remainingQuantity: number | null;
+  /**
+   * ADR 0137: what the variant physically is -- its weight or volume, whether it is sold by a
+   * weight only known at handover (`catchweight`: then `price` is per `catchweightQuantumGrams`,
+   * not per unit), whether it may be ordered by the portion, and its КБЖУ. Absent for a fixed
+   * unit sold whole, which is most of the menu.
+   */
+  physical?: PhysicalFacts | null;
 }
 
 /**

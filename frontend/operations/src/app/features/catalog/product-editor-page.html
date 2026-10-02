@@ -596,6 +596,22 @@
                 <p class="q-caption">{{ 'catalog.editor.fiscal.mxikReferenceNote' | t }}</p>
               </div>
             }
+            @case ('PHYSICAL') {
+              <div class="editor__section editor__physical">
+                <p class="q-caption">{{ 'catalog.editor.physical.intro' | t }}</p>
+                @if (brandScope(); as scope) {
+                  @for (variant of product.variants; track variant.variantId) {
+                    <q-variant-physical-attributes
+                      [scope]="scope"
+                      [variantId]="variant.variantId"
+                      [label]="variantLabel(variant.variantId)"
+                      [markingRequired]="variant.fiscal?.markingRequired ?? false"
+                      (saved)="onPhysicalSaved()"
+                    />
+                  }
+                }
+              </div>
+            }
             @case ('AVAILABILITY') {
               <div class="editor__section">
                 @if (unlistedVariantRows().length > 0) {

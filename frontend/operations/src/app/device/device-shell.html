@@ -145,7 +145,7 @@
               <ul class="device-shell__items">
                 @for (item of ticket.items; track item.itemId) {
                   <li class="device-shell__item">
-                    <span class="device-shell__item-qty">×{{ item.quantity }}</span>
+                    <span class="device-shell__item-qty">×{{ quantityText(item.quantity) }}</span>
                     @if (item.status === 'QUEUED') {
                       <button
                         type="button"

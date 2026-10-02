@@ -6237,7 +6237,7 @@ class CartCheckoutAndOrderTests {
             // was on today's menu.
             assertThat(line.variantId()).isEqualTo(burgerVariant);
             assertThat(line.productId()).isEqualTo(productIdByCode.get("BURGER"));
-            assertThat(line.quantity()).isEqualTo(2);
+            assertThat(line.quantity()).isEqualByComparingTo("2");
             assertThat(line.unitAmountMinor()).isEqualTo(50_000L);
             assertThat(line.originalUnitAmountMinor()).isEqualTo(50_000L);
         });
@@ -6559,7 +6559,7 @@ class CartCheckoutAndOrderTests {
         assertThat(carts.view(TENANT, BRAND, CUSTOMER, cart).orElseThrow().lines())
                 .extracting(JdbcCartStore.CartLineRow::variantId, JdbcCartStore.CartLineRow::quantity)
                 .as("the ids the order stored, not a name match")
-                .containsExactly(tuple(burgerVariant, 2));
+                .containsExactly(tuple(burgerVariant, java.math.BigDecimal.valueOf(2)));
     }
 
     @Test

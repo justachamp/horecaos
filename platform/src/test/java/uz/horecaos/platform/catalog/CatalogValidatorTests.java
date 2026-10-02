@@ -2,12 +2,14 @@ package uz.horecaos.platform.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.catalog.application.CatalogValidator;
@@ -20,6 +22,8 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
@@ -501,6 +505,129 @@ class CatalogValidatorTests {
         assertThat(validator.validate(wired).findings())
                 .extracting(ValidationFinding::code)
                 .doesNotContain("PRICING_VALIDATION_NOT_WIRED");
+    }
+
+    // ---------------------------------------------------------- ADR 0137: physical attributes vs marking
+
+    private static final FiscalClassification MARKED = new FiscalClassification(
+            "10202001001000000",
+            "1512315",
+            1,
+            "Bottle",
+            null,
+            true,
+            FiscalClassification.MarkingScheme.DATA_MATRIX,
+            false,
+            null,
+            null);
+
+    private static final PhysicalAttributes CATCHWEIGHT =
+            new PhysicalAttributes(1500, null, true, 100, 1200, false, null, null, null, null, null);
+
+    private static final PhysicalAttributes SPLITTABLE =
+            new PhysicalAttributes(null, null, false, null, null, true, new BigDecimal("0.5"), null, null, null, null);
+
+    private static final PhysicalAttributes PLAIN_WEIGHT =
+            new PhysicalAttributes(330, null, false, null, null, false, null, null, null, null, null);
+
+    @Test
+    @DisplayName("a marked good that is also catchweight is blocked: marks are captured one per physical unit")
+    void aMarkedCatchweightVariantIsBlocked() {
+        Variant variant = activeVariant("BOTTLE");
+
+        ValidationFinding.Report report = validator.validate(markingSnapshot(variant, MARKED, CATCHWEIGHT));
+
+        assertThat(report.blockers())
+                .filteredOn(finding -> finding.code().equals("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING"))
+                .singleElement()
+                .satisfies(finding -> {
+                    assertThat(finding.entityType()).isEqualTo(EntityType.VARIANT);
+                    assertThat(finding.entityId()).isEqualTo(variant.id());
+                    assertThat(finding.detail()).contains("catchweight");
+                });
+    }
+
+    @Test
+    @DisplayName("a marked good that is also splittable is blocked, and the finding names splittable")
+    void aMarkedSplittableVariantIsBlocked() {
+        Variant variant = activeVariant("BOTTLE");
+
+        ValidationFinding.Report report = validator.validate(markingSnapshot(variant, MARKED, SPLITTABLE));
+
+        assertThat(report.blockers())
+                .filteredOn(finding -> finding.code().equals("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING"))
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.detail()).contains("splittable"));
+    }
+
+    @Test
+    @DisplayName("catchweight without marking, marking without catchweight, and a plain weight are all fine")
+    void theExclusionOnlyFiresWhenBothFactsMeet() {
+        Variant variant = activeVariant("BOTTLE");
+        FiscalClassification unmarked = FiscalClassification.of("10202001001000000", "1512315", 1, "Cake");
+
+        assertThat(validator
+                        .validate(markingSnapshot(variant, unmarked, CATCHWEIGHT))
+                        .blockers())
+                .as("catchweight alone")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING");
+        assertThat(validator.validate(markingSnapshot(variant, MARKED, null)).blockers())
+                .as("marking alone")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING");
+        assertThat(validator
+                        .validate(markingSnapshot(variant, MARKED, PLAIN_WEIGHT))
+                        .blockers())
+                .as("a marked good may have a net weight: that is a fixed unit, not a weighed one")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING");
+    }
+
+    @Test
+    @DisplayName("an archived variant is not checked for the marking exclusion")
+    void anArchivedVariantIsNotChecked() {
+        UUID productId = UUID.randomUUID();
+        Variant archived =
+                new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "OLD", "PIECE", true, 0, Status.ARCHIVED, 1);
+
+        assertThat(validator
+                        .validate(markingSnapshot(archived, MARKED, CATCHWEIGHT))
+                        .blockers())
+                .extracting(ValidationFinding::code)
+                .doesNotContain("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING");
+    }
+
+    private static Variant activeVariant(String sku) {
+        return new Variant(
+                UUID.randomUUID(), TENANT, BRAND, UUID.randomUUID(), sku, "PIECE", true, 0, Status.ACTIVE, 1);
+    }
+
+    private static Snapshot markingSnapshot(
+            Variant variant, FiscalClassification fiscal, @Nullable PhysicalAttributes physical) {
+        Snapshot base = snapshotOf(
+                List.of(), List.of(variant), List.of(), List.of(), Map.of(), Map.of(), Set.of(variant.id()), Set.of());
+        Map<UUID, PhysicalAttributes> physicalByVariant = physical == null ? Map.of() : Map.of(variant.id(), physical);
+        return new Snapshot(
+                base.defaultLocale(),
+                base.fallbackLocale(),
+                base.products(),
+                base.variants(),
+                base.variantsByProduct(),
+                base.categories(),
+                base.categoriesById(),
+                base.productIdsByCategory(),
+                base.modifierGroupIdsByProduct(),
+                base.modifierGroups(),
+                base.optionsByGroup(),
+                base.translations(),
+                base.mediaReferences(),
+                base.displayableMedia(),
+                base.pricedVariantIds(),
+                base.offeredVariantIds(),
+                new CatalogValidator.FiscalContext(Map.of(variant.id(), fiscal), List.of(), false, false, Set.of()),
+                base.pricingWired(),
+                physicalByVariant);
     }
 
     // ---------------------------------------------------------- fixtures

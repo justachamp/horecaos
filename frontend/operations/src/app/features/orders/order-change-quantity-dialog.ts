@@ -3,11 +3,14 @@ import {
   Component,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
 } from '@angular/core';
 
+import { formatQuantity } from '../../core/format/quantity';
+import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Modal } from '../../shared/ui/modal';
 import { OrderLine } from './order-detail';
@@ -51,6 +54,8 @@ export interface QuantityChoice {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OrderChangeQuantityDialog {
+  private readonly i18n = inject(I18n);
+
   readonly lines = input.required<readonly OrderLine[]>();
   readonly busy = input(false);
 
@@ -106,7 +111,14 @@ export class OrderChangeQuantityDialog {
     () => this.choices().find((choice) => choice.lineId === this.selectedLineId()) ?? null,
   );
 
-  protected readonly minQuantity = computed(() => (this.selectedChoice()?.current ?? 0) + 1);
+  /**
+   * The smallest whole number strictly above the line's quantity. An amendment changes whole
+   * units (ADR 0137), and a line sold by the portion can hold `0.5`: the next quantity up is `1`,
+   * not `1.5`. A combo's quantity is a count of combos, always whole.
+   */
+  protected readonly minQuantity = computed(
+    () => Math.floor(this.selectedChoice()?.current ?? 0) + 1,
+  );
 
   protected readonly canSubmit = computed(
     () => this.selectedChoice() !== null && this.quantity() >= this.minQuantity(),
@@ -121,14 +133,18 @@ export class OrderChangeQuantityDialog {
       this.lastSeededLines = lines;
       const first = this.choices()[0] ?? null;
       this.selectedLineId.set(first?.lineId ?? null);
-      this.quantity.set((first?.current ?? 0) + 1);
+      this.quantity.set(Math.floor(first?.current ?? 0) + 1);
     });
   }
 
   protected selectLine(lineId: string): void {
     this.selectedLineId.set(lineId);
     const choice = this.choices().find((candidate) => candidate.lineId === lineId);
-    this.quantity.set((choice?.current ?? 0) + 1);
+    this.quantity.set(Math.floor(choice?.current ?? 0) + 1);
+  }
+
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
   }
 
   protected setQuantity(value: string): void {

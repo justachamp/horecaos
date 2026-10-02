@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pricing.domain;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A priced cart (ADR 0018).
@@ -87,6 +89,8 @@ public record Quote(
      *                            and an adjustment has neither
      * @param variantId           null on a {@link LineType#DELIVERY_FEE} line and
      *                            never on an item line
+     * @param quantity            a decimal since ADR 0137; always a whole number
+     *                            for a variant that is not sold by the portion
      * @param descriptionSnapshot the name as shown at pricing time. Copied, so a
      *                            menu rename cannot change what a historical quote
      *                            says the customer was buying
@@ -111,12 +115,15 @@ public record Quote(
      *                            {@code comboQuantity}, the pairing's default quantity and
      *                            this, and the first and last are the customer's own
      *                            choices, so neither can be recovered from {@code quantity}
+     * @param catchweight         ADR 0137: set only for a catchweight variant, and
+     *                            what makes the line's amounts provisional until a
+     *                            weight is captured
      */
     public record QuoteLine(
             String lineId,
             LineType type,
             @Nullable UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String descriptionSnapshot,
             Money unitAmount,
             Money baseAmount,
@@ -126,7 +133,8 @@ public record Quote(
             @Nullable UUID comboContainerVariantId,
             @Nullable UUID comboComponentId,
             @Nullable Integer comboQuantity,
-            @Nullable Integer comboPickQuantity) {
+            @Nullable Integer comboPickQuantity,
+            @Nullable Catchweight catchweight) {
 
         public QuoteLine {
             // Mirrors ck_quote_line_variant_agrees, stated as an equivalence so
@@ -152,14 +160,18 @@ public record Quote(
             if (comboSelectionId != null && type != LineType.ITEM) {
                 throw new IllegalArgumentException("Only an item line can be part of a combo: " + type);
             }
+            quantity = Quantities.normalise(quantity);
         }
 
-        /** A line that is not part of a combo, which is every line before ADR 0136. */
+        /**
+         * A line that is neither part of a combo (ADR 0136) nor catchweight (ADR 0137),
+         * which is every line there was before either.
+         */
         public QuoteLine(
                 String lineId,
                 LineType type,
                 @Nullable UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 String descriptionSnapshot,
                 Money unitAmount,
                 Money baseAmount,
@@ -179,6 +191,7 @@ public record Quote(
                     null,
                     null,
                     null,
+                    null,
                     null);
         }
 
@@ -186,7 +199,7 @@ public record Quote(
         public static QuoteLine comboComponent(
                 String lineId,
                 UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 String descriptionSnapshot,
                 Money unitAmount,
                 Money baseAmount,
@@ -211,38 +224,21 @@ public record Quote(
                     comboContainerVariantId,
                     comboComponentId,
                     comboQuantity,
-                    comboPickQuantity);
-        }
-
-        /** The same line carrying a discounted final amount and its tax share, grouping key preserved. */
-        public QuoteLine withAmounts(Money finalAmount, Money taxAmount) {
-            return new QuoteLine(
-                    lineId,
-                    type,
-                    variantId,
-                    quantity,
-                    descriptionSnapshot,
-                    unitAmount,
-                    baseAmount,
-                    finalAmount,
-                    taxAmount,
-                    comboSelectionId,
-                    comboContainerVariantId,
-                    comboComponentId,
-                    comboQuantity,
-                    comboPickQuantity);
+                    comboPickQuantity,
+                    null);
         }
 
         /** An ordinary basket line. */
         public static QuoteLine item(
                 String lineId,
                 UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 String descriptionSnapshot,
                 Money unitAmount,
                 Money baseAmount,
                 Money finalAmount,
-                Money taxAmount) {
+                Money taxAmount,
+                @Nullable Catchweight catchweight) {
             return new QuoteLine(
                     lineId,
                     LineType.ITEM,
@@ -252,7 +248,81 @@ public record Quote(
                     unitAmount,
                     baseAmount,
                     finalAmount,
-                    taxAmount);
+                    taxAmount,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    catchweight);
+        }
+
+        /** An ordinary basket line that is not catchweight. */
+        public static QuoteLine item(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount) {
+            return item(
+                    lineId,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount,
+                    null);
+        }
+
+        /**
+         * The same line with its amounts replaced, keeping everything that identifies it,
+         * its combo grouping and its catchweight facts included.
+         */
+        public QuoteLine withAmounts(Money newFinalAmount, Money newTaxAmount) {
+            return new QuoteLine(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    newFinalAmount,
+                    newTaxAmount,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    catchweight);
+        }
+    }
+
+    /**
+     * What makes a quote line provisional (ADR 0137).
+     *
+     * <p>The price is per {@code quantumGrams}; the quote is computed against
+     * {@code nominalGramsPerUnit} until a weight is captured, after which
+     * {@code actualWeightGrams} is the weight the line was priced at.
+     *
+     * @param pricePerQuantumMinor  the price row's amount, in minor units per quantum
+     * @param actualWeightGrams     null while the line is provisional; the weighed
+     *                              total of the whole line once it is not
+     */
+    public record Catchweight(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        /** Whether a weight has been captured and the line's amounts are final. */
+        public boolean reconciled() {
+            return actualWeightGrams != null;
         }
     }
 

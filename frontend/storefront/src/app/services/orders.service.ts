@@ -201,6 +201,10 @@ export class OrdersService {
         name: [line.productName, line.variantName].filter(Boolean).join(' '),
         quantity: line.quantity,
         price: line.unitAmountMinor,
+        // ADR 0137: the line's own amount — `unitAmountMinor × quantity` is wrong once a weighed
+        // line has been weighed, and for a portion it is the price of a whole one.
+        lineAmount: line.finalAmountMinor,
+        catchweight: line.catchweight ?? null,
         image: null,
         note: null,
         comboSelectionId: line.comboSelectionId ?? null,
@@ -316,12 +320,28 @@ export interface OrderLineResponse {
   readonly autoSelectedModifiers?: readonly string[];
   /** ADR 0136: the same options with what each cost for the whole line -- already inside `finalAmountMinor`. */
   readonly autoSelectedCharges?: readonly AutoSelectedCharge[];
+  /** ADR 0137: present on a line sold by weight, absent otherwise. */
+  readonly catchweight?: OrderLineCatchweight | null;
 }
 
 /** `StorefrontOrderingController.AutoSelectedChargeResponse`, transcribed. */
 export interface AutoSelectedCharge {
   readonly name: string;
   readonly amountMinor: number;
+}
+
+/**
+ * ADR 0137: `StorefrontOrderingController.CatchweightLineResponse`. `provisional` is true until the
+ * kitchen has weighed the line at handover, and means `finalAmountMinor` was computed against the
+ * nominal weight; the order total the customer sees then is an estimate the weighed amount
+ * replaces. `actualWeightGrams` is the whole line's weight — all its units together — once weighed.
+ */
+export interface OrderLineCatchweight {
+  readonly quantumGrams: number;
+  readonly nominalGramsPerUnit: number;
+  readonly pricePerQuantumMinor: number;
+  readonly provisional: boolean;
+  readonly actualWeightGrams?: number | null;
 }
 
 /**

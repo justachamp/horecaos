@@ -295,6 +295,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог рекомендация откреплено',
       'uz-Latn': 'Katalog tavsiya ajratildi',
     },
+    'catalog.variantPhysicalAttributes.set': {
+      en: 'Weight, portions and nutrition of a variant changed',
+      ru: 'Изменены вес, порции и пищевая ценность варианта',
+      'uz-Latn': 'Variantning ogʻirligi, porsiyalari va ozuqaviy qiymati oʻzgartirildi',
+    },
     'commercial.entitlement_override.granted': {
       en: 'Commercial entitlement override granted',
       ru: 'Коммерция право доступа переопределение предоставлено',
@@ -934,6 +939,12 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Ordering order call provenance recorded',
       ru: 'Заказы заказ звонок источник зафиксировано',
       'uz-Latn': 'Buyurtmalar buyurtma qoʻngʻiroq manba qayd etildi',
+    },
+    'ordering.order.catchweight-reconciled': {
+      en: 'Weight of an item sold by weight recorded and the order re-priced',
+      ru: 'Записан вес весовой позиции, заказ пересчитан',
+      'uz-Latn':
+        'Ogʻirlik boʻyicha sotiladigan pozitsiya ogʻirligi yozildi, buyurtma qayta hisoblandi',
     },
     'ordering.outcome-reason.archived': {
       en: 'Order outcome reason retired',

@@ -31,6 +31,31 @@
             @if (row.line.variantName) {
               <div class="q-caption pane__line-variant">{{ row.line.variantName }}</div>
             }
+            @if (row.line.catchweight; as weighed) {
+              <div class="q-caption pane__line-weight" data-testid="order-detail-line-weight">
+                @if (weighed.provisional) {
+                  {{
+                    'orders.detail.lines.weight.estimate'
+                      | t
+                        : {
+                            weight: estimatedWeight(row.line),
+                            price: formatMoneyMinor(weighed.pricePerQuantumMinor, currency()),
+                            quantum: weightText(weighed.quantumGrams),
+                          }
+                  }}
+                } @else {
+                  {{
+                    'orders.detail.lines.weight.weighed'
+                      | t
+                        : {
+                            weight: weightText(weighed.actualWeightGrams ?? 0),
+                            price: formatMoneyMinor(weighed.pricePerQuantumMinor, currency()),
+                            quantum: weightText(weighed.quantumGrams),
+                          }
+                  }}
+                }
+              </div>
+            }
             @if (chosenModifiers(row.line).length > 0) {
               <ul class="pane__line-modifiers">
                 @for (modifier of chosenModifiers(row.line); track $index) {
@@ -78,7 +103,7 @@
               }
             }
           </td>
-          <td class="pane__num-col q-tnum">{{ row.line.quantity }}</td>
+          <td class="pane__num-col q-tnum">{{ quantityText(row.line.quantity) }}</td>
           <td class="pane__num-col q-mono q-tnum">
             {{ formatMoneyMinor(row.line.finalAmountMinor, currency()) }}
           </td>

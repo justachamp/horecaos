@@ -747,6 +747,11 @@
         @if (!total().fullyPriced) {
           <p class="q-caption new-order__hint">{{ 'orders.newOrder.order.totalPending' | t }}</p>
         }
+        @if (total().provisional) {
+          <p class="q-caption new-order__hint" data-testid="new-order-total-provisional">
+            {{ 'orders.newOrder.order.totalProvisional' | t }}
+          </p>
+        }
         @if (!total().allAvailable) {
           <p class="q-caption new-order__error">{{ 'orders.newOrder.basket.unavailable' | t }}</p>
         }

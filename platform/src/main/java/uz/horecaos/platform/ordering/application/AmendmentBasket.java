@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +14,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort.PricingCommand;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The live basket of an order, as an amendment prices it again (ADR 0039, ADR 0136).
@@ -127,8 +129,10 @@ final class AmendmentBasket {
     private static PricingCommand.Item plainItem(
             Unit unit, Map<UUID, Integer> changedQuantities, Map<UUID, List<OrderModifierRow>> modifiersByLine) {
         OrderLineRow line = unit.first();
-        int quantity = changedQuantities.getOrDefault(line.lineId(), line.quantity());
-        if (changedQuantities.containsKey(line.lineId()) && quantity <= line.quantity()) {
+        Integer changedTo = changedQuantities.get(line.lineId());
+        boolean changed = changedTo != null;
+        BigDecimal quantity = changedTo != null ? BigDecimal.valueOf(changedTo) : line.quantity();
+        if (changed && quantity.compareTo(line.quantity()) <= 0) {
             throw decreaseRefused(line.lineId());
         }
         List<OrderModifierRow> rows = modifiersByLine.getOrDefault(line.lineId(), List.of());
@@ -149,7 +153,17 @@ final class AmendmentBasket {
                 .toList();
 
         return new PricingCommand.Item(
-                line.lineId().toString(), line.sourceVariantId(), quantity, chosen, List.of(), nested);
+                line.lineId().toString(),
+                line.sourceVariantId(),
+                quantity,
+                chosen,
+                List.of(),
+                nested,
+                // ADR 0137: a line that was already weighed keeps its weight through an
+                // amendment that did not touch it; one whose quantity just changed no longer
+                // has a weight that means anything, and goes back to provisional so the
+                // handover asks for it again.
+                changed ? null : line.actualWeightGrams());
     }
 
     private static PricingCommand.Item comboItem(Unit unit, Map<UUID, Integer> changedQuantities) {
@@ -165,13 +179,14 @@ final class AmendmentBasket {
             // The units one combo puts on the order for this component: the pairing's default
             // quantity times how many times it was picked. Exact, because the line's quantity
             // is the combo count times that.
-            int perCombo = line.quantity() / combos;
+            int lineUnits = wholeUnits(line.quantity());
+            int perCombo = lineUnits / combos;
             if (perCombo <= 0 || target % perCombo != 0) {
                 throw new AmendmentRefusedException(
                         "COMBO_QUANTITY_NOT_WHOLE",
                         ("Line %s is %d unit(s) of a combo that puts %d on the order for each one bought; "
                                         + "a combo changes by whole combos")
-                                .formatted(line.lineId(), line.quantity(), perCombo));
+                                .formatted(line.lineId(), lineUnits, perCombo));
             }
             int wanted = target / perCombo;
             if (requested != null && requested != wanted) {
@@ -193,7 +208,12 @@ final class AmendmentBasket {
                         requireUuid(line.comboComponentId()), requireInt(line.comboPickQuantity())))
                 .toList();
         return new PricingCommand.Item(
-                unit.key(), requireUuid(first.comboContainerVariantId()), combos, List.of(), picks, List.of());
+                unit.key(),
+                requireUuid(first.comboContainerVariantId()),
+                BigDecimal.valueOf(combos),
+                List.of(),
+                picks,
+                List.of());
     }
 
     /**
@@ -212,7 +232,10 @@ final class AmendmentBasket {
         for (QuoteSnapshot.Line quoted : quote.lines()) {
             String key = quoted.cartLineKey();
             if (addedKeys.contains(key)) {
-                increaseByVariant.merge(quoted.variantId(), quoted.quantity(), Integer::sum);
+                // Whole units, rounded up: stock is held whole (ADR 0137 leaves a fractional
+                // reservation to the record that next touches the inventory ledger).
+                increaseByVariant.merge(
+                        quoted.variantId(), Quantities.wholeUnitsCeiling(quoted.quantity()), Integer::sum);
                 continue;
             }
             Unit unit = changedByKey.get(key);
@@ -220,7 +243,7 @@ final class AmendmentBasket {
                 continue;
             }
             OrderLineRow live = unit.replacedBy(quoted);
-            int delta = quoted.quantity() - live.quantity();
+            int delta = Quantities.wholeUnitsCeiling(quoted.quantity().subtract(live.quantity()));
             if (delta > 0) {
                 increaseByVariant.merge(live.sourceVariantId(), delta, Integer::sum);
             }
@@ -236,6 +259,11 @@ final class AmendmentBasket {
                                 + "movement, not one of hold/commit/release). Withdraw this amendment "
                                 + "and place a new order for the corrected quantity.")
                         .formatted(lineId));
+    }
+
+    /** A combo component's units are always a whole number: the combo count times the picks. */
+    private static int wholeUnits(BigDecimal quantity) {
+        return quantity.intValueExact();
     }
 
     private static int requireInt(@Nullable Integer value) {

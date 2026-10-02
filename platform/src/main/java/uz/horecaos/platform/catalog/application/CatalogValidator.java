@@ -25,6 +25,7 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
@@ -67,6 +68,7 @@ public class CatalogValidator {
         validateMedia(snapshot, findings);
         validateOfferings(snapshot, findings);
         validateFiscalClassification(snapshot, findings);
+        validatePhysicalAttributes(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
     }
@@ -192,6 +194,47 @@ public class CatalogValidator {
                                     + "the Payme path there is no later checkpoint — the line data is "
                                     + "fixed before the customer pays.")
                             .formatted(incomplete)));
+        }
+    }
+
+    /**
+     * The marking exclusion, restated from the physical side (ADR 0137, ADR 0038).
+     *
+     * <p>ADR 0038 already decided that a marked good "forces integer quantity and
+     * forbids splittable or catch-weight semantics": marks are captured one per
+     * physical unit, so a unit that is weighed or split cannot carry one. ADR 0137
+     * enforces it here, at publication, rather than with a constraint across
+     * {@code catalog.fiscal_classifications} and
+     * {@code catalog.variant_physical_attributes}. Postgres cannot express a CHECK
+     * across two tables, and a trigger would be a second enforcement point that
+     * could disagree with this validator about what a conflict is -- the validator
+     * is where every other cross-domain catalog rule (media, pricing, offering) is
+     * reconciled already.
+     *
+     * <p>A blocker, unlike the fiscal coverage warnings above: nothing is waiting
+     * on tooling that does not exist. The author chose both facts, and no
+     * receipt can be built for the combination.
+     */
+    private void validatePhysicalAttributes(Snapshot snapshot, List<ValidationFinding> findings) {
+        for (Variant variant : snapshot.variants()) {
+            if (variant.status() != Status.ACTIVE) {
+                continue;
+            }
+            PhysicalAttributes physical = snapshot.physicalByVariant().get(variant.id());
+            if (physical == null || !(physical.catchweight() || physical.splittable())) {
+                continue;
+            }
+            if (snapshot.effectiveClassification(variant).markingRequired()) {
+                findings.add(ValidationFinding.blocker(
+                        "PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING",
+                        EntityType.VARIANT,
+                        variant.id(),
+                        variant.sku(),
+                        "A marked good (marking_required) cannot also be %s: marking codes are captured "
+                                        .formatted(physical.catchweight() ? "catchweight" : "splittable")
+                                + "one per physical unit, so the unit cannot be weighed at handover or split "
+                                + "into portions"));
+            }
         }
     }
 
@@ -726,6 +769,8 @@ public class CatalogValidator {
      *                         no name in {@code defaultLocale} may have one instead
      * @param pricedVariantIds contributed by pricing; catalog does not own money
      * @param displayableMedia contributed by media; catalog does not own bytes
+     * @param physicalByVariant ADR 0137: the variants that carry a physical-attributes row; a variant
+     *                         absent from the map is a fixed unit sold whole
      */
     public record Snapshot(
             String defaultLocale,
@@ -746,11 +791,13 @@ public class CatalogValidator {
             Set<UUID> offeredVariantIds,
             FiscalContext fiscal,
             boolean pricingWired,
-            CompositeContext composite) {
+            CompositeContext composite,
+            Map<UUID, PhysicalAttributes> physicalByVariant) {
 
         /**
-         * A snapshot with no composite products, which is every snapshot that predates
-         * ADR 0136 and every test with nothing to say about combos.
+         * A snapshot with no composite products (ADR 0136) and no variant carrying
+         * physical attributes (ADR 0137): every snapshot that predates either, and every
+         * test with nothing to say about them.
          */
         public Snapshot(
                 String defaultLocale,
@@ -790,7 +837,96 @@ public class CatalogValidator {
                     offeredVariantIds,
                     fiscal,
                     pricingWired,
-                    CompositeContext.empty());
+                    CompositeContext.empty(),
+                    Map.of());
+        }
+
+        /** A snapshot with composite products (ADR 0136) and no physical attributes (ADR 0137). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                CompositeContext composite) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    composite,
+                    Map.of());
+        }
+
+        /** A snapshot with physical attributes (ADR 0137) and no composite products (ADR 0136). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                Map<UUID, PhysicalAttributes> physicalByVariant) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    CompositeContext.empty(),
+                    physicalByVariant);
         }
 
         /**

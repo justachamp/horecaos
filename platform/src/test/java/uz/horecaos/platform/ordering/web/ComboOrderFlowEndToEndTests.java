@@ -1104,7 +1104,7 @@ class ComboOrderFlowEndToEndTests {
         assertThat(exported.lines())
                 .as("two components, three of each; the two rows the amendment closed are history")
                 .extracting(PosAdapter.OrderExport.Line::quantity)
-                .containsExactly(3, 3);
+                .containsExactly(java.math.BigDecimal.valueOf(3), java.math.BigDecimal.valueOf(3));
         assertThat(exported.lines())
                 .extracting(PosAdapter.OrderExport.Line::externalProductId)
                 .containsExactly("ext-" + burgerVariant, "ext-" + colaVariant);
@@ -1573,7 +1573,8 @@ class ComboOrderFlowEndToEndTests {
                 event -> {},
                 new RecordingProviderActivityRecorder(),
                 Clock.systemUTC(),
-                unitOfWork);
+                unitOfWork,
+                uz.horecaos.platform.support.StaffDirectories.none());
         UUID exportId = service.open(TENANT, orderId).orElseThrow();
         service.send(TENANT, exportId);
         var detail = posExportStore.findDetailByOrder(TENANT, orderId).orElseThrow();

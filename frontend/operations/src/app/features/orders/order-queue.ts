@@ -1736,6 +1736,8 @@ export class OrderQueue implements OnInit {
         return this.i18n.t('orders.queue.bulk.problem.ILLEGAL_TRANSITION');
       case 'CANCELLATION_NOT_PERMITTED':
         return this.i18n.t('orders.queue.bulk.problem.CANCELLATION_NOT_PERMITTED');
+      case 'CATCHWEIGHT_NOT_RECONCILED':
+        return this.i18n.t('orders.queue.bulk.problem.CATCHWEIGHT_NOT_RECONCILED');
       case 'REASON_NOT_FOUND':
         return this.i18n.t('orders.queue.bulk.problem.REASON_NOT_FOUND');
       case 'VALIDATION_FAILED':

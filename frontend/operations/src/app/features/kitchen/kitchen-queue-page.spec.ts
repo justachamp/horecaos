@@ -88,7 +88,7 @@ describe('KitchenQueuePage', () => {
   let boardSpy: ReturnType<typeof vi.fn>;
   let realtimeFrameListeners: Array<(frame: RealtimeFrame) => void>;
 
-  async function render(customBoard?: BoardResponse): Promise<void> {
+  async function render(customBoard?: BoardResponse, orderDetail?: unknown): Promise<void> {
     boardResult = customBoard ?? board([DELIVERY_TICKET]);
     revealLineNote = vi.fn(() => of({ lineId: 'line-1', note: 'без лука' }));
     dispatchQueue = vi.fn(() => Promise.resolve<readonly PlanQueueResponse[]>([]));
@@ -124,7 +124,10 @@ describe('KitchenQueuePage', () => {
         },
         {
           provide: ApiClient,
-          useValue: { get: () => of({ value: { lines: [], kitchenNote: null }, version: null }) },
+          useValue: {
+            get: () =>
+              of(orderDetail ?? { value: { lines: [], kitchenNote: null }, version: null }),
+          },
         },
         { provide: OrderRevealApi, useValue: { revealLineNote } },
         { provide: DispatchApi, useValue: { queue: dispatchQueue, assign: dispatchAssign } },
@@ -156,6 +159,99 @@ describe('KitchenQueuePage', () => {
     expect(host.querySelectorAll('[data-testid="kitchen-ticket"]')).toHaveLength(1);
     expect(host.textContent).toContain('A-014');
     expect(host.textContent).toContain('telegram-bot');
+  });
+
+  // ------------------------------------------------- portions and weights (ADR 0137)
+
+  describe('portions and weights (ADR 0137)', () => {
+    function cakeTicket(quantity: number): TicketResponse {
+      return {
+        ...DELIVERY_TICKET,
+        items: [{ ...DELIVERY_TICKET.items[0], quantity }],
+      };
+    }
+
+    function orderWith(catchweight: unknown, quantity = 1) {
+      return {
+        version: null,
+        value: {
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Medovik',
+              quantity,
+              finalAmountMinor: 180_000,
+              modifiers: [],
+              commentPresets: [],
+              lineId: 'line-1',
+              hasNote: false,
+              catchweight,
+            },
+          ],
+          kitchenNote: null,
+        },
+      };
+    }
+
+    async function expanded(ticket: TicketResponse, order?: unknown): Promise<HTMLElement> {
+      await render(board([ticket]), order);
+      const host = fixture.nativeElement as HTMLElement;
+      (host.querySelector('.ticket__header') as HTMLElement).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      return host;
+    }
+
+    it('writes a half portion with the console’s decimal mark', async () => {
+      const host = await expanded(cakeTicket(0.5));
+      TestBed.inject(I18n).setLocale('ru');
+      fixture.detectChanges();
+
+      expect(host.querySelector('td.kitchen__num-col')?.textContent?.trim()).toBe('0,5');
+    });
+
+    it('shows the estimated weight of a weighed line, every unit at its nominal weight', async () => {
+      const host = await expanded(
+        cakeTicket(2),
+        orderWith(
+          {
+            quantumGrams: 100,
+            nominalGramsPerUnit: 1_200,
+            pricePerQuantumMinor: 15_000,
+            provisional: true,
+          },
+          2,
+        ),
+      );
+
+      const weight = host.querySelector('[data-testid="kitchen-line-weight"]');
+      expect(weight?.textContent).toContain('2.4\u00a0kg');
+      expect(weight?.textContent).toContain('estimate');
+    });
+
+    it('shows what a line weighed once it has been weighed', async () => {
+      const host = await expanded(
+        cakeTicket(1),
+        orderWith({
+          quantumGrams: 100,
+          nominalGramsPerUnit: 1_200,
+          pricePerQuantumMinor: 15_000,
+          provisional: false,
+          actualWeightGrams: 1_340,
+        }),
+      );
+
+      const weight = host.querySelector('[data-testid="kitchen-line-weight"]');
+      expect(weight?.textContent).toContain('1.34\u00a0kg');
+      expect(weight?.textContent).toContain('weighed');
+    });
+
+    it('says nothing about weight on a line that is not sold by weight', async () => {
+      const host = await expanded(cakeTicket(1), orderWith(null));
+
+      expect(host.querySelector('[data-testid="kitchen-line-weight"]')).toBeNull();
+    });
   });
 
   it('refreshes at once on a KITCHEN_BOARD frame, the ADR 0045 accelerator (row 2.1)', async () => {

@@ -37,6 +37,7 @@ class FakeUiCartService {
   canPlaceOrder = vi.fn(() => true);
   /** ADR 0136: what the server added by itself, itemised. */
   hiddenCharges = vi.fn<() => readonly HiddenChargeRow[]>(() => []);
+  hasProvisionalLines = vi.fn(() => false);
 }
 
 class FakeDeliverySelectionService {
@@ -703,6 +704,30 @@ describe('CartConfirmationComponent: what the server added by itself (ADR 0136)'
 
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="hidden-charges"]'),
+    ).toBeNull();
+  });
+});
+
+describe('CartConfirmationComponent: items sold by weight (ADR 0137)', () => {
+  it('says the amount is an estimate before the customer pays, while the basket holds a weighed item', async () => {
+    const { fixture } = await setUp(['CASH'], (cart) =>
+      cart.hasProvisionalLines.mockReturnValue(true),
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="confirm-provisional-notice"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="confirm-provisional-notice"]',
+      ),
     ).toBeNull();
   });
 });

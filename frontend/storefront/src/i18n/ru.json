@@ -405,5 +405,24 @@
     "unit": {
       "UZS": "сум"
     }
+  },
+  "physical": {
+    "nutritionTitle": "Пищевая ценность",
+    "nutritionPer100g": "на 100 г",
+    "nutritionPer100ml": "на 100 мл",
+    "nutritionPerUnit": "в порции ({{amount}})",
+    "calories": "Калории",
+    "proteins": "Белки",
+    "fats": "Жиры",
+    "carbs": "Углеводы",
+    "kcal": "ккал",
+    "pricePerQuantum": "{{price}} за {{quantum}}",
+    "estimatedFor": "≈ {{price}} за ≈ {{weight}}",
+    "finalWeightNotice": "Окончательный вес и цена определяются при выдаче.",
+    "cartNotice": "В сумме есть весовые позиции. Окончательный вес и сумма определяются при выдаче заказа.",
+    "portionsUnit": "порц.",
+    "portionStep": "Заказывается порциями по {{step}}",
+    "weighedLine": "Взвешено: {{weight}}",
+    "estimateLine": "≈ {{weight}}, оценка"
   }
 }

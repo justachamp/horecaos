@@ -24,6 +24,7 @@ import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import type { ComboPickWire } from '../utils/combo-selection';
 import { variantAvailability } from '../utils/item-availability';
+import { lineAmountMinor, portionStep, type PhysicalFacts } from '../utils/physical';
 
 const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
 
@@ -123,9 +124,35 @@ export class UiCartService {
 
   readonly items = computed(() => this.cartData()?.items ?? []);
 
+  /**
+   * How many items the basket holds, for the badge: a half portion is one plate somebody has to
+   * make (ADR 0137), so each line counts its quantity rounded up, never as a fraction of one.
+   */
   readonly totalItemsCount = computed(() =>
-    this.items().reduce((sum, item) => sum + item.quantity, 0),
+    this.items().reduce((sum, item) => sum + Math.ceil(item.quantity), 0),
   );
+
+  /**
+   * Whether the basket holds an item sold by weight (ADR 0137): its amount is an estimate at the
+   * item's nominal weight, and the final weight and total are determined at handover.
+   */
+  readonly hasProvisionalLines = computed(() =>
+    this.items().some((item) => item.physical?.catchweight),
+  );
+
+  /**
+   * One line's amount in minor units: the price row times the quantity for a portion, or for a
+   * weighed item its price per quantum at the estimated weight. The platform prices the cart; this
+   * is what a line reads before that, rounded the way the platform rounds.
+   */
+  lineAmount(item: CartResponseItem): number {
+    return lineAmountMinor(item.price, item.quantity, item.physical);
+  }
+
+  /** The step a line's quantity moves in: its portion size, or one. */
+  stepOf(item: { physical?: PhysicalFacts | null }): number {
+    return portionStep(item.physical);
+  }
 
   /**
    * The platform's own total, or a dash while the cart holds no price -- never
@@ -464,11 +491,11 @@ export class UiCartService {
   }
 
   increaseQuantity(item: CartResponseItem): void {
-    void this.setQuantity(item, item.quantity + 1);
+    void this.setQuantity(item, tidy(item.quantity + this.stepOf(item)));
   }
 
   decreaseQuantity(item: CartResponseItem): void {
-    void this.setQuantity(item, item.quantity - 1);
+    void this.setQuantity(item, tidy(item.quantity - this.stepOf(item)));
   }
 
   removeItem(item: CartResponseItem): void {
@@ -672,7 +699,14 @@ export class UiCartService {
     const menu = await this.menu.menu(this.lang.langId(), cart.locationId);
     const byVariant = new Map<
       string,
-      { name: string; image: string | null; price: number; orderable: boolean; onSaleNow: boolean }
+      {
+        name: string;
+        image: string | null;
+        price: number;
+        orderable: boolean;
+        onSaleNow: boolean;
+        physical: PhysicalFacts | null;
+      }
     >();
     for (const product of menu.products) {
       for (const variant of product.variants) {
@@ -683,6 +717,7 @@ export class UiCartService {
           orderable: variant.orderable,
           // See MenuService.toMenuItem: absent means on sale.
           onSaleNow: variant.onSaleNow !== false,
+          physical: variant.physical ?? null,
         });
       }
     }
@@ -779,6 +814,7 @@ export class UiCartService {
           name: known.name,
           image: known.image ?? FALLBACK_IMAGE,
           price: comboPicks.length > 0 ? comboPrice : known.price,
+          physical: known.physical,
           active: availability === 'AVAILABLE',
           ...(availability === 'AVAILABLE' ? {} : { unavailableReason: availability }),
           quantity: line.quantity,
@@ -796,7 +832,7 @@ export class UiCartService {
     const zero = { price: 0, discount: 0 };
     this.cartData.set({
       items,
-      items_count: items.reduce((sum, item) => sum + item.quantity, 0),
+      items_count: items.reduce((sum, item) => sum + Math.ceil(item.quantity), 0),
       subtotal: { price: this.priced()?.subtotalMinor ?? 0, discount: 0 },
       total: { price: this.priced()?.totalMinor ?? 0, discount: 0 },
       delivery: zero,
@@ -937,3 +973,8 @@ const PROMO_REASON_KEYS: Readonly<Record<string, string>> = {
   REDEMPTION_LIMIT_REACHED: 'checkout.promoLimitReached',
   PER_CUSTOMER_LIMIT_REACHED: 'checkout.promoAlreadyUsed',
 };
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}

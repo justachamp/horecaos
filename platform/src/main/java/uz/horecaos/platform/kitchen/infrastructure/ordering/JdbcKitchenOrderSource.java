@@ -85,7 +85,7 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                         // Nullable in V0022: a line may name only a variant.
                         row.getObject("source_product_id", UUID.class),
                         row.getObject("source_variant_id", UUID.class),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getObject("combo_selection_id", UUID.class),
                         row.getObject("combo_container_variant_id", UUID.class)))
                 .list();

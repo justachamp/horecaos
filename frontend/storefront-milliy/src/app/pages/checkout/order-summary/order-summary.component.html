@@ -34,4 +34,9 @@
     <span>{{ 'cart.total' | t }}</span>
     <span>{{ total() }}</span>
   </div>
+  @if (provisional()) {
+    <p class="summary__note" data-testid="summary-provisional-notice">
+      {{ 'physical.cartNotice' | t }}
+    </p>
+  }
 </div>

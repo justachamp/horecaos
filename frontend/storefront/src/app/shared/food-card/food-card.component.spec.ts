@@ -25,6 +25,7 @@ class FakeUiCartService {
   readonly add = vi.fn(async () => {});
   readonly increaseQuantity = vi.fn();
   readonly decreaseQuantity = vi.fn();
+  readonly lineAmount = vi.fn((item: CartResponseItem) => item.price * item.quantity);
 }
 
 class FakeFavouritesService {
@@ -260,5 +261,120 @@ describe('FoodCardComponent: a combo (ADR 0136)', () => {
 
     expect(navigateSpy).not.toHaveBeenCalled();
     expect(cart.increaseQuantity).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FoodCardComponent: portions and weighed items (ADR 0137)', () => {
+  beforeEach(() => localStorage.clear());
+
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+  const CAKE = {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+    netWeightGrams: 1_200,
+  } as const;
+
+  function withVariant(physical: unknown, price = 25_000) {
+    const base = menuItem();
+    return menuItem({
+      price,
+      variants: [{ ...base.variants[0], price, physical } as MenuItem['variants'][number]],
+    });
+  }
+
+  function open(item: MenuItem, line?: Partial<CartResponseItem>) {
+    const fixtureSetUp = setUp();
+    fixtureSetUp.fixture.componentRef.setInput('item', item);
+    if (line) {
+      fixtureSetUp.cart.items.set([
+        {
+          variant_id: 'variant-1',
+          price: item.price,
+          quantity: 1,
+          modifierOptionIds: [],
+          ...line,
+        } as CartResponseItem,
+      ]);
+    }
+    fixtureSetUp.fixture.detectChanges();
+    return fixtureSetUp;
+  }
+
+  const textOf = (element: HTMLElement) => element.textContent?.replace(/\s+/g, ' ') ?? '';
+
+  it('shows a variant’s weight on the card', () => {
+    const { fixture } = open(
+      withVariant({ catchweight: false, splittable: false, netWeightGrams: 350 }),
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('[data-testid="physical-measure"]')
+        ?.textContent?.trim(),
+    ).toContain('350');
+  });
+
+  it('shows no weight on a fixed unit', () => {
+    const { fixture } = open(menuItem());
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="physical-measure"]'),
+    ).toBeNull();
+  });
+
+  it('prices a weighed variant per quantum on its add button, not as if the price were per unit', () => {
+    const { fixture } = open(withVariant(CAKE, 15_000));
+
+    expect(textOf(fixture.nativeElement as HTMLElement)).toContain('physical.pricePerQuantum');
+  });
+
+  it('starts a splittable variant at one whole portion', async () => {
+    const { comp, cart, session } = open(withVariant(SPLITTABLE));
+    signIn(session);
+
+    comp.increase(clickEvent());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(cart.add).toHaveBeenCalledWith('variant-1', 1);
+  });
+
+  it('starts a variant whose portion does not divide one at the first quantity the cart accepts', async () => {
+    const { comp, cart, session } = open(
+      withVariant({ catchweight: false, splittable: true, portionSize: 0.3 }),
+    );
+    signIn(session);
+
+    comp.increase(clickEvent());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(cart.add).toHaveBeenCalledWith('variant-1', 1.2);
+  });
+
+  it('writes a half portion with the language’s decimal mark and its portion unit', () => {
+    const { fixture } = open(withVariant(SPLITTABLE), { quantity: 0.5, physical: SPLITTABLE });
+
+    expect(textOf(fixture.nativeElement as HTMLElement)).toContain('0,5 physical.portionsUnit');
+  });
+
+  it('prices a line through the cart, and marks a weighed one as an estimate', () => {
+    const setUpResult = setUp();
+    setUpResult.cart.lineAmount.mockReturnValue(360_000);
+    setUpResult.fixture.componentRef.setInput('item', withVariant(CAKE, 15_000));
+    setUpResult.cart.items.set([
+      {
+        variant_id: 'variant-1',
+        price: 15_000,
+        quantity: 2,
+        modifierOptionIds: [],
+        physical: CAKE,
+      } as unknown as CartResponseItem,
+    ]);
+    setUpResult.fixture.detectChanges();
+
+    expect(textOf(setUpResult.fixture.nativeElement as HTMLElement)).toContain('≈ 360');
   });
 });

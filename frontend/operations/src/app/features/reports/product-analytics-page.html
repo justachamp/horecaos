@@ -104,18 +104,20 @@
                 </td>
                 <td class="q-body-sm">{{ categoryLabel(row.categoryId) }}</td>
                 <td class="q-body-sm q-tnum num">
-                  {{ row.deliveryQuantity === null ? '—' : formatCountValue(row.deliveryQuantity) }}
+                  {{
+                    row.deliveryQuantity === null ? '—' : formatQuantityValue(row.deliveryQuantity)
+                  }}
                 </td>
                 <td class="q-body-sm q-tnum num">
                   {{ row.deliveryNetSom === null ? '—' : formatMoneyValue(row.deliveryNetSom) }}
                 </td>
                 <td class="q-body-sm q-tnum num">
-                  {{ row.pickupQuantity === null ? '—' : formatCountValue(row.pickupQuantity) }}
+                  {{ row.pickupQuantity === null ? '—' : formatQuantityValue(row.pickupQuantity) }}
                 </td>
                 <td class="q-body-sm q-tnum num">
                   {{ row.pickupNetSom === null ? '—' : formatMoneyValue(row.pickupNetSom) }}
                 </td>
-                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.quantity) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatQuantityValue(row.quantity) }}</td>
                 <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.netSom) }}</td>
                 <td class="q-body-sm q-tnum num">{{ row.revenueSharePercent }}%</td>
               </tr>
@@ -328,7 +330,7 @@
                     }
                   </td>
                   <td class="q-body-sm">{{ categoryLabel(row.categoryId) }}</td>
-                  <td class="q-body-sm q-tnum num">{{ formatCountValue(row.quantity) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ formatQuantityValue(row.quantity) }}</td>
                   <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.revenueGrossSom) }}</td>
                   <td class="q-body-sm q-tnum num">{{ row.mean.toFixed(1) }}</td>
                   <td class="q-body-sm q-tnum num">{{ row.stddev.toFixed(1) }}</td>

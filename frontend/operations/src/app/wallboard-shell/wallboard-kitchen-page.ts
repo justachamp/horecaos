@@ -10,6 +10,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../core/api/problem-details';
 import { CurrentLocation } from '../core/auth/current-location';
+import { formatQuantity } from '../core/format/quantity';
 import { I18n } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
@@ -316,5 +317,10 @@ export class WallboardKitchenPage implements OnInit {
 
   protected errorReference(error: ApiError): string {
     return errorReference(error);
+  }
+
+  /** `0,5`, `2` — never `2.000` (ADR 0137). */
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
   }
 }

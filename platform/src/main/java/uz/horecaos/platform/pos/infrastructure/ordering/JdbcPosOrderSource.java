@@ -176,7 +176,7 @@ public class JdbcPosOrderSource implements PosOrderSource {
                             row.getObject("source_variant_id", UUID.class),
                             row.getString("product_name_snapshot"),
                             row.getString("variant_name_snapshot"),
-                            row.getInt("quantity"),
+                            row.getBigDecimal("quantity"),
                             row.getLong("unit_amount_minor"),
                             modifiersByLine.getOrDefault(lineId, List.of()),
                             commentPresetsByLine.getOrDefault(lineId, List.of()),

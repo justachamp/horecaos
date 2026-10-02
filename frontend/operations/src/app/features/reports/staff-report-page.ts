@@ -11,6 +11,7 @@ import { ProvenanceBanner } from './provenance-banner';
 import {
   formatAverage,
   formatCount,
+  formatQuantityTotal,
   formatSecondsDuration,
   formatShare,
 } from './report-formatting';
@@ -148,6 +149,9 @@ export class StaffReportPage {
   }
 
   protected formatCountValue = formatCount;
+  /** ADR 0137: items sold can be a fraction of a portion, which `formatCount` would round away. */
+  protected formatQuantityValue = (value: number): string =>
+    formatQuantityTotal(value, this.i18n.locale());
   protected formatAverageValue = formatAverage;
   protected formatDuration = formatSecondsDuration;
 

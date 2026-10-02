@@ -360,6 +360,26 @@ over the official list with the operator selecting is the accepted form
 (ADR 0038 alternatives table). AI assist on description and composition is fine
 and belongs on tab 1.
 
+### Tab 5b — Вес и питательность (built: ADR 0137, `4.2c`)
+
+Per variant, one card, one save: `PUT …/variants/{id}/physical-attributes` under
+`If-Match` (`catalog.author` at `BRAND`; an empty set clears the row, which is the common
+case). It sits beside the fiscal tab rather than on tab 1 — ADR 0137 says "tab 1", but
+every field is a fact about a *variant* and tab 1 is the product — and the tab and its
+fields are:
+
+| Field | Notes |
+|---|---|
+| Мера: вес, г / объём, мл | one or the other, never both (a select, then the figure) |
+| Продаётся на вес | the price in the price list then means the price **per quantum**; asks for `Цена указана за, г` and an estimated weight (the net weight stands in; a volume cannot) |
+| Можно продавать частями | asks for the portion size (the step a quantity moves in, at most three decimals) |
+| КБЖУ, на 100 г (на 100 мл for a volume) | calories 0–99 999,9; protein, fat, carbohydrates 0–100 each; no accuracy disclaimer — the owner's decision is still pending with legal (ADR 0137) |
+
+The form checks what `PhysicalAttributes` checks, marks a wrong figure on its own field,
+and puts a refusal the server names (`reason`) on the same field. A marked good (ИКПУ tab,
+«Требуется маркировка») cannot be sold by weight or in parts: the card says so the moment
+the two meet, and `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` blocks publication.
+
 ### Tab 6 — Наличие
 
 Read-mostly summary per location: offering status, fulfilment modes, stock

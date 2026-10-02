@@ -100,15 +100,34 @@
           />
           <div class="min-w-0 flex-1">
             <h2 class="text-sm font-semibold text-text-primary">{{ row.item.name }}</h2>
-            <p class="mt-0.5 text-sm text-text-primary">
-              {{ row.item.quantity }} {{ 'common.itemsUnit' | t }} {{ 'common.times' | t }}
-              <span class="font-semibold text-brand-accent">{{ row.item.unitPrice }}</span>
-            </p>
+            @if (row.item.weight; as weighed) {
+              <p class="mt-0.5 text-sm text-text-primary">
+                {{ row.item.quantityText }}
+                <span class="font-semibold text-brand-accent">{{ weighed.amountText }}</span>
+              </p>
+              <p class="mt-0.5 text-xs text-zinc-400" data-testid="order-line-weight">
+                {{ weighed.text }}
+              </p>
+            } @else {
+              <p class="mt-0.5 text-sm text-text-primary">
+                {{ row.item.quantityText }} {{ 'common.times' | t }}
+                <span class="font-semibold text-brand-accent">{{ row.item.unitPrice }}</span>
+              </p>
+            }
           </div>
         </article>
       }
     }
   </div>
+
+  @if (hasProvisionalLines()) {
+    <p
+      class="mx-4 mt-3 text-xs leading-snug text-amber-400"
+      data-testid="order-final-weight-notice"
+    >
+      {{ 'physical.finalWeightNotice' | t }}
+    </p>
+  }
 
   <!-- Payment summary (golden box) -->
   <div

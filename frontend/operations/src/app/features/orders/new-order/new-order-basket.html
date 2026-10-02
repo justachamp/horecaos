@@ -11,7 +11,8 @@
           <span class="q-body-sm">{{ line.productName }}</span>
           <q-number-stepper
             [value]="line.quantity"
-            [min]="1"
+            [step]="line.portionStep ?? 1"
+            [min]="line.portionStep ?? 1"
             [max]="99"
             (valueChange)="quantityChanged.emit({ lineKey: line.lineKey, quantity: $event })"
           />
@@ -27,6 +28,11 @@
         @if (line.combo) {
           <p class="q-caption new-order__modifiers" data-testid="new-order-line-combo">
             {{ line.comboText }}
+          </p>
+        }
+        @if (estimatedWeight(line); as weight) {
+          <p class="q-caption new-order__modifiers" data-testid="new-order-line-weight">
+            {{ 'orders.newOrder.basket.weighed' | t: { weight } }}
           </p>
         }
         @if (line.modifiers.length > 0) {

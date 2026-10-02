@@ -49,6 +49,14 @@ const CLAIM_CLOCK_MS = 15_000;
 
 /** The most a guest can say they are (the platform's own ceiling for a party). */
 const MAX_PARTY = 200;
+import { PhysicalFactsComponent } from '../../../shared/physical-facts/physical-facts.component';
+import {
+  formatQuantity,
+  formatWeight,
+  initialQuantity,
+  portionStep,
+  type PhysicalFacts,
+} from '../../../utils/physical';
 
 interface MenuRow {
   readonly categoryId: string;
@@ -96,7 +104,7 @@ interface MenuRow {
 @Component({
   selector: 'app-dine-in-table',
   standalone: true,
-  imports: [CommonModule, RouterLink, ComboChoicesComponent, TranslatePipe],
+  imports: [CommonModule, RouterLink, ComboChoicesComponent, PhysicalFactsComponent, TranslatePipe],
   templateUrl: './dine-in-table.component.html',
   styleUrl: './dine-in-table.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -500,8 +508,43 @@ export class DineInTableComponent implements OnInit {
     }));
   });
 
+  /** ADR 0137: what a variant physically is, from the published menu this table is ordering from. */
+  physicalOf(variantId: string): PhysicalFacts | null {
+    for (const product of this.menu()?.products ?? []) {
+      const variant = product.variants.find((candidate) => candidate.variantId === variantId);
+      if (variant) {
+        return variant.physical ?? null;
+      }
+    }
+    return null;
+  }
+
+  /** `0,5`, `2` — the quantity as the guest's language writes it. */
+  quantityText(variantId: string): string {
+    return formatQuantity(this.quantityOf(variantId), this.lang.langId());
+  }
+
+  /**
+   * A variant's price as the menu says it: per quantum for a variant sold by weight ("15 000 so'm
+   * per 100 g" — the price row is not what one item costs), otherwise the plain price.
+   */
+  priceLabel(variantId: string, amountMinor: number | null): string {
+    const physical = this.physicalOf(variantId);
+    if (physical?.catchweight && physical.catchweightQuantumGrams && amountMinor != null) {
+      return this.translate.getWithParams('physical.pricePerQuantum', {
+        price: this.formatPrice(amountMinor),
+        quantum: formatWeight(physical.catchweightQuantumGrams, this.lang.langId()),
+      });
+    }
+    return this.formatPrice(amountMinor);
+  }
+
+  /**
+   * The basket badge counts plates, not fractions: a half portion is one plate somebody has to
+   * make, so each line counts its quantity rounded up (ADR 0137).
+   */
   readonly cartCount = computed(
-    () => this.carts.cart()?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0,
+    () => this.carts.cart()?.lines.reduce((sum, line) => sum + Math.ceil(line.quantity), 0) ?? 0,
   );
 
   formatPrice(amountMinor: number | null): string {
@@ -517,12 +560,18 @@ export class DineInTableComponent implements OnInit {
     return total != null ? this.formatPrice(total) : this.formatPrice(0);
   }
 
+  /** One portion more — or, for a first tap, one whole portion (or the first quantity the cart accepts for a portion size that does not divide one). */
   async increase(variantId: string): Promise<void> {
-    await this.setQuantity(variantId, this.quantityOf(variantId) + 1);
+    const current = this.quantityOf(variantId);
+    const step = portionStep(this.physicalOf(variantId));
+    await this.setQuantity(variantId, current === 0 ? initialQuantity(step) : tidy(current + step));
   }
 
   async decrease(variantId: string): Promise<void> {
-    await this.setQuantity(variantId, this.quantityOf(variantId) - 1);
+    await this.setQuantity(
+      variantId,
+      tidy(this.quantityOf(variantId) - portionStep(this.physicalOf(variantId))),
+    );
   }
 
   private async setQuantity(variantId: string, quantity: number): Promise<void> {
@@ -838,4 +887,9 @@ export class DineInTableComponent implements OnInit {
     this.pendingCheckoutKey ??= newIdempotencyKey();
     return this.pendingCheckoutKey;
   }
+}
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

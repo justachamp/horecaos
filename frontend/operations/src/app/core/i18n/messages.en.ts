@@ -344,6 +344,37 @@ export const messagesEn = {
     'Names and prices are fixed at the moment the order was placed.',
   'orders.detail.lines.note.hidden': '💬 has a note',
   'orders.detail.lines.note.empty': 'no note',
+  'orders.detail.lines.weight.estimate': '≈ {weight}, estimate · {price} per {quantum}',
+  'orders.detail.lines.weight.weighed': 'Weighed: {weight} · {price} per {quantum}',
+  'orders.weigh.title': 'Weighing',
+  'orders.weigh.intro':
+    'Items sold by weight are priced at their estimated weight until they are weighed. Enter the total weight of each line and the order total is corrected from it. An order cannot leave the pass while one is unweighed.',
+  'orders.weigh.closed': 'The order has left the pass: its weights can no longer be changed.',
+  'orders.weigh.state.pending': 'Estimate {weight}, not weighed yet',
+  'orders.weigh.state.done': 'Weighed {weight}',
+  'orders.weigh.input.label': 'Total weight, g',
+  'orders.weigh.input.error': 'Enter a whole number of grams above zero',
+  'orders.weigh.save': 'Record weight',
+  'orders.weigh.saving': 'Saving…',
+  'orders.weigh.result.changed': 'Recorded {weight}. The order total is now {total} ({delta}).',
+  'orders.weigh.result.unchanged': 'Recorded {weight}. The order total did not change.',
+  'orders.weigh.result.same': 'Already recorded: {weight}. Nothing changed.',
+  'orders.weigh.error.paymentTaken':
+    'The weight cannot be recorded: the order is already paid online and this weight would change its total. Collecting the difference or refunding it is not available yet.',
+  'orders.weigh.error.notWeighable':
+    'The order has left the pass: its weight can no longer be changed.',
+  'orders.weigh.error.priceChanged':
+    'The menu price changed after the order was placed, so the weight was not applied. Ask a manager.',
+  'orders.weigh.error.stale':
+    'The order changed while you were weighing and has been reloaded. Check the weight and record it again.',
+  'orders.weigh.error.settlement':
+    'The amount to collect cannot be restated because money is already in motion on this order.',
+  'orders.weigh.error.lapsed':
+    'The recalculation lapsed before it could be applied. Record the weight again.',
+  'orders.action.catchweightNotReconciled':
+    'Weigh the items sold by weight before handing the order over',
+  'orders.queue.bulk.problem.CATCHWEIGHT_NOT_RECONCILED':
+    'Items sold by weight are not weighed yet',
 
   'orders.detail.money.subtotal': 'Items subtotal',
   'orders.detail.money.discount': 'Discount',
@@ -2384,6 +2415,7 @@ export const messagesEn = {
   'catalog.editor.tab.recommendations': 'Recommended products',
   'catalog.editor.tab.commentPresets': 'Preset comments',
   'catalog.editor.tab.history': 'History',
+  'catalog.editor.tab.physical': 'Weight and nutrition',
   'catalog.editor.locale.label': 'Editing language',
   'catalog.editor.save': 'Save',
   'catalog.editor.saving': 'Saving…',
@@ -2446,6 +2478,58 @@ export const messagesEn = {
     'Marking scheme, excise, alcohol % and age gate are stored but not yet enforced by publication — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Empty results mean the official ИКПУ/MXIK list has never been imported for this platform — not that nothing matched.',
+  'catalog.editor.physical.intro':
+    'What the variant physically is: its weight or volume, whether it is sold by a weight known only at handover, whether it can be ordered by the portion, and its nutrition. Leave everything empty for an ordinary fixed unit.',
+  'catalog.editor.physical.loading': 'Loading…',
+  'catalog.editor.physical.loadFailed': 'Could not load these attributes',
+  'catalog.editor.physical.retry': 'Retry',
+  'catalog.editor.physical.denied': 'You do not have access to these attributes',
+  'catalog.editor.physical.measure': 'Measured by',
+  'catalog.editor.physical.measure.none': 'Not set',
+  'catalog.editor.physical.measure.weight': 'Weight',
+  'catalog.editor.physical.measure.volume': 'Volume',
+  'catalog.editor.physical.weightGrams': 'Net weight, g',
+  'catalog.editor.physical.volumeMl': 'Net volume, ml',
+  'catalog.editor.physical.catchweight': 'Sold by weight (catchweight)',
+  'catalog.editor.physical.catchweightHelp':
+    'The price in the price list is then the price per the quantum below. The customer sees an estimate; the final weight is captured at handover and the total is corrected.',
+  'catalog.editor.physical.quantum': 'Price is per, g',
+  'catalog.editor.physical.nominal': 'Estimated weight of one unit, g',
+  'catalog.editor.physical.nominalHint': 'Empty means the net weight',
+  'catalog.editor.physical.splittable': 'Can be sold in parts',
+  'catalog.editor.physical.splittableHelp':
+    'With a portion size, a customer or an operator can order a fraction of it, such as 0.5.',
+  'catalog.editor.physical.portion': 'Portion size',
+  'catalog.editor.physical.portionHint': 'The step the quantity moves in, for example 0.5',
+  'catalog.editor.physical.nutrition': 'Nutrition (КБЖУ)',
+  'catalog.editor.physical.per100g': 'per 100 g',
+  'catalog.editor.physical.per100ml': 'per 100 ml',
+  'catalog.editor.physical.calories': 'Calories, kcal',
+  'catalog.editor.physical.protein': 'Protein, g',
+  'catalog.editor.physical.fat': 'Fat, g',
+  'catalog.editor.physical.carbs': 'Carbohydrates, g',
+  'catalog.editor.physical.markingConflict':
+    'This variant requires marking (Data Matrix) on the Fiscal data tab. A marked good cannot be sold by weight or in parts, so the catalogue will not publish until one of them changes.',
+  'catalog.editor.physical.clearHint': 'Everything is empty: saving removes these attributes',
+  'catalog.editor.physical.save': 'Save attributes',
+  'catalog.editor.physical.stale':
+    'Someone else changed these attributes. The latest values are loaded; review them and save again.',
+  'catalog.editor.physical.error.notANumber': 'Enter a number',
+  'catalog.editor.physical.error.wholePositive': 'Enter a whole number above zero',
+  'catalog.editor.physical.error.weightAndVolume': 'Weight and volume cannot both be set',
+  'catalog.editor.physical.error.needsQuantum':
+    'A catchweight variant needs the weight its price is quoted per',
+  'catalog.editor.physical.error.needsWeight':
+    'Enter the estimated weight, or a net weight to quote against',
+  'catalog.editor.physical.error.catchweightFields':
+    'A pricing quantum and an estimated weight only apply to a catchweight variant',
+  'catalog.editor.physical.error.portionPositive': 'A portion size must be above zero',
+  'catalog.editor.physical.error.portionPrecision': 'A portion size has at most three decimals',
+  'catalog.editor.physical.error.portionTooLarge': 'A portion size is at most 999',
+  'catalog.editor.physical.error.portionNeedsSplittable':
+    'A portion size belongs to a variant sold in parts',
+  'catalog.editor.physical.error.caloriesRange': 'Calories are between 0 and 99999.9',
+  'catalog.editor.physical.error.macroRange': 'Grams per 100 g are between 0 and 100',
   'catalog.editor.availability.location': 'Location',
   'catalog.editor.availability.state': 'State',
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
@@ -2601,6 +2685,8 @@ export const messagesEn = {
   'catalog.editor.nested.none': 'No groups attached to this variant',
   'catalog.editor.nested.attach': 'Attach a group',
   'catalog.editor.nested.choose': 'Choose a group',
+  'catalog.editor.finding.PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING':
+    'Marked goods cannot be sold by weight or in parts',
 
   'catalog.publish.action': 'Publish',
   'catalog.publish.title': 'Publish the catalog',
@@ -3031,6 +3117,9 @@ export const messagesEn = {
   'kitchen.expo.empty': 'Nothing ready for handover',
   'kitchen.expo.packedConfirm': 'Packed and ready to hand over',
   'kitchen.expo.packedWaiting': 'Waiting for every line to be ready before it can be packed',
+  'kitchen.item.weight.estimate': '≈ {weight} (estimate)',
+  'kitchen.item.weight.weighed': '{weight} weighed',
+  'kitchen.expo.weighFirst': 'Weigh the items sold by weight before handing this over.',
 
   'kitchen.stopList.tab.all': 'All',
   'kitchen.stopList.tab.available': 'Available',
@@ -6229,6 +6318,9 @@ export const messagesEn = {
   'orders.newOrder.basket.title': 'Basket',
   'orders.newOrder.basket.empty': 'No items yet',
   'orders.newOrder.basket.remove': 'Remove',
+  'orders.newOrder.basket.weighed': '≈ {weight}, weighed at handover',
+  'orders.newOrder.order.totalProvisional':
+    'The total includes items sold by weight: it is an estimate until they are weighed at handover',
   'orders.newOrder.basket.notePlaceholder': 'Note for the kitchen',
   'orders.newOrder.basket.unavailable': 'No longer available — remove it to continue',
   'orders.newOrder.order.title': 'Order',

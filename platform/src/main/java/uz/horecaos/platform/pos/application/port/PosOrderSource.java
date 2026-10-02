@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pos.application.port;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The order facts a till needs, read once and never copied (ADR 0011).
@@ -116,7 +118,7 @@ public interface PosOrderSource {
                 UUID sourceVariantId,
                 String productNameSnapshot,
                 @Nullable String variantNameSnapshot,
-                int quantity,
+                BigDecimal quantity,
                 long unitAmountMinor,
                 List<UUID> modifierOptionIds,
                 // Row 2.1b: catalog.comment_presets.id for every preset this
@@ -129,11 +131,36 @@ public interface PosOrderSource {
                 @Nullable String comboName) {
 
             public Line {
+                quantity = Quantities.normalise(quantity);
                 modifierOptionIds = List.copyOf(modifierOptionIds == null ? List.of() : modifierOptionIds);
                 commentPresetIds = List.copyOf(commentPresetIds == null ? List.of() : commentPresetIds);
             }
 
-            /** A line that is not part of a combo, which is every line before ADR 0136. */
+            /** A line that is not part of a combo: every line before ADR 0136. */
+            public Line(
+                    UUID lineId,
+                    UUID sourceVariantId,
+                    String productNameSnapshot,
+                    @Nullable String variantNameSnapshot,
+                    BigDecimal quantity,
+                    long unitAmountMinor,
+                    List<UUID> modifierOptionIds,
+                    List<UUID> commentPresetIds) {
+                this(
+                        lineId,
+                        sourceVariantId,
+                        productNameSnapshot,
+                        variantNameSnapshot,
+                        quantity,
+                        unitAmountMinor,
+                        modifierOptionIds,
+                        commentPresetIds,
+                        null,
+                        null,
+                        null);
+            }
+
+            /** A whole number of units that is not part of a combo: every line before ADR 0136 and 0137. */
             public Line(
                     UUID lineId,
                     UUID sourceVariantId,
@@ -148,7 +175,7 @@ public interface PosOrderSource {
                         sourceVariantId,
                         productNameSnapshot,
                         variantNameSnapshot,
-                        quantity,
+                        BigDecimal.valueOf(quantity),
                         unitAmountMinor,
                         modifierOptionIds,
                         commentPresetIds,

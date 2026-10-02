@@ -108,6 +108,17 @@
         [revealingNoteFor]="revealingNoteFor()"
         (noteRevealRequested)="revealLineNote($event)"
       />
+      @if (weighingScope(); as scope) {
+        <q-order-weighing-panel
+          [scope]="scope"
+          [orderId]="detail.value.summary.orderId"
+          [orderVersion]="detail.value.summary.version ?? 0"
+          [status]="detail.value.summary.status"
+          [lines]="detail.value.lines"
+          [currency]="detail.value.summary.currency"
+          (orderChanged)="refreshOrder()"
+        />
+      }
     </section>
 
     <!-- ================================================================ Деньги (§3.5, §1.3) -->

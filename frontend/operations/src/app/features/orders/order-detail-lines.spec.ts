@@ -242,4 +242,73 @@ describe('OrderDetailLines', () => {
     expect(host.querySelector('[data-testid="order-detail-line-auto"]')).toBeNull();
     expect(host.querySelector('.pane__line-modifiers')?.textContent).toContain('Large');
   });
+
+  describe('portions and weighed lines (ADR 0137)', () => {
+    const NBSP = '\u00a0';
+
+    it('writes a portion as the console writes a quantity, and a whole quantity without decimals', () => {
+      const { row } = render({
+        lines: [line({ quantity: 0.5 }), line({ lineId: 'l2', lineNumber: 2, quantity: 3 })],
+      });
+
+      expect(row(0).querySelectorAll('td')[2].textContent?.trim()).toBe('0.5');
+      expect(row(1).querySelectorAll('td')[2].textContent?.trim()).toBe('3');
+    });
+
+    it('writes the decimal mark of the console’s language', () => {
+      TestBed.inject(I18n).setLocale('ru');
+      const { row } = render({ lines: [line({ quantity: 0.5 })] });
+
+      expect(row(0).querySelectorAll('td')[2].textContent?.trim()).toBe('0,5');
+    });
+
+    it('says a weighed line is an estimate until it is weighed, with the price per quantum', () => {
+      const { row } = render({
+        lines: [
+          line({
+            quantity: 2,
+            catchweight: {
+              quantumGrams: 100,
+              nominalGramsPerUnit: 1_200,
+              pricePerQuantumMinor: 15_000,
+              provisional: true,
+            },
+          }),
+        ],
+      });
+
+      const weight = row(0).querySelector('[data-testid="order-detail-line-weight"]')!;
+      expect(weight.textContent).toContain(`2.4${NBSP}kg`);
+      expect(weight.textContent).toContain('estimate');
+      expect(weight.textContent).toContain(`100${NBSP}g`);
+    });
+
+    it('shows the weighed weight once it is weighed, and no longer calls it an estimate', () => {
+      const { row } = render({
+        lines: [
+          line({
+            quantity: 1,
+            catchweight: {
+              quantumGrams: 100,
+              nominalGramsPerUnit: 1_200,
+              pricePerQuantumMinor: 15_000,
+              provisional: false,
+              actualWeightGrams: 1_340,
+            },
+          }),
+        ],
+      });
+
+      const weight = row(0).querySelector('[data-testid="order-detail-line-weight"]')!;
+      expect(weight.textContent).toContain(`1.34${NBSP}kg`);
+      expect(weight.textContent).toContain('Weighed');
+      expect(weight.textContent).not.toContain('estimate');
+    });
+
+    it('draws nothing about weight on a line that is not sold by weight', () => {
+      const { row } = render({ lines: [line()] });
+
+      expect(row(0).querySelector('[data-testid="order-detail-line-weight"]')).toBeNull();
+    });
+  });
 });

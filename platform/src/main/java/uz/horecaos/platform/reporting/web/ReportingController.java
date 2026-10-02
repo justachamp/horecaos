@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -30,6 +31,7 @@ import uz.horecaos.platform.reporting.domain.SlaBucketSet;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Quantities;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -455,7 +457,7 @@ public class ReportingController {
             @RequestParam(required = false) List<String> fulfilmentType,
             @RequestParam(required = false) Integer limit,
             @RequestParam(defaultValue = "REVENUE_DESC") String sort,
-            @RequestParam(required = false) Integer afterQuantity,
+            @RequestParam(required = false) BigDecimal afterQuantity,
             @RequestParam(required = false) Long afterRevenueSom,
             @RequestParam(required = false) String afterProductName,
             @RequestParam(required = false) UUID afterVariantId) {
@@ -523,7 +525,7 @@ public class ReportingController {
      */
     private static JdbcReportingStore.@Nullable VariantSalesCursor variantSalesCursor(
             JdbcReportingStore.VariantSalesSort sort,
-            @Nullable Integer afterQuantity,
+            @Nullable BigDecimal afterQuantity,
             @Nullable Long afterRevenueSom,
             @Nullable String afterProductName,
             @Nullable UUID afterVariantId) {
@@ -1107,13 +1109,24 @@ public class ReportingController {
             @Nullable UUID variantId,
             @Nullable UUID categoryId,
             String productName,
-            int totalQuantity,
+            BigDecimal totalQuantity,
             long totalGrossSom,
             long totalNetSom,
-            @Nullable Integer deliveryQuantity,
+            @Nullable BigDecimal deliveryQuantity,
             @Nullable Long deliveryNetSom,
-            @Nullable Integer pickupQuantity,
+            @Nullable BigDecimal pickupQuantity,
             @Nullable Long pickupNetSom) {
+
+        /**
+         * A sum over {@code numeric(10,3)} carries three fraction digits whatever it adds up to
+         * and would be written {@code 3.000}; the report reads {@code 3}, as it did when the
+         * column was an integer (ADR 0137), and only a half portion earns a fraction.
+         */
+        public VariantSalesRowResponse {
+            totalQuantity = Quantities.normalise(totalQuantity);
+            deliveryQuantity = deliveryQuantity == null ? null : Quantities.normalise(deliveryQuantity);
+            pickupQuantity = pickupQuantity == null ? null : Quantities.normalise(pickupQuantity);
+        }
 
         static VariantSalesRowResponse of(JdbcReportingStore.VariantSalesRow row) {
             return new VariantSalesRowResponse(

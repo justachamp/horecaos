@@ -1,5 +1,6 @@
 package uz.horecaos.platform.kitchen.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.kitchen.domain.RoutingLevel;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.TicketStatus;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Kitchen persistence (ADR 0041).
@@ -294,8 +296,11 @@ public class JdbcKitchenStore {
      * go), not how much the station has been asked to produce in this slot.
      */
     public long committedPortions(UUID tenantId, UUID stationId, Instant windowStart, Instant windowEnd) {
+        // CEIL of the sum, in whole plates: a station's ceiling is a count of portions
+        // (V0144) and a half portion is still a plate somebody has to make room for. The
+        // sum is taken first so two halves are one plate, not two.
         Long total = jdbc.sql("""
-                SELECT COALESCE(SUM(ti.quantity), 0)
+                SELECT COALESCE(CEIL(SUM(ti.quantity)), 0)::bigint
                 FROM kitchen.ticket_items ti
                 JOIN kitchen.tickets t ON t.tenant_id = ti.tenant_id AND t.id = ti.ticket_id
                 WHERE ti.tenant_id = :tenantId
@@ -1070,7 +1075,7 @@ public class JdbcKitchenStore {
                 row.getObject("location_id", UUID.class),
                 row.getObject("order_line_id", UUID.class),
                 row.getObject("station_id", UUID.class),
-                row.getInt("quantity"),
+                row.getBigDecimal("quantity"),
                 RoutingLevel.valueOf(row.getString("routed_by")),
                 TicketItemStatus.valueOf(row.getString("status")),
                 instant(row, "started_at"),
@@ -1227,7 +1232,7 @@ public class JdbcKitchenStore {
             UUID locationId,
             UUID orderLineId,
             UUID stationId,
-            int quantity,
+            BigDecimal quantity,
             RoutingLevel routedBy,
             TicketItemStatus status,
             @Nullable Instant startedAt,
@@ -1238,6 +1243,10 @@ public class JdbcKitchenStore {
             @Nullable UUID comboSelectionId,
             @Nullable UUID comboContainerVariantId) {
 
+        public TicketItemRow {
+            quantity = Quantities.normalise(quantity);
+        }
+
         /** An item that is not part of a combo, which is every item before ADR 0136. */
         public TicketItemRow(
                 UUID id,
@@ -1246,7 +1255,7 @@ public class JdbcKitchenStore {
                 UUID locationId,
                 UUID orderLineId,
                 UUID stationId,
-                int quantity,
+                BigDecimal quantity,
                 RoutingLevel routedBy,
                 TicketItemStatus status,
                 @Nullable Instant startedAt,
@@ -1271,6 +1280,39 @@ public class JdbcKitchenStore {
                     createdAt,
                     null,
                     null);
+        }
+
+        /** A whole number of portions, which is every item there was before ADR 0137. */
+        public TicketItemRow(
+                UUID id,
+                UUID tenantId,
+                UUID ticketId,
+                UUID locationId,
+                UUID orderLineId,
+                UUID stationId,
+                int quantity,
+                RoutingLevel routedBy,
+                TicketItemStatus status,
+                @Nullable Instant startedAt,
+                @Nullable Instant readyAt,
+                @Nullable Instant cancelledAt,
+                int version,
+                Instant createdAt) {
+            this(
+                    id,
+                    tenantId,
+                    ticketId,
+                    locationId,
+                    orderLineId,
+                    stationId,
+                    BigDecimal.valueOf(quantity),
+                    routedBy,
+                    status,
+                    startedAt,
+                    readyAt,
+                    cancelledAt,
+                    version,
+                    createdAt);
         }
     }
 

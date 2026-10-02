@@ -114,7 +114,11 @@ export interface OrderLineItem {
   name: string;
   image: string;
   quantity: number;
+  /** `0,5 порц.`, `3 шт` — the quantity as the customer's language writes it (ADR 0137). */
+  quantityText: string;
   unitPrice: string;
+  /** ADR 0137: set for a line sold by weight — its weight (estimated or weighed) and its own amount. */
+  weight?: { text: string; amountText: string; provisional: boolean };
   /** For @for track when items can share the same name */
   variantId?: string;
   /** ADR 0136: set on each component line of a combo; the lines of one purchase share it. */

@@ -1,10 +1,34 @@
 # ADR 0137: Physical and nutritional product attributes
 
 - Decision status: Accepted
-- Implementation status: Not started — no column named in this record exists
-  on any `catalog` table. `catalog.variants.unit_code` (ADR 0016) is the only
-  physical fact a variant carries today, and it is a fiscal/display unit
-  (`PIECE`, etc.), not a weight, a portion count, or a nutrition figure.
+- Implementation status: Partial — the backend and both customer and operator
+  surfaces are built (operations batch 17, steps 1 and 2): V0448
+  `catalog.variant_physical_attributes` with `GET`/`PUT
+  .../variants/{variantId}/physical-attributes` under `catalog.author`, published
+  inside the variant's publication payload and served on the storefront menu; V0449
+  widens the line quantity to `numeric(10,3)` through the cart, quote, order, kitchen
+  ticket and reporting facts, with every reader of it carrying the decimal; V0450
+  snapshots catchweight facts on quote and order lines, and
+  `PUT .../orders/{orderId}/lines/{lineId}/actual-weight` (`order.advance`) reconciles
+  the charge at pick/handover with an order revision of source `CATCHWEIGHT`;
+  `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` blocks publication and
+  `CATCHWEIGHT_NOT_RECONCILED` blocks handover. The operator console has a Weight and
+  nutrition tab in the product editor (weight or volume, catchweight with its quantum
+  and estimated weight, splittable with a portion size, КБЖУ, the marking warning),
+  New Order steps a splittable line by its portion size and prices a weighed line per
+  quantum as an estimate, the order detail and the pass carry a scale panel that
+  records the weighed total of a line and hold handover until it is recorded, and the
+  ticket queue, pass, wallboard and tablet board show estimated or weighed weight and
+  write a portion as `0,5`; both storefronts show weight, КБЖУ per 100 g and per
+  serving, the price per quantum with the estimate and the "final weight is determined
+  at handover" notice, and order by the portion. Not built: the till is told the
+  nominal-weight amount at confirmation and never the weighed one; an order already
+  paid through a provider refuses a weight that moves its total, because an
+  incremental charge or partial refund is not performed; fiscal receipt lines are not
+  yet built from order lines, so Payme/Click integer counts are untouched; a
+  fractional stock reservation stays out of scope as the record says; an amendment
+  still changes whole units; no КБЖУ accuracy disclaimer is worded, since the record
+  leaves that to legal and product.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from
@@ -328,22 +352,27 @@ type itself is not rolled back once live orders may hold a fractional value.
 
 ## Implementation checklist
 
-- [ ] `catalog.variant_physical_attributes` (Flyway; number reserved by the
+- [x] `catalog.variant_physical_attributes` (Flyway; number reserved by the
       wave that picks this up).
-- [ ] `ordering.order_lines.quantity` widened to `numeric(10,3)` and
+- [x] `ordering.order_lines.quantity` widened to `numeric(10,3)` and
       `ordering.order_lines.actual_weight_grams` added (pending the Open
       input's sign-off).
-- [ ] `PUT …/variants/{id}/physical-attributes` on `CatalogAuthoringController`.
-- [ ] Mark-capture-adjacent endpoint for `actual_weight_grams`.
-- [ ] `CatalogValidator` rules listed in Specification.
-- [ ] `PricingEngine` catchweight quantum resolution and post-fulfilment
+- [x] `PUT …/variants/{id}/physical-attributes` on `CatalogAuthoringController`.
+- [x] Mark-capture-adjacent endpoint for `actual_weight_grams` (no mark-capture endpoint exists
+      yet, so it sits with the other `order.advance` writes:
+      `PUT .../orders/{orderId}/lines/{lineId}/actual-weight`).
+- [x] `CatalogValidator` rules listed in Specification.
+- [x] `PricingEngine` catchweight quantum resolution and post-fulfilment
       correction of `final_amount_minor`.
-- [ ] Every reader of `order_lines.quantity` (kitchen tickets, POS export,
+- [x] Every reader of `order_lines.quantity` (kitchen tickets, POS export,
       reporting counts, `AggregatorOrderIntakeService`) reviewed for the
       widened type.
-- [ ] Product editor tab 1 fields: weight/volume, catchweight, splittable,
-      portion size, КБЖУ; storefront product-page rendering.
-- [ ] Domain, PostgreSQL, and API tests: the weight/volume exclusion, the
+- [x] Product editor fields: weight/volume, catchweight, splittable, portion size,
+      КБЖУ — on their own per-variant tab beside the fiscal one rather than tab 1,
+      because every field is a fact about a variant and tab 1 is the product; storefront
+      product-page rendering (both storefronts), the operator's New Order and the
+      weighing at the pass.
+- [x] Domain, PostgreSQL, and API tests: the weight/volume exclusion, the
       marking/catchweight exclusion, catchweight quote-vs-reconciled-total,
       decimal-quantity pricing arithmetic, and a golden test that an
       integer-quantity order's total is byte-identical before and after the

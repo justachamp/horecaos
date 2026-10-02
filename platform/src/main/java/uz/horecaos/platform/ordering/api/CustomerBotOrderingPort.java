@@ -1,10 +1,12 @@
 package uz.horecaos.platform.ordering.api;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * What a customer may do to their own orders from a chat (ADR 0075).
@@ -142,7 +144,17 @@ public interface CustomerBotOrderingPort {
         }
 
         /** A line as the customer bought it, never a catalog lookup. */
-        public record Item(String name, int quantity) {}
+        public record Item(String name, BigDecimal quantity) {
+
+            public Item {
+                quantity = Quantities.normalise(quantity);
+            }
+
+            /** A whole number of units, which is every line there was before ADR 0137. */
+            public Item(String name, int quantity) {
+                this(name, BigDecimal.valueOf(quantity));
+            }
+        }
     }
 
     /** @param refusalCode ordering's own stable code when a checkout was refused */

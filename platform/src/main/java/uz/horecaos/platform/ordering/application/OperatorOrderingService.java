@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -112,7 +113,7 @@ public class OperatorOrderingService {
     /** One line an operator entered into the basket. */
     public record OrderLine(
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets, same vocabulary
             // and the same offered-subset check a customer's own cart line
@@ -129,14 +130,31 @@ public class OperatorOrderingService {
             nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
         }
 
-        /** Every line that predates ADR 0136's combos and nested modifiers. */
+        /** A line with no combo and no nested selection: every line that predates ADR 0136. */
+        public OrderLine(
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, List.of(), List.of());
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
         public OrderLine(
                 UUID variantId,
                 int quantity,
                 List<UUID> modifierOptionIds,
                 List<String> commentPresetCodes,
                 @Nullable String customerNote) {
-            this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, List.of(), List.of());
+            this(
+                    variantId,
+                    BigDecimal.valueOf(quantity),
+                    modifierOptionIds,
+                    commentPresetCodes,
+                    customerNote,
+                    List.of(),
+                    List.of());
         }
     }
 

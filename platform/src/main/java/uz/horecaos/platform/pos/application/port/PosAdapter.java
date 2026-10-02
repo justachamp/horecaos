@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pos.application.port;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.PosCapability;
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.ExportCandidate;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A point of sale, behind one provider-neutral contract (ADR 0011).
@@ -349,7 +351,7 @@ public interface PosAdapter {
         public record Line(
                 String externalProductId,
                 String nameSnapshot,
-                int quantity,
+                BigDecimal quantity,
                 long unitAmountMinor,
                 List<String> externalModifierIds,
                 @Nullable String packageCode,
@@ -358,10 +360,31 @@ public interface PosAdapter {
                 @Nullable String comboExternalProductId) {
 
             public Line {
+                quantity = Quantities.normalise(quantity);
                 externalModifierIds = List.copyOf(externalModifierIds == null ? List.of() : externalModifierIds);
             }
 
-            /** A line that is not part of a combo, which is every line before ADR 0136. */
+            /** A line that is not part of a combo: every line before ADR 0136. */
+            public Line(
+                    String externalProductId,
+                    String nameSnapshot,
+                    BigDecimal quantity,
+                    long unitAmountMinor,
+                    List<String> externalModifierIds,
+                    @Nullable String packageCode) {
+                this(
+                        externalProductId,
+                        nameSnapshot,
+                        quantity,
+                        unitAmountMinor,
+                        externalModifierIds,
+                        packageCode,
+                        null,
+                        null,
+                        null);
+            }
+
+            /** A whole number of units that is not part of a combo: every line before ADR 0136 and 0137. */
             public Line(
                     String externalProductId,
                     String nameSnapshot,
@@ -372,7 +395,7 @@ public interface PosAdapter {
                 this(
                         externalProductId,
                         nameSnapshot,
-                        quantity,
+                        BigDecimal.valueOf(quantity),
                         unitAmountMinor,
                         externalModifierIds,
                         packageCode,

@@ -1857,6 +1857,48 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     }
   });
 
+  it('says a bulk advance left an order behind because its weighed items are not weighed (ADR 0137)', async () => {
+    const a = order({
+      orderId: 'a',
+      publicOrderNumber: '0001',
+      status: 'READY',
+      actions: [{ action: 'CANCEL' }],
+    });
+    const bulkSubmit = vi.fn().mockReturnValue(
+      of({
+        bulkOperationId: 'bulk-1',
+        actionType: 'CANCEL',
+        requestedCount: 1,
+        appliedCount: 0,
+        failedCount: 1,
+        replayed: false,
+        items: [
+          { orderId: 'a', itemStatus: 'FAILED', itemProblemCode: 'CATCHWEIGHT_NOT_RECONCILED' },
+        ],
+      }),
+    );
+    configureForBulk(ordersResponse([a]), { bulkSubmit });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-row-select"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-queue-bulk-cancel"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (
+      host.querySelector('[data-testid="order-outcome-reason-option-reason-1"]') as HTMLInputElement
+    ).dispatchEvent(new Event('change'));
+    (
+      host.querySelector('[data-testid="order-outcome-reason-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(
+      host.querySelector('[data-testid="order-queue-bulk-result-item"]')?.textContent,
+    ).toContain('Items sold by weight are not weighed yet');
+  });
+
   it('renders §2.10’s result panel for a partial-failure bulk cancel, then retries only the failed item under a fresh submission', async () => {
     const a = order({
       orderId: 'a',

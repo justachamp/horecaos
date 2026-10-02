@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -92,7 +93,7 @@ public class JdbcClassificationStore {
         return jdbc.sql("""
                 SELECT l.variant_id, l.category_id, l.legal_entity_id, max(l.product_name_snapshot) AS product_name,
                        ((l.business_date - :from) / :bucketDays)::int AS bucket_index,
-                       sum(l.quantity)::integer AS quantity,
+                       sum(l.quantity) AS quantity,
                        sum(l.gross_som)::bigint AS gross_som
                   FROM reporting.fact_order_line l
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
@@ -108,7 +109,7 @@ public class JdbcClassificationStore {
                         row.getObject("legal_entity_id", UUID.class),
                         row.getString("product_name"),
                         row.getInt("bucket_index"),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getLong("gross_som")))
                 .list();
     }
@@ -120,7 +121,7 @@ public class JdbcClassificationStore {
             @Nullable UUID legalEntityId,
             String productName,
             int bucketIndex,
-            int quantity,
+            BigDecimal quantity,
             long grossSom) {}
 
     /** Persists a run header and every one of its result rows in one round of statements. */
@@ -251,7 +252,7 @@ public class JdbcClassificationStore {
                         row.getInt("revenue_share_basis_points"),
                         row.getInt("cumulative_share_basis_points"),
                         row.getString("abc_class").charAt(0),
-                        row.getInt("quantity_total"),
+                        row.getBigDecimal("quantity_total"),
                         row.getDouble("mean_quantity_per_bucket"),
                         row.getDouble("stddev_quantity_per_bucket"),
                         row.getInt("coefficient_of_variation_basis_points"),

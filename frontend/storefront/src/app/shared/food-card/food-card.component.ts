@@ -4,7 +4,16 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { UiCartService } from '../../services/ui-cart.service';
+import { LangService } from '../../services/lang.service';
 import { TranslatePipe } from '../translate/translate.pipe';
+import { PhysicalFactsComponent } from '../physical-facts/physical-facts.component';
+import {
+  formatQuantity,
+  formatWeight,
+  initialQuantity,
+  portionStep,
+  type PhysicalFacts,
+} from '../../utils/physical';
 import type { MenuItem, MenuItemVariant } from '../../types/home.types';
 import { FEATURES } from '../../core/config/features';
 import { Session } from '../../core/auth/session';
@@ -12,7 +21,7 @@ import { Session } from '../../core/auth/session';
 @Component({
   selector: 'app-food-card',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslatePipe],
+  imports: [CommonModule, RouterLink, PhysicalFactsComponent, TranslatePipe],
   templateUrl: './food-card.component.html',
   styleUrl: './food-card.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -27,6 +36,7 @@ export class FoodCardComponent {
   favouriting = signal(false);
 
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
   private readonly favourites = inject(FavouritesService);
   private readonly session = inject(Session);
   private readonly router = inject(Router);
@@ -48,12 +58,29 @@ export class FoodCardComponent {
 
   readonly qty = computed(() => this.cartLine()?.quantity ?? 0);
 
-  /** Line total (unit × qty) for pill when qty ≥ 1 */
+  /** The variant the card sells, and what it physically is (ADR 0137); null for a fixed unit sold whole. */
+  readonly physical = computed<PhysicalFacts | null>(() => {
+    const menu = this.item();
+    const active = (menu.variants ?? []).filter((v: MenuItemVariant) => v.active);
+    return active[0]?.physical ?? null;
+  });
+
+  /** Line amount for the pill when qty ≥ 1, through the cart so a portion or a weighed line is priced as the platform will. */
   readonly lineTotalFormatted = computed(() => {
     this.translate.current();
     const line = this.cartLine();
     if (!line) return this.formatMoney(0);
-    return this.formatMoney(line.price * line.quantity);
+    const amount = this.formatMoney(this.cart.lineAmount(line));
+    return line.physical?.catchweight ? `≈ ${amount}` : amount;
+  });
+
+  /** `0,5 порц.`, `3 шт` — the quantity as the customer's language writes it. */
+  readonly qtyLabel = computed(() => {
+    this.translate.current();
+    const unit = this.translate.get(
+      this.physical()?.splittable ? 'physical.portionsUnit' : 'common.itemsUnit',
+    );
+    return `${formatQuantity(this.qty(), this.lang.langId())} ${unit}`;
   });
 
   /** Display title */
@@ -68,11 +95,25 @@ export class FoodCardComponent {
   /** ADR 0136: a combo asks the customer to choose before it can be added, so the card sends them to its page. */
   readonly isCombo = computed(() => (this.item().comboGroups ?? []).length > 0);
 
-  /** Formatted unit price; for a combo, the least it can cost, since its own variant has no price. */
+  /**
+   * The price on the add button. For a combo, the least it can cost, since its own variant has no
+   * price. For a variant sold by weight the price is per quantum, so it is said that way —
+   * "15 000 so'm per 100 g" — and never as if it were what one item costs (ADR 0137).
+   */
   priceLabel = computed(() => {
     this.translate.current();
     const price = this.formatMoney(this.item().price);
-    return this.isCombo() ? this.translate.getWithParams('product.fromPrice', { price }) : price;
+    if (this.isCombo()) {
+      return this.translate.getWithParams('product.fromPrice', { price });
+    }
+    const physical = this.physical();
+    if (physical?.catchweight && physical.catchweightQuantumGrams) {
+      return this.translate.getWithParams('physical.pricePerQuantum', {
+        price,
+        quantum: formatWeight(physical.catchweightQuantumGrams, this.lang.langId()),
+      });
+    }
+    return price;
   });
 
   /** Image URL */
@@ -136,7 +177,8 @@ export class FoodCardComponent {
       if (line) {
         this.cart.increaseQuantity(line);
       } else {
-        void this.cart.add(vid, 1);
+        // ADR 0137: one whole portion, or the first quantity the cart accepts for a portion size that does not divide one.
+        void this.cart.add(vid, initialQuantity(portionStep(this.physical())));
       }
     };
     if (!this.cart.cartData()) {

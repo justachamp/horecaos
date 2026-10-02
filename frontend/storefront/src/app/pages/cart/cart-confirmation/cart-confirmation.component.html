@@ -247,6 +247,17 @@
       }
     </div>
 
+    <!-- ADR 0137: a weighed item is priced at its estimated weight; the final weight and
+         amount are set at handover, so the customer is told before they pay. -->
+    @if (cart.hasProvisionalLines()) {
+      <p
+        class="mt-2 rounded-xl bg-amber-500/15 px-4 py-3 text-center text-sm text-amber-300"
+        data-testid="confirm-provisional-notice"
+      >
+        {{ 'physical.cartNotice' | t }}
+      </p>
+    }
+
     <!-- Why the delivery fee is not final yet: outside the delivery area,
          minimum basket not met, or no address chosen -- named specifically,
          in the customer's own language, never a generic error. -->

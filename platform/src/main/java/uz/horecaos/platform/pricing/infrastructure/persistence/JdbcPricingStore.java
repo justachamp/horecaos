@@ -225,6 +225,11 @@ public class JdbcPricingStore {
             lineParams.put("lineType", line.type().name());
             lineParams.put("variantId", line.variantId());
             lineParams.put("quantity", line.quantity());
+            Quote.Catchweight catchweight = line.catchweight();
+            lineParams.put("quantum", catchweight == null ? null : catchweight.quantumGrams());
+            lineParams.put("nominal", catchweight == null ? null : catchweight.nominalGramsPerUnit());
+            lineParams.put("pricePerQuantum", catchweight == null ? null : catchweight.pricePerQuantumMinor());
+            lineParams.put("actualWeight", catchweight == null ? null : catchweight.actualWeightGrams());
             lineParams.put("description", line.descriptionSnapshot());
             lineParams.put("unit", line.unitAmount().minor());
             lineParams.put("base", line.baseAmount().minor());
@@ -244,11 +249,14 @@ public class JdbcPricingStore {
                         description_snapshot, unit_amount_minor, base_amount_minor,
                         final_amount_minor, tax_amount_minor,
                         combo_selection_id, combo_container_variant_id,
-                        combo_component_id, combo_quantity, combo_pick_quantity)
+                        combo_component_id, combo_quantity, combo_pick_quantity,
+                        catchweight_quantum_grams, catchweight_nominal_grams,
+                        catchweight_price_per_quantum_minor, actual_weight_grams)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
                         :description, :unit, :base, :finalAmount, :tax,
                         :comboSelectionId, :comboContainerVariantId,
-                        :comboComponentId, :comboQuantity, :comboPickQuantity)
+                        :comboComponentId, :comboQuantity, :comboPickQuantity,
+                        :quantum, :nominal, :pricePerQuantum, :actualWeight)
                     """).params(lineParams).update();
         }
 
@@ -355,7 +363,9 @@ public class JdbcPricingStore {
                 SELECT line_id, source_variant_id, quantity, description_snapshot,
                        unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
                        combo_selection_id, combo_container_variant_id,
-                       combo_component_id, combo_quantity, combo_pick_quantity
+                       combo_component_id, combo_quantity, combo_pick_quantity,
+                       catchweight_quantum_grams, catchweight_nominal_grams,
+                       catchweight_price_per_quantum_minor, actual_weight_grams
                 FROM pricing.quote_lines
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
                 -- A combo's component lines are the cart line's key, a tilde and a position
@@ -372,7 +382,7 @@ public class JdbcPricingStore {
                 .query((row, number) -> new QuoteSnapshot.Line(
                         row.getString("line_id"),
                         row.getObject("source_variant_id", UUID.class),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getString("description_snapshot"),
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
@@ -382,7 +392,17 @@ public class JdbcPricingStore {
                         row.getObject("combo_container_variant_id", UUID.class),
                         row.getObject("combo_component_id", UUID.class),
                         row.getObject("combo_quantity", Integer.class),
-                        row.getObject("combo_pick_quantity", Integer.class)))
+                        row.getObject("combo_pick_quantity", Integer.class),
+                        // Read through getObject: the primitive accessors answer 0
+                        // for a SQL null, and a quantum of 0 grams is not "not sold
+                        // by weight".
+                        row.getObject("catchweight_quantum_grams", Integer.class) == null
+                                ? null
+                                : new QuoteSnapshot.Catchweight(
+                                        row.getInt("catchweight_quantum_grams"),
+                                        row.getInt("catchweight_nominal_grams"),
+                                        row.getLong("catchweight_price_per_quantum_minor"),
+                                        row.getObject("actual_weight_grams", Integer.class))))
                 .list();
 
         List<QuoteSnapshot.Adjustment> adjustments = jdbc.sql("""

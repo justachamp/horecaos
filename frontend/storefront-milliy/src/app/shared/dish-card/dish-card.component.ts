@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { RouterLink } from '@angular/router';
 
 import { formatMoney, money } from '../../core/money/money';
+import { LangService } from '../../services/lang.service';
 import { TranslateService } from '../../services/translate.service';
 import type { MenuItem, MenuItemVariant } from '../../types/home.types';
 import {
@@ -13,6 +14,14 @@ import {
 } from '../../utils/item-availability';
 import { canBeSatisfied as comboGroupCanBeSatisfied } from '../../utils/combo-selection';
 import { canBeSatisfied, isMandatory } from '../../utils/modifier-selection';
+import {
+  formatQuantity,
+  formatWeight,
+  initialQuantity,
+  portionStep,
+  type PhysicalFacts,
+} from '../../utils/physical';
+import { PhysicalFactsComponent } from '../physical-facts/physical-facts.component';
 import { TranslatePipe } from '../translate/translate.pipe';
 
 /**
@@ -68,13 +77,14 @@ import { TranslatePipe } from '../translate/translate.pipe';
 @Component({
   selector: 'app-dish-card',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, TranslatePipe],
+  imports: [NgTemplateOutlet, RouterLink, PhysicalFactsComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dish-card.component.html',
   styleUrl: './dish-card.component.scss',
 })
 export class DishCardComponent {
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
 
   readonly item = input.required<MenuItem>();
   /** ISO currency of the menu the item came from; null before any menu is read. */
@@ -95,6 +105,14 @@ export class DishCardComponent {
   protected readonly availability = computed<ItemAvailability>(() => itemAvailability(this.item()));
 
   protected readonly unavailable = computed(() => this.availability() !== 'AVAILABLE');
+
+  /**
+   * ADR 0137: what the portion the card prices itself from physically is -- its weight, whether it
+   * is sold by weight or by the portion. Null for a fixed unit sold whole (most of the menu).
+   */
+  protected readonly physical = computed<PhysicalFacts | null>(
+    () => (preferredSellableVariant(this.item()) ?? this.item().variants[0])?.physical ?? null,
+  );
 
   /**
    * The remaining count of the portion a customer would actually get, when it
@@ -196,7 +214,24 @@ export class DishCardComponent {
    * out there is the whole line.
    */
   protected lowered(variant: MenuItemVariant): number {
-    return this.canAdd(variant) ? this.quantityOf(variant.id) - 1 : 0;
+    return this.canAdd(variant) ? tidy(this.quantityOf(variant.id) - this.stepOf(variant)) : 0;
+  }
+
+  /** ADR 0137: the step a portion's quantity moves in -- its portion size, or one. */
+  protected stepOf(variant: MenuItemVariant): number {
+    return portionStep(variant.physical);
+  }
+
+  /** What one tap on "+" asks for: the next portion up, or for the first tap one whole portion. */
+  protected raised(variant: MenuItemVariant): number {
+    const held = this.quantityOf(variant.id);
+    const step = this.stepOf(variant);
+    return held === 0 ? initialQuantity(step) : tidy(held + step);
+  }
+
+  /** `0,5`, `2` — the quantity as the guest's language writes it. */
+  protected quantityText(variantId: string): string {
+    return formatQuantity(this.quantityOf(variantId), this.lang.langId());
   }
 
   protected request(variantId: string, quantity: number): void {
@@ -205,17 +240,35 @@ export class DishCardComponent {
     }
   }
 
-  protected portionPrice(variant: MenuItemVariant): string {
+  /**
+   * A price as the card says it. For a variant sold by weight the price is per quantum, so it is
+   * said that way ("15 000 so'm per 100 g") and never as if it were what one item costs.
+   */
+  private priceText(amountMinor: number, physical: PhysicalFacts | null | undefined): string {
     this.translate.current();
     const unit = this.translate.get('common.currency') || "so'm";
-    return formatMoney(money(variant.price, this.currency() ?? 'UZS'), unit);
+    const amount = formatMoney(money(amountMinor, this.currency() ?? 'UZS'), unit);
+    return physical?.catchweight && physical.catchweightQuantumGrams
+      ? this.translate.getWithParams('physical.pricePerQuantum', {
+          price: amount,
+          quantum: formatWeight(physical.catchweightQuantumGrams, this.lang.langId()),
+        })
+      : amount;
+  }
+
+  protected portionPrice(variant: MenuItemVariant): string {
+    return this.priceText(variant.price, variant.physical);
   }
 
   protected readonly priceLabel = computed(() => {
     this.translate.current();
-    const unit = this.translate.get('common.currency') || "so'm";
-    const price = formatMoney(money(this.item().price, this.currency() ?? 'UZS'), unit);
+    const price = this.priceText(this.item().price, this.physical());
     // A combo's own variant has no price: this is the least a guest can pay for it.
     return this.isCombo() ? this.translate.getWithParams('dish.fromPrice', { price }) : price;
   });
+}
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

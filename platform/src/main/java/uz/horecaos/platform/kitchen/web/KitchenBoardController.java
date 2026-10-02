@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -596,7 +597,7 @@ public class KitchenBoardController {
             UUID itemId,
             UUID orderLineId,
             UUID stationId,
-            int quantity,
+            BigDecimal quantity,
             String routedBy,
             String status,
             int version,
@@ -731,7 +732,7 @@ public class KitchenBoardController {
      */
     record VduItemView(
             UUID stationId,
-            int quantity,
+            BigDecimal quantity,
             String status,
             @Nullable UUID comboSelectionId) {
 

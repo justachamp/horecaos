@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pricing.application;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -16,6 +17,7 @@ import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Promotion.Action;
 import uz.horecaos.platform.pricing.domain.Promotion.Condition;
 import uz.horecaos.platform.pricing.domain.TaxCalculation;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * ADR 0018 stages 3 and 4: which promotions apply, and what they are worth.
@@ -210,7 +212,9 @@ public class PromotionEvaluator {
                         case PRODUCT, VARIANT, CATEGORY -> !matchedLines.isEmpty();
                         case QUANTITY_AT_LEAST ->
                             quantityOf(basket, matchedLines)
-                                    >= condition.operands().requireInt("quantity");
+                                            .compareTo(BigDecimal.valueOf(
+                                                    condition.operands().requireInt("quantity")))
+                                    >= 0;
                         case SUBTOTAL_AT_LEAST ->
                             basket.goodsSubtotalMinor() >= condition.operands().requireLong("amountMinor");
                         case CHANNEL ->
@@ -249,11 +253,15 @@ public class PromotionEvaluator {
         return from <= to ? minuteOfDay >= from && minuteOfDay < to : minuteOfDay >= from || minuteOfDay < to;
     }
 
-    private int quantityOf(Basket basket, Set<String> lineIds) {
+    /**
+     * The units the matched lines add up to. A decimal since ADR 0137: half a portion
+     * counts as half, so "buy three" is not satisfied by two and a half.
+     */
+    private BigDecimal quantityOf(Basket basket, Set<String> lineIds) {
         return basket.lines().stream()
                 .filter(line -> lineIds.contains(line.lineId()))
-                .mapToInt(BasketLine::quantity)
-                .sum();
+                .map(BasketLine::quantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
@@ -283,13 +291,15 @@ public class PromotionEvaluator {
                         // item must not make the line negative, which ADR 0018
                         // rejects outright.
                         perLine.merge(
-                                line.lineId(), Math.min(perUnit * line.quantity(), line.lineGrossMinor()), Long::sum);
+                                line.lineId(),
+                                Math.min(Quantities.times(perUnit, line.quantity()), line.lineGrossMinor()),
+                                Long::sum);
                     }
                 }
                 case ITEM_FIXED_PRICE -> {
                     long unitPrice = action.operands().requireLong("amountMinor");
                     for (BasketLine line : basket.linesIn(matchedLines)) {
-                        long target = unitPrice * line.quantity();
+                        long target = Quantities.times(unitPrice, line.quantity());
                         perLine.merge(line.lineId(), Math.max(0, line.lineGrossMinor() - target), Long::sum);
                     }
                 }
@@ -316,8 +326,14 @@ public class PromotionEvaluator {
                         // Bounded, and bounded by the line as well as by the rule:
                         // giving away more units than the customer is buying would
                         // take the line below zero.
-                        int free = Math.min(bound, line.quantity());
-                        perLine.merge(line.lineId(), line.unitAmountMinor() * free, Long::sum);
+                        BigDecimal free = BigDecimal.valueOf(bound).min(line.quantity());
+                        // Also bounded by what the line costs: a catchweight line
+                        // weighed lighter than its nominal weight is worth less than
+                        // quantity times its provisional unit price.
+                        perLine.merge(
+                                line.lineId(),
+                                Math.min(Quantities.times(line.unitAmountMinor(), free), line.lineGrossMinor()),
+                                Long::sum);
                     }
                 }
             }
@@ -487,12 +503,32 @@ public class PromotionEvaluator {
             UUID variantId,
             @Nullable UUID productId,
             Set<UUID> categoryIds,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
             long lineGrossMinor) {
 
         public BasketLine {
             categoryIds = categoryIds == null ? Set.of() : Set.copyOf(categoryIds);
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public BasketLine(
+                String lineId,
+                UUID variantId,
+                @Nullable UUID productId,
+                Set<UUID> categoryIds,
+                int quantity,
+                long unitAmountMinor,
+                long lineGrossMinor) {
+            this(
+                    lineId,
+                    variantId,
+                    productId,
+                    categoryIds,
+                    BigDecimal.valueOf(quantity),
+                    unitAmountMinor,
+                    lineGrossMinor);
         }
     }
 

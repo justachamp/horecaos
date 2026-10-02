@@ -49,6 +49,7 @@ import type {
 import { variantAvailability } from '../../../utils/item-availability';
 import { type ComboPicks, comboValid } from '../../../utils/combo-selection';
 import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
+import { portionStep } from '../../../utils/physical';
 
 /** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
 const CLAIM_CLOCK_MS = 15_000;
@@ -348,6 +349,8 @@ export class DineInTableComponent implements OnInit {
         portion: found.item.variants.length > 1 ? found.variant.name || null : null,
         options,
         quantity: line.quantity,
+        // ADR 0137: a splittable portion moves by its portion size.
+        step: portionStep(found.variant.physical),
         available: variantAvailability(found.variant) === 'AVAILABLE',
       };
     });
@@ -372,8 +375,9 @@ export class DineInTableComponent implements OnInit {
     }));
   });
 
+  /** Plates, not fractions: a half portion is one plate somebody has to make (ADR 0137). */
   protected readonly cartCount = computed(
-    () => this.carts.cart()?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0,
+    () => this.carts.cart()?.lines.reduce((sum, line) => sum + Math.ceil(line.quantity), 0) ?? 0,
   );
 
   /** Orders placed from this device that the table's bill has not confirmed yet. */

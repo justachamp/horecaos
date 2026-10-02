@@ -34,6 +34,7 @@ import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.pricing.domain.CatchweightFacts;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
@@ -226,6 +227,9 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Set<UUID> pricedVariantIds = new HashSet<>(lineVariantIds);
         pricedVariantIds.removeAll(combos.groupIdsByContainer().keySet());
         pricedVariantIds.addAll(componentVariantIds);
+        // ADR 0137, from the same publication the quote is stamped with, so the facts a
+        // customer was shown are the facts the line is priced by.
+        Map<UUID, CatchweightFacts> catchweight = catalog.catchweightFacts(publication, pricedVariantIds);
 
         FulfillmentMode mode = request.effectiveFulfillmentMode();
         Map<UUID, List<CompositePricing.HiddenCharge>> hiddenCharges =
@@ -302,7 +306,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 descriptions,
                 null,
                 null,
-                composite);
+                composite,
+                catchweight);
         ResolvedDeliveryCharge charge = resolveDeliveryCharge(
                 request, quoteId, priceBook.currency(), engine.goodsSubtotal(request, draft), now);
 
@@ -320,7 +325,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 descriptions,
                 charge,
                 resolvePromotionInputs(request, now),
-                composite);
+                composite,
+                catchweight);
 
         var result = engine.price(request, inputs, now);
 
@@ -571,6 +577,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                     "ITEM_NOT_PRICED",
                     unpriced.priceableId(),
                     Objects.requireNonNullElse(unpriced.getMessage(), "ITEM_NOT_PRICED"));
+        } catch (PricingEngine.NotCatchweightException notWeighed) {
+            throw new PricingRefusedException(
+                    "NOT_CATCHWEIGHT",
+                    notWeighed.variantId(),
+                    Objects.requireNonNullElse(notWeighed.getMessage(), "NOT_CATCHWEIGHT"));
         } catch (NoPublishedMenuException noMenu) {
             throw new PricingRefusedException(
                     "NO_PUBLISHED_MENU",
@@ -613,7 +624,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                         .toList(),
                 item.nestedModifiers().stream()
                         .map(nested -> new QuoteRequest.NestedModifier(nested.parentOptionId(), nested.optionId()))
-                        .toList());
+                        .toList(),
+                item.actualWeightGrams());
     }
 
     /**

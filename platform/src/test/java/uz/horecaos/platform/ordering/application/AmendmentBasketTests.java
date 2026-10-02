@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -215,7 +216,7 @@ class AmendmentBasketTests {
                 "name",
                 "variant",
                 "SKU",
-                units,
+                BigDecimal.valueOf(units),
                 1_000L,
                 1_000L * units,
                 1_000L * units,
@@ -226,7 +227,11 @@ class AmendmentBasketTests {
                 "Lunch box",
                 componentId,
                 combos,
-                pick);
+                pick,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static OrderLineRow plain(int number, UUID variant, int quantity) {
@@ -238,12 +243,16 @@ class AmendmentBasketTests {
                 "name",
                 "variant",
                 "SKU",
-                quantity,
+                BigDecimal.valueOf(quantity),
                 2_000L,
                 2_000L * quantity,
                 2_000L * quantity,
                 0L,
                 "",
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -263,7 +272,7 @@ class AmendmentBasketTests {
         return new QuoteSnapshot.Line(
                 key,
                 variant,
-                units,
+                BigDecimal.valueOf(units),
                 "name",
                 1_000L,
                 1_000L * units,
@@ -273,11 +282,12 @@ class AmendmentBasketTests {
                 LUNCH,
                 componentId,
                 combos,
-                pick);
+                pick,
+                null);
     }
 
     private static QuoteSnapshot.Line plainQuoted(String key, UUID variant, int quantity) {
-        return new QuoteSnapshot.Line(key, variant, quantity, "name", 2_000L, 2_000L, 2_000L, 0L);
+        return new QuoteSnapshot.Line(key, variant, BigDecimal.valueOf(quantity), "name", 2_000L, 2_000L, 2_000L, 0L);
     }
 
     private static QuoteSnapshot quote(QuoteSnapshot.Line... lines) {

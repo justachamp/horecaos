@@ -51,7 +51,10 @@
                   <span class="line__addons">{{ addons }}</span>
                 }
               }
-              <span class="line__price">{{ cart.formatPrice(item.price * item.quantity) }}</span>
+              @if (estimateText(item); as estimate) {
+                <span class="line__addons" data-testid="cart-line-estimate">{{ estimate }}</span>
+              }
+              <span class="line__price">{{ lineTotal(item) }}</span>
               @if (!item.active) {
                 <span class="line__unavailable" data-testid="cart-line-unavailable">
                   {{
@@ -72,7 +75,7 @@
               >
                 −
               </button>
-              <span class="qty__value">{{ item.quantity }}</span>
+              <span class="qty__value">{{ quantityText(item) }}</span>
               <button
                 type="button"
                 class="qty__btn qty__btn--add"
@@ -132,6 +135,11 @@
           <span>{{ 'cart.total' | t }}</span>
           <span>{{ cart.totalAmount() }}</span>
         </div>
+        @if (cart.hasProvisionalLines()) {
+          <p class="summary__note" data-testid="cart-provisional-notice">
+            {{ 'physical.cartNotice' | t }}
+          </p>
+        }
       </div>
     }
   }

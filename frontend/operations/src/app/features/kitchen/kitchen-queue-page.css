@@ -262,3 +262,7 @@
 .ticket__item--component td:first-child {
   padding-left: 20px;
 }
+
+.ticket__weight {
+  color: var(--q-ink-subtle);
+}

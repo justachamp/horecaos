@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,6 +46,7 @@ import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.tenancy.api.Serviceability;
 import uz.horecaos.platform.tenancy.api.ServiceabilityResolver;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The server-side cart (ADR 0019).
@@ -107,6 +109,9 @@ public class CartService {
 
     /** The ADR 0027 purpose recorded when a customer chooses where their order goes. */
     private static final String CAPTURE_PURPOSE = "CART_DESTINATION_CAPTURE";
+
+    /** ck_cart_line_quantity's upper bound (V0022), restated so a refusal names the cart's own limit. */
+    private static final BigDecimal MAX_CART_QUANTITY = BigDecimal.valueOf(999);
 
     /** The reason recorded against the round an operator's placement puts on a party's bill. */
     private static final String OPERATOR_ROUND_REASON = "Placed with the order from the New Order screen";
@@ -312,6 +317,33 @@ public class CartService {
                 expectedVersion,
                 lineKey,
                 variantId,
+                BigDecimal.valueOf(quantity),
+                modifierOptionIds,
+                List.of(),
+                customerNote);
+    }
+
+    /** {@link #putLine(UUID, UUID, UUID, UUID, int, String, UUID, BigDecimal, List, List, String)} with no presets. */
+    @Transactional
+    public CartView putLine(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            List<UUID> modifierOptionIds,
+            @Nullable String customerNote) {
+        return putLine(
+                tenantId,
+                brandId,
+                callerAccountId,
+                cartId,
+                expectedVersion,
+                lineKey,
+                variantId,
                 quantity,
                 modifierOptionIds,
                 List.of(),
@@ -319,14 +351,8 @@ public class CartService {
     }
 
     /**
-     * Adds or replaces one line, with the coded kitchen-instruction presets
-     * (row 2.1b) the customer or operator chose for it.
-     *
-     * <p>{@code commentPresetCodes} is validated against {@link
-     * CommentPresetLookup#offeredCodesForVariant} exactly as {@code
-     * modifierOptionIds} is validated against {@link CartMenuRules} —
-     * refused by name here, at add time, rather than discovered as an
-     * unrenderable chip on a kitchen ticket.
+     * {@link #putLine(UUID, UUID, UUID, UUID, int, String, UUID, BigDecimal, List, List,
+     * String)} for the whole-unit quantity every caller before ADR 0137 sent.
      */
     @Transactional
     public CartView putLine(
@@ -349,6 +375,40 @@ public class CartService {
                 expectedVersion,
                 lineKey,
                 variantId,
+                BigDecimal.valueOf(quantity),
+                modifierOptionIds,
+                commentPresetCodes,
+                List.of(),
+                List.of(),
+                customerNote);
+    }
+
+    /**
+     * {@link #putLine(UUID, UUID, UUID, UUID, int, String, UUID, BigDecimal, List, List,
+     * List, List, String)} for a quantity that is a decimal and a line that is neither a
+     * combo nor carries a second-level modifier selection.
+     */
+    @Transactional
+    public CartView putLine(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            List<UUID> modifierOptionIds,
+            @Nullable List<String> commentPresetCodes,
+            @Nullable String customerNote) {
+        return putLine(
+                tenantId,
+                brandId,
+                callerAccountId,
+                cartId,
+                expectedVersion,
+                lineKey,
+                variantId,
                 quantity,
                 modifierOptionIds,
                 commentPresetCodes,
@@ -358,20 +418,8 @@ public class CartService {
     }
 
     /**
-     * Adds or replaces one line that may be a combo or carry second-level modifier
-     * selections (ADR 0136).
-     *
-     * <p>A combo line's variant is the combo's container, which has no price, no stock
-     * and no order line of its own: what is sold is the {@code comboPicks}, one ordinary
-     * line per picked component. Everything a cart refuses for an ordinary line it
-     * therefore refuses for the components: stock and the sale window are checked on
-     * the variants the selection actually puts on the order, and on the container too,
-     * because a lunch combo's schedule is the combo's own.
-     *
-     * <p>The selection is validated here, by the rules the quote applies, so the screen
-     * that can say which group needs another pick hears it at the pick, not when the cart
-     * is priced. {@code nestedModifiers} name the first-level option whose linked variant
-     * offers the choice; one level and no more.
+     * {@link #putLine(UUID, UUID, UUID, UUID, int, String, UUID, BigDecimal, List, List,
+     * List, List, String)} for the whole-unit quantity every caller before ADR 0137 sent.
      */
     @Transactional
     public CartView putLine(
@@ -388,12 +436,73 @@ public class CartService {
             @Nullable List<ComboPick> comboPicks,
             @Nullable List<NestedModifier> nestedModifiers,
             @Nullable String customerNote) {
+        return putLine(
+                tenantId,
+                brandId,
+                callerAccountId,
+                cartId,
+                expectedVersion,
+                lineKey,
+                variantId,
+                BigDecimal.valueOf(quantity),
+                modifierOptionIds,
+                commentPresetCodes,
+                comboPicks,
+                nestedModifiers,
+                customerNote);
+    }
+
+    /**
+     * Adds or replaces one line that may be a combo or carry second-level modifier
+     * selections (ADR 0136), with the coded kitchen-instruction presets (row 2.1b) the
+     * customer or operator chose for it.
+     *
+     * <p>A combo line's variant is the combo's container, which has no price, no stock
+     * and no order line of its own: what is sold is the {@code comboPicks}, one ordinary
+     * line per picked component. Everything a cart refuses for an ordinary line it
+     * therefore refuses for the components: stock and the sale window are checked on
+     * the variants the selection actually puts on the order, and on the container too,
+     * because a lunch combo's schedule is the combo's own.
+     *
+     * <p>The selection is validated here, by the rules the quote applies, so the screen
+     * that can say which group needs another pick hears it at the pick, not when the cart
+     * is priced. {@code nestedModifiers} name the first-level option whose linked variant
+     * offers the choice; one level and no more.
+     *
+     * <p>{@code commentPresetCodes} is validated against {@link
+     * CommentPresetLookup#offeredCodesForVariant} exactly as {@code
+     * modifierOptionIds} is validated against {@link CartMenuRules} --
+     * refused by name here, at add time, rather than discovered as an
+     * unrenderable chip on a kitchen ticket.
+     *
+     * <p><b>The quantity is a decimal since ADR 0137</b>, and a fraction is accepted only
+     * for a variant whose published physical attributes allow it: splittable, with a
+     * portion step, and a quantity that is a whole number of portions. Everything else
+     * is a positive whole number, exactly as before. Refused by name ({@code
+     * FRACTIONAL_QUANTITY_NOT_ALLOWED}, {@code QUANTITY_NOT_A_PORTION}) at the basket,
+     * where the customer can fix it, not at the kitchen ticket.
+     */
+    @Transactional
+    public CartView putLine(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            List<UUID> modifierOptionIds,
+            @Nullable List<String> commentPresetCodes,
+            @Nullable List<ComboPick> comboPicks,
+            @Nullable List<NestedModifier> nestedModifiers,
+            @Nullable String customerNote) {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         List<ComboPick> picks = canonicalPicks(comboPicks);
         List<NestedModifier> nested = canonicalNested(nestedModifiers);
         requireLineKeyShape(lineKey, !picks.isEmpty());
-        requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
+        requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds, quantity);
         Set<UUID> sold = requireCompositeSelection(
                 tenantId,
                 brandId,
@@ -1341,7 +1450,12 @@ public class CartService {
      * where the refusal can name the item.
      */
     private void requireSelectionRules(
-            UUID tenantId, UUID brandId, CartRow cart, UUID variantId, List<UUID> modifierOptionIds) {
+            UUID tenantId,
+            UUID brandId,
+            CartRow cart,
+            UUID variantId,
+            List<UUID> modifierOptionIds,
+            BigDecimal quantity) {
 
         String channelCode = channels.byId(tenantId, cart.channelId())
                 .orElseThrow(
@@ -1350,6 +1464,12 @@ public class CartService {
 
         CartMenuRules.ProductRules rules =
                 menu.forVariant(tenantId, brandId, channelCode, variantId).orElse(null);
+
+        // ADR 0137, before the modifier rules and before the early return below: a
+        // variant the publication does not describe is not "anything goes" for a
+        // fraction. It has no physical block, so it takes whole units.
+        requireQuantityAllowed(
+                rules == null ? CartMenuRules.PhysicalRules.WHOLE_UNITS : rules.physicalOf(variantId), quantity);
         if (rules == null) {
             return;
         }
@@ -1399,6 +1519,33 @@ public class CartService {
                 }
             }
         }
+    }
+
+    /**
+     * Whether this quantity is one the variant may be ordered in (ADR 0137).
+     *
+     * <p>Positive and within the column first, so a client cannot send a quantity the
+     * database would round or refuse; then the published rule. The messages name the
+     * portion step, because "0.5 is not allowed" tells a customer nothing and "this
+     * dish is ordered in steps of 0.5" tells them what to type.
+     */
+    private static void requireQuantityAllowed(CartMenuRules.PhysicalRules physical, BigDecimal quantity) {
+        if (!Quantities.fitsColumn(quantity) || quantity.compareTo(MAX_CART_QUANTITY) > 0) {
+            throw new CartRefusedException(
+                    "QUANTITY_OUT_OF_RANGE",
+                    "A quantity is more than zero and at most %s, with at most %d fraction digits"
+                            .formatted(MAX_CART_QUANTITY.toPlainString(), Quantities.SCALE));
+        }
+        if (physical.accepts(quantity)) {
+            return;
+        }
+        if (physical.allowsFraction()) {
+            throw new CartRefusedException(
+                    "QUANTITY_NOT_A_PORTION",
+                    "This item is ordered in steps of %s"
+                            .formatted(Quantities.plain(Objects.requireNonNull(physical.portionSize()))));
+        }
+        throw new CartRefusedException("FRACTIONAL_QUANTITY_NOT_ALLOWED", "This item is only sold in whole units");
     }
 
     private String modifiersJson(List<UUID> modifierOptionIds) {

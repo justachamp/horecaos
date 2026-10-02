@@ -547,7 +547,11 @@ public class StorefrontCatalogQuery {
                     null,
                     // Rows 4.4c/4.4d: attached after the whole menu is read too,
                     // by withAvailability — see menuFor.
-                    null));
+                    null,
+                    // ADR 0137: read from the published copy, so what the customer is
+                    // shown (КБЖУ, "price per 100 g", the portion step) is what the
+                    // cart and the quote are held to.
+                    PhysicalFacts.fromPublished(variant.get("physical"))));
         }
         return variants;
     }
@@ -1070,10 +1074,25 @@ public class StorefrontCatalogQuery {
             boolean orderable,
             boolean onSaleNow,
             @Nullable Long amountMinor,
-            @Nullable BigDecimal remainingQuantity) {
+            @Nullable BigDecimal remainingQuantity,
+            @Nullable PhysicalFacts physical) {
+
+        /** A variant with no physical attributes: a fixed unit sold whole. */
+        public MenuVariant(
+                UUID variantId,
+                @Nullable String sku,
+                @Nullable String unitCode,
+                boolean isDefault,
+                boolean orderable,
+                boolean onSaleNow,
+                @Nullable Long amountMinor,
+                @Nullable BigDecimal remainingQuantity) {
+            this(variantId, sku, unitCode, isDefault, orderable, onSaleNow, amountMinor, remainingQuantity, null);
+        }
 
         MenuVariant withPrice(@Nullable Long price) {
-            return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, onSaleNow, price, remainingQuantity);
+            return new MenuVariant(
+                    variantId, sku, unitCode, isDefault, orderable, onSaleNow, price, remainingQuantity, physical);
         }
 
         /**
@@ -1091,7 +1110,72 @@ public class StorefrontCatalogQuery {
                     orderable && inventoryOrderable,
                     onSaleNow,
                     amountMinor,
-                    remainingQuantity);
+                    remainingQuantity,
+                    physical);
+        }
+    }
+
+    /**
+     * ADR 0137: what a customer may be told about a variant's physical nature, as
+     * published.
+     *
+     * <p>{@code catchweight} means {@code amountMinor} is the price per {@code
+     * catchweightQuantumGrams}, not per unit, and the total a basket shows for the
+     * line is provisional against {@code catchweightNominalGrams}: the final weight
+     * is determined at handover. {@code portionSize} is the step the variant may be
+     * ordered in (a decimal quantity); absent means whole units only. The КБЖУ is
+     * per 100 g (per 100 mL when the variant is volume-measured), and a portion's
+     * figure is the client's own computation from it.
+     *
+     * @param nutrition null when the author entered no КБЖУ
+     */
+    public record PhysicalFacts(
+            @Nullable Integer netWeightGrams,
+            @Nullable Integer netVolumeMillilitres,
+            boolean catchweight,
+            @Nullable Integer catchweightQuantumGrams,
+            @Nullable Integer catchweightNominalGrams,
+            boolean splittable,
+            @Nullable BigDecimal portionSize,
+            @Nullable NutritionPer100 nutrition) {
+
+        /** @param caloriesKcalPer100 calories, kcal per 100 g (or mL) */
+        public record NutritionPer100(
+                @Nullable BigDecimal caloriesKcalPer100,
+                @Nullable BigDecimal proteinGramsPer100,
+                @Nullable BigDecimal fatGramsPer100,
+                @Nullable BigDecimal carbohydratesGramsPer100) {}
+
+        /** Null for a publication that predates ADR 0137 or a variant that carries none. */
+        static @Nullable PhysicalFacts fromPublished(@Nullable Object raw) {
+            if (!(raw instanceof Map<?, ?> block)) {
+                return null;
+            }
+            NutritionPer100 nutrition = null;
+            if (block.get("nutrition") instanceof Map<?, ?> published) {
+                nutrition = new NutritionPer100(
+                        decimal(published.get("caloriesKcalPer100")),
+                        decimal(published.get("proteinGramsPer100")),
+                        decimal(published.get("fatGramsPer100")),
+                        decimal(published.get("carbohydratesGramsPer100")));
+            }
+            return new PhysicalFacts(
+                    integer(block.get("netWeightGrams")),
+                    integer(block.get("netVolumeMillilitres")),
+                    Boolean.TRUE.equals(block.get("catchweight")),
+                    integer(block.get("catchweightQuantumGrams")),
+                    integer(block.get("catchweightNominalGrams")),
+                    Boolean.TRUE.equals(block.get("splittable")),
+                    decimal(block.get("portionSize")),
+                    nutrition);
+        }
+
+        private static @Nullable Integer integer(@Nullable Object raw) {
+            return raw instanceof Number number ? number.intValue() : null;
+        }
+
+        private static @Nullable BigDecimal decimal(@Nullable Object raw) {
+            return raw instanceof Number number ? new BigDecimal(number.toString()) : null;
         }
     }
 

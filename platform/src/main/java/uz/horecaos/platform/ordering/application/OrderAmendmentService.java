@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -1189,7 +1190,12 @@ public class OrderAmendmentService {
         }
         for (NewLine added : intent.addedLines()) {
             items.add(new CartPricingPort.PricingCommand.Item(
-                    added.lineKey(), added.variantId(), added.quantity(), List.of(), added.comboPicks(), List.of()));
+                    added.lineKey(),
+                    added.variantId(),
+                    BigDecimal.valueOf(added.quantity()),
+                    List.of(),
+                    added.comboPicks(),
+                    List.of()));
         }
 
         if (intent.address() != null && order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
@@ -1424,7 +1430,10 @@ public class OrderAmendmentService {
                                         Objects.requireNonNull(priced.comboComponentId()),
                                         Objects.requireNonNull(priced.comboQuantity()),
                                         Objects.requireNonNull(priced.comboPickQuantity()))
-                                : null);
+                                : null,
+                        // ADR 0137: the replacement keeps what its provisional figures were
+                        // provisional against.
+                        priced.catchweight());
                 carryOver(
                         tenantId,
                         original,
@@ -1474,7 +1483,8 @@ public class OrderAmendmentService {
                                                         : container.productName() + " " + container.variantName(),
                                         Objects.requireNonNull(priced.comboComponentId()),
                                         Objects.requireNonNull(priced.comboQuantity()),
-                                        Objects.requireNonNull(priced.comboPickQuantity())));
+                                        Objects.requireNonNull(priced.comboPickQuantity())),
+                        priced.catchweight());
                 writeHidden(
                         tenantId,
                         newLineId,

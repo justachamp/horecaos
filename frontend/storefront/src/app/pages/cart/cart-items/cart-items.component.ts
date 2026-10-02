@@ -8,6 +8,7 @@ import { LangService } from '../../../services/lang.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import type { CartResponseComboComponent, CartResponseItem } from '../../../types/cart.types';
 import { presetLabelFor } from '../../../utils/preset-label';
+import { catchweightEstimateGrams, formatQuantity, formatWeight } from '../../../utils/physical';
 
 @Component({
   selector: 'app-cart-items',
@@ -42,6 +43,30 @@ export class CartItemsComponent implements OnInit {
       ? `${component.name} ${component.variantName}`
       : component.name;
     return component.quantity > 1 ? `${name} ×${component.quantity}` : name;
+  }
+
+  /** `0,5 порц.`, `3 шт` — the quantity as the customer's language writes it (ADR 0137). */
+  quantityLabel(item: CartResponseItem): string {
+    const unit = this.translate.get(
+      item.physical?.splittable ? 'physical.portionsUnit' : 'common.itemsUnit',
+    );
+    return `${formatQuantity(item.quantity, this.lang.langId())} ${unit}`;
+  }
+
+  /** The line's amount through the cart, marked as an estimate when it is sold by weight. */
+  lineTotal(item: CartResponseItem): string {
+    const amount = this.formatPrice(this.cart.lineAmount(item));
+    return item.physical?.catchweight ? `≈ ${amount}` : amount;
+  }
+
+  /** What a weighed line is estimated at: every unit at its nominal weight, until it is weighed at handover. */
+  estimateText(item: CartResponseItem): string | null {
+    const grams = catchweightEstimateGrams(item.physical);
+    return grams === null
+      ? null
+      : this.translate.getWithParams('physical.estimateLine', {
+          weight: formatWeight(grams * item.quantity, this.lang.langId()),
+        });
   }
 
   /** Row 2.1b: the line's checked comment presets, in the customer's own language. */

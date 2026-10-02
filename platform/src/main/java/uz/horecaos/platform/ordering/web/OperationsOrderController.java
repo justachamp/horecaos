@@ -1,16 +1,20 @@
 package uz.horecaos.platform.ordering.web;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -1007,6 +1011,8 @@ public class OperationsOrderController {
                     illegal.getMessage(),
                     java.util.Map.of(
                             "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
+            throw catchweightNotReconciled(unweighed);
         }
     }
 
@@ -1204,11 +1210,29 @@ public class OperationsOrderController {
                     illegal.getMessage(),
                     java.util.Map.of(
                             "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
+            throw catchweightNotReconciled(unweighed);
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
+    }
+
+    /**
+     * ADR 0137's {@code CATCHWEIGHT_NOT_RECONCILED}: a conflict with the order's current
+     * state, carrying the lines still to weigh so the console can take the operator to them.
+     */
+    private static ApiException catchweightNotReconciled(
+            OrderStateService.CatchweightNotReconciledException unweighed) {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                unweighed.getMessage(),
+                java.util.Map.of(
+                        "reason",
+                        "CATCHWEIGHT_NOT_RECONCILED",
+                        "orderLineIds",
+                        unweighed.lineIds().stream().map(UUID::toString).toList()));
     }
 
     // ------------------------------------------------------------ amendments
@@ -1754,7 +1778,18 @@ public class OperationsOrderController {
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: a decimal; whether this variant takes a fraction is the cart's
+            // decision against its published attributes.
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets the operator
             // picked from the product's own offered subset.
@@ -1768,11 +1803,21 @@ public class OperationsOrderController {
         /** Every request that predates ADR 0136's combos and nested modifiers. */
         public OrderLineRequest(
                 UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 List<UUID> modifierOptionIds,
                 List<String> commentPresetCodes,
                 @Nullable String customerNote) {
             this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, null, null);
+        }
+
+        /** A whole number of units, with no combo and no nested modifiers. */
+        public OrderLineRequest(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, commentPresetCodes, customerNote, null, null);
         }
 
         OperatorOrderingService.OrderLine toLine() {
@@ -1894,7 +1939,18 @@ public class OperationsOrderController {
     public record AggregatorOrderLineRequest(
             @Nullable UUID variantId,
             @NotBlank @Size(max = 200) String nameSnapshot,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: an aggregator may sell by the portion or by weight, so a manual
+            // entry takes a decimal quantity like the order line it becomes.
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @PositiveOrZero long unitAmountMinor,
             @Size(max = 128) @Nullable String externalItemReference) {
 
@@ -2837,7 +2893,8 @@ public class OperationsOrderController {
                                     .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
                                     .map(m -> new AutoSelectedChargeResponse(
                                             m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
-                                    .toList()))
+                                    .toList(),
+                            OrderLineCatchweightResponse.of(line.line())))
                     .toList();
         }
     }
@@ -3062,7 +3119,7 @@ public class OperationsOrderController {
             String productName,
             String variantName,
             String sku,
-            int quantity,
+            BigDecimal quantity,
             long finalAmountMinor,
             List<String> modifiers,
             // Row 2.1b: the coded kitchen-instruction presets this line was
@@ -3080,7 +3137,11 @@ public class OperationsOrderController {
             List<String> autoSelectedModifiers,
             // ADR 0136: the same options with what each cost, already inside {@code
             // finalAmountMinor}, so the console can itemise a charge the customer never chose.
-            List<AutoSelectedChargeResponse> autoSelectedCharges) {}
+            List<AutoSelectedChargeResponse> autoSelectedCharges,
+            // ADR 0137: present on a line sold by weight. provisional is true until the
+            // kitchen has weighed it, and means finalAmountMinor was computed against
+            // the nominal weight.
+            @Nullable OrderLineCatchweightResponse catchweight) {}
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}
@@ -3093,6 +3154,34 @@ public class OperationsOrderController {
      * @param quantity     how many combos this purchase was
      */
     public record ComboResponse(UUID selectionId, UUID containerVariantId, String name, int quantity) {}
+
+    /**
+     * ADR 0137: what makes an order line's amount provisional, for the console's
+     * "weigh before handover" prompt and the order detail's weighed/nominal figure.
+     *
+     * @param pricePerQuantumMinor the price the customer agreed to, per {@code quantumGrams}
+     * @param provisional          true until a weight has been captured
+     * @param actualWeightGrams    the weighed total of the whole line, once captured
+     */
+    public record OrderLineCatchweightResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable OrderLineCatchweightResponse of(JdbcOrderStore.OrderLineRow line) {
+            if (!line.catchweight()) {
+                return null;
+            }
+            return new OrderLineCatchweightResponse(
+                    Objects.requireNonNull(line.catchweightQuantumGrams()),
+                    Objects.requireNonNull(line.catchweightNominalGrams()),
+                    Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),
+                    !line.reconciled(),
+                    line.actualWeightGrams());
+        }
+    }
 
     /**
      * Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape.

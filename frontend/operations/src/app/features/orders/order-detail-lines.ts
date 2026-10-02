@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
 import { formatMoney } from '../../core/format/money';
+import { formatQuantity, formatWeight } from '../../core/format/quantity';
 import { I18n } from '../../core/i18n/i18n';
 import { presetLabelFor } from '../../core/i18n/locale-labels';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -125,6 +126,23 @@ export class OrderDetailLines {
 
   protected isRevealingNote(lineId: string): boolean {
     return this.revealingNoteFor() === lineId;
+  }
+
+  /** `0,5`, `2` — never `2.000`. */
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
+  }
+
+  /** The estimated weight of the whole line: every unit at its nominal weight. */
+  protected estimatedWeight(line: OrderLine): string {
+    return formatWeight(
+      line.quantity * (line.catchweight?.nominalGramsPerUnit ?? 0),
+      this.i18n.locale(),
+    );
+  }
+
+  protected weightText(grams: number): string {
+    return formatWeight(grams, this.i18n.locale());
   }
 
   protected formatMoneyMinor(amountMinor: number, currency: string): string {

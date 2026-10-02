@@ -92,3 +92,8 @@
   list-style: none;
   padding-left: 0;
 }
+
+.pane__line-weight {
+  color: var(--q-ink-subtle);
+  margin-top: 2px;
+}

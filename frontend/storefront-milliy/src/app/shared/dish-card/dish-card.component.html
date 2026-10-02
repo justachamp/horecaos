@@ -15,6 +15,7 @@
     @if (item().description) {
       <span class="dish__desc">{{ item().description }}</span>
     }
+    <app-physical-facts [physical]="physical()" [compact]="true" />
     <span class="dish__price">{{ priceLabel() }}</span>
     @switch (availability()) {
       @case ('SOLD_OUT') {
@@ -85,7 +86,7 @@
                 class="portion__add"
                 data-testid="dine-in-add"
                 [disabled]="busy()"
-                (click)="request(variant.id, 1)"
+                (click)="request(variant.id, raised(variant))"
               >
                 {{ 'common.add' | t }}
               </button>
@@ -102,7 +103,7 @@
                   −
                 </button>
                 <span class="stepper__value" data-testid="dine-in-quantity">{{
-                  quantityOf(variant.id)
+                  quantityText(variant.id)
                 }}</span>
                 <button
                   type="button"
@@ -110,7 +111,7 @@
                   data-testid="dine-in-increase"
                   [disabled]="busy() || !canAdd(variant)"
                   [attr.aria-label]="'common.increase' | t"
-                  (click)="request(variant.id, quantityOf(variant.id) + 1)"
+                  (click)="request(variant.id, raised(variant))"
                 >
                   +
                 </button>

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pricing.domain;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -7,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * What a customer wants priced (ADR 0018).
@@ -180,6 +182,10 @@ public record QuoteRequest(
     /**
      * One line of the cart being priced.
      *
+     * <p>The quantity is a decimal since ADR 0137: a splittable variant is ordered
+     * by the portion (0.5 of a plov). It is normalised on construction, so {@code 2}
+     * and {@code 2.000} are one quantity and two equal baskets hash equally.
+     *
      * @param lineId stable within the cart, so a re-quote can be compared line by
      *               line rather than by position
      * @param modifierOptionIds priced individually and added to the line
@@ -190,21 +196,33 @@ public record QuoteRequest(
      * @param nestedModifiers ADR 0136: second-level selections, each naming the
      *               first-level option whose linked variant offers it. One level
      *               and no more -- a nested option cannot itself be a parent
+     * @param actualWeightGrams ADR 0137: the weighed total of this line, in grams
+     *               (all of its units together), once it has been captured at
+     *               pick or handover. Null at cart time, when a catchweight line
+     *               is priced provisionally against its nominal weight. Only
+     *               meaningful for a catchweight variant; pricing refuses it on
+     *               any other
      */
     public record Line(
             String lineId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             List<ComboPick> comboPicks,
-            List<NestedModifier> nestedModifiers) {
+            List<NestedModifier> nestedModifiers,
+            @Nullable Integer actualWeightGrams) {
 
         public Line {
             Objects.requireNonNull(lineId, "A line id is required");
             Objects.requireNonNull(variantId, "A variant id is required");
-            if (quantity <= 0) {
+            Objects.requireNonNull(quantity, "A quantity is required");
+            if (quantity.signum() <= 0) {
                 throw new IllegalArgumentException("A quote line needs a positive quantity");
             }
+            if (actualWeightGrams != null && actualWeightGrams <= 0) {
+                throw new IllegalArgumentException("A weighed amount must be positive");
+            }
+            quantity = Quantities.normalise(quantity);
             modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
             comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
             nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
@@ -220,9 +238,46 @@ public record QuoteRequest(
         /** 64 for {@code quote_lines.line_id}, less {@code ~} and a three-digit position. */
         public static final int MAX_COMBO_LINE_ID_LENGTH = 60;
 
-        /** An ordinary line, with no combo and no nested selection: every line before ADR 0136. */
+        /** A line priced provisionally (no weight captured), with no combo and no nested selection. */
+        public Line(String lineId, UUID variantId, BigDecimal quantity, List<UUID> modifierOptionIds) {
+            this(lineId, variantId, quantity, modifierOptionIds, List.of(), List.of(), null);
+        }
+
+        /** A line with a captured weight (ADR 0137) and no combo and no nested selection. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                @Nullable Integer actualWeightGrams) {
+            this(lineId, variantId, quantity, modifierOptionIds, List.of(), List.of(), actualWeightGrams);
+        }
+
+        /** A line with a combo and nested selections (ADR 0136) and no captured weight. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<ComboPick> comboPicks,
+                List<NestedModifier> nestedModifiers) {
+            this(lineId, variantId, quantity, modifierOptionIds, comboPicks, nestedModifiers, null);
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
         public Line(String lineId, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
-            this(lineId, variantId, quantity, modifierOptionIds, List.of(), List.of());
+            this(lineId, variantId, BigDecimal.valueOf(quantity), modifierOptionIds, List.of(), List.of(), null);
+        }
+
+        /** A whole number of units with a combo and nested selections. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<ComboPick> comboPicks,
+                List<NestedModifier> nestedModifiers) {
+            this(lineId, variantId, BigDecimal.valueOf(quantity), modifierOptionIds, comboPicks, nestedModifiers, null);
         }
     }
 

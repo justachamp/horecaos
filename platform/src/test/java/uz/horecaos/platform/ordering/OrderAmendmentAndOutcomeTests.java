@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -1582,15 +1583,15 @@ class OrderAmendmentAndOutcomeTests {
         var liveLines = orderStore.lines(TENANT, orderId);
         assertThat(liveLines).hasSize(1);
         assertThat(liveLines.getFirst().lineId()).isNotEqualTo(lineId);
-        assertThat(liveLines.getFirst().quantity()).isEqualTo(3);
+        assertThat(liveLines.getFirst().quantity()).isEqualByComparingTo("3");
 
         // V0022's own rule: the old line's row is never edited, only closed.
-        assertThat(jdbc.sql("SELECT quantity, revision_to FROM ordering.order_lines WHERE id = :id")
-                        .param("id", lineId)
-                        .query()
-                        .singleRow())
-                .containsEntry("quantity", 2)
-                .containsEntry("revision_to", 2);
+        Map<String, Object> closed = jdbc.sql("SELECT quantity, revision_to FROM ordering.order_lines WHERE id = :id")
+                .param("id", lineId)
+                .query()
+                .singleRow();
+        assertThat((BigDecimal) closed.get("quantity")).isEqualByComparingTo("2");
+        assertThat(closed.get("revision_to")).isEqualTo(2);
     }
 
     @Test

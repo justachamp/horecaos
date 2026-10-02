@@ -120,9 +120,10 @@
                       @if (isCombo(product)) {
                         {{ 'dineIn.comboChoose' | t }}
                       } @else {
-                        {{ formatPrice(variant.amountMinor) }}
+                        {{ priceLabel(variant.variantId, variant.amountMinor) }}
                       }
                     </p>
+                    <app-physical-facts [physical]="variant.physical ?? null" [compact]="true" />
                   </div>
                   @if (canOrder() && isSeated() && isCombo(product)) {
                     <div class="table__item-actions">
@@ -159,7 +160,7 @@
                             −
                           </button>
                           <span class="table__step-count" data-testid="dine-in-quantity">{{
-                            quantityOf(variant.variantId)
+                            quantityText(variant.variantId)
                           }}</span>
                           <button
                             type="button"

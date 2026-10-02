@@ -16,6 +16,7 @@ import { ComboChoicesComponent } from '../../shared/combo-choices/combo-choices.
 import { IconComponent } from '../../shared/icon/icon.component';
 import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
+import { PhysicalFactsComponent } from '../../shared/physical-facts/physical-facts.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import type { MenuItem, MenuItemComboGroup, MenuItemModifierGroup } from '../../types/home.types';
@@ -26,6 +27,7 @@ import {
   comboValid,
   picksOnTheWire,
 } from '../../utils/combo-selection';
+import { formatQuantity, initialQuantity, portionStep } from '../../utils/physical';
 import {
   itemAvailability,
   preferredSellableVariant,
@@ -49,7 +51,7 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 @Component({
   selector: 'app-details',
   standalone: true,
-  imports: [ComboChoicesComponent, IconComponent, TranslatePipe],
+  imports: [ComboChoicesComponent, IconComponent, PhysicalFactsComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './details.component.html',
   styleUrl: './details.component.scss',
@@ -155,6 +157,9 @@ export class DetailsComponent implements OnInit {
         (preferredSellableVariant(item) ?? item.variants.find((variant) => variant.active))?.id ??
           null,
       );
+      // ADR 0137: a splittable portion starts at one whole portion (or the first quantity the
+      // cart accepts for a portion size that does not divide one).
+      this.quantity.set(initialQuantity(this.stepSize()));
       this.state.set('ready');
     } catch {
       this.state.set('error');
@@ -227,8 +232,34 @@ export class DetailsComponent implements OnInit {
       !this.adding(),
   );
 
+  /** ADR 0137: the step the quantity moves in -- the chosen portion's size, or one. */
+  private stepSize(): number {
+    return portionStep(this.selectedVariant()?.physical);
+  }
+
+  /** `0,5`, `2` -- the quantity as the guest's language writes it. */
+  protected quantityText(): string {
+    return formatQuantity(this.quantity(), this.lang.langId());
+  }
+
+  /** Moves the quantity by `by` portions, and never below one. */
   protected step(by: number): void {
-    this.quantity.update((value) => Math.max(1, value + by));
+    const size = this.stepSize();
+    this.quantity.update((value) => Math.max(size, tidy(value + by * size)));
+  }
+
+  /**
+   * Chooses a portion. The quantity follows: it stays when the new portion accepts it, and is
+   * otherwise put back to the new portion's first quantity -- 1.5 of a half-portion dish is not a
+   * quantity a dish with a 0.3 portion takes.
+   */
+  protected selectVariant(variantId: string): void {
+    this.variantId.set(variantId);
+    const size = this.stepSize();
+    const multiples = this.quantity() / size;
+    if (Math.abs(multiples - Math.round(multiples)) > 1e-6) {
+      this.quantity.set(initialQuantity(size));
+    }
   }
 
   protected back(): void {
@@ -273,4 +304,9 @@ export class DetailsComponent implements OnInit {
       this.adding.set(false);
     }
   }
+}
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

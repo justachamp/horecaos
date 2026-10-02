@@ -133,6 +133,22 @@ export interface ActorRequest {
   actorId: string;
 }
 
+export interface ActualWeightRequest {
+  actualWeightGrams: number;
+}
+
+export interface ActualWeightResponse {
+  actualWeightGrams?: number;
+  changed?: boolean;
+  deltaTotalMinor?: number;
+  lineFinalAmountMinor?: number;
+  lineId?: string;
+  orderId?: string;
+  orderVersion?: number;
+  revision?: number;
+  totalMinor?: number;
+}
+
 export interface AdapterCapabilities {
   declaredCapabilities?: Array<"CATALOG_READ" | "AVAILABILITY_READ" | "ORDER_APPROVAL" | "ORDER_EXPORT" | "ORDER_CANCELLATION" | "PREPARATION_STATUS" | "RECEIPT_READ" | "FISCAL_IDENTIFIER_WRITE_BACK" | "FULFILLMENT_STATUS_WRITE" | "CUSTOMER_UPSERT">;
   providerType?: string;
@@ -1367,6 +1383,14 @@ export interface CatalogSummaryResponse {
   code?: string;
   name?: string;
   status?: string;
+}
+
+export interface CatchweightLineResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
 }
 
 export interface CategoryDefaultResponse {
@@ -4399,6 +4423,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   onSaleNow?: boolean;
   orderable?: boolean;
+  physical?: PhysicalFacts;
   remainingQuantity?: number;
   sku?: string;
   unitCode?: string;
@@ -4688,6 +4713,13 @@ export interface NotificationTemplateControllerVersionResponse {
   versionNumber?: number;
 }
 
+export interface NutritionPer100 {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  fatGramsPer100?: number;
+  proteinGramsPer100?: number;
+}
+
 export interface ObservationBatchRequest {
   activeAssignmentCount?: number;
   courierId: string;
@@ -4882,6 +4914,7 @@ export interface OperationsOrderControllerDestinationRequest {
 }
 
 export interface OperationsOrderControllerLineResponse {
+  catchweight?: OrderLineCatchweightResponse;
   commentPresets?: Array<CommentPresetChip>;
   finalAmountMinor?: number;
   hasNote?: boolean;
@@ -5142,6 +5175,14 @@ export interface OrderLatenessResponse {
   level?: string;
 }
 
+export interface OrderLineCatchweightResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
+}
+
 export interface OrderLineRequest {
   commentPresetCodes?: Array<string>;
   customerNote?: string;
@@ -5151,6 +5192,7 @@ export interface OrderLineRequest {
 }
 
 export interface OrderLineResponse {
+  catchweight?: CatchweightLineResponse;
   finalAmountMinor?: number;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
@@ -5838,6 +5880,46 @@ export interface PhoneRevealResponse {
   phone?: string;
 }
 
+export interface PhysicalAttributesRequest {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  fatGramsPer100?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  portionSize?: number;
+  proteinGramsPer100?: number;
+  splittable?: boolean;
+}
+
+export interface PhysicalAttributesResponse {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  fatGramsPer100?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  portionSize?: number;
+  proteinGramsPer100?: number;
+  splittable?: boolean;
+  version?: number;
+}
+
+export interface PhysicalFacts {
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  nutrition?: NutritionPer100;
+  portionSize?: number;
+  splittable?: boolean;
+}
+
 export interface PickupLocation {
   acceptsScheduledOrders?: boolean;
   addressLine?: string;
@@ -6490,6 +6572,7 @@ export interface QuoteControllerAdjustmentResponse {
 }
 
 export interface QuoteControllerLineResponse {
+  catchweight?: QuoteLineCatchweightResponse;
   description?: string;
   finalAmountMinor?: number;
   lineId?: string;
@@ -6497,6 +6580,14 @@ export interface QuoteControllerLineResponse {
   taxAmountMinor?: number;
   unitAmountMinor?: number;
   variantId?: string;
+}
+
+export interface QuoteLineCatchweightResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
 }
 
 export interface QuoteRequestBody {
@@ -9362,6 +9453,8 @@ export interface Operations {
   "setOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: SetOfferingRequest }; responses: { "200": unknown } };
   "itemSaleSchedule": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } } }; responses: { "200": ItemSaleScheduleResponse } };
   "replaceItemSaleSchedule": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: ItemSaleScheduleRequest }; responses: { "200": ItemSaleScheduleResponse } };
+  "physicalAttributes": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } } }; responses: { "200": PhysicalAttributesResponse } };
+  "setPhysicalAttributes": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } }; body: PhysicalAttributesRequest }; responses: { "200": PhysicalAttributesResponse } };
   "list_42": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<FlowDocumentResponse> } };
   "author_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}"; request: { parameters: { path: { brandId: string; flowKey: string; tenantId: string } }; body: AuthorFlowDocumentRequest }; responses: { "200": FlowDocumentResponse } };
   "list_31": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };
@@ -10008,6 +10101,7 @@ export interface Operations {
   "revealAddress": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/address"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": OperationsOrderControllerAddressResponse } };
   "revealPhone": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/phone"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": PhoneRevealResponse } };
   "decisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/decisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<ApprovalDecisionResponse> } };
+  "captureActualWeight": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/actual-weight"; request: { parameters: { path: { brandId: string; lineId: string; locationId: string; orderId: string; tenantId: string } }; body: ActualWeightRequest }; responses: { "200": ActualWeightResponse } };
   "revealNote": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/note"; request: { parameters: { path: { brandId: string; lineId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": NoteResponse } };
   "revisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/revisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<RevisionResponse> } };
   "stateAction_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerStateActionRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };

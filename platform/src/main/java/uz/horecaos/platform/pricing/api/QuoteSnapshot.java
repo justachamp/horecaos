@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pricing.api;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A priced cart as stored, in the shape an order copies from (ADR 0018).
@@ -92,6 +94,7 @@ public record QuoteSnapshot(
      *                A combo's component lines carry the cart line's key followed by
      *                {@code ~} and a position, so each is stable on its own and all of them
      *                sort next to the line they came from
+     * @param quantity a decimal since ADR 0137, normalised: {@code 2}, never {@code 2.000}
      * @param comboSelectionId ADR 0136: groups the component lines of one combo purchase,
      *                null on every other line. An order copies it onto each component
      *                order line, and a report counts distinct values to know how many
@@ -108,11 +111,13 @@ public record QuoteSnapshot(
      * @param comboPickQuantity how many times the customer picked this component inside
      *                one combo; {@code quantity} is the product of {@code comboQuantity},
      *                the pairing's default quantity and this
+     * @param catchweight ADR 0137: set only for a catchweight variant, and what makes the
+     *                line's amounts provisional until a weight is captured
      */
     public record Line(
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String descriptionSnapshot,
             long unitAmountMinor,
             long baseAmountMinor,
@@ -122,7 +127,8 @@ public record QuoteSnapshot(
             @Nullable UUID comboContainerVariantId,
             @Nullable UUID comboComponentId,
             @Nullable Integer comboQuantity,
-            @Nullable Integer comboPickQuantity) {
+            @Nullable Integer comboPickQuantity,
+            @Nullable Catchweight catchweight) {
 
         public Line {
             if ((comboSelectionId == null) != (comboContainerVariantId == null)
@@ -132,6 +138,7 @@ public record QuoteSnapshot(
                 throw new IllegalArgumentException(
                         "A combo component line carries its selection, container, pairing and quantities, or none");
             }
+            quantity = Quantities.normalise(quantity);
         }
 
         /**
@@ -144,11 +151,11 @@ public record QuoteSnapshot(
             return comboSelectionId != null && tilde > 0 ? lineKey.substring(0, tilde) : lineKey;
         }
 
-        /** A line that is not part of a combo, which is every line before ADR 0136. */
+        /** A line that is neither part of a combo (ADR 0136) nor catchweight (ADR 0137). */
         public Line(
                 String lineKey,
                 UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 String descriptionSnapshot,
                 long unitAmountMinor,
                 long baseAmountMinor,
@@ -167,7 +174,27 @@ public record QuoteSnapshot(
                     null,
                     null,
                     null,
+                    null,
                     null);
+        }
+    }
+
+    /**
+     * What makes a quote line provisional (ADR 0137): the price is per {@code
+     * quantumGrams}, and the amounts were computed against {@code nominalGramsPerUnit}
+     * until {@code actualWeightGrams} says otherwise.
+     *
+     * @param pricePerQuantumMinor the price row's amount: minor units per quantum, not per unit
+     * @param actualWeightGrams    null while provisional; the weighed total of the whole line after
+     */
+    public record Catchweight(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        public boolean reconciled() {
+            return actualWeightGrams != null;
         }
     }
 

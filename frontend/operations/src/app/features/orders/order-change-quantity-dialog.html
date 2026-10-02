@@ -21,7 +21,7 @@
             }}
           } @else {
             {{ choice.name }} ({{ 'orders.detail.lines.column.quantity' | t }}:
-            {{ choice.current }})
+            {{ quantityText(choice.current) }})
           }
         </option>
       }

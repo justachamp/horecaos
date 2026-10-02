@@ -502,5 +502,24 @@
     "incomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
     "unavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
     "total": "Kombo narxi: {{price}}"
+  },
+  "physical": {
+    "nutritionTitle": "Ozuqaviy qiymati",
+    "nutritionPer100g": "100 g uchun",
+    "nutritionPer100ml": "100 ml uchun",
+    "nutritionPerUnit": "bir porsiyada ({{amount}})",
+    "calories": "Kaloriya",
+    "proteins": "Oqsillar",
+    "fats": "Yog'lar",
+    "carbs": "Uglevodlar",
+    "kcal": "kkal",
+    "pricePerQuantum": "{{quantum}} uchun {{price}}",
+    "estimatedFor": "≈ {{weight}} uchun ≈ {{price}}",
+    "finalWeightNotice": "Yakuniy og'irlik va narx buyurtma topshirilganda aniqlanadi.",
+    "cartNotice": "Summada og'irlik bo'yicha sotiladigan mahsulotlar bor. Yakuniy og'irlik va summa buyurtma topshirilganda aniqlanadi.",
+    "portionsUnit": "porsiya",
+    "portionStep": "{{step}} porsiyalarda buyurtma qilinadi",
+    "weighedLine": "Tortildi: {{weight}}",
+    "estimateLine": "≈ {{weight}}, taxminiy"
   }
 }

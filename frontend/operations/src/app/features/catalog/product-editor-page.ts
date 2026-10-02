@@ -59,6 +59,7 @@ import { ProductEditorHeader } from './product-editor-header';
 import { ProductModifierPolicyPanel } from './product-modifier-policy-panel';
 import { ProductPhotosPanel } from './product-photos-panel';
 import { ListingNotice, ProductUnlistedBanner, UnlistedRow } from './product-unlisted-banner';
+import { VariantPhysicalAttributes } from './variant-physical-attributes';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
@@ -69,6 +70,7 @@ type EditorTab =
   | 'COMBO'
   | 'PHOTOS'
   | 'FISCAL'
+  | 'PHYSICAL'
   | 'AVAILABILITY'
   | 'SCHEDULE'
   | 'RECOMMENDATIONS'
@@ -82,6 +84,7 @@ const TABS: readonly EditorTab[] = [
   'COMBO',
   'PHOTOS',
   'FISCAL',
+  'PHYSICAL',
   'AVAILABILITY',
   'SCHEDULE',
   'RECOMMENDATIONS',
@@ -95,6 +98,7 @@ const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
   COMBO: 'catalog.editor.tab.combo',
   PHOTOS: 'catalog.editor.tab.photos',
   FISCAL: 'catalog.editor.tab.fiscal',
+  PHYSICAL: 'catalog.editor.tab.physical',
   AVAILABILITY: 'catalog.editor.tab.availability',
   SCHEDULE: 'catalog.editor.tab.schedule',
   RECOMMENDATIONS: 'catalog.editor.tab.recommendations',
@@ -155,6 +159,8 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
   MODIFIER_NESTING_DEPTH_EXCEEDED: 'catalog.editor.finding.MODIFIER_NESTING_DEPTH_EXCEEDED',
   MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS:
     'catalog.editor.finding.MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS',
+  PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING:
+    'catalog.editor.finding.PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING',
 };
 
 /**
@@ -253,6 +259,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
     ProductPhotosPanel,
     ProductUnlistedBanner,
     ScheduleGrid,
+    VariantPhysicalAttributes,
   ],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
@@ -276,6 +283,8 @@ export class ProductEditorPage implements OnInit {
   private readonly localeSet = inject(LocaleSet);
 
   protected readonly tabs = TABS;
+  /** The brand the editor writes under, for the cards that own their own reads and writes. */
+  protected readonly brandScope = computed(() => this.brand.scope());
   protected readonly tabLabel = TAB_LABEL;
   /**
    * Row 10.12: the brand's own supported locales (default first, mapped to
@@ -1398,6 +1407,21 @@ export class ProductEditorPage implements OnInit {
       this.handleSaveError(error);
     } finally {
       this.savingField.set(null);
+    }
+  }
+
+  // ------------------------------------------------------------ Tab 6 — Вес и питательность (ADR 0137)
+
+  /**
+   * A set of physical attributes was written. The card owns the read and the
+   * write; the page only has to look at the readiness rail again, because
+   * `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` is a publication blocker that a
+   * save here can raise or clear.
+   */
+  protected onPhysicalSaved(): void {
+    const product = this.product();
+    if (product) {
+      void this.loadReadiness(product);
     }
   }
 

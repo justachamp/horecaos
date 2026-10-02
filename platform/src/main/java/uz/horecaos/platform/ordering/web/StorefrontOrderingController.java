@@ -4,12 +4,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -791,7 +795,19 @@ public class StorefrontOrderingController {
 
     public record PutLineRequest(
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: a decimal, so a splittable variant can be ordered by the portion.
+            // Whether this particular variant takes a fraction is the cart's decision
+            // against its published attributes; this only bounds the number.
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets the customer
             // picked from the product's own offered subset (@Size null-safe
@@ -812,7 +828,7 @@ public class StorefrontOrderingController {
                 List<UUID> modifierOptionIds,
                 List<String> commentPresetCodes,
                 String customerNote) {
-            this(variantId, quantity, modifierOptionIds, commentPresetCodes, null, null, customerNote);
+            this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, commentPresetCodes, null, null, customerNote);
         }
     }
 
@@ -1001,7 +1017,7 @@ public class StorefrontOrderingController {
     public record CartLineResponse(
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             // Row 2.1b: the coded presets this line currently carries.
             List<String> commentPresetCodes,
             boolean hasCustomerNote,
@@ -1260,7 +1276,8 @@ public class StorefrontOrderingController {
                                             .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
                                             .map(m -> new AutoSelectedChargeResponse(
                                                     m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
-                                            .toList()))
+                                            .toList(),
+                                    CatchweightLineResponse.of(line.line())))
                             .toList(),
                     detail.warnings());
         }
@@ -1295,7 +1312,7 @@ public class StorefrontOrderingController {
             String variantName,
             UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
             long finalAmountMinor,
             List<String> modifiers,
@@ -1303,7 +1320,8 @@ public class StorefrontOrderingController {
             @Nullable UUID comboSelectionId,
             @Nullable String comboName,
             List<String> autoSelectedModifiers,
-            List<AutoSelectedChargeResponse> autoSelectedCharges) {}
+            List<AutoSelectedChargeResponse> autoSelectedCharges,
+            @Nullable CatchweightLineResponse catchweight) {}
 
     /**
      * An option the server applied to an order line, with what it cost (ADR 0136).
@@ -1311,6 +1329,32 @@ public class StorefrontOrderingController {
      * @param amountMinor the charge for the whole line, already inside the line's final amount
      */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}
+
+    /**
+     * ADR 0137: present on a line sold by weight. {@code provisional} is true until the
+     * kitchen has weighed it at handover, and means {@code finalAmountMinor} was
+     * computed against {@code nominalGramsPerUnit}; the order total the customer sees
+     * then is an estimate that the weighed amount replaces.
+     */
+    public record CatchweightLineResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable CatchweightLineResponse of(JdbcOrderStore.OrderLineRow line) {
+            if (!line.catchweight()) {
+                return null;
+            }
+            return new CatchweightLineResponse(
+                    Objects.requireNonNull(line.catchweightQuantumGrams()),
+                    Objects.requireNonNull(line.catchweightNominalGrams()),
+                    Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),
+                    !line.reconciled(),
+                    line.actualWeightGrams());
+        }
+    }
 
     /**
      * ADR 0074's answer to "can this be ordered again".
@@ -1363,7 +1407,7 @@ public class StorefrontOrderingController {
             @Nullable String variantName,
             @Nullable UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             String status,
             @Nullable Long unitAmountMinor,

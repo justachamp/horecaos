@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Writes a manually keyed aggregator order into {@code ordering.orders}
@@ -71,9 +73,29 @@ public class JdbcAggregatorOrderStore {
     public record Line(
             @Nullable UUID variantId,
             String nameSnapshot,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
-            @Nullable String externalItemReference) {}
+            @Nullable String externalItemReference) {
+
+        public Line {
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public Line(
+                @Nullable UUID variantId,
+                String nameSnapshot,
+                int quantity,
+                long unitAmountMinor,
+                @Nullable String externalItemReference) {
+            this(variantId, nameSnapshot, BigDecimal.valueOf(quantity), unitAmountMinor, externalItemReference);
+        }
+
+        /** The unit price times the quantity, rounded once to a whole minor unit (ADR 0137). */
+        public long amountMinor() {
+            return Quantities.times(unitAmountMinor, quantity);
+        }
+    }
 
     /**
      * @param fulfillmentMode {@code PICKUP} or {@code DELIVERY} (row {@code
@@ -225,7 +247,7 @@ public class JdbcAggregatorOrderStore {
 
         int lineNumber = 1;
         for (Line line : command.lines()) {
-            long lineAmount = line.unitAmountMinor() * line.quantity();
+            long lineAmount = line.amountMinor();
             Map<String, Object> lineRow = new HashMap<>();
             lineRow.put("id", UUID.randomUUID());
             lineRow.put("tenantId", command.tenantId());

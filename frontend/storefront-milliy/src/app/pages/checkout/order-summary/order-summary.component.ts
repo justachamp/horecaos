@@ -32,4 +32,9 @@ export class OrderSummaryComponent {
    * itemised, each already inside the figures above. Empty when nothing was added.
    */
   readonly hiddenCharges = input<readonly HiddenChargeRow[]>([]);
+  /**
+   * ADR 0137: the basket holds an item sold by weight, so the total is an estimate at its
+   * nominal weight and the final weight and amount are determined at handover.
+   */
+  readonly provisional = input(false);
 }

@@ -93,6 +93,7 @@ class FakeUiCartService {
   deliveryTimeDisplay = (): string | null => null;
   deliveryUnresolvedMessage = (): string | null => null;
   hiddenCharges = (): readonly HiddenChargeRow[] => [];
+  hasProvisionalLines = (): boolean => false;
 
   load = vi.fn(async () => {});
   paymentMethods = vi.fn(async (): Promise<readonly string[]> => ['CASH']);
@@ -586,5 +587,25 @@ describe('CheckoutComponent -- what the server added by itself (ADR 0136)', () =
     const { fixture } = await setUp();
 
     expect(fixture.nativeElement.querySelector('[data-testid="hidden-charges"]')).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- items sold by weight (ADR 0137)', () => {
+  it('tells the customer before they pay that the total is an estimate while the basket holds a weighed item', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.hasProvisionalLines = () => true;
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
+    ).toBeNull();
   });
 });

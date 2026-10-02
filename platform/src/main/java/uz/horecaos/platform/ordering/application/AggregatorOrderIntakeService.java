@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -26,6 +27,7 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Manual aggregator order entry (ADR 0040, orders.md §5, gap map row {@code
@@ -140,9 +142,34 @@ public class AggregatorOrderIntakeService {
     public record Line(
             @Nullable UUID variantId,
             String nameSnapshot,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
-            @Nullable String externalItemReference) {}
+            @Nullable String externalItemReference) {
+
+        public Line {
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public Line(
+                @Nullable UUID variantId,
+                String nameSnapshot,
+                int quantity,
+                long unitAmountMinor,
+                @Nullable String externalItemReference) {
+            this(variantId, nameSnapshot, BigDecimal.valueOf(quantity), unitAmountMinor, externalItemReference);
+        }
+
+        /**
+         * What this line amounts to: the unit price times the quantity, rounded once to a
+         * whole minor unit (ADR 0137). The one place the line arithmetic is stated, shared
+         * by the subtotal check here and the row the store writes, so the two cannot round
+         * differently.
+         */
+        public long amountMinor() {
+            return Quantities.times(unitAmountMinor, quantity);
+        }
+    }
 
     /**
      * Row {@code 1.3g}: where a {@code DELIVERY} manual entry goes — the
@@ -204,8 +231,11 @@ public class AggregatorOrderIntakeService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "An order needs at least one line");
         }
         for (Line line : command.lines()) {
-            if (line.quantity() <= 0) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED, "A line's quantity must be positive");
+            if (!Quantities.fitsColumn(line.quantity())) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "A line's quantity must be positive, with at most %d fraction digits"
+                                .formatted(Quantities.SCALE));
             }
             if (line.unitAmountMinor() < 0) {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, "A line's price cannot be negative");
@@ -240,9 +270,8 @@ public class AggregatorOrderIntakeService {
         // header, are what JdbcAggregatorOrderStore.create persists as each
         // order_lines row's final_amount_minor, so this is the one check that
         // keeps the header telling the truth about what was actually written.
-        long lineTotalMinor = command.lines().stream()
-                .mapToLong(line -> line.unitAmountMinor() * line.quantity())
-                .sum();
+        long lineTotalMinor =
+                command.lines().stream().mapToLong(Line::amountMinor).sum();
         if (lineTotalMinor != command.subtotalMinor()) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED, "The subtotal does not match the sum of the lines given");

@@ -93,7 +93,7 @@ class OperationsOrderControllerDineInSessionTests {
                 "STOREFRONT",
                 mode,
                 List.of(new OperationsOrderController.OrderLineRequest(
-                        UUID.randomUUID(), 1, List.of(), List.of(), null)),
+                        UUID.randomUUID(), java.math.BigDecimal.ONE, List.of(), List.of(), null)),
                 null,
                 "CASH",
                 null,

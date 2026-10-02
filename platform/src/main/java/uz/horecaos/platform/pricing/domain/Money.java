@@ -1,6 +1,8 @@
 package uz.horecaos.platform.pricing.domain;
 
+import java.math.BigDecimal;
 import java.util.Objects;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * An amount in integer minor units (ADR 0018).
@@ -42,6 +44,14 @@ public record Money(long minor, String currency) {
 
     public Money times(int quantity) {
         return new Money(Math.multiplyExact(minor, (long) quantity), currency);
+    }
+
+    /**
+     * Multiplied by a decimal quantity (ADR 0137), rounded once to a whole minor
+     * unit. Exact for a whole quantity, so an integer order's money is unchanged.
+     */
+    public Money times(BigDecimal quantity) {
+        return new Money(Quantities.times(minor, quantity), currency);
     }
 
     public boolean isNegative() {

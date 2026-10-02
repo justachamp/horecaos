@@ -5,12 +5,15 @@ import { OrderDetail, OrderLineItem, orderLineRows } from '../../pages/orders/or
 import {
   OrdersService,
   type ApiOrderDetail,
+  type OrderLineCatchweight,
   type ReorderPlanResponse,
 } from '../../services/orders.service';
 import { NotificationService } from '../../services/notification.service';
 import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
+import { LangService } from '../../services/lang.service';
+import { formatQuantity, formatWeight } from '../../utils/physical';
 import { UiCartService } from '../../services/ui-cart.service';
 import {
   LocationProfileService,
@@ -78,6 +81,11 @@ export class OrderDetailComponent implements OnInit {
   repeating = signal(false);
   repeatError = signal<string | null>(null);
 
+  /** ADR 0137: a line is still priced at its estimated weight, so the final weight and total are set at handover. */
+  readonly hasProvisionalLines = computed(
+    () => this.order()?.lineItems.some((item) => item.weight?.provisional) ?? false,
+  );
+
   /** True once the plan says this exact order is READY to repeat. */
   readonly canRepeat = computed(() => {
     const plan = this.reorderPlan();
@@ -97,6 +105,7 @@ export class OrderDetailComponent implements OnInit {
   pickupBranch = signal<LocationProfile | null>(null);
 
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
   private readonly cart = inject(UiCartService);
   private readonly locationProfile = inject(LocationProfileService);
 
@@ -201,15 +210,38 @@ export class OrderDetailComponent implements OnInit {
       const price = Number(i.price) || 0;
       const qty = Number(i.quantity) || 1;
       const img = i.image;
+      const catchweight = i['catchweight'] as OrderLineCatchweight | null | undefined;
+      const lineAmount = Number(i['lineAmount']);
+      const langId = this.lang.langId();
       return {
         name: String(i.name ?? ''),
         image: img && typeof img === 'string' ? img : '/assets/logo/placeholder-item.png',
         quantity: qty,
+        // A fraction of a portion is counted in portions, a whole quantity in pieces.
+        quantityText: `${formatQuantity(qty, langId)} ${this.translate.get(
+          Number.isInteger(qty) ? 'common.itemsUnit' : 'physical.portionsUnit',
+        )}`,
         unitPrice: format(price),
         variantId: i.variant_id,
         ...(i.comboSelectionId
           ? { comboSelectionId: i.comboSelectionId, comboName: i.comboName ?? '' }
           : {}),
+        weight: catchweight
+          ? {
+              provisional: catchweight.provisional,
+              text: catchweight.provisional
+                ? this.translate.getWithParams('physical.estimateLine', {
+                    weight: formatWeight(qty * catchweight.nominalGramsPerUnit, langId),
+                  })
+                : this.translate.getWithParams('physical.weighedLine', {
+                    weight: formatWeight(catchweight.actualWeightGrams ?? 0, langId),
+                  }),
+              // The line's own amount: `unit × quantity` is wrong once it has been weighed.
+              amountText: `${catchweight.provisional ? '≈ ' : ''}${format(
+                Number.isFinite(lineAmount) ? lineAmount : price * qty,
+              )}`,
+            }
+          : undefined,
       };
     });
     // ADR 0136: one row per option the server applied, its charge summed over the lines it went on.

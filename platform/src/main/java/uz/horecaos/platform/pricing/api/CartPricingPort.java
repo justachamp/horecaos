@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pricing.api;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -7,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Pricing a cart, for the module that owns the cart (ADR 0018, ADR 0019).
@@ -239,29 +241,80 @@ public interface CartPricingPort {
          *
          * @param lineKey stable within the cart, so a re-quote can be compared line
          *                by line rather than by position
+         * @param quantity a decimal since ADR 0137; whole for a variant that is not
+         *                 sold by the portion
          * @param comboPicks ADR 0136: what the customer chose inside a combo. Non-empty
          *                exactly when {@code variantId} is a combo's container, which
          *                is never priced or sold on its own
          * @param nestedModifiers ADR 0136: second-level selections, each naming the
          *                first-level option whose linked variant offers it
+         * @param actualWeightGrams ADR 0137: the weighed total of this line in grams, once
+         *                 captured at pick or handover, or null while the line is still
+         *                 priced provisionally. Refused for a variant that is not sold by weight
          */
         public record Item(
                 String lineKey,
                 UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 List<UUID> modifierOptionIds,
                 List<ComboPick> comboPicks,
-                List<NestedModifier> nestedModifiers) {
+                List<NestedModifier> nestedModifiers,
+                @Nullable Integer actualWeightGrams) {
 
             public Item {
+                quantity = Quantities.normalise(quantity);
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
                 comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
                 nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
             }
 
-            /** An ordinary line, which is every line before ADR 0136. */
+            /** A line not yet weighed, with no combo and no nested selection. */
+            public Item(String lineKey, UUID variantId, BigDecimal quantity, List<UUID> modifierOptionIds) {
+                this(lineKey, variantId, quantity, modifierOptionIds, List.of(), List.of(), null);
+            }
+
+            /** A line with a captured weight (ADR 0137) and no combo or nested selection. */
+            public Item(
+                    String lineKey,
+                    UUID variantId,
+                    BigDecimal quantity,
+                    List<UUID> modifierOptionIds,
+                    @Nullable Integer actualWeightGrams) {
+                this(lineKey, variantId, quantity, modifierOptionIds, List.of(), List.of(), actualWeightGrams);
+            }
+
+            /** A line with a combo and nested selections (ADR 0136), not yet weighed. */
+            public Item(
+                    String lineKey,
+                    UUID variantId,
+                    BigDecimal quantity,
+                    List<UUID> modifierOptionIds,
+                    List<ComboPick> comboPicks,
+                    List<NestedModifier> nestedModifiers) {
+                this(lineKey, variantId, quantity, modifierOptionIds, comboPicks, nestedModifiers, null);
+            }
+
+            /** A whole number of units, which is every line there was before ADR 0137. */
             public Item(String lineKey, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
-                this(lineKey, variantId, quantity, modifierOptionIds, List.of(), List.of());
+                this(lineKey, variantId, BigDecimal.valueOf(quantity), modifierOptionIds, List.of(), List.of(), null);
+            }
+
+            /** A whole number of units with a combo and nested selections. */
+            public Item(
+                    String lineKey,
+                    UUID variantId,
+                    int quantity,
+                    List<UUID> modifierOptionIds,
+                    List<ComboPick> comboPicks,
+                    List<NestedModifier> nestedModifiers) {
+                this(
+                        lineKey,
+                        variantId,
+                        BigDecimal.valueOf(quantity),
+                        modifierOptionIds,
+                        comboPicks,
+                        nestedModifiers,
+                        null);
             }
         }
 

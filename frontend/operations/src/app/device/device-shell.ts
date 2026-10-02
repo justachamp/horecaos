@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 
+import { formatQuantity } from '../core/format/quantity';
 import { I18n } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { QQrCode } from '../shared/ui/qr-code';
@@ -289,5 +290,10 @@ export class DeviceShell implements OnInit {
     this.session.clearSetup();
     this.tickets.set([]);
     this.ticketsLoaded.set(false);
+  }
+
+  /** `0,5`, `2` — never `2.000` (ADR 0137). */
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
   }
 }

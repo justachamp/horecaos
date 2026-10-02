@@ -10,8 +10,11 @@ import { Router } from '@angular/router';
 
 import { IconComponent } from '../../shared/icon/icon.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
+import { LangService } from '../../services/lang.service';
+import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import type { CartResponseItem } from '../../types/cart.types';
+import { catchweightEstimateGrams, formatQuantity, formatWeight } from '../../utils/physical';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -41,6 +44,8 @@ type LoadState = 'loading' | 'ready' | 'error';
 export class CartComponent implements OnInit {
   protected readonly cart = inject(UiCartService);
   private readonly router = inject(Router);
+  private readonly lang = inject(LangService);
+  private readonly translate = inject(TranslateService);
 
   protected readonly state = signal<LoadState>('loading');
 
@@ -103,6 +108,28 @@ export class CartComponent implements OnInit {
         return component.quantity > 1 ? `${name} ×${component.quantity}` : name;
       })
       .join(', ');
+  }
+
+  /** `0,5`, `2` -- the quantity as the customer's language writes it (ADR 0137). */
+  protected quantityText(item: CartResponseItem): string {
+    return formatQuantity(item.quantity, this.lang.langId());
+  }
+
+  /** The line's amount through the cart, marked as an estimate when it is sold by weight. */
+  protected lineTotal(item: CartResponseItem): string {
+    const amount = this.cart.formatPrice(this.cart.lineAmount(item));
+    return item.physical?.catchweight ? `≈ ${amount}` : amount;
+  }
+
+  /** What a weighed line is estimated at: every unit at its nominal weight, until it is weighed at handover. */
+  protected estimateText(item: CartResponseItem): string | null {
+    this.translate.current();
+    const grams = catchweightEstimateGrams(item.physical);
+    return grams === null
+      ? null
+      : this.translate.getWithParams('physical.estimateLine', {
+          weight: formatWeight(grams * item.quantity, this.lang.langId()),
+        });
   }
 
   /** Comma-joined modifier labels for one line, or '' when it has none. */

@@ -1,0 +1,78 @@
+:host {
+  display: block;
+}
+
+.physical {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  margin: 0;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.physical legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.physical__wide {
+  grid-column: 1 / -1;
+}
+
+.physical__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.physical__field input,
+.physical__field select {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.physical__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.physical__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.physical__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.physical__help {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.physical__heading {
+  font-weight: 600;
+}
+
+.physical__error {
+  color: var(--q-error);
+}
+
+.physical__failed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.physical__actions {
+  display: flex;
+  justify-content: flex-start;
+}
