@@ -458,7 +458,13 @@ public class KitchenTicketService {
 
             UUID stationId = match.map(ResolvedStation::stationId).orElse(fallbackStation);
             RoutingLevel level = match.map(ResolvedStation::level).orElse(RoutingLevel.FALLBACK);
-            resolved.add(new RoutedLine(line.orderLineId(), stationId, level, line.quantity()));
+            resolved.add(new RoutedLine(
+                    line.orderLineId(),
+                    stationId,
+                    level,
+                    line.quantity(),
+                    line.comboSelectionId(),
+                    line.comboContainerVariantId()));
         }
         return resolved;
     }
@@ -486,7 +492,12 @@ public class KitchenTicketService {
                     null,
                     null,
                     1,
-                    now));
+                    now,
+                    // ADR 0136: the combo this item belongs to, for a display to group on. The
+                    // station above was resolved from this item's own variant, so a combo's
+                    // burger and its drink still go to the grill and the bar.
+                    line.comboSelectionId(),
+                    line.comboContainerVariantId()));
         }
         return unresolved;
     }
@@ -1164,5 +1175,11 @@ public class KitchenTicketService {
     private record Release(ReleaseMode mode, @Nullable Instant releaseAt, boolean fireNow, boolean ceilingExceeded) {}
 
     /** One order line, resolved onto a station but not yet written as a ticket item. */
-    private record RoutedLine(UUID orderLineId, UUID stationId, RoutingLevel level, int quantity) {}
+    private record RoutedLine(
+            UUID orderLineId,
+            UUID stationId,
+            RoutingLevel level,
+            int quantity,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {}
 }

@@ -540,16 +540,85 @@ public class JdbcOrderStore {
             long finalMinor,
             long taxMinor,
             @Nullable String noteEncrypted) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                null);
+    }
+
+    /**
+     * What a combo's component line remembers about the purchase it was part of (ADR 0136).
+     *
+     * <p>All of it, or none of it: {@code ck_order_line_combo_provenance} says so, and so
+     * does this record, which cannot be built with a part missing.
+     *
+     * @param selectionId the shared grouping key; a report counts distinct values
+     * @param containerVariantId the combo, which is never a line of its own
+     * @param name the container's name as sold, copied so a rename cannot change a receipt
+     * @param componentId the pairing the line was priced from, so an amendment prices the
+     *                    same component at the same combo price
+     * @param comboQuantity combos bought on the cart line
+     * @param pickQuantity times this component was picked inside one combo
+     */
+    public record ComboFacts(
+            UUID selectionId,
+            UUID containerVariantId,
+            String name,
+            UUID componentId,
+            int comboQuantity,
+            int pickQuantity) {}
+
+    /** The same insert, for a line that is one component of a combo when {@code combo} is non-null. */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            int quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            @Nullable ComboFacts combo) {
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
                     product_name_snapshot, variant_name_snapshot, sku_snapshot, quantity,
                     unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                    note_encrypted)
+                    note_encrypted,
+                    combo_selection_id, combo_container_variant_id, combo_name_snapshot,
+                    combo_component_id, combo_quantity, combo_pick_quantity)
                 VALUES (:id, :tenantId, :orderId, :lineNumber, :productId, :variantId,
                     :productName, :variantName, :sku, :quantity,
-                    :unit, :base, :finalAmount, :tax, :note)
+                    :unit, :base, :finalAmount, :tax, :note,
+                    :comboSelectionId, :comboContainerVariantId, :comboName,
+                    :comboComponentId, :comboQuantity, :comboPickQuantity)
                 """)
+                .param("comboSelectionId", combo == null ? null : combo.selectionId())
+                .param("comboContainerVariantId", combo == null ? null : combo.containerVariantId())
+                .param("comboName", combo == null ? null : combo.name())
+                .param("comboComponentId", combo == null ? null : combo.componentId())
+                .param("comboQuantity", combo == null ? null : combo.comboQuantity())
+                .param("comboPickQuantity", combo == null ? null : combo.pickQuantity())
                 .param("id", lineId)
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
@@ -578,15 +647,55 @@ public class JdbcOrderStore {
             int quantity,
             long unitMinor,
             long finalMinor) {
+        insertLineModifier(
+                tenantId,
+                orderLineId,
+                sourceGroupId,
+                sourceOptionId,
+                groupName,
+                optionName,
+                quantity,
+                unitMinor,
+                finalMinor,
+                null,
+                false);
+    }
+
+    /**
+     * Inserts one modifier selection and returns its id, so a second-level selection can name
+     * it as its parent (ADR 0136).
+     *
+     * @param parentModifierId the first-level selection whose linked variant offered this one,
+     *                         or null on a first-level selection
+     * @param autoSelected true when the server applied a hidden option for the order's
+     *                     fulfilment mode: the customer never chose it
+     */
+    public UUID insertLineModifier(
+            UUID tenantId,
+            UUID orderLineId,
+            @Nullable UUID sourceGroupId,
+            UUID sourceOptionId,
+            @Nullable String groupName,
+            String optionName,
+            int quantity,
+            long unitMinor,
+            long finalMinor,
+            @Nullable UUID parentModifierId,
+            boolean autoSelected) {
+        UUID modifierId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO ordering.order_line_modifiers (
                     id, tenant_id, order_line_id, source_group_id, source_option_id,
                     group_name_snapshot, option_name_snapshot, quantity,
-                    unit_amount_minor, final_amount_minor)
+                    unit_amount_minor, final_amount_minor,
+                    parent_order_line_modifier_id, auto_selected)
                 VALUES (:id, :tenantId, :lineId, :groupId, :optionId,
-                    :groupName, :optionName, :quantity, :unit, :finalAmount)
+                    :groupName, :optionName, :quantity, :unit, :finalAmount,
+                    :parentId, :autoSelected)
                 """)
-                .param("id", UUID.randomUUID())
+                .param("parentId", parentModifierId)
+                .param("autoSelected", autoSelected)
+                .param("id", modifierId)
                 .param("tenantId", tenantId)
                 .param("lineId", orderLineId)
                 .param("groupId", sourceGroupId)
@@ -597,6 +706,7 @@ public class JdbcOrderStore {
                 .param("unit", unitMinor)
                 .param("finalAmount", finalMinor)
                 .update();
+        return modifierId;
     }
 
     /**
@@ -1835,7 +1945,9 @@ public class JdbcOrderStore {
                 SELECT id, line_number, source_product_id, source_variant_id,
                        product_name_snapshot, variant_name_snapshot, sku_snapshot, quantity,
                        unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                       note_encrypted
+                       note_encrypted,
+                       combo_selection_id, combo_container_variant_id, combo_name_snapshot,
+                       combo_component_id, combo_quantity, combo_pick_quantity
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                   AND (:revision::integer IS NULL
@@ -1858,7 +1970,13 @@ public class JdbcOrderStore {
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
                         row.getLong("tax_amount_minor"),
-                        row.getString("note_encrypted")))
+                        row.getString("note_encrypted"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class),
+                        row.getString("combo_name_snapshot"),
+                        row.getObject("combo_component_id", UUID.class),
+                        row.getObject("combo_quantity", Integer.class),
+                        row.getObject("combo_pick_quantity", Integer.class)))
                 .list();
     }
 
@@ -1877,9 +1995,10 @@ public class JdbcOrderStore {
 
     public List<OrderModifierRow> lineModifiers(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                SELECT m.order_line_id, m.source_group_id, m.source_option_id,
+                SELECT m.id, m.order_line_id, m.source_group_id, m.source_option_id,
                        m.group_name_snapshot, m.option_name_snapshot, m.quantity,
-                       m.unit_amount_minor, m.final_amount_minor
+                       m.unit_amount_minor, m.final_amount_minor,
+                       m.parent_order_line_modifier_id, m.auto_selected
                 FROM ordering.order_line_modifiers m
                 JOIN ordering.order_lines l ON l.id = m.order_line_id AND l.tenant_id = m.tenant_id
                 WHERE m.tenant_id = :tenantId AND l.order_id = :orderId
@@ -1895,7 +2014,10 @@ public class JdbcOrderStore {
                         row.getString("option_name_snapshot"),
                         row.getInt("quantity"),
                         row.getLong("unit_amount_minor"),
-                        row.getLong("final_amount_minor")))
+                        row.getLong("final_amount_minor"),
+                        row.getObject("id", UUID.class),
+                        row.getObject("parent_order_line_modifier_id", UUID.class),
+                        row.getBoolean("auto_selected")))
                 .list();
     }
 
@@ -3193,13 +3315,34 @@ public class JdbcOrderStore {
             long baseAmountMinor,
             long finalAmountMinor,
             long taxAmountMinor,
-            String noteEncrypted) {
+            String noteEncrypted,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId,
+            @Nullable String comboName,
+            @Nullable UUID comboComponentId,
+            @Nullable Integer comboQuantity,
+            @Nullable Integer comboPickQuantity) {
 
         public boolean hasNote() {
             return noteEncrypted != null;
         }
+
+        /** True when this line is one component of a combo (ADR 0136). */
+        public boolean isComboComponent() {
+            return comboSelectionId != null;
+        }
     }
 
+    /**
+     * One modifier selection on an order line, as it was bought.
+     *
+     * @param modifierId the selection's own id, which a second-level selection names as its parent
+     * @param parentModifierId ADR 0136: the first-level selection whose linked variant offered this
+     *                         one, or null on a first-level selection
+     * @param autoSelected ADR 0136: the server applied this hidden option for the order's
+     *                     fulfilment mode; the customer never chose it, so nothing that rebuilds the
+     *                     customer's selections (a reorder, an amendment's repricing) carries it
+     */
     public record OrderModifierRow(
             UUID orderLineId,
             UUID sourceGroupId,
@@ -3208,7 +3351,10 @@ public class JdbcOrderStore {
             String optionName,
             int quantity,
             long unitAmountMinor,
-            long finalAmountMinor) {}
+            long finalAmountMinor,
+            UUID modifierId,
+            @Nullable UUID parentModifierId,
+            boolean autoSelected) {}
 
     /**
      * Row 2.1b: one preset a line was checked out carrying, labels as of that moment.

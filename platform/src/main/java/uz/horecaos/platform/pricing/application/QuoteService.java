@@ -539,20 +539,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 command.locationId(),
                 command.customerAccountId(),
                 command.channelCode(),
-                command.items().stream()
-                        .map(item -> new QuoteRequest.Line(
-                                item.lineKey(),
-                                item.variantId(),
-                                item.quantity(),
-                                item.modifierOptionIds(),
-                                item.comboPicks().stream()
-                                        .map(pick -> new QuoteRequest.ComboPick(pick.componentId(), pick.quantity()))
-                                        .toList(),
-                                item.nestedModifiers().stream()
-                                        .map(nested -> new QuoteRequest.NestedModifier(
-                                                nested.parentOptionId(), nested.optionId()))
-                                        .toList()))
-                        .toList(),
+                command.items().stream().map(QuoteService::lineOf).toList(),
                 command.idempotencyKey(),
                 // Null for a cart being collected, or a delivery cart that has not
                 // named a destination yet — both are honestly "not priced as a
@@ -612,6 +599,66 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                     "HIDDEN_MODIFIER_GROUP_AMBIGUOUS",
                     ambiguous.groupId(),
                     Objects.requireNonNullElse(ambiguous.getMessage(), "HIDDEN_MODIFIER_GROUP_AMBIGUOUS"));
+        }
+    }
+
+    private static QuoteRequest.Line lineOf(PricingCommand.Item item) {
+        return new QuoteRequest.Line(
+                item.lineKey(),
+                item.variantId(),
+                item.quantity(),
+                item.modifierOptionIds(),
+                item.comboPicks().stream()
+                        .map(pick -> new QuoteRequest.ComboPick(pick.componentId(), pick.quantity()))
+                        .toList(),
+                item.nestedModifiers().stream()
+                        .map(nested -> new QuoteRequest.NestedModifier(nested.parentOptionId(), nested.optionId()))
+                        .toList());
+    }
+
+    /**
+     * ADR 0136: the selection rules of {@link #priceCart}, over the same facts, without
+     * the price book, the tax profile or a stored quote. Nothing is written.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item) {
+        QuoteRequest.Line line = lineOf(item);
+        CompositeProductsLookup.ComboCatalog combos =
+                composites.comboCatalog(tenantId, brandId, Set.of(item.variantId()));
+
+        Set<UUID> optionIds = new HashSet<>(item.modifierOptionIds());
+        item.nestedModifiers().forEach(nested -> {
+            optionIds.add(nested.parentOptionId());
+            optionIds.add(nested.optionId());
+        });
+        CompositeProductsLookup.NestedCatalog nested = composites.nestedCatalog(tenantId, brandId, optionIds);
+
+        var facts = new CompositePricing.CompositeInputs(
+                combos.groups(),
+                combos.groupIdsByContainer(),
+                combos.components(),
+                Map.of(),
+                Map.of(),
+                nested.options(),
+                nested.groupsByVariant(),
+                Map.of());
+        try {
+            List<CompositePricing.ComboLine> combo = CompositePricing.resolveCombo(line, facts);
+            if (combo != null) {
+                return new SelectionCheck(
+                        true,
+                        combo.stream()
+                                .map(pick -> pick.component().componentVariantId())
+                                .collect(Collectors.toUnmodifiableSet()));
+            }
+            CompositePricing.resolveNested(line, facts);
+            return new SelectionCheck(false, Set.of(item.variantId()));
+        } catch (CompositePricing.CompositeSelectionException selection) {
+            throw new PricingRefusedException(
+                    selection.code(),
+                    selection.subjectId(),
+                    Objects.requireNonNullElse(selection.getMessage(), selection.code()));
         }
     }
 

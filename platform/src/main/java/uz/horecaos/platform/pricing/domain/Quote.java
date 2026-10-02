@@ -100,6 +100,17 @@ public record Quote(
      *                            for display and the receipt header; set exactly when
      *                            {@code comboSelectionId} is. The container itself is
      *                            never a line and never carries an amount
+     * @param comboComponentId    the {@code catalog.combo_components} pairing this line
+     *                            was priced from; set exactly when {@code comboSelectionId}
+     *                            is. An order keeps it so an amendment prices the same
+     *                            component at the same combo price
+     * @param comboQuantity       how many combos the customer bought on the cart line,
+     *                            the same on every component of one selection
+     * @param comboPickQuantity   how many times the customer picked this component inside
+     *                            one combo. {@code quantity} is the product of
+     *                            {@code comboQuantity}, the pairing's default quantity and
+     *                            this, and the first and last are the customer's own
+     *                            choices, so neither can be recovered from {@code quantity}
      */
     public record QuoteLine(
             String lineId,
@@ -112,7 +123,10 @@ public record Quote(
             Money finalAmount,
             Money taxAmount,
             @Nullable UUID comboSelectionId,
-            @Nullable UUID comboContainerVariantId) {
+            @Nullable UUID comboContainerVariantId,
+            @Nullable UUID comboComponentId,
+            @Nullable Integer comboQuantity,
+            @Nullable Integer comboPickQuantity) {
 
         public QuoteLine {
             // Mirrors ck_quote_line_variant_agrees, stated as an equivalence so
@@ -122,10 +136,18 @@ public record Quote(
                 throw new IllegalArgumentException(
                         "An item line needs a variant and a fee line must not have one: " + type);
             }
-            // Mirrors ck_quote_line_combo_pair and ck_quote_line_combo_is_item.
-            if ((comboSelectionId == null) != (comboContainerVariantId == null)) {
+            // Mirrors ck_quote_line_combo_pair, ck_quote_line_combo_provenance and
+            // ck_quote_line_combo_is_item.
+            if ((comboSelectionId == null) != (comboContainerVariantId == null)
+                    || (comboSelectionId == null) != (comboComponentId == null)
+                    || (comboSelectionId == null) != (comboQuantity == null)
+                    || (comboSelectionId == null) != (comboPickQuantity == null)) {
                 throw new IllegalArgumentException(
-                        "A combo component line carries both its selection and its container, or neither");
+                        "A combo component line carries its selection, container, pairing and quantities, or none");
+            }
+            if ((comboQuantity != null && comboQuantity <= 0)
+                    || (comboPickQuantity != null && comboPickQuantity <= 0)) {
+                throw new IllegalArgumentException("A combo component line needs positive combo and pick quantities");
             }
             if (comboSelectionId != null && type != LineType.ITEM) {
                 throw new IllegalArgumentException("Only an item line can be part of a combo: " + type);
@@ -154,6 +176,9 @@ public record Quote(
                     finalAmount,
                     taxAmount,
                     null,
+                    null,
+                    null,
+                    null,
                     null);
         }
 
@@ -168,7 +193,10 @@ public record Quote(
                 Money finalAmount,
                 Money taxAmount,
                 UUID comboSelectionId,
-                UUID comboContainerVariantId) {
+                UUID comboContainerVariantId,
+                UUID comboComponentId,
+                int comboQuantity,
+                int comboPickQuantity) {
             return new QuoteLine(
                     lineId,
                     LineType.ITEM,
@@ -180,7 +208,10 @@ public record Quote(
                     finalAmount,
                     taxAmount,
                     comboSelectionId,
-                    comboContainerVariantId);
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity);
         }
 
         /** The same line carrying a discounted final amount and its tax share, grouping key preserved. */
@@ -196,7 +227,10 @@ public record Quote(
                     finalAmount,
                     taxAmount,
                     comboSelectionId,
-                    comboContainerVariantId);
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity);
         }
 
         /** An ordinary basket line. */

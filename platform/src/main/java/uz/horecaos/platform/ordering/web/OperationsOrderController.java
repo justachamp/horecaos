@@ -75,6 +75,8 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
+import uz.horecaos.platform.ordering.web.StorefrontOrderingController.ComboPickRequest;
+import uz.horecaos.platform.ordering.web.StorefrontOrderingController.NestedModifierRequest;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -1757,7 +1759,21 @@ public class OperationsOrderController {
             // Row 2.1b: the coded kitchen-instruction presets the operator
             // picked from the product's own offered subset.
             @Size(max = 20) List<String> commentPresetCodes,
-            @Size(max = 500) @Nullable String customerNote) {
+            @Size(max = 500) @Nullable String customerNote,
+            // ADR 0136: what the operator picked inside a combo, and the second-level
+            // modifier selections, in the shape a storefront cart line carries them.
+            @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks,
+            @Size(max = 20) @Nullable List<@Valid NestedModifierRequest> nestedModifiers) {
+
+        /** Every request that predates ADR 0136's combos and nested modifiers. */
+        public OrderLineRequest(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, null, null);
+        }
 
         OperatorOrderingService.OrderLine toLine() {
             return new OperatorOrderingService.OrderLine(
@@ -1765,7 +1781,15 @@ public class OperationsOrderController {
                     quantity,
                     modifierOptionIds == null ? List.of() : modifierOptionIds,
                     commentPresetCodes == null ? List.of() : commentPresetCodes,
-                    customerNote);
+                    customerNote,
+                    comboPicks == null
+                            ? List.of()
+                            : comboPicks.stream().map(ComboPickRequest::toPick).toList(),
+                    nestedModifiers == null
+                            ? List.of()
+                            : nestedModifiers.stream()
+                                    .map(NestedModifierRequest::toNested)
+                                    .toList());
         }
     }
 
@@ -2062,14 +2086,32 @@ public class OperationsOrderController {
         }
     }
 
-    /** One line {@code ADD_LINES} carries. */
+    /**
+     * One line {@code ADD_LINES} carries.
+     *
+     * @param comboPicks ADR 0136: what the operator picked inside a combo, when {@code variantId}
+     *     is a combo's container. {@code quantity} is then how many combos. A combo is added as
+     *     the several ordinary lines it is, each at its own combo price
+     */
     public record AddLineRequest(
             @NotNull UUID variantId,
             @Positive int quantity,
-            @Size(max = 10) List<UUID> modifierOptionIds) {
+            @Size(max = 10) List<UUID> modifierOptionIds,
+            @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks) {
+
+        /** Every request that predates ADR 0136's combos. */
+        public AddLineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+            this(variantId, quantity, modifierOptionIds, null);
+        }
 
         OrderAmendmentService.AmendmentCommand.LineRequest toLineRequest() {
-            return new OrderAmendmentService.AmendmentCommand.LineRequest(variantId, quantity, modifierOptionIds);
+            return new OrderAmendmentService.AmendmentCommand.LineRequest(
+                    variantId,
+                    quantity,
+                    modifierOptionIds,
+                    comboPicks == null
+                            ? List.of()
+                            : comboPicks.stream().map(ComboPickRequest::toPick).toList());
         }
     }
 
@@ -2753,6 +2795,18 @@ public class OperationsOrderController {
             return staffDisplayNames.displayName(actorId);
         }
 
+        private static @Nullable ComboResponse comboOf(JdbcOrderStore.OrderLineRow line) {
+            if (!line.isComboComponent()) {
+                return null;
+            }
+            // The provenance constraint (ck_order_line_combo_provenance) makes these all-or-none.
+            return new ComboResponse(
+                    Objects.requireNonNull(line.comboSelectionId()),
+                    Objects.requireNonNull(line.comboContainerVariantId()),
+                    Objects.requireNonNull(line.comboName()),
+                    Objects.requireNonNull(line.comboQuantity()));
+        }
+
         private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {
             return detail.lines().stream()
                     .map(line -> new LineResponse(
@@ -2768,7 +2822,12 @@ public class OperationsOrderController {
                                             p.code(), p.labelRu(), p.labelUz(), p.labelEn(), p.labels()))
                                     .toList(),
                             line.line().lineId(),
-                            line.line().hasNote()))
+                            line.line().hasNote(),
+                            comboOf(line.line()),
+                            line.modifiers().stream()
+                                    .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                    .map(m -> m.optionName())
+                                    .toList()))
                     .toList();
         }
     }
@@ -3001,7 +3060,23 @@ public class OperationsOrderController {
             // locale, so the console renders whichever the operator is in.
             List<CommentPresetChip> commentPresets,
             UUID lineId,
-            boolean hasNote) {}
+            boolean hasNote,
+            // ADR 0136: set on each component line of a combo, null on every other line. The
+            // lines of one combo share a selection id; a console groups on it and shows the name
+            // as the header, because the container itself is never a line.
+            @Nullable ComboResponse combo,
+            // ADR 0136: the names, within {@code modifiers}, of the options the server applied
+            // for this order's fulfilment mode -- a delivery box the customer was never shown.
+            List<String> autoSelectedModifiers) {}
+
+    /**
+     * The combo a line was bought as part of (ADR 0136).
+     *
+     * @param selectionId  groups the component lines of one combo purchase
+     * @param name         the combo's name as it was sold; copied, so a rename cannot change it
+     * @param quantity     how many combos this purchase was
+     */
+    public record ComboResponse(UUID selectionId, UUID containerVariantId, String name, int quantity) {}
 
     /**
      * Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape.

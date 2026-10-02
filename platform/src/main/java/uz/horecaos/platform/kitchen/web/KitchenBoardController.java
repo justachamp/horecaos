@@ -585,9 +585,23 @@ public class KitchenBoardController {
      * off kitchen rows; a display resolves them through an authorized read against
      * the ADR 0019 order snapshot, where the name has one authority and the
      * customer's note is under ADR 0029 envelope encryption.
+     *
+     * <p>That holds for a combo's name too (ADR 0136). {@code comboSelectionId} is the key the
+     * component items of one combo purchase share, so a display groups them under one header, and
+     * {@code comboContainerVariantId} says which combo; the header's text is the order line's
+     * {@code combo.name} in the order read, copied there when the combo was sold. Both are null on
+     * every other item. Routing never looks at either: each component routes by its own variant.
      */
     record ItemView(
-            UUID itemId, UUID orderLineId, UUID stationId, int quantity, String routedBy, String status, int version) {
+            UUID itemId,
+            UUID orderLineId,
+            UUID stationId,
+            int quantity,
+            String routedBy,
+            String status,
+            int version,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {
 
         static ItemView of(TicketItemRow item) {
             return new ItemView(
@@ -597,7 +611,9 @@ public class KitchenBoardController {
                     item.quantity(),
                     item.routedBy().name(),
                     item.status().name(),
-                    item.version());
+                    item.version(),
+                    item.comboSelectionId(),
+                    item.comboContainerVariantId());
         }
     }
 
@@ -709,12 +725,19 @@ public class KitchenBoardController {
         }
     }
 
-    /** One line, reduced to the two facts a wall renders: which station, how many. */
-    record VduItemView(UUID stationId, int quantity, String status) {
+    /**
+     * One line, reduced to the two facts a wall renders: which station, how many. A combo's items
+     * also carry the key they are grouped on (ADR 0136), an id and never a name.
+     */
+    record VduItemView(
+            UUID stationId,
+            int quantity,
+            String status,
+            @Nullable UUID comboSelectionId) {
 
         static VduItemView of(TicketItemRow item) {
             return new VduItemView(
-                    item.stationId(), item.quantity(), item.status().name());
+                    item.stationId(), item.quantity(), item.status().name(), item.comboSelectionId());
         }
     }
 

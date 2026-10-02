@@ -9,12 +9,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.catalog.api.CommentPresetLookup;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
@@ -87,6 +89,12 @@ public class CartService {
      * tenant that has never overridden the key still gets.
      */
     public static final Duration CART_TTL = Duration.ofHours(4);
+
+    /** ADR 0136: separates a combo cart line's key from the position of one of its components. */
+    static final char COMBO_KEY_SEPARATOR = '~';
+
+    /** 64 for the quote line's id, less the separator and a three-digit position. */
+    static final int MAX_COMBO_LINE_KEY_LENGTH = 60;
 
     private static final String CART_LINE_TABLE = "ordering.cart_lines";
     private static final String NOTE_COLUMN = "customer_note_encrypted";
@@ -253,7 +261,18 @@ public class CartService {
     public Optional<CartView> view(UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId) {
         return carts.find(tenantId, brandId, cartId)
                 .filter(cart -> ownedBy(cart, callerAccountId))
-                .map(cart -> new CartView(cart, lines(tenantId, cartId)));
+                .map(cart -> {
+                    List<CartLineRow> lines = lines(tenantId, cartId);
+                    java.util.Map<String, LineSelections> selections = new java.util.HashMap<>();
+                    for (CartLineRow line : lines) {
+                        List<ComboPick> picks = comboPicksOf(line);
+                        List<NestedModifier> nested = nestedModifiersOf(line);
+                        if (!picks.isEmpty() || !nested.isEmpty()) {
+                            selections.put(line.lineKey(), new LineSelections(picks, nested));
+                        }
+                    }
+                    return new CartView(cart, lines, selections);
+                });
     }
 
     /**
@@ -322,12 +341,77 @@ public class CartService {
             List<UUID> modifierOptionIds,
             @Nullable List<String> commentPresetCodes,
             @Nullable String customerNote) {
+        return putLine(
+                tenantId,
+                brandId,
+                callerAccountId,
+                cartId,
+                expectedVersion,
+                lineKey,
+                variantId,
+                quantity,
+                modifierOptionIds,
+                commentPresetCodes,
+                List.of(),
+                List.of(),
+                customerNote);
+    }
+
+    /**
+     * Adds or replaces one line that may be a combo or carry second-level modifier
+     * selections (ADR 0136).
+     *
+     * <p>A combo line's variant is the combo's container, which has no price, no stock
+     * and no order line of its own: what is sold is the {@code comboPicks}, one ordinary
+     * line per picked component. Everything a cart refuses for an ordinary line it
+     * therefore refuses for the components: stock and the sale window are checked on
+     * the variants the selection actually puts on the order, and on the container too,
+     * because a lunch combo's schedule is the combo's own.
+     *
+     * <p>The selection is validated here, by the rules the quote applies, so the screen
+     * that can say which group needs another pick hears it at the pick, not when the cart
+     * is priced. {@code nestedModifiers} name the first-level option whose linked variant
+     * offers the choice; one level and no more.
+     */
+    @Transactional
+    public CartView putLine(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            List<UUID> modifierOptionIds,
+            @Nullable List<String> commentPresetCodes,
+            @Nullable List<ComboPick> comboPicks,
+            @Nullable List<NestedModifier> nestedModifiers,
+            @Nullable String customerNote) {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        List<ComboPick> picks = canonicalPicks(comboPicks);
+        List<NestedModifier> nested = canonicalNested(nestedModifiers);
+        requireLineKeyShape(lineKey, !picks.isEmpty());
         requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
-        requireAvailable(tenantId, cart, java.util.Set.of(variantId));
+        Set<UUID> sold = requireCompositeSelection(
+                tenantId,
+                brandId,
+                new CartPricingPort.PricingCommand.Item(
+                        lineKey,
+                        variantId,
+                        quantity,
+                        modifierOptionIds == null ? List.of() : modifierOptionIds,
+                        pricingPicks(picks),
+                        pricingNested(nested)));
+        requireAvailable(tenantId, cart, sold);
         Instant now = clock.instant();
         requireOnSaleNow(tenantId, cart, variantId, now);
+        for (UUID soldVariant : sold) {
+            if (!soldVariant.equals(variantId)) {
+                requireOnSaleNow(tenantId, cart, soldVariant, now);
+            }
+        }
         List<String> presetCodes = commentPresetCodes == null ? List.of() : commentPresetCodes;
         requireOfferedCommentPresets(tenantId, brandId, variantId, presetCodes);
 
@@ -356,6 +440,8 @@ public class CartService {
                 quantity,
                 modifiersJson(modifierOptionIds),
                 List.copyOf(new java.util.LinkedHashSet<>(presetCodes)),
+                objectMapper.writeValueAsString(picks),
+                objectMapper.writeValueAsString(nested),
                 noteEncrypted,
                 now);
 
@@ -742,18 +828,27 @@ public class CartService {
         // requireSelectionRules' own doc says a menu-state refusal belongs at
         // pricing, where it can.
         Instant priceNow = clock.instant();
+        // ADR 0136: what each line puts on the order is its own variant, or for a combo the
+        // components its picks name. Asked of pricing, which owns the rules, at the same time
+        // as the schedule is re-checked, so a menu that moved under a combo is refused here and
+        // by name. Stock is held on these variants at checkout, so this is the set to check.
+        Set<UUID> soldVariants = new java.util.LinkedHashSet<>();
         for (CartLineRow line : lines) {
             requireOnSaleNow(tenantId, cart, line.variantId(), priceNow);
+            Set<UUID> lineSold = requireCompositeSelection(tenantId, brandId, pricingItemOf(line));
+            for (UUID soldVariant : lineSold) {
+                if (!soldVariant.equals(line.variantId())) {
+                    requireOnSaleNow(tenantId, cart, soldVariant, priceNow);
+                }
+            }
+            soldVariants.addAll(lineSold);
         }
         // Rows 4.4c/4.4d, storefront half: re-checked here too, not only at
         // putLine, for the identical reason requireOnSaleNow already is —
         // stock can run out between adding a line and pricing the cart, and
         // a price a customer cannot actually check out on is worse than a
         // refusal that names the line.
-        requireAvailable(
-                tenantId,
-                cart,
-                lines.stream().map(CartLineRow::variantId).collect(java.util.stream.Collectors.toSet()));
+        requireAvailable(tenantId, cart, soldVariants);
 
         SalesChannel channel = channels.byId(tenantId, cart.channelId())
                 .orElseThrow(() ->
@@ -765,10 +860,7 @@ public class CartService {
                 cart.locationId(),
                 cart.customerAccountId(),
                 channel.code(),
-                lines.stream()
-                        .map(line -> new CartPricingPort.PricingCommand.Item(
-                                line.lineKey(), line.variantId(), line.quantity(), modifierIdsOf(line)))
-                        .toList(),
+                lines.stream().map(this::pricingItemOf).toList(),
                 // Keyed on the cart and its version, so re-pricing an unchanged
                 // cart returns the same quote rather than a second one holding a
                 // second reservation — and any edit, which bumps the version,
@@ -779,7 +871,12 @@ public class CartService {
                 // learns whether it is eligible, only what the resulting quote
                 // says.
                 cart.appliedCouponCode(),
-                deliveryFor(tenantId, cartId, cart, channel)));
+                deliveryFor(tenantId, cartId, cart, channel),
+                null,
+                // ADR 0136: the hidden auto-selected modifier groups pricing applies are the
+                // ones that name this mode, and a dine-in cart is told apart from a pickup one
+                // by nothing but this. The cart knows its mode for its whole life.
+                cart.fulfillmentMode()));
 
         if (!carts.attachQuote(
                 tenantId,
@@ -934,6 +1031,12 @@ public class CartService {
                     // is not personal data bound to the old row's encryption,
                     // so there is nothing stopping the copy.
                     line.commentPresetCodes(),
+                    // ADR 0136: what was picked inside a combo, and the nested choices, are
+                    // the customer's selection like the modifiers are. Whether the new branch
+                    // still offers them is answered when the new cart is priced, which can
+                    // name the group.
+                    line.comboPicksJson(),
+                    line.nestedModifiersJson(),
                     null,
                     now);
         }
@@ -1015,6 +1118,104 @@ public class CartService {
         return ids;
     }
 
+    /** ADR 0136: what the customer picked inside a combo, read back out of the stored document. */
+    public List<ComboPick> comboPicksOf(CartLineRow line) {
+        if (line.comboPicksJson() == null || line.comboPicksJson().isBlank()) {
+            return List.of();
+        }
+        return objectMapper.readValue(line.comboPicksJson(), new TypeReference<List<ComboPick>>() {});
+    }
+
+    /** ADR 0136: the second-level modifier selections, read back out of the stored document. */
+    public List<NestedModifier> nestedModifiersOf(CartLineRow line) {
+        if (line.nestedModifiersJson() == null || line.nestedModifiersJson().isBlank()) {
+            return List.of();
+        }
+        return objectMapper.readValue(line.nestedModifiersJson(), new TypeReference<List<NestedModifier>>() {});
+    }
+
+    /** One cart line, as pricing is asked about it: the single place a stored line becomes a pricing item. */
+    CartPricingPort.PricingCommand.Item pricingItemOf(CartLineRow line) {
+        return new CartPricingPort.PricingCommand.Item(
+                line.lineKey(),
+                line.variantId(),
+                line.quantity(),
+                modifierIdsOf(line),
+                pricingPicks(comboPicksOf(line)),
+                pricingNested(nestedModifiersOf(line)));
+    }
+
+    private static List<CartPricingPort.PricingCommand.ComboPick> pricingPicks(List<ComboPick> picks) {
+        return picks.stream()
+                .map(pick -> new CartPricingPort.PricingCommand.ComboPick(pick.componentId(), pick.quantity()))
+                .toList();
+    }
+
+    private static List<CartPricingPort.PricingCommand.NestedModifier> pricingNested(List<NestedModifier> nested) {
+        return nested.stream()
+                .map(one -> new CartPricingPort.PricingCommand.NestedModifier(one.parentOptionId(), one.optionId()))
+                .toList();
+    }
+
+    /**
+     * The same pick twice is one pick of two, and the order the customer tapped them in is
+     * not part of what they chose: merged and sorted, so the same selection is the same
+     * document and therefore the same pricing context hash.
+     */
+    private static List<ComboPick> canonicalPicks(@Nullable List<ComboPick> picks) {
+        if (picks == null || picks.isEmpty()) {
+            return List.of();
+        }
+        java.util.Map<UUID, Integer> merged = new java.util.TreeMap<>();
+        for (ComboPick pick : picks) {
+            merged.merge(pick.componentId(), pick.quantity(), Math::addExact);
+        }
+        return merged.entrySet().stream()
+                .map(entry -> new ComboPick(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    private static List<NestedModifier> canonicalNested(@Nullable List<NestedModifier> nested) {
+        if (nested == null || nested.isEmpty()) {
+            return List.of();
+        }
+        return nested.stream()
+                .sorted(java.util.Comparator.comparing(NestedModifier::parentOptionId)
+                        .thenComparing(NestedModifier::optionId))
+                .toList();
+    }
+
+    /**
+     * A combo's component lines carry the cart line's key, {@value #COMBO_KEY_SEPARATOR} and a
+     * position (ADR 0136), and a quote line's id is 64 characters. A key that already holds the
+     * separator could be mistaken for a component of another line, so it is not accepted on any
+     * line; a combo's has to leave room for the suffix.
+     */
+    private static void requireLineKeyShape(String lineKey, boolean combo) {
+        if (lineKey.indexOf(COMBO_KEY_SEPARATOR) >= 0) {
+            throw new CartRefusedException(
+                    "LINE_KEY_INVALID", "A line key may not contain '" + COMBO_KEY_SEPARATOR + "'");
+        }
+        if (combo && lineKey.length() > MAX_COMBO_LINE_KEY_LENGTH) {
+            throw new CartRefusedException(
+                    "LINE_KEY_TOO_LONG",
+                    "A combo line's key may be at most " + MAX_COMBO_LINE_KEY_LENGTH + " characters");
+        }
+    }
+
+    /**
+     * Asks pricing whether this line's selection is one the catalog allows, and what it puts on
+     * the order. Pricing owns the rules; the cart owns what it does with the answer.
+     */
+    private Set<UUID> requireCompositeSelection(UUID tenantId, UUID brandId, CartPricingPort.PricingCommand.Item item) {
+        try {
+            return pricing.checkSelection(tenantId, brandId, item).soldVariantIds();
+        } catch (CartPricingPort.PricingRefusedException refused) {
+            throw new CartRefusedException(
+                    refused.code(), java.util.Objects.requireNonNullElse(refused.getMessage(), refused.code()));
+        }
+    }
+
     /** The customer's note, decrypted for the one place that may see it. Null when there is none. */
     public @Nullable String revealNote(UUID tenantId, CartLineRow line, String purpose) {
         if (line.customerNoteEncrypted() == null) {
@@ -1080,7 +1281,7 @@ public class CartService {
      * use, so a client need not learn a second vocabulary for "this dish is
      * gone".
      */
-    private void requireAvailable(UUID tenantId, CartRow cart, java.util.Set<UUID> variantIds) {
+    private void requireAvailable(UUID tenantId, CartRow cart, Set<UUID> variantIds) {
         AvailabilityDecision decision = inventory.checkAvailability(tenantId, cart.locationId(), variantIds);
         if (!decision.available()) {
             AvailabilityDecision.Unavailable first = decision.unavailableItems().get(0);
@@ -1210,6 +1411,35 @@ public class CartService {
     }
 
     /**
+     * One thing the customer picked inside a combo (ADR 0136).
+     *
+     * @param componentId the {@code catalog.combo_components} pairing -- also what its price is
+     *                    keyed to, so the same drink in two combos is two different picks
+     * @param quantity    how many times it was picked; more than one needs a group that allows it
+     */
+    public record ComboPick(UUID componentId, int quantity) {
+
+        public ComboPick {
+            java.util.Objects.requireNonNull(componentId, "A combo pick names a component");
+            if (quantity <= 0) {
+                throw new IllegalArgumentException("A combo pick needs a positive quantity");
+            }
+        }
+    }
+
+    /**
+     * A second-level modifier selection (ADR 0136): the option chosen, and the first-level
+     * option whose linked variant offered it.
+     */
+    public record NestedModifier(UUID parentOptionId, UUID optionId) {
+
+        public NestedModifier {
+            java.util.Objects.requireNonNull(parentOptionId, "A nested selection names its parent option");
+            java.util.Objects.requireNonNull(optionId, "A nested selection names an option");
+        }
+    }
+
+    /**
      * A cart with its lines, as every read of a cart returns it.
      *
      * <p>Deliberately without the destination. Reading a cart is the most frequent
@@ -1218,7 +1448,33 @@ public class CartService {
      * that a cart response can never grow a field that turns out to be somebody's
      * home address.
      */
-    public record CartView(CartRow cart, List<CartLineRow> lines) {}
+    public record CartView(CartRow cart, List<CartLineRow> lines, java.util.Map<String, LineSelections> selections) {
+
+        public CartView {
+            selections = java.util.Map.copyOf(selections);
+        }
+
+        /** A view with no composite line in it, which is every view before ADR 0136. */
+        public CartView(CartRow cart, List<CartLineRow> lines) {
+            this(cart, lines, java.util.Map.of());
+        }
+
+        /** What a line holds beyond its variant, modifiers and note; empty for an ordinary line. */
+        public LineSelections selectionsOf(String lineKey) {
+            return selections.getOrDefault(lineKey, LineSelections.NONE);
+        }
+    }
+
+    /** ADR 0136: the combo picks and second-level selections of one cart line, parsed. */
+    public record LineSelections(List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers) {
+
+        static final LineSelections NONE = new LineSelections(List.of(), List.of());
+
+        public LineSelections {
+            comboPicks = List.copyOf(comboPicks);
+            nestedModifiers = List.copyOf(nestedModifiers);
+        }
+    }
 
     /**
      * What was captured on the cart, decrypted for one transaction.

@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
+import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
@@ -462,7 +463,10 @@ public class PricingEngine {
                     Money.of(lineGross, currency),
                     Money.zero(currency),
                     selectionId,
-                    line.variantId()));
+                    line.variantId(),
+                    component.id(),
+                    line.quantity(),
+                    pick.pickQuantity()));
             drafts.add(new AdjustmentDraft(
                     childId,
                     Adjustment.Type.BASE_PRICE,
@@ -527,7 +531,7 @@ public class PricingEngine {
      * source_id} is the option itself: the evidence an order reads to learn which
      * option the server selected for the customer.
      */
-    public static final String HIDDEN_MODIFIER_SOURCE = "HIDDEN_MODIFIER_OPTION";
+    public static final String HIDDEN_MODIFIER_SOURCE = QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE;
 
     private record HiddenApplied(UUID optionId, long priceMinor) {}
 

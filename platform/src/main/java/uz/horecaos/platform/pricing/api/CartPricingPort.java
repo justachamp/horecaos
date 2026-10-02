@@ -32,6 +32,41 @@ public interface CartPricingPort {
     QuoteSnapshot priceCart(PricingCommand command);
 
     /**
+     * Checks one cart line's composite selection without pricing it (ADR 0136).
+     *
+     * <p>The cart is what the customer is looking at, and a combo with a group left
+     * unanswered or a nested choice that its option does not offer is a basket nobody
+     * can be charged for: discovering that when the cart is priced is a step too late
+     * for the screen that could have said which group needs another pick. This runs
+     * the very selection rules {@link #priceCart} runs, over the very same facts, so
+     * the two cannot disagree about what a valid selection is.
+     *
+     * <p>A line that is not composite is accepted as it is, and the answer says so.
+     *
+     * @return the variants this line puts on the order: the picked components for a
+     *         combo, whose container is never sold, and the line's own variant
+     *         otherwise. The cart checks stock and sale windows on these
+     * @throws PricingRefusedException with the rule's own stable code
+     *         ({@code COMBO_GROUP_MINIMUM_NOT_MET}, {@code
+     *         MODIFIER_NESTING_DEPTH_EXCEEDED}, ...) when the selection is not allowed
+     */
+    SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item);
+
+    /**
+     * What a valid selection puts on the order.
+     *
+     * @param combo true when the line is a combo, whose container has no stock, no
+     *              price and no line of its own
+     * @param soldVariantIds the variants stock and sale windows are checked on
+     */
+    record SelectionCheck(boolean combo, java.util.Set<UUID> soldVariantIds) {
+
+        public SelectionCheck {
+            soldVariantIds = java.util.Set.copyOf(soldVariantIds);
+        }
+    }
+
+    /**
      * Everything a cart's total depends on, handed from ordering to pricing.
      *
      * @param customerAccountId null for a guest cart, which has no account to

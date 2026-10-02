@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -263,11 +264,21 @@ class CheckoutOrderWriter {
         Map<String, CartLineRow> cartLinesByKey = cartLines.stream()
                 .collect(Collectors.toMap(CartLineRow::lineKey, line -> line, (a, b) -> a, LinkedHashMap::new));
 
-        Set<UUID> variantIds =
-                quote.lines().stream().map(QuoteSnapshot.Line::variantId).collect(Collectors.toUnmodifiableSet());
-        Set<UUID> optionIds = cartLines.stream()
-                .flatMap(line -> cartService.modifierIdsOf(line).stream())
+        // ADR 0136: a combo's cart line is priced as one quote line per picked component, and
+        // the container -- the variant the customer added -- is on none of them. Both the
+        // container's name and the hidden options the server applied are read once, in bulk,
+        // like the variants and options above.
+        Set<UUID> variantIds = quote.lines().stream()
+                .flatMap(line -> java.util.stream.Stream.of(line.variantId(), line.comboContainerVariantId()))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());
+        Map<String, List<UUID>> hiddenOptionsByLine = hiddenOptionsByQuoteLine(quote);
+        Set<UUID> optionIds = new java.util.HashSet<>();
+        cartLines.forEach(line -> {
+            optionIds.addAll(cartService.modifierIdsOf(line));
+            cartService.nestedModifiersOf(line).forEach(nested -> optionIds.add(nested.optionId()));
+        });
+        hiddenOptionsByLine.values().forEach(optionIds::addAll);
 
         Map<UUID, OrderCatalogSnapshot.VariantDescriptor> variants =
                 catalog.variants(command.tenantId(), command.brandId(), variantIds);
@@ -288,7 +299,9 @@ class CheckoutOrderWriter {
 
         for (QuoteSnapshot.Line line : quote.lines()) {
             lineNumber++;
-            CartLineRow cartLine = cartLinesByKey.get(line.lineKey());
+            // A combo's component lines carry the cart line's key and a position; the cart line
+            // holds the note, the presets and the second-level choices.
+            CartLineRow cartLine = cartLinesByKey.get(line.cartLineKey());
             var descriptor = variants.get(line.variantId());
             UUID orderLineId = UUID.randomUUID();
 
@@ -310,14 +323,61 @@ class CheckoutOrderWriter {
                     line.baseAmountMinor(),
                     line.finalAmountMinor(),
                     line.taxAmountMinor(),
-                    reEncryptNote(command.tenantId(), cartLine, orderLineId));
+                    // The same note on every component of a combo: it was written about the
+                    // combo, and the station that cooks the burger and the one that pours the
+                    // drink each need to read it.
+                    reEncryptNote(command.tenantId(), cartLine, orderLineId),
+                    comboFacts(line, variants));
 
             orderLineIdsByKey.put(line.lineKey(), orderLineId);
 
-            if (cartLine == null) {
-                continue;
+            // First-level choices the customer made, then the second-level ones that hang off
+            // them, then the options the server applied by itself. A combo's cart line takes no
+            // modifiers (the quote refuses them), so for a component line only the hidden
+            // options of its own variant can be here.
+            Map<UUID, UUID> modifierIdByOption = new HashMap<>();
+            if (cartLine != null && line.comboSelectionId() == null) {
+                for (UUID optionId : cartService.modifierIdsOf(cartLine)) {
+                    var option = options.get(optionId);
+                    UUID modifierId = orders.insertLineModifier(
+                            command.tenantId(),
+                            orderLineId,
+                            option == null ? null : option.groupId(),
+                            optionId,
+                            option == null ? null : option.groupName(),
+                            option == null ? optionId.toString() : option.optionName(),
+                            1,
+                            0L,
+                            0L,
+                            null,
+                            false);
+                    modifierIdByOption.putIfAbsent(optionId, modifierId);
+                }
+                for (CartService.NestedModifier nested : cartService.nestedModifiersOf(cartLine)) {
+                    var option = options.get(nested.optionId());
+                    orders.insertLineModifier(
+                            command.tenantId(),
+                            orderLineId,
+                            option == null ? null : option.groupId(),
+                            nested.optionId(),
+                            option == null ? null : option.groupName(),
+                            option == null ? nested.optionId().toString() : option.optionName(),
+                            1,
+                            0L,
+                            0L,
+                            // Validated against the quote's own rules before it was priced, so the
+                            // parent was selected; a missing one is a bug, not a customer error.
+                            Objects.requireNonNull(
+                                    modifierIdByOption.get(nested.parentOptionId()),
+                                    "A nested selection's parent is a first-level selection of the same line"),
+                            false);
+                }
             }
-            for (UUID optionId : cartService.modifierIdsOf(cartLine)) {
+            // ADR 0136: a hidden auto-selected option reaches the order -- and therefore the
+            // receipt and the till -- even though the customer was never shown it. Its amount is
+            // already in this line's unit price and itemised in order_adjustments, like any
+            // modifier's; the row says which option the server applied.
+            for (UUID optionId : hiddenOptionsByLine.getOrDefault(line.lineKey(), List.of())) {
                 var option = options.get(optionId);
                 orders.insertLineModifier(
                         command.tenantId(),
@@ -328,7 +388,13 @@ class CheckoutOrderWriter {
                         option == null ? optionId.toString() : option.optionName(),
                         1,
                         0L,
-                        0L);
+                        0L,
+                        null,
+                        true);
+            }
+
+            if (cartLine == null) {
+                continue;
             }
 
             // Row 2.1b: a code the vocabulary no longer answers for (renamed,
@@ -410,6 +476,49 @@ class CheckoutOrderWriter {
         if (cart.fulfillmentMode() != null) {
             log.debug("Snapshotted {} lines onto order {}", lineNumber, orderId);
         }
+    }
+
+    /**
+     * The combo facts an order line remembers, or null on every line that is not one component
+     * of a combo (ADR 0136). The container's name is the product the customer added, copied
+     * now: a combo renamed next month does not rename this receipt.
+     */
+    private static JdbcOrderStore.@Nullable ComboFacts comboFacts(
+            QuoteSnapshot.Line line, Map<UUID, OrderCatalogSnapshot.VariantDescriptor> variants) {
+        if (line.comboSelectionId() == null) {
+            return null;
+        }
+        UUID containerId = Objects.requireNonNull(line.comboContainerVariantId());
+        var container = variants.get(containerId);
+        String name = container == null
+                ? containerId.toString()
+                : container.variantName() == null
+                        ? container.productName()
+                        : container.productName() + " " + container.variantName();
+        return new JdbcOrderStore.ComboFacts(
+                line.comboSelectionId(),
+                containerId,
+                name,
+                Objects.requireNonNull(line.comboComponentId()),
+                Objects.requireNonNull(line.comboQuantity()),
+                Objects.requireNonNull(line.comboPickQuantity()));
+    }
+
+    /**
+     * The hidden options pricing applied, by the quote line they were applied to. Read from the
+     * quote's own adjustments, which are the evidence: an option the server selected is exactly
+     * one pricing charged (even at zero) and recorded.
+     */
+    private static Map<String, List<UUID>> hiddenOptionsByQuoteLine(QuoteSnapshot quote) {
+        Map<String, List<UUID>> byLine = new LinkedHashMap<>();
+        for (QuoteSnapshot.Adjustment adjustment : quote.adjustments()) {
+            if (adjustment.lineKey() != null
+                    && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
+                byLine.computeIfAbsent(adjustment.lineKey(), key -> new java.util.ArrayList<>())
+                        .add(adjustment.sourceId());
+            }
+        }
+        return byLine;
     }
 
     /**

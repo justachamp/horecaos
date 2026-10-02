@@ -234,16 +234,21 @@ public class JdbcPricingStore {
             // for the same reason variantId is one.
             lineParams.put("comboSelectionId", line.comboSelectionId());
             lineParams.put("comboContainerVariantId", line.comboContainerVariantId());
+            lineParams.put("comboComponentId", line.comboComponentId());
+            lineParams.put("comboQuantity", line.comboQuantity());
+            lineParams.put("comboPickQuantity", line.comboPickQuantity());
 
             jdbc.sql("""
                     INSERT INTO pricing.quote_lines (
                         quote_id, line_id, tenant_id, line_type, source_variant_id, quantity,
                         description_snapshot, unit_amount_minor, base_amount_minor,
                         final_amount_minor, tax_amount_minor,
-                        combo_selection_id, combo_container_variant_id)
+                        combo_selection_id, combo_container_variant_id,
+                        combo_component_id, combo_quantity, combo_pick_quantity)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
                         :description, :unit, :base, :finalAmount, :tax,
-                        :comboSelectionId, :comboContainerVariantId)
+                        :comboSelectionId, :comboContainerVariantId,
+                        :comboComponentId, :comboQuantity, :comboPickQuantity)
                     """).params(lineParams).update();
         }
 
@@ -349,10 +354,18 @@ public class JdbcPricingStore {
         List<QuoteSnapshot.Line> lines = jdbc.sql("""
                 SELECT line_id, source_variant_id, quantity, description_snapshot,
                        unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                       combo_selection_id, combo_container_variant_id
+                       combo_selection_id, combo_container_variant_id,
+                       combo_component_id, combo_quantity, combo_pick_quantity
                 FROM pricing.quote_lines
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
-                ORDER BY line_id
+                -- A combo's component lines are the cart line's key, a tilde and a position
+                -- (PricingEngine). Compared as text, position 10 would sort before position 2
+                -- and an order would list a combo's components out of the order they were
+                -- priced in; the position is compared as the number it is.
+                ORDER BY split_part(line_id, '~', 1),
+                         CASE WHEN split_part(line_id, '~', 2) ~ '^[0-9]{1,9}$'
+                              THEN split_part(line_id, '~', 2)::integer ELSE 0 END,
+                         line_id
                 """)
                 .param("quoteId", quoteId)
                 .param("tenantId", tenantId)
@@ -366,7 +379,10 @@ public class JdbcPricingStore {
                         row.getLong("final_amount_minor"),
                         row.getLong("tax_amount_minor"),
                         row.getObject("combo_selection_id", UUID.class),
-                        row.getObject("combo_container_variant_id", UUID.class)))
+                        row.getObject("combo_container_variant_id", UUID.class),
+                        row.getObject("combo_component_id", UUID.class),
+                        row.getObject("combo_quantity", Integer.class),
+                        row.getObject("combo_pick_quantity", Integer.class)))
                 .list();
 
         List<QuoteSnapshot.Adjustment> adjustments = jdbc.sql("""

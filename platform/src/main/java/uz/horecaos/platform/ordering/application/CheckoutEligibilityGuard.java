@@ -422,6 +422,22 @@ class CheckoutEligibilityGuard {
             return Result.rejected("QUOTE_EXPIRED", "This quote has expired or was already accepted");
         }
 
+        // ADR 0136: a combo's cart line is its container, whose window was re-checked with
+        // the other cart lines above. What is actually sold is the components the quote
+        // lists, and each has a sale window of its own that can close between the pick and
+        // the checkout.
+        if (zone != null) {
+            for (QuoteSnapshot.Line quoted : quote.lines()) {
+                if (quoted.comboSelectionId() != null
+                        && !saleWindows.isOnSaleAt(
+                                command.tenantId(), cart.locationId(), quoted.variantId(), zone, now)) {
+                    return Result.rejected(
+                            "ITEM_OUT_OF_SALE_WINDOW",
+                            "Variant " + quoted.variantId() + " is outside its sale window right now");
+                }
+            }
+        }
+
         // ADR 0037. A delivery order is refused here whenever its accepted quote
         // carries no delivery charge a checkout may rely on — never priced as a
         // fake zero. This runs beside, and after, the DELIVERY_DESTINATION_REQUIRED

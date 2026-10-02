@@ -156,7 +156,8 @@ public class JdbcPosOrderSource implements PosOrderSource {
 
         return jdbc.sql("""
                 SELECT id, source_variant_id, product_name_snapshot, variant_name_snapshot,
-                       quantity, unit_amount_minor
+                       quantity, unit_amount_minor,
+                       combo_selection_id, combo_container_variant_id, combo_name_snapshot
                   FROM ordering.order_lines
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                  ORDER BY line_number
@@ -173,7 +174,10 @@ public class JdbcPosOrderSource implements PosOrderSource {
                             row.getInt("quantity"),
                             row.getLong("unit_amount_minor"),
                             modifiersByLine.getOrDefault(lineId, List.of()),
-                            commentPresetsByLine.getOrDefault(lineId, List.of()));
+                            commentPresetsByLine.getOrDefault(lineId, List.of()),
+                            row.getObject("combo_selection_id", UUID.class),
+                            row.getObject("combo_container_variant_id", UUID.class),
+                            row.getString("combo_name_snapshot"));
                 })
                 .list();
     }

@@ -354,6 +354,97 @@ class CompositeQuoteTests {
     }
 
     @Test
+    @DisplayName("a stored combo line remembers the pairing and the quantities an amendment has to price again")
+    void aStoredLineRemembersWhatAnAmendmentNeeds() {
+        var quote = quotes.quote(request(comboLine("lunch-1", 3, pick(burgerInLunch, 1), pick(colaInLunch, 1))));
+
+        QuoteSnapshot stored = quotes.quoteSnapshot(TENANT, quote.quoteId()).orElseThrow();
+
+        assertThat(stored.lines())
+                .extracting(QuoteSnapshot.Line::comboComponentId)
+                .as("the pairing the line was priced from: the same cola costs a different amount in another combo")
+                .containsExactly(burgerInLunch.id(), colaInLunch.id());
+        assertThat(stored.lines())
+                .extracting(QuoteSnapshot.Line::comboQuantity)
+                .as("the combos the customer bought, which the units alone cannot give back")
+                .containsOnly(3);
+        assertThat(stored.lines()).extracting(QuoteSnapshot.Line::comboPickQuantity).containsOnly(1);
+        assertThat(stored.lines())
+                .extracting(QuoteSnapshot.Line::cartLineKey)
+                .as("an order reads the cart line's note and presets through the key without the position")
+                .containsOnly("lunch-1");
+        assertThat(catchThrowable(() -> jdbc.sql("""
+                                UPDATE pricing.quote_lines SET combo_component_id = NULL
+                                WHERE combo_container_variant_id IS NOT NULL
+                                """).update()))
+                .as("a grouped line without its pairing could never be repriced")
+                .hasMessageContaining("ck_quote_line_combo_provenance");
+    }
+
+    @Test
+    @DisplayName("a combo's component lines come back in the order they were priced, past the ninth")
+    void componentLinesAreReadBackInPositionOrder() {
+        UUID big = variant("BIG-LUNCH");
+        ComboGroup group = composites.createComboGroup(
+                new NewComboGroup(TENANT, BRAND, big, "MANY", "Many", "en", 0, 12, true, 0), "tester");
+        List<ComboComponent> components = new java.util.ArrayList<>();
+        for (int position = 0; position < 11; position++) {
+            ComboComponent component =
+                    composites.addComponent(TENANT, BRAND, group.id(), variant("PIECE-" + position), 1, position, "tester");
+            priceAuthoring.setPrice(TENANT, BRAND, priceBook, PriceableType.COMBO_COMPONENT, component.id(), 1_000L);
+            components.add(component);
+        }
+        PickSpec[] picks = components.stream().map(component -> pick(component, 1)).toArray(PickSpec[]::new);
+        QuoteRequest.Line eleven = new QuoteRequest.Line(
+                "big",
+                big,
+                1,
+                List.of(),
+                java.util.Arrays.stream(picks)
+                        .map(spec -> new QuoteRequest.ComboPick(spec.componentId(), spec.quantity()))
+                        .toList(),
+                List.of());
+
+        var quote = quotes.quote(request(eleven));
+
+        QuoteSnapshot stored = quotes.quoteSnapshot(TENANT, quote.quoteId()).orElseThrow();
+        assertThat(stored.lines())
+                .extracting(QuoteSnapshot.Line::lineKey)
+                .as("position 10 sorts as the number it is, not as the text '10' before '2'")
+                .containsExactly("big~1", "big~2", "big~3", "big~4", "big~5", "big~6", "big~7", "big~8", "big~9", "big~10", "big~11");
+        assertThat(stored.lines())
+                .extracting(QuoteSnapshot.Line::comboComponentId)
+                .containsExactlyElementsOf(components.stream().map(ComboComponent::id).toList());
+    }
+
+    @Test
+    @DisplayName("the cart can ask whether a selection is allowed without pricing or storing anything")
+    void aSelectionCanBeCheckedWithoutPricingIt() {
+        CartPricingPort.SelectionCheck combo = quotes.checkSelection(
+                TENANT, BRAND, item("l", lunch, 2, pick(wrapInLunch, 1), pick(colaInLunch, 1)));
+
+        assertThat(combo.combo()).isTrue();
+        assertThat(combo.soldVariantIds())
+                .as("what the cart holds stock on and checks sale windows for: the components, never the container")
+                .containsExactlyInAnyOrder(wrap, cola);
+
+        CartPricingPort.SelectionCheck plain = quotes.checkSelection(TENANT, BRAND, item("b", burger, 1));
+        assertThat(plain.combo()).isFalse();
+        assertThat(plain.soldVariantIds()).containsExactly(burger);
+
+        assertThat(jdbc.sql("SELECT count(*) FROM pricing.quotes").query(Long.class).single())
+                .as("a check writes nothing")
+                .isZero();
+
+        CartPricingPort.PricingRefusedException refused = (CartPricingPort.PricingRefusedException) catchThrowable(
+                () -> quotes.checkSelection(TENANT, BRAND, item("l", lunch, 1, pick(burgerInLunch, 1))));
+        assertThat(refused.code())
+                .as("the very rule pricing applies, so the cart and the quote cannot disagree")
+                .isEqualTo("COMBO_GROUP_MINIMUM_NOT_MET");
+        assertThat(refused.subjectId()).isEqualTo(drinkGroup.id());
+    }
+
+    @Test
     @DisplayName("an ordinary cart is unchanged: no combo columns, no hidden adjustment, the same lines as before")
     void anOrdinaryCartIsUntouched() {
         var quote = quotes.quote(request(line("b", burger, 2)));

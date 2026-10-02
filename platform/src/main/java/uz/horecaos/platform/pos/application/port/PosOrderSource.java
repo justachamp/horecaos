@@ -101,7 +101,15 @@ public interface PosOrderSource {
          *                        resolved from this through the ADR 0026 mapping
          *                        rather than from the name, because a provider's
          *                        product name is editable in their back office and
-         *                        its identifier is not
+         *                        its identifier is not. For a combo's component line
+         *                        (ADR 0136) it is the component, never the combo
+         * @param comboSelectionId ADR 0136: shared by the component lines of one combo
+         *                        purchase, null on every other line
+         * @param comboContainerVariantId the combo, set exactly when {@code comboSelectionId}
+         *                        is. The combo is not a line and carries no amount; a till
+         *                        that groups can look up its own id for it
+         * @param comboName       the combo's name as it was sold, set exactly when
+         *                        {@code comboSelectionId} is
          */
         public record Line(
                 UUID lineId,
@@ -115,11 +123,38 @@ public interface PosOrderSource {
                 // line was checked out carrying — mapped to a provider
                 // modifier code through ADR 0026 exactly as modifierOptionIds
                 // already is.
-                List<UUID> commentPresetIds) {
+                List<UUID> commentPresetIds,
+                @Nullable UUID comboSelectionId,
+                @Nullable UUID comboContainerVariantId,
+                @Nullable String comboName) {
 
             public Line {
                 modifierOptionIds = List.copyOf(modifierOptionIds == null ? List.of() : modifierOptionIds);
                 commentPresetIds = List.copyOf(commentPresetIds == null ? List.of() : commentPresetIds);
+            }
+
+            /** A line that is not part of a combo, which is every line before ADR 0136. */
+            public Line(
+                    UUID lineId,
+                    UUID sourceVariantId,
+                    String productNameSnapshot,
+                    @Nullable String variantNameSnapshot,
+                    int quantity,
+                    long unitAmountMinor,
+                    List<UUID> modifierOptionIds,
+                    List<UUID> commentPresetIds) {
+                this(
+                        lineId,
+                        sourceVariantId,
+                        productNameSnapshot,
+                        variantNameSnapshot,
+                        quantity,
+                        unitAmountMinor,
+                        modifierOptionIds,
+                        commentPresetIds,
+                        null,
+                        null,
+                        null);
             }
         }
     }

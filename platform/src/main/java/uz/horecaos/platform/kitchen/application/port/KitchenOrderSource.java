@@ -92,7 +92,28 @@ public interface KitchenOrderSource {
      * @param productId nullable in {@code ordering.order_lines}, so routing must
      *                  cope with a line that names only a variant rather than
      *                  assuming a product level exists to fall back to
+     * @param comboSelectionId ADR 0136: the key the component lines of one combo purchase
+     *                  share, null on every other line. It is carried onto the ticket item so
+     *                  a display can group a combo's items under one header; it is an id and
+     *                  not a name, because kitchen rows carry no names (ADR 0041)
+     * @param comboContainerVariantId the combo this component was bought as part of, set
+     *                  exactly when {@code comboSelectionId} is. Routing never reads it: a
+     *                  component routes by its own variant, so the grill and the bar each
+     *                  still see only their own item
      */
     record OrderLineForKitchen(
-            UUID orderLineId, int lineNumber, @Nullable UUID productId, UUID variantId, int quantity) {}
+            UUID orderLineId,
+            int lineNumber,
+            @Nullable UUID productId,
+            UUID variantId,
+            int quantity,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {
+
+        /** A line that is not part of a combo, which is every line before ADR 0136. */
+        public OrderLineForKitchen(
+                UUID orderLineId, int lineNumber, @Nullable UUID productId, UUID variantId, int quantity) {
+            this(orderLineId, lineNumber, productId, variantId, quantity, null, null);
+        }
+    }
 }

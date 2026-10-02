@@ -839,10 +839,14 @@ public class JdbcKitchenStore {
         jdbc.sql("""
                 INSERT INTO kitchen.ticket_items (
                     id, tenant_id, ticket_id, location_id, order_line_id, station_id,
-                    quantity, routed_by, status, version, created_at, updated_at)
+                    quantity, routed_by, status, version, created_at, updated_at,
+                    combo_selection_id, combo_container_variant_id)
                 VALUES (:id, :tenantId, :ticketId, :locationId, :lineId, :stationId,
-                    :quantity, :routedBy, :status, 1, :now, :now)
+                    :quantity, :routedBy, :status, 1, :now, :now,
+                    :comboSelectionId, :comboContainerVariantId)
                 """)
+                .param("comboSelectionId", item.comboSelectionId())
+                .param("comboContainerVariantId", item.comboContainerVariantId())
                 .param("id", item.id())
                 .param("tenantId", item.tenantId())
                 .param("ticketId", item.ticketId())
@@ -1010,7 +1014,7 @@ public class JdbcKitchenStore {
     private static final String SELECT_ITEM = """
             SELECT id, tenant_id, ticket_id, location_id, order_line_id, station_id,
                    quantity, routed_by, status, started_at, ready_at, cancelled_at,
-                   version, created_at
+                   version, created_at, combo_selection_id, combo_container_variant_id
             FROM kitchen.ticket_items
             """;
 
@@ -1073,7 +1077,9 @@ public class JdbcKitchenStore {
                 instant(row, "ready_at"),
                 instant(row, "cancelled_at"),
                 row.getInt("version"),
-                row.getObject("created_at", OffsetDateTime.class).toInstant());
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getObject("combo_selection_id", UUID.class),
+                row.getObject("combo_container_variant_id", UUID.class));
     }
 
     private static BrandRoutingRuleRow mapBrandRoutingRule(ResultSet row, int number) throws SQLException {
@@ -1228,7 +1234,45 @@ public class JdbcKitchenStore {
             @Nullable Instant readyAt,
             @Nullable Instant cancelledAt,
             int version,
-            Instant createdAt) {}
+            Instant createdAt,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {
+
+        /** An item that is not part of a combo, which is every item before ADR 0136. */
+        public TicketItemRow(
+                UUID id,
+                UUID tenantId,
+                UUID ticketId,
+                UUID locationId,
+                UUID orderLineId,
+                UUID stationId,
+                int quantity,
+                RoutingLevel routedBy,
+                TicketItemStatus status,
+                @Nullable Instant startedAt,
+                @Nullable Instant readyAt,
+                @Nullable Instant cancelledAt,
+                int version,
+                Instant createdAt) {
+            this(
+                    id,
+                    tenantId,
+                    ticketId,
+                    locationId,
+                    orderLineId,
+                    stationId,
+                    quantity,
+                    routedBy,
+                    status,
+                    startedAt,
+                    readyAt,
+                    cancelledAt,
+                    version,
+                    createdAt,
+                    null,
+                    null);
+        }
+    }
 
     public record TicketEventRow(
             UUID id,
