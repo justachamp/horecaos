@@ -1,42 +1,29 @@
 # ADR 0143: Walk-in guests open their own table session
 
 - Decision status: Accepted
-- Implementation status: Not started — no guest-side call creates a table
-  session. The only writer is staff-side: `TableSessionController.open`
-  (`POST /api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions`)
-  declares `dinein.session.manage` at `LOCATION` scope, and
-  `TableSessionService.open` — which the controller calls — takes an
-  `openedBy` string and authorizes nothing itself, so the gate is the
-  controller's declaration. `ReservationsPage.submitSeat` always sends a
-  `reservationId`; since batch 15 (`w6-dine-in-operator-flows`) two more console
-  callers send none and seat a walk-in, as this record says the staff path must
-  (the floor plan's "Seat walk-in", and the New Order screen's table picker for a
-  DINE_IN order), and none of them consults a booking's hold or a table's `seats`
-  -- the host's judgement, with an advisory warning, exactly as the context
-  below describes. ADR 0047's API
-  sketch names `POST /api/v1/storefront/qr/{tableToken}/sessions` for the guest's
-  own open; it was never built, and ADR 0047's own checklist has already moved the
-  token exchange from a path segment into a request body
-  (`POST /api/v1/storefront/dine-in/qr/token-exchanges`). What is built and this
-  record keeps: the table token and its exchange for a short-lived guest token
-  (`QrEntryService`), the guest's bill, bill request and round attach
-  (`QrEntryController`), the one-live-party-per-table index
-  (`ux_session_table_occupied`), the reservation exclusion constraint, and batch
-  13's storefront `/dine-in` flow, which for an `ORDER_AND_PAY` table with no live
-  session renders `dineIn.notSeated` ("Ask a member of staff to seat you, then
-  scan the code again") and disables ordering.
-  Status note, 2026-09-30 (documentation pass, no code; the status above is
-  unchanged): ordering now has a table binding. Batch 15 built the cart-to-table
-  binding this record's Context and Open inputs describe (`V0435`, `PUT
-  .../carts/{cartId}/table`, `dinein.api.TableBindingPort`), so nothing here should
-  be read as "checkout knows nothing about a table". Read against the tree at
-  `acd96539`, both customer storefronts now make the `PUT` (`frontend/storefront`
-  and `frontend/storefront-milliy`), but only `frontend/storefront` sends the
-  guest's `X-Dine-In-Token` at checkout; `frontend/storefront-milliy` does not, so
-  its table-bound checkout should be refused with `TABLE_TOKEN_REQUIRED` (read from
-  the two codebases and `CartCheckoutAndOrderTests#aBoundCartWithoutATokenIsRefused`;
-  not reproduced against a running stack, and not fixed by this note). Self-seating
-  itself remains unbuilt.
+- Implementation status: Partial — built in operations batch 17 (wave `w8-walk-in-sessions`):
+  the claim columns on `dinein.table_sessions` and the branch's `walk_in_horizon_minutes`
+  and claim-window settings (`V0467`, with `ux_claim_account_branch`), the guest route on
+  `QrEntryController` and the open path in `WalkInSeatingService` (eligibility in one
+  transaction, the settings-row lock before the table-row lock, a unique-index violation
+  mapped to `TABLE_NOT_AVAILABLE`, the table row lock also taken by `ReservationService`
+  confirm and amend), `AdmissionResponse.walkInAvailable`, the `claim-confirmations`
+  endpoint, `origin`, `claimExpiresAt` and `confirmedAt` on the live list,
+  `TableSessionClaimSweeper` (every live status; `BILL_REQUESTED` lapses by way of `OPEN`)
+  with the pending-order read on `SessionOrderSource`, the `CLAIM_UNCONFIRMED` refusal when
+  asking for the bill, staff moves past `OPEN` confirming a claim, erasure clearing
+  `opened_by_account_id`, the `EndpointCapabilityDeclarationTests` allow-list entry and the
+  `StorefrontReadAuthenticationTests` case, the console floor-plan and reservation
+  surfaces, and both storefronts' "sit at this table" flow, hold countdown and strings. Not
+  built, because the record defers each input to a named owner: whether a self-seated table
+  may place a cash round, or whether a QR table cart must carry the table binding (finance
+  and the owner); a realtime `FLOOR` signal to the host stand (needs an ADR 0045
+  amendment); and a presence proof stronger than a printed code, so the phantom-cash-order
+  exposure is exactly as the record describes it. Also not built: no report or business-day
+  fact reads `dinein.table_sessions` today, so the checklist's reporting item (exclude
+  `CLAIM_LAPSED` from opened-session and cover counts, carry `origin`) has nothing to change
+  until a covers or sessions report exists; and the console's "booked soon" warning keeps
+  its advisory 90-minute window rather than the branch's `walk_in_horizon_minutes`.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin) as an

@@ -1,14 +1,35 @@
 # ADR 0139: Staff identity: the staff person record
 
 - Decision status: Accepted
-- Implementation status: Not started — no staff person table, no `StaffDirectory`
-  port, no self-service profile and no contact-person table exists. What exists
-  is the interim this record replaces: Keycloak holds each staff member's first
-  name, last name and a `phone` attribute (`KeycloakStaffAccounts#create` and
-  `#completeSetup`), and `CachedStaffDisplayNames` reads the name back through a
-  ten-minute cache keyed by subject alone (Staff 9.3b and 9.2d, built).
-  `iam.principals` and `iam.tenant_membership_links` (`V0057`) exist, and nothing
-  in `src/main/java` reads or writes either.
+- Implementation status: Partial — built in operations batch 17 (wave `w4-staff-identity`):
+  the tenant's own record of each staff member (`V0453`, encrypted through
+  `FieldProtection`, with the retention columns), the reference that is never reused
+  (`V0454`), a branch's contact person (`V0455`) and a member's emergency contact
+  (`V0456`); the `iam.api.staff` port (`StaffDirectory`, `StaffMemberCards`,
+  `StaffMemberRegistry`, `StaffPhotos`) over a `(tenant, subject)` cache evicted on
+  write, which replaces `CachedStaffDisplayNames`; row creation inside the
+  invitation, promotion to `ACTIVE` on acceptance and in the owner's `completeSetup`;
+  `StaffMemberReconciler` (backfill for accounts that predate the record, plus the
+  completion gauges) and `StaffMemberRetentionSweeper` in report-only mode; the
+  member, `me`, photo, end-employment, emergency-contact and branch-contact
+  endpoints, the four capabilities and `@StaffSelfAuthorized`; audit facts through
+  `ChangeDocuments` with the redaction set extended; `MappingEntityType.OPERATOR` and
+  the POS operator pairing; names on the operator leaderboard and the live operator
+  band; and the console (People list and card, «Мой профиль», branch contact persons,
+  emergency-contact panel, shell chip, i18n parity, lazy-loaded). Not built: the drift
+  half of ADR 0009 (the reconciler only reconciles grants into staff members and
+  promotes `PENDING` ones, it does not detect drift in `iam.principals` or
+  `iam.tenant_membership_links`); deleting the photo object on anonymise (there is no
+  media delete port, so the reference is cleared and the object stays) and a retention
+  sweeper that deletes (it ships `REPORT_ONLY` until legal approves a sample); ending a
+  `PENDING` member does not cancel its outstanding invitation, and ending employment is
+  `ENDED` first and then a per-grant revoke, not one transaction; operator names on the
+  report export (`ReportExportService`); the CRM log's «Оператор» column, the call log
+  and the presence view, which still print the Keycloak subject; a branch manager
+  (`LOCATION_MANAGER`) holds no `location.write`, so branch contacts are read-only for
+  that job; another member's photo cannot be set from the console; and the
+  `@Idempotent` list responses of other modules, which `ClassificationScanner` does not
+  descend into, were not audited for personal data.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform

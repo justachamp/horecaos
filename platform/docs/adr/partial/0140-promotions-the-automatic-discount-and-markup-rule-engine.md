@@ -1,19 +1,30 @@
 # ADR 0140: Promotions: the automatic discount and markup rule engine
 
 - Decision status: Accepted
-- Implementation status: Not started — nothing this record decides is built: no
-  authoring, validation, simulation or lifecycle endpoint for an automatic
-  promotion, no markup, no payment-method, channel-type, order-sequence or
-  delivery-zone condition, no promotion redemption ledger, no per-promotion limit,
-  no definition history and no promotion redemption fact. The substrate it builds
-  on does exist: `V0093` tables (`pricing.promotions`, `promotion_conditions`,
-  `promotion_actions`, `coupon_codes`, `coupon_customer_usage`,
-  `coupon_redemptions`), `PromotionEvaluator` (twelve condition types and eight
-  action types) inside `PricingEngine` stages 3 and 4, the promo-code authoring
-  surface of ADR 0072, and a per-code redemption list. Reading the code found that
-  several evaluator inputs are inert today, and that an amended order is repriced
-  with none of the inputs it was placed under (see Context), so a promotion
-  authored by any route other than a promo code would not behave as written.
+- Implementation status: Partial — built in operations batch 17 (wave `w5-promotions-engine`):
+  the closed rule vocabulary and the engine over it (`V0457`: the new conditions,
+  `QUANTITY_AT_LEAST` with `exact`, the three stacking groups, `FREE_ITEM` as one bounded
+  gift allocated highest unit amount first, item markups at stage 2b), definition history,
+  usage and the redemption ledger (`V0458`), the promotion frame the cart and an amendment
+  fix (`V0459`), the redemption fact for the day close and the report (`V0460`), activation
+  governed by an approval policy (`V0461`), `PromotionInputResolver` as the one place every
+  condition input is resolved (and recorded, so an amendment inherits what the order was
+  priced with), `PromotionSimulationService` over the same pricing path a real quote takes,
+  the activation and suspension events (schemas and catalogue entries), the console
+  authoring and simulator screens and the redemption report, and the storefront display of
+  the kinds of benefit (a discount, a promo code, a delivery offer, a surcharge) with the
+  platform's own amounts. Not built: order-level markup and `SERVICE_CHARGE` (the open
+  fiscal and legal input; markups are item-level only); named-customer targeting (needs a
+  static audience) and a polygon geozone (a delivery-zone condition matches by zone id); an
+  approval threshold on the value of a `FREE_ITEM` gift (activation approval looks at
+  markup, percentage and fixed-amount thresholds); the delivery-fee threshold basis, which
+  no Accepted ADR decides (pre- or post-discount subtotal handed to the fee resolver);
+  the scheduled-order checkpoint re-quote; benefit grants as a redemption fact source
+  (`source_kind GRANT` exists with no producer); `promo.*` metrics; a customer-facing
+  promotion title per locale (the storefronts show kinds of benefit, never a promotion
+  name); the "your offers are already better" message on the main storefront, which has no
+  code entry; and an end-to-end test from a real checkout through a real day close to the
+  report.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform owner)
