@@ -117,24 +117,46 @@
             @for (person of group.people; track person.principalSubject) {
               <tr
                 class="row"
-                [class.row--revoked]="statusOfPerson(person).kind === 'ALL_REVOKED'"
+                [class.row--revoked]="isInactive(person)"
                 [class.row--expiring]="statusOfPerson(person).kind === 'EXPIRING_SOON'"
                 (click)="openPerson(person.principalSubject)"
               >
                 <td class="q-body-sm">
-                  <span class="q-mono person-id">{{ person.principalSubject }}</span>
-                  @if (isSelf(person.principalSubject)) {
-                    <span class="chip chip--muted">{{ 'staff.chip.you' | t }}</span>
-                  }
-                  @if (isLinkedToTelegram(person.principalSubject)) {
-                    <span class="chip chip--telegram" [title]="'staff.telegram.linked' | t"
-                      >Telegram</span
-                    >
-                  }
-                  <p class="q-caption not-built-note">{{ 'staff.column.person.notBuilt' | t }}</p>
-                  @if (rowCaption(person); as caption) {
-                    <p class="q-caption row-caption">{{ caption }}</p>
-                  }
+                  <div class="person">
+                    <span class="avatar" aria-hidden="true">{{ initialsOf(person) || '·' }}</span>
+                    <div class="person__text">
+                      @if (nameOf(person); as name) {
+                        <span class="person-name" data-testid="staff-row-name">{{ name }}</span>
+                      } @else {
+                        <span class="q-mono person-id" data-testid="staff-row-name">{{
+                          referenceOf(person) ?? person.principalSubject
+                        }}</span>
+                      }
+                      @if (isSelf(person.principalSubject)) {
+                        <span class="chip chip--muted">{{ 'staff.chip.you' | t }}</span>
+                      }
+                      @if (isLinkedToTelegram(person.principalSubject)) {
+                        <span class="chip chip--telegram" [title]="'staff.telegram.linked' | t"
+                          >Telegram</span
+                        >
+                      }
+                      @if (person.member) {
+                        <p class="q-caption person-meta" data-testid="staff-row-meta">
+                          @if (maskedPhoneOf(person); as phone) {
+                            <span class="q-tnum">{{ phone }}</span> ·
+                          }
+                          <span class="q-mono">{{ person.member.displayReference }}</span>
+                        </p>
+                      } @else {
+                        <p class="q-caption not-built-note" data-testid="staff-row-no-record">
+                          {{ 'staff.row.noRecord' | t }}
+                        </p>
+                      }
+                      @if (rowCaption(person); as caption) {
+                        <p class="q-caption row-caption">{{ caption }}</p>
+                      }
+                    </div>
+                  </div>
                 </td>
                 <td class="q-body-sm">
                   @for (grant of activeJobsOf(person); track grant.id) {
@@ -153,20 +175,17 @@
                 <td class="q-body-sm">
                   <span
                     class="status-pill"
-                    [class.status-pill--revoked]="statusOfPerson(person).kind === 'ALL_REVOKED'"
-                    [class.status-pill--expiring]="statusOfPerson(person).kind === 'EXPIRING_SOON'"
-                    [class.status-pill--invited]="statusOfPerson(person).kind === 'INVITED'"
+                    [class.status-pill--revoked]="isInactive(person)"
+                    [class.status-pill--expiring]="
+                      statusOfPerson(person).kind === 'EXPIRING_SOON' ||
+                      statusOfPerson(person).kind === 'ACCESS_DRIFT'
+                    "
+                    [class.status-pill--invited]="
+                      statusOfPerson(person).kind === 'INVITED' ||
+                      statusOfPerson(person).kind === 'ON_LEAVE'
+                    "
                   >
-                    {{
-                      (statusOfPerson(person).kind === 'ALL_REVOKED'
-                        ? 'staff.status.revoked'
-                        : statusOfPerson(person).kind === 'EXPIRING_SOON'
-                          ? 'staff.status.expiring'
-                          : statusOfPerson(person).kind === 'INVITED'
-                            ? 'staff.status.invited'
-                            : 'staff.status.ok'
-                      ) | t
-                    }}
+                    {{ statusLabelKey(person) | t }}
                   </span>
                 </td>
                 <td class="row-actions" (click)="$event.stopPropagation()">
@@ -189,15 +208,17 @@
                         {{ 'staff.action.revokeInvite' | t }}
                       </button>
                     } @else {
-                      <button
-                        type="button"
-                        class="text-button"
-                        (click)="openJobDialog(person.principalSubject)"
-                        data-testid="staff-row-add-job"
-                      >
-                        {{ 'staff.action.addJob' | t }}
-                      </button>
-                      @if (statusOfPerson(person).kind !== 'ALL_REVOKED') {
+                      @if (canAddJob(person)) {
+                        <button
+                          type="button"
+                          class="text-button"
+                          (click)="openJobDialog(person.principalSubject)"
+                          data-testid="staff-row-add-job"
+                        >
+                          {{ 'staff.action.addJob' | t }}
+                        </button>
+                      }
+                      @if (canSuspend(person)) {
                         <button
                           type="button"
                           class="text-button text-button--destructive"
@@ -206,7 +227,8 @@
                         >
                           {{ 'staff.action.suspend' | t }}
                         </button>
-                      } @else {
+                      }
+                      @if (canRestore(person)) {
                         <button
                           type="button"
                           class="text-button"

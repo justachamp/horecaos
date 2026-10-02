@@ -40,7 +40,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService;
 import uz.horecaos.platform.ordering.application.BranchResolutionQueryService;
@@ -118,7 +118,7 @@ public class OperationsOrderController {
     private final AggregatorOrderIntakeService aggregatorOrders;
     private final ShipmentCancellationPort deliveryCancellation;
     private final MyWorkQueryService myWork;
-    private final StaffDisplayNames staffDisplayNames;
+    private final StaffDirectory staffDirectory;
     private final ItemDisplayLookup itemDisplayLookup;
     private final BranchResolutionQueryService branchResolution;
     private final BranchOverrideReasonQueryService branchOverrideReasons;
@@ -160,7 +160,7 @@ public class OperationsOrderController {
             AggregatorOrderIntakeService aggregatorOrders,
             ShipmentCancellationPort deliveryCancellation,
             MyWorkQueryService myWork,
-            StaffDisplayNames staffDisplayNames,
+            StaffDirectory staffDirectory,
             ItemDisplayLookup itemDisplayLookup,
             BranchResolutionQueryService branchResolution,
             BranchOverrideReasonQueryService branchOverrideReasons) {
@@ -180,7 +180,7 @@ public class OperationsOrderController {
         this.aggregatorOrders = aggregatorOrders;
         this.deliveryCancellation = deliveryCancellation;
         this.myWork = myWork;
-        this.staffDisplayNames = staffDisplayNames;
+        this.staffDirectory = staffDirectory;
         this.itemDisplayLookup = itemDisplayLookup;
         this.branchResolution = branchResolution;
         this.branchOverrideReasons = branchOverrideReasons;
@@ -806,7 +806,7 @@ public class OperationsOrderController {
                         amendmentAwaitingOperator,
                         presentablePayment,
                         table,
-                        staffDisplayNames));
+                        staffDirectory));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -2660,14 +2660,16 @@ public class OperationsOrderController {
      *                       and {@link #revealAddress} are the capability-gated
      *                       calls that return them
      * @param createdByDisplayName  {@code createdByActorId} resolved to a name
-     *                       (gap map row 9.2d) through {@code StaffDisplayNames}
-     *                       — the same cached, read-time lookup {@code
-     *                       AuditQueryService} already uses for an audit row's
-     *                       actor — or null when the actor is not a {@code USER}
-     *                       (a system/integration actor has no Keycloak identity
-     *                       to resolve) or the subject has none on file. The
-     *                       raw {@code createdByActorId} stays on the response
-     *                       too, for a caller that still wants the subject id.
+     *                       (gap map row 9.2d) through {@code StaffDirectory}
+     *                       — the same tenant-scoped, read-time lookup {@code
+     *                       AuditQueryService} uses for an audit row's actor, so
+     *                       the two cannot disagree about who someone is (ADR
+     *                       0139) — or null when the actor is not a {@code USER}
+     *                       (a system/integration actor has no staff record to
+     *                       resolve) or this tenant has no name for the subject.
+     *                       The raw {@code createdByActorId} stays on the
+     *                       response too, for a caller that still wants the
+     *                       subject id.
      * @param acceptedByDisplayName the same resolution for {@code
      *                       acceptedByActorId}
      */
@@ -2702,7 +2704,7 @@ public class OperationsOrderController {
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
-                StaffDisplayNames staffDisplayNames) {
+                StaffDirectory staffDirectory) {
             var order = detail.order();
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
@@ -2720,10 +2722,12 @@ public class OperationsOrderController {
                     order.currentRevision(),
                     order.createdByActorType(),
                     order.createdByActorId(),
-                    displayNameOf(staffDisplayNames, order.createdByActorType(), order.createdByActorId()),
+                    displayNameOf(
+                            staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId()),
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
-                    displayNameOf(staffDisplayNames, order.acceptedByActorType(), order.acceptedByActorId()),
+                    displayNameOf(
+                            staffDirectory, order.tenantId(), order.acceptedByActorType(), order.acceptedByActorId()),
                     order.acceptedAt(),
                     order.callbackRequested(),
                     order.callbackResolvedAt(),
@@ -2741,16 +2745,17 @@ public class OperationsOrderController {
          * screen showed before this wave — resolved only for a {@code "USER"}
          * actor, the same restriction {@code AuditQueryService
          * .withResolvedActorDisplay} applies for the same reason: a system job,
-         * an integration or a migration run has no Keycloak identity to look up,
+         * an integration or a migration run has no staff record to look up,
          * and {@code null} in means {@code null} out rather than a lookup for a
-         * subject that was never supplied.
+         * subject that was never supplied. Asked of this order's own tenant
+         * (ADR 0139), so a name is the one that tenant keeps.
          */
         private static @Nullable String displayNameOf(
-                StaffDisplayNames staffDisplayNames, @Nullable String actorType, @Nullable String actorId) {
+                StaffDirectory staffDirectory, UUID tenantId, @Nullable String actorType, @Nullable String actorId) {
             if (actorId == null || !"USER".equals(actorType)) {
                 return null;
             }
-            return staffDisplayNames.displayName(actorId);
+            return staffDirectory.nameOf(tenantId, actorId);
         }
 
         private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {

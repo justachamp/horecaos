@@ -44,6 +44,7 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfigu
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
+import uz.horecaos.platform.support.StaffDirectories;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -133,7 +134,8 @@ class OrderPosExportControllerTests {
                 event -> {},
                 new RecordingProviderActivityRecorder(),
                 clock,
-                unitOfWork);
+                unitOfWork,
+                StaffDirectories.none());
 
         controller = new OrderPosExportController(
                 new StubOrderDirectory(),
@@ -244,7 +246,8 @@ class OrderPosExportControllerTests {
                 event -> {},
                 new RecordingProviderActivityRecorder(),
                 clock,
-                unitOfWork);
+                unitOfWork,
+                StaffDirectories.none());
         var controllerWithNoPresetMapping = new OrderPosExportController(
                 new StubOrderDirectory(),
                 installations,
@@ -308,7 +311,8 @@ class OrderPosExportControllerTests {
                 event -> {},
                 new RecordingProviderActivityRecorder(),
                 clock,
-                unitOfWork);
+                unitOfWork,
+                StaffDirectories.none());
         var controllerWithNoPresetMapping = new OrderPosExportController(
                 new StubOrderDirectory(),
                 installations,

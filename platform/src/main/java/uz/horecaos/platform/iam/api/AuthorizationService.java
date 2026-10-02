@@ -26,6 +26,24 @@ public interface AuthorizationService {
 
     CapabilityView viewFor(String subject, java.util.UUID tenantId);
 
+    /**
+     * Whether the subject holds the capability at <em>any</em> scope in the
+     * tenant -- the check behind {@code StaffSelfAuthorized} (ADR 0139), which is
+     * deliberately not a coverage comparison.
+     *
+     * <p>A person's own profile belongs to no location, and ADR 0025's rule is
+     * that a grant covers downward only: a grant at {@code LOCATION} scope never
+     * covers a {@code TENANT} route, and most staff hold only a location grant.
+     * Asking "does a grant somewhere in this tenant carry the capability" is the
+     * honest question for an endpoint that touches only the caller's own row.
+     *
+     * <p>Answered from the same applicable-grants view {@link #viewFor} uses, so
+     * a suspended tenant's write capabilities are already gone from it.
+     */
+    default boolean holdsAtAnyScope(String subject, Capability capability, java.util.UUID tenantId) {
+        return viewFor(subject, tenantId).capabilities().contains(capability);
+    }
+
     /** Raised when a capability check fails. */
     final class AccessDeniedException extends RuntimeException {
 

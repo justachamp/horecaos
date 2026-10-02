@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.OperatorTodayCountsService;
 import uz.horecaos.platform.ordering.application.OperatorTodayCountsService.OperatorTodayCounts;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -36,9 +39,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OperatorTodayCountsController {
 
     private final OperatorTodayCountsService counts;
+    private final StaffDirectory staffDirectory;
 
-    public OperatorTodayCountsController(OperatorTodayCountsService counts) {
+    public OperatorTodayCountsController(OperatorTodayCountsService counts, StaffDirectory staffDirectory) {
         this.counts = counts;
+        this.staffDirectory = staffDirectory;
     }
 
     @GetMapping("/today-counts")
@@ -52,18 +57,34 @@ public class OperatorTodayCountsController {
     public ResponseEntity<OperatorTodayCountsResponse> today(
             @PathVariable UUID tenantId, @PathVariable @NotBlank @Size(max = 255) String subject) {
         OperatorTodayCounts result = counts.today(tenantId, subject);
-        return ResponseEntity.ok(OperatorTodayCountsResponse.of(result));
+        // ADR 0139: composed here, at the web layer, so the counting service stays
+        // free of personal data. This tenant's own name for the person, or null.
+        return ResponseEntity.ok(OperatorTodayCountsResponse.of(result, staffDirectory.nameOf(tenantId, subject)));
     }
 
     public record OperatorTodayCountsResponse(
-            long createdCount, long acceptedCount, Instant businessDayFrom, Instant businessDayTo) {
+            long createdCount,
+            long acceptedCount,
+            Instant businessDayFrom,
+            Instant businessDayTo,
 
-        static OperatorTodayCountsResponse of(OperatorTodayCounts result) {
+            @Classified(DataClass.PERSONAL) @org.jspecify.annotations.Nullable
+            String displayName) {
+
+        static OperatorTodayCountsResponse of(
+                OperatorTodayCounts result, @org.jspecify.annotations.Nullable String displayName) {
             return new OperatorTodayCountsResponse(
                     result.created(),
                     result.accepted(),
                     result.window().from(),
-                    result.window().to());
+                    result.window().to(),
+                    displayName);
+        }
+
+        @Override
+        public String toString() {
+            return "OperatorTodayCountsResponse[createdCount=" + createdCount + ", acceptedCount=" + acceptedCount
+                    + "]";
         }
     }
 }

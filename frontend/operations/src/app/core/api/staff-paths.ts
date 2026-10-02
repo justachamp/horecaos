@@ -148,6 +148,60 @@ export const staffPaths = {
   operatorTodayOrderCounts(tenantId: string, subject: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/orders/operators/${enc(subject)}/today-counts`;
   },
+
+  /**
+   * `StaffMemberController` (ADR 0139) -- the tenant's own record of each
+   * person. `/api/v1/operations/**`, tenant-wide: the People screen is
+   * reached by the owner and the administrator, who hold `staff.profile.*`
+   * at tenant scope. A branch has routes of its own ({@link
+   * locationMembers}) because a branch manager's grant never covers a
+   * tenant route (ADR 0025).
+   */
+  members(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/members`;
+  },
+
+  member(tenantId: string, memberId: string): string {
+    return `${this.members(tenantId)}/${enc(memberId)}`;
+  },
+
+  /** `StaffMemberController.endEmployment` -- sets ENDED and revokes every job in the same act. */
+  memberEndEmployment(tenantId: string, memberId: string): string {
+    return `${this.member(tenantId, memberId)}/end-employment`;
+  },
+
+  /** `StaffMemberController.emergencyContactsForTenant`/`replaceEmergencyContactsForTenant` -- the read is audited. */
+  memberEmergencyContacts(tenantId: string, memberId: string): string {
+    return `${this.member(tenantId, memberId)}/emergency-contacts`;
+  },
+
+  /**
+   * `StaffMemberController.listForLocation` -- the people who work at one
+   * branch, for a holder of `staff.profile.read` at that branch. The colleague
+   * picker of a branch's contact persons reads it.
+   */
+  locationMembers(scope: LocationScope): string {
+    return `${OPERATIONS}/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/staff/members`;
+  },
+
+  /**
+   * `StaffSelfController` -- the caller's own record. There is no member id in
+   * the path on purpose: the server resolves the row from the token's
+   * subject, so no request can address anyone else's.
+   */
+  me(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/me`;
+  },
+
+  /** `StaffSelfController.setPhoto` -- the body is the image itself, at most 1 MiB. */
+  mePhoto(tenantId: string): string {
+    return `${this.me(tenantId)}/photo`;
+  },
+
+  /** `LocationContactPersonController` -- who to call about a branch (row 9.2b). */
+  locationContactPersons(scope: LocationScope): string {
+    return `${OPERATIONS}/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/contact-persons`;
+  },
 } as const;
 
 function enc(value: string): string {

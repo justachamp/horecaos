@@ -37,6 +37,7 @@ import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.OutgoingMail;
 import uz.horecaos.platform.mail.api.PlatformMailer;
+import uz.horecaos.platform.support.RecordingStaffMemberRegistry;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService.OwnerInvitationOverviewRow;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationEventStore;
@@ -103,8 +104,15 @@ class OwnerInvitationOverviewTests {
         store = new JdbcOwnerInvitationStore(jdbc);
         events = new JdbcOwnerInvitationEventStore(jdbc);
         transactions = new TransactionTemplate(new JdbcTransactionManager(db.dataSource()));
-        invitations =
-                new OwnerInvitationService(store, events, accounts, authorization, facts::add, transactions, clock);
+        invitations = new OwnerInvitationService(
+                store,
+                events,
+                accounts,
+                authorization,
+                facts::add,
+                transactions,
+                clock,
+                new RecordingStaffMemberRegistry());
         mailer = new RecordingMailer();
         relay = new OwnerInvitationRelay(
                 store, events, accounts, mailer, facts::add, transactions, clock, "https://ops.test/");
@@ -348,8 +356,15 @@ class OwnerInvitationOverviewTests {
                         queued(zulfiya, "zulfiya-co", "Zulfiya Osh"), queued(alisher, "alisher-co", "Alisher Kafe"));
             }
         };
-        OwnerInvitationService sorting =
-                new OwnerInvitationService(backwards, events, accounts, authorization, facts::add, transactions, clock);
+        OwnerInvitationService sorting = new OwnerInvitationService(
+                backwards,
+                events,
+                accounts,
+                authorization,
+                facts::add,
+                transactions,
+                clock,
+                new RecordingStaffMemberRegistry());
 
         assertThat(sorting.overview(null, READER, "corr"))
                 .extracting(OwnerInvitationOverviewRow::tenantName)
@@ -382,8 +397,15 @@ class OwnerInvitationOverviewTests {
                 return super.ownerStates(limit);
             }
         };
-        OwnerInvitationService counted =
-                new OwnerInvitationService(recording, events, accounts, authorization, facts::add, transactions, clock);
+        OwnerInvitationService counted = new OwnerInvitationService(
+                recording,
+                events,
+                accounts,
+                authorization,
+                facts::add,
+                transactions,
+                clock,
+                new RecordingStaffMemberRegistry());
 
         counted.overview(null, READER, "corr");
         counted.ownerStates();
@@ -458,7 +480,8 @@ class OwnerInvitationOverviewTests {
                     facts.add(fact);
                 },
                 transactions,
-                clock);
+                clock,
+                new RecordingStaffMemberRegistry());
 
         var rows = watchedService.overview(null, ONBOARDER, "corr");
 

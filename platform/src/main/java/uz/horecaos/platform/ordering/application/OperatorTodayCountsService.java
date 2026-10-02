@@ -20,8 +20,9 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
  * uz.horecaos.platform.reporting.application.OperatorAttribution}'s own doc
  * says for the leaderboard: this answers "how many", keyed by the Keycloak
  * subject already on the person's card, and resolving that subject to a
- * display name is the caller's own job (the same {@code StaffDisplayNames}
- * lookup {@code OrderDetailResponse} already uses).
+ * display name is the caller's own job (the same tenant-scoped {@code
+ * StaffDirectory} lookup {@code OrderDetailResponse} uses; the controller
+ * composes it, ADR 0139).
  */
 @Service
 public class OperatorTodayCountsService {

@@ -61,9 +61,10 @@ const TELEPHONY_MAX_DAYS = 31;
  * this wave, reading `reporting.fact_order`'s new `operator_principal_id`
  * (T12). A machine principal — the bot, the website, any channel nobody on
  * staff touched — renders with an explicit `MACHINE` badge and its channel
- * code; a staff row renders `STAFF` and a truncated Keycloak subject, never a
- * bare UUID with no explanation, because the staff-identity ADR that would
- * resolve a real name has not landed.
+ * code; a staff row renders `STAFF` and the name the tenant keeps for the
+ * person (ADR 0139, composed by the platform at the web layer -- `reporting`
+ * never holds a name), falling back to a truncated Keycloak subject, never a
+ * bare UUID with no explanation, for a subject the tenant keeps no name for.
  *
  * **Telephony (7.5b) is not blocked** on live telephony existing:
  * `CallStatsController` already serves offered/answered/missed/transferred
@@ -152,6 +153,19 @@ export class StaffReportPage {
 
   protected formatHandling(seconds: number | null): string {
     return seconds === null ? '—' : formatSecondsDuration(seconds);
+  }
+
+  /**
+   * A telephony row's operator: the name the leaderboard already resolved for the
+   * same subject (ADR 0139), else the short subject. The call-stats read carries
+   * no name of its own, so an operator who took calls and no completed order in
+   * the range keeps the short form.
+   */
+  protected telephonyOperator(subject: string): string {
+    const named = this.rows().find(
+      (row) => row.principalKind === 'STAFF' && row.subject === subject && row.displayName,
+    );
+    return named?.displayName ?? this.shortSubject(subject);
   }
 
   /** Never the full Keycloak subject in a table cell — see `order-rows-table.ts`'s `shortId` for the same move. */

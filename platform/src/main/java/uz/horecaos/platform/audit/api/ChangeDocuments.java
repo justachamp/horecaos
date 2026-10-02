@@ -55,7 +55,13 @@ public final class ChangeDocuments {
             "note",
             "comment",
             "instructions",
-            "devicefingerprint");
+            "devicefingerprint",
+            // ADR 0139: an employer-assigned number identifies one person inside
+            // one employer, and an emergency contact is a third party's name and
+            // phone. Neither was in the set when staff had no record to change,
+            // so a key named for either would have been written in clear.
+            "employeenumber",
+            "emergency");
 
     private ChangeDocuments() {}
 

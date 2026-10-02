@@ -161,13 +161,13 @@ describe('WallboardShell: the oversized counters', () => {
 });
 
 describe('WallboardShell: the operator band', () => {
-  it('stays an honest locked note, never a raw actor id, since IA 9.2 is not built', async () => {
+  it('stays a note that says naming people on a shared screen is undecided, never a name or an actor id', async () => {
     configure({});
     const fixture = await render();
 
-    expect(
-      fixture.nativeElement.querySelector('[data-testid="wallboard-operators"]')?.textContent,
-    ).toContain('IA 9.2');
+    const band = fixture.nativeElement.querySelector('[data-testid="wallboard-operators"]');
+    expect(band?.textContent).toContain('shared screen');
+    expect(band?.querySelector('table')).toBeNull();
   });
 });
 

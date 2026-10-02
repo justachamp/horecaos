@@ -57,8 +57,11 @@ function isoDaysAgo(days: number): string {
  *
  * «Кто» shows `actorDisplay ?? actorSubject`. Before this wave `actorDisplay`
  * was null on nearly every row; `AuditQueryService` now resolves it at read
- * time (Staff 9.3b), so most rows carry a name here without this component
- * doing anything differently — the fix lives entirely on the read path.
+ * time (Staff 9.3b) through `StaffDirectory` (ADR 0139), the same names the
+ * People list, the order detail and the operator leaderboards print, so most
+ * rows carry a name here without this component doing anything differently —
+ * the fix lives entirely on the read path, and an edit of someone's own name
+ * shows on the next load with no wait for a cache.
  * «Что» renders a plain-language label from {@link activityLogActionLabelKey}
  * where one is hand-curated, a mechanically-generated sentence from
  * {@link bulkActivityLogActionSentence} for the rest of what

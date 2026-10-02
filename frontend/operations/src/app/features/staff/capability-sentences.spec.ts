@@ -135,6 +135,10 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'reservation.read',
   'serviceability.manage',
   'shipment.cancel',
+  'staff.emergency-contact.read',
+  'staff.profile.manage',
+  'staff.profile.read',
+  'staff.self.manage',
   'suppression.manage',
   'tenant.onboarding.manage',
   'tenant.read',
@@ -142,6 +146,20 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
 ] as const;
 
 describe('CAPABILITY_SENTENCES', () => {
+  it('describes the four staff-record capabilities (ADR 0139) in plain words, the audited read saying it is recorded', () => {
+    for (const code of [
+      'staff.profile.read',
+      'staff.profile.manage',
+      'staff.emergency-contact.read',
+      'staff.self.manage',
+    ]) {
+      expect(CAPABILITY_SENTENCES[code], code).toBeDefined();
+      expect(CAPABILITY_SENTENCES[code].area).toBe('staff');
+    }
+    expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].en).toContain('recorded');
+    expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].ru).toContain('записывается');
+  });
+
   it('has a build-time-equivalent entry for every capability a tenant-visible job can carry', () => {
     const missing = TENANT_VISIBLE_CAPABILITY_CODES.filter(
       (code) => !(code in CAPABILITY_SENTENCES),

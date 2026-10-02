@@ -531,6 +531,11 @@ export interface OperatorChannelCountResponse {
  *   renders a bare id with no explanation.
  * @property subject the Keycloak subject for `STAFF`, or the channel code for
  *   `MACHINE` — what a surface prints beside `principalKind`.
+ * @property displayName the name this tenant keeps for a `STAFF` row (ADR 0139),
+ *   composed by the platform at the web layer -- `reporting` itself never holds a
+ *   name. `null` for a `MACHINE` row and for a subject the tenant keeps no name
+ *   for, where a surface falls back to the short subject and says what kind of
+ *   row it is.
  * @property averageCheckSom null when `orderCount` is zero — never a
  *   zero-som average.
  * @property avgHandlingSeconds average seconds from order creation to
@@ -551,6 +556,7 @@ export interface OperatorLeaderboardRowResponse {
   readonly dineInCount: number;
   readonly avgItemsPerOrder: number;
   readonly byChannel: readonly OperatorChannelCountResponse[];
+  readonly displayName?: string | null;
 }
 
 export interface OperatorLeaderboardResponse {
@@ -564,6 +570,8 @@ export interface OperatorProductListResponse {
   readonly rows: readonly VariantSalesRowResponse[];
   readonly maybeMore: boolean;
   readonly provenance: ProvenanceResponse;
+  /** ADR 0139: the same name the leaderboard row carries, `null` for a pseudo-operator or an unnamed subject. */
+  readonly operatorDisplayName?: string | null;
 }
 
 /**

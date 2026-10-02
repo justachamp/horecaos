@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -38,12 +38,12 @@ public class AuditQueryService {
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
-    private final StaffDisplayNames actorDisplayNames;
+    private final StaffDirectory staffDirectory;
 
-    public AuditQueryService(JdbcClient jdbc, ObjectMapper objectMapper, StaffDisplayNames actorDisplayNames) {
+    public AuditQueryService(JdbcClient jdbc, ObjectMapper objectMapper, StaffDirectory staffDirectory) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
-        this.actorDisplayNames = actorDisplayNames;
+        this.staffDirectory = staffDirectory;
     }
 
     public List<AuditEventView> search(AuditQuery query) {
@@ -167,8 +167,8 @@ public class AuditQueryService {
                         rs.getObject("occurred_at", OffsetDateTime.class).toInstant()))
                 .list()
                 .stream()
-                .map(this::withResolvedActorDisplay)
-                .toList();
+                .collect(java.util.stream.Collectors.collectingAndThen(
+                        java.util.stream.Collectors.toList(), this::withResolvedActorDisplays));
     }
 
     /**
@@ -235,23 +235,55 @@ public class AuditQueryService {
      * ActorRef.user(subject, null)} call sites this codebase has today.
      *
      * <p><strong>Never a directory lookup a caller can address on its
-     * own.</strong> This runs only over a row {@link #search} or {@link
-     * #findDetail} already decided the caller may see — tenant-scoped,
-     * behind {@code AUDIT_READ} — so a principal never learns a name for a
-     * subject whose audit row it could not otherwise read. A row that
-     * already carries a display name (a future write-time caller that
-     * supplies one) is left untouched, and only a {@code USER} actor is
-     * resolved: a service account, a system job, or a migration run has no
-     * Keycloak identity to look up.
+     * own.</strong> This runs only over rows {@link #search} already decided the
+     * caller may see -- tenant-scoped, behind {@code AUDIT_READ} -- so a
+     * principal never learns a name for a subject whose audit row it could not
+     * otherwise read. And since ADR 0139 the lookup is scoped by the tenant of
+     * the row it is resolving for, so the name is the one <em>that tenant</em>
+     * keeps for the person and a subject who works in two tenants shows two
+     * different names on their two tenants' logs. A row that already carries a
+     * display name (a future write-time caller that supplies one) is left
+     * untouched, only a {@code USER} actor is resolved (a service account, a
+     * system job or a migration run has no staff record), and a row with no
+     * tenant -- a platform-scope event -- is left as it is: HorecaOS's own staff
+     * are not any tenant's staff.
+     *
+     * <p>One batched read per tenant on the page, not one lookup per row.
      */
-    private AuditEventView withResolvedActorDisplay(AuditEventView view) {
-        if (view.actorDisplay() != null || view.actorSubject() == null || !"USER".equals(view.actorType())) {
-            return view;
+    private List<AuditEventView> withResolvedActorDisplays(List<AuditEventView> views) {
+        java.util.Map<UUID, java.util.Set<String>> wanted = new java.util.LinkedHashMap<>();
+        for (AuditEventView view : views) {
+            if (needsActorName(view.actorDisplay(), view.actorSubject(), view.actorType(), view.tenantId())) {
+                wanted.computeIfAbsent(view.tenantId(), ignored -> new java.util.LinkedHashSet<>())
+                        .add(view.actorSubject());
+            }
         }
-        String resolved = actorDisplayNames.displayName(view.actorSubject());
-        if (resolved == null) {
-            return view;
+        if (wanted.isEmpty()) {
+            return views;
         }
+        java.util.Map<UUID, java.util.Map<String, String>> names = new java.util.HashMap<>();
+        wanted.forEach((tenantId, subjects) -> names.put(tenantId, staffDirectory.namesOf(tenantId, subjects)));
+        return views.stream()
+                .map(view -> {
+                    if (!needsActorName(view.actorDisplay(), view.actorSubject(), view.actorType(), view.tenantId())) {
+                        return view;
+                    }
+                    java.util.Map<String, String> forTenant = names.get(view.tenantId());
+                    String resolved = forTenant == null ? null : forTenant.get(view.actorSubject());
+                    return resolved == null ? view : withActorDisplay(view, resolved);
+                })
+                .toList();
+    }
+
+    private static boolean needsActorName(
+            @Nullable String actorDisplay,
+            @Nullable String actorSubject,
+            @Nullable String actorType,
+            @Nullable UUID tenantId) {
+        return actorDisplay == null && actorSubject != null && "USER".equals(actorType) && tenantId != null;
+    }
+
+    private static AuditEventView withActorDisplay(AuditEventView view, String resolved) {
         return new AuditEventView(
                 view.id(),
                 view.recordedAt(),
@@ -273,12 +305,12 @@ public class AuditQueryService {
                 view.occurredAt());
     }
 
-    /** {@link #withResolvedActorDisplay(AuditEventView)}, for the one-event detail read. */
+    /** The one-event detail read's counterpart of {@link #withResolvedActorDisplays(List)}. */
     private AuditEventDetail withResolvedActorDisplay(AuditEventDetail detail) {
-        if (detail.actorDisplay() != null || !"USER".equals(detail.actorType())) {
+        if (!needsActorName(detail.actorDisplay(), detail.actorSubject(), detail.actorType(), detail.tenantId())) {
             return detail;
         }
-        String resolved = actorDisplayNames.displayName(detail.actorSubject());
+        String resolved = staffDirectory.nameOf(detail.tenantId(), detail.actorSubject());
         if (resolved == null) {
             return detail;
         }

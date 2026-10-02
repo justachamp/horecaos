@@ -114,3 +114,68 @@
   margin: 0;
   padding-left: 18px;
 }
+
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+}
+
+.identity {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.identity__text p {
+  margin: 0;
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink-muted);
+  font-weight: 600;
+}
+
+.avatar--photo {
+  object-fit: cover;
+}
+
+.photo-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.photo-pick {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The native control stays in the tree (it is what opens the file picker and what a test drives) but is not drawn. */
+.photo-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.fields dd {
+  margin: 0;
+}

@@ -45,6 +45,7 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfigu
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
+import uz.horecaos.platform.support.StaffDirectories;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -491,7 +492,8 @@ class PosOrderExportCrossInstanceDispatchTests {
                 event -> {},
                 activity,
                 clock,
-                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())));
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                StaffDirectories.none());
     }
 
     private ExportState exportState(UUID orderId) {

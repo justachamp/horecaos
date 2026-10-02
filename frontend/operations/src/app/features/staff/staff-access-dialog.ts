@@ -7,9 +7,12 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * `resendInvite`/`revokeInvite` are staff-access-dialog's own two more
  * confirmations (ADR 0116, staff-and-access.md §4): a manager acting on a
  * person who has not accepted their invitation yet, from the same row-action
- * surface the suspend/restore pair already uses.
+ * surface the suspend/restore pair already uses. `endEmployment` is the fifth
+ * (ADR 0139, «Завершить работу»): the same shape -- name the person, a
+ * mandatory reason, confirm -- plus the optional day employment ended.
  */
-export type StaffAccessDialogMode = 'suspend' | 'restore' | 'resendInvite' | 'revokeInvite';
+export type StaffAccessDialogMode =
+  'suspend' | 'restore' | 'resendInvite' | 'revokeInvite' | 'endEmployment';
 
 /**
  * Приостановить/Вернуть доступ (staff-and-access.md §2), and, since ADR 0116,
@@ -40,17 +43,22 @@ export class StaffAccessDialog {
   readonly busy = input(false);
   readonly serverError = input<string | null>(null);
 
-  readonly confirmed = output<{ reason: string }>();
+  readonly confirmed = output<{ reason: string; employedUntil?: string }>();
   readonly dismiss = output<void>();
 
   protected readonly reason = signal('');
+  /** `endEmployment` only: the last day of work, as `yyyy-mm-dd`, or blank for "today" in the tenant's own zone. */
+  protected readonly employedUntil = signal('');
   private readonly touched = signal(false);
 
   protected readonly reasonMissing = computed(() => this.touched() && this.reason().trim() === '');
 
-  /** The action carries destructive styling — suspend and revoking an invitation, never restore or resend. */
+  /** The action carries destructive styling — suspend, revoking an invitation and ending employment; never restore or resend. */
   protected readonly destructive = computed(
-    () => this.mode() === 'suspend' || this.mode() === 'revokeInvite',
+    () =>
+      this.mode() === 'suspend' ||
+      this.mode() === 'revokeInvite' ||
+      this.mode() === 'endEmployment',
   );
 
   protected readonly titleKey = computed<MessageKey>(() => TITLE_KEYS[this.mode()]);
@@ -61,13 +69,20 @@ export class StaffAccessDialog {
     this.reason.set(value);
   }
 
+  protected setEmployedUntil(value: string): void {
+    this.employedUntil.set(value);
+  }
+
   protected confirm(): void {
     this.touched.set(true);
     const reason = this.reason().trim();
     if (!reason) {
       return;
     }
-    this.confirmed.emit({ reason });
+    const until = this.employedUntil().trim();
+    this.confirmed.emit(
+      this.mode() === 'endEmployment' && until ? { reason, employedUntil: until } : { reason },
+    );
   }
 
   protected close(): void {
@@ -80,6 +95,7 @@ const TITLE_KEYS: Record<StaffAccessDialogMode, MessageKey> = {
   restore: 'staff.accessDialog.restore.title',
   resendInvite: 'staff.accessDialog.resendInvite.title',
   revokeInvite: 'staff.accessDialog.revokeInvite.title',
+  endEmployment: 'staff.accessDialog.endEmployment.title',
 };
 
 const BODY_KEYS: Record<StaffAccessDialogMode, MessageKey> = {
@@ -87,6 +103,7 @@ const BODY_KEYS: Record<StaffAccessDialogMode, MessageKey> = {
   restore: 'staff.accessDialog.restore.body',
   resendInvite: 'staff.accessDialog.resendInvite.body',
   revokeInvite: 'staff.accessDialog.revokeInvite.body',
+  endEmployment: 'staff.accessDialog.endEmployment.body',
 };
 
 const ACTION_KEYS: Record<StaffAccessDialogMode, MessageKey> = {
@@ -94,4 +111,5 @@ const ACTION_KEYS: Record<StaffAccessDialogMode, MessageKey> = {
   restore: 'staff.action.restore',
   resendInvite: 'staff.accessDialog.resendInvite.confirm',
   revokeInvite: 'staff.accessDialog.revokeInvite.confirm',
+  endEmployment: 'staff.accessDialog.endEmployment.title',
 };

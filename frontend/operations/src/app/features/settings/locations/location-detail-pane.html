@@ -163,6 +163,10 @@
         </dl>
       }
 
+      @if (contactScope(); as contactScope) {
+        <q-location-contact-persons [scope]="contactScope" />
+      }
+
       @if (!editingPlace()) {
         <button type="button" class="q-body primary" (click)="startEditingPlace()">
           {{ 'settings.locations.edit' | t }}

@@ -425,7 +425,29 @@ public class JdbcPosMappingStore {
             case CHANNEL_POS_CODE -> resolveById(tenantId, "tenant.sales_channels", "display_name", ids);
             case VARIANT -> resolveVariantNames(tenantId, brandId, ids);
             case MODIFIER -> resolveModifierNames(tenantId, brandId, ids);
+            // ADR 0139: the staff member's non-personal reference only -- this
+            // store never decrypts. A caller that may show a name (the mapping
+            // pane, behind pos.sync.read) upgrades it from the staff cards.
+            case OPERATOR -> resolveById(tenantId, "iam.staff_members", "display_reference", ids);
         };
+    }
+
+    /**
+     * The HorecaOS ids this binding has an {@code ACTIVE} mapping for, for a
+     * type whose candidates are read from outside this store (operators, whose
+     * names are ciphertext here and are opened by the staff cards port).
+     */
+    public Set<UUID> activelyMappedIds(UUID tenantId, UUID bindingId, MappingEntityType type) {
+        return new java.util.HashSet<>(jdbc.sql("""
+                        SELECT horecaos_entity_id FROM integration.provider_entity_mappings
+                         WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                           AND entity_type = :entityType AND status = 'ACTIVE'
+                        """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("entityType", type.storedAs())
+                .query(UUID.class)
+                .list());
     }
 
     /**

@@ -35,6 +35,7 @@ import uz.horecaos.platform.iam.api.grants.GrantAuthority;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.EnsureMembership;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.MembershipRef;
+import uz.horecaos.platform.iam.api.staff.StaffMemberRegistry;
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.PlatformMailer;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStaffInvitationStore;
@@ -89,6 +90,7 @@ public class StaffInvitationService {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final String operationsOrigin;
+    private final StaffMemberRegistry staffMembers;
 
     public StaffInvitationService(
             JdbcStaffInvitationStore store,
@@ -100,7 +102,8 @@ public class StaffInvitationService {
             AuditRecorder audit,
             TransactionTemplate transactions,
             Clock clock,
-            @Value("${horecaos.frontends.operations-origin:http://localhost:4200}") String operationsOrigin) {
+            @Value("${horecaos.frontends.operations-origin:http://localhost:4200}") String operationsOrigin,
+            StaffMemberRegistry staffMembers) {
         this.store = store;
         this.accounts = accounts;
         this.organizations = organizations;
@@ -113,6 +116,7 @@ public class StaffInvitationService {
         this.operationsOrigin = operationsOrigin.endsWith("/")
                 ? operationsOrigin.substring(0, operationsOrigin.length() - 1)
                 : operationsOrigin;
+        this.staffMembers = staffMembers;
     }
 
     /**
@@ -201,7 +205,7 @@ public class StaffInvitationService {
             // exist at this point; without cleanup, accounts.findByPhone
             // above would find this account forever and refuse every future
             // invitation for this phone, by anybody, for good.
-            abandonOrphanedAccount(tenantId, account, refused, actor, command.reason(), correlationId);
+            abandonOrphanedAccount(tenantId, account, refused, actor, command.reason(), correlationId, null);
             throw refused;
         }
 
@@ -213,33 +217,58 @@ public class StaffInvitationService {
         String language = LOCALES.contains(command.locale()) ? command.locale() : "ru";
         boolean emailGiven = command.email() != null;
 
-        transactions.executeWithoutResult(ignored -> {
-            store.insert(
-                    invitationId,
-                    tenantId,
-                    account.subjectId(),
-                    grantId,
-                    language,
-                    tokenHash,
-                    expiresAt,
-                    emailGiven,
-                    actor.subject(),
-                    now);
-            audit.record(AuditFact.of("tenant.staff_invitation.invited", AuditClass.SECURITY)
-                    .by(actor)
-                    .at(command.scope())
-                    .target("tenant.staff_invitation", invitationId)
-                    .because(command.reason())
-                    // Staff 9.3a: a brand-new invitation, no prior state to diff against.
-                    .changed(ChangeDocuments.created(Map.of(
-                            "roleCode", command.roleCode(),
-                            "scopeType", command.scope().type().name(),
-                            "emailGiven", emailGiven)))
-                    .usingCapability(Capability.IAM_GRANT_MANAGE.code())
-                    .correlatedBy(correlationId)
-                    .occurredAt(now)
-                    .build());
-        });
+        try {
+            transactions.executeWithoutResult(ignored -> {
+                // ADR 0139: the member row, the invitation row and the audit fact
+                // commit or roll back together. The member is written first in
+                // the transaction but is the last of the invitation's steps to
+                // be able to fail for a reason of its own, which is why a failure
+                // anywhere here undoes the whole invitation below.
+                staffMembers.registerInvited(
+                        tenantId,
+                        account.subjectId(),
+                        command.firstName(),
+                        command.lastName(),
+                        command.phone(),
+                        actor.subject(),
+                        correlationId);
+                store.insert(
+                        invitationId,
+                        tenantId,
+                        account.subjectId(),
+                        grantId,
+                        language,
+                        tokenHash,
+                        expiresAt,
+                        emailGiven,
+                        actor.subject(),
+                        now);
+                audit.record(AuditFact.of("tenant.staff_invitation.invited", AuditClass.SECURITY)
+                        .by(actor)
+                        .at(command.scope())
+                        .target("tenant.staff_invitation", invitationId)
+                        .because(command.reason())
+                        // Staff 9.3a: a brand-new invitation, no prior state to diff against.
+                        .changed(ChangeDocuments.created(Map.of(
+                                "roleCode", command.roleCode(),
+                                "scopeType", command.scope().type().name(),
+                                "emailGiven", emailGiven)))
+                        .usingCapability(Capability.IAM_GRANT_MANAGE.code())
+                        .correlatedBy(correlationId)
+                        .occurredAt(now)
+                        .build());
+            });
+        } catch (RuntimeException notRecorded) {
+            // The Keycloak account, the organization membership and the grant all
+            // exist by now and the grant committed in its own transaction. Left
+            // alone, the live grant would rest on an account no invitation
+            // explains, and rejectIfPhoneTaken would refuse every later
+            // invitation for this phone as "already has an account". So the
+            // same compensation the grant step has runs here too, extended to
+            // withdraw the grant first, and the original failure is rethrown.
+            abandonOrphanedAccount(tenantId, account, notRecorded, actor, command.reason(), correlationId, grantId);
+            throw notRecorded;
+        }
 
         String link = operationsOrigin + "/invite#token=" + token;
         if (emailGiven) {
@@ -306,18 +335,29 @@ public class StaffInvitationService {
             RuntimeException cause,
             ActorRef actor,
             String reason,
-            String correlationId) {
+            String correlationId,
+            @Nullable UUID grantId) {
         try {
+            if (grantId != null) {
+                // The grant step succeeded and committed before this failure, so
+                // deleting the account alone would leave authority resting on
+                // nothing. Revoke it first, through the audited path.
+                grants.revoke(
+                        tenantId,
+                        grantId,
+                        actor.subject(),
+                        "The invitation could not be recorded, so the job it was for was withdrawn");
+            }
             accounts.delete(account.subjectId());
             log.warn(
-                    "A staff invitation's job grant was refused after the account was created; the orphaned "
+                    "A staff invitation failed after the account was created; the orphaned "
                             + "account was removed (subject {}, correlation {})",
                     account.subjectId(),
                     correlationId,
                     cause);
         } catch (RuntimeException deleteFailed) {
             log.error(
-                    "A staff invitation's job grant was refused after the account was created, and removing the "
+                    "A staff invitation failed after the account was created, and removing the "
                             + "orphaned account also failed; it now permanently blocks this phone until an operator "
                             + "removes it by hand (subject {}, correlation {})",
                     account.subjectId(),
@@ -526,19 +566,26 @@ public class StaffInvitationService {
                     "The password does not meet the policy",
                     Map.of("field", "password", "policy", refused.policy()));
         }
-        transactions.executeWithoutResult(
-                ignored -> audit.record(AuditFact.of("tenant.staff_invitation.accepted", AuditClass.SECURITY)
-                        .by(ActorRef.user(row.subjectId(), null))
-                        .at(ResourceScope.tenant(row.tenantId()))
-                        .target("tenant.staff_invitation", row.id())
-                        .because("The invited person set up their account (ADR 0116)")
-                        // Staff 9.3a: "status" genuinely moves -- markAccepted's
-                        // own guard above already proved row.status() was the
-                        // prior value.
-                        .changed(ChangeDocuments.change("status", row.status(), "ACCEPTED"))
-                        .correlatedBy(correlationId)
-                        .occurredAt(now)
-                        .build()));
+        transactions.executeWithoutResult(ignored -> {
+            // ADR 0139: PENDING becomes ACTIVE and the name the person typed
+            // becomes the tenant's record of them, in the transaction that
+            // records the acceptance. It runs after Keycloak has taken the
+            // password, so a rejected password leaves the row PENDING with
+            // nothing to undo.
+            staffMembers.activate(row.tenantId(), row.subjectId(), firstName.strip(), lastName.strip(), correlationId);
+            audit.record(AuditFact.of("tenant.staff_invitation.accepted", AuditClass.SECURITY)
+                    .by(ActorRef.user(row.subjectId(), null))
+                    .at(ResourceScope.tenant(row.tenantId()))
+                    .target("tenant.staff_invitation", row.id())
+                    .because("The invited person set up their account (ADR 0116)")
+                    // Staff 9.3a: "status" genuinely moves -- markAccepted's
+                    // own guard above already proved row.status() was the
+                    // prior value.
+                    .changed(ChangeDocuments.change("status", row.status(), "ACCEPTED"))
+                    .correlatedBy(correlationId)
+                    .occurredAt(now)
+                    .build());
+        });
         return new Accepted(account.username());
     }
 

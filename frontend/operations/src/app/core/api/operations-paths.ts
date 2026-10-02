@@ -130,6 +130,23 @@ export const operationsPaths = {
   },
 
   /**
+   * IA 0.1d, the live board's operator band (ADR 0139): who took and who
+   * accepted how many orders today, with names, across the whole brand.
+   * `OperatorTodayLeaderboardController`; `ORDER_READ` at `BRAND` scope, so a
+   * location-scoped principal is refused and reads {@link
+   * locationOperatorsToday} for their own branch instead -- the same split
+   * {@link brandOrderCounts} has.
+   */
+  brandOperatorsToday(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/orders/operators/today`;
+  },
+
+  /** {@link brandOperatorsToday}, for the one branch a shift supervisor's own grant covers. */
+  locationOperatorsToday(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/operators/today`;
+  },
+
+  /**
    * IA 0.2a (wave T01): the caller's own orders today, by sales channel —
    * `MyWorkQueryService`, self-scoped server-side by the token's own subject.
    * No `actorId` query param is ever built here: the one this endpoint

@@ -102,10 +102,10 @@ export const routes: Routes = [
       },
       // IA 0.2 (My work), wave T01: `0.2a`/`0.2b` are real (the actor-grouped
       // channel read is self-scoped by the token's own subject, per
-      // MyWorkQueryService's own doc); `0.2c`/`0.2d` stay an honest locked
-      // band inside the page itself, naming the staff-identity ADR, rather
-      // than a second not-built route — see `my-work-page.ts`'s own doc for
-      // the boundary.
+      // MyWorkQueryService's own doc); `0.2c` is «Мой профиль» (ADR 0139),
+      // linked from a band inside the page, and `0.2d` stays an honest locked
+      // band inside the page itself rather than a second not-built route —
+      // see `my-work-page.ts`'s own doc for the boundary.
       {
         path: 'today/my-work',
         loadComponent: () => import('./features/today/my-work-page').then((m) => m.MyWorkPage),

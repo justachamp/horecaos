@@ -1,12 +1,130 @@
 <div class="page">
   <h1 class="q-title">{{ 'staff.myProfile.title' | t }}</h1>
 
-  <section class="section">
+  <section class="section" data-testid="my-profile-personal">
     <h2 class="q-emphasis">{{ 'staff.myProfile.personalData.title' | t }}</h2>
-    @if (auth.displayName(); as name) {
-      <p class="q-body-sm">{{ name }}</p>
+
+    @switch (profileState()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'staff.people.loading' | t }}</p>
+      }
+      @case ('absent') {
+        @if (auth.displayName(); as name) {
+          <p class="q-body-sm">{{ name }}</p>
+        }
+        <p class="q-caption not-built-note" data-testid="my-profile-no-record">
+          {{ 'staff.myProfile.noRecord' | t }}
+        </p>
+      }
+      @case ('error') {
+        <p class="q-body-sm error" role="alert">{{ 'error.unknown.noReference' | t }}</p>
+      }
+      @case ('ready') {
+        @if (member(); as person) {
+          @if (notice(); as message) {
+            <p class="q-body-sm notice" role="status" data-testid="my-profile-notice">
+              {{ message }}
+            </p>
+          }
+
+          <div class="identity">
+            @if (person.photoUrl; as photo) {
+              <img
+                class="avatar avatar--photo"
+                [src]="photo"
+                [alt]="shownName() ?? ''"
+                data-testid="my-profile-photo"
+              />
+            } @else {
+              <div class="avatar" aria-hidden="true">{{ initials() || '·' }}</div>
+            }
+            <div class="identity__text">
+              <p class="q-emphasis" data-testid="my-profile-name">{{ shownName() }}</p>
+              <p class="q-caption q-mono not-built-note">{{ person.displayReference }}</p>
+              <div class="photo-actions">
+                <label class="text-button photo-pick">
+                  {{ 'staff.myProfile.photo.change' | t }}
+                  <input
+                    type="file"
+                    class="photo-input"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    (change)="choosePhoto($event)"
+                    [disabled]="busy()"
+                    data-testid="my-profile-photo-input"
+                  />
+                </label>
+                @if (person.hasPhoto) {
+                  <button
+                    type="button"
+                    class="text-button"
+                    (click)="removePhoto()"
+                    [disabled]="busy()"
+                    data-testid="my-profile-photo-remove"
+                  >
+                    {{ 'staff.myProfile.photo.remove' | t }}
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+
+          @if (editing()) {
+            <q-staff-profile-form
+              [member]="person"
+              [manager]="false"
+              [busy]="busy()"
+              [serverError]="profileError()"
+              (submitted)="save($event)"
+              (cancelled)="cancelEditing()"
+            />
+          } @else {
+            <dl class="fields">
+              <div>
+                <dt class="q-caption">{{ 'staff.profile.field.phone' | t }}</dt>
+                <dd class="q-body-sm q-tnum" data-testid="my-profile-phone">
+                  {{ person.phone ?? '—' }}
+                </dd>
+              </div>
+              <div>
+                <dt class="q-caption">{{ 'staff.profile.field.uiLocale' | t }}</dt>
+                <dd class="q-body-sm">
+                  {{ person.uiLocale ? languageName(person.uiLocale) : '—' }}
+                </dd>
+              </div>
+              <div>
+                <dt class="q-caption">{{ 'staff.profile.field.spoken' | t }}</dt>
+                <dd class="q-body-sm">
+                  @for (code of person.spokenLanguages; track code; let last = $last) {
+                    {{ languageName(code) }}{{ last ? '' : ', ' }}
+                  } @empty {
+                    —
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt class="q-caption">{{ 'staff.profile.field.status' | t }}</dt>
+                <dd class="q-body-sm">{{ statusKey(person) | t }}</dd>
+              </div>
+            </dl>
+            <p class="q-caption not-built-note">{{ 'staff.profile.phone.signIn' | t }}</p>
+            @if (profileError(); as message) {
+              <p class="q-body-sm error" role="alert" data-testid="my-profile-error">
+                {{ message }}
+              </p>
+            }
+            <button
+              type="button"
+              class="primary-button"
+              (click)="startEditing()"
+              [disabled]="busy()"
+              data-testid="my-profile-edit"
+            >
+              {{ 'staff.profile.edit' | t }}
+            </button>
+          }
+        }
+      }
     }
-    <p class="q-caption not-built-note">{{ 'staff.myProfile.personalData.notBuilt' | t }}</p>
   </section>
 
   <section class="section">

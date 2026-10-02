@@ -1741,6 +1741,28 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.tab.notifications': 'Уведомления',
   'settings.locations.tab.floorPlan': 'План зала',
   'settings.locations.edit': 'Изменить',
+
+  // ---- branch contact persons (ADR 0139, row 9.2b)
+  'settings.locations.contacts.title': 'Контактные лица',
+  'settings.locations.contacts.lead':
+    'Кому звонить по этому филиалу. Это не публичный телефон, который видят гости и курьеры.',
+  'settings.locations.contacts.empty': 'Контактных лиц пока нет.',
+  'settings.locations.contacts.denied':
+    'Ваша должность не позволяет смотреть контактных лиц филиала.',
+  'settings.locations.contacts.outsideNotice':
+    'Коллега показывается с телефоном из его профиля. Для постороннего человека имя и телефон вводите сами: это чужие данные, добавляйте их только с ведома человека.',
+  'settings.locations.contacts.colleague': 'Коллега',
+  'settings.locations.contacts.colleague.pick': 'Выберите коллегу…',
+  'settings.locations.contacts.colleague.required': 'Выберите коллегу',
+  'settings.locations.contacts.addColleague': 'Добавить коллегу',
+  'settings.locations.contacts.addOutside': 'Добавить постороннего',
+  'settings.locations.contacts.max': 'Не больше десяти контактных лиц.',
+  'settings.locations.contacts.relation.MANAGER': 'Управляющий',
+  'settings.locations.contacts.relation.OWNER': 'Владелец',
+  'settings.locations.contacts.relation.LANDLORD': 'Арендодатель',
+  'settings.locations.contacts.relation.SECURITY': 'Охрана',
+  'settings.locations.contacts.relation.MAINTENANCE': 'Обслуживание',
+  'settings.locations.contacts.relation.OTHER': 'Другое',
   'settings.locations.cancel': 'Отмена',
   'settings.locations.save': 'Сохранить',
   'settings.locations.saving': 'Сохранение…',
@@ -2755,8 +2777,14 @@ export const messagesRu: MessageCatalogue = {
   'today.branches.unavailable': 'Не удалось загрузить список филиалов',
   'today.branches.partial': 'Показано филиалов: {shown} из {total}',
   'today.operators.title': 'Операторы',
-  'today.operators.notBuilt':
-    'Появится вместе со справочником сотрудников (IA 9.2, ещё не построен) — сегодня нет способа сопоставить принявшего заказ с именем.',
+  'today.operators.column.operator': 'Оператор',
+  'today.operators.column.accepted': 'Принято',
+  'today.operators.column.created': 'Создано',
+  'today.operators.unnamed': 'Сотрудник без имени',
+  'today.operators.empty': 'Сегодня заказов ещё никто не принял',
+  'today.operators.unavailable': 'Не удалось загрузить операторов',
+  'today.operators.overlap':
+    'Один заказ может попасть в оба столбца: один человек может и создать, и принять заказ.',
 
   // ---- IA 0.2 Моя работа (my-work-page.ts) — волна T01 ----
   'myWork.title': 'Моя работа',
@@ -2770,7 +2798,8 @@ export const messagesRu: MessageCatalogue = {
   'myWork.payment.empty': 'Пока нет поступлений за сегодня',
   'myWork.locked.title': 'Пока недоступно',
   'myWork.locked.ask':
-    'Личные данные и персонализация интерфейса ждут ADR об идентификации сотрудников, который владелец платформы ещё не написал.',
+    'Персонализация интерфейса (сохранённые фильтры, раскладка) пока не построена.',
+  'myWork.profile.body': 'Имя, телефон, фото и языки меняются в вашем профиле.',
 
   // ---- IA 0.1e / X/X.3 Информационная панель (wallboard-shell.ts) — волна T23 ----
   'wallboard.title': 'Живая доска',
@@ -2783,8 +2812,8 @@ export const messagesRu: MessageCatalogue = {
   'wallboard.branches.title': 'Загрузка по филиалам',
   'wallboard.branches.empty': 'Нет данных по филиалам',
   'wallboard.branches.unavailable': 'Не удалось загрузить список филиалов',
-  'wallboard.operators.notBuilt':
-    'Появится вместе со справочником сотрудников (IA 9.2, ещё не построен) — сегодня нет способа сопоставить принявшего заказ с именем.',
+  'wallboard.operators.deferred':
+    'Операторы на общем экране не показываются: пока не решено, можно ли выводить на нём имена сотрудников.',
   'wallboard.fullscreen.enter': 'Развернуть на весь экран',
   'wallboard.freshness.loading': 'Подключение…',
   'wallboard.freshness.seconds': 'Обновлено {seconds} с назад',
@@ -4138,15 +4167,13 @@ export const messagesRu: MessageCatalogue = {
   'staff.filter.all': 'Все ({count})',
   'staff.filter.active': 'Активные ({count})',
   'staff.filter.suspended': 'Приостановлены ({count})',
-  'staff.filter.search.placeholder': 'Поиск по идентификатору',
+  'staff.filter.search.placeholder': 'Поиск по имени или номеру',
   'staff.filter.reset': 'Сбросить фильтры',
 
   'staff.group.companyWide': 'Вся компания',
   'staff.group.noActiveJob': 'Без действующей должности',
 
   'staff.column.person': 'Сотрудник',
-  'staff.column.person.notBuilt':
-    'Имя и телефон пока не сохраняются — показан идентификатор учётной записи',
   'staff.column.job': 'Должность',
   'staff.column.job.none': '—',
   'staff.column.scope': 'Где работает',
@@ -4156,11 +4183,17 @@ export const messagesRu: MessageCatalogue = {
   'staff.status.revoked': 'Доступ отозван',
   'staff.status.expiring': 'Заканчивается',
   'staff.status.invited': 'Приглашён',
+  'staff.status.ended': 'Не работает',
+  'staff.status.accessDrift': 'Доступ остался',
+  'staff.status.onLeave': 'В отпуске',
 
   'staff.row.revoked.reason': 'Доступ отозван: {reason}',
   'staff.row.revoked.noReason': 'Доступ отозван',
   'staff.row.expiring': 'Заканчивается {date}',
   'staff.row.invited': 'Ещё не настроил учётную запись',
+  'staff.row.noRecord': 'Профиль ещё не создан',
+  'staff.row.ended': 'Работа завершена {date}',
+  'staff.row.accessDrift': 'Работа завершена {date}, но должность ещё действует',
 
   'staff.telegram.linked': 'Telegram привязан',
   'staff.telegram.notLinked': 'Telegram не привязан',
@@ -4214,6 +4247,10 @@ export const messagesRu: MessageCatalogue = {
   'staff.accessDialog.revokeInvite.body':
     'Приглашение будет отменено, а должность, для которой оно было создано, — отозвана. Уже отправленная ссылка перестанет работать.',
   'staff.accessDialog.revokeInvite.confirm': 'Отозвать',
+  'staff.accessDialog.endEmployment.title': 'Завершить работу',
+  'staff.accessDialog.endEmployment.body':
+    'Сотрудник перестаёт работать, все его должности ({count}) будут сняты. Карточка сохранится: в старых заказах останется его имя.',
+  'staff.accessDialog.endEmployment.date': 'Последний рабочий день (пусто — сегодня)',
 
   'staff.inviteDialog.title': 'Пригласить',
   'staff.inviteDialog.rule':
@@ -4240,10 +4277,13 @@ export const messagesRu: MessageCatalogue = {
   'staff.detail.back': 'Назад к списку',
   'staff.detail.notFound': 'Такого сотрудника нет',
   'staff.detail.denied': 'У вас нет доступа к правам этого сотрудника',
-  'staff.detail.identity.notBuilt': 'Имя, телефон и фото пока не сохраняются',
   'staff.detail.since': 'В системе с {date}',
   'staff.detail.tab.access': 'Доступ',
   'staff.detail.tab.security': 'Безопасность',
+  'staff.detail.tab.profile': 'Профиль',
+  'staff.detail.tab.contacts': 'Контакты',
+  'staff.detail.drift': 'Работа завершена, но у сотрудника ещё есть должность.',
+  'staff.detail.drift.finish': 'Снять оставшийся доступ',
   'staff.detail.access.empty': 'У этого человека пока нет ни одной должности.',
   'staff.detail.canDo.show': 'Что можно делать',
   'staff.detail.canDo.hide': 'Скрыть',
@@ -4260,11 +4300,62 @@ export const messagesRu: MessageCatalogue = {
   'staff.detail.today.created': 'Создано сегодня: {count}',
   'staff.detail.today.accepted': 'Принято сегодня: {count}',
   'staff.detail.today.loading': 'Загрузка заказов за сегодня…',
+
+  // ---- staff record (ADR 0139): profile form and card
+  'staff.profile.field.firstName': 'Имя',
+  'staff.profile.field.lastName': 'Фамилия',
+  'staff.profile.field.phone': 'Контактный телефон',
+  'staff.profile.phone.hint':
+    'Номер, по которому звонят коллеги. Он может отличаться от номера для входа.',
+  'staff.profile.phone.signIn': 'Номер для входа задаётся при приглашении и здесь не меняется.',
+  'staff.profile.phone.invalid': 'В номере телефона от 7 до 15 цифр',
+  'staff.profile.firstName.required': 'Укажите имя',
+  'staff.profile.field.uiLocale': 'Язык интерфейса',
+  'staff.profile.uiLocale.none': 'Не выбран',
+  'staff.profile.field.spoken': 'Владеет языками',
+  'staff.profile.field.status': 'Статус работы',
+  'staff.profile.status.ACTIVE': 'Работает',
+  'staff.profile.field.employeeNumber': 'Табельный номер',
+  'staff.profile.field.employedFrom': 'Дата начала работы',
+  'staff.profile.field.employedUntil': 'Дата окончания работы',
+  'staff.profile.dates.invalid': 'Дата окончания раньше даты начала',
+  'staff.profile.field.reason': 'Причина (необязательно)',
+  'staff.profile.edit': 'Изменить',
+  'staff.profile.save': 'Сохранить',
+  'staff.profile.saved': 'Сохранено',
+  'staff.end.done': 'Работа завершена. Снято должностей: {count}.',
+  'staff.end.partial':
+    'Работа завершена, но не удалось снять должностей: {remaining}. Повторите, чтобы довести до конца.',
+  'staff.emergency.title': 'Экстренные контакты',
+  'staff.emergency.audited':
+    'Это данные других людей. Каждый показ записывается в журнал действий.',
+  'staff.emergency.show': 'Показать контакты',
+  'staff.emergency.hide': 'Скрыть',
+  'staff.emergency.denied': 'Ваша должность не позволяет смотреть экстренные контакты.',
+  'staff.emergency.empty': 'Экстренных контактов пока нет.',
+  'staff.emergency.add': 'Добавить контакт',
+  'staff.emergency.max': 'Не больше трёх контактов.',
+  'staff.emergency.name': 'Имя',
+  'staff.emergency.phone': 'Телефон',
+  'staff.emergency.relationship': 'Кем приходится',
+  'staff.emergency.name.required': 'Укажите имя',
+  'staff.emergency.phone.invalid': 'Укажите телефон: от 7 до 15 цифр',
+  'staff.emergency.relation.SPOUSE': 'Супруг(а)',
+  'staff.emergency.relation.PARENT': 'Родитель',
+  'staff.emergency.relation.CHILD': 'Ребёнок',
+  'staff.emergency.relation.SIBLING': 'Брат или сестра',
+  'staff.emergency.relation.FRIEND': 'Друг',
+  'staff.emergency.relation.OTHER': 'Другое',
   'staff.detail.viewActivity': 'Смотреть журнал действий',
 
   'staff.myProfile.title': 'Мой профиль',
   'staff.myProfile.personalData.title': 'Личные данные',
-  'staff.myProfile.personalData.notBuilt': 'Имя, телефон и email пока нельзя изменить здесь',
+  'staff.myProfile.noRecord':
+    'Эта компания не ведёт профиль для вашей учётной записи, поэтому здесь нечего менять.',
+  'staff.myProfile.photo.change': 'Сменить фото',
+  'staff.myProfile.photo.remove': 'Убрать фото',
+  'staff.myProfile.photo.type': 'Выберите изображение JPEG, PNG, WebP или AVIF',
+  'staff.myProfile.photo.tooLarge': 'Фото больше 1 МБ',
   'staff.myProfile.telegram.title': 'Telegram',
   'staff.myProfile.telegram.body':
     'Привяжите свой Telegram-аккаунт, чтобы получать уведомления от бота.',
@@ -6450,6 +6541,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.detail.mapping.entityType.PAYMENT_TYPE': 'Способы оплаты',
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Скидки',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Курьеры',
+  'settings.integrations.detail.mapping.entityType.OPERATOR': 'Операторы',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Причины отмены',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Канал → код POS',
 

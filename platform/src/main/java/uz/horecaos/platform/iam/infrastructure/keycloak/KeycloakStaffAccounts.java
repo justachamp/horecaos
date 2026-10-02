@@ -293,6 +293,53 @@ class KeycloakStaffAccounts implements StaffAccounts {
     }
 
     /**
+     * The whole profile the staff member record is backfilled from (ADR 0139):
+     * both names, the {@code phone} attribute {@link #create} wrote, and whether
+     * a password exists. A {@code 404} is "no such account"; any other failure
+     * propagates, so the backfill can tell the two apart and retry the second.
+     */
+    @Override
+    public Optional<StaffProfile> profile(String subjectId) {
+        Map<String, Object> user;
+        try {
+            user = client.get()
+                    .uri("/admin/realms/{realm}/users/{id}", realm, subjectId)
+                    .retrieve()
+                    .body(SINGLE);
+        } catch (HttpClientErrorException.NotFound missing) {
+            return Optional.empty();
+        }
+        if (user == null) {
+            return Optional.empty();
+        }
+        List<Map<String, Object>> credentials = client.get()
+                .uri("/admin/realms/{realm}/users/{id}/credentials", realm, subjectId)
+                .retrieve()
+                .body(LIST);
+        boolean hasPassword = credentials != null
+                && credentials.stream().anyMatch(credential -> "password".equals(credential.get("type")));
+        return Optional.of(new StaffProfile(
+                text(user.get("firstName")), text(user.get("lastName")), phoneAttribute(user), hasPassword));
+    }
+
+    private static @Nullable String text(@Nullable Object value) {
+        if (value == null) {
+            return null;
+        }
+        String stripped = String.valueOf(value).strip();
+        return stripped.isEmpty() ? null : stripped;
+    }
+
+    private static @Nullable String phoneAttribute(Map<String, Object> user) {
+        if (user.get("attributes") instanceof Map<?, ?> attributes
+                && attributes.get("phone") instanceof List<?> phones
+                && !phones.isEmpty()) {
+            return text(phones.getFirst());
+        }
+        return null;
+    }
+
+    /**
      * Ends every session the account holds -- which takes <em>two</em> admin
      * calls, not one (ADR 0098).
      *

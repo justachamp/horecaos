@@ -61,11 +61,14 @@ export type WallboardFreshness = 'loading' | 'fresh' | 'aging' | 'stale';
  * request still turns the banner red without waiting for a poll tick that
  * will never arrive.
  *
- * **The operator leaderboard stays a locked note.** Nothing here builds IA
- * `0.1d` — no staff person record exists to turn `acceptedByActorId` into a
- * display name (see `live-board.ts`'s own doc) — so the operators band
- * renders the same honest "not yet" `today-page.ts` renders, not a Keycloak
- * subject id blown up to TV size.
+ * **The operator band stays a note on the wall, by decision and not for
+ * want of data.** The desk view names who took and who accepted today's orders
+ * (`today-page.ts`, IA `0.1d`, ADR 0139). Whether a screen that hangs where
+ * the whole kitchen reads it may rank named employees — or show the
+ * non-personal `S-0142` reference instead — is a product and legal choice ADR
+ * 0139 leaves open, so this shell requests no operator data at all and says so,
+ * rather than guessing and printing either a name or a Keycloak subject id at
+ * TV size.
  *
  * **Unattended fullscreen.** A shift supervisor sets this up once and walks
  * away for the rest of service; nothing in this codebase called

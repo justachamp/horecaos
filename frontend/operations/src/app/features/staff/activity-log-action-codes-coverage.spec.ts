@@ -137,4 +137,47 @@ describe('activity log action-code dictionary coverage', () => {
       expect(blankOrMissing, `blank or missing in ${locale}`).toEqual([]);
     }
   });
+
+  /**
+   * The staff record's audit facts (ADR 0139) are written through named
+   * constants (`StaffMemberService.CREATED`, `StaffEmergencyContactService.READ`,
+   * `LocationContactPersonService.UPDATED`, …), not `AuditFact.of("<code>", …)`
+   * literals, so the scan above cannot discover them -- the limit the doc
+   * comment on this file already states for indirect producers. This names them
+   * by hand, so the activity log reads «Просмотрены экстренные контакты» and not
+   * a dotted code, and a code removed on the Java side is not silently kept here.
+   */
+  it('has a sentence in every locale for the staff record’s indirectly written audit codes', () => {
+    const staffRecordCodes = [
+      'staff.member.created',
+      'staff.member.updated',
+      'staff.member.employment_ended',
+      'staff.member.anonymised',
+      'staff.emergency_contact.read',
+      'staff.emergency_contact.updated',
+      'iam.location_contact.updated',
+    ];
+    for (const code of staffRecordCodes) {
+      for (const locale of LOCALES) {
+        const sentence = bulkActivityLogActionSentence(code, locale);
+        expect(sentence?.trim(), `${code} in ${locale}`).toBeTruthy();
+        expect(sentence, `${code} in ${locale}`).not.toContain('.');
+      }
+    }
+  });
+
+  it('keeps the staff record’s code names in step with the Java constants that write them', () => {
+    const service = readFileSync(
+      join(javaRoot, 'uz/horecaos/platform/iam/application/staff/StaffMemberService.java'),
+      'utf8',
+    );
+    for (const code of [
+      'staff.member.created',
+      'staff.member.updated',
+      'staff.member.employment_ended',
+      'staff.member.anonymised',
+    ]) {
+      expect(service, code).toContain(`"${code}"`);
+    }
+  });
 });

@@ -33,6 +33,7 @@ import java.util.Optional;
  * per-modifier candidate list, so their external side is always {@code
  * sourced=false}: an operator types the provider's own code by hand, the same
  * fallback {@link #COURIER} and {@link #CANCELLATION_REASON} already use.
+ * {@link #OPERATOR} (ADR 0139) joins them on the same footing.
  */
 public enum MappingEntityType {
     PRODUCT("VARIANT_PARENT"),
@@ -42,7 +43,24 @@ public enum MappingEntityType {
     CANCELLATION_REASON("CANCELLATION_REASON"),
     CHANNEL_POS_CODE("CHANNEL_POS_CODE"),
     VARIANT("VARIANT"),
-    MODIFIER("MODIFIER");
+    MODIFIER("MODIFIER"),
+
+    /**
+     * A member of the tenant's own staff (ADR 0139, gap-map row 9.2c): which
+     * till operator id is this colleague. {@code horecaos_entity_id} is the
+     * staff member's id ({@code iam.staff_members.id}), not the Keycloak
+     * subject -- the subject is an authentication artefact, and every other
+     * mapping here keys on the HorecaOS entity ({@code VARIANT}, {@code
+     * COURIER}). The export path resolves the subject on an order to a member id
+     * and then the mapping to the till's id.
+     *
+     * <p>Not sourced: no provider in this build discovers an operator list, so an
+     * operator types the till's own id by hand, the way {@link #COURIER} works.
+     * The literal is the one {@code PosOrderExportService} has always queried for
+     * {@code OrderExport#operatorExternalId}, which had a reader and no author
+     * until this value existed.
+     */
+    OPERATOR("OPERATOR");
 
     private final String storedAs;
 
