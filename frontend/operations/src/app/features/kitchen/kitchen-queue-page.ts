@@ -14,6 +14,7 @@ import { LocationScope, operationsPaths } from '../../core/api/operations-paths'
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock } from '../../core/format/datetime';
+import { formatQuantity } from '../../core/format/quantity';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { LatenessPolicyTracker } from '../../core/lateness-policy-tracker';
@@ -66,6 +67,7 @@ import {
   isKitchenTabId,
   isKitchenTabMember,
 } from './kitchen-ticket';
+import { lineWeightText } from './kitchen-line-weight';
 
 /**
  * Fixed, English, machine-facing ADR 0029 reveal purpose — matches
@@ -538,6 +540,16 @@ export class KitchenQueuePage implements OnInit {
 
   protected lineFor(ticket: TicketResponse, item: TicketItemView): OrderLine | null {
     return this.orderLinesByOrderId().get(ticket.orderId)?.get(item.orderLineId) ?? null;
+  }
+
+  /** `0,5`, `2` — never `2.000` (ADR 0137). */
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
+  }
+
+  /** The estimated weight of the line (what to cut) or what it weighed, for the kitchen. */
+  protected weightText(line: OrderLine): string | null {
+    return lineWeightText(line, this.i18n.locale(), (key, values) => this.i18n.t(key, values));
   }
 
   protected kitchenNoteFor(ticket: TicketResponse): string | null {

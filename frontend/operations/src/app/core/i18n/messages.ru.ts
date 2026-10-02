@@ -2897,6 +2897,9 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.expo.empty': 'Нечего передавать',
   'kitchen.expo.packedConfirm': 'Упаковано и готово к передаче',
   'kitchen.expo.packedWaiting': 'Ожидание готовности всех позиций перед упаковкой',
+  'kitchen.item.weight.estimate': '≈ {weight} (оценка)',
+  'kitchen.item.weight.weighed': '{weight}, взвешено',
+  'kitchen.expo.weighFirst': 'Взвесьте весовые позиции, прежде чем выдавать заказ.',
 
   'kitchen.stopList.tab.all': 'Все',
   'kitchen.stopList.tab.available': 'В продаже',

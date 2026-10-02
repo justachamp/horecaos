@@ -172,3 +172,12 @@
   height: 48px;
   background: var(--q-surface-1);
 }
+
+.expo__weight {
+  color: var(--q-ink-subtle);
+}
+
+.expo__weigh-first {
+  color: var(--q-warning);
+  margin: 8px 0 0;
+}

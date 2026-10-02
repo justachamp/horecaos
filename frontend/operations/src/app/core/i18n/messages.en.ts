@@ -2936,6 +2936,9 @@ export const messagesEn = {
   'kitchen.expo.empty': 'Nothing ready for handover',
   'kitchen.expo.packedConfirm': 'Packed and ready to hand over',
   'kitchen.expo.packedWaiting': 'Waiting for every line to be ready before it can be packed',
+  'kitchen.item.weight.estimate': '≈ {weight} (estimate)',
+  'kitchen.item.weight.weighed': '{weight} weighed',
+  'kitchen.expo.weighFirst': 'Weigh the items sold by weight before handing this over.',
 
   'kitchen.stopList.tab.all': 'All',
   'kitchen.stopList.tab.available': 'Available',

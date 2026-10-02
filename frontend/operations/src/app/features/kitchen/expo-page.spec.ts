@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { NEVER, of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -8,6 +8,7 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { ChallengeState, OrderHandoverApi } from '../orders/order-handover-api';
+import { ActualWeightResult, OrderWeighingApi } from '../orders/order-weighing-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { ExpoPage } from './expo-page';
 
@@ -53,6 +54,7 @@ describe('ExpoPage', () => {
     kitchenApi: Partial<KitchenApi>,
     apiClient?: Partial<ApiClient>,
     handoverApi?: Partial<OrderHandoverApi>,
+    weighingApi?: Partial<OrderWeighingApi>,
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [ExpoPage],
@@ -78,6 +80,11 @@ describe('ExpoPage', () => {
         {
           provide: OrderHandoverApi,
           useValue: handoverApi ?? { challenge: () => of(null) },
+        },
+        // ADR 0137: the scale is only drawn for an order with a weighed line.
+        {
+          provide: OrderWeighingApi,
+          useValue: weighingApi ?? { captureActualWeight: () => NEVER },
         },
       ],
     }).compileComponents();
@@ -281,5 +288,221 @@ describe('ExpoPage', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="expo-denied"]'),
     ).not.toBeNull();
+  });
+
+  // ----------------------------------------------- portions and weighing (ADR 0137)
+
+  describe('portions and weighing at handover (ADR 0137)', () => {
+    function weighedOrder(provisional: boolean, version = 7) {
+      return {
+        version,
+        value: {
+          summary: {
+            orderId: 'order-1',
+            status: 'READY',
+            currency: 'UZS',
+            version,
+            totalMinor: provisional ? 180_000 : 201_000,
+          },
+          kitchenNote: null,
+          lines: [
+            {
+              lineId: 'line-1',
+              lineNumber: 1,
+              productName: 'Medovik',
+              quantity: 1,
+              finalAmountMinor: provisional ? 180_000 : 201_000,
+              modifiers: [],
+              commentPresets: [],
+              hasNote: false,
+              catchweight: {
+                quantumGrams: 100,
+                nominalGramsPerUnit: 1_200,
+                pricePerQuantumMinor: 15_000,
+                provisional,
+                actualWeightGrams: provisional ? null : 1_340,
+              },
+            },
+          ],
+        },
+      };
+    }
+
+    function result(): ActualWeightResult {
+      return {
+        orderId: 'order-1',
+        lineId: 'line-1',
+        changed: true,
+        actualWeightGrams: 1_340,
+        lineFinalAmountMinor: 201_000,
+        totalMinor: 201_000,
+        deltaTotalMinor: 21_000,
+        revision: 2,
+        orderVersion: 8,
+      };
+    }
+
+    const BOARD: BoardResponse = { tickets: [ready({})], warnings: [] };
+
+    /** `ApiClient.get` is generic over the response; a fixture reader is not, so it is cast once, here. */
+    const api = (read: () => unknown): Partial<ApiClient> => ({
+      get: read as unknown as ApiClient['get'],
+    });
+
+    function kitchen(extra: Partial<KitchenApi> = {}): Partial<KitchenApi> {
+      return { board: () => Promise.resolve(BOARD), stations: () => Promise.resolve([]), ...extra };
+    }
+
+    function pack(host: HTMLElement): void {
+      (host.querySelector('[data-testid="expo-packed"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+    }
+
+    const handOverButton = (host: HTMLElement) =>
+      host.querySelector('[data-testid="expo-handover"]') as HTMLButtonElement;
+
+    it('writes a half portion as 0,5 in the table and in the department roll-up', async () => {
+      const half = ready({
+        items: [
+          {
+            itemId: 'item-1',
+            orderLineId: 'line-1',
+            stationId: 'grill',
+            quantity: 0.5,
+            routedBy: 'LOCATION_VARIANT',
+            status: 'READY',
+            version: 1,
+          },
+        ],
+      });
+      await render({
+        board: () => Promise.resolve({ tickets: [half], warnings: [] }),
+        stations: () => Promise.resolve([]),
+      });
+
+      TestBed.inject(I18n).setLocale('ru');
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('tbody td.expo__num-col')?.textContent?.trim()).toBe('0,5');
+      expect(host.querySelector('[data-testid="expo-rollup-chip"]')?.textContent).toContain(
+        '0,5/0,5',
+      );
+    });
+
+    it('shows a weighed line’s estimated weight under its name, so the pass knows what to cut', async () => {
+      await render(
+        kitchen(),
+        api(() => of(weighedOrder(true))),
+      );
+
+      const weight = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="expo-line-weight"]',
+      );
+      expect(weight?.textContent).toContain('1.2\u00a0kg');
+    });
+
+    it('shows the weight a line was weighed at once it is weighed', async () => {
+      await render(
+        kitchen(),
+        api(() => of(weighedOrder(false))),
+      );
+
+      const weight = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="expo-line-weight"]',
+      );
+      expect(weight?.textContent).toContain('1.34\u00a0kg');
+      expect(weight?.textContent).toContain('weighed');
+    });
+
+    it('will not hand an order over while a weighed line is unweighed, and says why', async () => {
+      const handOver = vi.fn().mockReturnValue(of({ ...ready({}), status: 'HANDED_OVER' }));
+      await render(
+        kitchen({ handOver }),
+        api(() => of(weighedOrder(true))),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(true);
+      expect(host.querySelector('[data-testid="expo-weigh-first"]')).not.toBeNull();
+      handOverButton(host).click();
+      expect(handOver).not.toHaveBeenCalled();
+    });
+
+    it('offers the scale on the ticket, and lets the order go once the weight is recorded', async () => {
+      let order = weighedOrder(true);
+      const capture = vi.fn(() => {
+        order = weighedOrder(false, 8);
+        return of(result());
+      });
+      await render(
+        kitchen(),
+        api(() => of(order)),
+        undefined,
+        {
+          captureActualWeight: capture,
+        },
+      );
+      const host = fixture.nativeElement as HTMLElement;
+      pack(host);
+      expect(handOverButton(host).disabled).toBe(true);
+
+      const input = host.querySelector('[data-testid="order-weigh-input"]') as HTMLInputElement;
+      input.value = '1340';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="order-weigh-save"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(capture).toHaveBeenCalledWith(SCOPE, 'order-1', 'line-1', 1_340, 7);
+      expect(host.querySelector('[data-testid="expo-weigh-first"]')).toBeNull();
+      expect(handOverButton(host).disabled).toBe(false);
+    });
+
+    it('does not hand over while it has not yet read the order, rather than guess there is nothing to weigh', async () => {
+      await render(
+        kitchen(),
+        api(() => NEVER),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(true);
+    });
+
+    it('does not hold back an order with nothing sold by weight', async () => {
+      await render(
+        kitchen(),
+        api(() => of({ value: { lines: [], kitchenNote: null }, version: null })),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(false);
+      expect(host.querySelector('[data-testid="order-weighing"]')).toBeNull();
+    });
+
+    it('notices on the next poll that another screen weighed the order', async () => {
+      let order = weighedOrder(true);
+      await render(
+        kitchen(),
+        api(() => of(order)),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+      pack(host);
+      expect(handOverButton(host).disabled).toBe(true);
+
+      order = weighedOrder(false, 8);
+      await (fixture.componentInstance as unknown as { refresh(): Promise<void> }).refresh();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(handOverButton(host).disabled).toBe(false);
+    });
   });
 });

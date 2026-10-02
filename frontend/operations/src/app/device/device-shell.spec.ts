@@ -230,4 +230,42 @@ describe('DeviceShell', () => {
     expect(session.forgetCredential).toHaveBeenCalledTimes(1);
     expect(session.clearSetup).toHaveBeenCalledTimes(1);
   });
+
+  it('writes a half portion with the console’s decimal mark on the tablet board (ADR 0137)', async () => {
+    const board = vi.fn().mockResolvedValue({
+      tickets: [
+        {
+          ticketId: 'ticket-1',
+          orderId: 'order-1',
+          sequenceLabel: 'A-014',
+          fulfilmentMode: 'DELIVERY',
+          status: 'FIRED',
+          releaseMode: 'AUTO_ON_CONFIRM',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          items: [
+            {
+              itemId: 'item-1',
+              orderLineId: 'line-1',
+              stationId: 'station-1',
+              quantity: 0.5,
+              routedBy: 'FALLBACK',
+              status: 'QUEUED',
+              version: 1,
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    });
+    await render(makeSession({ setUp: true, enrolled: true }), { board });
+    TestBed.inject(I18n).setLocale('ru');
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('.device-shell__item-qty')
+        ?.textContent?.trim(),
+    ).toBe('×0,5');
+  });
 });

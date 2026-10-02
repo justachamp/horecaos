@@ -267,4 +267,43 @@ describe('WallboardKitchenPage', () => {
       vi.useRealTimers();
     }
   });
+
+  it('writes a half portion with the console’s decimal mark, and a whole one without decimals (ADR 0137)', async () => {
+    setUp({
+      tickets: [
+        ticket({
+          items: [
+            {
+              itemId: 'item-1',
+              orderLineId: 'line-1',
+              stationId: 'station-1',
+              quantity: 0.5,
+              routedBy: 'FALLBACK',
+              status: 'QUEUED',
+              version: 1,
+            },
+            {
+              itemId: 'item-2',
+              orderLineId: 'line-2',
+              stationId: 'station-1',
+              quantity: 3,
+              routedBy: 'FALLBACK',
+              status: 'QUEUED',
+              version: 1,
+            },
+          ],
+        }),
+      ],
+      warnings: [],
+    });
+    TestBed.inject(I18n).setLocale('ru');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const quantities = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll('.wk__item-qty'),
+    ].map((el) => el.textContent?.trim());
+    expect(quantities).toEqual(['×0,5', '×3']);
+  });
 });

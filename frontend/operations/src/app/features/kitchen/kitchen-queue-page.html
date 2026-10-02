@@ -182,6 +182,11 @@
                         @if (line.variantName) {
                           <div class="q-caption">{{ line.variantName }}</div>
                         }
+                        @if (weightText(line); as weight) {
+                          <div class="q-caption ticket__weight" data-testid="kitchen-line-weight">
+                            {{ weight }}
+                          </div>
+                        }
                         @if (line.commentPresets.length > 0) {
                           <ul class="ticket__line-presets" data-testid="kitchen-line-presets">
                             @for (preset of line.commentPresets; track preset.code) {
@@ -219,7 +224,7 @@
                       }
                     </td>
                     <td>{{ stationLabel(item.stationId) }}</td>
-                    <td class="kitchen__num-col q-tnum">{{ item.quantity }}</td>
+                    <td class="kitchen__num-col q-tnum">{{ quantityText(item.quantity) }}</td>
                     <td>
                       <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
                     </td>

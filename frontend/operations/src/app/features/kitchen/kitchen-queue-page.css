@@ -252,3 +252,7 @@
 .ticket__assign-cancel {
   color: var(--q-ink-muted);
 }
+
+.ticket__weight {
+  color: var(--q-ink-subtle);
+}

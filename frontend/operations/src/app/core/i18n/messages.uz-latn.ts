@@ -2929,6 +2929,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.expo.empty': 'Topshirish uchun hech narsa yoʻq',
   'kitchen.expo.packedConfirm': 'Qadoqlangan va topshirishga tayyor',
   'kitchen.expo.packedWaiting': 'Qadoqlashdan oldin barcha qatorlar tayyor boʻlishi kutilmoqda',
+  'kitchen.item.weight.estimate': '≈ {weight} (taxminiy)',
+  'kitchen.item.weight.weighed': '{weight}, tortilgan',
+  'kitchen.expo.weighFirst':
+    'Topshirishdan oldin ogʻirlik boʻyicha sotiladigan pozitsiyalarni torting.',
 
   'kitchen.stopList.tab.all': 'Barchasi',
   'kitchen.stopList.tab.available': 'Sotuvda',
