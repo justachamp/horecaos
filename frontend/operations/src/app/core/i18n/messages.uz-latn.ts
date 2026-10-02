@@ -1115,7 +1115,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.brandProfile.formats.timezone.hint':
     'Bu yerda faqat koʻrish uchun: standart vaqt mintaqasini tenant belgilaydi, har bir filialning oʻzi bor.',
   'settings.brandProfile.formats.timezone.tenant': 'Tenant standarti',
-  'settings.brandProfile.formats.timezone.branches': 'Filiallarning vaqt mintaqalari',
   'settings.brandProfile.formats.preview': 'Namuna',
   'settings.brandProfile.formats.preview.total': 'Jami',
   'settings.brandProfile.formats.preview.phone': 'Telefon',

@@ -174,7 +174,8 @@ describe('CartComponent', () => {
     const note = fixture.nativeElement.querySelector(
       '[data-testid="promotion-note"]',
     ) as HTMLElement;
-    expect(note.textContent?.trim()).toBe('cart.deliveryOfferNote');
+    // The fake translator appends the interpolation values to the key: the note names the amount.
+    expect(note.textContent?.trim()).toContain('cart.deliveryOfferNote');
   });
 
   it('does not offer a checkout button over an empty basket', async () => {

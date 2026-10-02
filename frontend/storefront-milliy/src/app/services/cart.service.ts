@@ -575,16 +575,6 @@ export interface PricedCart {
    * nothing.
    */
   readonly hiddenCharges?: readonly HiddenCharge[];
-}
-
-/** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */
-export interface HiddenCharge {
-  /** The cart line it was applied to; for a combo component, that line's key followed by its position. */
-  readonly lineKey: string;
-  /** The modifier option, which the published menu names. */
-  readonly optionId: string;
-  /** For the whole line, zero when the option is free. */
-  readonly amountMinor: number;
   /**
    * ADR 0140. The kinds of promotion behind the price, in the platform's words:
    * whether the customer asked for each by typing a code, what it did to the total
@@ -597,6 +587,16 @@ export interface HiddenCharge {
    * the cart carries no code.
    */
   readonly promoCodeOutcome?: PromoCodeOutcome | null;
+}
+
+/** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */
+export interface HiddenCharge {
+  /** The cart line it was applied to; for a combo component, that line's key followed by its position. */
+  readonly lineKey: string;
+  /** The modifier option, which the published menu names. */
+  readonly optionId: string;
+  /** For the whole line, zero when the option is free. */
+  readonly amountMinor: number;
 }
 
 export interface PaymentMethods {

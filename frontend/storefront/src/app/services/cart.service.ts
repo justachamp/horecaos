@@ -541,6 +541,12 @@ export interface PricedCart {
    * adds nothing.
    */
   readonly hiddenCharges?: readonly HiddenCharge[];
+  /**
+   * ADR 0140. The kinds of promotion behind the price, in the platform's words:
+   * whether the customer asked for each by typing a code, what it did to the total
+   * and how much. Names no promotion. Absent from an answer that predates it.
+   */
+  readonly appliedPromotions?: readonly AppliedPromotion[];
 }
 
 /** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */
@@ -551,12 +557,6 @@ export interface HiddenCharge {
   readonly optionId: string;
   /** For the whole line, zero when the option is free. */
   readonly amountMinor: number;
-  /**
-   * ADR 0140. The kinds of promotion behind the price, in the platform's words:
-   * whether the customer asked for each by typing a code, what it did to the total
-   * and how much. Names no promotion. Absent from an answer that predates it.
-   */
-  readonly appliedPromotions?: readonly AppliedPromotion[];
 }
 
 export interface PaymentMethods {

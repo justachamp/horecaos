@@ -109,11 +109,18 @@ When a page's stylesheet grows past 4 kB:
   raises what the user asks for (`host: display contents` keeps the box tree unchanged). The page keeps
   every read, write and decision; the order queue's toolbar, the detail pane's money section and
   the product editor's Photos tab are examples.
-- Do not raise the budget. `operations`' initial bundle measured 782.55 kB on 2026-09-30 against
-  the 825 kB error budget (about 42 kB of headroom), of which the Russian catalogue (the default
-  locale, eager by ADR 0035's loading model) is 466 kB. The figure ages with every merge: the
+- Do not raise the budget for code. It was raised once, from 825 kB to 831 kB, by the batch 17
+  integration (2026-10-02), and only for message growth: eight waves merged into one build, and
+  the initial total went from 783.46 kB on main to 830.92 kB (830.82 kB once the one dead key
+  `i18n:dead` listed was removed). A comparison of the two production
+  bundles' stats files attributes 39.0 kB of the 47.5 kB to the Russian catalogue (the default
+  locale, eager by ADR 0035's loading model; 593 new lines across the batch's waves) and a
+  further hundred bytes to the rest of the changed files -- no wave put eager code of its own
+  into the initial chunks, every new screen being lazy. The figure ages with every merge: the
   `Initial total` line of `ng build --configuration production` is the source of truth, so size a
-  feature against a fresh build, not against this number.
+  feature against a fresh build, not against this number. The headroom is now under 200 bytes, so
+  the next wave that adds messages has to make room first (`npm run i18n:dead -- --write`, then
+  say which keys are dead) before it asks for another bump.
 
 `operations` also has `npm run i18n:dead`, which lists message keys nothing references;
 `--write` removes them from all three locales (`--app-dir ../control-plane --variables

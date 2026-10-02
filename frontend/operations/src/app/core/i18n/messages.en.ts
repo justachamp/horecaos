@@ -1138,7 +1138,6 @@ export const messagesEn = {
   'settings.brandProfile.formats.timezone.hint':
     'Read-only here: the tenant sets a default time zone and each branch has its own.',
   'settings.brandProfile.formats.timezone.tenant': 'Tenant default',
-  'settings.brandProfile.formats.timezone.branches': 'Branch time zones',
   'settings.brandProfile.formats.preview': 'Example',
   'settings.brandProfile.formats.preview.total': 'Total',
   'settings.brandProfile.formats.preview.phone': 'Phone',

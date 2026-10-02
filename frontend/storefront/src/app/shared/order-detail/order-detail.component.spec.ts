@@ -245,7 +245,8 @@ describe('OrderDetailComponent: the promotions behind the price (ADR 0140)', () 
       promotions: [{ source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 3_000 }],
     });
 
-    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toBe(
+    // The fake translator appends the interpolation values to the key: the note names the amount.
+    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toContain(
       'cart.deliveryOfferNote',
     );
     expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();

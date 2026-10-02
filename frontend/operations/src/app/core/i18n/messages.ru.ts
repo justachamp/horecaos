@@ -1100,7 +1100,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.brandProfile.formats.timezone.hint':
     'Здесь только для просмотра: часовой пояс по умолчанию задаёт тенант, у каждого филиала он свой.',
   'settings.brandProfile.formats.timezone.tenant': 'По умолчанию у тенанта',
-  'settings.brandProfile.formats.timezone.branches': 'Часовые пояса филиалов',
   'settings.brandProfile.formats.preview': 'Пример',
   'settings.brandProfile.formats.preview.total': 'Итого',
   'settings.brandProfile.formats.preview.phone': 'Телефон',
