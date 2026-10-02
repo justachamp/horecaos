@@ -1,0 +1,153 @@
+:host {
+  display: block;
+}
+
+.sim {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sim__intro,
+.sim__hint {
+  color: var(--q-ink-muted);
+  margin: 0;
+}
+
+.sim__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0 12px;
+}
+
+.sim__section {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  min-inline-size: 0;
+}
+
+.sim__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.chip--active {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.sim__lines {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sim__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sim__line-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sim__qty {
+  width: 72px;
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.sim__remove {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.sim__run .primary {
+  padding: 6px 16px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.sim__run .primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sim__error {
+  padding: 10px 14px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-radius: var(--q-radius);
+}
+
+.sim__result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sim__totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  margin: 0;
+  max-width: 360px;
+}
+
+.sim__totals dd {
+  margin: 0;
+  text-align: right;
+}
+
+.sim__total-label,
+.sim__total {
+  font-weight: 600;
+  border-top: 1px solid var(--q-hairline);
+  padding-top: 4px;
+}
+
+.sim__sub {
+  margin: 8px 0 0;
+}
+
+.sim__adjustments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sim__adjustment {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}

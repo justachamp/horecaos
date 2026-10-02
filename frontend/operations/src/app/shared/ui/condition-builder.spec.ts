@@ -97,6 +97,7 @@ const CATALOGUE: readonly ConditionTypeDescriptor[] = [
       [catalogue]="catalogue"
       [groups]="groups()"
       [allowGroups]="allowGroups()"
+      [allowEmpty]="allowEmpty()"
       heading="Conditions"
       (groupsChange)="groups.set($event)"
     />
@@ -105,6 +106,7 @@ const CATALOGUE: readonly ConditionTypeDescriptor[] = [
 class ConditionBuilderHost {
   readonly catalogue = CATALOGUE;
   readonly allowGroups = signal(false);
+  readonly allowEmpty = signal(false);
   readonly groups = signal<readonly ConditionGroup[]>([newConditionGroup(CATALOGUE, 'AND')]);
 }
 
@@ -245,6 +247,22 @@ describe('ConditionBuilder', () => {
     expect(host.querySelectorAll('.predicate-row')).toHaveLength(1);
     // Only one row left across the whole builder — its remove button is now disabled.
     expect(host.querySelector<HTMLButtonElement>('.predicate-row__remove')!.disabled).toBe(true);
+  });
+
+  it('lets the last row go when the host says an empty rule set is meaningful (a promotion with no condition applies to every order)', () => {
+    fixture.componentInstance.allowEmpty.set(true);
+    fixture.detectChanges();
+    const remove = host.querySelector<HTMLButtonElement>('.predicate-row__remove')!;
+    expect(remove.disabled).toBe(false);
+    remove.click();
+    fixture.detectChanges();
+    expect(host.querySelectorAll('.predicate-row')).toHaveLength(0);
+    expect(fixture.componentInstance.groups()).toHaveLength(1);
+    expect(fixture.componentInstance.groups()[0].rows).toHaveLength(0);
+    // And the add button still brings a row back.
+    host.querySelector<HTMLButtonElement>('.add-row')!.click();
+    fixture.detectChanges();
+    expect(host.querySelectorAll('.predicate-row')).toHaveLength(1);
   });
 
   describe('and/or grouping (allowGroups)', () => {

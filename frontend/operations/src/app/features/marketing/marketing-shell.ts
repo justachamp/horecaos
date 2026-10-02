@@ -22,8 +22,12 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * above them; `PromoCodeController` and `PromoCodesPage` are the first —
  * draft (a closed set of three discount shapes: percentage off the order,
  * fixed amount off the order, free delivery), activate, retire. 6.1
- * Promotions, the general no-code rule-engine screen the same schema could
- * also serve, remains unbuilt and routes to `NotBuiltPage`. 6.4 Campaigns:
+ * Promotions, the general no-code rule-engine screen the same schema also
+ * serves, is `PromotionsPage` (ADR 0140): automatic discounts and markups in
+ * a closed vocabulary, authored as a draft, validated, activated (with a
+ * second person's approval above the ADR 0030 thresholds), simulated against
+ * the real engine and reordered by priority within a stacking group.
+ * 6.4 Campaigns:
  * ADR 0044's audiences, campaign lifecycle, and suppression machinery, with
  * `RFM targeting` folded in as this row's own audience-definition step rather
  * than a separate IA row. 6.3 Loyalty: `LoyaltyOperationsController`'s
@@ -44,8 +48,6 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * INACTIVITY and CART_ABANDONMENT triggers — see `AutomationsPage`'s own
  * doc for why only three of ADR 0044's named kinds. The other two tabs
  * route to the shared `NotBuiltPage`, each naming its own IA subsection —
- * 6.1 Promotions, the general no-code rule-engine authoring screen
- * `V0093`'s schema could also serve, still has no controller of its own;
  * 6.7/6.8's merchandising slots have neither schema nor service. Each is a
  * subsystem in its own right, not a small gap a couple of reserved
  * migrations could close honestly — see wave 44's final report.

@@ -17,6 +17,9 @@ const ITEMS: readonly RuleListItem[] = [
   template: `
     <q-rule-list
       [items]="items()"
+      [selectable]="selectable()"
+      [selectedId]="selectedId()"
+      (select)="lastSelected = $event"
       (reorder)="lastReorder = $event"
       (enabledChange)="onEnabledChange($event)"
     />
@@ -24,6 +27,9 @@ const ITEMS: readonly RuleListItem[] = [
 })
 class RuleListHost {
   readonly items = signal<readonly RuleListItem[]>(ITEMS);
+  readonly selectable = signal(false);
+  readonly selectedId = signal<string | null>(null);
+  lastSelected: string | null = null;
   lastReorder: RuleReorder | null = null;
   lastEnabledChange: RuleEnabledChange | null = null;
 
@@ -147,6 +153,39 @@ describe('RuleList', () => {
       fixture.detectChanges();
 
       expect(fixture.componentInstance.lastReorder).toBeNull();
+    });
+  });
+
+  describe('selectable rows (the promotions screen opens a rule from its row)', () => {
+    it('does nothing when a row body is clicked unless the host asked for selection', () => {
+      rows()[1].querySelector<HTMLElement>('.rule-list__body')!.click();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.lastSelected).toBeNull();
+      expect(rows()[1].querySelector('.rule-list__body')!.getAttribute('role')).toBeNull();
+    });
+
+    it('emits the id of the clicked row and marks the selected one', () => {
+      fixture.componentInstance.selectable.set(true);
+      fixture.componentInstance.selectedId.set('r3');
+      fixture.detectChanges();
+
+      expect(rows()[2].classList.contains('rule-list__row--selected')).toBe(true);
+      expect(rows()[2].querySelector('.rule-list__body')!.getAttribute('aria-current')).toBe(
+        'true',
+      );
+      expect(rows()[0].classList.contains('rule-list__row--selected')).toBe(false);
+
+      rows()[1].querySelector<HTMLElement>('.rule-list__body')!.click();
+      expect(fixture.componentInstance.lastSelected).toBe('r2');
+    });
+
+    it('opens a row from the keyboard as well', () => {
+      fixture.componentInstance.selectable.set(true);
+      fixture.detectChanges();
+      const body = rows()[0].querySelector<HTMLElement>('.rule-list__body')!;
+      expect(body.getAttribute('tabindex')).toBe('0');
+      body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(fixture.componentInstance.lastSelected).toBe('r1');
     });
   });
 });

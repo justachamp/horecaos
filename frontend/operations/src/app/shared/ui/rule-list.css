@@ -81,3 +81,17 @@
   color: var(--q-ink-muted);
   flex: 0 0 auto;
 }
+
+.rule-list__row--selected {
+  border-color: var(--q-primary);
+  background: var(--q-surface-1);
+}
+
+.rule-list__body--selectable {
+  cursor: pointer;
+}
+
+.rule-list__body--selectable:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 2px;
+}

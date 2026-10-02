@@ -1,0 +1,472 @@
+<div class="promotions">
+  <div class="promotions__toolbar">
+    <div>
+      <h1 class="q-subhead">{{ 'marketing.promotions.title' | t }}</h1>
+      <p class="q-body-sm promotions__intro">{{ 'marketing.promotions.intro' | t }}</p>
+    </div>
+    @if (!loading() && !denied()) {
+      <button
+        type="button"
+        class="promotions__create"
+        (click)="startCreate()"
+        data-testid="promotions-create"
+      >
+        {{ 'marketing.promotions.create' | t }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="promotions__skeleton" [attr.aria-label]="'marketing.promotions.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="promotions__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="promotions__denied" data-testid="promotions-denied">
+      <p class="q-body-sm">{{ 'marketing.promotions.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="promotions__band promotions__band--error" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div
+        class="promotions__band promotions__band--error"
+        role="alert"
+        data-testid="promotions-error"
+      >
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (notice(); as key) {
+      <div
+        class="promotions__band promotions__band--ok"
+        role="status"
+        data-testid="promotions-notice"
+      >
+        <span class="q-body-sm">{{ key | t }}</span>
+      </div>
+    }
+    @if (pendingApprovalId(); as requestId) {
+      <div
+        class="promotions__band promotions__band--info"
+        role="status"
+        data-testid="promotions-pending"
+      >
+        <span class="q-body-sm">{{ 'marketing.promotions.pending' | t: { id: requestId } }}</span>
+        <a class="q-body-sm" [routerLink]="approvalsLink">{{
+          'marketing.promotions.pending.link' | t
+        }}</a>
+      </div>
+    }
+
+    <div class="promotions__layout">
+      <aside class="promotions__list" [attr.aria-label]="'marketing.promotions.list' | t">
+        @if (promotions().length === 0) {
+          <p class="q-body-sm promotions__empty" data-testid="promotions-empty">
+            {{ 'marketing.promotions.empty' | t }}
+          </p>
+        }
+
+        @for (epoch of [listEpoch()]; track epoch) {
+          @for (group of groups(); track group.name) {
+            <section class="group" data-testid="promotion-group">
+              <h2 class="q-caption group__title">
+                {{ 'marketing.promotions.group' | t: { name: group.name } }}
+              </h2>
+              <q-rule-list
+                [items]="group.items"
+                [selectable]="true"
+                [selectedId]="selectedId()"
+                (select)="select($event)"
+                (reorder)="onReorder(group, $event)"
+                (enabledChange)="onEnabledChange($event)"
+              />
+            </section>
+          }
+        }
+
+        @if (groups().length > 0) {
+          <p class="q-caption promotions__hint">{{ 'marketing.promotions.list.hint' | t }}</p>
+        }
+
+        @if (archived().length > 0) {
+          <details class="group group--archived">
+            <summary class="q-caption">
+              {{ 'marketing.promotions.archived' | t: { count: archived().length } }}
+            </summary>
+            <ul class="archived-list">
+              @for (promotion of archived(); track promotion.promotionId) {
+                <li>
+                  <button
+                    type="button"
+                    class="archived-list__item q-body-sm"
+                    [class.archived-list__item--selected]="selectedId() === promotion.promotionId"
+                    (click)="select(promotion.promotionId)"
+                  >
+                    {{ promotion.name }} <span class="q-caption">{{ promotion.code }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          </details>
+        }
+      </aside>
+
+      <section class="promotions__detail">
+        @if (!hasOpenRule()) {
+          <p class="q-body-sm promotions__empty" data-testid="promotions-nothing-open">
+            {{ 'marketing.promotions.nothingOpen' | t }}
+          </p>
+        } @else {
+          <header class="detail__header">
+            <div class="detail__title">
+              <h2 class="q-subhead">
+                {{ creating() ? ('marketing.promotions.newTitle' | t) : detail()?.name }}
+              </h2>
+              @if (detail(); as open) {
+                <span class="q-caption detail__code">{{ open.code }}</span>
+                <span
+                  class="status-badge"
+                  [class.status-badge--live]="open.status === 'ACTIVE'"
+                  data-testid="promotion-status"
+                >
+                  {{ statusLabelKey(open.status) | t }}
+                </span>
+              }
+            </div>
+
+            <div class="detail__actions">
+              @if (canValidate()) {
+                <button
+                  type="button"
+                  [disabled]="acting() !== null"
+                  (click)="validate()"
+                  data-testid="promotion-validate"
+                >
+                  {{ 'marketing.promotions.action.validate' | t }}
+                </button>
+              }
+              @if (canActivate()) {
+                <button
+                  type="button"
+                  class="primary"
+                  [disabled]="acting() !== null"
+                  (click)="openActivation()"
+                  data-testid="promotion-activate"
+                >
+                  {{ 'marketing.promotions.action.activate' | t }}
+                </button>
+              }
+              @if (canSuspend()) {
+                <button
+                  type="button"
+                  [disabled]="acting() !== null"
+                  (click)="suspend()"
+                  data-testid="promotion-suspend"
+                >
+                  {{ 'marketing.promotions.action.suspend' | t }}
+                </button>
+              }
+              @if (canResume()) {
+                <button
+                  type="button"
+                  class="primary"
+                  [disabled]="acting() !== null"
+                  (click)="resume()"
+                  data-testid="promotion-resume"
+                >
+                  {{ 'marketing.promotions.action.resume' | t }}
+                </button>
+              }
+              @if (canArchive()) {
+                <button
+                  type="button"
+                  [disabled]="acting() !== null"
+                  (click)="openArchive()"
+                  data-testid="promotion-archive"
+                >
+                  {{ 'marketing.promotions.action.archive' | t }}
+                </button>
+              }
+              <button type="button" class="detail__close" (click)="close()">
+                {{ 'marketing.promotions.action.close' | t }}
+              </button>
+            </div>
+          </header>
+
+          @if (dirty() && detail() !== null) {
+            <p class="q-caption promotions__hint" data-testid="promotion-dirty">
+              {{ 'marketing.promotions.dirty' | t }}
+            </p>
+          }
+
+          @if (validation(); as result) {
+            <div
+              class="validation"
+              [class.validation--bad]="!result.valid"
+              data-testid="promotion-validation"
+            >
+              <p class="q-body-sm validation__verdict">
+                {{
+                  (result.valid
+                    ? 'marketing.promotions.validation.ok'
+                    : 'marketing.promotions.validation.refused'
+                  ) | t
+                }}
+              </p>
+              @if (result.refusals.length > 0) {
+                <ul class="validation__list">
+                  @for (issue of result.refusals; track $index) {
+                    <li class="q-body-sm" data-testid="promotion-refusal">
+                      <code class="validation__code">{{ issue.code }}</code>
+                      @if (issuePlace(issue); as place) {
+                        <span class="q-caption">{{ place }}</span>
+                      }
+                      {{ issueText(issue) }}
+                    </li>
+                  }
+                </ul>
+              }
+              @if (result.warnings.length > 0) {
+                <ul class="validation__list validation__list--warn">
+                  @for (issue of result.warnings; track $index) {
+                    <li class="q-body-sm" data-testid="promotion-warning">
+                      <code class="validation__code">{{ issue.code }}</code>
+                      @if (issuePlace(issue); as place) {
+                        <span class="q-caption">{{ place }}</span>
+                      }
+                      {{ issueText(issue) }}
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+
+          <div class="panes" role="tablist">
+            @for (item of panes; track item.id) {
+              <button
+                type="button"
+                role="tab"
+                class="pane-tab"
+                [class.pane-tab--active]="pane() === item.id"
+                [attr.aria-selected]="pane() === item.id"
+                [disabled]="creating() && (item.id === 'history' || item.id === 'redemptions')"
+                (click)="selectPane(item.id)"
+                [attr.data-testid]="'promotion-pane-' + item.id"
+              >
+                {{ item.labelKey | t }}
+              </button>
+            }
+          </div>
+
+          @switch (pane()) {
+            @case ('rule') {
+              <q-promotion-editor
+                [(draft)]="draft"
+                [catalogue]="catalogue()"
+                [lookups]="refs.lookups()"
+                [stackingGroups]="stackingGroups()"
+                [locations]="refs.lookups().locations"
+                [menuLocationId]="refs.menuLocationId()"
+                [menuLoading]="refs.variantsLoading()"
+                [unsupported]="unsupported()"
+                [saving]="saving()"
+                [isNew]="creating()"
+                [locked]="locked()"
+                [lockedHint]="lockedHint()"
+                (menuLocationChange)="changeMenuBranch($event)"
+                (save)="save()"
+                (cancel)="close()"
+              />
+            }
+            @case ('simulate') {
+              @if (brandScope(); as scope) {
+                <q-promotion-simulator
+                  [scope]="scope"
+                  [catalogue]="catalogue()"
+                  [locations]="refs.lookups().locations"
+                  [channels]="refs.lookups().channels"
+                  [paymentMethods]="refs.lookups().paymentMethods"
+                  [segments]="refs.lookups().segments"
+                  [variants]="refs.lookups().variants"
+                  [menuLocationId]="refs.menuLocationId()"
+                  [candidate]="candidate()"
+                  [replay]="replay()"
+                  (menuLocationChange)="changeMenuBranch($event)"
+                />
+              }
+            }
+            @case ('history') {
+              @if (detail(); as open) {
+                @if (open.versions.length === 0) {
+                  <p class="q-body-sm promotions__empty">
+                    {{ 'marketing.promotions.history.empty' | t }}
+                  </p>
+                } @else {
+                  <p class="q-body-sm promotions__hint">
+                    {{ 'marketing.promotions.history.intro' | t }}
+                  </p>
+                  <table class="table" data-testid="promotion-history">
+                    <thead>
+                      <tr>
+                        <th class="q-caption">{{ 'marketing.promotions.history.version' | t }}</th>
+                        <th class="q-caption">{{ 'marketing.promotions.history.reason' | t }}</th>
+                        <th class="q-caption">{{ 'marketing.promotions.history.by' | t }}</th>
+                        <th class="q-caption">{{ 'marketing.promotions.history.when' | t }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (
+                        version of open.versions;
+                        track version.definitionVersion + version.reason
+                      ) {
+                        <tr>
+                          <td class="q-body-sm q-tnum">{{ version.definitionVersion }}</td>
+                          <td class="q-body-sm">{{ version.reason }}</td>
+                          <td class="q-body-sm">{{ version.recordedBy }}</td>
+                          <td class="q-body-sm q-tnum">{{ formatWhen(version.recordedAt) }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+                @if (open.activatedAt) {
+                  <p class="q-caption promotions__hint">
+                    {{
+                      'marketing.promotions.history.activated'
+                        | t: { by: open.activatedBy ?? '—', when: formatWhen(open.activatedAt) }
+                    }}
+                  </p>
+                }
+              }
+            }
+            @case ('redemptions') {
+              @switch (redemptionsState()) {
+                @case ('loading') {
+                  <p class="q-body-sm">{{ 'marketing.promotions.redemptions.loading' | t }}</p>
+                }
+                @case ('ready') {
+                  @if (redemptions().length === 0) {
+                    <p class="q-body-sm promotions__empty">
+                      {{ 'marketing.promotions.redemptions.empty' | t }}
+                    </p>
+                  } @else {
+                    <p class="q-body-sm promotions__hint">
+                      {{ 'marketing.promotions.redemptions.intro' | t }}
+                    </p>
+                    <table class="table" data-testid="promotion-redemptions">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">
+                            {{ 'marketing.promotions.redemptions.order' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'marketing.promotions.redemptions.version' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'marketing.promotions.redemptions.discount' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'marketing.promotions.redemptions.markup' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'marketing.promotions.redemptions.status' | t }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of redemptions(); track row.redemptionId) {
+                          <tr>
+                            <td class="q-body-sm q-tnum">{{ row.orderId }}</td>
+                            <td class="q-body-sm q-tnum">{{ row.definitionVersion }}</td>
+                            <td class="q-body-sm q-tnum num">
+                              {{ formatMoneyValue(row.discountMinor, row.currency) }}
+                            </td>
+                            <td class="q-body-sm q-tnum num">
+                              {{ formatMoneyValue(row.markupMinor, row.currency) }}
+                            </td>
+                            <td class="q-body-sm">{{ row.status }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                }
+                @case ('error') {
+                  <p class="q-body-sm">{{ 'marketing.promotions.redemptions.error' | t }}</p>
+                }
+                @default {}
+              }
+            }
+          }
+        }
+      </section>
+    </div>
+  }
+
+  @if (activationOpen()) {
+    <div class="q-modal-backdrop" (click)="closeActivation()">
+      <div
+        class="q-modal"
+        role="dialog"
+        aria-modal="true"
+        (click)="$event.stopPropagation()"
+        data-testid="promotion-activation-dialog"
+      >
+        <h2 class="q-subhead">{{ 'marketing.promotions.activate.title' | t }}</h2>
+        <p class="q-body-sm">{{ 'marketing.promotions.activate.body' | t }}</p>
+        <label class="q-field">
+          <span class="q-caption">{{ 'marketing.promotions.activate.reason' | t }}</span>
+          <textarea
+            rows="3"
+            maxlength="500"
+            [value]="activationReason()"
+            (input)="activationReason.set($any($event.target).value)"
+            data-testid="promotion-activation-reason"
+          ></textarea>
+        </label>
+        <div class="q-modal__actions">
+          <button type="button" (click)="closeActivation()">
+            {{ 'marketing.promotions.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            (click)="confirmActivation()"
+            data-testid="promotion-activation-confirm"
+          >
+            {{ 'marketing.promotions.activate.confirm' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (archiveOpen()) {
+    <q-confirm-dialog
+      [title]="'marketing.promotions.archive.title' | t"
+      [body]="'marketing.promotions.archive.body' | t"
+      [confirmLabel]="'marketing.promotions.action.archive' | t"
+      [cancelLabel]="'marketing.promotions.dialog.cancel' | t"
+      tone="destructive"
+      (confirm)="confirmArchive()"
+      (cancel)="closeArchive()"
+    />
+  }
+
+  @if (discardOpen()) {
+    <q-confirm-dialog
+      [title]="'marketing.promotions.discard.title' | t"
+      [body]="'marketing.promotions.discard.body' | t"
+      [confirmLabel]="'marketing.promotions.discard.confirm' | t"
+      [cancelLabel]="'marketing.promotions.discard.keep' | t"
+      tone="destructive"
+      (confirm)="confirmDiscard()"
+      (cancel)="cancelDiscard()"
+    />
+  }
+</div>

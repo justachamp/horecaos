@@ -830,6 +830,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Локация обслуживание состояние изменено',
       'uz-Latn': 'Filial xizmat holat oʻzgartirildi',
     },
+    'loyalty.accrual.skipped': {
+      en: 'Loyalty points not earned on an order',
+      ru: 'Баллы лояльности за заказ не начислены',
+      'uz-Latn': 'Buyurtma uchun sodiqlik ballari hisoblanmadi',
+    },
     'marketplace.handover.bypassed': {
       en: 'Marketplace handover bypassed',
       ru: 'Маркетплейс передача пропущено',
@@ -999,6 +1004,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Pricing price book activated',
       ru: 'Ценообразование цена книга активировано',
       'uz-Latn': 'Narxlash narx kitob faollashtirildi',
+    },
+    'pricing.promotion.drafted': {
+      en: 'Promotion drafted',
+      ru: 'Акция создана как черновик',
+      'uz-Latn': 'Aksiya qoralama sifatida yaratildi',
+    },
+    'pricing.promotion.updated': {
+      en: 'Promotion edited',
+      ru: 'Акция изменена',
+      'uz-Latn': 'Aksiya oʻzgartirildi',
     },
     'reference.public_holiday.added': {
       en: 'Reference public holiday added',

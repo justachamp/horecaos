@@ -28,6 +28,8 @@ const ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'loyalty.balance.adjust': 'staff.approvals.action.loyaltyBalanceAdjust',
   /** Staff 9.4: `ApprovalAction.CUSTOMER_PII_EXPORT` — a filtered customer export above the tenant's own row threshold. */
   'customer.pii.export': 'staff.approvals.action.customerPiiExport',
+  /** ADR 0140: a promotion's activation above the configured thresholds, or any markup. */
+  'pricing.promotion.activate': 'staff.approvals.action.pricingPromotionActivate',
 };
 
 /** The label key for a known action code, or `null` for one this map does not (yet) name. */

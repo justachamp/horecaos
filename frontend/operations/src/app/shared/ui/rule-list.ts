@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  booleanAttribute,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -52,6 +59,18 @@ export class RuleList {
   protected readonly i18n = inject(I18n);
 
   readonly items = input.required<readonly RuleListItem[]>();
+
+  /**
+   * Whether a row body opens the rule (a master-detail host such as the
+   * promotions screen). Off by default: the automations list has no detail pane,
+   * and a focusable body that does nothing would be a trap for a keyboard
+   * operator.
+   */
+  readonly selectable = input(false, { transform: booleanAttribute });
+  /** The open rule, marked in the list. Only meaningful with {@link selectable}. */
+  readonly selectedId = input<string | null>(null);
+  readonly select = output<string>();
+
   readonly reorder = output<RuleReorder>();
   readonly enabledChange = output<RuleEnabledChange>();
 

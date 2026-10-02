@@ -74,6 +74,14 @@ export class ConditionBuilder {
   /** `false` (the default): exactly one flat AND group, no group chrome — segments' own shape. `true` offers "Add group", each joined by OR. */
   readonly allowGroups = input(false, { transform: booleanAttribute });
 
+  /**
+   * Whether the last row may be removed. `false` (the default): a rule with
+   * nothing in it is nothing to save, so the last row stays. `true` for a rule
+   * where "no condition" is a meaningful rule (a promotion with no condition
+   * applies to every order); the group then renders just its add button.
+   */
+  readonly allowEmpty = input(false, { transform: booleanAttribute });
+
   /** The section caption, already translated by the host page — "Conditions" for segments, a different noun elsewhere. `null` renders none. */
   readonly heading = input<string | null>(null);
 
@@ -85,9 +93,10 @@ export class ConditionBuilder {
   /** What the operator has typed into each searchable row's filter box, by row id. Never emitted — it narrows the chips shown, not the rule. */
   protected readonly chipFilters = signal<Readonly<Record<string, string>>>({});
 
-  /** The last row across every group may not be removed — nothing left to save otherwise. */
+  /** The last row across every group may not be removed — nothing left to save otherwise — unless the host allows an empty rule. */
   protected readonly canRemoveAnyRow = computed(
-    () => this.groups().reduce((count, group) => count + group.rows.length, 0) > 1,
+    () =>
+      this.allowEmpty() || this.groups().reduce((count, group) => count + group.rows.length, 0) > 1,
   );
 
   protected typeLabel(type: string): string {

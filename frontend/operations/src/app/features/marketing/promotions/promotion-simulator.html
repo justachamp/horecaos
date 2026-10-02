@@ -1,0 +1,297 @@
+<section class="sim" data-testid="promotion-simulator">
+  <h2 class="q-subhead">{{ 'marketing.promotions.sim.title' | t }}</h2>
+  <p class="q-body-sm sim__intro">{{ 'marketing.promotions.sim.intro' | t }}</p>
+
+  <div class="sim__grid">
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.promotions.sim.branch' | t }}</span>
+      <select
+        [value]="menuLocationId() ?? ''"
+        (change)="menuLocationChange.emit($any($event.target).value)"
+        data-testid="sim-branch"
+      >
+        @for (location of locations(); track location.value) {
+          <option [value]="location.value">{{ location.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.promotions.sim.channel' | t }}</span>
+      <select
+        [value]="channelCode()"
+        (change)="channelCode.set($any($event.target).value)"
+        data-testid="sim-channel"
+      >
+        <option value="">—</option>
+        @for (channel of channels(); track channel.value) {
+          <option [value]="channel.value">{{ channel.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.promotions.sim.mode' | t }}</span>
+      <select
+        [value]="mode()"
+        (change)="mode.set($any($event.target).value)"
+        data-testid="sim-mode"
+      >
+        @for (m of modes; track m) {
+          <option [value]="m">{{ modeLabelKey(m) | t }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.promotions.sim.payment' | t }}</span>
+      <select
+        [value]="paymentMethodCode()"
+        (change)="paymentMethodCode.set($any($event.target).value)"
+        data-testid="sim-payment"
+      >
+        <option value="">—</option>
+        @for (method of paymentMethods(); track method.value) {
+          <option [value]="method.value">{{ method.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.promotions.sim.instant' | t }}</span>
+      <input
+        type="datetime-local"
+        [value]="serviceLocal()"
+        (input)="serviceLocal.set($any($event.target).value)"
+        data-testid="sim-instant"
+      />
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.promotions.sim.coupon' | t }}</span>
+      <input
+        type="text"
+        maxlength="32"
+        [value]="couponCode()"
+        (input)="couponCode.set($any($event.target).value)"
+      />
+    </label>
+  </div>
+
+  @if (mode() === 'DELIVERY') {
+    <div class="sim__grid">
+      <label class="q-field">
+        <span class="q-caption">{{ 'marketing.promotions.sim.latitude' | t }}</span>
+        <input
+          type="number"
+          step="any"
+          [value]="latitude()"
+          (input)="latitude.set($any($event.target).value)"
+        />
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'marketing.promotions.sim.longitude' | t }}</span>
+        <input
+          type="number"
+          step="any"
+          [value]="longitude()"
+          (input)="longitude.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+    <p class="q-caption sim__hint">{{ 'marketing.promotions.sim.destination.hint' | t }}</p>
+  }
+
+  <fieldset class="sim__section">
+    <legend class="q-caption">{{ 'marketing.promotions.sim.customer' | t }}</legend>
+    <p class="q-caption sim__hint">{{ 'marketing.promotions.sim.customer.hint' | t }}</p>
+    <div class="sim__grid">
+      <label class="q-field">
+        <span class="q-caption">{{ 'marketing.promotions.sim.brandPosition' | t }}</span>
+        <input
+          type="number"
+          min="1"
+          [value]="brandOrderPosition()"
+          (input)="brandOrderPosition.set($any($event.target).value)"
+          data-testid="sim-brand-position"
+        />
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'marketing.promotions.sim.channelPosition' | t }}</span>
+        <input
+          type="number"
+          min="1"
+          [value]="channelOrderPosition()"
+          (input)="channelOrderPosition.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+    @if (segments().length > 0) {
+      <div class="sim__chips">
+        @for (segment of segments(); track segment.value) {
+          <button
+            type="button"
+            class="chip"
+            [class.chip--active]="segmentIds().includes(segment.value)"
+            [attr.aria-pressed]="segmentIds().includes(segment.value)"
+            (click)="toggleSegment(segment.value)"
+          >
+            {{ segment.label }}
+          </button>
+        }
+      </div>
+    }
+  </fieldset>
+
+  <fieldset class="sim__section">
+    <legend class="q-caption">{{ 'marketing.promotions.sim.cart' | t }}</legend>
+    <q-combobox
+      [query]="lineQuery()"
+      (queryChange)="onLineQuery($event)"
+      [options]="lineOptions()"
+      [placeholder]="'marketing.promotions.sim.addDish' | t"
+      [ariaLabel]="'marketing.promotions.sim.addDish' | t"
+      (optionSelected)="addLine($event)"
+      data-testid="sim-add-dish"
+    />
+    @if (lines().length === 0) {
+      <p class="q-body-sm sim__hint">{{ 'marketing.promotions.sim.cart.empty' | t }}</p>
+    } @else {
+      <ul class="sim__lines">
+        @for (line of lines(); track line.id) {
+          <li class="sim__line" data-testid="sim-line">
+            <span class="q-body-sm sim__line-label">{{ line.label }}</span>
+            <input
+              type="number"
+              min="1"
+              max="999"
+              class="sim__qty"
+              [attr.aria-label]="'marketing.promotions.sim.quantity' | t"
+              [value]="line.quantity"
+              (input)="setQuantity(line.id, +$any($event.target).value)"
+            />
+            <button
+              type="button"
+              class="sim__remove"
+              [attr.aria-label]="'marketing.promotions.sim.removeLine' | t"
+              (click)="removeLine(line.id)"
+            >
+              ×
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </fieldset>
+
+  @if (candidate() !== null || replay() !== null) {
+    <fieldset class="sim__section">
+      <legend class="q-caption">{{ 'marketing.promotions.sim.try' | t }}</legend>
+      @if (candidate() !== null) {
+        <label class="q-field q-field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="useCandidate()"
+            (change)="useCandidate.set($any($event.target).checked)"
+            data-testid="sim-use-candidate"
+          />
+          <span class="q-caption">{{ 'marketing.promotions.sim.useCandidate' | t }}</span>
+        </label>
+      }
+      @if (replay(); as choice) {
+        @if (choice.versions.length > 0) {
+          <label class="q-field">
+            <span class="q-caption">{{
+              'marketing.promotions.sim.replay' | t: { code: choice.code }
+            }}</span>
+            <select
+              [value]="replayVersion()"
+              (change)="replayVersion.set($any($event.target).value)"
+              data-testid="sim-replay"
+            >
+              <option value="">{{ 'marketing.promotions.sim.replay.current' | t }}</option>
+              @for (version of choice.versions; track version) {
+                <option [value]="version">
+                  {{ 'marketing.promotions.sim.replay.version' | t: { version: version } }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+      }
+    </fieldset>
+  }
+
+  <div class="sim__run">
+    <button
+      type="button"
+      class="primary"
+      [disabled]="!canRun()"
+      (click)="run()"
+      data-testid="sim-run"
+    >
+      {{ (running() ? 'marketing.promotions.sim.running' : 'marketing.promotions.sim.run') | t }}
+    </button>
+  </div>
+
+  @if (error(); as message) {
+    <div class="sim__error" role="alert" data-testid="sim-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+
+  @if (result(); as outcome) {
+    <div class="sim__result" data-testid="sim-result">
+      <dl class="sim__totals">
+        <dt class="q-caption">{{ 'marketing.promotions.sim.subtotal' | t }}</dt>
+        <dd class="q-tnum" data-testid="sim-subtotal">{{ money(outcome.subtotalMinor) }}</dd>
+        <dt class="q-caption">{{ 'marketing.promotions.sim.discount' | t }}</dt>
+        <dd class="q-tnum" data-testid="sim-discount">−{{ money(outcome.discountMinor) }}</dd>
+        <dt class="q-caption">{{ 'marketing.promotions.sim.fee' | t }}</dt>
+        <dd class="q-tnum">{{ money(outcome.feeMinor) }}</dd>
+        <dt class="q-caption">{{ 'marketing.promotions.sim.tax' | t }}</dt>
+        <dd class="q-tnum">{{ money(outcome.taxMinor) }}</dd>
+        <dt class="q-caption sim__total-label">{{ 'marketing.promotions.sim.total' | t }}</dt>
+        <dd class="q-tnum sim__total" data-testid="sim-total">{{ money(outcome.totalMinor) }}</dd>
+      </dl>
+
+      <p class="q-caption sim__hint">
+        {{
+          'marketing.promotions.sim.inputs'
+            | t
+              : {
+                  instant: outcome.serviceInstant,
+                  zone: outcome.timeZone,
+                  mode: outcome.fulfillmentMode,
+                }
+        }}
+      </p>
+      @if (!outcome.loyaltyAccrualAllowed) {
+        <p class="q-caption sim__hint">{{ 'marketing.promotions.sim.noAccrual' | t }}</p>
+      }
+      @if (!outcome.loyaltyRedemptionAllowed) {
+        <p class="q-caption sim__hint">{{ 'marketing.promotions.sim.noRedemption' | t }}</p>
+      }
+
+      @if (outcome.adjustments.length > 0) {
+        <h3 class="q-body-sm sim__sub">{{ 'marketing.promotions.sim.adjustments' | t }}</h3>
+        <ul class="sim__adjustments">
+          @for (adjustment of outcome.adjustments; track adjustment.sequence) {
+            <li class="q-body-sm sim__adjustment">
+              <span>{{ adjustmentLabel(adjustment) }}</span>
+              <span class="q-tnum">{{ money(adjustment.amountMinor) }}</span>
+            </li>
+          }
+        </ul>
+      }
+
+      <h3 class="q-body-sm sim__sub">{{ 'marketing.promotions.sim.trace' | t }}</h3>
+      <q-rule-simulator
+        [catalogue]="catalogue()"
+        [rules]="[]"
+        [externalResults]="verdicts()"
+        data-testid="sim-trace"
+      />
+    </div>
+  }
+</section>
