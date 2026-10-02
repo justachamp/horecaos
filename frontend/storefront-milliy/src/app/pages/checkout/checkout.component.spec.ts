@@ -92,6 +92,7 @@ class FakeUiCartService {
   appliedPromoCode = (): string | null => null;
   deliveryTimeDisplay = (): string | null => null;
   deliveryUnresolvedMessage = (): string | null => null;
+  hasProvisionalLines = (): boolean => false;
 
   load = vi.fn(async () => {});
   paymentMethods = vi.fn(async (): Promise<readonly string[]> => ['CASH']);
@@ -564,6 +565,26 @@ describe('CheckoutComponent -- a basket the platform would not price on arrival'
 
     expect(
       fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]'),
+    ).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- items sold by weight (ADR 0137)', () => {
+  it('tells the customer before they pay that the total is an estimate while the basket holds a weighed item', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.hasProvisionalLines = () => true;
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
     ).toBeNull();
   });
 });

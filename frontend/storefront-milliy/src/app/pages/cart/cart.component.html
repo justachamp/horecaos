@@ -5,15 +5,15 @@
   <div class="head__titles">
     <h1 class="head__title">{{ 'cart.title' | t }}</h1>
     @if (cart.items().length > 0) {
-      <p class="head__sub">
-        {{ cart.totalItemsCount() }} {{ 'common.itemsUnit' | t }}
-      </p>
+      <p class="head__sub">{{ cart.totalItemsCount() }} {{ 'common.itemsUnit' | t }}</p>
     }
   </div>
 </header>
 
 @switch (state()) {
-  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('loading') {
+    <p class="state">{{ 'common.loading' | t }}</p>
+  }
   @case ('error') {
     <div class="state">
       <p>{{ 'cart.loadError' | t }}</p>
@@ -48,13 +48,17 @@
                   <span class="line__addons">{{ addons }}</span>
                 }
               }
-              <span class="line__price">{{ cart.formatPrice(item.price * item.quantity) }}</span>
+              @if (estimateText(item); as estimate) {
+                <span class="line__addons" data-testid="cart-line-estimate">{{ estimate }}</span>
+              }
+              <span class="line__price">{{ lineTotal(item) }}</span>
               @if (!item.active) {
                 <span class="line__unavailable" data-testid="cart-line-unavailable">
                   {{
                     (item.unavailableReason === 'OUT_OF_SALE_WINDOW'
                       ? 'errors.reason.itemOutOfSaleWindow'
-                      : 'errors.reason.itemUnavailable') | t
+                      : 'errors.reason.itemUnavailable'
+                    ) | t
                   }}
                 </span>
               }
@@ -65,14 +69,18 @@
                 class="qty__btn"
                 (click)="decrease(item)"
                 [attr.aria-label]="'common.decrease' | t"
-              >−</button>
-              <span class="qty__value">{{ item.quantity }}</span>
+              >
+                −
+              </button>
+              <span class="qty__value">{{ quantityText(item) }}</span>
               <button
                 type="button"
                 class="qty__btn qty__btn--add"
                 (click)="increase(item)"
                 [attr.aria-label]="'common.increase' | t"
-              >+</button>
+              >
+                +
+              </button>
             </div>
           </div>
         }
@@ -111,6 +119,11 @@
           <span>{{ 'cart.total' | t }}</span>
           <span>{{ cart.totalAmount() }}</span>
         </div>
+        @if (cart.hasProvisionalLines()) {
+          <p class="summary__note" data-testid="cart-provisional-notice">
+            {{ 'physical.cartNotice' | t }}
+          </p>
+        }
       </div>
     }
   }

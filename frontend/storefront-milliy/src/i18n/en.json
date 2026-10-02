@@ -472,5 +472,24 @@
     "chooseRequired": "Choose the required options first.",
     "customLinesTitle": "Dishes with your choices",
     "lineGone": "A dish that is no longer on the menu"
+  },
+  "physical": {
+    "nutritionTitle": "Nutrition",
+    "nutritionPer100g": "per 100 g",
+    "nutritionPer100ml": "per 100 ml",
+    "nutritionPerUnit": "per serving ({{amount}})",
+    "calories": "Calories",
+    "proteins": "Protein",
+    "fats": "Fat",
+    "carbs": "Carbs",
+    "kcal": "kcal",
+    "pricePerQuantum": "{{price}} per {{quantum}}",
+    "estimatedFor": "≈ {{price}} for ≈ {{weight}}",
+    "finalWeightNotice": "The final weight and price are determined at handover.",
+    "cartNotice": "The total includes items sold by weight. The final weight and amount are determined at handover.",
+    "portionsUnit": "portion",
+    "portionStep": "Ordered in portions of {{step}}",
+    "weighedLine": "Weighed: {{weight}}",
+    "estimateLine": "≈ {{weight}}, estimate"
   }
 }

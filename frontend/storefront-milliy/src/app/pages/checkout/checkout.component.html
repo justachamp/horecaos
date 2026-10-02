@@ -149,6 +149,7 @@
       [hasDiscount]="cart.hasDiscount()"
       [discount]="cart.discountFormatted()"
       [total]="cart.totalAmount()"
+      [provisional]="cart.hasProvisionalLines()"
     />
 
     @if (pricingNoteKey(); as pricingRefusal) {

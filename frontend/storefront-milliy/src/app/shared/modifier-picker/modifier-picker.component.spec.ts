@@ -456,3 +456,55 @@ describe("ModifierPickerComponent -- choosing a dish's options at a table (ADR 0
     });
   });
 });
+
+describe('ModifierPickerComponent -- portions (ADR 0137)', () => {
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+
+  function splittable(portionSize = 0.5) {
+    return dish([group()], [variant({ physical: { ...SPLITTABLE, portionSize } })]);
+  }
+
+  it('starts a splittable portion at one whole portion', () => {
+    const view = render(splittable());
+
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('1');
+  });
+
+  it('starts a portion that does not divide one at the first quantity the cart accepts', () => {
+    const view = render(splittable(0.3));
+
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('1,2');
+  });
+
+  it('steps by the portion size and never below one portion', () => {
+    const view = render(splittable());
+
+    view.q('modifier-picker-increase')!.click();
+    view.fixture.detectChanges();
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('1,5');
+    view.q('modifier-picker-decrease')!.click();
+    view.q('modifier-picker-decrease')!.click();
+    view.fixture.detectChanges();
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('0,5');
+    expect((view.q('modifier-picker-decrease') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('hands the chosen fraction to the screen', () => {
+    const view = render(splittable());
+    view.tap('SMALL');
+
+    view.q('modifier-picker-decrease')!.click();
+    view.q('modifier-picker-add')!.click();
+
+    expect(view.state.confirmed[0].quantity).toBe(0.5);
+  });
+
+  it('keeps a plain portion in whole units, as before', () => {
+    const view = render();
+
+    view.q('modifier-picker-increase')!.click();
+    view.fixture.detectChanges();
+
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('2');
+  });
+});

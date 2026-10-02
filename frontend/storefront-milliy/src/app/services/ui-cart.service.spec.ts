@@ -189,7 +189,11 @@ describe('UiCartService.applyDestination', () => {
 
     expect(result).toBe(true);
     expect(carts.setDestination).toHaveBeenCalledWith(
-      expect.objectContaining({ addressId: 'addr-1', recipientName: 'Aziz', recipientPhone: '+998901234567' }),
+      expect.objectContaining({
+        addressId: 'addr-1',
+        recipientName: 'Aziz',
+        recipientPhone: '+998901234567',
+      }),
     );
   });
 });
@@ -474,7 +478,7 @@ describe('UiCartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
     });
   }
 
-  it('trims the code, applies it, and re-prices so the discount is the platform\'s own answer', async () => {
+  it("trims the code, applies it, and re-prices so the discount is the platform's own answer", async () => {
     const { service, carts } = setUp();
     const applied = cartWith('OSH2026');
     carts.applyPromoCode.mockResolvedValue(applied);
@@ -685,7 +689,7 @@ describe('UiCartService: every cart failure reaches the customer as the specific
     expect(service.errorKey()).toBe('errors.reason.notServiceable');
   });
 
-  it('priceCart: returns null and keeps the refusal\'s own sentence for the checkout screen to show', async () => {
+  it("priceCart: returns null and keeps the refusal's own sentence for the checkout screen to show", async () => {
     const { service, carts } = setUp();
     carts.cart.set(baseCart());
     carts.price.mockRejectedValue(refusal('DELIVERY_DESTINATION_REQUIRED'));
@@ -899,7 +903,7 @@ describe('UiCartService project(): a refused pricing never renders as a zero tot
     expect(service.totalAmount()).toBe(service.formatPrice(1000));
   });
 
-  it('still reads the platform\'s own numbers once a price is held', async () => {
+  it("still reads the platform's own numbers once a price is held", async () => {
     const { service, carts, menu } = setUp();
     const cart = heldCart();
     carts.ensure.mockResolvedValue(cart);
@@ -911,5 +915,154 @@ describe('UiCartService project(): a refused pricing never renders as a zero tot
     expect(service.totalAmount()).toBe(service.formatPrice(1000));
     expect(service.subtotalFormatted()).toBe(service.formatPrice(1000));
     expect(service.priceRefusalKey()).toBeNull();
+  });
+});
+
+describe('UiCartService with portions and weighed items (ADR 0137)', () => {
+  function variant(
+    variantId: string,
+    amountMinor: number,
+    physical: PublishedMenu['products'][number]['variants'][number]['physical'],
+  ): PublishedMenu['products'][number]['variants'][number] {
+    return {
+      variantId,
+      sku: null,
+      unitCode: null,
+      isDefault: true,
+      orderable: true,
+      amountMinor,
+      onSaleNow: true,
+      remainingQuantity: null,
+      physical,
+    };
+  }
+
+  function product(
+    productId: string,
+    name: string,
+    variants: PublishedMenu['products'][number]['variants'],
+  ): PublishedMenu['products'][number] {
+    return {
+      productId,
+      code: null,
+      name,
+      description: null,
+      mediaAssetIds: [],
+      imageUrls: [],
+      variants,
+      modifierGroupIds: [],
+    } as PublishedMenu['products'][number];
+  }
+
+  const PLOV = variant('v-plov', 38_000, {
+    catchweight: false,
+    splittable: true,
+    portionSize: 0.5,
+  });
+  const CAKE = variant('v-cake', 15_000, {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+  });
+  const COLA = variant('v-cola', 9_000, null);
+
+  async function loaded(quantities: Record<string, number>) {
+    const fakes = setUp();
+    const cart = baseCart({
+      lines: Object.entries(quantities).map(([variantId, quantity]) => ({
+        lineKey: variantId,
+        variantId,
+        quantity,
+        hasCustomerNote: false,
+      })),
+    });
+    fakes.carts.cart.set(cart);
+    fakes.carts.ensure.mockResolvedValue(cart);
+    fakes.carts.price.mockResolvedValue(pricedFor(cart));
+    fakes.carts.putLine.mockResolvedValue(cart);
+    fakes.carts.removeLine.mockResolvedValue(cart);
+    fakes.menu.menu.mockResolvedValue(
+      emptyMenu({
+        products: [
+          product('p-plov', 'Plov', [PLOV]),
+          product('p-cake', 'Medovik', [CAKE]),
+          product('p-cola', 'Cola', [COLA]),
+        ],
+      }),
+    );
+    await fakes.service.load();
+    return fakes;
+  }
+
+  function itemOf(service: UiCartService, variantId: string): CartResponseItem {
+    return service.items().find((item) => item.variant_id === variantId) as CartResponseItem;
+  }
+
+  it('carries each variant’s physical facts onto its cart line', async () => {
+    const { service } = await loaded({ 'v-plov': 0.5, 'v-cola': 2 });
+
+    expect(itemOf(service, 'v-plov').physical?.portionSize).toBe(0.5);
+    expect(itemOf(service, 'v-cola').physical ?? null).toBeNull();
+  });
+
+  it('moves a splittable line by its portion size, and a plain one by one', async () => {
+    const { service, carts } = await loaded({ 'v-plov': 1, 'v-cola': 2 });
+
+    service.increaseQuantity(itemOf(service, 'v-plov'));
+    service.decreaseQuantity(itemOf(service, 'v-cola'));
+    await Promise.resolve();
+
+    const quantities = carts.putLine.mock.calls.map((call) => [
+      call[0].variantId,
+      call[0].quantity,
+    ]);
+    expect(quantities).toContainEqual(['v-plov', 1.5]);
+    expect(quantities).toContainEqual(['v-cola', 1]);
+  });
+
+  it('a half portion is stepped down to nothing, which removes the line rather than writing zero', async () => {
+    const { service, carts } = await loaded({ 'v-plov': 0.5 });
+
+    service.decreaseQuantity(itemOf(service, 'v-plov'));
+    await Promise.resolve();
+
+    expect(carts.removeLine).toHaveBeenCalledWith('v-plov');
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('does not let floating-point noise reach the platform: 0.2 + 0.1 is written 0.3', async () => {
+    const { service, carts } = await loaded({ 'v-plov': 0.2 });
+    const item = {
+      ...itemOf(service, 'v-plov'),
+      physical: { catchweight: false, splittable: true, portionSize: 0.1 },
+    };
+
+    service.increaseQuantity(item);
+    await Promise.resolve();
+
+    expect(carts.putLine.mock.calls[0][0].quantity).toBe(0.3);
+  });
+
+  it('prices a portion at its share of the price, and a weighed line at its estimated weight', async () => {
+    const { service } = await loaded({ 'v-plov': 0.5, 'v-cake': 2, 'v-cola': 3 });
+
+    expect(service.lineAmount(itemOf(service, 'v-plov'))).toBe(19_000);
+    expect(service.lineAmount(itemOf(service, 'v-cake'))).toBe(360_000);
+    expect(service.lineAmount(itemOf(service, 'v-cola'))).toBe(27_000);
+  });
+
+  it('counts a half portion as one plate in the basket badge, not as half of one', async () => {
+    const { service } = await loaded({ 'v-plov': 0.5, 'v-cola': 2 });
+
+    expect(service.totalItemsCount()).toBe(3);
+  });
+
+  it('knows when the basket holds something sold by weight, so its total is an estimate', async () => {
+    expect((await loaded({ 'v-cola': 2, 'v-cake': 1 })).service.hasProvisionalLines()).toBe(true);
+  });
+
+  it('does not call a basket of fixed units an estimate', async () => {
+    expect((await loaded({ 'v-cola': 2 })).service.hasProvisionalLines()).toBe(false);
   });
 });

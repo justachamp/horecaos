@@ -19,6 +19,8 @@
  * from there instead of leaving it null.
  */
 
+import type { PhysicalFacts } from '../utils/physical';
+
 /** Price + discount pair from cart response */
 export interface CartPriceDiscount {
   price: number;
@@ -55,7 +57,14 @@ export interface CartResponseItem {
    */
   unavailableReason?: 'SOLD_OUT' | 'OUT_OF_SALE_WINDOW';
   image: string | null;
+  /** A decimal for a variant ordered by the portion (ADR 0137): `0.5` is half a portion. */
   quantity: number;
+  /**
+   * ADR 0137: the variant's physical facts, joined from the menu. `price` is the price row --
+   * per unit, or per `catchweightQuantumGrams` for a weighed variant -- so a line's amount is
+   * `UiCartService.lineAmount`, never `price * quantity`.
+   */
+  physical?: PhysicalFacts | null;
   note: string | null;
   /**
    * Decoded from the line's own key. Must be resent on every write to this

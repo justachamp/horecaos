@@ -47,6 +47,7 @@ import type {
 } from '../../../types/home.types';
 import { variantAvailability } from '../../../utils/item-availability';
 import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
+import { portionStep } from '../../../utils/physical';
 
 /** U+2014. Shown where the platform has not priced the basket, so a zero is never read as free. */
 const UNRESOLVED = '—';
@@ -276,13 +277,16 @@ export class DineInTableComponent implements OnInit {
         portion: found.item.variants.length > 1 ? found.variant.name || null : null,
         options,
         quantity: line.quantity,
+        // ADR 0137: a splittable portion moves by its portion size.
+        step: portionStep(found.variant.physical),
         available: variantAvailability(found.variant) === 'AVAILABLE',
       };
     });
   });
 
+  /** Plates, not fractions: a half portion is one plate somebody has to make (ADR 0137). */
   protected readonly cartCount = computed(
-    () => this.carts.cart()?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0,
+    () => this.carts.cart()?.lines.reduce((sum, line) => sum + Math.ceil(line.quantity), 0) ?? 0,
   );
 
   /** Orders placed from this device that the table's bill has not confirmed yet. */

@@ -5,6 +5,7 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
   viewChild,
@@ -12,6 +13,7 @@ import {
 } from '@angular/core';
 
 import { formatMoney, money } from '../../core/money/money';
+import { LangService } from '../../services/lang.service';
 import { TranslateService } from '../../services/translate.service';
 import type { MenuItem, MenuItemModifierGroup, MenuItemVariant } from '../../types/home.types';
 import {
@@ -22,6 +24,7 @@ import {
   unsatisfiedGroups,
   type ModifierChoices,
 } from '../../utils/modifier-selection';
+import { formatQuantity, initialQuantity, portionStep } from '../../utils/physical';
 import { TranslatePipe } from '../translate/translate.pipe';
 
 /** What the guest settled on for one portion of a dish. */
@@ -54,6 +57,7 @@ export interface ModifierSelection {
 })
 export class ModifierPickerComponent {
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
 
   readonly item = input.required<MenuItem>();
   /** The portion the options are being chosen for. */
@@ -69,7 +73,6 @@ export class ModifierPickerComponent {
   readonly dismissed = output<void>();
 
   protected readonly choices = signal<ModifierChoices>({});
-  protected readonly quantity = signal(1);
 
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
 
@@ -81,6 +84,21 @@ export class ModifierPickerComponent {
 
   protected readonly variant = computed<MenuItemVariant | null>(
     () => this.item().variants.find((entry) => entry.id === this.variantId()) ?? null,
+  );
+
+  /** ADR 0137: the step the quantity moves in -- the portion's size, or one. */
+  protected readonly stepSize = computed(() => portionStep(this.variant()?.physical));
+
+  /**
+   * How many of the portion: it starts at one whole portion (or the first quantity the cart accepts
+   * for a portion size that does not divide one), and starts again if the sheet is pointed at
+   * another portion.
+   */
+  protected readonly quantity = linkedSignal(() => initialQuantity(this.stepSize()));
+
+  /** `0,5`, `2` -- the quantity as the guest's language writes it. */
+  protected readonly quantityText = computed(() =>
+    formatQuantity(this.quantity(), this.lang.langId()),
   );
 
   /** Portions are named only when the dish has more than one. */
@@ -136,7 +154,8 @@ export class ModifierPickerComponent {
   }
 
   protected step(by: number): void {
-    this.quantity.update((value) => Math.max(1, value + by));
+    const size = this.stepSize();
+    this.quantity.update((value) => Math.max(size, tidy(value + by * size)));
   }
 
   protected confirm(): void {
@@ -156,4 +175,9 @@ export class ModifierPickerComponent {
     const unit = this.translate.get('common.currency') || "so'm";
     return formatMoney(money(amountMinor, this.currency() ?? 'UZS'), unit);
   }
+}
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

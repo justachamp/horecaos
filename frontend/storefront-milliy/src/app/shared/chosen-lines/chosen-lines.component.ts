@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 
+import { LangService } from '../../services/lang.service';
+import { formatQuantity } from '../../utils/physical';
 import { TranslatePipe } from '../translate/translate.pipe';
 
 /** One basket line that carries the guest's own choices, ready to show. */
@@ -12,6 +14,8 @@ export interface ChosenLine {
   /** What the guest chose, by name, in the dish's own order. */
   readonly options: readonly string[];
   readonly quantity: number;
+  /** ADR 0137: the step the quantity moves in -- the portion's size for a splittable dish; absent means one. */
+  readonly step?: number;
   /** False when the dish cannot be bought now (or is off the menu): the line can only be lowered. */
   readonly available: boolean;
 }
@@ -38,6 +42,8 @@ export interface ChosenLine {
   styleUrl: './chosen-lines.component.scss',
 })
 export class ChosenLinesComponent {
+  private readonly lang = inject(LangService);
+
   readonly lines = input.required<readonly ChosenLine[]>();
   /** A write to the basket is in flight: the controls wait rather than stack. */
   readonly busy = input(false);
@@ -51,7 +57,17 @@ export class ChosenLinesComponent {
    * The way out there is the whole line.
    */
   protected lowered(line: ChosenLine): number {
-    return line.available ? line.quantity - 1 : 0;
+    return line.available ? tidy(line.quantity - (line.step ?? 1)) : 0;
+  }
+
+  /** One portion more (ADR 0137): the line's own step, or one. */
+  protected raised(line: ChosenLine): number {
+    return tidy(line.quantity + (line.step ?? 1));
+  }
+
+  /** `0,5`, `2` -- the quantity as the guest's language writes it. */
+  protected quantityText(line: ChosenLine): string {
+    return formatQuantity(line.quantity, this.lang.langId());
   }
 
   protected request(line: ChosenLine, quantity: number): void {
@@ -59,4 +75,9 @@ export class ChosenLinesComponent {
       this.quantityChange.emit({ lineKey: line.lineKey, quantity: Math.max(0, quantity) });
     }
   }
+}
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

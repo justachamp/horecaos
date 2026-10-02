@@ -76,13 +76,13 @@
           type="button"
           class="qty__btn"
           data-testid="modifier-picker-decrease"
-          [disabled]="quantity() <= 1"
+          [disabled]="quantity() <= stepSize()"
           [attr.aria-label]="'common.decrease' | t"
           (click)="step(-1)"
         >
           −
         </button>
-        <span class="qty__value" data-testid="modifier-picker-quantity">{{ quantity() }}</span>
+        <span class="qty__value" data-testid="modifier-picker-quantity">{{ quantityText() }}</span>
         <button
           type="button"
           class="qty__btn"

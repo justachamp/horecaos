@@ -9,7 +9,8 @@ import type { CartResponseItem } from '../../types/cart.types';
 
 class FakeTranslateService {
   get = (key: string): string => key;
-  getWithParams = (key: string): string => key;
+  getWithParams = (key: string, params?: Record<string, string | number>): string =>
+    params ? `${key}|${Object.values(params).join('|')}` : key;
   current = (): Record<string, unknown> => ({});
 }
 
@@ -36,16 +37,18 @@ class FakeUiCartService {
   readonly priceRefusalKey = signal<string | null>(null);
   deliveryUnresolvedMessage = (): string | null => null;
   totalItemsCount = () => this.items().reduce((sum, i) => sum + i.quantity, 0);
-  subtotalFormatted = () => '25 000 so\'m';
-  deliveryFee = () => '10 000 so\'m';
-  totalAmount = () => '35 000 so\'m';
+  subtotalFormatted = () => "25 000 so'm";
+  deliveryFee = () => "10 000 so'm";
+  totalAmount = () => "35 000 so'm";
   hasDiscount = () => false;
-  discountFormatted = () => '0 so\'m';
+  discountFormatted = () => "0 so'm";
   appliedPromoCode = (): string | null => null;
   load = vi.fn(async () => {});
   increaseQuantity = vi.fn();
   decreaseQuantity = vi.fn();
   formatPrice = (value: number) => `${value} so'm`;
+  hasProvisionalLines = () => false;
+  lineAmount = vi.fn((item: CartResponseItem) => item.price * item.quantity);
 }
 
 async function setUp(fake = new FakeUiCartService()) {
@@ -119,7 +122,7 @@ describe('CartComponent', () => {
     fake.items.set([line()]);
     fake.hasDiscount = () => true;
     fake.appliedPromoCode = () => 'OSH2026';
-    fake.discountFormatted = () => '5 000 so\'m';
+    fake.discountFormatted = () => "5 000 so'm";
     const { fixture } = await setUp(fake);
 
     expect(fixture.nativeElement.textContent).toContain('OSH2026');
@@ -152,9 +155,9 @@ describe('CartComponent -- failures and unavailable lines say why', () => {
     const { fixture } = await setUp(fake);
 
     expect(fixture.nativeElement.textContent).toContain('cart.loadError');
-    expect(fixture.nativeElement.querySelector('[data-testid="cart-error-detail"]')?.textContent).toContain(
-      'errors.offline',
-    );
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-error-detail"]')?.textContent,
+    ).toContain('errors.offline');
   });
 
   it('a load failure with only the generic sentence adds no second, redundant line', async () => {
@@ -193,7 +196,9 @@ describe('CartComponent -- failures and unavailable lines say why', () => {
 
   it('marks a line that has gone out of its sale window, and says that rather than "sold out"', async () => {
     const fake = new FakeUiCartService();
-    fake.items.set([line({ item_id: 'a', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' })]);
+    fake.items.set([
+      line({ item_id: 'a', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' }),
+    ]);
     const { fixture } = await setUp(fake);
 
     const note = fixture.nativeElement.querySelector('[data-testid="cart-line-unavailable"]');
@@ -227,7 +232,9 @@ describe('CartComponent -- a basket the platform would not price', () => {
     fake.priceRefusalKey.set('errors.reason.itemOutOfSaleWindow');
     const { fixture } = await setUp(fake);
 
-    const note = fixture.nativeElement.querySelector('[data-testid="cart-pricing-error"]') as HTMLElement;
+    const note = fixture.nativeElement.querySelector(
+      '[data-testid="cart-pricing-error"]',
+    ) as HTMLElement;
     expect(note.textContent).toContain('errors.reason.itemOutOfSaleWindow');
     expect(note.getAttribute('role')).toBe('alert');
     expect(fixture.nativeElement.textContent).not.toContain('cart.loadError');
@@ -260,5 +267,80 @@ describe('CartComponent -- a basket the platform would not price', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe('CartComponent -- portions and weighed items (ADR 0137)', () => {
+  const NBSP = '\u00a0';
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+  const CAKE = {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+  } as const;
+
+  const normalised = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ');
+
+  it('writes a half portion with the language’s decimal mark', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ quantity: 0.5, physical: SPLITTABLE })]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('.qty__value')?.textContent?.trim()).toBe('0,5');
+  });
+
+  it('writes a whole quantity without decimals', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ quantity: 3 })]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('.qty__value')?.textContent?.trim()).toBe('3');
+  });
+
+  it('prices a line through the cart, so a portion is priced as the platform will price it', async () => {
+    const fake = new FakeUiCartService();
+    fake.lineAmount.mockReturnValue(12_501);
+    fake.items.set([line({ price: 25_000, quantity: 0.5, physical: SPLITTABLE })]);
+    const { fixture } = await setUp(fake);
+
+    expect(normalised(fixture.nativeElement.querySelector('.line__price')?.textContent)).toBe(
+      "12501 so'm",
+    );
+  });
+
+  it('marks a weighed line’s amount as an estimate and says what weight it is estimated at', async () => {
+    const fake = new FakeUiCartService();
+    fake.lineAmount.mockReturnValue(360_000);
+    fake.items.set([line({ price: 15_000, quantity: 2, physical: CAKE })]);
+    const { fixture } = await setUp(fake);
+
+    expect(normalised(fixture.nativeElement.querySelector('.line__price')?.textContent)).toContain(
+      '≈ 360000',
+    );
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-line-estimate"]')?.textContent,
+    ).toContain(`2,4${NBSP}kg`);
+  });
+
+  it('says the total is an estimate while the basket holds anything sold by weight', async () => {
+    const fake = new FakeUiCartService();
+    fake.hasProvisionalLines = () => true;
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-provisional-notice"]'),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-provisional-notice"]'),
+    ).toBeNull();
   });
 });

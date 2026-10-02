@@ -1098,6 +1098,37 @@ describe('DineInTableComponent', () => {
           expect(view.q('dine-in-order')).toBeNull();
         });
 
+        it('step a splittable dish by its portion size, and count a half portion as one plate (ADR 0137)', async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.menuService.home.mockResolvedValue(
+            menu([
+              dish(
+                'p1',
+                'Plov',
+                [
+                  variant({
+                    physical: { catchweight: false, splittable: true, portionSize: 0.5 },
+                  }),
+                ],
+                [modifierGroup()],
+              ),
+            ]),
+          );
+          view.carts.preload([chosenLine('variant-1', ['opt-large'], 1)]);
+          await settle(view.fixture);
+
+          await view.click('dine-in-custom-decrease');
+
+          expect(view.carts.putLine).toHaveBeenLastCalledWith({
+            variantId: 'variant-1',
+            quantity: 0.5,
+            modifierOptionIds: ['opt-large'],
+          });
+          expect(view.q('dine-in-custom-quantity')?.textContent).toContain('0,5');
+          expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":1');
+        });
+
         it("are not counted by the dish's own stepper, which counts its plain portion only", async () => {
           const view = setUp();
           view.dineIn.seed(admission());
