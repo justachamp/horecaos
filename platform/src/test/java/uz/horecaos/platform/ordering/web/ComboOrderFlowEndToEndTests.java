@@ -88,8 +88,10 @@ import uz.horecaos.platform.kitchen.application.KitchenStationService.NewStation
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
+import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.CustomerBotOrderingAdapter;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
@@ -237,6 +239,9 @@ class ComboOrderFlowEndToEndTests {
 
     @Autowired
     private ReorderPlanService reorderPlans;
+
+    @Autowired
+    private CustomerBotOrderingAdapter bot;
 
     @Autowired
     private PosOrderSource posOrderSource;
@@ -412,6 +417,22 @@ class ComboOrderFlowEndToEndTests {
         assertThat(items).extracting(TicketItemRow::comboSelectionId).containsOnly(selection);
         assertThat(items).extracting(TicketItemRow::comboContainerVariantId).containsOnly(lunchVariant);
         assertThat(burgerItem.quantity()).isEqualTo(2);
+
+        // -- the kitchen screens read the grouping key over HTTP, and never a name (ADR 0041).
+        String kitchen = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/kitchen";
+        JsonNode board = kitchenRead(kitchen + "/tickets/" + ticket.id());
+        assertThat(board.get("items")).hasSize(2);
+        board.get("items").forEach(item -> {
+            assertThat(item.get("comboSelectionId").asText()).isEqualTo(selection.toString());
+            assertThat(item.get("comboContainerVariantId").asText()).isEqualTo(lunchVariant.toString());
+            assertThat(item.has("name"))
+                    .as("a kitchen row carries no dish name")
+                    .isFalse();
+        });
+        JsonNode wall = kitchenRead(kitchen + "/vdu");
+        assertThat(wall.get("tickets").get(0).get("items"))
+                .extracting(item -> item.get("comboSelectionId").asText())
+                .containsOnly(selection.toString());
 
         // -- the till: two ordinary lines, each its own dish, one grouping key; the combo is not a line.
         PosAdapter.OrderExport exported = exportToTheTill(orderId, Set.of(lunchVariant));
@@ -1025,6 +1046,42 @@ class ComboOrderFlowEndToEndTests {
         setAvailable(colaVariant, true);
     }
 
+    @Test
+    @DisplayName(
+            "the chat bot repeats a combo order as a combo cart line with its picks, and prices it at the combo price")
+    void theBotRepeatsAComboAsAComboLine() {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 2, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        offer(lunchVariant);
+        offer(burgerVariant);
+        offer(colaVariant);
+
+        var repeat = tx(() -> bot.repeat(TENANT, BRAND, CUSTOMER, orderId));
+
+        assertThat(repeat.result()).isEqualTo(CustomerBotOrderingPort.Repeat.Result.BUILT);
+        assertThat(repeat.lineCount()).as("one combo, not its two components").isEqualTo(1);
+        UUID repeatCart = Objects.requireNonNull(repeat.cartId());
+        CartService.CartView view =
+                carts.view(TENANT, BRAND, CUSTOMER, repeatCart).orElseThrow();
+        assertThat(view.lines()).hasSize(1);
+        assertThat(view.lines().get(0).variantId())
+                .as("the container the customer added, never a component")
+                .isEqualTo(lunchVariant);
+        assertThat(view.lines().get(0).quantity()).isEqualTo(2);
+        assertThat(view.selectionsOf(view.lines().get(0).lineKey()).comboPicks())
+                .containsExactlyInAnyOrder(
+                        new CartService.ComboPick(burgerInLunch.id(), 1),
+                        new CartService.ComboPick(colaInLunch.id(), 1));
+        assertThat(tx(() -> carts.price(
+                                TENANT, BRAND, CUSTOMER, repeatCart, view.cart().version()))
+                        .quote()
+                        .totalMinor())
+                .as("priced as a combo again, not as burgers and colas on their own")
+                .isEqualTo(2 * (BURGER_IN_LUNCH + COLA_IN_LUNCH));
+    }
+
     // ===================================================================== till edge cases
 
     @Test
@@ -1176,6 +1233,14 @@ class ComboOrderFlowEndToEndTests {
 
     private String orderPath(UUID orderId) {
         return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/" + orderId;
+    }
+
+    private JsonNode kitchenRead(String path) throws Exception {
+        MvcResult result = mvc.perform(get(path).with(tokenFor(OPERATOR))).andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as(result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
     }
 
     private JsonNode orderDetail(UUID orderId) throws Exception {
