@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { BasketLine, computeBasketTotal, lineAmountMinor } from './new-order-total';
+import {
+  BasketComboPick,
+  BasketLine,
+  comboAmountMinor,
+  computeBasketTotal,
+  lineAmountMinor,
+} from './new-order-total';
 
 function line(overrides: Partial<BasketLine> = {}): BasketLine {
   return {
@@ -119,5 +125,47 @@ describe('computeBasketTotal', () => {
     ];
     const total = computeBasketTotal(lines, 'UZS');
     expect(total.fullyPriced).toBe(false);
+  });
+});
+
+describe('comboAmountMinor (ADR 0136)', () => {
+  const pick = (overrides: Partial<BasketComboPick> = {}): BasketComboPick => ({
+    componentId: 'c1',
+    name: 'Burger',
+    pickQuantity: 1,
+    unitQuantity: 1,
+    amountMinor: 25_000,
+    ...overrides,
+  });
+
+  it('is the sum of each pick’s price per unit, times the units one pick puts on the order, times how often it was picked', () => {
+    expect(
+      comboAmountMinor({
+        picks: [
+          pick(),
+          pick({
+            componentId: 'c2',
+            name: 'Cola',
+            pickQuantity: 2,
+            unitQuantity: 2,
+            amountMinor: 3_000,
+          }),
+        ],
+      }),
+    ).toBe(25_000 + 3_000 * 2 * 2);
+  });
+
+  it('is unknown while any picked component has no price, never a smaller sum', () => {
+    expect(
+      comboAmountMinor({ picks: [pick(), pick({ componentId: 'c2', amountMinor: null })] }),
+    ).toBeNull();
+  });
+
+  it('is multiplied by the combo count when the line is totalled', () => {
+    const combo = { picks: [pick({ unitQuantity: 2, amountMinor: 1_000 })] };
+
+    expect(
+      lineAmountMinor(line({ quantity: 3, unitAmountMinor: comboAmountMinor(combo), combo })),
+    ).toBe(6_000);
   });
 });

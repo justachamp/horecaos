@@ -1281,7 +1281,10 @@ describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
       totalMinor: 24_000,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       delivery: null,
-      hiddenCharges: [{ lineKey: 'v-lunchcabc~0', optionId: 'o-box', amountMinor: 2_000 }],
+      hiddenCharges: [
+        { lineKey: 'v-lunchcabc~0', optionId: 'o-box', amountMinor: 2_000 },
+        { lineKey: 'v-lunchcabc~1', optionId: 'o-box', amountMinor: 2_000 },
+      ],
     });
     cartService.cart.set(cart);
     fixture.detectChanges();
@@ -1292,6 +1295,7 @@ describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
       '[data-testid="dine-in-hidden-charge"]',
     );
     expect(charge?.textContent).toContain('Table service');
-    expect(charge?.textContent).toMatch(/2.000/);
+    // One row per option, the amount summed over the lines it was applied to.
+    expect(charge?.textContent).toMatch(/4.000/);
   });
 });

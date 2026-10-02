@@ -204,6 +204,14 @@ describe('what a combo costs (ADR 0136)', () => {
     expect(comboFromAmountMinor([group({ minimumSelections: 0 })])).toBe(0);
   });
 
+  it('says nothing when a choice that must be made has no orderable component at all', () => {
+    expect(
+      comboFromAmountMinor([
+        group({ components: [component('a', { amountMinor: 1_000, active: false })] }),
+      ]),
+    ).toBeNull();
+  });
+
   it('ignores a sold-out component when working out the least', () => {
     expect(
       comboFromAmountMinor([

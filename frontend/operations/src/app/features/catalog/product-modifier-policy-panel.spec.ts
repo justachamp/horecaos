@@ -168,6 +168,19 @@ describe('ProductModifierPolicyPanel', () => {
     expect((q('policy-mode-PICKUP') as HTMLInputElement).checked).toBe(false);
   });
 
+  it('warns about a hidden group whose override makes it optional, even with exactly one option', () => {
+    const { q } = render([
+      {
+        groupId: 'box',
+        sortOrder: 0,
+        visibility: 'HIDDEN_AUTO_SELECT',
+        requiredOverride: false,
+      },
+    ]);
+
+    expect(q('policy-ambiguous')?.textContent).toContain('exactly one active option');
+  });
+
   it('saves a hidden group for delivery only, with the attachment’s own version as If-Match', async () => {
     const { q, settle, api, changed } = render([
       { groupId: 'box', sortOrder: 0, visibility: 'HIDDEN_AUTO_SELECT', version: 4 },
