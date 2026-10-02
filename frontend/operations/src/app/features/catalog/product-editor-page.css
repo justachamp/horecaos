@@ -31,6 +31,7 @@
 
 .editor__tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 0 16px;
   border-bottom: 1px solid var(--q-hairline);
