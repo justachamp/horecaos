@@ -2091,6 +2091,7 @@ describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
     view.menuService.optionLabels.set(new Map([['o-box', 'Table service']]));
     view.carts.hiddenCharges = [
       { lineKey: 'v-lunchcabc~0', optionId: 'o-box', amountMinor: 2_000 },
+      { lineKey: 'v-lunchcabc~1', optionId: 'o-box', amountMinor: 2_000 },
     ];
     view.carts.preload([line('variant-1', 1)]);
 
@@ -2099,7 +2100,8 @@ describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
     const charges = view.all('dine-in-hidden-charge');
     expect(charges).toHaveLength(1);
     expect(charges[0].textContent).toContain('Table service');
-    expect(charges[0].textContent).toMatch(/2.000/);
+    // One row per option, the amount summed over the lines it was applied to.
+    expect(charges[0].textContent).toMatch(/4.000/);
   });
 
   it('says nothing of the kind when the server added nothing', async () => {
