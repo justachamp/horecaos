@@ -4537,6 +4537,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.profile.dates.invalid': 'Tugash sanasi boshlanish sanasidan oldin',
   'staff.profile.field.reason': 'Sabab (ixtiyoriy)',
   'staff.profile.edit': 'Tahrirlash',
+  'staff.profile.detailFailed':
+    'Toʻliq yozuvni oʻqib boʻlmadi: telefon va xodim raqami koʻrsatilmagan, yuklanmaguncha tahrirlash oʻchirilgan.',
+  'staff.profile.detailRetry': 'Qayta urinish',
   'staff.profile.save': 'Saqlash',
   'staff.profile.saved': 'Saqlandi',
   'staff.end.done': 'Ish tugatildi. Olib tashlangan lavozimlar: {count}.',

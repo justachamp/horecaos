@@ -109,6 +109,14 @@ export class StaffMemberDetailPane {
   private readonly colleagues = signal<readonly StaffMember[]>([]);
   /** This person, read singly (full phone, employee number, signed photo link), or `null` when the tenant keeps no record. */
   protected readonly member = signal<StaffMember | null>(null);
+  /**
+   * The single read failed and {@link member} is the masked list record instead.
+   * That record has no phone and no employee number, and the manager's save is a
+   * replace in which a missing optional field is cleared, so a form built from it
+   * would wipe both. While this is set the card is read-only and says why.
+   */
+  protected readonly detailFailed = signal(false);
+  protected readonly detailRetrying = signal(false);
   protected readonly editingProfile = signal(false);
   protected readonly profileBusy = signal(false);
   protected readonly profileError = signal<string | null>(null);
@@ -301,8 +309,29 @@ export class StaffMemberDetailPane {
   // ------------------------------------------------------------- profile
 
   protected startEditingProfile(): void {
+    if (this.detailFailed()) {
+      return;
+    }
     this.profileError.set(null);
     this.editingProfile.set(true);
+  }
+
+  /** Reads the person singly again after the first read failed; editing comes back only with the full record. */
+  protected async retryDetail(): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    const current = this.member();
+    if (!tenantId || current === null || this.detailRetrying()) {
+      return;
+    }
+    this.detailRetrying.set(true);
+    try {
+      this.member.set(await this.membersApi.detail(tenantId, current.memberId));
+      this.detailFailed.set(false);
+    } catch {
+      // Still unread: the card stays read-only and the retry stays on offer.
+    } finally {
+      this.detailRetrying.set(false);
+    }
   }
 
   protected cancelEditingProfile(): void {
@@ -317,7 +346,7 @@ export class StaffMemberDetailPane {
   protected async saveProfile(draft: ProfileDraft): Promise<void> {
     const tenantId = this.tenant.tenantId();
     const current = this.member();
-    if (!tenantId || current === null) {
+    if (!tenantId || current === null || this.detailFailed()) {
       return;
     }
     this.profileBusy.set(true);
@@ -539,6 +568,7 @@ export class StaffMemberDetailPane {
     this.todayCounts.set(null);
     this.todayCountsLoading.set(true);
     this.member.set(null);
+    this.detailFailed.set(false);
     this.editingProfile.set(false);
     this.notice.set(null);
     this.activeTab.set('access');
@@ -566,10 +596,16 @@ export class StaffMemberDetailPane {
       this.colleagues.set(colleagues);
       const listed = colleagues.find((candidate) => candidate.principalSubject === subjectId);
       if (listed !== undefined) {
-        // The list is masked and has no photo link; the single read has both.
-        this.member.set(
-          await this.membersApi.detail(tenantId, listed.memberId).catch(() => listed),
-        );
+        // The list is masked and has no photo link; the single read has both. When
+        // it fails the card still opens on the list's record (name, reference,
+        // status) but is read-only: that record has no phone and no employee
+        // number, and the manager's save would clear both.
+        try {
+          this.member.set(await this.membersApi.detail(tenantId, listed.memberId));
+        } catch {
+          this.member.set(listed);
+          this.detailFailed.set(true);
+        }
       }
       if (!grants.some((g) => g.principalSubject === subjectId) && listed === undefined) {
         this.notFound.set(true);
