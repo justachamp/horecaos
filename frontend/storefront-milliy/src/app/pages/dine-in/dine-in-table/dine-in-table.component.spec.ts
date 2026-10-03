@@ -118,8 +118,14 @@ class FakeCartService {
     this.preloaded = lines;
   }
 
+  /** ADR 0140: the method the basket is priced under; the platform keeps it across line edits. */
+  paymentMethodCode: string | null = null;
+
+  /** The total, in som, a basket priced under a method comes to; unset methods pay full price. */
+  totalByMethod: Readonly<Record<string, number>> = {};
+
   private open(lines: readonly PlatformCartLine[]): PlatformCart {
-    const cart = cartOf(lines, this.version);
+    const cart = { ...cartOf(lines, this.version), paymentMethodCode: this.paymentMethodCode };
     this.cart.set(cart);
     return cart;
   }
@@ -171,6 +177,7 @@ class FakeCartService {
   price = vi.fn(async (): Promise<PricedCart> => {
     const cart = this.cart()!;
     const count = cart.lines.reduce((sum, line) => sum + line.quantity, 0);
+    const total = (this.totalByMethod[this.paymentMethodCode ?? ''] ?? 45_000) * count;
     return {
       cartId: cart.cartId,
       cartVersion: cart.version,
@@ -179,9 +186,9 @@ class FakeCartService {
       currency: 'UZS',
       subtotalMinor: 45_000 * count,
       taxMinor: 0,
-      totalMinor: 45_000 * count,
+      totalMinor: total,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      discountMinor: 0,
+      discountMinor: 45_000 * count - total,
       ...(this.hiddenCharges.length > 0 ? { hiddenCharges: this.hiddenCharges } : {}),
     };
   });
@@ -208,6 +215,12 @@ class FakeCartService {
       warnings: [],
     }),
   );
+
+  selectPaymentMethod = vi.fn(async (code: string | null) => {
+    this.version++;
+    this.paymentMethodCode = code;
+    return this.open(this.cart()?.lines ?? []);
+  });
 
   bindTable = vi.fn(async (_headers: Readonly<Record<string, string>>) => {
     this.version++;
@@ -1452,6 +1465,60 @@ describe('DineInTableComponent', () => {
       );
     });
 
+    it('writes the method the guest picks to the basket and prices it again, so the total and the quote are for that method (ADR 0140)', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.carts.paymentMethods.mockResolvedValue({
+        cartId: 'cart-1',
+        currency: 'UZS',
+        methodCodes: ['CASH', 'CLICK'],
+        warnings: [],
+      });
+      view.carts.totalByMethod = { CLICK: 42_750 };
+      view.dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 42_750, roundCount: 1 }));
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+      expect(view.carts.selectPaymentMethod).toHaveBeenCalledWith('CASH');
+
+      view.all('dine-in-payment-option')[1].click();
+      await settle(view.fixture);
+
+      expect(view.carts.selectPaymentMethod).toHaveBeenLastCalledWith('CLICK');
+      expect(view.fixture.componentInstance['priced']()?.totalMinor).toBe(42_750);
+
+      await view.click('dine-in-checkout');
+
+      expect(view.carts.checkout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paymentMethodCode: 'CLICK',
+          priced: expect.objectContaining({ totalMinor: 42_750 }),
+        }),
+      );
+    });
+
+    it('writes the method again at checkout when it never reached the basket, and asks the guest to look when that moves the total', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.carts.paymentMethods.mockResolvedValue({
+        cartId: 'cart-1',
+        currency: 'UZS',
+        methodCodes: ['CASH', 'CLICK'],
+        warnings: [],
+      });
+      view.carts.totalByMethod = { CLICK: 42_750 };
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+      // The write behind the tap was refused, so the basket is still priced under cash.
+      view.carts.selectPaymentMethod.mockRejectedValueOnce(new Error('offline'));
+      view.all('dine-in-payment-option')[1].click();
+      await settle(view.fixture);
+
+      await view.click('dine-in-checkout');
+
+      expect(view.carts.checkout).not.toHaveBeenCalled();
+      expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.priceRefreshed');
+    });
+
     it('shows no payment choice when there is only one way to pay, and uses it', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
@@ -1640,6 +1707,8 @@ describe('DineInTableComponent', () => {
       /** The first price of the basket is already expired; later ones are fresh, at `laterTotalMinor`. */
       async function withExpiredQuote(laterTotalMinor = 45_000): Promise<View> {
         return withBasket((v) => {
+          // A guest whose method is already on the basket (ADR 0140), so only the clock moves the price.
+          v.carts.paymentMethodCode = 'CASH';
           const fresh = v.carts.price.getMockImplementation()!;
           v.carts.price
             .mockImplementationOnce(async () => ({ ...(await fresh()), expiresAt: PAST() }))

@@ -24,6 +24,7 @@ class FakeUiCartService {
   cartData = vi.fn<() => CartResponse | null>(() => cartDataFixture());
   load = vi.fn();
   paymentMethods = vi.fn();
+  selectPaymentMethod = vi.fn().mockResolvedValue(undefined);
   applyDestination = vi.fn();
   priceCart = vi.fn();
   checkout = vi.fn();
@@ -332,6 +333,60 @@ describe('CartConfirmationComponent: CASH wording matches how it is actually pai
     });
 
     expect(comp.paymentMethod).toBe('cart.cash / cart.cashSecondaryPickup');
+  });
+});
+
+describe('CartConfirmationComponent: the payment method is part of the price (ADR 0140)', () => {
+  it('writes the method the platform offered to the cart when the screen loads, so a promotion that reads it is in the total', async () => {
+    const { cart } = await setUp(['CLICK']);
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('writes the method to the cart when the customer picks another one', async () => {
+    const { comp, cart } = await setUp(['CASH', 'CLICK']);
+    cart.selectPaymentMethod.mockClear();
+
+    comp.selectPayment('CLICK');
+
+    expect(comp.selectedPaymentId).toBe('CLICK');
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('puts the method on the cart after the destination and before it prices, so checkout is not refused PRICE_CHANGED', async () => {
+    const { comp, cart } = await setUp(['CLICK']);
+    cart.selectPaymentMethod.mockClear();
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockResolvedValue(checkoutResult());
+
+    await comp.submitOrder();
+
+    const destination = cart.applyDestination.mock.invocationCallOrder[0];
+    const select = cart.selectPaymentMethod.mock.invocationCallOrder[0];
+    const price = cart.priceCart.mock.invocationCallOrder[0];
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+    expect(destination).toBeLessThan(select);
+    expect(select).toBeLessThan(price);
+  });
+
+  it('reports the refusal and never reaches checkout when the platform will not take the method', async () => {
+    const { comp, cart } = await setUp(['CLICK']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.selectPaymentMethod.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'refused',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'PAYMENT_METHOD_UNAVAILABLE' },
+      }),
+    );
+
+    await comp.submitOrder();
+
+    expect(comp.orderError()).toBe('errors.reason.paymentMethodUnavailable');
+    expect(cart.priceCart).not.toHaveBeenCalled();
+    expect(cart.checkout).not.toHaveBeenCalled();
   });
 });
 

@@ -668,6 +668,26 @@ export class UiCartService {
   }
 
   /**
+   * Tells the platform how the customer means to pay, so the cart is priced with it (ADR 0140).
+   *
+   * A promotion can read the payment method ("5% off when paying by Click"), so the method is an
+   * input to the price and has to be on the cart before it is priced: checkout refuses a method
+   * the quote was not priced under (`PRICE_CHANGED`) whenever such a promotion exists. Writing it
+   * clears the attached quote, so the basket is re-priced here through {@link project} and the
+   * total on screen is the platform's own answer for the chosen method.
+   *
+   * Does nothing when the cart already carries this method, which keeps the call free to repeat
+   * ahead of every checkout. A refusal is thrown to the caller, who owns the screen's error.
+   */
+  async selectPaymentMethod(paymentMethodCode: string): Promise<void> {
+    const held = this.carts.cart();
+    if (!held || held.paymentMethodCode === paymentMethodCode) {
+      return;
+    }
+    await this.project(await this.carts.selectPaymentMethod(paymentMethodCode));
+  }
+
+  /**
    * Turns a priced basket into an order.
    *
    * Delegated rather than reimplemented so there is one description of the

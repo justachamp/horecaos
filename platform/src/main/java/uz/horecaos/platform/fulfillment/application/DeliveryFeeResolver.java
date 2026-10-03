@@ -105,6 +105,12 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         return run(query);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ResolvedDeliveryCharge preview(DeliveryFeeQuery query) {
+        return run(query).toCharge();
+    }
+
     private DeliveryFeeResolution run(DeliveryFeeQuery query) {
         Map<String, Object> evidence = new LinkedHashMap<>();
 

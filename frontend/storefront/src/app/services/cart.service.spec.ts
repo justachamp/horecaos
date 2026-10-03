@@ -198,6 +198,52 @@ describe('CartService (withVersion, via putLine)', () => {
   });
 });
 
+describe('CartService.selectPaymentMethod (ADR 0140)', () => {
+  it('PUTs the code to the cart with the held version, and adopts the returned cart', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 4 }));
+    const updated = baseCart({ version: 5, paymentMethodCode: 'CLICK' });
+    api.mutate.mockResolvedValue(updated);
+
+    const result = await service.selectPaymentMethod('CLICK');
+
+    expect(result).toEqual(updated);
+    expect(service.cart()).toEqual(updated);
+    expect(api.mutate).toHaveBeenCalledWith(
+      'PUT',
+      expect.stringContaining('/carts/cart-1/payment-method'),
+      expect.objectContaining({
+        body: { paymentMethodCode: 'CLICK' },
+        expectedVersion: 4,
+        idempotencyKey: expect.any(String),
+      }),
+    );
+  });
+
+  it('sends null to clear the selection', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 2, paymentMethodCode: 'CLICK' }));
+    api.mutate.mockResolvedValue(baseCart({ version: 3, paymentMethodCode: null }));
+
+    await service.selectPaymentMethod(null);
+
+    expect(api.mutate.mock.calls[0][2]?.body).toEqual({ paymentMethodCode: null });
+  });
+
+  it('retries once on STALE_VERSION, against the reloaded version', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate
+      .mockRejectedValueOnce(staleVersion(2))
+      .mockResolvedValueOnce(baseCart({ version: 3, paymentMethodCode: 'CLICK' }));
+    api.get.mockResolvedValueOnce(baseCart({ version: 2 }));
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(api.mutate.mock.calls[1][2]?.expectedVersion).toBe(2);
+  });
+});
+
 describe('CartService.bindTable (ADR 0047)', () => {
   it("puts to the cart's table sub-resource with the version and the guest token header, and no body naming a table", async () => {
     const { service, api } = setUp();

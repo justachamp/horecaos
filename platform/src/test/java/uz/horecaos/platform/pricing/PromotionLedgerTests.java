@@ -210,6 +210,157 @@ class PromotionLedgerTests {
     }
 
     @Test
+    @DisplayName(
+            "a claim refused for a later promotion leaves no ledger row and no counter behind, and a retry is refused again")
+    void aRefusedClaimLeavesNothingBehindAndTheRetryIsRefusedAgain() {
+        // Promotions are claimed in id order, and ids are minted in order: the unlimited one is
+        // claimed first, so its row is written before the limited one refuses.
+        var open = limited("OPENFIRST", null, null);
+        var lastSlot = limited("LASTSLOT2", 1, null);
+        assertThat(open.id().compareTo(lastSlot.id())).isNegative();
+        Quote mine = quoteFor(CUSTOMER);
+        assertThat(fixture.promotionStore.promotionAmountsOnQuote(TENANT, mine.quoteId()))
+                .as("the cart was priced with both promotions")
+                .hasSize(2);
+        // Someone else takes the last slot between this customer's pricing and checkout.
+        assertThat(claim(quoteFor(OTHER_CUSTOMER), UUID.randomUUID(), OTHER_CUSTOMER)
+                        .outcome())
+                .isEqualTo(Outcome.CLAIMED);
+        UUID orderId = UUID.randomUUID();
+
+        PromotionRedemptionPort.Result refused = claim(mine, orderId, CUSTOMER);
+
+        assertThat(refused.outcome()).isEqualTo(Outcome.LIMIT_REACHED);
+        assertThat(refused.promotionId()).isEqualTo(lastSlot.id());
+        assertThat(rows(orderId))
+                .as("the refusal commits, so a row written for the earlier promotion would outlive it")
+                .isEmpty();
+        assertThat(claimedRows(mine.quoteId())).isZero();
+        assertThat(consumed(lastSlot.id()))
+                .as("the other customer's slot is still theirs")
+                .isEqualTo(1);
+
+        PromotionRedemptionPort.Result retried = claim(mine, UUID.randomUUID(), CUSTOMER);
+
+        assertThat(retried.outcome())
+                .as("with a leftover row the retry reports CLAIMED and spends no slot on the limited promotion")
+                .isEqualTo(Outcome.LIMIT_REACHED);
+        assertThat(consumed(lastSlot.id())).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a per-customer refusal on a later promotion gives back the earlier ones' rows and counters too")
+    void aPerCustomerRefusalLeavesNothingBehind() {
+        var open = limited("OPENCOUNTED", 5, null);
+        var eachOnce = limited("EACHONCE", 10, 1);
+        assertThat(open.id().compareTo(eachOnce.id())).isNegative();
+        Quote first = quoteFor(CUSTOMER);
+        Quote second = quoteFor(CUSTOMER);
+        assertThat(claim(first, UUID.randomUUID(), CUSTOMER).outcome()).isEqualTo(Outcome.CLAIMED);
+        UUID orderId = UUID.randomUUID();
+
+        PromotionRedemptionPort.Result refused = claim(second, orderId, CUSTOMER);
+
+        assertThat(refused.outcome()).isEqualTo(Outcome.PER_CUSTOMER_LIMIT_REACHED);
+        assertThat(rows(orderId)).isEmpty();
+        assertThat(claimedRows(second.quoteId())).isZero();
+        assertThat(consumed(open.id()))
+                .as("only the first order's slot is spent")
+                .isEqualTo(1);
+        assertThat(consumed(eachOnce.id())).isEqualTo(1);
+        assertThat(customerUsage(eachOnce.id(), CUSTOMER)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a per-customer cap raised after the customer's first redemption is the cap the claim enforces")
+    void aRaisedPerCustomerCapIsEnforcedAtCheckout() {
+        var promotion = limited("RAISED", 10, 1);
+        assertThat(claim(quoteFor(CUSTOMER), UUID.randomUUID(), CUSTOMER).outcome())
+                .isEqualTo(Outcome.CLAIMED);
+        assertThat(fixture.promotionStore.limitReached(TENANT, BRAND, CUSTOMER))
+                .as("pricing already treats the customer as done with it")
+                .contains(promotion.id());
+
+        // The marketer suspends it, allows two each, and puts it back through validation.
+        editLimits(promotion.id(), 10, 2);
+
+        assertThat(fixture.promotionStore.limitReached(TENANT, BRAND, CUSTOMER))
+                .as("pricing now offers it to the customer again")
+                .doesNotContain(promotion.id());
+        Quote second = quoteFor(CUSTOMER);
+        assertThat(second.discount().minor())
+                .as("the cart is priced with the promotion")
+                .isPositive();
+
+        assertThat(claim(second, UUID.randomUUID(), CUSTOMER).outcome())
+                .as("the claim agrees with pricing; a cap frozen at the first claim refused this on every retry")
+                .isEqualTo(Outcome.CLAIMED);
+        assertThat(customerUsage(promotion.id(), CUSTOMER)).isEqualTo(2);
+        assertThat(fixture.promotionStore.limitReached(TENANT, BRAND, CUSTOMER)).contains(promotion.id());
+    }
+
+    @Test
+    @DisplayName("a per-customer cap lowered after the customer was priced is the cap the claim enforces")
+    void aLoweredPerCustomerCapIsEnforcedAtCheckout() {
+        var promotion = limited("LOWERED", 10, 3);
+        assertThat(claim(quoteFor(CUSTOMER), UUID.randomUUID(), CUSTOMER).outcome())
+                .isEqualTo(Outcome.CLAIMED);
+        Quote priced = quoteFor(CUSTOMER);
+        assertThat(priced.discount().minor()).isPositive();
+
+        editLimits(promotion.id(), 10, 1);
+
+        assertThat(claim(priced, UUID.randomUUID(), CUSTOMER).outcome())
+                .as("one redemption already used, and the cap is one now")
+                .isEqualTo(Outcome.PER_CUSTOMER_LIMIT_REACHED);
+        assertThat(customerUsage(promotion.id(), CUSTOMER)).isEqualTo(1);
+        assertThat(consumed(promotion.id()))
+                .as("the total it took is given back")
+                .isEqualTo(1);
+    }
+
+    /** Suspend, edit the two limits, validate and activate again, the way the console does. */
+    private void editLimits(UUID id, @Nullable Integer total, @Nullable Integer perCustomer) {
+        var authoring = fixture.authoring;
+        var suspended = authoring.suspend(
+                TENANT,
+                BRAND,
+                id,
+                fixture.promotionStore.find(TENANT, BRAND, id).orElseThrow().version());
+        var d = suspended.definition();
+        var edited = authoring.update(
+                TENANT,
+                BRAND,
+                id,
+                suspended.version(),
+                new PromotionDefinition(
+                        d.code(),
+                        d.name(),
+                        d.kind(),
+                        d.scope(),
+                        d.stackingGroup(),
+                        d.exclusive(),
+                        d.priority(),
+                        d.requiresCoupon(),
+                        d.maximumDiscountMinor(),
+                        d.currency(),
+                        d.validFrom(),
+                        d.validUntil(),
+                        total,
+                        perCustomer,
+                        d.loyaltyAccrual(),
+                        d.loyaltyRedemption(),
+                        d.conditions(),
+                        d.actions()));
+        var validated = authoring.validate(TENANT, BRAND, id, edited.version());
+        assertThat(validated.report().isValid()).isTrue();
+        assertThat(authoring
+                        .activate(TENANT, BRAND, id, validated.promotion().version(), "edit limits")
+                        .isPending())
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("a guest is never refused for a per-customer cap, as decided for coupons")
     void aGuestHasNoPerCustomerCap() {
         var promotion = limited("GUESTS", 10, 1);
@@ -451,6 +602,14 @@ class PromotionLedgerTests {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    private long claimedRows(UUID quoteId) {
+        return fixture.jdbc
+                .sql("SELECT count(*) FROM pricing.promotion_redemptions WHERE claimed_quote_id = :quote")
+                .param("quote", quoteId)
+                .query(Long.class)
+                .single();
     }
 
     private List<Map<String, Object>> rows(UUID orderId) {

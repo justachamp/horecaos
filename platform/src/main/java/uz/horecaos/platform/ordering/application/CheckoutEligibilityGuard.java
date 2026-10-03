@@ -403,11 +403,19 @@ class CheckoutEligibilityGuard {
         // ADR 0140: the payment method is an input to the price whenever a promotion reads
         // it. The cart was priced with the method it had selected (none, until the
         // customer chose one), so a checkout that names a different method is paying for
-        // a total nobody quoted: it is refused PRICE_CHANGED and re-quoted, never charged
-        // the difference. Only when a payment-method promotion exists -- otherwise the
-        // method cannot move the total and the cart has no reason to carry one.
-        if (!paymentMethodCode.equals(cart.paymentMethodCode())
-                && promotionQuery.paymentMethodChangesTheTotal(command.tenantId(), command.brandId(), null)) {
+        // a total nobody quoted if a promotion reads either of the two: it is refused
+        // PRICE_CHANGED and re-quoted, never charged the difference.
+        //
+        // Only when the swap can move the price. A brand with "5% off with Click" has an
+        // active payment-method promotion for as long as it runs, and refusing every
+        // checkout that merely differs from the cart's (usually empty) selection would
+        // refuse the customer who pays cash, whose quote is exactly what cash pays, and
+        // would do it for ever, because re-quoting changes nothing about a method nobody
+        // selected. A method no promotion reads cannot move the total away from the quote.
+        String pricedMethodCode = cart.paymentMethodCode();
+        if (!paymentMethodCode.equals(pricedMethodCode)
+                && promotionQuery.paymentMethodMovesTheTotal(
+                        command.tenantId(), command.brandId(), pricedMethodCode, paymentMethodCode)) {
             return Result.rejected(
                     "PRICE_CHANGED",
                     "The payment method changes what this order costs; select it on the cart and request a new quote");

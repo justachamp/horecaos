@@ -188,6 +188,15 @@ public class PromotionAuthoringService {
             throw ApiException.staleVersion(expectedVersion, before.version());
         }
         PromotionDefinition definition = normalised(replacement);
+        if (definition.maximumRedemptions() != null && definition.maximumRedemptions() < before.consumedCount()) {
+            // The database refuses it too (ck_promotion_consumed), as an integrity error nobody
+            // maps; say it as the authoring refusal it is.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "This promotion has already been redeemed " + before.consumedCount()
+                            + " times, so its limit cannot be set below that",
+                    java.util.Map.of("reason", "MAXIMUM_REDEMPTIONS_BELOW_CONSUMED"));
+        }
         int definitionVersion = store.hasDefinitionVersion(tenantId, id, before.definitionVersion())
                 ? before.definitionVersion() + 1
                 : before.definitionVersion();

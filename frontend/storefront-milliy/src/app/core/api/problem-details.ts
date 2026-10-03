@@ -272,6 +272,8 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   ON_STOP: 'errors.reason.itemUnavailable',
   NOT_STOCKED_AT_LOCATION: 'errors.reason.itemUnavailable',
   RESERVATION_NO_LONGER_HELD: 'errors.reason.holdExpired',
+  // ADR 0140: the cart's channel does not sell the method the customer chose (CartService.setPaymentMethod).
+  PAYMENT_METHOD_UNAVAILABLE: 'errors.reason.paymentMethodUnavailable',
   // CheckoutEligibilityGuard: the quote's fifteen minutes ran out (or it was already
   // accepted). Pricing the cart again cures it.
   QUOTE_EXPIRED: 'errors.reason.quoteExpired',

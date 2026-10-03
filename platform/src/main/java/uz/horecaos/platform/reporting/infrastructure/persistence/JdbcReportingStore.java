@@ -740,6 +740,53 @@ public class JdbcReportingStore {
                 """).params(params).update();
     }
 
+    /**
+     * Removes this fact's rows for these redemptions that are filed under another day.
+     *
+     * <p>{@code fact_promotion_redemption}'s primary key is {@code (tenant_id,
+     * redemption_id)}, with no business date: one row per (order, promotion). A boundary
+     * change that moves a redemption across the seam would otherwise make the next close
+     * insert the same redemption again, violate the key and roll the whole close back --
+     * every other fact of the tenant-day with it, on every retry. The same job {@link
+     * #clearMisfiledOrders} does for the order facts, on this fact's own key.
+     */
+    public void clearMisfiledPromotionRedemptions(UUID tenantId, List<UUID> redemptionIds, LocalDate keep) {
+        if (redemptionIds.isEmpty()) {
+            return;
+        }
+        jdbc.sql("""
+                DELETE FROM reporting.fact_promotion_redemption
+                 WHERE tenant_id = :tenantId AND redemption_id IN (:redemptionIds)
+                   AND business_date <> :keep
+                """)
+                .param("tenantId", tenantId)
+                .param("redemptionIds", redemptionIds)
+                .param("keep", keep)
+                .update();
+    }
+
+    /** One brand's stored promotion facts for a day, summed: what a recut compares against. */
+    public record PromotionDayTotal(UUID brandId, long redemptions, long discountMinor, long markupMinor) {}
+
+    public List<PromotionDayTotal> readPromotionDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT brand_id, count(*) AS redemptions,
+                       COALESCE(sum(discount_minor), 0) AS discount_minor,
+                       COALESCE(sum(markup_minor), 0) AS markup_minor
+                  FROM reporting.fact_promotion_redemption
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY brand_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new PromotionDayTotal(
+                        row.getObject("brand_id", UUID.class),
+                        row.getLong("redemptions"),
+                        row.getLong("discount_minor"),
+                        row.getLong("markup_minor")))
+                .list();
+    }
+
     public void insertOrderFact(OrderFact fact) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", fact.tenantId());

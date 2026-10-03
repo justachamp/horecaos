@@ -435,7 +435,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         if (request.delivery() == null) {
             return null;
         }
-        ResolvedDeliveryCharge charge = deliveryFees.resolve(new DeliveryFeeQuery(
+        var feeQuery = new DeliveryFeeQuery(
                 request.tenantId(),
                 request.brandId(),
                 request.locationId(),
@@ -444,7 +444,13 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 currency,
                 goodsSubtotal,
                 request.delivery().pricingAuthority(),
-                now));
+                now);
+        // A real quote always has an id, and its fee resolution is evidence pinned to that quote.
+        // The simulator prices without one, inside a read-only transaction (ADR 0140): the same
+        // resolution, with nothing written -- an INSERT there is "cannot execute INSERT in a
+        // read-only transaction", a 500 for every simulated delivery cart.
+        ResolvedDeliveryCharge charge =
+                quoteId == null ? deliveryFees.preview(feeQuery) : deliveryFees.resolve(feeQuery);
 
         if (charge.outcome() != DeliveryFeeOutcome.RESOLVED
                 && charge.outcome() != DeliveryFeeOutcome.EXTERNALLY_PRICED) {

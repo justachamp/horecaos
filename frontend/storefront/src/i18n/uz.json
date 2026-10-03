@@ -327,6 +327,7 @@
     "roundCount": "Buyurtma qilingan: {{count}} marta",
     "askForBill": "Hisobni so'rash",
     "orderPlaced": "Buyurtma oshxonaga yuborildi",
+    "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing.",
     "billRequested": "Hisob so'raldi",
     "roundAttachRetry": "Buyurtma oshxonaga yuborildi, lekin hali stol hisobida yo'q. «Qayta urinish» tugmasini bosing.",
     "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
@@ -401,7 +402,8 @@
       "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
       "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
-      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
+      "paymentMethodUnavailable": "Bu to'lov usuli hozir mavjud emas. Boshqasini tanlang."
     }
   },
   "money": {

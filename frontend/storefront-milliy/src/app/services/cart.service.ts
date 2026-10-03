@@ -311,6 +311,32 @@ export class CartService {
     );
   }
 
+  /**
+   * Says how the cart will be paid (ADR 0140), or clears the selection with `null`.
+   *
+   * The method is an input to the price whenever a promotion reads it ("5% off when
+   * paying by Click"), so it lives on the cart and the platform prices the cart with it.
+   * A cart that never names one is priced as if none were chosen, and checkout with a
+   * method the quote was not priced under is refused `PRICE_CHANGED` when such a
+   * promotion exists: this call, then pricing again, is the way forward.
+   *
+   * Like a line edit it bumps the version and clears the attached quote, so the cart
+   * must be priced again before it can be checked out.
+   */
+  async selectPaymentMethod(paymentMethodCode: string | null): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>(
+        'PUT',
+        `${this.brandPath}/carts/${cart.cartId}/payment-method`,
+        {
+          body: { paymentMethodCode },
+          expectedVersion: version,
+          idempotencyKey: newIdempotencyKey(),
+        },
+      ),
+    );
+  }
+
   /** What this cart may be paid with, as the platform resolves it today. */
   async paymentMethods(): Promise<PaymentMethods | null> {
     const cart = this.cart();
@@ -549,6 +575,8 @@ export interface PlatformCart {
   readonly lines: readonly PlatformCartLine[];
   /** ADR 0072. Null (or absent) when no code is applied to this cart. */
   readonly appliedPromoCode?: string | null;
+  /** ADR 0140. The method the cart is priced under; null (or absent) until one is selected. */
+  readonly paymentMethodCode?: string | null;
 }
 
 export interface PricedCart {
