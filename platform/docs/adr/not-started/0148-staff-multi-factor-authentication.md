@@ -14,8 +14,9 @@
   no authentication flow and no OTP policy, so the realm runs Keycloak's defaults
   (a direct-grant flow with a conditional OTP step that engages only for a user
   who already has an OTP credential), with brute-force protection on
-  (`failureFactor` 8, `maxFailureWaitSeconds` 900) and a password policy of 12
-  characters. `KeycloakStaffAccounts` already wraps the admin API for `find`,
+  (`failureFactor` 8, `maxFailureWaitSeconds` 900, and a quick-login check that
+  disables an account for 60 seconds when two failures arrive less than 1,000 ms
+  apart) and a password policy of 12 characters. `KeycloakStaffAccounts` already wraps the admin API for `find`,
   `create`, `setPassword`, `findSubjectIdByLogin` and `logoutEverywhere`. The
   segmented code field `q-otp-input` is built and tested in
   `frontend/operations/src/app/shared/ui` with no consumer (row `X.38`), and the
@@ -36,12 +37,20 @@
   record as written.
   - **Whether the pinned Keycloak will register an OTP credential from a secret the
     platform supplies** (engineering). Community reports say the admin API accepts
-    a `credentials` element of type `totp` with `secretData`, and also say an
-    ordinary user cannot create one through the account API; neither has been run
-    against 26.7 here, nor has the direct grant's answer to a missing `totp` (which
-    the same reports describe as indistinguishable from a wrong password) or the
-    holding of two OTP credentials on one account. This is the first thing to
-    prove, in a spike a day long.
+    a `credentials` element carrying `secretData` for an OTP credential, and also
+    say an ordinary user cannot create one through the account API. A throwaway
+    26.7.0 container, run on 2026-10-03 with
+    `infra/keycloak/spikes/mfa-lockout-probe.py`, showed the following. The admin
+    API accepted an `otp` credential (`subType` `totp`, `secretData.value`) when
+    the user was created and on `PUT /users/{id}` for a user that already existed,
+    and a sign-in with the password and a current code then succeeded. The direct
+    grant answered a missing code and a wrong code alike with HTTP 400
+    `invalid_grant` "Invalid user credentials", and refused a code used a second
+    time inside its 30-second step. A wrong code is counted by the brute-force
+    detector, and a successful password-only grant by another client clears that
+    count (Context, "What Keycloak's failure counter does"). Not yet run: two OTP
+    credentials on one account, deleting one by id, and the account-API path. Those
+    are still the first thing to prove, in a spike a day long.
     Proposed default: build Decision 3 as written if it works; if it does not,
     enrol through Keycloak's own `CONFIGURE_TOTP` required-action page (the
     alternative below), which needs the owner to accept one narrow exception to
@@ -57,9 +66,20 @@
     tenant setting that is off by default, with `OFF`, `SENSITIVE_ROLES` (owner,
     administrator, finance, brand manager) and `ALL_STAFF` as its values. Device
     principals (ADR 0079) and customers (ADR 0051) are outside this record.
-  - **The realm's brute-force threshold** (operations). A wrong password will now
-    cost Keycloak two failed attempts (Decision 2). Proposed default: raise
-    `failureFactor` from 8 to 10, so five wrong passwords still lock the account.
+  - **How many code attempts an account gets** (security). Keycloak's own lockout
+    cannot be the control for the code step, because the password-only probe that
+    Decision 2 needs clears its failure count (Context). The platform therefore
+    owns this limit. Proposed default: a burst of 5 code attempts, then 5 more an
+    hour, per account (not per address), on the ADR 0033 limiter that already guards
+    sign-in. That is at most about 120 attempts a day; with look-ahead 1 three of
+    the million codes are valid at any moment, so a guesser who already holds the
+    password has roughly a 1-in-2,800 chance a day, and the owner of the account
+    can lock themselves out for an hour at worst.
+  - **The realm's brute-force settings** (operations). Proposed default: unchanged
+    (`failureFactor` 8, quick-login check 1,000 ms / 60 s). Decision 2 asks the
+    password-only client first so that a wrong password stays one failure, as it is
+    today; an earlier draft that asked it after the refusal made it two failures
+    milliseconds apart and disabled the account for a minute on the first typo.
   - **Whether the pinned Keycloak's recovery-code authenticator is supported**
     (engineering). Proposed default: none at launch; recovery is a second
     authenticator or an administrator reset (Decision 5).
@@ -109,6 +129,37 @@ is a Keycloak fact the platform cannot fix.
   superseding record, not a quiet re-enable"). TOTP is the second factor that fits
   the direct grant; this record does not reopen that.
 
+**What Keycloak's failure counter does, which the sign-in step cannot ignore.** An
+earlier draft of this record asked a password-only client "is the password right?"
+after Keycloak refused a sign-in, and counted on Keycloak's lockout to stop
+code-guessing. A throwaway Keycloak 26.7.0 carrying this platform's brute-force
+settings (`failureFactor` 8, quick-login check 1,000 ms / 60 s) shows both halves
+were wrong. `infra/keycloak/spikes/mfa-lockout-probe.py` reproduces every line
+below and exits non-zero if a later Keycloak image behaves differently.
+
+- A wrong one-time code is counted like a wrong password. With no probe in the
+  picture, the eighth wrong code (right password) disables the account.
+- A successful password-only grant clears the count, whichever client made it.
+  Fifteen wrong codes, each followed by one successful grant of a password-only
+  client, leave `numFailures` at 0, the account enabled, and the right code still
+  signing in. Calling that client only when no code was sent changes nothing: one
+  code-less request between two guesses clears the count in the same way (ten
+  rounds, no failure left).
+- Two failures less than a second apart disable the account for 60 seconds. A wrong
+  password followed at once by a failing password-only call is exactly that pair:
+  `numFailures` 2, `disabled` true, and the right password and code refused until it
+  lapses. With the password-only client asked first, the same wrong password is one
+  failure and the right password and code sign in at once.
+
+So a password-only probe costs something that no wording of "Invalid credentials"
+hides. Called after a refusal, it turns every typo into a minute-long lockout. And
+its success gives anyone who holds the password a way to keep Keycloak's counter at
+zero while guessing a six-digit code, which is the dangerous half: TOTP is the whole
+second factor, and with the counter silent only the per-address sign-in budget
+(which a rotating address defeats) stands between a phished password and a
+distributed guess. The lockout for the code step therefore cannot be Keycloak's.
+Decision 2 asks the probe first and keeps the code budget in the platform.
+
 **Who needs it, and how much.** A platform-scope account can enter any tenant
 (ADR 0081) and change platform policy; a tenant owner or finance user can reveal
 customer data, export it, and change who may. A cashier on a shared terminal is a
@@ -128,8 +179,9 @@ is therefore never an email link.
 
 **Keep Keycloak as the only long-term holder and the only verifier of a staff
 member's TOTP credential; put a first-party second step on the sign-in page, a
-first-party enrolment screen behind it, and a recovery path that is an audited
-administrator action and never a link.**
+first-party enrolment screen behind it, a limit on code attempts that the platform
+owns because Keycloak's counter cannot be relied on for it, and a recovery path
+that is an audited administrator action and never a link.**
 
 1. **TOTP only, one policy, held in Keycloak.** Authenticator apps with the
    standard parameters (6 digits, 30-second period, HMAC-SHA-1, look-ahead 1). The
@@ -138,20 +190,45 @@ administrator action and never a link.**
    path that needs nobody else. The platform stores no secret, no recovery code and
    no copy of the factor.
 
-2. **The code is a second step, signalled without an oracle.** `POST
-   …/auth/sessions` gains an optional `otp` field forwarded to Keycloak as `totp`.
-   When Keycloak refuses and no code was sent, the platform asks a second,
-   password-only Keycloak client whether the password alone is right. That client's
-   direct-grant flow has no OTP step, its tokens are never released (the adapter
-   returns a `PasswordVerified` value that has no token field, so a bug cannot hand
-   one out), and it is called only on the failure path. If the password is right
-   the answer is `MFA_REQUIRED` and the page shows the code step with
-   `q-otp-input`; if it is wrong the answer is the same uniform "Invalid
-   credentials" as today. If a code was sent and refused, a verified password makes
-   the answer `MFA_CODE_INVALID`. Both distinguishing answers are reachable only by
-   someone who already knows the password. The happy path for an account with no
-   factor is one Keycloak call, unchanged. Cost: a wrong password is two failed
-   attempts in Keycloak's counter (first open input).
+2. **The code is a second step, signalled without an oracle, and its lockout is the
+   platform's.** `POST …/auth/sessions` gains an optional `otp` field, forwarded to
+   Keycloak as `totp`. After the existing per-address sign-in budget, the calls run
+   in a fixed order:
+   1. *Is the password right?* The platform asks a second, password-only Keycloak
+      client, `horecaos-staff-password-check`. Its direct-grant flow has no OTP
+      step. Its tokens are never released: the adapter returns a `PasswordVerified`
+      value that carries the account's subject id (read from the answer, with the
+      token dropped inside the adapter) and has no token field, so a bug cannot
+      hand one out. If Keycloak refuses, the answer is exactly today's, the uniform
+      "Invalid credentials" (or `ACCOUNT_ACTION_REQUIRED`, the one exception ADR
+      0062 carves out). A wrong password or an unknown name stops here, and is one
+      failure in Keycloak's counter, as it is today.
+   2. *May a code be tried?* Only when `otp` was sent, and only for a verified
+      password. The platform charges one attempt to that account's code budget
+      (keyed by the subject id, on the ADR 0033 limiter, strict, so an unavailable
+      limiter refuses). With the budget spent the answer is `429
+      RATE_LIMIT_EXCEEDED` with `retryAfterSeconds`, and the code goes to Keycloak
+      not at all, right or wrong. Four properties carry the weight. The charge is
+      made before Keycloak is asked, so nothing after it can refund it. It is keyed
+      by the account, not the address, so a rotating address does not refill it. It
+      follows a verified password, so a wrong password or an unknown name never
+      spends a budget and the 429 cannot tell accounts apart. And it is the
+      platform's own counter, because Keycloak's is cleared by this very probe
+      (Context). Every other endpoint that accepts a code for an existing factor
+      (removing an authenticator, Specification) charges the same budget.
+   3. *Sign in.* The platform calls `horecaos-staff-login` with the password and the
+      code, if any. Issued: the session. Refused with no code sent: `MFA_REQUIRED`,
+      and the page shows the code step with `q-otp-input`. Refused with a code sent:
+      `MFA_CODE_INVALID`. A refusal that is `ACCOUNT_ACTION_REQUIRED` keeps its
+      present answer. Both distinguishing answers are reachable only by someone who
+      already knows the password.
+
+   Cost: every sign-in is two Keycloak calls, and the first leaves a short-lived
+   Keycloak session of the probe client that the adapter must end or let lapse (the
+   checklist asks the spike to settle which). The probe's success zeroes
+   Keycloak's failure count for the account, which is harmless for passwords (a
+   guesser has no success to interleave) and is the reason Keycloak's lockout is
+   not a control for codes.
 
 3. **Enrolment is in the product and re-proves the password.** The enrolment screen
    asks for the current password again, shows the secret as a QR code
@@ -207,7 +284,10 @@ administrator action and never a link.**
 |---|---|---|
 | The platform stores TOTP secrets and verifies codes itself | A second authenticator and a second secret store beside Keycloak, against ADR 0003 and the repository rule not to run a second credential issuer; the platform would own recovery codes, replay windows and clock skew | Keycloak cannot be made to accept programmatic enrolment *and* its own page is unacceptable |
 | Enrol on Keycloak's own `CONFIGURE_TOTP` page (a redirect, then back) | Honours ADR 0139's wording to the letter and needs no secret handling, but reintroduces the redirect and callback the owner removed in ADR 0062 as "a jarring seam" and "broken in practice", requires a public client again, and needs a themed realm in three languages | The spike in the first open input fails |
-| A custom Keycloak authenticator or REST extension (distinguishable "OTP required", an enrolment endpoint) | The cleanest protocol, with no second-client probe and no double failure count. Also a Java extension one person must build, version and re-test on every Keycloak upgrade | The probe in Decision 2 proves fragile in operation |
+| A custom Keycloak authenticator or REST extension (distinguishable "OTP required", an enrolment endpoint) | The cleanest protocol: no second-client probe, no second Keycloak call per sign-in, and Keycloak's own counter would then count code failures properly. Also a Java extension one person must build, version and re-test on every Keycloak upgrade | The probe in Decision 2 proves fragile in operation |
+| Rely on Keycloak's brute-force detector for the code step | Not possible while a password-only probe exists: its success clears the count. Reproduced: fifteen wrong codes, each followed by a probe, leave no failure and no lock; probing only when no code was sent is beaten by one code-less request between guesses | Keycloak offers a password check that leaves the detector alone, or the extension above is built |
+| Ask the password-only client after Keycloak refuses (this record's first draft) | One Keycloak call on the happy path, but a wrong password becomes two failures milliseconds apart, the quick-login check disables the account for 60 seconds on the first typo, and the probe's success still clears the count | Never |
+| Switch the quick-login check off in the realm so the double failure is harmless | Weakens the realm against concurrent guessing to hide an artefact of our own call pattern, and does nothing for the cleared count | Never |
 | Always show the code field on sign-in | No probe and no Keycloak change; every cashier sees a field that is not theirs, and a missing code is still an unexplained "Invalid credentials" for the person who needs it | Never as the only affordance |
 | Reveal the code field after the first failure and remember it per browser | Simple and oracle-free, but the first sign-in on any new browser fails visibly for every enrolled user and counts against the lockout | The probe's second client is refused |
 | SMS code as the second factor | Weaker (SIM swap, no receipt on some subscribers), costs money per sign-in, and makes console sign-in depend on the SMS gateway's availability (ADR 0146) | Staff without a smartphone must be covered |
@@ -232,11 +312,20 @@ administrator action and never a link.**
 - Enrolment depends on a Keycloak behaviour not yet proven against 26.7, and the
   fallback re-opens a decision the owner made on 2026-09-02.
 - The probe client is a second route to "password verified" and a place a bug would
-  be a bypass. It is contained by what the adapter can return, not by vigilance,
-  and it needs its own test that no token escapes.
-- A wrong password costs two failures in Keycloak's counter; the realm threshold
-  moves, and the realm file only applies on first import, so a live realm needs the
-  hardening runbook's step.
+  be a bypass. It is contained by what the adapter can return (a subject id and
+  nothing that signs anything), not by vigilance, and it needs its own test that no
+  token escapes.
+- Every sign-in is two Keycloak calls and leaves a short-lived probe session behind.
+  Staff sign in a handful of times a day, so the load is nothing; the session has
+  to be ended or left to lapse on purpose (checklist).
+- The limit on code attempts is the platform's, not Keycloak's, and it is the only
+  brute-force control the second factor has. It sits behind the ADR 0033 port, so it
+  is per replica and forgotten on restart until a shared limiter replaces it
+  (roughly N times the budget for N replicas, which ADR 0033 accepts). Its metric
+  has an alert, and the exit criteria test it.
+- A budget keyed by the account means someone who holds a password can spend it and
+  make the real owner wait for the hour to refill. That needs the password, and
+  Keycloak's own lockout has the same property.
 - The first enrolment of a fresh account is still protected by the password alone.
   Someone holding a stolen password for an account that has not yet enrolled can
   enrol their own device first. Enrolment at invitation acceptance, the email on
@@ -266,25 +355,30 @@ administrator action and never a link.**
 POST /api/v1/{control-plane|operations}/auth/sessions
      body gains optional otp (6 digits)
      answers: 200 session | 401 UNAUTHENTICATED (uniform) | 401 MFA_REQUIRED | 401 MFA_CODE_INVALID
+              | 429 RATE_LIMIT_EXCEEDED (the code budget, only after a verified password)
               | 403 MFA_ENROLMENT_REQUIRED { enrolmentTicket, expiresAt } | 403 ACCOUNT_ACTION_REQUIRED
 POST …/auth/mfa/enrolments                 bearer or enrolmentTicket, password -> { sealedSecret, otpauthUri, secret, expiresAt }
 POST …/auth/mfa/enrolments/confirm         { sealedSecret, code, password, label } -> 204 (+ session when begun from a ticket)
 DELETE …/auth/mfa/authenticators/{id}      password + a valid code from another authenticator
+                                           (charges the same code budget as sign-in)
 GET  …/staff/{personId}/mfa                iam.staff.mfa.read -> { enrolled, authenticators[{id,label,createdAt}], requirement }
 POST …/staff/{personId}/mfa/resets         iam.staff.mfa.reset, If-Match, Idempotency-Key, reason
 ```
 
 Sign-in and the enrolment endpoints are unauthenticated or ticket-authenticated by
 design, in the same `permitAll` category as the six ADR 0062 paths, each added to
-`SecurityConfiguration` with its reason. All are rate limited per ADR 0033 (the
-sign-in budget of five a minute per address and username is unchanged and now also
-counts code attempts). The reset is a mutating endpoint and declares its capability
+`SecurityConfiguration` with its reason. All are rate limited per ADR 0033. The sign-in
+budget of five a minute per address and username is unchanged and stays first. The
+code budget is a second, separate limit keyed by the Keycloak subject id (burst 5,
+five more an hour), charged after the password is verified and before any code
+reaches Keycloak, by sign-in and by the authenticator-removal endpoint alike. The reset is a mutating endpoint and declares its capability
 at the scope of the person's tenant, or platform scope for a platform account.
 
 ### Configuration
 
 ```text
 horecaos.iam.mfa.enforcement            OFF | PROMPT | REQUIRED     platform accounts; deploy setting
+horecaos.iam.mfa.code-budget            burst 5, refill 5 per hour, per account       deploy setting
 iam.staff_mfa_requirement               OFF | SENSITIVE_ROLES | ALL_STAFF   tenant ConfigurationKey, ADR 0030
 ```
 
@@ -297,26 +391,47 @@ names a person.
 horecaos-staff-login            unchanged: direct grant, default flow, conditional OTP
 horecaos-staff-password-check   new confidential client; direct grant only; a flow with
                                 username and password validation and no OTP; no scopes,
-                                no offline_access; a one-second access token
-realm: OTP policy declared (totp, 6, 30, HmacSHA1, look-ahead 1); failureFactor 10
+                                no offline_access; a one-second access token; asked
+                                FIRST, on every sign-in
+realm: OTP policy declared (totp, 6, 30, HmacSHA1, look-ahead 1);
+       failureFactor 8 and the quick-login check (1000 ms / 60 s) unchanged
 ```
 
 ### Observability and audit
 
 Counters `horecaos.auth.staff.mfa{step,outcome}` with bounded labels
-(`challenge`, `confirm`, `reset`; `ok`, `invalid`, `required`). Audit facts
+(`challenge`, `budget`, `confirm`, `reset`; `ok`, `invalid`, `required`,
+`exhausted`). A rise in `budget`/`exhausted` is the alert: somebody who holds a
+password is guessing codes. Audit facts
 `iam.staff.mfa.enrolled`, `.authenticator_added`, `.authenticator_removed`,
 `.reset` through `ChangeDocuments`, carrying the subject's reference, the actor and
 the reason — never a secret, a code or a label.
 
 ### Testing
 
-- The direct-grant client sends `totp` when given a code; a missing code on an
-  enrolled account yields `MFA_REQUIRED` only after the password-only client
-  confirms the password, and the uniform failure otherwise (against the live dev
-  realm and against the fake).
-- The password-only adapter's return type has no token; a test asserts it by
-  reflection so a later edit cannot add one quietly.
+- The direct-grant client sends `totp` when given a code. The password-only client
+  is asked first: a wrong password or an unknown name answers the uniform failure,
+  and the login client is never called. A missing code on an enrolled account
+  yields `MFA_REQUIRED` only after that client confirms the password (against the
+  live dev realm and against the fake).
+- **The code lockout holds when Keycloak's counter does not.** With the right
+  password, the sixth code-bearing sign-in within the hour answers 429 and no
+  request carrying that code reaches Keycloak, although every earlier attempt was
+  followed by a successful probe. The right code is refused with the same 429 while
+  the budget is spent, and works again once it refills (a controlled clock, not a
+  sleep). Rotating the source address does not refill it, and signing in by email
+  instead of user name draws on the same account budget. A wrong password and an
+  unknown name never spend a budget and answer exactly as before. Removing an
+  authenticator spends the same budget. Seen failing first against a build that has
+  only the probe.
+- **The Keycloak facts the design rests on stay true.** An integration test, or
+  `infra/keycloak/spikes/mfa-lockout-probe.py` in the release checklist, asserts on
+  the pinned image that a successful password-only grant clears the failure count,
+  that a wrong password asked of the probe first is one failure with no quick-login
+  lock, and that a wrong code is counted. A Keycloak upgrade that changes any of
+  them reopens this record.
+- The password-only adapter's return type has no token (only a subject id); a test
+  asserts it by reflection so a later edit cannot add one quietly.
 - Enrolment: a good code registers and a bad code leaves no credential behind; the
   sealed token expires, cannot be replayed, and is useless on another account.
 - Enforcement: platform account with no factor gets `MFA_ENROLMENT_REQUIRED` and its
@@ -328,7 +443,7 @@ the reason — never a secret, a code or a label.
 ## Rollout and rollback
 
 Spike first (first open input). Then realm changes in a staging realm: the OTP
-policy, the password-check client, the threshold. Then the backend and both
+policy and the password-check client (the brute-force settings do not change). Then the backend and both
 consoles with enforcement `OFF`: accounts can enrol and enrolled accounts are asked
 for a code, and nothing else changes. Then `PROMPT` for platform accounts, then
 `REQUIRED` with a `logoutEverywhere` for the affected subjects. Tenant setting last,
@@ -339,10 +454,16 @@ reset action is how that is undone for a person.
 ## Implementation checklist
 
 - [ ] The Keycloak spike; its result recorded on this ADR.
-- [ ] Realm file: OTP policy, `horecaos-staff-password-check` client and flow,
-      `failureFactor`; the live-realm runbook step.
-- [ ] `StaffDirectGrantClient` sends `totp`; the password-only adapter; the answers
-      above in `StaffAuthService`; `ErrorCode` entries.
+- [ ] Realm file: OTP policy, `horecaos-staff-password-check` client and flow; the
+      live-realm runbook step.
+- [ ] `StaffDirectGrantClient` sends `totp`; the password-only adapter, asked first,
+      returning a subject id and no token; the answers above in `StaffAuthService`;
+      `ErrorCode` entries.
+- [ ] The code budget on the ADR 0033 limiter, keyed by subject id, strict, charged
+      after the probe and before the code is sent; the `budget` metric and its alert;
+      the same charge in the authenticator-removal endpoint.
+- [ ] Decide how the probe's Keycloak session ends (a revoke, or idle expiry), in the
+      same spike.
 - [ ] `KeycloakStaffAccounts`: list, add and remove OTP credentials; required-action
       handling.
 - [ ] Enrolment endpoints and the sealed token; the confirm-by-grant proof and its
@@ -364,8 +485,11 @@ A platform administrator who has never enrolled signs in, is taken to enrolment,
 scans the QR code, enters the first code and arrives signed in; signs out and back
 in with a password and a code; and, with the phone lost, is reset by a second
 administrator and re-enrols. A wrong password and an unknown username still answer
-identically. No authenticator secret, code or sealed token appears in any log,
-and the realm holds the only copy of the factor.
+identically. Twenty wrong codes with the right password, from changing source
+addresses, stop at the budget: Keycloak sees no more than five of them, the account
+owner signs in again once the budget has refilled, and the alert has fired. No
+authenticator secret, code or sealed token appears in any log, and the realm holds
+the only copy of the factor.
 
 ## References
 
@@ -374,8 +498,11 @@ and the realm holds the only copy of the factor.
   ADR 0098, ADR 0116, ADR 0139 (the Keycloak boundary), ADR 0146
 - `platform/docs/operations-gap-map.md` row `X.38`; `platform/docs/operations-spec/staff-and-access.md` §11.9
 - `StaffDirectGrantClient`, `StaffAuthService`, `StaffSessionController`,
-  `KeycloakStaffAccounts`, `SecurityConfiguration`; `platform/infra/keycloak/realm/horecaos-realm.json`,
+  `KeycloakStaffAccounts`, `SecurityConfiguration`, `RateLimiter` and
+  `InProcessRateLimiter`; `platform/infra/keycloak/realm/horecaos-realm.json`,
   `platform/infra/keycloak/README.md`, `create-platform-admin.sh`
+- `platform/infra/keycloak/spikes/mfa-lockout-probe.py`: the reproduction behind the
+  Context section "What Keycloak's failure counter does"
 - `frontend/operations/src/app/shared/ui/otp-input.ts`, `…/q-qr-code`, both consoles'
   `sign-in-page.ts`
 - Keycloak community discussions of the direct grant and a missing `totp`
