@@ -1,6 +1,6 @@
 <nav
   class="relative z-50 shrink-0"
-  style="padding: 0.75rem 0.75rem calc(0.75rem + var(--safe-bottom, 0px));"
+  style="padding: 0.75rem 0.75rem calc(0.75rem + var(--safe-bottom, 0px))"
 >
   <div class="mx-auto max-w-[420px] rounded-[22px] bg-surface-raised px-6 py-3 shadow-nav">
     <ul class="grid grid-cols-4 items-center text-center">
@@ -29,11 +29,11 @@
         >
           <span class="relative inline-block">
             <span
-            class="nav-icon h-6 w-6"
-            role="img"
-            [attr.aria-label]="'nav.cart' | t"
-            [style.--nav-icon]="'url(/assets/nav-icons/cart.svg)'"
-          ></span>
+              class="nav-icon h-6 w-6"
+              role="img"
+              [attr.aria-label]="'nav.cart' | t"
+              [style.--nav-icon]="'url(/assets/nav-icons/cart.svg)'"
+            ></span>
             @if (cart.totalItemsCount() > 0) {
               <span
                 class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"

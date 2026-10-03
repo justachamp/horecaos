@@ -41,7 +41,13 @@ function setUp(historyState: unknown) {
 }
 
 function document(overrides: Partial<TermsDocument> = {}): TermsDocument {
-  return { locale: 'en', isPlatformDefault: false, version: 1, body: 'Some terms text.', ...overrides };
+  return {
+    locale: 'en',
+    isPlatformDefault: false,
+    version: 1,
+    body: 'Some terms text.',
+    ...overrides,
+  };
 }
 
 async function flush(): Promise<void> {
@@ -123,7 +129,9 @@ describe('TermsOfConditionsComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.mustAccept).toBe(false);
-    expect((fixture.nativeElement as HTMLElement).querySelector('button[type="button"].w-full')).toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('button[type="button"].w-full'),
+    ).toBeNull();
   });
 
   it('accepting navigates to returnTo, recording acceptance first', async () => {

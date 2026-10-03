@@ -296,7 +296,9 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
     try {
       const status = await this.terms.status();
       if (!status.accepted) {
-        await this.router.navigate(['/terms'], { state: { mustAccept: true, returnTo: destination } });
+        await this.router.navigate(['/terms'], {
+          state: { mustAccept: true, returnTo: destination },
+        });
         return;
       }
     } catch {
@@ -338,7 +340,5 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
 function maskPhone(e164: string): string {
   const pretty = formatUzPhone(e164);
   const groups = pretty.split(' ');
-  return groups.length === 5
-    ? `${groups[0]} ${groups[1]} *** ** ${groups[4]}`
-    : pretty;
+  return groups.length === 5 ? `${groups[0]} ${groups[1]} *** ** ${groups[4]}` : pretty;
 }

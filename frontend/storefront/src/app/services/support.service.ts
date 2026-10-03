@@ -77,10 +77,9 @@ export class SupportService {
   }
 
   async socialLinks(): Promise<SocialMediaItem[]> {
-    const response = await this.api.get<SocialLinkResponse[]>(
-      `${this.supportPath}/social-links`,
-      { anonymous: true },
-    );
+    const response = await this.api.get<SocialLinkResponse[]>(`${this.supportPath}/social-links`, {
+      anonymous: true,
+    });
     return (response ?? []).map((link) => ({
       id: link.linkId,
       platform: link.platform,

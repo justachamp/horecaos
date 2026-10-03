@@ -19,7 +19,7 @@ export const CART_ROUTES: Routes = [
       // (PaymentSessionService.open's returnUrl). Outside CartComponent's own
       // chrome would also work; kept a child of it so it shares the same
       // outlet and bottom-nav visibility rules as the rest of /cart.
-      { path: 'payment-return/:id', component: PaymentReturnComponent }
-    ]
-  }
+      { path: 'payment-return/:id', component: PaymentReturnComponent },
+    ],
+  },
 ];

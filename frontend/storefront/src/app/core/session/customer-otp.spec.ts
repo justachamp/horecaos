@@ -140,34 +140,36 @@ describe('CustomerOtp.submitCode error taxonomy', () => {
     const { otp, api } = setUp();
     api.mutate.mockRejectedValue(apiError(404, 'RESOURCE_NOT_FOUND'));
 
-    await expect(
-      otp.submitCode({ challengeId: 'c-1', code: '123456' }),
-    ).rejects.toBeInstanceOf(CustomerSignInUnavailableError);
+    await expect(otp.submitCode({ challengeId: 'c-1', code: '123456' })).rejects.toBeInstanceOf(
+      CustomerSignInUnavailableError,
+    );
   });
 
   it('RATE_LIMIT_EXCEEDED -> OtpRateLimitedError', async () => {
     const { otp, api } = setUp();
     api.mutate.mockRejectedValue(apiError(429, 'RATE_LIMIT_EXCEEDED'));
 
-    await expect(
-      otp.submitCode({ challengeId: 'c-1', code: '123456' }),
-    ).rejects.toBeInstanceOf(OtpRateLimitedError);
+    await expect(otp.submitCode({ challengeId: 'c-1', code: '123456' })).rejects.toBeInstanceOf(
+      OtpRateLimitedError,
+    );
   });
 
   it('UNPROCESSABLE_STATE -> OtpChallengeOverError (expired, superseded, exhausted, or spent -- all one answer)', async () => {
     const { otp, api } = setUp();
     api.mutate.mockRejectedValue(apiError(422, 'UNPROCESSABLE_STATE'));
 
-    await expect(
-      otp.submitCode({ challengeId: 'c-1', code: '123456' }),
-    ).rejects.toBeInstanceOf(OtpChallengeOverError);
+    await expect(otp.submitCode({ challengeId: 'c-1', code: '123456' })).rejects.toBeInstanceOf(
+      OtpChallengeOverError,
+    );
   });
 
   it('401 / UNAUTHENTICATED -> OtpCodeRejectedError, carrying attemptsRemaining from the problem extension', async () => {
     const { otp, api } = setUp();
     api.mutate.mockRejectedValue(apiError(401, 'UNAUTHENTICATED', { attemptsRemaining: 2 }));
 
-    const failure = await otp.submitCode({ challengeId: 'c-1', code: '000000' }).catch((e: unknown) => e);
+    const failure = await otp
+      .submitCode({ challengeId: 'c-1', code: '000000' })
+      .catch((e: unknown) => e);
 
     expect(failure).toBeInstanceOf(OtpCodeRejectedError);
     expect((failure as OtpCodeRejectedError).attemptsRemaining).toBe(2);
@@ -177,7 +179,9 @@ describe('CustomerOtp.submitCode error taxonomy', () => {
     const { otp, api } = setUp();
     api.mutate.mockRejectedValue(apiError(401, 'UNAUTHENTICATED'));
 
-    const failure = await otp.submitCode({ challengeId: 'c-1', code: '000000' }).catch((e: unknown) => e);
+    const failure = await otp
+      .submitCode({ challengeId: 'c-1', code: '000000' })
+      .catch((e: unknown) => e);
 
     expect((failure as OtpCodeRejectedError).attemptsRemaining).toBeNull();
   });
@@ -186,7 +190,9 @@ describe('CustomerOtp.submitCode error taxonomy', () => {
     const { otp, api } = setUp();
     api.mutate.mockRejectedValue(apiError(400, 'VALIDATION_FAILED'));
 
-    const failure = await otp.submitCode({ challengeId: 'c-1', code: '1' }).catch((e: unknown) => e);
+    const failure = await otp
+      .submitCode({ challengeId: 'c-1', code: '1' })
+      .catch((e: unknown) => e);
 
     expect(failure).toBeInstanceOf(OtpCodeRejectedError);
     expect((failure as OtpCodeRejectedError).attemptsRemaining).toBeNull();
@@ -197,7 +203,9 @@ describe('CustomerOtp.submitCode error taxonomy', () => {
     const original = apiError(500, 'INTERNAL_ERROR');
     api.mutate.mockRejectedValue(original);
 
-    const failure = await otp.submitCode({ challengeId: 'c-1', code: '123456' }).catch((e: unknown) => e);
+    const failure = await otp
+      .submitCode({ challengeId: 'c-1', code: '123456' })
+      .catch((e: unknown) => e);
 
     expect(failure).toBe(original);
   });
@@ -237,7 +245,12 @@ describe('CustomerOtp.signIn error taxonomy and session install', () => {
     const { otp, api } = setUp();
     const session = TestBed.inject(Session);
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
-    api.mutate.mockResolvedValue({ token: 'qcs1.abc', expiresAt, accountId: 'acc-9', created: true });
+    api.mutate.mockResolvedValue({
+      token: 'qcs1.abc',
+      expiresAt,
+      accountId: 'acc-9',
+      created: true,
+    });
 
     const signedIn = await otp.signIn('grant-1');
 
@@ -263,7 +276,10 @@ describe('CustomerOtp.signOut', () => {
   it('clears the local session even when the platform call fails', async () => {
     const { otp, api } = setUp();
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-live', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-live',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
     api.mutate.mockRejectedValue(apiError(500, 'INTERNAL_ERROR'));
 
     await otp.signOut();
@@ -274,7 +290,10 @@ describe('CustomerOtp.signOut', () => {
   it('clears the local session on a successful platform call', async () => {
     const { otp, api } = setUp();
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-live', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-live',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
     api.mutate.mockResolvedValue(undefined);
 
     await otp.signOut();

@@ -17,7 +17,7 @@ export interface LanguageOption {
   imports: [CommonModule, TranslatePipe, BackDirective],
   templateUrl: './profile-language.html',
   styleUrl: './profile-language.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileLanguageComponent implements OnInit {
   private readonly lang = inject(LangService);
@@ -27,7 +27,7 @@ export class ProfileLanguageComponent implements OnInit {
   readonly languages: LanguageOption[] = [
     { id: 'uz', label: "O'zbek", flag: '🇺🇿' },
     { id: 'ru', label: 'Русский', flag: '🇷🇺' },
-    { id: 'en', label: 'English', flag: '🇬🇧' }
+    { id: 'en', label: 'English', flag: '🇬🇧' },
   ];
 
   readonly selectedId = computed(() => this.lang.langId());

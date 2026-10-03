@@ -224,13 +224,19 @@ describe('AuthLoginComponent.continue', () => {
 describe('AuthLoginComponent Continue with Telegram', () => {
   it('mints a code and holds it for the deep-link button', async () => {
     const { comp, telegram } = setUp();
-    telegram.mintCode.mockResolvedValue({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    telegram.mintCode.mockResolvedValue({
+      code: 'abc123',
+      deepLink: 'https://t.me/bot?start=auth_abc123',
+    });
     telegram.pollOnce.mockResolvedValue(false);
 
     await comp.continueWithTelegram();
 
     expect(telegram.mintCode).toHaveBeenCalledTimes(1);
-    expect(comp.telegramCode()).toEqual({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    expect(comp.telegramCode()).toEqual({
+      code: 'abc123',
+      deepLink: 'https://t.me/bot?start=auth_abc123',
+    });
     expect(comp.telegramMinting()).toBe(false);
   });
 
@@ -261,7 +267,10 @@ describe('AuthLoginComponent Continue with Telegram', () => {
 
   it('once the poll reports signed in, it navigates to /locations and stops', async () => {
     const { comp, telegram, navigateSpy } = setUp();
-    telegram.mintCode.mockResolvedValue({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    telegram.mintCode.mockResolvedValue({
+      code: 'abc123',
+      deepLink: 'https://t.me/bot?start=auth_abc123',
+    });
     telegram.pollOnce.mockResolvedValue(true);
 
     await comp.continueWithTelegram();
@@ -276,7 +285,10 @@ describe('AuthLoginComponent Continue with Telegram', () => {
     sessionStorage.clear();
     const { comp, telegram, navigateSpy } = setUp();
     TestBed.inject(ReturnDestination).remember('/dine-in/table');
-    telegram.mintCode.mockResolvedValue({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    telegram.mintCode.mockResolvedValue({
+      code: 'abc123',
+      deepLink: 'https://t.me/bot?start=auth_abc123',
+    });
     telegram.pollOnce.mockResolvedValue(true);
 
     await comp.continueWithTelegram();
@@ -289,7 +301,10 @@ describe('AuthLoginComponent Continue with Telegram', () => {
 
   it('an expired code clears the pending state and shows the message', async () => {
     const { comp, telegram } = setUp();
-    telegram.mintCode.mockResolvedValue({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    telegram.mintCode.mockResolvedValue({
+      code: 'abc123',
+      deepLink: 'https://t.me/bot?start=auth_abc123',
+    });
     telegram.pollOnce.mockRejectedValue(new TelegramSignInExpiredError());
 
     await comp.continueWithTelegram();
@@ -311,7 +326,10 @@ describe('AuthLoginComponent Continue with Telegram', () => {
 
   it('cancelling discards the code and any error, returning to the plain form', async () => {
     const { comp, telegram } = setUp();
-    telegram.mintCode.mockResolvedValue({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    telegram.mintCode.mockResolvedValue({
+      code: 'abc123',
+      deepLink: 'https://t.me/bot?start=auth_abc123',
+    });
     telegram.pollOnce.mockResolvedValue(false);
     await comp.continueWithTelegram();
 

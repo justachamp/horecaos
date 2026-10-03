@@ -7,7 +7,12 @@
         class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
         Orqaga
       </button>
@@ -32,9 +37,7 @@
     }
 
     @if (!loading() && !error() && categories().length === 0) {
-      <p class="py-8 text-center text-sm text-zinc-400">
-        Savollar hozircha mavjud emas.
-      </p>
+      <p class="py-8 text-center text-sm text-zinc-400">Savollar hozircha mavjud emas.</p>
     }
 
     @if (!loading() && !error() && categories().length > 0) {
@@ -54,11 +57,21 @@
                     <span class="shrink-0 text-brand-accent">
                       @if (isExpanded(item)) {
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 15l7-7 7 7"
+                          />
                         </svg>
                       } @else {
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 9l-7 7-7-7"
+                          />
                         </svg>
                       }
                     </span>

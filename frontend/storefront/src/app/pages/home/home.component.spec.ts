@@ -164,7 +164,7 @@ async function mount(fixture: ComponentFixture<unknown>): Promise<void> {
 describe('HomeComponent: anonymous visitor', () => {
   beforeEach(() => localStorage.clear());
 
-  it('greets the customer in the configured tenant\'s name, not a hardcoded brand', async () => {
+  it("greets the customer in the configured tenant's name, not a hardcoded brand", async () => {
     const { fixture } = setUp();
 
     await mount(fixture);

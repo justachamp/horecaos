@@ -7,7 +7,10 @@ import { debounceTime, distinctUntilChanged, switchMap, tap, catchError } from '
 import { YaMapComponent, YaPlacemarkDirective } from 'angular8-yandex-maps';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { BackDirective } from '../../../shared/back/back.directive';
-import { GeocodingService, type GeocodeSuggestion as ReverseGeocodeSuggestion } from '../../../services/geocoding.service';
+import {
+  GeocodingService,
+  type GeocodeSuggestion as ReverseGeocodeSuggestion,
+} from '../../../services/geocoding.service';
 
 export type GeocodeSuggestion = ReverseGeocodeSuggestion;
 
@@ -16,12 +19,18 @@ const DEFAULT_CENTER = [41.2995, 69.2401] as [number, number]; // Tashkent [lat,
 @Component({
   selector: 'app-locations-add',
   standalone: true,
-  imports: [CommonModule, FormsModule, YaMapComponent, YaPlacemarkDirective, TranslatePipe, BackDirective],
+  imports: [
+    CommonModule,
+    FormsModule,
+    YaMapComponent,
+    YaPlacemarkDirective,
+    TranslatePipe,
+    BackDirective,
+  ],
   templateUrl: './locations-add.component.html',
   styleUrl: './locations-add.component.scss',
 })
 export class LocationsAddComponent implements OnInit, OnDestroy {
-
   /** Permission state: 'prompt' | 'granted' | 'denied' | 'checking' */
   permissionState = signal<'checking' | 'prompt' | 'granted' | 'denied'>('checking');
   /** Loading map or geocoding */
@@ -64,7 +73,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
 
   constructor(
     private geocoding: GeocodingService,
-    private router: Router
+    private router: Router,
   ) {
     this.searchSub = this.searchSubject
       .pipe(
@@ -88,9 +97,9 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
                 this.showDropdown.set(false);
               }
               return of([] as ReverseGeocodeSuggestion[]);
-            })
+            }),
           );
-        })
+        }),
       )
       .subscribe();
   }
@@ -167,7 +176,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
         this.permissionState.set('granted');
         this.initMap(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
       },
-      LocationsAddComponent.GEO_OPTIONS
+      LocationsAddComponent.GEO_OPTIONS,
     );
   }
 
@@ -198,7 +207,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
           this.onLocationDenied();
         }
       },
-      LocationsAddComponent.GEO_OPTIONS
+      LocationsAddComponent.GEO_OPTIONS,
     );
   }
 
@@ -234,7 +243,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
           this.permissionState.set('denied');
         }
       },
-      LocationsAddComponent.GEO_OPTIONS
+      LocationsAddComponent.GEO_OPTIONS,
     );
   }
 
@@ -322,7 +331,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
     const newLocation = { lat, lng, address };
     sessionStorage.setItem('new-location', JSON.stringify(newLocation));
     this.router.navigate(['/locations/save'], {
-      state: { address }
+      state: { address },
     });
   }
 

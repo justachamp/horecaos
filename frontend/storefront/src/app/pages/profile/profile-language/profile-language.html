@@ -7,7 +7,12 @@
         class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
         {{ 'common.back' | t }}
       </button>
@@ -22,12 +27,19 @@
             (click)="selectLanguage(lang.id)"
             class="flex w-full items-center gap-4 py-4 text-left text-text-primary transition-opacity hover:opacity-90"
           >
-            <span class="flex h-8 w-8 shrink-0 items-center justify-center text-2xl leading-none" aria-hidden="true">{{ lang.flag }}</span>
+            <span
+              class="flex h-8 w-8 shrink-0 items-center justify-center text-2xl leading-none"
+              aria-hidden="true"
+              >{{ lang.flag }}</span
+            >
             <span class="flex-1 font-medium">{{ lang.label }}</span>
             @if (selectedId() === lang.id) {
               <span class="h-5 w-5 shrink-0 rounded-full bg-brand-accent" aria-hidden="true"></span>
             } @else {
-              <span class="h-5 w-5 shrink-0 rounded-full border-2 border-text-primary" aria-hidden="true"></span>
+              <span
+                class="h-5 w-5 shrink-0 rounded-full border-2 border-text-primary"
+                aria-hidden="true"
+              ></span>
             }
           </button>
         </li>

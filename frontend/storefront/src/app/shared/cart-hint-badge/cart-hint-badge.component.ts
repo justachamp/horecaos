@@ -10,7 +10,6 @@ import { TranslatePipe } from '../translate/translate.pipe';
   templateUrl: './cart-hint-badge.component.html',
   styleUrl: './cart-hint-badge.component.scss',
   imports: [CommonModule, RouterLink, TranslatePipe],
-
 })
 export class CartHintBadgeComponent {
   constructor(public cart: UiCartService) {}

@@ -25,8 +25,5 @@ applyBrand(config.brand);
 
 bootstrapApplication(App, {
   ...appConfig,
-  providers: [
-    ...appConfig.providers,
-    { provide: APP_CONFIG, useValue: config },
-  ],
+  providers: [...appConfig.providers, { provide: APP_CONFIG, useValue: config }],
 }).catch((failure) => showStartFailure(failure));

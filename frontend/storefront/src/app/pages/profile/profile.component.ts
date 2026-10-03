@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal, computed } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { ProfileMenuComponent } from './profile-menu/profile-menu';
@@ -26,7 +33,7 @@ interface UserProfile {
   styleUrl: './profile.component.scss',
   imports: [CommonModule, RouterLink, ProfileMenuComponent, TranslatePipe],
   standalone: true,
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileComponent implements OnInit {
   readonly phoneNumber = signal<string>('');
@@ -59,9 +66,7 @@ export class ProfileComponent implements OnInit {
   private readonly avatars = inject(AvatarService);
   private readonly telegramLink = inject(TelegramLinkService);
 
-  constructor(
-    private router: Router
-  ) {}
+  constructor(private router: Router) {}
 
   ngOnInit(): void {
     const authorized = this.session.isAuthenticated();
@@ -83,7 +88,8 @@ export class ProfileComponent implements OnInit {
     this.phoneNumber.set('');
 
     if (authorized) {
-      this.profileService.load()
+      this.profileService
+        .load()
         .then((profile) => this.user.set((profile ?? {}) as unknown as UserProfile))
         .catch(() => this.user.set(null));
     }

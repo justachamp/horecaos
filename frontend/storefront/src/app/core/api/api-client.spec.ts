@@ -1,7 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { ApiClient, ANONYMOUS, PLATFORM_API_REQUEST, versionFromETag, weakETag } from './api-client';
+import {
+  ApiClient,
+  ANONYMOUS,
+  PLATFORM_API_REQUEST,
+  versionFromETag,
+  weakETag,
+} from './api-client';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 
 const CONFIG: AppConfig = {
@@ -31,9 +37,12 @@ describe('weakETag / versionFromETag', () => {
     expect(weakETag(7)).toBe('W/"7"');
   });
 
-  it.each([0, 1, 7, 42, 999_999])('round-trips version %i through weakETag -> versionFromETag', (v) => {
-    expect(versionFromETag(weakETag(v))).toBe(v);
-  });
+  it.each([0, 1, 7, 42, 999_999])(
+    'round-trips version %i through weakETag -> versionFromETag',
+    (v) => {
+      expect(versionFromETag(weakETag(v))).toBe(v);
+    },
+  );
 
   it('also reads a strong (non-weak) quoted validator', () => {
     expect(versionFromETag('"12"')).toBe(12);

@@ -53,7 +53,11 @@ describe('TelegramLinkService.refresh', () => {
 
   it('rethrows a failure that is not not-found -- an unauthenticated or network failure is not a "no account" state', async () => {
     const { service, api } = setUp();
-    const failure = new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' });
+    const failure = new HorecaOSApiError({
+      status: 0,
+      code: 'NETWORK_UNREACHABLE',
+      detail: 'offline',
+    });
     api.status.mockRejectedValue(failure);
 
     await expect(service.refresh()).rejects.toBe(failure);
@@ -110,7 +114,10 @@ describe('TelegramLinkService.mintCode', () => {
     api.issueCode.mockResolvedValueOnce(code());
     await service.mintCode();
 
-    const secondCode: TelegramLinkCode = { code: 'zzz999', deepLink: 'https://t.me/jizbiz_bot?start=zzz999' };
+    const secondCode: TelegramLinkCode = {
+      code: 'zzz999',
+      deepLink: 'https://t.me/jizbiz_bot?start=zzz999',
+    };
     api.issueCode.mockResolvedValueOnce(secondCode);
     await service.mintCode();
 

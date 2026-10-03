@@ -17,7 +17,7 @@ function formatLegacyNotification(err: HttpErrorResponse): string {
   const body = err?.error as ApiErrorBody | null | undefined;
   const code = body?.code ?? err?.status?.toString() ?? 'ERR';
   const message =
-    (typeof body?.message === 'string' && body.message.trim())
+    typeof body?.message === 'string' && body.message.trim()
       ? body.message.trim()
       : FALLBACK_MESSAGE;
   return `${code} - ${message}`;
@@ -57,6 +57,6 @@ export const errorNotificationInterceptor: HttpInterceptorFn = (req, next) => {
         notification.show(formatLegacyNotification(err));
       }
       return throwError(() => err);
-    })
+    }),
   );
 };

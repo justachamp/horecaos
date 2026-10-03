@@ -82,8 +82,7 @@ export class GeocodingService {
         const object = member.GeoObject;
         // "longitude latitude", space separated, in that order.
         const [lng, lat] = (object?.Point?.pos ?? '').split(' ').map(Number);
-        const address =
-          object?.metaDataProperty?.GeocoderMetaData?.text ?? object?.name ?? '';
+        const address = object?.metaDataProperty?.GeocoderMetaData?.text ?? object?.name ?? '';
         return { address, lat, lng };
       })
       .filter(

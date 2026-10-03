@@ -15,7 +15,14 @@ const CANCELLED_STATUSES = ['cancelled'];
   standalone: true,
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.scss',
-  imports: [CommonModule, RouterLink, RouterLinkActive, RouterOutlet, OrderReloadComponent, TranslatePipe],
+  imports: [
+    CommonModule,
+    RouterLink,
+    RouterLinkActive,
+    RouterOutlet,
+    OrderReloadComponent,
+    TranslatePipe,
+  ],
 })
 export class OrdersComponent implements OnInit {
   private readonly router = inject(Router);

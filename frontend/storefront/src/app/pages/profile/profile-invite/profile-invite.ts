@@ -7,6 +7,6 @@ import { BackDirective } from '../../../shared/back/back.directive';
   imports: [CommonModule, BackDirective],
   templateUrl: './profile-invite.html',
   styleUrl: './profile-invite.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileInviteComponent {}

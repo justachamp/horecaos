@@ -1,11 +1,14 @@
 <header class="flex items-center justify-between gap-4">
   <a routerLink="/locations" class="flex flex-1 items-center gap-2 text-left">
     <div class="flex min-w-0 flex-col">
-      <span class="text-xs text-zinc-400">{{ addressLabel() || ('cart.deliveryAddress' | t) }}</span>
+      <span class="text-xs text-zinc-400">{{
+        addressLabel() || ('cart.deliveryAddress' | t)
+      }}</span>
       <span
         [title]="addressValue() || ('cart.addressNotSelected' | t)"
         class="line-clamp-2 min-w-0 text-base font-semibold text-text-primary"
-      >{{ addressValue() || ('cart.addressNotSelected' | t) }}</span>
+        >{{ addressValue() || ('cart.addressNotSelected' | t) }}</span
+      >
     </div>
     <span class="text-zinc-400">›</span>
   </a>
@@ -14,7 +17,13 @@
     class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-text-primary"
     aria-label="Notification"
   >
-    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg
+      class="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
       <path
         fill-rule="evenodd"
         clip-rule="evenodd"

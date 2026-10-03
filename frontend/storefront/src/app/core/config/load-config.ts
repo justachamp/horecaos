@@ -106,7 +106,8 @@ function validate(body: unknown): AppConfig {
  */
 function brandFrom(raw: Record<string, unknown>): BrandConfig {
   const value = raw['brand'];
-  const rawBrand = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const rawBrand =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 
   return {
     displayName: optionalText(rawBrand, 'displayName') ?? NEUTRAL_BRAND.displayName,
@@ -117,7 +118,8 @@ function brandFrom(raw: Record<string, unknown>): BrandConfig {
 
 function themeFrom(rawBrand: Record<string, unknown>): BrandTheme {
   const value = rawBrand['theme'];
-  const rawTheme = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const rawTheme =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 
   return {
     accent: optionalText(rawTheme, 'accent') ?? NEUTRAL_BRAND.theme.accent,

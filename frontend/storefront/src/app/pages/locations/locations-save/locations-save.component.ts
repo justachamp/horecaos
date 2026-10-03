@@ -18,7 +18,7 @@ type AddressType = 'home' | 'work' | 'other';
 })
 export class LocationsSaveComponent {
   /** Address line from map step (e.g. from navigation state) */
-  addressLine = 'Chust ko\'chasi, 1-uy';
+  addressLine = "Chust ko'chasi, 1-uy";
 
   selectedType: AddressType = 'home';
 
@@ -30,7 +30,7 @@ export class LocationsSaveComponent {
   constructor(
     private router: Router,
     private addressBook: AddressBookService,
-    private translate: TranslateService
+    private translate: TranslateService,
   ) {
     try {
       const stored = sessionStorage.getItem('new-location');
@@ -52,7 +52,7 @@ export class LocationsSaveComponent {
     try {
       const stored = sessionStorage.getItem('new-location');
       if (!stored) {
-        this.error.set("Manzil topilmadi. Qaytadan xaritadan tanlang.");
+        this.error.set('Manzil topilmadi. Qaytadan xaritadan tanlang.');
         return;
       }
       const data = JSON.parse(stored) as { lat?: number; lng?: number; address?: string };
