@@ -417,7 +417,7 @@ class ComboOrderFlowEndToEndTests {
         assertThat(colaItem.stationId()).as("the cola goes to the bar").isEqualTo(bar);
         assertThat(items).extracting(TicketItemRow::comboSelectionId).containsOnly(selection);
         assertThat(items).extracting(TicketItemRow::comboContainerVariantId).containsOnly(lunchVariant);
-        assertThat(burgerItem.quantity()).isEqualTo(2);
+        assertThat(burgerItem.quantity()).isEqualByComparingTo("2");
 
         // -- the kitchen screens read the grouping key over HTTP, and never a name (ADR 0041).
         String kitchen = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/kitchen";
@@ -1196,7 +1196,7 @@ class ComboOrderFlowEndToEndTests {
         var line = plan.lines().get(0);
         assertThat(line.variantId()).isEqualTo(lunchVariant);
         assertThat(line.productName()).isEqualTo("Lunch box");
-        assertThat(line.quantity()).as("combos").isEqualTo(2);
+        assertThat(line.quantity()).as("combos").isEqualByComparingTo("2");
         assertThat(line.comboPicks())
                 .containsExactlyInAnyOrder(
                         new CartService.ComboPick(wrapInLunch.id(), 1), new CartService.ComboPick(colaInLunch.id(), 1));
@@ -1254,7 +1254,7 @@ class ComboOrderFlowEndToEndTests {
         assertThat(view.lines().get(0).variantId())
                 .as("the container the customer added, never a component")
                 .isEqualTo(lunchVariant);
-        assertThat(view.lines().get(0).quantity()).isEqualTo(2);
+        assertThat(view.lines().get(0).quantity()).isEqualByComparingTo("2");
         assertThat(view.selectionsOf(view.lines().get(0).lineKey()).comboPicks())
                 .containsExactlyInAnyOrder(
                         new CartService.ComboPick(burgerInLunch.id(), 1),
