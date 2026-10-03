@@ -89,6 +89,7 @@ import uz.horecaos.platform.kitchen.application.KitchenStationService;
 import uz.horecaos.platform.kitchen.application.KitchenStationService.NewRoutingRule;
 import uz.horecaos.platform.kitchen.application.KitchenStationService.NewStation;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
+import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
@@ -1303,6 +1304,43 @@ class ComboOrderFlowEndToEndTests {
                 .isEqualTo("MODIFIER_UNMAPPED");
     }
 
+    @Test
+    @DisplayName("a ticket opened after a combo was amended is made of the live lines, not also the rows it closed")
+    void aTicketOpenedAfterAnAmendmentHoldsOnlyTheLiveLines() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        amend(orderId, "amend-grow-combo-before-ticket", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":3}""".formatted(
+                        orderLines(orderId).get(0).lineId()));
+        List<OrderLine> live = orderLines(orderId);
+        assertThat(live).as("two components, rewritten whole").hasSize(2);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_lines WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(Integer.class)
+                        .single())
+                .as("the amendment closed two rows and appended two: the order has four rows in all")
+                .isEqualTo(4);
+
+        // Whatever opened the first ticket is not under test; the opener running after an amendment
+        // is (an order accepted after it was amended, or the async opener arriving late). Take the
+        // ticket away and let the opener build it again from the order as it stands now.
+        removeTicketOf(orderId);
+        var ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        List<TicketItemRow> items = tickets.items(TENANT, ticket.id());
+        assertThat(items)
+                .as("one item per live component; the closed rows are history, not food to cook")
+                .extracting(TicketItemRow::orderLineId)
+                .containsExactlyInAnyOrderElementsOf(
+                        live.stream().map(OrderLine::lineId).toList());
+        assertThat(items)
+                .extracting(item -> item.quantity().intValue())
+                .as("three burgers and three colas, not also the one each of the closed rows")
+                .containsExactly(3, 3);
+    }
+
     // ============================================================ weighing at the pass (ADR 0137)
 
     @Test
@@ -1579,6 +1617,19 @@ class ComboOrderFlowEndToEndTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"actualWeightGrams\":" + grams + "}"))
                 .andReturn();
+    }
+
+    /** Deletes the kitchen ticket an order has, so the opener can build it again. */
+    private void removeTicketOf(UUID orderId) {
+        for (String table : List.of("kitchen.ticket_events", "kitchen.ticket_items")) {
+            jdbc.sql("DELETE FROM " + table
+                            + " WHERE ticket_id IN (SELECT id FROM kitchen.tickets WHERE order_id = :id)")
+                    .param("id", orderId)
+                    .update();
+        }
+        jdbc.sql("DELETE FROM kitchen.tickets WHERE order_id = :id")
+                .param("id", orderId)
+                .update();
     }
 
     private UUID lineOf(UUID orderId, UUID variantId) {

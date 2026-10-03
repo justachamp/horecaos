@@ -75,6 +75,11 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                        combo_selection_id, combo_container_variant_id
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
+                  -- An amendment never edits a line: it closes it and appends its replacement
+                  -- (ADR 0039), and a combo is closed and rewritten whole. A ticket opened after
+                  -- one is made of what the order holds now; read without this it would be made of
+                  -- both versions of every component, and the kitchen would cook the combo twice.
+                  AND revision_to IS NULL
                 ORDER BY line_number
                 """)
                 .param("tenantId", tenantId)
