@@ -1935,6 +1935,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Mehmon oʻzi oʻtirdi; zal rejasidan hal qilindi',
   'reservations.notice.tableOccupiedNow':
     'Tasdiqlandi. Bu stollardan birida allaqachon mehmonlar oʻtiribdi — bron kelishidan oldin zalni tekshiring.',
+  'reservations.notice.tableOccupiedNowAmended':
+    'Oʻzgartirildi. Bu stollardan birida allaqachon mehmonlar oʻtiribdi — bron kelishidan oldin zalni tekshiring.',
 
   'finance.scope.denied': 'Bu hisobga Moliya boʻlimiga ruxsat berilmagan.',
 
