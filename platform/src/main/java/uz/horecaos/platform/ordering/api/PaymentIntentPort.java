@@ -31,6 +31,24 @@ public interface PaymentIntentPort {
     boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId, String paymentMethodCode);
 
     /**
+     * Whether the money for this method is taken before the order reaches the pass: a provider
+     * tender, which has to clear before the restaurant is asked to confirm, as against cash, which
+     * is collected at the door.
+     *
+     * <p>Asked of the method alone, so a basket can be judged before it has an order. It matters
+     * to a basket whose total is not final at checkout -- a line sold by weight (ADR 0137) is
+     * priced at its nominal weight and corrected at the scale, and a total a provider has
+     * already taken cannot follow the correction. An unknown code answers false, as
+     * {@link #paymentRequiredBeforeConfirmation} does.
+     *
+     * <p>Defaults to false so a build with no payments module behaves exactly as it did: that
+     * build takes no money before anything, so there is nothing for the question to guard.
+     */
+    default boolean takesMoneyBeforeHandover(UUID tenantId, String paymentMethodCode) {
+        return false;
+    }
+
+    /**
      * Whether a payment by this method could actually be taken at this location.
      *
      * <p>A precondition, asked among checkout's read-only validations and before

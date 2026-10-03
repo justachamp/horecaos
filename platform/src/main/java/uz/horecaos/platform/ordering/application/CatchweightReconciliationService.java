@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,19 +19,24 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderFieldPatch;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderLineRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionTotals;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
  * The weight captured at handover, and the charge it corrects (ADR 0137).
@@ -51,6 +57,15 @@ import uz.horecaos.platform.pricing.api.QuoteSnapshot;
  * rounding, then tax, then the order-level discount" would be a second answer to what an
  * order costs, and two answers to that is the defect ADR 0018 exists to prevent.
  *
+ * <p>The basket goes back in the way an amendment sends it ({@link AmendmentBasket}) and under
+ * the context the order was bought in: a combo as the combo and its picks and not as its
+ * components, the customer's own choices and not the options the server applied (pricing
+ * applies those again for the order's mode, and handing them back would charge them twice),
+ * the order's fulfilment mode, its delivery point, and the promotion inputs recorded on the
+ * quote behind its current revision (ADR 0140). A weight captured at 15:20 on a delivery order
+ * placed at lunch time is priced as that order, not as a pickup quote of 15:20: the "delivery
+ * orders" promotion, the lunch window and the first-order discount all still hold.
+ *
  * <p>Two things are checked on the way back so that a re-price cannot do more than the
  * weight asked of it. A weighed line must still be priced at the per-quantum price the
  * customer agreed to (snapshotted on the line), and every other line must still have the
@@ -67,6 +82,16 @@ import uz.horecaos.platform.pricing.api.QuoteSnapshot;
  * definition, and ADR 0137 accepts that "the total they see at checkout is not necessarily
  * the total they pay"), and it needs no second signature -- an operator reading a scale is
  * not choosing a discount.
+ *
+ * <h2>What a revision carries with it</h2>
+ *
+ * <p>The re-priced quote becomes the order's current quote, so everything that is recorded
+ * against "the quote behind the current revision" is restated with it, as an amendment restates
+ * it: the promo code's redemption, the automatic promotions' ledger rows (ADR 0140, report 7.9)
+ * and the loyalty flags those promotions set. A discount that grows with the weight would
+ * otherwise be recorded at its nominal-weight amount for ever, and a promotion that stopped (or
+ * began) applying at the scale would keep (or lack) the ledger row and the points rule the
+ * order's totals no longer agree with.
  *
  * <h2>Money that has already moved</h2>
  *
@@ -98,7 +123,9 @@ public class CatchweightReconciliationService {
     private final CartPricingPort pricing;
     private final QuoteAcceptancePort quoteAcceptance;
     private final PromoCodeRedemptionPort promoCodes;
+    private final PromotionRedemptionPort promotions;
     private final OrderSettlementPort settlement;
+    private final OrderDeliveryPoint deliveryPoint;
     private final AuditRecorder audit;
     private final Clock clock;
 
@@ -108,14 +135,18 @@ public class CatchweightReconciliationService {
             CartPricingPort pricing,
             QuoteAcceptancePort quoteAcceptance,
             PromoCodeRedemptionPort promoCodes,
+            PromotionRedemptionPort promotions,
             OrderSettlementPort settlement,
+            OrderDeliveryPoint deliveryPoint,
             AuditRecorder audit,
             Clock clock) {
         this.orders = orders;
         this.pricing = pricing;
         this.quoteAcceptance = quoteAcceptance;
         this.promoCodes = promoCodes;
+        this.promotions = promotions;
         this.settlement = settlement;
+        this.deliveryPoint = deliveryPoint;
         this.audit = audit;
         this.clock = clock;
     }
@@ -199,14 +230,16 @@ public class CatchweightReconciliationService {
         requireNothingElseMoved(live, quotedByLine);
 
         // The delivery charge was agreed at checkout and is not a function of the weight: the
-        // goods are re-priced without a destination, so the quote carries no fee, and the order's
-        // own is added back. total = subtotal + tax + fee - discount holds on both sides.
+        // quote's own fee is taken back out of its total and the order's is put in its place. The
+        // destination is passed to pricing only so the delivery-side promotions and zone-bound
+        // conditions are evaluated as they were at checkout, not to re-quote the fee.
+        // total = subtotal + tax + fee - discount holds on both sides.
         RevisionTotals totals = new RevisionTotals(
                 quote.subtotalMinor(),
                 quote.taxMinor(),
                 quote.discountMinor(),
                 order.feeMinor(),
-                Math.addExact(quote.totalMinor(), order.feeMinor()));
+                Math.addExact(Math.subtractExact(quote.totalMinor(), quote.feeMinor()), order.feeMinor()));
         long delta = totals.totalMinor() - order.totalMinor();
 
         if (delta != 0) {
@@ -299,6 +332,14 @@ public class CatchweightReconciliationService {
 
         // The coupon this order holds keeps its slot; only the amount it stands for moves.
         promoCodes.restateForOrder(tenantId, orderId, quote.quoteId());
+        // ADR 0140: the same for the automatic promotions, and for what they decide about points.
+        // The order keeps one ledger row per promotion and it moves in place to the quote behind
+        // this revision, so a discount that grows with the weight is recorded at the amount given;
+        // a promotion that stopped applying is released (its counter stays consumed) and one that
+        // newly applies gets a row. A weight never claims a slot, as an amendment never does.
+        promotions.restateForOrder(
+                tenantId, order.brandId(), orderId, quote.quoteId(), newRevision, order.customerAccountId(), now);
+        orders.setLoyaltyFlags(tenantId, orderId, quote.loyaltyAccrualAllowed(), quote.loyaltyRedemptionAllowed());
 
         audit.record(AuditFact.of("ordering.order.catchweight-reconciled", AuditClass.BUSINESS)
                 .by(actorOf(actorType, actorId))
@@ -331,22 +372,35 @@ public class CatchweightReconciliationService {
      * weights already captured plus the one being captured now. Lines nobody has weighed yet
      * go back in provisional, so reconciling one line of three never touches the other two.
      *
-     * <p>The basket is the one an amendment prices ({@link AmendmentBasket}), under the order's
-     * own fulfilment mode. A combo goes back as its container and picks, because its components
-     * are priced at their combo price and not their variant's; what the server applied by
-     * itself (a hidden packing or delivery box) is not handed back as a choice, because pricing
-     * applies it again for this order's mode and a choice on top would charge it twice; and a
-     * second-level choice goes back under the option that offered it.
+     * <p>Built the way {@link OrderAmendmentService} builds the same request for an amendment, so
+     * the two ways an order is re-priced cannot disagree about what it was bought as: see the
+     * class documentation, and {@link AmendmentBasket#pricingItemsWeighing} for the basket itself.
      */
     private QuoteSnapshot repriceWithWeights(
             OrderRow order, List<OrderLineRow> live, UUID weighedLineId, int weighedGrams, int expectedVersion) {
 
-        Map<UUID, List<JdbcOrderStore.OrderModifierRow>> modifiersByLine =
+        Map<UUID, List<OrderModifierRow>> modifiersByLine =
                 orders.lineModifiers(order.tenantId(), order.orderId()).stream()
-                        .collect(Collectors.groupingBy(JdbcOrderStore.OrderModifierRow::orderLineId));
-
+                        .collect(Collectors.groupingBy(OrderModifierRow::orderLineId));
         List<CartPricingPort.PricingCommand.Item> items = AmendmentBasket.pricingItemsWeighing(
                 AmendmentBasket.units(live), modifiersByLine, weighedLineId, weighedGrams);
+
+        // ADR 0140. The order was bought once, at one instant, by one method, and that is what
+        // it is re-priced under: pricing starts from the promotion inputs recorded on the quote
+        // behind the order's current revision, and the frame overrides nothing a weight changes.
+        // The clock is never an override. An order priced before calculation version 3 recorded
+        // none, and falls back to its own creation time and fulfilment mode.
+        UUID currentQuoteId = orders.revisions(order.tenantId(), order.orderId()).stream()
+                .filter(revision -> revision.revision() == order.currentRevision())
+                .map(RevisionRow::pricingQuoteId)
+                .findFirst()
+                .orElse(order.pricingQuoteId());
+        var frame = new CartPricingPort.PricingCommand.PromotionFrame(
+                null, null, order.fulfillmentMode().name(), currentQuoteId, order.createdAt());
+
+        GeoPoint point = deliveryPoint.of(order, "CATCHWEIGHT_REPRICE");
+        CartPricingPort.PricingCommand.Delivery delivery =
+                point == null ? null : new CartPricingPort.PricingCommand.Delivery(point, PricingAuthority.HORECAOS);
         try {
             return pricing.priceCart(new CartPricingPort.PricingCommand(
                     order.tenantId(),
@@ -359,15 +413,14 @@ public class CatchweightReconciliationService {
                     // retried request prices once and a changed order prices afresh.
                     "catchweight:%s:%s:%d:v%d".formatted(order.orderId(), weighedLineId, weighedGrams, expectedVersion),
                     null,
-                    null,
+                    delivery,
                     // The redemption this order's checkout recorded rides along, exactly as it does
                     // for an amendment, so a promo code earned at checkout is not re-priced away.
                     order.orderId(),
-                    // ADR 0136: which hidden groups apply is decided by the order's own mode. Left
-                    // unsaid, the goods are priced as collected: a delivery box the order was checked
-                    // out with would drop out of the weighed line, and a dine-in order would be
-                    // priced as a pickup one.
-                    order.fulfillmentMode()));
+                    // Which hidden auto-selected groups apply is decided by the order's own mode, and
+                    // a dine-in order is told apart from a pickup one by nothing else.
+                    order.fulfillmentMode(),
+                    frame));
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new RefusedException(
                     refused.code(), Objects.requireNonNullElse(refused.getMessage(), refused.code()));
@@ -375,19 +428,26 @@ public class CatchweightReconciliationService {
     }
 
     /**
-     * The priced line for each live order line. A combo was bought as one cart line and is
-     * stored as one order line per component, so the quote names its components by the cart
-     * line's key and a position, and the order line a quote line stands for is found the way an
-     * amendment finds it: by the component the line was priced from.
+     * The quote's line for each live order line.
+     *
+     * <p>An ordinary line is priced under its own id. A combo is priced as one cart line and
+     * comes back as one line per component, so each stored component line is matched to its
+     * priced component by the pairing it was bought from, exactly as an amendment matches them.
      */
     private static Map<UUID, QuoteSnapshot.Line> quotedByOrderLine(List<OrderLineRow> live, QuoteSnapshot quote) {
         Map<String, List<QuoteSnapshot.Line>> byCartLine = quote.lines().stream()
                 .collect(Collectors.groupingBy(
                         QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
-        Map<UUID, QuoteSnapshot.Line> byOrderLine = new LinkedHashMap<>();
+        Map<UUID, QuoteSnapshot.Line> byOrderLine = new HashMap<>();
         for (AmendmentBasket.Unit unit : AmendmentBasket.units(live)) {
             for (QuoteSnapshot.Line quoted : byCartLine.getOrDefault(unit.key(), List.of())) {
-                byOrderLine.put(unit.replacedBy(quoted).lineId(), quoted);
+                try {
+                    byOrderLine.put(unit.replacedBy(quoted).lineId(), quoted);
+                } catch (IllegalStateException unknownComponent) {
+                    throw new RefusedException(
+                            "REPRICE_COMPONENT_MISMATCH",
+                            "The re-price priced a combo component this order never had; nothing is written");
+                }
             }
         }
         return byOrderLine;

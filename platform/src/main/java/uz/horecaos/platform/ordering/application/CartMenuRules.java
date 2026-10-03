@@ -73,11 +73,18 @@ public interface CartMenuRules {
      * invite half a can of soda.
      *
      * @param portionSize the step a splittable variant may be ordered in, or null
+     * @param catchweight whether the variant is sold by weight, so that its price is provisional
+     *                    until the scale has spoken (ADR 0137)
      */
-    record PhysicalRules(boolean splittable, @Nullable BigDecimal portionSize) {
+    record PhysicalRules(boolean splittable, @Nullable BigDecimal portionSize, boolean catchweight) {
+
+        /** A variant that is not sold by weight, which is every one that predates the checkout rule on weighed baskets. */
+        public PhysicalRules(boolean splittable, @Nullable BigDecimal portionSize) {
+            this(splittable, portionSize, false);
+        }
 
         /** No block published: whole units only. */
-        public static final PhysicalRules WHOLE_UNITS = new PhysicalRules(false, null);
+        public static final PhysicalRules WHOLE_UNITS = new PhysicalRules(false, null, false);
 
         public boolean allowsFraction() {
             return splittable && portionSize != null;

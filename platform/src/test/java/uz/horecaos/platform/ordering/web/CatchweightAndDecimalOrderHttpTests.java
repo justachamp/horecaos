@@ -18,6 +18,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Assumptions;
@@ -32,8 +33,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -46,8 +49,15 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.AttachmentPolicy;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.NewComboGroup;
 import uz.horecaos.platform.catalog.application.PhysicalAttributesAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
+import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.iam.api.PlatformRole;
@@ -61,6 +71,10 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.pos.application.port.PosOrderSource;
 import uz.horecaos.platform.pos.infrastructure.ordering.JdbcPosOrderSource;
+import uz.horecaos.platform.pricing.PromotionDbFixture;
+import uz.horecaos.platform.pricing.application.PromotionAuthoringService;
+import uz.horecaos.platform.pricing.domain.Promotion;
+import uz.horecaos.platform.pricing.domain.PromotionDefinition;
 import uz.horecaos.platform.reporting.application.DayCloseService;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcClassificationStore;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -147,6 +161,12 @@ class CatchweightAndDecimalOrderHttpTests {
     private PhysicalAttributesAuthoringService physical;
 
     @Autowired
+    private CompositeProductAuthoringService composites;
+
+    @Autowired
+    private PromotionAuthoringService promotionAuthoring;
+
+    @Autowired
     private KitchenTicketService kitchenTickets;
 
     @Autowired
@@ -170,6 +190,8 @@ class CatchweightAndDecimalOrderHttpTests {
     private UUID plovVariant;
     private UUID cakeVariant;
     private UUID sodaVariant;
+    private UUID catalogId;
+    private UUID priceBook;
 
     @BeforeEach
     void reset() {
@@ -211,6 +233,9 @@ class CatchweightAndDecimalOrderHttpTests {
         jdbc.sql("""
                 TRUNCATE TABLE catalog.variant_physical_attributes, catalog.publication_items,
                     catalog.publications, catalog.location_offerings, catalog.translations,
+                    catalog.combo_components, catalog.combo_groups,
+                    catalog.product_modifier_groups, catalog.variant_modifier_groups,
+                    catalog.modifier_options, catalog.modifier_groups,
                     catalog.catalog_products, catalog.fiscal_classifications, catalog.fees,
                     catalog.variants, catalog.products, catalog.catalogs CASCADE
                 """).update();
@@ -803,6 +828,205 @@ class CatchweightAndDecimalOrderHttpTests {
                 .isEmpty();
     }
 
+    // ------------------------------------- the context a weight is captured in
+
+    @Test
+    @DisplayName("a weight capture re-prices under the promotion inputs the order was placed with: "
+            + "a first-order discount survives the customer's next order")
+    void aWeightCaptureKeepsTheFirstOrderPromotion() throws Exception {
+        activate(welcomeDiscount());
+        UUID orderId = placeOrder(Map.of("cake", cakeVariant), "welcome-1");
+        assertThat(totalOf(orderId)).as("10% off 180,000").isEqualTo(162_000L);
+        // The customer orders again while the cake is in the oven. By the clock they are no longer a
+        // first-time customer, and a re-price that asked the clock would take the welcome discount back.
+        placeOrder(Map.of("soda", sodaVariant), "welcome-2");
+        advanceToReady(orderId);
+
+        MvcResult weighed = weigh(orderId, lineIdOf(orderId, cakeVariant), 1_340, version(orderId));
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode result = JSON.readTree(weighed.getResponse().getContentAsString());
+        assertThat(result.get("totalMinor").asLong())
+                .as("10% off 201,000: the discount stays, and follows the weight")
+                .isEqualTo(180_900L);
+        assertThat(result.get("deltaTotalMinor").asLong()).isEqualTo(18_900L);
+        assertThat(cashDue(orderId))
+                .as("the courier collects the weighed, discounted amount")
+                .isEqualTo(180_900L);
+    }
+
+    @Test
+    @DisplayName("a hidden option the server applied is neither charged a second time nor refused when a line is "
+            + "weighed, on the weighed line or on any other")
+    void aHiddenOptionIsAppliedOnceWhenALineIsWeighed() throws Exception {
+        attachHiddenPackaging(2_000L, cakeVariant, sodaVariant);
+        UUID orderId = placeOrder(Map.of("cake", cakeVariant, "soda", sodaVariant), "boxed");
+        assertThat(totalOf(orderId))
+                .as("180,000 and 5,000, and a 2,000 box on each")
+                .isEqualTo(189_000L);
+        advanceToReady(orderId);
+
+        MvcResult weighed = weigh(orderId, lineIdOf(orderId, cakeVariant), 1_340, version(orderId));
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode result = JSON.readTree(weighed.getResponse().getContentAsString());
+        assertThat(result.get("lineFinalAmountMinor").asLong())
+                .as("201,000 and the one box")
+                .isEqualTo(203_000L);
+        assertThat(result.get("totalMinor").asLong())
+                .as("203,000 + 5,000 + 2,000")
+                .isEqualTo(210_000L);
+        assertThat(jdbc.sql("""
+                                SELECT count(*) FROM ordering.order_line_modifiers m
+                                JOIN ordering.order_lines l ON l.id = m.order_line_id
+                                WHERE l.order_id = :id AND l.revision_to IS NULL AND m.auto_selected
+                                """).param("id", orderId).query(Integer.class).single())
+                .as("still one hidden row per line, written by the server")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("an order that also holds a combo can be weighed, and the combo keeps its combo price")
+    void anOrderWithAComboCanBeWeighed() throws Exception {
+        Lunch lunch = seedLunchCombo(25_000L);
+        UUID cart = openCart();
+        putLine(cart, "cake", cakeVariant, "1");
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "lunch",
+                lunch.variantId(),
+                1,
+                List.of(),
+                null,
+                List.of(new CartService.ComboPick(lunch.burger().id(), 1)),
+                List.of(),
+                null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkoutCart(cart, "cake-and-lunch");
+        assertThat(totalOf(orderId)).as("180,000 and the lunch box at 25,000").isEqualTo(205_000L);
+        advanceToReady(orderId);
+
+        MvcResult weighed = weigh(orderId, lineIdOf(orderId, cakeVariant), 1_340, version(orderId));
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(totalOf(orderId)).as("201,000 and the same 25,000").isEqualTo(226_000L);
+        assertThat(jdbc.sql("""
+                                SELECT final_amount_minor FROM ordering.order_lines
+                                WHERE order_id = :id AND revision_to IS NULL AND combo_selection_id IS NOT NULL
+                                """).param("id", orderId).query(Long.class).single())
+                .as("the combo component is untouched by the scale")
+                .isEqualTo(25_000L);
+    }
+
+    // ------------------------------------- the ledgers a weight capture restates
+
+    @Test
+    @DisplayName("the promotion ledger follows the weight: the same row, the new quote, the new amount")
+    void theWeighedDiscountIsWhatThePromotionLedgerHolds() throws Exception {
+        activate(welcomeDiscount());
+        UUID orderId = placeOrder(Map.of("cake", cakeVariant), "ledger-1");
+        Map<String, Object> placed = redemptionOf(orderId);
+        assertThat(placed.get("status")).isEqualTo("REDEEMED");
+        assertThat(money(placed, "discount_minor")).as("10% of 180,000").isEqualTo(18_000L);
+        assertThat(placed.get("current_quote_id")).isEqualTo(placed.get("claimed_quote_id"));
+        advanceToReady(orderId);
+
+        assertThat(weigh(orderId, lineIdOf(orderId, cakeVariant), 1_340, version(orderId))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        Map<String, Object> weighed = redemptionOf(orderId);
+        assertThat(weighed.get("id"))
+                .as("one row per order and promotion, moved in place")
+                .isEqualTo(placed.get("id"));
+        assertThat(weighed.get("status")).isEqualTo("REDEEMED");
+        assertThat(money(weighed, "discount_minor"))
+                .as("what was given is 10% of 201,000, as the order's total says")
+                .isEqualTo(20_100L);
+        assertThat(weighed.get("claimed_quote_id"))
+                .as("the checkout quote is never rewritten")
+                .isEqualTo(placed.get("claimed_quote_id"));
+        assertThat(weighed.get("current_quote_id"))
+                .as("the quote behind the order's current revision")
+                .isEqualTo(jdbc.sql("SELECT pricing_quote_id FROM ordering.order_revisions "
+                                + "WHERE order_id = :id AND revision = 2")
+                        .param("id", orderId)
+                        .query(UUID.class)
+                        .single());
+        assertThat(weighed.get("last_revision")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a promotion that stops applying at the scale is released, and the loyalty flags it set go with it")
+    void aPromotionThatStopsApplyingIsReleased() throws Exception {
+        activate(bulkDiscountThatSuppressesPoints());
+        UUID orderId = placeOrder(Map.of("cake", cakeVariant), "bulk-1");
+        assertThat(totalOf(orderId))
+                .as("10% off 180,000, which clears the 170,000 threshold")
+                .isEqualTo(162_000L);
+        assertThat(loyaltyAccrualAllowed(orderId))
+                .as("the promotion suppresses points while it applies")
+                .isFalse();
+        advanceToReady(orderId);
+
+        MvcResult weighed = weigh(orderId, lineIdOf(orderId, cakeVariant), 1_000, version(orderId));
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(totalOf(orderId))
+                .as("150,000 is under the threshold: no discount")
+                .isEqualTo(150_000L);
+        Map<String, Object> ledger = redemptionOf(orderId);
+        assertThat(ledger.get("status")).isEqualTo("RELEASED");
+        assertThat(ledger.get("released_at")).isNotNull();
+        assertThat(loyaltyAccrualAllowed(orderId))
+                .as("nothing suppresses points any more")
+                .isTrue();
+    }
+
+    // ------------------------------- the payment a weighed basket can be sold with
+
+    @Test
+    @DisplayName("a basket with a line sold by weight cannot be checked out with a method that takes the money "
+            + "first, because the weighed total could never be taken from it")
+    void aWeighedBasketCannotBeSoldForAProviderPayment() {
+        enableProviderMethodOnTheStorefront("CLICK");
+        UUID weighed = openCart();
+        putLine(weighed, "cake", cakeVariant, "1");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, weighed, cartVersion(weighed)));
+
+        var refused = checkoutResult(weighed, "weighed-click", "CLICK");
+
+        assertThat(refused.rejectionCode()).as(refused.rejectionDetail()).isEqualTo("WEIGHED_LINES_PAY_AT_HANDOVER");
+        assertThat(refused.orderId()).isNull();
+
+        // The rule is about the basket, not the method: without a weighed line the very same checkout meets
+        // the next precondition instead (no merchant account is bound in this fixture).
+        UUID ordinary = openCart();
+        putLine(ordinary, "soda", sodaVariant, "1");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, ordinary, cartVersion(ordinary)));
+        assertThat(checkoutResult(ordinary, "soda-click", "CLICK").rejectionCode())
+                .isEqualTo("PAYMENT_METHOD_UNAVAILABLE");
+
+        // And the weighed basket is still sold, for the method that settles at the door.
+        var settledAtTheDoor = checkoutResult(weighed, "weighed-cash", "CASH");
+        assertThat(settledAtTheDoor.created())
+                .as("%s %s", settledAtTheDoor.rejectionCode(), settledAtTheDoor.rejectionDetail())
+                .isTrue();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private UUID placeOrder(Map<String, UUID> lines, String idempotencyKey) {
@@ -847,8 +1071,13 @@ class CatchweightAndDecimalOrderHttpTests {
     }
 
     private UUID checkoutCart(UUID cart, String idempotencyKey) {
+        var result = checkoutResult(cart, idempotencyKey, "CASH");
+        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
+    }
+
+    private CheckoutService.CheckoutResult checkoutResult(UUID cart, String idempotencyKey, String paymentMethod) {
         var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
-        var result = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
                 TENANT,
                 BRAND,
                 cart,
@@ -856,14 +1085,13 @@ class CatchweightAndDecimalOrderHttpTests {
                 Objects.requireNonNull(row.pricingQuoteId(), "the cart was priced first"),
                 Objects.requireNonNull(row.pricingContextHash(), "the cart was priced first"),
                 idempotencyKey,
-                "CASH",
+                paymentMethod,
                 0L,
                 "CUSTOMER",
                 CUSTOMER.toString(),
                 null,
                 null,
                 false)));
-        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
     }
 
     /** CASH orders confirm themselves under the default policy; this makes the premise explicit. */
@@ -961,6 +1189,193 @@ class CatchweightAndDecimalOrderHttpTests {
                 .as(result.getResponse().getContentAsString())
                 .isEqualTo(200);
         return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** 10% off the goods from 170,000 up, which also keeps the order from earning points. */
+    private static PromotionDefinition bulkDiscountThatSuppressesPoints() {
+        var base = PromotionDbFixture.definition(
+                "BULK",
+                Promotion.Scope.ORDER,
+                "bulk",
+                List.of(PromotionDbFixture.condition(
+                        1, Promotion.Condition.Type.SUBTOTAL_AT_LEAST, "amountMinor", 170_000L)),
+                List.of(PromotionDbFixture.action(
+                        1, Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT, "basisPoints", 1_000L)));
+        return new PromotionDefinition(
+                base.code(),
+                base.name(),
+                base.kind(),
+                base.scope(),
+                base.stackingGroup(),
+                base.exclusive(),
+                base.priority(),
+                base.requiresCoupon(),
+                base.maximumDiscountMinor(),
+                base.currency(),
+                base.validFrom(),
+                base.validUntil(),
+                base.maximumRedemptions(),
+                base.maximumPerCustomer(),
+                Promotion.LoyaltyAccrual.SUPPRESS,
+                base.loyaltyRedemption(),
+                base.conditions(),
+                base.actions());
+    }
+
+    /** The order's one promotion ledger row (ADR 0140). */
+    private Map<String, Object> redemptionOf(UUID orderId) {
+        return jdbc.sql("""
+                SELECT id, status, discount_minor, claimed_quote_id, current_quote_id, last_revision, released_at
+                FROM pricing.promotion_redemptions WHERE order_id = :id
+                """).param("id", orderId).query().singleRow();
+    }
+
+    private boolean loyaltyAccrualAllowed(UUID orderId) {
+        return Boolean.TRUE.equals(jdbc.sql("SELECT loyalty_accrual_allowed FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(Boolean.class)
+                .single());
+    }
+
+    /** CLICK sold on the storefront channel; no merchant account is bound to it. */
+    private void enableProviderMethodOnTheStorefront(String code) {
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, :code, :code, 'OPERATOR', 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
+                SELECT :tenantId, id, :code, true FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND code = 'STOREFRONT'
+                ON CONFLICT DO NOTHING
+                """).param("tenantId", TENANT).param("code", code).update();
+    }
+
+    private long totalOf(UUID orderId) throws Exception {
+        return orderDetail(orderId).get("summary").get("totalMinor").asLong();
+    }
+
+    /** 10% off the goods, for a customer's first order at the brand. */
+    private static PromotionDefinition welcomeDiscount() {
+        return PromotionDbFixture.definition(
+                "WELCOME",
+                Promotion.Scope.ORDER,
+                "welcome",
+                List.of(PromotionDbFixture.condition(1, Promotion.Condition.Type.FIRST_ORDER)),
+                List.of(PromotionDbFixture.action(
+                        1, Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT, "basisPoints", 1_000L)));
+    }
+
+    /** Authors, validates and activates a promotion through the production service, as a marketer would. */
+    private void activate(PromotionDefinition definition) {
+        var previous = SecurityContextHolder.getContext().getAuthentication();
+        SecurityContextHolder.getContext()
+                .setAuthentication(new JwtAuthenticationToken(
+                        Jwt.withTokenValue("promotion-author")
+                                .header("alg", "none")
+                                .subject(ACTOR_SUBJECT)
+                                .build(),
+                        List.of()));
+        try {
+            var drafted = promotionAuthoring.create(TENANT, BRAND, definition);
+            var validated = promotionAuthoring.validate(TENANT, BRAND, drafted.id(), drafted.version());
+            assertThat(validated.report().isValid())
+                    .as(String.valueOf(validated.report().refusals()))
+                    .isTrue();
+            var activated = promotionAuthoring.activate(
+                    TENANT, BRAND, drafted.id(), validated.promotion().version(), "catchweight test");
+            assertThat(activated.isPending())
+                    .as("a promotion this small needs no second person")
+                    .isFalse();
+        } finally {
+            SecurityContextHolder.getContext().setAuthentication(previous);
+        }
+    }
+
+    /**
+     * A required packaging group the server adds by itself to each of these variants' products on a
+     * pickup order -- hidden, so the customer never chooses it -- priced at {@code boxMinor}, and the
+     * menu published again with it.
+     */
+    private void attachHiddenPackaging(long boxMinor, UUID... variants) {
+        UUID group = catalogAuthoring.createModifierGroup(TENANT, BRAND, "PACK", "Packaging", "uz", true, 1, 1, false);
+        UUID box = catalogAuthoring.addModifierOption(
+                TENANT, BRAND, group, "BOX", "Gift box", "uz", null, 1, 0, FiscalClassification.unclassified(), null);
+        for (UUID variant : variants) {
+            UUID product = jdbc.sql("SELECT product_id FROM catalog.variants WHERE id = :id")
+                    .param("id", variant)
+                    .query(UUID.class)
+                    .single();
+            catalogAuthoring.attachModifierGroup(TENANT, BRAND, product, group, 0);
+            composites.setAttachmentPolicy(
+                    TENANT,
+                    BRAND,
+                    AttachmentOwnerType.PRODUCT,
+                    product,
+                    group,
+                    1,
+                    new AttachmentPolicy(
+                            Visibility.HIDDEN_AUTO_SELECT, Set.of(FulfillmentMode.PICKUP), null, null, null),
+                    ACTOR_SUBJECT);
+        }
+        priceOf("MODIFIER_OPTION", box, boxMinor);
+        publishAgain();
+    }
+
+    private record Lunch(UUID variantId, ComboComponent burger) {}
+
+    /** A lunch box that is a burger, sold at {@code burgerInLunchMinor} inside it, on the published menu. */
+    private Lunch seedLunchCombo(long burgerInLunchMinor) {
+        var unclassified = FiscalClassification.unclassified();
+        var lunch = catalogAuthoring.createProduct(
+                TENANT, BRAND, catalogId, "LUNCH", "Lunch box", null, "uz", "SKU-LUNCH", "PIECE", unclassified, null);
+        var burger = catalogAuthoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, "uz", "SKU-BURGER", "PIECE", unclassified, null);
+        UUID lunchVariant = lunch.defaultVariantId();
+        var main = composites.createComboGroup(
+                new NewComboGroup(TENANT, BRAND, lunchVariant, "MAIN", "Choose a main", "uz", 1, 1, false, 0),
+                ACTOR_SUBJECT);
+        ComboComponent burgerInLunch =
+                composites.addComponent(TENANT, BRAND, main.id(), burger.defaultVariantId(), 1, 0, ACTOR_SUBJECT);
+        priceOf("VARIANT", burger.defaultVariantId(), 30_000L);
+        priceOf("COMBO_COMPONENT", burgerInLunch.id(), burgerInLunchMinor);
+        for (UUID variant : List.of(lunchVariant, burger.defaultVariantId())) {
+            catalogAuthoring.setOffering(
+                    TENANT, BRAND, LOCATION, variant, OfferingStatus.AVAILABLE, List.of("PICKUP", "DELIVERY"));
+        }
+        publishAgain();
+        return new Lunch(lunchVariant, burgerInLunch);
+    }
+
+    private void publishAgain() {
+        var published = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+        assertThat(published.status())
+                .as(String.valueOf(published.report().blockers()))
+                .isEqualTo(PublicationStatus.PUBLISHED);
+    }
+
+    private void priceOf(String type, UUID priceableId, long amountMinor) {
+        jdbc.sql("""
+                INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id, priceable_type,
+                    priceable_id, amount_minor, valid_from)
+                VALUES (:id, :tenantId, :brandId, :priceBookId, :type, :priceableId, :amount, :from)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("type", type)
+                .param("priceableId", priceableId)
+                .param("amount", amountMinor)
+                .param(
+                        "from",
+                        java.time.OffsetDateTime.ofInstant(Instant.now().minus(Duration.ofDays(1)), ZoneOffset.UTC))
+                .update();
     }
 
     private <T> T tx(Supplier<T> work) {
@@ -1123,7 +1538,7 @@ class CatchweightAndDecimalOrderHttpTests {
      * way the product editor does it, then published and priced.
      */
     private void seedCatalogAndPricing() {
-        UUID catalogId = UUID.randomUUID();
+        catalogId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
@@ -1152,7 +1567,7 @@ class CatchweightAndDecimalOrderHttpTests {
                 0,
                 ACTOR_SUBJECT);
 
-        UUID priceBook = UUID.randomUUID();
+        priceBook = UUID.randomUUID();
         var validFrom = java.time.OffsetDateTime.ofInstant(Instant.now().minus(Duration.ofDays(1)), ZoneOffset.UTC);
         jdbc.sql("""
                 INSERT INTO pricing.price_books (id, tenant_id, brand_id, name, currency, status,

@@ -10,7 +10,11 @@
   ticket and reporting facts, with every reader of it carrying the decimal; V0450
   snapshots catchweight facts on quote and order lines, and
   `PUT .../orders/{orderId}/lines/{lineId}/actual-weight` (`order.advance`) reconciles
-  the charge at pick/handover with an order revision of source `CATCHWEIGHT`;
+  the charge at pick/handover with an order revision of source `CATCHWEIGHT`, priced
+  as the order was bought (its fulfilment mode, delivery point and the promotion inputs
+  recorded on its current quote, a combo as the combo, the options the server applied
+  left to pricing) with the promotion ledger and loyalty flags restated against the new
+  quote;
   `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` blocks publication and
   `CATCHWEIGHT_NOT_RECONCILED` blocks handover. The operator console has a Weight and
   nutrition tab in the product editor (weight or volume, catchweight with its quantum
@@ -24,7 +28,10 @@
   at handover" notice, and order by the portion. Not built: the till is told the
   nominal-weight amount at confirmation and never the weighed one; an order already
   paid through a provider refuses a weight that moves its total, because an
-  incremental charge or partial refund is not performed; fiscal receipt lines are not
+  incremental charge or partial refund is not performed, so a basket holding a weighed
+  line is sold only for a method that settles at handover (the payment step does not
+  offer the others and checkout refuses them, `WEIGHED_LINES_PAY_AT_HANDOVER`; the
+  way to sell one for an online payment is ADR 0153, Proposed); fiscal receipt lines are not
   yet built from order lines, so Payme/Click integer counts are untouched; a
   fractional stock reservation stays out of scope as the record says; an amendment
   still changes whole units; no КБЖУ accuracy disclaimer is worded, since the record
