@@ -474,7 +474,17 @@ public class JdbcPromotionStore {
                 .update();
     }
 
-    /** One of this customer's slots, claimed atomically; the mirror of the coupon upsert. */
+    /**
+     * One of this customer's slots, claimed atomically; the mirror of the coupon upsert.
+     *
+     * <p>The cap compared against is the promotion's <em>current</em> one, passed in and written
+     * back on conflict. {@link #limitReached}, which prices the cart, compares against the
+     * promotion's current {@code maximum_per_customer}; a cap frozen in the usage row at the
+     * customer's first claim would let the two disagree as soon as a marketer suspended the
+     * promotion, changed the limit and resumed it -- the cart priced with the promotion and every
+     * checkout refused for it, or the other way round. The usage row's copy of the cap exists
+     * only so its CHECK can bound the counter.
+     */
     public boolean claimCustomerSlot(
             UUID tenantId, UUID brandId, UUID promotionId, UUID customerAccountId, int maximumPerCustomer) {
         return jdbc.sql("""
@@ -482,8 +492,9 @@ public class JdbcPromotionStore {
                     promotion_id, tenant_id, brand_id, customer_account_id, consumed_count, maximum_per_customer)
                 VALUES (:promotionId, :tenantId, :brandId, :customerId, 1, :maxPerCustomer)
                 ON CONFLICT (promotion_id, customer_account_id) DO UPDATE
-                SET consumed_count = pricing.promotion_customer_usage.consumed_count + 1
-                WHERE pricing.promotion_customer_usage.consumed_count < pricing.promotion_customer_usage.maximum_per_customer
+                SET consumed_count = pricing.promotion_customer_usage.consumed_count + 1,
+                    maximum_per_customer = EXCLUDED.maximum_per_customer
+                WHERE pricing.promotion_customer_usage.consumed_count < EXCLUDED.maximum_per_customer
                 """)
                         .param("promotionId", promotionId)
                         .param("tenantId", tenantId)

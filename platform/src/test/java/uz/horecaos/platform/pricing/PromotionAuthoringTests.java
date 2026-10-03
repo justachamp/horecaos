@@ -169,6 +169,56 @@ class PromotionAuthoringTests {
     }
 
     @Test
+    @DisplayName(
+            "a total limit cannot be edited below what has already been redeemed: a refusal, not an integrity error")
+    void aLimitCannotBeLoweredBelowWhatWasRedeemed() {
+        var base = tenPercent("LIMITED10");
+        var limited = fixture.activate(withTotalLimit(base, 5));
+        fixture.jdbc
+                .sql("UPDATE pricing.promotions SET consumed_count = 3 WHERE id = :id")
+                .param("id", limited.id())
+                .update();
+        var suspended = fixture.authoring.suspend(TENANT, BRAND, limited.id(), limited.version());
+
+        assertThatThrownBy(() -> fixture.authoring.update(
+                        TENANT, BRAND, limited.id(), suspended.version(), withTotalLimit(base, 2)))
+                .as("ck_promotion_consumed would refuse it as an unmapped integrity violation, a 500")
+                .isInstanceOfSatisfying(ApiException.class, e -> {
+                    assertThat(e.errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+                    assertThat(e.getMessage()).contains("3 times");
+                });
+
+        assertThat(fixture.authoring
+                        .update(TENANT, BRAND, limited.id(), suspended.version(), withTotalLimit(base, 3))
+                        .definition()
+                        .maximumRedemptions())
+                .as("a limit equal to what was redeemed is a promotion that is simply used up")
+                .isEqualTo(3);
+    }
+
+    private static PromotionDefinition withTotalLimit(PromotionDefinition d, int total) {
+        return new PromotionDefinition(
+                d.code(),
+                d.name(),
+                d.kind(),
+                d.scope(),
+                d.stackingGroup(),
+                d.exclusive(),
+                d.priority(),
+                d.requiresCoupon(),
+                d.maximumDiscountMinor(),
+                d.currency(),
+                d.validFrom(),
+                d.validUntil(),
+                total,
+                d.maximumPerCustomer(),
+                d.loyaltyAccrual(),
+                d.loyaltyRedemption(),
+                d.conditions(),
+                d.actions());
+    }
+
+    @Test
     @DisplayName("editing a validated promotion takes a new definition version and leaves the recorded one untouched")
     void editingTakesANewVersionAndTheHistoryIsImmutable() {
         var drafted = fixture.authoring.create(TENANT, BRAND, tenPercent("EDIT10"));

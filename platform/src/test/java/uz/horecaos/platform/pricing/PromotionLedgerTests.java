@@ -272,6 +272,95 @@ class PromotionLedgerTests {
     }
 
     @Test
+    @DisplayName("a per-customer cap raised after the customer's first redemption is the cap the claim enforces")
+    void aRaisedPerCustomerCapIsEnforcedAtCheckout() {
+        var promotion = limited("RAISED", 10, 1);
+        assertThat(claim(quoteFor(CUSTOMER), UUID.randomUUID(), CUSTOMER).outcome())
+                .isEqualTo(Outcome.CLAIMED);
+        assertThat(fixture.promotionStore.limitReached(TENANT, BRAND, CUSTOMER))
+                .as("pricing already treats the customer as done with it")
+                .contains(promotion.id());
+
+        // The marketer suspends it, allows two each, and puts it back through validation.
+        editLimits(promotion.id(), 10, 2);
+
+        assertThat(fixture.promotionStore.limitReached(TENANT, BRAND, CUSTOMER))
+                .as("pricing now offers it to the customer again")
+                .doesNotContain(promotion.id());
+        Quote second = quoteFor(CUSTOMER);
+        assertThat(second.discount().minor())
+                .as("the cart is priced with the promotion")
+                .isPositive();
+
+        assertThat(claim(second, UUID.randomUUID(), CUSTOMER).outcome())
+                .as("the claim agrees with pricing; a cap frozen at the first claim refused this on every retry")
+                .isEqualTo(Outcome.CLAIMED);
+        assertThat(customerUsage(promotion.id(), CUSTOMER)).isEqualTo(2);
+        assertThat(fixture.promotionStore.limitReached(TENANT, BRAND, CUSTOMER)).contains(promotion.id());
+    }
+
+    @Test
+    @DisplayName("a per-customer cap lowered after the customer was priced is the cap the claim enforces")
+    void aLoweredPerCustomerCapIsEnforcedAtCheckout() {
+        var promotion = limited("LOWERED", 10, 3);
+        assertThat(claim(quoteFor(CUSTOMER), UUID.randomUUID(), CUSTOMER).outcome())
+                .isEqualTo(Outcome.CLAIMED);
+        Quote priced = quoteFor(CUSTOMER);
+        assertThat(priced.discount().minor()).isPositive();
+
+        editLimits(promotion.id(), 10, 1);
+
+        assertThat(claim(priced, UUID.randomUUID(), CUSTOMER).outcome())
+                .as("one redemption already used, and the cap is one now")
+                .isEqualTo(Outcome.PER_CUSTOMER_LIMIT_REACHED);
+        assertThat(customerUsage(promotion.id(), CUSTOMER)).isEqualTo(1);
+        assertThat(consumed(promotion.id()))
+                .as("the total it took is given back")
+                .isEqualTo(1);
+    }
+
+    /** Suspend, edit the two limits, validate and activate again, the way the console does. */
+    private void editLimits(UUID id, @Nullable Integer total, @Nullable Integer perCustomer) {
+        var authoring = fixture.authoring;
+        var suspended = authoring.suspend(
+                TENANT,
+                BRAND,
+                id,
+                fixture.promotionStore.find(TENANT, BRAND, id).orElseThrow().version());
+        var d = suspended.definition();
+        var edited = authoring.update(
+                TENANT,
+                BRAND,
+                id,
+                suspended.version(),
+                new PromotionDefinition(
+                        d.code(),
+                        d.name(),
+                        d.kind(),
+                        d.scope(),
+                        d.stackingGroup(),
+                        d.exclusive(),
+                        d.priority(),
+                        d.requiresCoupon(),
+                        d.maximumDiscountMinor(),
+                        d.currency(),
+                        d.validFrom(),
+                        d.validUntil(),
+                        total,
+                        perCustomer,
+                        d.loyaltyAccrual(),
+                        d.loyaltyRedemption(),
+                        d.conditions(),
+                        d.actions()));
+        var validated = authoring.validate(TENANT, BRAND, id, edited.version());
+        assertThat(validated.report().isValid()).isTrue();
+        assertThat(authoring
+                        .activate(TENANT, BRAND, id, validated.promotion().version(), "edit limits")
+                        .isPending())
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("a guest is never refused for a per-customer cap, as decided for coupons")
     void aGuestHasNoPerCustomerCap() {
         var promotion = limited("GUESTS", 10, 1);
