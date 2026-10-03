@@ -1,6 +1,7 @@
 package uz.horecaos.platform.audit.api;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -31,7 +32,7 @@ public enum ApprovalAction {
      */
     COURIER_MANUAL_PENALTY("courier.adjustment.create.manual-penalty", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
 
-    TENANT_ACTIVATE("tenant.activate", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+    TENANT_ACTIVATE("tenant.activate", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL, Worklist.PLATFORM),
 
     /**
      * ADR 0090: moving a tenant to another market. Governed from the first day
@@ -39,7 +40,7 @@ public enum ApprovalAction {
      * residency change is exactly the decision a second signature exists for,
      * so a deployment that deleted the policy should stop, not proceed alone.
      */
-    TENANT_COUNTRY_CHANGE("tenant.country.change", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+    TENANT_COUNTRY_CHANGE("tenant.country.change", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
     INTEGRATION_FAILURE_RESOLVE("integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
 
     /**
@@ -49,13 +50,13 @@ public enum ApprovalAction {
      * money, and the failure mode of "no policy configured yet" must be
      * "nothing moves", never "one person moves it".
      */
-    WALLET_ADJUSTMENT("commercial.wallet.adjustment", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+    WALLET_ADJUSTMENT("commercial.wallet.adjustment", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
 
     /** ADR 0095: granting bonus money, with the expiry it lapses on. Fail-closed, same reasoning. */
-    WALLET_BONUS_GRANT("commercial.wallet.bonus-grant", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+    WALLET_BONUS_GRANT("commercial.wallet.bonus-grant", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
 
     /** ADR 0095: refunding paid money to a leaving tenant, naming the payout. Fail-closed, same reasoning. */
-    WALLET_REFUND("commercial.wallet.refund", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+    WALLET_REFUND("commercial.wallet.refund", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
 
     /**
      * ADR 0095: taking back an activation deposit recorded against the wrong
@@ -64,7 +65,8 @@ public enum ApprovalAction {
      * owed again, and one person doing either on their own word is the control
      * a finance review asks for first.
      */
-    WALLET_DEPOSIT_REVERSAL("commercial.wallet.deposit-reversal", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+    WALLET_DEPOSIT_REVERSAL(
+            "commercial.wallet.deposit-reversal", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
 
     /**
      * ADR 0025, Gap A of the 2026-08-30 proving run: granting or revoking a
@@ -143,6 +145,24 @@ public enum ApprovalAction {
      */
     PRICING_PROMOTION_ACTIVATE("pricing.promotion.activate", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
 
+    /**
+     * Which worklist a request for the action reaches once it is {@code PENDING}.
+     *
+     * <p>A {@link #PLATFORM} request is HorecaOS's own decision about a tenant
+     * (its country, its activation, its wallet): it is raised at platform scope,
+     * carries no tenant, and is listed only by the platform queue's action
+     * filter. A {@link #TENANT} request is the tenant's own decision, raised in
+     * a tenant-owned scope and listed on that tenant's worklist — even when the
+     * policy governing it is a platform-scope floor a migration seeded, as
+     * {@code V0461} does for {@link #PRICING_PROMOTION_ACTIVATE}. The
+     * distinction is what {@code PlatformApprovalActionCoverageTests} checks: a
+     * request that reaches neither worklist is not a control, it is a delay.
+     */
+    public enum Worklist {
+        PLATFORM,
+        TENANT
+    }
+
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {
         /** Preserve today’s explicit one-signature behaviour. */
@@ -157,10 +177,16 @@ public enum ApprovalAction {
 
     private final String code;
     private final MissingPolicyMode missingPolicyMode;
+    private final Worklist worklist;
 
     ApprovalAction(String code, MissingPolicyMode missingPolicyMode) {
+        this(code, missingPolicyMode, Worklist.TENANT);
+    }
+
+    ApprovalAction(String code, MissingPolicyMode missingPolicyMode, Worklist worklist) {
         this.code = code;
         this.missingPolicyMode = missingPolicyMode;
+        this.worklist = worklist;
     }
 
     public String code() {
@@ -169,6 +195,18 @@ public enum ApprovalAction {
 
     public MissingPolicyMode missingPolicyMode() {
         return missingPolicyMode;
+    }
+
+    public Worklist worklist() {
+        return worklist;
+    }
+
+    /** The codes of every action the platform worklist lists, in declaration order. */
+    public static List<String> platformWorklistCodes() {
+        return Arrays.stream(values())
+                .filter(action -> action.worklist == Worklist.PLATFORM)
+                .map(ApprovalAction::code)
+                .toList();
     }
 
     public static Optional<ApprovalAction> find(String code) {

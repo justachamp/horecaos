@@ -104,19 +104,17 @@ public class ApprovalRequestController {
     /**
      * The actions HorecaOS staff decide across tenants (ADR 0090, ADR 0095).
      *
-     * <p>Public so a test can assert it covers every {@code PLATFORM}-scope
-     * policy the migrations seed. It is the only filter
-     * {@link ApprovalDecisionService#pendingAcrossTenants} applies, and a code
-     * missing from it is a request nobody can find in any queue — the tenant
-     * worklist is keyed on a tenant such a row does not carry.
+     * <p>Derived from each action's declared {@link ApprovalAction.Worklist}
+     * rather than kept by hand, and public so a test can assert it against
+     * every {@code PLATFORM}-scope policy the migrations seed. It is the only
+     * filter {@link ApprovalDecisionService#pendingAcrossTenants} applies, and
+     * a platform-decided code missing from it is a request nobody can find in
+     * any queue — the tenant worklist is keyed on a tenant such a row does not
+     * carry. A tenant-decided action governed by a platform-scope floor (a
+     * promotion's activation) is deliberately absent: its requests carry the
+     * tenant and reach that tenant's worklist.
      */
-    public static final List<String> PLATFORM_ACTIONS = List.of(
-            ApprovalAction.TENANT_COUNTRY_CHANGE.code(),
-            ApprovalAction.TENANT_ACTIVATE.code(),
-            ApprovalAction.WALLET_ADJUSTMENT.code(),
-            ApprovalAction.WALLET_BONUS_GRANT.code(),
-            ApprovalAction.WALLET_REFUND.code(),
-            ApprovalAction.WALLET_DEPOSIT_REVERSAL.code());
+    public static final List<String> PLATFORM_ACTIONS = ApprovalAction.platformWorklistCodes();
 
     @GetMapping("/api/v1/control-plane/approval-requests")
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.PLATFORM)
