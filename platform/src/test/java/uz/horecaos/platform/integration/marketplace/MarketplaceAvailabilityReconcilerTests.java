@@ -336,6 +336,34 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
+    @DisplayName("a stop recorded while a restore is in flight is not held back by that restore's lost answer")
+    void aStopRecordedDuringARestoreWithALostAnswerIsNotDelayedByIt() {
+        World w = world();
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        reconcile(w);
+        assertThat(partner.held(w)).containsEntry("ext-A", false);
+
+        lift(w, stop);
+        markDirty(w);
+        // The restore for ext-A is on the wire when the dish is stopped again: another replica's
+        // sweep records the new desired value, then the restore's lost answer is written back. The
+        // partner did apply the restore, so it holds true and the platform must say false.
+        partner.script(Scenario.TIMEOUT_AFTER_APPLY);
+        partner.duringCall = () -> store.upsertDesired(
+                w.tenant(), w.binding(), "ext-A", w.variantA(), w.location(), false, clock.instant());
+        reconcile(w);
+        partner.duringCall = () -> {};
+
+        assertThat(partner.calls.stream().filter(call -> call.equals(new Call("ext-A", true))))
+                .as("the restore was sent once")
+                .hasSize(1);
+        assertThat(partner.held(w))
+                .as("the restore's backoff was earned by an instruction that is no longer current, so the stop"
+                        + " follows it in the same pass instead of waiting it out")
+                .containsEntry("ext-A", false);
+    }
+
+    @Test
     @DisplayName("a restore on a row that is backing off still waits out its backoff: only a stop jumps the queue")
     void aRestoreStillWaitsOutTheBackoff() {
         World w = world();
@@ -1061,6 +1089,9 @@ class MarketplaceAvailabilityReconcilerTests {
         private final Deque<Scenario> script = new ArrayDeque<>();
         volatile Duration delay = Duration.ZERO;
 
+        /** Runs while a call is in flight, before the partner answers: another replica's sweep landing. */
+        volatile Runnable duringCall = () -> {};
+
         void script(Scenario... scenarios) {
             synchronized (script) {
                 script.clear();
@@ -1104,6 +1135,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 scenario = script.isEmpty() ? Scenario.OK : script.pollFirst();
             }
             calls.add(new Call(item, available));
+            duringCall.run();
             return switch (scenario) {
                 case OK -> {
                     held.put(key, available);

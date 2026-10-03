@@ -409,6 +409,12 @@ public class JdbcMarketplaceAvailabilityStore {
     /**
      * Writes what one attempt concluded, if the worker still holds the lease.
      *
+     * <p>A retry time earned by a failed attempt belongs to the instruction that was sent. If a
+     * stop was recorded while that call was in flight (the row's desired value is now {@code
+     * false} and differs from what was sent), the failed restore's backoff must not delay it:
+     * the row is claimable at once, exactly as {@link #upsertDesired} leaves it when no call was
+     * in flight.
+     *
      * @param sent the value that was sent, which is what {@code CONFIRMED} records — not the
      *     row's current desired value, which may have moved while the call was in flight
      * @return false when the lease was lost, in which case nothing was written
@@ -441,7 +447,9 @@ public class JdbcMarketplaceAvailabilityStore {
                                 state = CASE WHEN state = 'UNCERTAIN' THEN 'UNCERTAIN' ELSE 'PENDING' END,
                                 attempt_count = attempt_count + 1, last_failure_code = :failureCode,
                                 pending_since = COALESCE(pending_since, :now),
-                                next_attempt_at = :retryAt,
+                                next_attempt_at = CASE
+                                    WHEN NOT desired_available AND desired_available IS DISTINCT FROM :sent THEN :now
+                                    ELSE :retryAt END,
                                 lease_owner = NULL, lease_expires_at = NULL, updated_at = :now
                             WHERE tenant_id = :tenantId AND binding_id = :bindingId AND external_entity_id = :externalId
                               AND lease_owner = :owner
@@ -453,7 +461,9 @@ public class JdbcMarketplaceAvailabilityStore {
                                 state = 'UNCERTAIN',
                                 attempt_count = attempt_count + 1, last_failure_code = :failureCode,
                                 pending_since = COALESCE(pending_since, :now),
-                                next_attempt_at = :retryAt,
+                                next_attempt_at = CASE
+                                    WHEN NOT desired_available AND desired_available IS DISTINCT FROM :sent THEN :now
+                                    ELSE :retryAt END,
                                 lease_owner = NULL, lease_expires_at = NULL, updated_at = :now
                             WHERE tenant_id = :tenantId AND binding_id = :bindingId AND external_entity_id = :externalId
                               AND lease_owner = :owner
