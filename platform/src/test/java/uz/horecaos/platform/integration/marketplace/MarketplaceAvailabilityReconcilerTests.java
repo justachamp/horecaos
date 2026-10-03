@@ -136,6 +136,7 @@ class MarketplaceAvailabilityReconcilerTests {
         jdbc.sql("TRUNCATE TABLE catalog.channel_offering_exclusions, catalog.branch_menu_bindings, "
                         + "catalog.menu_items, catalog.menus, catalog.location_offerings CASCADE")
                 .update();
+        setMappingMarker(true);
         transactionManager = new DataSourceTransactionManager(dataSource);
         clock = new MutableClock(Instant.parse("2026-10-01T09:00:00Z"));
         partner = new FakePartner();
@@ -567,6 +568,9 @@ class MarketplaceAvailabilityReconcilerTests {
     void aNewMappingConverges() {
         World w = world();
         reconcile(w);
+        // The trigger on the mapping table is the marker; switched off, this proves the sweep alone
+        // is the guarantee for a mapping, exactly as for every input without a marker.
+        setMappingMarker(false);
         UUID variantC = variant(w.tenant(), w.brand(), "C");
         jdbc.sql("""
                 INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
@@ -581,10 +585,109 @@ class MarketplaceAvailabilityReconcilerTests {
         list(w, variantC);
         map(w, variantC, "ext-C");
 
+        assertThat(requested()).as("nothing asked for an early sweep").isEmpty();
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("before the resync interval, with no marker, the partner has not heard of the dish")
+                .doesNotContainKey("ext-C");
+
         clock.advance(RESYNC.plusSeconds(60));
         reconcile(w);
 
         assertThat(partner.held(w)).containsEntry("ext-C", true);
+    }
+
+    @Test
+    @DisplayName(
+            "a new MENU_ITEM mapping marks its binding, and the partner hears of the dish on the next tick, not the next resync")
+    void aNewMappingIsPushedOnTheNextTick() {
+        World w = world();
+        reconcile(w);
+        assertThat(requested())
+                .as("the first sweep honoured the marker the seed mappings left")
+                .isEmpty();
+
+        UUID variantC = variant(w.tenant(), w.brand(), "C");
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                VALUES (:id, :t, :b, :l, :v, 'AVAILABLE')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant)
+                .param("b", w.brand)
+                .param("l", w.location)
+                .param("v", variantC)
+                .update();
+        list(w, variantC);
+        map(w, variantC, "ext-C");
+        assertThat(requested()).containsExactly(w.binding);
+
+        // No time passes: the resync interval is far away.
+        clock.advance(Duration.ofSeconds(5));
+        reconcile(w);
+
+        assertThat(partner.held(w)).containsEntry("ext-C", true);
+    }
+
+    @Test
+    @DisplayName("the marker is the mapping's own: an item added, repointed, retired or removed marks its binding; "
+            + "another entity type, or a touch that changes nothing the reconciler reads, does not")
+    void theItemMappingMarksItsBindingAndNothingElse() {
+        World w = world();
+        UUID otherLocation = location(w.tenant(), w.brand(), "OTHER");
+        UUID otherBinding = binding(w, otherLocation, "mkt-other");
+        reconcile(w);
+        assertThat(requested()).isEmpty();
+
+        // A mapping of some other entity type is none of the reconciler's business.
+        jdbc.sql("""
+                INSERT INTO integration.provider_entity_mappings
+                    (id, tenant_id, installation_id, binding_id, entity_type, horecaos_entity_id,
+                     external_entity_id, status, mapping_source)
+                VALUES (:id, :t, :i, :b, 'VARIANT', :v, 'pos-A', 'ACTIVE', 'OPERATOR')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant())
+                .param("i", w.installation())
+                .param("b", w.binding())
+                .param("v", w.variantA())
+                .update();
+        assertThat(requested()).as("a VARIANT mapping marks nothing").isEmpty();
+
+        // A touch that changes neither the status, the dish nor the partner's id.
+        jdbc.sql("UPDATE integration.provider_entity_mappings SET last_seen_at = now() "
+                        + "WHERE binding_id = :b AND entity_type = 'MENU_ITEM'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a last-seen touch marks nothing").isEmpty();
+
+        // The partner renumbered a dish.
+        jdbc.sql("UPDATE integration.provider_entity_mappings SET external_entity_id = 'ext-A2' "
+                        + "WHERE binding_id = :b AND external_entity_id = 'ext-A'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a repointed partner id marks its binding").containsExactly(w.binding());
+
+        reconcile(w);
+        assertThat(requested()).isEmpty();
+
+        // Retired: the dish is no longer one the reconciler keeps a row for.
+        jdbc.sql("UPDATE integration.provider_entity_mappings SET status = 'RETIRED' "
+                        + "WHERE binding_id = :b AND external_entity_id = 'ext-B'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a retired mapping marks its binding").containsExactly(w.binding());
+
+        reconcile(w);
+        assertThat(requested()).isEmpty();
+
+        // Removed outright.
+        jdbc.sql("DELETE FROM integration.provider_entity_mappings "
+                        + "WHERE binding_id = :b AND external_entity_id = 'ext-A2'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a removed mapping marks its binding").containsExactly(w.binding());
+        assertThat(requested()).doesNotContain(otherBinding);
     }
 
     @Test
@@ -970,9 +1073,79 @@ class MarketplaceAvailabilityReconcilerTests {
         assertThat(requested()).containsExactlyInAnyOrder(w.binding, otherBinding);
     }
 
+    @Test
+    @DisplayName("a sales channel pointed at, or away from, an installation wakes exactly that installation's bindings")
+    void aChannelInstallationChangeWakesItsBindings() {
+        World w = world();
+        UUID otherLocation = location(w.tenant(), w.brand(), "OTHER");
+        UUID otherBinding = binding(w, otherLocation, "mkt-other");
+        UUID otherInstallation = jdbc.sql("SELECT installation_id FROM integration.bindings WHERE id = :b")
+                .param("b", otherBinding)
+                .query(UUID.class)
+                .single();
+        MarketplaceDirtyMarkerListener listener = new MarketplaceDirtyMarkerListener(store, clock);
+        jdbc.sql("DELETE FROM integration.marketplace_availability_sync_state").update();
+
+        listener.onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                w.tenant, w.channel, null, w.installation, clock.instant()));
+        assertThat(requested()).containsExactly(w.binding);
+
+        jdbc.sql("DELETE FROM integration.marketplace_availability_sync_state").update();
+        listener.onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                w.tenant, w.channel, w.installation, otherInstallation, clock.instant()));
+        assertThat(requested())
+                .as("repointed from one installation to another: both lose or gain their channel")
+                .containsExactlyInAnyOrder(w.binding, otherBinding);
+
+        jdbc.sql("DELETE FROM integration.marketplace_availability_sync_state").update();
+        listener.onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                UUID.randomUUID(), w.channel, null, w.installation, clock.instant()));
+        assertThat(requested())
+                .as("another tenant's announcement reaches none of this tenant's bindings")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a channel repointed away from an installation is re-resolved on the next tick, not the next resync")
+    void aChannelRepointedIsReResolvedOnTheNextTick() {
+        World w = world();
+        reconcile(w);
+        assertThat(partner.held(w)).containsEntry("ext-A", true);
+
+        // The channel is paused: nothing resolves for the installation any more. Without a
+        // marker the reconciler would go on believing in the channel it swept five minutes ago.
+        jdbc.sql("UPDATE tenant.sales_channels SET status = 'INACTIVE' WHERE id = :c")
+                .param("c", w.channel)
+                .update();
+        new MarketplaceDirtyMarkerListener(store, clock)
+                .onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                        w.tenant, w.channel, w.installation, w.installation, clock.instant()));
+        assertThat(requested()).containsExactly(w.binding);
+
+        clock.advance(Duration.ofSeconds(5));
+        reconcile(w);
+
+        assertThat(requested()).as("the early sweep was honoured").isEmpty();
+        assertThat(jdbc.sql("SELECT last_sweep_at FROM integration.marketplace_availability_sync_state "
+                                + "WHERE binding_id = :b")
+                        .param("b", w.binding)
+                        .query(java.time.OffsetDateTime.class)
+                        .single()
+                        .toInstant())
+                .as("swept at the later instant, well inside the resync interval")
+                .isEqualTo(clock.instant());
+    }
+
     // -----------------------------------------------------------------------
     // Fixtures
     // -----------------------------------------------------------------------
+
+    /** Switches the mapping table's marker trigger, so a test can prove the sweep alone is the guarantee. */
+    private void setMappingMarker(boolean on) {
+        jdbc.sql("ALTER TABLE integration.provider_entity_mappings " + (on ? "ENABLE" : "DISABLE")
+                        + " TRIGGER trg_marketplace_mapping_marks_sweep")
+                .update();
+    }
 
     private record World(
             UUID tenant,

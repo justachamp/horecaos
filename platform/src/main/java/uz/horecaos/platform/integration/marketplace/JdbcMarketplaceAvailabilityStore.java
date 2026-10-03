@@ -90,6 +90,26 @@ public class JdbcMarketplaceAvailabilityStore {
                 .list();
     }
 
+    /**
+     * Active {@code MARKETPLACE} bindings of one installation: what a change to the sales channel
+     * that installation backs must wake (ADR 0141 Decision 7's marker for a channel's installation).
+     */
+    public List<UUID> bindingIdsOfInstallation(UUID tenantId, UUID installationId) {
+        return jdbc.sql("""
+                SELECT b.id
+                FROM integration.bindings b
+                JOIN integration.installations i
+                  ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId
+                  AND i.provider_category = 'MARKETPLACE'
+                  AND i.status = 'ACTIVE' AND b.status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query(UUID.class)
+                .list();
+    }
+
     /** The binding's mapped menu items: the partner's id for each HorecaOS variant. */
     public Map<UUID, String> mappedItems(UUID tenantId, UUID bindingId) {
         Map<UUID, String> byVariant = new HashMap<>();
