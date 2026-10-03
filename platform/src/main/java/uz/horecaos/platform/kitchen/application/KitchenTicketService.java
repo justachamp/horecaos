@@ -451,8 +451,14 @@ public class KitchenTicketService {
 
     /** Resolves every line onto a station, without writing anything yet. */
     private List<RoutedLine> resolveLines(OrderForKitchen order, UUID fallbackStation) {
+        return resolveLines(order, order.lines(), fallbackStation);
+    }
+
+    /** Resolves these lines of the order onto stations, each at the quantity it is to be cooked at. */
+    private List<RoutedLine> resolveLines(
+            OrderForKitchen order, List<OrderLineForKitchen> lines, UUID fallbackStation) {
         List<RoutedLine> resolved = new ArrayList<>();
-        for (OrderLineForKitchen line : order.lines()) {
+        for (OrderLineForKitchen line : lines) {
             Optional<ResolvedStation> match = kitchen.resolveStation(
                     order.tenantId(), order.brandId(), order.locationId(), line.variantId(), line.productId());
 
@@ -500,6 +506,220 @@ public class KitchenTicketService {
                     line.comboContainerVariantId()));
         }
         return unresolved;
+    }
+
+    // ------------------------------------------------------------------ amendments
+
+    /**
+     * Brings a ticket that is already open in line with an order an amendment has changed
+     * (ADR 0039, ADR 0136).
+     *
+     * <p>An amendment never edits a line: {@code ADD_LINES} appends lines, and a quantity change
+     * closes the line and appends its replacement. The ticket was built once, from the lines the
+     * order held when it was confirmed, so without this a line added afterwards reached no station
+     * and a line replaced by a larger one was cooked at its old size. The comparison is between the
+     * order's live lines and the ticket's items, so it is the same whatever the amendment was and a
+     * replayed call is a no-op:
+     *
+     * <ul>
+     *   <li>a live line the ticket has no item for is routed exactly as at opening -- its own
+     *       variant decides the station, so a combo added to an order sends its burger to the grill
+     *       and its drink to the bar;
+     *   <li>an item still to be made (queued or started) for a line the amendment closed is
+     *       cancelled, because the replacement carries the whole line;
+     *   <li>an item already <em>ready</em> for a closed line is left on the pass and credited
+     *       against its replacement, which is queued for what is still to be made -- the three
+     *       burgers that became four are one burger, not four more.
+     * </ul>
+     *
+     * <p>Nothing is done for an order with no ticket (it is built from the live lines when it is
+     * opened) or whose ticket has been handed over or voided (the food has gone). A ticket that
+     * was ready goes back into production, the same edge a recall uses, and the order stays where
+     * it is: ADR 0019 does not move an order backwards.
+     *
+     * <p>The station's throughput ceiling is not recomputed. It shifts a ticket's release time,
+     * and an amendment that arrives after the ticket was released has nothing left to shift.
+     */
+    @Transactional
+    public void syncAmendedLines(UUID tenantId, UUID orderId) {
+        Optional<TicketRow> found = kitchen.findTicketByOrder(tenantId, orderId);
+        if (found.isEmpty()) {
+            return;
+        }
+        TicketRow ticket = found.get();
+        if (ticket.status().terminal()) {
+            log.debug("Ticket {} is {}; an amendment to order {} has nothing to cook", ticket.id(), ticket.status(), orderId);
+            return;
+        }
+        OrderForKitchen order = orders.find(tenantId, orderId).orElse(null);
+        if (order == null) {
+            return;
+        }
+        Instant now = clock.instant();
+
+        List<TicketItemRow> items = kitchen.itemsOf(tenantId, ticket.id());
+        Set<UUID> liveLineIds = new java.util.HashSet<>();
+        order.lines().forEach(line -> liveLineIds.add(line.orderLineId()));
+        Map<UUID, OrderLineForKitchen> closedById = new HashMap<>();
+        orders.closedLines(tenantId, orderId).forEach(line -> closedById.put(line.orderLineId(), line));
+
+        boolean changed = false;
+
+        // What the amendment replaced and the kitchen has not made yet is struck, and what it has
+        // already made is remembered so the replacement is queued for the difference only.
+        Map<AmendedLineKey, BigDecimal> alreadyMade = new HashMap<>();
+        for (TicketItemRow item : items) {
+            if (liveLineIds.contains(item.orderLineId())) {
+                continue;
+            }
+            OrderLineForKitchen closed = closedById.get(item.orderLineId());
+            if (item.status() == TicketItemStatus.READY && closed != null) {
+                alreadyMade.merge(AmendedLineKey.of(closed), item.quantity(), BigDecimal::add);
+            } else if (item.status() == TicketItemStatus.QUEUED || item.status() == TicketItemStatus.STARTED) {
+                if (kitchen.transitionItem(tenantId, item.id(), item.status(), TicketItemStatus.CANCELLED, now)
+                        .isPresent()) {
+                    kitchen.recordEvent(
+                            tenantId,
+                            ticket.id(),
+                            item.id(),
+                            item.status().name(),
+                            TicketItemStatus.CANCELLED.name(),
+                            "ORDER_AMENDED",
+                            "SERVICE",
+                            "kitchen",
+                            "KITCHEN_LINE_REPLACED",
+                            orderId.toString(),
+                            now);
+                    changed = true;
+                }
+            }
+        }
+
+        Set<UUID> itemisedLineIds = new java.util.HashSet<>();
+        items.forEach(item -> itemisedLineIds.add(item.orderLineId()));
+        List<OrderLineForKitchen> unrouted = order.lines().stream()
+                .filter(line -> !itemisedLineIds.contains(line.orderLineId()))
+                .toList();
+
+        if (!unrouted.isEmpty()) {
+            Optional<UUID> fallback = kitchen.findFallbackStation(tenantId, order.locationId());
+            if (fallback.isEmpty()) {
+                // The ticket exists, so the branch once had one; an amendment is not refused for
+                // a station somebody archived since. The lines stay unrouted and the log says so.
+                log.warn(
+                        "Order {} was amended but location {} has no fallback station; {} line(s) reached no station",
+                        orderId,
+                        order.locationId(),
+                        unrouted.size());
+            } else {
+                changed |= routeAmendedLines(order, ticket, unrouted, alreadyMade, fallback.get(), now);
+            }
+        }
+
+        if (!changed) {
+            return;
+        }
+        TicketRow after = rollUp(tenantId, ticket, "SERVICE", "kitchen", orderId.toString(), now);
+        signalBoardChanged(tenantId, after.locationId(), after.id(), after.version(), now);
+    }
+
+    /** Routes the lines an amendment added or rewrote, at the quantity still to be cooked. */
+    private boolean routeAmendedLines(
+            OrderForKitchen order,
+            TicketRow ticket,
+            List<OrderLineForKitchen> unrouted,
+            Map<AmendedLineKey, BigDecimal> alreadyMade,
+            UUID fallbackStation,
+            Instant now) {
+
+        // A credit is claimed only where it is unambiguous: one rewritten line of that dish (and,
+        // for a combo, of that purchase). Two lines of one variant with different choices cannot be
+        // told apart, and cooking a dish too many is the lesser error than not cooking one.
+        Map<AmendedLineKey, Long> contenders = new HashMap<>();
+        unrouted.forEach(line -> contenders.merge(AmendedLineKey.of(line), 1L, Long::sum));
+
+        List<OrderLineForKitchen> toCook = new ArrayList<>();
+        for (OrderLineForKitchen line : unrouted) {
+            AmendedLineKey key = AmendedLineKey.of(line);
+            BigDecimal credit = contenders.getOrDefault(key, 0L) == 1L ? alreadyMade.getOrDefault(key, BigDecimal.ZERO) : BigDecimal.ZERO;
+            BigDecimal remaining = line.quantity().subtract(credit.min(line.quantity()));
+            if (remaining.signum() > 0) {
+                toCook.add(new OrderLineForKitchen(
+                        line.orderLineId(),
+                        line.lineNumber(),
+                        line.productId(),
+                        line.variantId(),
+                        remaining,
+                        line.comboSelectionId(),
+                        line.comboContainerVariantId()));
+            } else {
+                // Everything asked for is already on the pass. The line is still the order's, and
+                // has no item: the ticket needs nothing more for it.
+                log.debug("Line {} of order {} is already made; no item was queued", line.orderLineId(), order.orderId());
+            }
+        }
+        if (toCook.isEmpty()) {
+            return false;
+        }
+
+        for (RoutedLine routed : resolveLines(order, toCook, fallbackStation)) {
+            UUID itemId = UUID.randomUUID();
+            kitchen.insertItem(new TicketItemRow(
+                    itemId,
+                    ticket.tenantId(),
+                    ticket.id(),
+                    ticket.locationId(),
+                    routed.orderLineId(),
+                    routed.stationId(),
+                    routed.quantity(),
+                    routed.level(),
+                    TicketItemStatus.QUEUED,
+                    null,
+                    null,
+                    null,
+                    1,
+                    now,
+                    routed.comboSelectionId(),
+                    routed.comboContainerVariantId()));
+            kitchen.recordEvent(
+                    ticket.tenantId(),
+                    ticket.id(),
+                    itemId,
+                    null,
+                    TicketItemStatus.QUEUED.name(),
+                    "ORDER_AMENDED",
+                    "SERVICE",
+                    "kitchen",
+                    null,
+                    order.orderId().toString(),
+                    now);
+            if (routed.level().unresolved()) {
+                kitchen.recordEvent(
+                        ticket.tenantId(),
+                        ticket.id(),
+                        itemId,
+                        null,
+                        TicketItemStatus.QUEUED.name(),
+                        "ROUTING_UNRESOLVED",
+                        "SERVICE",
+                        "kitchen",
+                        "KITCHEN_ROUTING_UNRESOLVED",
+                        routed.orderLineId().toString(),
+                        now);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * What identifies "the same thing" across an amendment's close-and-replace: the dish, and for a
+     * combo component the purchase it belongs to.
+     */
+    private record AmendedLineKey(UUID variantId, @Nullable UUID comboSelectionId) {
+
+        static AmendedLineKey of(OrderLineForKitchen line) {
+            return new AmendedLineKey(line.variantId(), line.comboSelectionId());
+        }
     }
 
     // ------------------------------------------------------------------- release
@@ -924,14 +1144,19 @@ public class KitchenTicketService {
                 correlationId,
                 now);
 
-        TicketRow after = rollUp(tenantId, ticket, actorId, correlationId, now);
+        TicketRow after = rollUp(tenantId, ticket, "USER", actorId, correlationId, now);
         signalBoardChanged(tenantId, after.locationId(), after.id(), after.version(), now);
         return new ItemOutcome(true, kitchen.findItem(tenantId, itemId).orElseThrow(), after);
     }
 
     /** Applies the ticket status the items now imply, and proposes what it means. */
     private TicketRow rollUp(
-            UUID tenantId, TicketRow ticket, String actorId, @Nullable String correlationId, Instant now) {
+            UUID tenantId,
+            TicketRow ticket,
+            String actorType,
+            String actorId,
+            @Nullable String correlationId,
+            Instant now) {
 
         List<TicketItemStatus> statuses = kitchen.itemsOf(tenantId, ticket.id()).stream()
                 .map(TicketItemRow::status)
@@ -966,13 +1191,13 @@ public class KitchenTicketService {
                 ticket.status().name(),
                 implied.name(),
                 "ITEM_ROLLUP",
-                "USER",
+                actorType,
                 actorId,
                 null,
                 correlationId,
                 now);
 
-        propose(ticket, ticket.status(), implied, actorId, correlationId, now);
+        propose(ticket, ticket.status(), implied, actorType, actorId, correlationId, now);
         return require(tenantId, ticket.id());
     }
 
@@ -996,6 +1221,7 @@ public class KitchenTicketService {
             TicketRow ticket,
             TicketStatus from,
             TicketStatus implied,
+            String actorType,
             String actorId,
             @Nullable String correlationId,
             Instant now) {
@@ -1025,7 +1251,7 @@ public class KitchenTicketService {
                 progress,
                 "kitchen-ticket:%s:%s".formatted(ticket.id(), progress),
                 "KITCHEN_" + progress.name(),
-                "USER",
+                actorType,
                 actorId,
                 correlationId == null ? ticket.orderId().toString() : correlationId);
 

@@ -24,8 +24,13 @@ import uz.horecaos.platform.web.api.Quantities;
 public interface CartMenuRules {
 
     /**
-     * The groups a variant's product offers on this channel, or empty when the
+     * The groups this variant is offered with on this channel, or empty when the
      * live publication does not describe the variant.
+     *
+     * <p>A variant is offered its product's groups and the ones it carries of its own, and where
+     * the variant states rules of its own for a group (required, minimum, maximum) they replace
+     * the product's for that variant (ADR 0136). The record is the product's, with the groups
+     * resolved for the variant that was asked about.
      *
      * <p>Empty is not "anything goes" by intention; it is "this menu says nothing
      * about that item". A variant the publication does not carry has no group

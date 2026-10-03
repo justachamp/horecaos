@@ -506,6 +506,7 @@ public class CartService {
         Set<UUID> sold = requireCompositeSelection(
                 tenantId,
                 brandId,
+                channelCodeOf(tenantId, cart),
                 new CartPricingPort.PricingCommand.Item(
                         lineKey,
                         variantId,
@@ -942,9 +943,10 @@ public class CartService {
         // as the schedule is re-checked, so a menu that moved under a combo is refused here and
         // by name. Stock is held on these variants at checkout, so this is the set to check.
         Set<UUID> soldVariants = new java.util.LinkedHashSet<>();
+        String selectionChannel = channelCodeOf(tenantId, cart);
         for (CartLineRow line : lines) {
             requireOnSaleNow(tenantId, cart, line.variantId(), priceNow);
-            Set<UUID> lineSold = requireCompositeSelection(tenantId, brandId, pricingItemOf(line));
+            Set<UUID> lineSold = requireCompositeSelection(tenantId, brandId, selectionChannel, pricingItemOf(line));
             for (UUID soldVariant : lineSold) {
                 if (!soldVariant.equals(line.variantId())) {
                     requireOnSaleNow(tenantId, cart, soldVariant, priceNow);
@@ -1387,9 +1389,10 @@ public class CartService {
      * Asks pricing whether this line's selection is one the catalog allows, and what it puts on
      * the order. Pricing owns the rules; the cart owns what it does with the answer.
      */
-    private Set<UUID> requireCompositeSelection(UUID tenantId, UUID brandId, CartPricingPort.PricingCommand.Item item) {
+    private Set<UUID> requireCompositeSelection(
+            UUID tenantId, UUID brandId, String channelCode, CartPricingPort.PricingCommand.Item item) {
         try {
-            return pricing.checkSelection(tenantId, brandId, item).soldVariantIds();
+            return pricing.checkSelection(tenantId, brandId, channelCode, item).soldVariantIds();
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new CartRefusedException(
                     refused.code(), java.util.Objects.requireNonNullElse(refused.getMessage(), refused.code()));
@@ -1504,6 +1507,14 @@ public class CartService {
         }
     }
 
+    /** The code of the cart's channel, whose live publication every menu rule is read from. */
+    private String channelCodeOf(UUID tenantId, CartRow cart) {
+        return channels.byId(tenantId, cart.channelId())
+                .orElseThrow(
+                        () -> new CartRefusedException("CHANNEL_NOT_REGISTERED", "The cart's channel no longer exists"))
+                .code();
+    }
+
     /**
      * Enforces what the published menu says about this product's modifier groups.
      *
@@ -1528,10 +1539,7 @@ public class CartService {
             List<UUID> modifierOptionIds,
             BigDecimal quantity) {
 
-        String channelCode = channels.byId(tenantId, cart.channelId())
-                .orElseThrow(
-                        () -> new CartRefusedException("CHANNEL_NOT_REGISTERED", "The cart's channel no longer exists"))
-                .code();
+        String channelCode = channelCodeOf(tenantId, cart);
 
         CartMenuRules.ProductRules rules =
                 menu.forVariant(tenantId, brandId, channelCode, variantId).orElse(null);

@@ -20,6 +20,7 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
@@ -221,6 +222,55 @@ public class JdbcCompositeCatalogStore {
                         .param("expectedVersion", expectedVersion)
                         .update()
                 == 1;
+    }
+
+    /**
+     * Copies the combo groups a container variant owns, and their components, onto another
+     * variant (ADR 0136): the structure a duplicated combo product needs to be a combo at all.
+     *
+     * <p>The copies keep every authored value -- heading codes, range, repeat rule, order,
+     * status, and which dish each component offers -- and get new ids and version 1, like any new
+     * row. The components are the same variants, since a component is a shared dish, not part of
+     * the combo that offers it. Nothing is priced: a component's price is keyed to its own id, so
+     * the copy has none until it is set, exactly as the duplicate's variants have none, and
+     * publication blocks the unpriced component by name.
+     *
+     * @return the new group id by the source group id, in the source's order, so the caller can
+     *         copy what hangs off a group (its heading's translations)
+     */
+    public Map<UUID, UUID> copyComboStructure(
+            UUID tenantId, UUID brandId, UUID fromContainerVariantId, UUID toContainerVariantId) {
+        Map<UUID, UUID> newGroupBySource = new LinkedHashMap<>();
+        List<ComboGroup> groups = comboGroupsForContainer(tenantId, brandId, fromContainerVariantId);
+        for (ComboGroup source : groups) {
+            UUID newId = Ids.newId();
+            newGroupBySource.put(source.id(), newId);
+            insertComboGroup(new ComboGroup(
+                    newId,
+                    tenantId,
+                    brandId,
+                    toContainerVariantId,
+                    source.code(),
+                    source.minimumSelections(),
+                    source.maximumSelections(),
+                    source.allowSameComponentMultipleTimes(),
+                    source.sortOrder(),
+                    source.status(),
+                    1));
+        }
+        for (ComboComponent source : componentsForGroups(tenantId, brandId, List.copyOf(newGroupBySource.keySet()))) {
+            insertComboComponent(new ComboComponent(
+                    Ids.newId(),
+                    tenantId,
+                    brandId,
+                    java.util.Objects.requireNonNull(newGroupBySource.get(source.comboGroupId())),
+                    source.componentVariantId(),
+                    source.defaultQuantity(),
+                    source.sortOrder(),
+                    source.status(),
+                    1));
+        }
+        return newGroupBySource;
     }
 
     /** Whether a variant is the container of any combo group, whatever its status. */
