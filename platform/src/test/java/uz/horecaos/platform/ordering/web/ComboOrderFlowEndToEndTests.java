@@ -55,11 +55,13 @@ import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.AttachmentPolicy;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.NewComboGroup;
+import uz.horecaos.platform.catalog.application.PhysicalAttributesAuthoringService;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
@@ -163,6 +165,11 @@ class ComboOrderFlowEndToEndTests {
     private static final long CHILI = 1_000L;
     private static final long HOT = 500L;
 
+    /** A fish sold by weight: priced per 100 g, quoted at 1,000 g, with a packing charge in every mode. */
+    private static final long FISH_PER_QUANTUM = 2_000L;
+
+    private static final long PACK = 1_500L;
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -218,6 +225,9 @@ class ComboOrderFlowEndToEndTests {
     private CompositeProductAuthoringService composites;
 
     @Autowired
+    private PhysicalAttributesAuthoringService physical;
+
+    @Autowired
     private CatalogPublicationService publication;
 
     @Autowired
@@ -268,6 +278,8 @@ class ComboOrderFlowEndToEndTests {
     private UUID colaVariant;
     private UUID saladVariant;
     private UUID saladProduct;
+    private UUID fishVariant;
+    private UUID packOption;
     private UUID grill;
     private UUID bar;
     private ComboGroup mainGroup;
@@ -1291,6 +1303,143 @@ class ComboOrderFlowEndToEndTests {
                 .isEqualTo("MODIFIER_UNMAPPED");
     }
 
+    // ============================================================ weighing at the pass (ADR 0137)
+
+    @Test
+    @DisplayName("weighing a fish leaves a combo on the same order at its combo price, and records the weight")
+    void weighingALineLeavesAComboAtItsComboPrice() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        put(cart, "fish", fishVariant, 1, List.of());
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        long combo = BURGER_IN_LUNCH + COLA_IN_LUNCH;
+        assertThat(totalOf(orderId))
+                .as("the combo at its combo price, and the fish at its nominal 1,000 g with its packing")
+                .isEqualTo(combo + 10 * FISH_PER_QUANTUM + PACK);
+        UUID fishLine = lineOf(orderId, fishVariant);
+
+        MvcResult weighed = weigh(orderId, fishLine, 1_300);
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(
+                        "a combo's components are priced as a combo's, so only the fish moves: %s",
+                        weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(JSON.readTree(weighed.getResponse().getContentAsString())
+                        .get("totalMinor")
+                        .asLong())
+                .isEqualTo(combo + 13 * FISH_PER_QUANTUM + PACK);
+        assertThat(totalOf(orderId)).isEqualTo(combo + 13 * FISH_PER_QUANTUM + PACK);
+        assertThat(orderLines(orderId).stream()
+                        .filter(line -> line.selectionId() != null)
+                        .toList())
+                .extracting(OrderLine::variantId, OrderLine::unitAmountMinor, OrderLine::finalAmountMinor)
+                .as("the combo's two components keep the amounts they were checked out at")
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(burgerVariant, BURGER_IN_LUNCH, BURGER_IN_LUNCH),
+                        org.assertj.core.groups.Tuple.tuple(colaVariant, COLA_IN_LUNCH, COLA_IN_LUNCH));
+        assertThat(jdbc.sql("SELECT actual_weight_grams FROM ordering.order_lines WHERE id = :id")
+                        .param("id", fishLine)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1_300);
+        assertThat(reconciles(orderId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("weighing a line charges its server-applied packing once, as it was before it was weighed")
+    void weighingALineDoesNotChargeItsHiddenPackingTwice() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "fish", fishVariant, 1, List.of());
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        assertThat(totalOf(orderId)).isEqualTo(10 * FISH_PER_QUANTUM + PACK);
+        UUID fishLine = lineOf(orderId, fishVariant);
+
+        MvcResult weighed = weigh(orderId, fishLine, 1_300);
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode result = JSON.readTree(weighed.getResponse().getContentAsString());
+        assertThat(result.get("lineFinalAmountMinor").asLong())
+                .as("13 quanta of 100 g, and one packing -- the stored packing row is the server's, not a choice")
+                .isEqualTo(13 * FISH_PER_QUANTUM + PACK);
+        assertThat(result.get("totalMinor").asLong()).isEqualTo(13 * FISH_PER_QUANTUM + PACK);
+        assertThat(totalOf(orderId)).isEqualTo(13 * FISH_PER_QUANTUM + PACK);
+        assertThat(modifierRows(orderId, true))
+                .extracting(ModifierRow::optionId, ModifierRow::autoSelected)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(packOption, true));
+    }
+
+    @Test
+    @DisplayName("weighing a fish on a DELIVERY order keeps the delivery box the order was checked out with")
+    void weighingALineKeepsTheBoxOfADeliveryOrder() throws Exception {
+        UUID cart = openCart(FulfillmentMode.DELIVERY);
+        put(cart, "fish", fishVariant, 1, List.of());
+        tx(() -> carts.setDestination(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                new CartService.DestinationCommand(addressId, "Dilnoza", "+998901112233", null)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        assertThat(totalOf(orderId))
+                .as("the fish at its nominal weight, with the packing and, because it is delivered, the box")
+                .isEqualTo(10 * FISH_PER_QUANTUM + PACK + BOX);
+        UUID fishLine = lineOf(orderId, fishVariant);
+
+        MvcResult weighed = weigh(orderId, fishLine, 1_300);
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(totalOf(orderId))
+                .as("the weight moves the fish and nothing else: still one packing and one box")
+                .isEqualTo(13 * FISH_PER_QUANTUM + PACK + BOX);
+        assertThat(modifierRows(orderId, true))
+                .extracting(ModifierRow::optionId)
+                .containsExactlyInAnyOrder(packOption, boxOption);
+    }
+
+    @Test
+    @DisplayName("weighing a fish leaves a dish on the same order with a second-level choice as it was priced")
+    void weighingALineKeepsANestedChoiceOnAnotherLine() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "salad",
+                saladVariant,
+                1,
+                List.of(chiliOption),
+                null,
+                List.of(),
+                List.of(new CartService.NestedModifier(chiliOption, hotOption)),
+                null));
+        put(cart, "fish", fishVariant, 1, List.of());
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        long salad = SALAD + CHILI + HOT;
+        assertThat(totalOf(orderId)).isEqualTo(salad + 10 * FISH_PER_QUANTUM + PACK);
+        UUID fishLine = lineOf(orderId, fishVariant);
+
+        MvcResult weighed = weigh(orderId, fishLine, 1_300);
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(
+                        "the salad's hot chili is re-sent as a chili with its hot, not as two first-level choices: %s",
+                        weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(totalOf(orderId)).isEqualTo(salad + 13 * FISH_PER_QUANTUM + PACK);
+    }
+
     // ================================================================== fixtures: acting
 
     private UUID openCart(FulfillmentMode mode) {
@@ -1414,6 +1563,30 @@ class ComboOrderFlowEndToEndTests {
                 .as(confirmed.getResponse().getContentAsString())
                 .isEqualTo(200);
         return JSON.readTree(confirmed.getResponse().getContentAsString());
+    }
+
+    private MvcResult weigh(UUID orderId, UUID lineId, int grams) throws Exception {
+        return mvc.perform(MockMvcRequestBuilders.put(orderPath(orderId) + "/lines/" + lineId + "/actual-weight")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "weigh-" + UUID.randomUUID())
+                        .header(
+                                "If-Match",
+                                "\""
+                                        + orderDetail(orderId)
+                                                .get("summary")
+                                                .get("version")
+                                                .asInt() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actualWeightGrams\":" + grams + "}"))
+                .andReturn();
+    }
+
+    private UUID lineOf(UUID orderId, UUID variantId) {
+        return orderLines(orderId).stream()
+                .filter(line -> line.variantId().equals(variantId))
+                .findFirst()
+                .orElseThrow()
+                .lineId();
     }
 
     private String orderPath(UUID orderId) {
@@ -1929,6 +2102,9 @@ class ComboOrderFlowEndToEndTests {
                 TENANT, BRAND, catalogId, "SALAD", "Salad", null, LOCALE, "SKU-SALAD", "PIECE", UNCLASSIFIED, ACTOR);
         var sauce = authoring.createProduct(
                 TENANT, BRAND, catalogId, "SAUCE", "Sauce", null, LOCALE, "SKU-SAUCE", "PIECE", UNCLASSIFIED, ACTOR);
+        var fish = authoring.createProduct(
+                TENANT, BRAND, catalogId, "FISH", "Fish", null, LOCALE, "SKU-FISH", "PIECE", UNCLASSIFIED, ACTOR);
+        fishVariant = fish.defaultVariantId();
         lunchVariant = lunch.defaultVariantId();
         burgerVariant = burger.defaultVariantId();
         wrapVariant = wrap.defaultVariantId();
@@ -1972,6 +2148,39 @@ class ComboOrderFlowEndToEndTests {
         chiliOption = authoring.addModifierOption(
                 TENANT, BRAND, sauces, "CHILI", "Chili", LOCALE, sauce.defaultVariantId(), 1, 0, UNCLASSIFIED, ACTOR);
         authoring.attachModifierGroup(TENANT, BRAND, saladProduct, sauces, 1);
+
+        // The fish is weighed at the pass (ADR 0137): priced per 100 g, quoted at 1,000 g. It carries a
+        // packing charge the server applies in every mode, and the delivery box besides on a DELIVERY order.
+        physical.replace(
+                TENANT,
+                BRAND,
+                fishVariant,
+                new PhysicalAttributes(null, null, true, 100, 1_000, false, null, null, null, null, null),
+                0,
+                TESTER);
+        UUID packGroup = authoring.createModifierGroup(TENANT, BRAND, "PACK", "Packing", LOCALE, true, 1, 1, false);
+        packOption = authoring.addModifierOption(
+                TENANT, BRAND, packGroup, "PACK-OPT", "Packing", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        authoring.attachModifierGroup(TENANT, BRAND, fish.productId(), packGroup, 0);
+        composites.setAttachmentPolicy(
+                TENANT,
+                BRAND,
+                AttachmentOwnerType.PRODUCT,
+                fish.productId(),
+                packGroup,
+                1,
+                new AttachmentPolicy(Visibility.HIDDEN_AUTO_SELECT, null, null, null, null),
+                TESTER);
+        authoring.attachModifierGroup(TENANT, BRAND, fish.productId(), boxGroup, 1);
+        composites.setAttachmentPolicy(
+                TENANT,
+                BRAND,
+                AttachmentOwnerType.PRODUCT,
+                fish.productId(),
+                boxGroup,
+                1,
+                new AttachmentPolicy(Visibility.HIDDEN_AUTO_SELECT, Set.of(FulfillmentMode.DELIVERY), null, null, null),
+                TESTER);
     }
 
     private static FiscalClassification classified(String packageCode, String name) {
@@ -2026,11 +2235,13 @@ class ComboOrderFlowEndToEndTests {
         price("VARIANT", wrapVariant, 28_000L);
         price("VARIANT", colaVariant, COLA);
         price("VARIANT", saladVariant, SALAD);
+        price("VARIANT", fishVariant, FISH_PER_QUANTUM);
         price("VARIANT", sauceVariant(), 1_000L);
         price("COMBO_COMPONENT", burgerInLunch.id(), BURGER_IN_LUNCH);
         price("COMBO_COMPONENT", wrapInLunch.id(), WRAP_IN_LUNCH);
         price("COMBO_COMPONENT", colaInLunch.id(), COLA_IN_LUNCH);
         price("MODIFIER_OPTION", boxOption, BOX);
+        price("MODIFIER_OPTION", packOption, PACK);
         price("MODIFIER_OPTION", chiliOption, CHILI);
         price("MODIFIER_OPTION", mildOption, 0L);
         price("MODIFIER_OPTION", hotOption, HOT);
@@ -2072,7 +2283,7 @@ class ComboOrderFlowEndToEndTests {
     }
 
     private void seedStock() {
-        for (UUID variant : List.of(burgerVariant, wrapVariant, colaVariant, saladVariant)) {
+        for (UUID variant : List.of(burgerVariant, wrapVariant, colaVariant, saladVariant, fishVariant)) {
             inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, variant, TrackingMode.BINARY);
         }
     }

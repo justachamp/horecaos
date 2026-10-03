@@ -27,6 +27,10 @@ import uz.horecaos.platform.web.api.Quantities;
  * instead of its combo price. This class is the place that folds the component lines back
  * into the one combo they were, and unfolds the quote that comes back.
  *
+ * <p>A weight captured at the pass (ADR 0137) prices the same basket the same way, with one line's
+ * grams added ({@link #pricingItemsWeighing}), and reads the quote back the same way
+ * ({@link Unit#replacedBy}).
+ *
  * <p>Pure: values in, values out. Nothing here reads a database, so every rule below is
  * tested on a literal.
  */
@@ -116,18 +120,48 @@ final class AmendmentBasket {
      */
     static List<PricingCommand.Item> pricingItems(
             List<Unit> units, Map<UUID, Integer> changedQuantities, Map<UUID, List<OrderModifierRow>> modifiersByLine) {
+        return pricingItems(units, changedQuantities, modifiersByLine, null, null);
+    }
+
+    /**
+     * The pricing request for every live unit with one line's weight just captured at the pass
+     * (ADR 0137), and no quantity changed.
+     *
+     * <p>The same basket an amendment prices, so a weight capture cannot disagree with it about
+     * what a combo, a hidden option or a second-level choice is: the weighed line carries the
+     * grams, every other line keeps the weight it already had (or none), and a combo goes back as
+     * its container and picks.
+     *
+     * @param weighedLineId the catchweight line the weight is for. A combo's component is never
+     *        catchweight, so it is always an ordinary unit
+     */
+    static List<PricingCommand.Item> pricingItemsWeighing(
+            List<Unit> units, Map<UUID, List<OrderModifierRow>> modifiersByLine, UUID weighedLineId, int weighedGrams) {
+        return pricingItems(units, Map.of(), modifiersByLine, weighedLineId, weighedGrams);
+    }
+
+    private static List<PricingCommand.Item> pricingItems(
+            List<Unit> units,
+            Map<UUID, Integer> changedQuantities,
+            Map<UUID, List<OrderModifierRow>> modifiersByLine,
+            @Nullable UUID weighedLineId,
+            @Nullable Integer weighedGrams) {
         List<PricingCommand.Item> items = new ArrayList<>();
         for (Unit unit : units) {
             items.add(
                     unit.combo()
                             ? comboItem(unit, changedQuantities)
-                            : plainItem(unit, changedQuantities, modifiersByLine));
+                            : plainItem(unit, changedQuantities, modifiersByLine, weighedLineId, weighedGrams));
         }
         return items;
     }
 
     private static PricingCommand.Item plainItem(
-            Unit unit, Map<UUID, Integer> changedQuantities, Map<UUID, List<OrderModifierRow>> modifiersByLine) {
+            Unit unit,
+            Map<UUID, Integer> changedQuantities,
+            Map<UUID, List<OrderModifierRow>> modifiersByLine,
+            @Nullable UUID weighedLineId,
+            @Nullable Integer weighedGrams) {
         OrderLineRow line = unit.first();
         Integer changedTo = changedQuantities.get(line.lineId());
         boolean changed = changedTo != null;
@@ -162,8 +196,9 @@ final class AmendmentBasket {
                 // ADR 0137: a line that was already weighed keeps its weight through an
                 // amendment that did not touch it; one whose quantity just changed no longer
                 // has a weight that means anything, and goes back to provisional so the
-                // handover asks for it again.
-                changed ? null : line.actualWeightGrams());
+                // handover asks for it again. The line being weighed right now carries the
+                // weight just captured.
+                line.lineId().equals(weighedLineId) ? weighedGrams : changed ? null : line.actualWeightGrams());
     }
 
     private static PricingCommand.Item comboItem(Unit unit, Map<UUID, Integer> changedQuantities) {
