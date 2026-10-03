@@ -114,6 +114,52 @@ class OnboardingServiceValidationResultsTests {
     }
 
     @Test
+    void theThreeTiersMapOntoTheAdvisoryFlagAnOlderConsoleReads() {
+        StepResult outcome = StepResult.failedWithFindings(List.of(
+                new StepResult.Finding("LOCATION_FISCAL_ASSIGNMENT_ENDING", "Location A ends soon", LOCATION_A)));
+
+        assertThat(OnboardingService.validationResultsFor("CHECK", outcome, ReadinessSeverity.BLOCKING))
+                .singleElement()
+                .satisfies(result -> {
+                    assertThat(result.severity()).isEqualTo(ReadinessSeverity.BLOCKING);
+                    assertThat(result.advisory()).isFalse();
+                });
+        assertThat(OnboardingService.validationResultsFor("CHECK", outcome, ReadinessSeverity.EXPIRING))
+                .singleElement()
+                .satisfies(result -> {
+                    assertThat(result.severity()).isEqualTo(ReadinessSeverity.EXPIRING);
+                    assertThat(result.advisory())
+                            .as("an expiring finding does not stop trade today, so a console that knows only"
+                                    + " advisory-or-not still reads it as advice")
+                            .isTrue();
+                    assertThat(result.locationId()).isEqualTo(LOCATION_A);
+                });
+        assertThat(OnboardingService.validationResultsFor("CHECK", outcome, true))
+                .singleElement()
+                .satisfies(result -> assertThat(result.severity()).isEqualTo(ReadinessSeverity.ADVISORY));
+        assertThat(OnboardingService.validationResultsFor("CHECK", outcome, false))
+                .singleElement()
+                .satisfies(result -> assertThat(result.severity()).isEqualTo(ReadinessSeverity.BLOCKING));
+    }
+
+    @Test
+    void aResultCannotContradictItsOwnTier() {
+        OnboardingService.ValidationResult claimsAdvisory = new OnboardingService.ValidationResult(
+                "CHECK",
+                false,
+                "CODE",
+                "detail",
+                null,
+                true,
+                StepResult.FindingSubject.salesChannel(UUID.randomUUID()),
+                ReadinessSeverity.BLOCKING);
+
+        assertThat(claimsAdvisory.advisory())
+                .as("one source of truth: the tier wins over a stray flag")
+                .isFalse();
+    }
+
+    @Test
     void aFindingThatNamesAChannelCarriesItsSubjectOntoItsRowAndOneThatDoesNotStaysBare() {
         UUID channel = UUID.randomUUID();
         StepResult outcome = StepResult.failedWithFindings(List.of(

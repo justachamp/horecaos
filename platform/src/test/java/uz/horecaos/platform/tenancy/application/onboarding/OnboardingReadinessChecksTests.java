@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
@@ -37,6 +38,7 @@ class OnboardingReadinessChecksTests {
     private static final Instant NOW = Instant.parse("2026-08-21T10:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final Duration ROTATION_PERIOD = Duration.ofDays(180);
+    private static final LocalDate TODAY = LocalDate.of(2026, 8, 21);
 
     private static TestDatabase.Handle db;
 
@@ -591,6 +593,211 @@ class OnboardingReadinessChecksTests {
         assertThat(bindings().checkKey()).isEqualTo("LOCATION_SERVICE_BINDING_COVERAGE_VALIDATE");
     }
 
+    // ------------------------------------------------- LOCATION_FORCED_CLOSED_NO_EXPIRY
+
+    @Test
+    void forcedClosedNamesALocationClosedByHandWithNoEndTimeAndHowLongItHasBeenShut() {
+        setServiceState(locationId, "FORCE_CLOSED", "FRYER_BROKEN", null, daysAgo(4), "call Aziz +998901112233");
+
+        List<StepResult.Finding> findings = findings(forcedClosed().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("LOCATION_FORCED_CLOSED_NO_EXPIRY");
+            assertThat(finding.locationId()).isEqualTo(locationId);
+            assertThat(finding.detail())
+                    .as("the code, the branch and the days it has been dark")
+                    .isEqualTo("Location MAIN01 has been closed by hand for 4 days (reason FRYER_BROKEN) "
+                            + "with no time set to reopen");
+            assertThat(finding.detail())
+                    .as("the free-text note can carry a name or a phone number and never leaves the table")
+                    .doesNotContain("Aziz")
+                    .doesNotContain("998");
+        });
+    }
+
+    @Test
+    void forcedClosedIgnoresAClosureThatHasAnEndTimeAndTheOtherOverrideModes() {
+        UUID endsTomorrow = UUID.randomUUID();
+        insertLocation(tenantId, brandId, endsTomorrow, "AAA01", "ACTIVE");
+        setServiceState(endsTomorrow, "FORCE_CLOSED", "HOLIDAY", NOW.plus(Duration.ofDays(1)), daysAgo(1), null);
+        UUID forcedOpen = UUID.randomUUID();
+        insertLocation(tenantId, brandId, forcedOpen, "BBB01", "ACTIVE");
+        setServiceState(forcedOpen, "FORCE_OPEN", "EVENT", null, daysAgo(9), null);
+        setServiceState(locationId, "FOLLOW_SCHEDULE", null, null, daysAgo(9), null);
+
+        assertThat(forcedClosed().check(tenantId).outcome())
+                .as("a closure with an expiry reopens by itself; a forced-open or default state is not a closure")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void forcedClosedListsTheLongestClosedBranchFirstAndSkipsOnesThatAreNotActive() {
+        UUID newer = UUID.randomUUID();
+        insertLocation(tenantId, brandId, newer, "AAA01", "ACTIVE");
+        setServiceState(newer, "FORCE_CLOSED", "STAFF_SHORT", null, daysAgo(1), null);
+        setServiceState(locationId, "FORCE_CLOSED", "FRYER_BROKEN", null, daysAgo(11), null);
+        UUID suspended = UUID.randomUUID();
+        insertLocation(tenantId, brandId, suspended, "SUS01", "SUSPENDED");
+        setServiceState(suspended, "FORCE_CLOSED", "OTHER", null, daysAgo(30), null);
+
+        assertThat(findings(forcedClosed().check(tenantId)))
+                .as(
+                        "the branch dark for eleven days leads; a suspended branch is closed for a reason its status states")
+                .extracting(StepResult.Finding::locationId)
+                .containsExactly(locationId, newer);
+    }
+
+    @Test
+    void forcedClosedNeverReadsAnotherTenantsLocationsAndIsAdvisory() {
+        UUID otherTenant = UUID.randomUUID();
+        UUID otherBrand = UUID.randomUUID();
+        UUID otherLocation = UUID.randomUUID();
+        insertTenant(otherTenant);
+        insertBrand(otherTenant, otherBrand, "THEIRS", "ACTIVE");
+        insertLocation(otherTenant, otherBrand, otherLocation, "THEIRS1", "ACTIVE");
+        setServiceState(otherTenant, otherBrand, otherLocation, "FORCE_CLOSED", "OTHER", null, daysAgo(3), null);
+
+        assertThat(forcedClosed().check(tenantId).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+        assertThat(forcedClosed().advisory()).isTrue();
+        assertThat(forcedClosed().severity()).isEqualTo(ReadinessSeverity.ADVISORY);
+    }
+
+    // ------------------------------------------------- LOCATION_CHANNEL_REACH
+
+    @Test
+    void channelReachNamesAnActiveLocationNoChannelIsSwitchedOnFor() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        UUID other = UUID.randomUUID();
+        insertLocation(tenantId, brandId, other, "AAA01", "ACTIVE");
+        serveChannelAt(storefront, other, "ACTIVE");
+
+        List<StepResult.Finding> findings = findings(reach().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("LOCATION_NO_SALES_CHANNEL");
+            assertThat(finding.locationId()).isEqualTo(locationId);
+            assertThat(finding.detail()).isEqualTo("Location MAIN01 is not switched on for any active sales channel");
+        });
+    }
+
+    @Test
+    void channelReachCountsAnInactiveLinkOrAnInactiveChannelAsNotReached() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        UUID retired = insertChannel(tenantId, "RETIRED_ONE", "INACTIVE");
+        UUID switchedOff = UUID.randomUUID();
+        insertLocation(tenantId, brandId, switchedOff, "AAA01", "ACTIVE");
+        serveChannelAt(storefront, switchedOff, "INACTIVE");
+        serveChannelAt(retired, locationId, "ACTIVE");
+
+        assertThat(findings(reach().check(tenantId)))
+                .as("a link that is off, and a link to a channel that is not active, reach nobody")
+                .extracting(StepResult.Finding::locationId)
+                .containsExactly(switchedOff, locationId);
+    }
+
+    @Test
+    void channelReachPassesOnceTheLocationIsOnAnActiveChannelAndSkipsLocationsThatAreNotActive() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        insertLocation(tenantId, brandId, UUID.randomUUID(), "DRAFT1", "DRAFT");
+        insertLocation(tenantId, brandId, UUID.randomUUID(), "OLD01", "ARCHIVED");
+
+        assertThat(reach().check(tenantId).outcome())
+                .as("a draft or archived location is not open, so no channel needs to reach it")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void channelReachIsBlockingAndNeverReadsAnotherTenantsChannels() {
+        UUID otherTenant = UUID.randomUUID();
+        insertTenant(otherTenant);
+        UUID theirs = insertChannel(otherTenant, "THEIRS", "ACTIVE");
+        assertThat(theirs).isNotNull();
+
+        assertThat(findings(reach().check(tenantId)))
+                .as("the fixture location has no channel of its own tenant's")
+                .hasSize(1);
+        assertThat(reach().advisory()).isFalse();
+        assertThat(reach().severity()).isEqualTo(ReadinessSeverity.BLOCKING);
+    }
+
+    // ------------------------------------------------- FISCAL_ASSIGNMENT_EXPIRY
+
+    @Test
+    void fiscalExpiryNamesAnAssignmentEndingWithinTheWindowWithNothingAfterIt() {
+        UUID entity = insertLegalEntity("ACME");
+        assignFiscal(locationId, entity, TODAY.minusYears(1), TODAY.plusDays(12));
+
+        List<StepResult.Finding> findings = findings(expiry(Duration.ofDays(30)).check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("LOCATION_FISCAL_ASSIGNMENT_ENDING");
+            assertThat(finding.locationId()).isEqualTo(locationId);
+            assertThat(finding.detail())
+                    .isEqualTo("The fiscal assignment of location MAIN01 ends on 2026-09-02 (12 days) "
+                            + "and no later assignment covers it");
+        });
+    }
+
+    @Test
+    void fiscalExpiryIgnoresAHandoverToTheNextCompanyButNotAGapBeforeIt() {
+        UUID entity = insertLegalEntity("ACME");
+        UUID successor = insertLegalEntity("NEXT");
+        assignFiscal(locationId, entity, TODAY.minusYears(1), TODAY.plusDays(12));
+        assignFiscal(locationId, successor, TODAY.plusDays(12), null);
+
+        assertThat(expiry(Duration.ofDays(30)).check(tenantId).outcome())
+                .as("a row starting on the end date is the handover, so the branch always has a seller")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+
+        jdbc.sql("DELETE FROM tenant.location_fiscal_assignments WHERE legal_entity_id = :id")
+                .param("id", successor)
+                .update();
+        assignFiscal(locationId, successor, TODAY.plusDays(20), null);
+
+        assertThat(findings(expiry(Duration.ofDays(30)).check(tenantId)))
+                .as("a successor that starts eight days late leaves eight days with no seller")
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.locationId()).isEqualTo(locationId));
+    }
+
+    @Test
+    void fiscalExpiryIgnoresAnOpenEndedAssignmentOneBeyondTheWindowAndOneAlreadyOver() {
+        UUID entity = insertLegalEntity("ACME");
+        UUID far = UUID.randomUUID();
+        insertLocation(tenantId, brandId, far, "AAA01", "ACTIVE");
+        UUID over = UUID.randomUUID();
+        insertLocation(tenantId, brandId, over, "BBB01", "ACTIVE");
+        assignFiscal(locationId, entity, TODAY.minusYears(1), null);
+        assignFiscal(far, entity, TODAY.minusYears(1), TODAY.plusDays(31));
+        assignFiscal(over, entity, TODAY.minusYears(2), TODAY.minusDays(3));
+
+        assertThat(expiry(Duration.ofDays(30)).check(tenantId).outcome())
+                .as("no end date never expires, thirty-one days is outside a thirty-day window, and "
+                        + "an assignment that already ended is NO_LEGAL_ENTITY's finding, not this one's")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void fiscalExpiryListsTheSoonestEndingFirstSkipsInactiveLocationsAndIsExpiringNotBlocking() {
+        UUID entity = insertLegalEntity("ACME");
+        UUID sooner = UUID.randomUUID();
+        insertLocation(tenantId, brandId, sooner, "ZZZ01", "ACTIVE");
+        UUID draft = UUID.randomUUID();
+        insertLocation(tenantId, brandId, draft, "DRAFT1", "DRAFT");
+        assignFiscal(locationId, entity, TODAY.minusYears(1), TODAY.plusDays(20));
+        assignFiscal(sooner, entity, TODAY.minusYears(1), TODAY.plusDays(3));
+        assignFiscal(draft, entity, TODAY.minusYears(1), TODAY.plusDays(2));
+
+        assertThat(findings(expiry(Duration.ofDays(30)).check(tenantId)))
+                .extracting(StepResult.Finding::locationId)
+                .containsExactly(sooner, locationId);
+        assertThat(expiry(Duration.ofDays(30)).severity()).isEqualTo(ReadinessSeverity.EXPIRING);
+        assertThat(expiry(Duration.ofDays(30)).advisory())
+                .as("an expiring finding does not stop trade today, so allPassed ignores it")
+                .isTrue();
+    }
+
     // ------------------------------------------------- SECRET_ROTATION_AGE
 
     @Test
@@ -757,6 +964,18 @@ class OnboardingReadinessChecksTests {
         return new OnboardingReadinessChecks.LocationServiceBindingCoverage(jdbc);
     }
 
+    private OnboardingReadinessChecks.LocationForcedClosedNoExpiry forcedClosed() {
+        return new OnboardingReadinessChecks.LocationForcedClosedNoExpiry(jdbc, CLOCK);
+    }
+
+    private OnboardingReadinessChecks.LocationChannelReach reach() {
+        return new OnboardingReadinessChecks.LocationChannelReach(jdbc);
+    }
+
+    private OnboardingReadinessChecks.FiscalAssignmentExpiry expiry(Duration window) {
+        return new OnboardingReadinessChecks.FiscalAssignmentExpiry(jdbc, CLOCK, window);
+    }
+
     private OnboardingReadinessChecks.SecretRotationAge rotation(Duration period) {
         return new OnboardingReadinessChecks.SecretRotationAge(jdbc, CLOCK, period);
     }
@@ -815,6 +1034,58 @@ class OnboardingReadinessChecksTests {
                 .param("code", code)
                 .param("slug", "l-" + id.toString().substring(0, 8))
                 .param("status", status)
+                .update();
+    }
+
+    private void setServiceState(
+            UUID atLocation,
+            String mode,
+            @Nullable String reasonCode,
+            @Nullable Instant until,
+            Instant changedAt,
+            @Nullable String note) {
+        setServiceState(tenantId, brandId, atLocation, mode, reasonCode, until, changedAt, note);
+    }
+
+    private void setServiceState(
+            UUID owner,
+            UUID ownerBrand,
+            UUID atLocation,
+            String mode,
+            @Nullable String reasonCode,
+            @Nullable Instant until,
+            Instant changedAt,
+            @Nullable String note) {
+        jdbc.sql("""
+                INSERT INTO tenant.location_service_state
+                    (location_id, tenant_id, brand_id, mode, reason_code, note, effective_until, changed_at)
+                VALUES (:locationId, :tenantId, :brandId, :mode, :reasonCode, :note, :until, :changedAt)
+                """)
+                .param("locationId", atLocation)
+                .param("tenantId", owner)
+                .param("brandId", ownerBrand)
+                .param("mode", mode)
+                .param("reasonCode", reasonCode)
+                .param("note", note)
+                .param("until", until == null ? null : OffsetDateTime.ofInstant(until, ZoneOffset.UTC))
+                .param("changedAt", OffsetDateTime.ofInstant(changedAt, ZoneOffset.UTC))
+                .update();
+    }
+
+    private void assignFiscal(UUID atLocation, UUID legalEntityId, LocalDate from, @Nullable LocalDate until) {
+        jdbc.sql("""
+                INSERT INTO tenant.location_fiscal_assignments
+                    (id, tenant_id, brand_id, location_id, legal_entity_id, effective_from, effective_until,
+                     approved_by)
+                VALUES (:id, :tenantId, :brandId, :locationId, :legalEntityId, :from, :until, 'test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", atLocation)
+                .param("legalEntityId", legalEntityId)
+                .param("from", from)
+                .param("until", until)
                 .update();
     }
 
