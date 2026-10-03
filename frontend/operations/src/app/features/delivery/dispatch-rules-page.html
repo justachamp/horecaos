@@ -126,13 +126,20 @@
                 class="q-body field q-mono"
                 type="text"
                 maxlength="63"
-                [value]="rule.id"
+                [value]="pendingId() ?? rule.id"
                 [disabled]="selectedIsPublished()"
                 [attr.aria-invalid]="idProblem()"
                 (input)="retype($any($event.target).value)"
+                (blur)="settleId()"
                 data-testid="rule-id"
               />
-              <span class="rules__muted">{{ 'delivery.rules.id.hint' | t }}</span>
+              @if (pendingId() !== null) {
+                <span class="rules__fieldError" role="alert" data-testid="rule-id-taken">{{
+                  'delivery.rules.id.taken' | t
+                }}</span>
+              } @else {
+                <span class="rules__muted">{{ 'delivery.rules.id.hint' | t }}</span>
+              }
             </label>
 
             <h3 class="q-body-sm">{{ 'delivery.rules.when.heading' | t }}</h3>

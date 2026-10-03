@@ -16,7 +16,11 @@
   matched rule, the resolved action, the skipped installations and the pinned
   document version; `DeliverySourcingRunner` reads that decision back from the
   plan and `DeliverySourcingService` applies its `exclude`/`order`/`selection`
-  (`LADDER` asks no quote, `CHEAPEST` is `QuoteScoring` unchanged) over the live
+  (`LADDER` asks no quote to choose with and `CHEAPEST` is `QuoteScoring`
+  unchanged; as built, a `LADDER` winner is priced once, after the booking has
+  settled, so a cost above the customer's fee still leaves its
+  `DELIVERY_COST_SUBSIDY` fact -- the price never changes who is booked, and a
+  partner that gives none leaves the order booked and the fact unrecorded) over the live
   `ShipmentBookingPort.partners` list, so an edit never reroutes an order in
   flight. `SourcingMode.PARTNER_FIRST` is the fifth mode: the partner lane first,
   the fleet only once that lane ended with a definite answer, an uncertain attempt

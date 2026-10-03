@@ -14,6 +14,7 @@ import {
   DispatchOptions,
   DispatchRulesApi,
   DispatchRulesDocument,
+  RecentPlan,
   ScopeLevel,
   SimulationRequest,
   SimulationResult,
@@ -111,13 +112,22 @@ export class DispatchSimulator {
   protected readonly error = signal<string | null>(null);
   protected readonly result = signal<SimulationResult | null>(null);
 
-  protected readonly recentPlans = computed(() => this.options()?.recentPlans ?? []);
+  /**
+   * The recent orders the operator can re-read: the newest of the scope being viewed, so at the company or brand
+   * level they belong to several branches. The server finds a plan only at the branch it belongs to, so the
+   * ones whose branch cannot be placed are not offered at all.
+   */
+  protected readonly recentPlans = computed(() =>
+    (this.options()?.recentPlans ?? []).filter((plan) => this.branchOf(plan) !== null),
+  );
   protected readonly zones = computed(() => this.options()?.zones ?? []);
   protected readonly channels = computed(() => this.options()?.channels ?? []);
   protected readonly usingDraft = computed(() => this.dirty() && this.useDraft());
 
   protected readonly canRun = computed(
-    () => !this.running() && (this.mode() === 'facts' || this.planId() !== ''),
+    () =>
+      !this.running() &&
+      (this.mode() === 'facts' || this.recentPlans().some((plan) => plan.planId === this.planId())),
   );
 
   protected zoneLabel(zone: DispatchOptions['zones'][number]): string {
@@ -126,6 +136,16 @@ export class DispatchSimulator {
       displayNameUz: zone.nameUz,
       displayNameEn: zone.nameEn,
     });
+  }
+
+  /** An order's number and state, and the branch it was for when that is not the operator's own. */
+  protected planLabel(plan: RecentPlan): string {
+    const label = `${plan.orderReference} · ${plan.status}`;
+    if (plan.locationId === this.locationId()) {
+      return label;
+    }
+    const branch = this.options()?.locations.find((location) => location.id === plan.locationId);
+    return branch ? `${label} · ${branch.displayName}` : label;
   }
 
   protected modeLabel(mode: SimulationResult['decision']['mode']): MessageKey {
@@ -184,6 +204,28 @@ export class DispatchSimulator {
     }
   }
 
+  /**
+   * The branch a recent plan was for, or null when this screen cannot place it.
+   *
+   * What the draft is judged against follows the same ids (a branch's rules name what that branch may name),
+   * so a plan is only placed where the document being written reaches it: any branch of the company at the
+   * company level, a branch of this brand at the brand level, and only this branch at the branch level.
+   */
+  private branchOf(plan: RecentPlan): { brandId: string; locationId: string } | null {
+    if (plan.locationId === this.locationId()) {
+      return { brandId: this.brandId(), locationId: plan.locationId };
+    }
+    const level = this.scopeLevel();
+    if (level === 'LOCATION') {
+      return null;
+    }
+    const branch = this.options()?.locations.find((location) => location.id === plan.locationId);
+    if (!branch || (level === 'BRAND' && branch.brandId !== this.brandId())) {
+      return null;
+    }
+    return { brandId: branch.brandId, locationId: branch.id };
+  }
+
   private request(): SimulationRequest {
     const draft = this.usingDraft() ? this.draft() : null;
     const base = {
@@ -193,7 +235,11 @@ export class DispatchSimulator {
       ...(draft ? { draft } : {}),
     };
     if (this.mode() === 'plan') {
-      return { ...base, planId: this.planId() };
+      // The branch is the plan's own, not the operator's: the server answers 404 for a plan asked about at
+      // any other branch.
+      const plan = this.recentPlans().find((candidate) => candidate.planId === this.planId());
+      const branch = plan ? this.branchOf(plan) : null;
+      return { ...base, ...(branch ?? {}), planId: this.planId() };
     }
     const zone = this.result()?.facts.branchTimezone ?? FALLBACK_ZONE;
     return {

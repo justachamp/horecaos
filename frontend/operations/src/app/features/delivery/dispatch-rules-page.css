@@ -40,6 +40,10 @@
   border-radius: var(--q-radius);
 }
 
+.rules__fieldError {
+  color: var(--q-error-text);
+}
+
 .rules__error ul {
   margin: 4px 0 0;
   padding-left: 18px;

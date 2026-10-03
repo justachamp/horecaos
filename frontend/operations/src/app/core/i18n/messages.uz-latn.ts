@@ -3431,6 +3431,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.rules.name': 'Nomi',
   'delivery.rules.id': 'Identifikator',
   'delivery.rules.id.hint': 'Kichik harflar, raqamlar, chiziqchalar. Eʻlon qilingach oʻzgarmaydi.',
+  'delivery.rules.id.taken':
+    'Boshqa qoidada bunday identifikator allaqachon bor. Yozishda davom eting yoki maydondan chiqib, avvalgisini qaytaring.',
   'delivery.rules.when.heading': 'Qachon buyurtma…',
   'delivery.rules.when.hint':
     'Qoʻyilgan barcha shartlar bajarilishi kerak; boʻshi istalganiga mos.',

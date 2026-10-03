@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -18,6 +19,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
+import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -120,6 +122,72 @@ class JdbcProviderInstallationLookupTests {
     }
 
     @Test
+    void bindingsOfEqualScopeAndPriorityComeBackInOneStableOrder() {
+        UUID first = insertInstallation("DELIVERY", "yandex", "first");
+        UUID second = insertInstallation("DELIVERY", "noor", "second");
+        UUID lowerId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000001");
+        UUID higherId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000002");
+        // The higher id is written first, so the table's physical order is the reverse of the id order.
+        insertBinding(higherId, second, BRAND, null, 100);
+        insertBinding(lowerId, first, BRAND, null, 100);
+        insertCapability(higherId, CAPABILITY, false);
+        insertCapability(lowerId, CAPABILITY, false);
+
+        assertThat(lookup.candidateBindings(TENANT, BRAND, LOCATION, CAPABILITY))
+                .as("ties on scope and priority are the normal case, and the partner order a rule with no "
+                        + "explicit order falls back to must not depend on how the rows happen to be stored")
+                .extracting(BindingRef::bindingId)
+                .containsExactly(lowerId, higherId);
+
+        // Rewriting a row moves it in the heap; the order a rule saw yesterday must be today's order.
+        jdbc.sql("UPDATE integration.bindings SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", lowerId)
+                .update();
+        jdbc.sql("UPDATE integration.bindings SET status = 'ACTIVE' WHERE id = :id")
+                .param("id", lowerId)
+                .update();
+
+        assertThat(lookup.candidateBindings(TENANT, BRAND, LOCATION, CAPABILITY))
+                .extracting(BindingRef::bindingId)
+                .containsExactly(lowerId, higherId);
+    }
+
+    @Test
+    void equalBindingsAreOrderedByIdWhateverOrderTheyArriveIn() {
+        UUID brand = BRAND;
+        BindingRef low = ref(UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000001"), brand, null);
+        BindingRef mid = ref(UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000002"), brand, null);
+        BindingRef high = ref(UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000003"), brand, null);
+        BindingRef atLocation = ref(UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000004"), brand, LOCATION);
+
+        for (List<BindingRef> arrival : List.of(
+                List.of(high, mid, low, atLocation),
+                List.of(mid, atLocation, high, low),
+                List.of(low, high, atLocation, mid))) {
+            List<JdbcProviderInstallationLookup.Candidate> candidates = arrival.stream()
+                    .map(binding -> new JdbcProviderInstallationLookup.Candidate(binding, false, 100))
+                    .toList();
+
+            assertThat(JdbcProviderInstallationLookup.inBindingOrder(candidates))
+                    .as("scope first, then priority, then the one thing about a binding that never changes")
+                    .extracting(BindingRef::bindingId)
+                    .containsExactly(atLocation.bindingId(), low.bindingId(), mid.bindingId(), high.bindingId());
+        }
+    }
+
+    @Test
+    void aLowerPriorityNumberStillBeatsALowerId() {
+        BindingRef lowerId = ref(UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000001"), BRAND, null);
+        BindingRef higherId = ref(UUID.fromString("018f6f4e-899d-7b1c-a8cf-000000000002"), BRAND, null);
+
+        assertThat(JdbcProviderInstallationLookup.inBindingOrder(List.of(
+                        new JdbcProviderInstallationLookup.Candidate(lowerId, false, 200),
+                        new JdbcProviderInstallationLookup.Candidate(higherId, false, 100))))
+                .extracting(BindingRef::bindingId)
+                .containsExactly(higherId.bindingId(), lowerId.bindingId());
+    }
+
+    @Test
     void twoPrimaryBindingsForOneScopeAndCapabilityCannotCoexist() {
         UUID first = insertInstallation("DELIVERY", "yandex", "first");
         UUID second = insertInstallation("DELIVERY", "noor", "second");
@@ -200,6 +268,11 @@ class JdbcProviderInstallationLookupTests {
         assertThat(snapshot.baseUrl()).startsWith("https://");
     }
 
+    private static BindingRef ref(UUID bindingId, UUID brandId, @Nullable UUID locationId) {
+        return new BindingRef(
+                bindingId, UUID.randomUUID(), TENANT, ProviderCategory.DELIVERY, "yandex", brandId, locationId);
+    }
+
     private void insertEnvironment(String code, String category, String type) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments
@@ -236,7 +309,10 @@ class JdbcProviderInstallationLookupTests {
     }
 
     private UUID insertBinding(UUID installationId, UUID brandId, @Nullable UUID locationId, int priority) {
-        UUID id = UUID.randomUUID();
+        return insertBinding(UUID.randomUUID(), installationId, brandId, locationId, priority);
+    }
+
+    private UUID insertBinding(UUID id, UUID installationId, UUID brandId, @Nullable UUID locationId, int priority) {
         jdbc.sql("""
                 INSERT INTO integration.bindings
                     (id, tenant_id, installation_id, brand_id, location_id, status, priority, effective_from)

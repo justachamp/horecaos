@@ -181,7 +181,9 @@ public class DispatchRulesAuthoringService {
                 store.deliveryInstallations(tenantId).stream()
                         .map(InstallationRow::id)
                         .collect(Collectors.toSet()),
-                store.deliveryZones(tenantId).stream().map(ZoneRow::id).collect(Collectors.toSet()),
+                store.deliveryZones(tenantId, scope.brandId()).stream()
+                        .map(ZoneRow::id)
+                        .collect(Collectors.toSet()),
                 store.channels(tenantId).stream().map(ChannelRow::id).collect(Collectors.toSet()),
                 store.locationsInScope(tenantId, scope.brandId(), scope.locationId()).stream()
                         .map(LocationRow::id)
@@ -195,7 +197,7 @@ public class DispatchRulesAuthoringService {
         UUID tenantId = tenantOf(scope);
         return new Options(
                 store.deliveryInstallations(tenantId),
-                store.deliveryZones(tenantId),
+                store.deliveryZones(tenantId, scope.brandId()),
                 store.channels(tenantId),
                 store.locationsInScope(tenantId, scope.brandId(), scope.locationId()),
                 groupingAllowed);
