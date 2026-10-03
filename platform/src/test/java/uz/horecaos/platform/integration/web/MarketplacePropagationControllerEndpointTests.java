@@ -272,7 +272,9 @@ class MarketplacePropagationControllerEndpointTests {
                     """)
                     .param("id", UUID.randomUUID())
                     .param("t", tenant)
-                    .param("code", "CH" + installation.toString().substring(0, 8).toUpperCase())
+                    .param(
+                            "code",
+                            "CH" + installation.toString().substring(0, 8).toUpperCase())
                     .param("name", name)
                     .param("i", installation)
                     .update();
