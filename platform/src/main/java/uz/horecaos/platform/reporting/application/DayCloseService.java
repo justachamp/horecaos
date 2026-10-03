@@ -115,6 +115,14 @@ public class DayCloseService {
         store.clearDay(tenantId, businessDate);
         store.clearMisfiledOrders(
                 tenantId, derived.orders().stream().map(OrderFact::orderId).toList(), businessDate);
+        // The promotion fact is keyed by redemption alone, so a redemption a boundary change moved
+        // onto this day must leave the day it was filed under first.
+        store.clearMisfiledPromotionRedemptions(
+                tenantId,
+                derived.promotionRedemptions().stream()
+                        .map(ReportingFacts.PromotionRedemptionFact::redemptionId)
+                        .toList(),
+                businessDate);
 
         derived.orders().forEach(store::insertOrderFact);
         // P39: the tender producer, right beside the order-fact write and inside
@@ -180,7 +188,10 @@ public class DayCloseService {
      * <p>Nothing stored is changed. The comparison runs at the branch-day grain
      * on the three figures a person acts on — gross revenue, net revenue, and the
      * completed order count — because a divergence report that lists every column
-     * of every slice is one nobody reads.
+     * of every slice is one nobody reads. The promotion redemption fact (ADR 0140,
+     * report 7.9) is compared beside them, per brand, on the redemption count and
+     * the discount and markup given: the ledger moves after a day closes when an
+     * amendment restates a row, and this is where that is reported.
      */
     @Transactional
     public CloseResult recut(UUID tenantId, LocalDate businessDate) {
@@ -231,6 +242,8 @@ public class DayCloseService {
                     after == null ? 0 : after.orderCount());
         }
 
+        comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
+
         for (Divergence divergence : divergences) {
             store.insertDivergence(
                     UUID.randomUUID(),
@@ -239,7 +252,7 @@ public class DayCloseService {
                     businessDate,
                     divergence.metricName(),
                     divergence.metricVersion(),
-                    describe(divergence.key()),
+                    divergence.dimension(),
                     divergence.storedValue(),
                     divergence.recutValue());
         }
@@ -618,8 +631,52 @@ public class DayCloseService {
 
     private static void compare(
             List<Divergence> into, BranchDayKey key, String metricName, int metricVersion, long stored, long recut) {
+        compare(into, describe(key), metricName, metricVersion, stored, recut);
+    }
+
+    private static void compare(
+            List<Divergence> into, String dimension, String metricName, int metricVersion, long stored, long recut) {
         if (stored != recut) {
-            into.add(new Divergence(key, metricName, metricVersion, stored, recut));
+            into.add(new Divergence(dimension, metricName, metricVersion, stored, recut));
+        }
+    }
+
+    /**
+     * ADR 0140 (7.9): the redemption count and the discount and markup given, per brand, against
+     * the rows the close stored.
+     *
+     * <p>The ledger is final when an order completes, but an amendment applied or a redemption
+     * recorded late changes a row after the day closed, and the record says such a change is "a
+     * divergence for recut to report, not a silent rewrite". Nothing else would: a promotion's
+     * discount is inside the day's gross and net revenue only as a difference between two figures
+     * that both moved.
+     */
+    private void comparePromotionFacts(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readPromotionDayTotals(tenantId, businessDate)
+                .forEach(total -> stored.put(
+                        total.brandId(), new long[] {total.redemptions(), total.discountMinor(), total.markupMinor()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.brandId(), brand -> new long[3]);
+            totals[0]++;
+            totals[1] += fact.discountMinor();
+            totals[2] += fact.markupMinor();
+        }
+        java.util.Set<UUID> brands = new java.util.LinkedHashSet<>(stored.keySet());
+        brands.addAll(fresh.keySet());
+        long[] none = new long[3];
+        for (UUID brand : brands) {
+            long[] before = stored.getOrDefault(brand, none);
+            long[] after = fresh.getOrDefault(brand, none);
+            String dimension = "brand=%s".formatted(brand);
+            compare(into, dimension, "promotion.redemptions", 1, before[0], after[0]);
+            compare(into, dimension, "promotion.discount", 1, before[1], after[1]);
+            compare(into, dimension, "promotion.markup", 1, before[2], after[2]);
         }
     }
 
@@ -655,7 +712,7 @@ public class DayCloseService {
      * along with the figure that is still on the screen.
      */
     public record Divergence(
-            BranchDayKey key, String metricName, int metricVersion, long storedValue, long recutValue) {
+            String dimension, String metricName, int metricVersion, long storedValue, long recutValue) {
 
         public long difference() {
             return recutValue - storedValue;

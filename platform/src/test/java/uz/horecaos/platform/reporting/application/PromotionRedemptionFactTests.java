@@ -30,6 +30,7 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionSource;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionSource.Redemption;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionSource.Redemption.Kind;
+import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -176,6 +177,86 @@ class PromotionRedemptionFactTests {
     }
 
     @Test
+    @DisplayName(
+            "a boundary change that moves a redemption to the neighbouring day moves its fact, and the close does not abort")
+    void aBoundaryChangeMovesTheFactInsteadOfViolatingItsKey() {
+        UUID order = insertOrder("SEAM", 100_000, "COMPLETED", CUSTOMER_A);
+        source.add(redemption(order, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+        close.close(TENANT, DAY);
+        assertThat(factDates()).containsExactly(DAY);
+
+        // The tenant moves its business day to start at 14:00: the redemption at 13:01 now belongs to
+        // the business day that began at 14:00 the day before.
+        new BusinessDayService(store)
+                .setBoundary(TENANT, new BusinessDayBoundary(TASHKENT, LocalTime.of(14, 0), 2), DAY, null);
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> close.close(TENANT, DAY.minusDays(1)))
+                .as("the same redemption id re-inserted under the previous day used to violate its primary key")
+                .doesNotThrowAnyException();
+
+        assertThat(factDates())
+                .as("one row for the redemption, on the day it now belongs to")
+                .containsExactly(DAY.minusDays(1));
+    }
+
+    @Test
+    @DisplayName("a recut reports a promotion fact that changed after the day closed, and leaves the stored rows alone")
+    void aRecutReportsAPromotionFactThatChangedAfterTheClose() {
+        UUID first = insertOrder("RC1", 100_000, "COMPLETED", CUSTOMER_A);
+        UUID second = insertOrder("RC2", 80_000, "COMPLETED", CUSTOMER_B);
+        source.add(redemption(first, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+        close.close(TENANT, DAY);
+
+        // After the close an amendment restated the first redemption, and the second order's
+        // promotion was recorded late.
+        source.clear();
+        source.add(redemption(first, Kind.AUTOMATIC, null, CUSTOMER_A, 7_000, 0));
+        source.add(redemption(second, Kind.AUTOMATIC, null, CUSTOMER_B, 2_000, 0));
+
+        var result = close.recut(TENANT, DAY);
+
+        assertThat(result.divergences())
+                .extracting(DayCloseService.Divergence::metricName)
+                .containsExactlyInAnyOrder("promotion.redemptions", "promotion.discount");
+        assertThat(result.divergences())
+                .filteredOn(d -> d.metricName().equals("promotion.redemptions"))
+                .singleElement()
+                .satisfies(d -> {
+                    assertThat(d.storedValue()).isEqualTo(1L);
+                    assertThat(d.recutValue()).isEqualTo(2L);
+                });
+        assertThat(result.divergences())
+                .filteredOn(d -> d.metricName().equals("promotion.discount"))
+                .singleElement()
+                .satisfies(d -> {
+                    assertThat(d.storedValue()).isEqualTo(10_000L);
+                    assertThat(d.recutValue()).isEqualTo(9_000L);
+                });
+        assertThat(jdbc.sql("SELECT count(*) FROM reporting.aggregate_divergences WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
+                .as("recorded for a person to decide, not applied")
+                .isEqualTo(2L);
+        assertThat(jdbc.sql("SELECT sum(discount_minor) FROM reporting.fact_promotion_redemption WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
+                .as("the stored fact is still what the day was closed with")
+                .isEqualTo(10_000L);
+    }
+
+    @Test
+    @DisplayName("a recut of a day whose promotion facts have not moved reports nothing")
+    void aRecutOfUnchangedPromotionFactsIsClean() {
+        UUID order = insertOrder("RC3", 100_000, "COMPLETED", CUSTOMER_A);
+        source.add(redemption(order, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+        close.close(TENANT, DAY);
+
+        assertThat(close.recut(TENANT, DAY).divergences()).isEmpty();
+    }
+
+    @Test
     @DisplayName("the summary counts redemptions, unique customers and discount, and leaves a cancelled order"
             + " out while the log keeps it with its status")
     void theSummaryExcludesCancelledOrdersAndTheLogKeepsThem() {
@@ -302,6 +383,14 @@ class PromotionRedemptionFactTests {
         assertThat(orders).isEqualTo(1L);
     }
 
+    private List<LocalDate> factDates() {
+        return jdbc.sql("SELECT business_date FROM reporting.fact_promotion_redemption WHERE tenant_id = :t"
+                        + " ORDER BY business_date")
+                .param("t", TENANT)
+                .query(LocalDate.class)
+                .list();
+    }
+
     // ---------------------------------------------------------------- setup
 
     private Redemption redemption(
@@ -328,6 +417,10 @@ class PromotionRedemptionFactTests {
 
         void add(Redemption redemption) {
             all.add(redemption);
+        }
+
+        void clear() {
+            all.clear();
         }
 
         @Override
