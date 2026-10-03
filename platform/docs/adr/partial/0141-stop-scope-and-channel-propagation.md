@@ -39,6 +39,16 @@
   `MarketplaceChannelWentStale`, the ADR 0006 failure and the ADR 0058 alert for items unconfirmed
   past their bound; the Phase 3 dry-run mode; and a console dialog for the explainer (the
   endpoint and the per-stop tooltip exist).
+  Corrected after the batch-17 review (`fix17-f-stops`): the effective cross-sell preview
+  (`GET .../recommendations/effective`) and the storefront single-variant availability read
+  now go through the stops too (the preview drops a target stopped on every channel at the
+  branch; the storefront read takes its `channel` as the tenant's channel code, as the menu does,
+  and still accepts a bare system type); a stop is claimable at once on an item row that is
+  backing off, including when it lands while a restore is in flight; one reconcile pass checks
+  its time budget before every call, closes the door after two unknown outcomes in a row and
+  leaves a hung binding alone for a while; and the propagation read gives a `reason` and reads
+  `MANUAL` when the reconciler cannot act on a binding (installation not active, no single
+  channel behind it, nothing swept) instead of "in sync".
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)
