@@ -1567,6 +1567,7 @@ export interface ChannelPreviewResponse {
   categories?: Array<ProjectedCategory>;
   channel?: PreviewChannelView;
   channelReady?: boolean;
+  comboGroups?: Array<MenuComboGroup>;
   findings?: Array<PreviewFindingView>;
   items?: Array<ProjectedProduct>;
   locale?: string;
@@ -6851,11 +6852,13 @@ export interface ProjectedCategory {
 
 export interface ProjectedProduct {
   code?: string;
+  comboGroupIds?: Array<string>;
   description?: string;
   imageUrls?: Array<string>;
   mediaAssetIds?: Array<string>;
   mediaSource?: "DEFAULT" | "CHANNEL_RELATION" | "CHANNEL_OVERRIDE";
   modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
   variants?: Array<ProjectedVariant>;

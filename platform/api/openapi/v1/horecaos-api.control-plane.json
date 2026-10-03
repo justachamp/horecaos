@@ -2047,6 +2047,12 @@
           "channelReady" : {
             "type" : "boolean"
           },
+          "comboGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboGroup"
+            },
+            "type" : "array"
+          },
           "findings" : {
             "items" : {
               "$ref" : "#/components/schemas/PreviewFindingView"
@@ -5570,6 +5576,84 @@
         },
         "type" : "object"
       },
+      "MenuComboComponent" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "defaultQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "orderable" : {
+            "type" : "boolean"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuComboGroup" : {
+        "properties" : {
+          "allowSameComponentMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "comboGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "components" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboComponent"
+            },
+            "type" : "array"
+          },
+          "containerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MenuItemRequest" : {
         "properties" : {
           "availabilityDefault" : {
@@ -5643,6 +5727,26 @@
               "$ref" : "#/components/schemas/MenuModifierOption"
             },
             "type" : "array"
+          },
+          "required" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuModifierGroupPolicy" : {
+        "properties" : {
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
           },
           "required" : {
             "type" : "boolean"
@@ -8193,6 +8297,13 @@
           "code" : {
             "type" : "string"
           },
+          "comboGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "description" : {
             "type" : "string"
           },
@@ -8216,6 +8327,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modifierGroupPolicies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
           },

@@ -12,7 +12,9 @@ import uz.horecaos.platform.catalog.application.ChannelProjection.MediaSource;
 import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuCategory;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuComboGroup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroup;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroupPolicy;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuProduct;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MarketplaceBindingRow;
@@ -40,6 +42,8 @@ import uz.horecaos.platform.tenancy.api.SalesChannel;
  *     decides: no universal blocker
  * @param channelReady {@code publishable} and no blocker from the projection or a
  *     marketplace ruleset
+ * @param comboGroups the choices every combo on the menu asks for (ADR 0136), the whole menu's, so
+ *     first page only like {@code modifierGroups}
  * @param items one page of products, ordered by product id
  * @param nextCursor null on the last page
  */
@@ -54,6 +58,7 @@ public record ChannelPreviewResponse(
         List<PreviewFindingView> findings,
         List<ProjectedCategory> categories,
         List<MenuModifierGroup> modifierGroups,
+        List<MenuComboGroup> comboGroups,
         List<ProjectedProduct> items,
         @Nullable String nextCursor) {
 
@@ -79,6 +84,7 @@ public record ChannelPreviewResponse(
                                 .toList()
                         : List.of(),
                 firstPage ? preview.modifierGroups() : List.of(),
+                firstPage ? preview.comboGroups() : List.of(),
                 preview.products().stream()
                         .map(product -> ProjectedProduct.of(product, media, tenantId))
                         .toList(),
@@ -181,7 +187,11 @@ public record ChannelPreviewResponse(
             List<String> imageUrls,
             MediaSource mediaSource,
             List<ProjectedVariant> variants,
-            List<UUID> modifierGroupIds) {
+            List<UUID> modifierGroupIds,
+            // ADR 0136, as the live menu serves them: the combo groups whose container is one of
+            // this product's variants, and its own min/max/required for a group it overrides.
+            List<UUID> comboGroupIds,
+            List<MenuModifierGroupPolicy> modifierGroupPolicies) {
 
         static ProjectedProduct of(MenuProduct product, Map<UUID, ResolvedMedia> media, UUID tenantId) {
             ResolvedMedia resolved = media.get(product.productId());
@@ -196,7 +206,9 @@ public record ChannelPreviewResponse(
                     product.variants().stream()
                             .map(variant -> ProjectedVariant.of(variant, media, tenantId))
                             .toList(),
-                    product.modifierGroupIds());
+                    product.modifierGroupIds(),
+                    product.comboGroupIds(),
+                    product.modifierGroupPolicies());
         }
     }
 

@@ -4935,6 +4935,12 @@
           "channelReady" : {
             "type" : "boolean"
           },
+          "comboGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboGroup"
+            },
+            "type" : "array"
+          },
           "findings" : {
             "items" : {
               "$ref" : "#/components/schemas/PreviewFindingView"
@@ -21568,6 +21574,13 @@
           "code" : {
             "type" : "string"
           },
+          "comboGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "description" : {
             "type" : "string"
           },
@@ -21591,6 +21604,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modifierGroupPolicies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
           },

@@ -18,6 +18,7 @@ import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssembledMenu;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssemblyInput;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuCategory;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuComboGroup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuProduct;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
@@ -228,6 +229,7 @@ public class ChannelPreviewService {
                 findings,
                 menu.categories(),
                 menu.modifierGroups(),
+                menu.comboGroups(),
                 List.copyOf(page),
                 hasMore,
                 mediaPlan.resolved());
@@ -654,6 +656,7 @@ public class ChannelPreviewService {
      * @param products one page, ordered by product id
      * @param hasMore whether a further page follows {@code products}
      * @param categories the whole menu's, not the page's
+     * @param comboGroups the choices every combo on the menu asks for (ADR 0136), the whole menu's
      */
     public record ChannelPreview(
             SalesChannel channel,
@@ -667,6 +670,7 @@ public class ChannelPreviewService {
             List<PreviewFinding> findings,
             List<MenuCategory> categories,
             List<MenuModifierGroup> modifierGroups,
+            List<MenuComboGroup> comboGroups,
             List<MenuProduct> products,
             boolean hasMore,
             Map<UUID, ResolvedMedia> media) {}

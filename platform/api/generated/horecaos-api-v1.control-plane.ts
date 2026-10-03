@@ -667,6 +667,7 @@ export interface ChannelPreviewResponse {
   categories?: Array<ProjectedCategory>;
   channel?: PreviewChannelView;
   channelReady?: boolean;
+  comboGroups?: Array<MenuComboGroup>;
   findings?: Array<PreviewFindingView>;
   items?: Array<ProjectedProduct>;
   locale?: string;
@@ -1773,6 +1774,30 @@ export interface MediaRelationView {
   sortOrder?: number;
 }
 
+export interface MenuComboComponent {
+  amountMinor?: number;
+  componentId?: string;
+  defaultQuantity?: number;
+  name?: string;
+  orderable?: boolean;
+  productId?: string;
+  sortOrder?: number;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface MenuComboGroup {
+  allowSameComponentMultipleTimes?: boolean;
+  code?: string;
+  comboGroupId?: string;
+  components?: Array<MenuComboComponent>;
+  containerVariantId?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  name?: string;
+  sortOrder?: number;
+}
+
 export interface MenuItemRequest {
   availabilityDefault: string;
   sortOrder?: number;
@@ -1796,6 +1821,13 @@ export interface MenuModifierGroup {
   modifierGroupId?: string;
   name?: string;
   options?: Array<MenuModifierOption>;
+  required?: boolean;
+}
+
+export interface MenuModifierGroupPolicy {
+  maximumSelections?: number;
+  minimumSelections?: number;
+  modifierGroupId?: string;
   required?: boolean;
 }
 
@@ -2630,11 +2662,13 @@ export interface ProjectedCategory {
 
 export interface ProjectedProduct {
   code?: string;
+  comboGroupIds?: Array<string>;
   description?: string;
   imageUrls?: Array<string>;
   mediaAssetIds?: Array<string>;
   mediaSource?: "DEFAULT" | "CHANNEL_RELATION" | "CHANNEL_OVERRIDE";
   modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
   variants?: Array<ProjectedVariant>;
