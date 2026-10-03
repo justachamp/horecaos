@@ -46,6 +46,7 @@ import uz.horecaos.platform.integration.api.marketplace.PushConclusion;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.BindingRow;
 import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.Mode;
+import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.Reason;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.inventory.api.StopSource;
@@ -183,7 +184,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 jdbc,
                 // A seeded jitter would still be a delay; the clock is advanced explicitly.
                 RetryBackoff.randomisedBy(Duration.ofSeconds(5), Duration.ofMinutes(10), new java.util.Random(7)));
-        propagation = new MarketplacePropagationQuery(store, registry, resolver);
+        propagation = new MarketplacePropagationQuery(store, registry, resolver, channels);
     }
 
     // -----------------------------------------------------------------------
@@ -822,6 +823,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 .isZero();
         assertThat(propagation.at(w.tenant, w.location)).singleElement().satisfies(summary -> {
             assertThat(summary.mode()).isEqualTo(Mode.MANUAL);
+            assertThat(summary.reason()).isEqualTo(Reason.NO_ADAPTER);
             assertThat(summary.pending() + summary.uncertain() + summary.inSync())
                     .isZero();
         });
@@ -838,6 +840,7 @@ class MarketplaceAvailabilityReconcilerTests {
         MarketplacePropagationQuery.Binding view =
                 propagation.at(w.tenant, w.location).get(0);
         assertThat(view.mode()).isEqualTo(Mode.AUTOMATIC);
+        assertThat(view.reason()).as("acted on, so there is nothing to explain").isNull();
         assertThat(view.pending()).isEqualTo(2);
         assertThat(view.oldestUnconfirmedSince()).isEqualTo(clock.instant());
         assertThat(view.unconfirmedItems())
@@ -849,6 +852,74 @@ class MarketplaceAvailabilityReconcilerTests {
         assertThat(view.unconfirmedItems().toString())
                 .as("identifiers, counts and codes only (ADR 0029)")
                 .doesNotContain("Plov");
+    }
+
+    // -----------------------------------------------------------------------
+    // The propagation read does not say "in sync" for a binding nothing acts on
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a binding whose installation is no longer active reads MANUAL, not the in sync its old rows suggest")
+    void aBindingWithAnInactiveInstallationIsManual() {
+        World w = world();
+        reconcile(w);
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode())
+                .as("sanity: acted on and in sync")
+                .isEqualTo(Mode.AUTOMATIC);
+
+        jdbc.sql("UPDATE integration.installations SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", w.installation)
+                .update();
+
+        MarketplacePropagationQuery.Binding view =
+                propagation.at(w.tenant, w.location).get(0);
+        assertThat(view.mode())
+                .as("the worklist leaves the binding out, so nothing will be pushed and a recall must be made by hand")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(view.reason()).isEqualTo(Reason.INSTALLATION_INACTIVE);
+    }
+
+    @Test
+    @DisplayName("a binding with no single sales channel behind its installation reads MANUAL")
+    void aBindingWithoutAnUnambiguousChannelIsManual() {
+        World w = world();
+        reconcile(w);
+        jdbc.sql("UPDATE tenant.sales_channels SET provider_installation_id = NULL WHERE id = :id")
+                .param("id", w.channel)
+                .update();
+        markDirty(w);
+        reconcile(w);
+
+        MarketplacePropagationQuery.Binding view =
+                propagation.at(w.tenant, w.location).get(0);
+        assertThat(view.mode())
+                .as("the sweep resolves nothing without a channel, so no stop is ever pushed")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(view.reason()).isEqualTo(Reason.CHANNEL_UNRESOLVED);
+    }
+
+    @Test
+    @DisplayName("a binding with nothing mapped, or not yet swept, reads MANUAL rather than an empty in sync")
+    void aBindingTheReconcilerKeepsNoItemsForIsManual() {
+        World w = world();
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode())
+                .as("created, mapped, but the reconciler has not looked at it yet")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(propagation.at(w.tenant, w.location).get(0).reason()).isEqualTo(Reason.NO_ITEMS_TRACKED);
+
+        reconcile(w);
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode()).isEqualTo(Mode.AUTOMATIC);
+
+        jdbc.sql("DELETE FROM integration.provider_entity_mappings WHERE binding_id = :b")
+                .param("b", w.binding)
+                .update();
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode())
+                .as("every mapping is gone, the rows are gone, and nothing will be pushed")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(propagation.at(w.tenant, w.location).get(0).reason()).isEqualTo(Reason.NO_ITEMS_TRACKED);
     }
 
     @Test

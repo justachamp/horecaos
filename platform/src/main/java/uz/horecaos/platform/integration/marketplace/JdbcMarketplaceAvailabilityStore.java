@@ -513,7 +513,8 @@ public class JdbcMarketplaceAvailabilityStore {
     /** Counts and the oldest pending moment for each binding at one location. */
     public List<BindingSummary> summariesAtLocation(UUID tenantId, UUID locationId) {
         return jdbc.sql("""
-                SELECT b.id AS binding_id, i.provider_type, i.display_name,
+                SELECT b.id AS binding_id, b.installation_id AS installation_id, i.status AS installation_status,
+                       i.provider_type, i.display_name,
                        count(a.*) FILTER (WHERE a.state = 'IN_SYNC') AS in_sync,
                        count(a.*) FILTER (WHERE a.state = 'PENDING') AS pending,
                        count(a.*) FILTER (WHERE a.state = 'UNCERTAIN') AS uncertain,
@@ -533,8 +534,8 @@ public class JdbcMarketplaceAvailabilityStore {
                        ON w.tenant_id = b.tenant_id AND w.binding_id = b.id AND w.direction = 'OUTBOUND'
                 WHERE b.tenant_id = :tenantId AND b.location_id = :locationId
                   AND i.provider_category = 'MARKETPLACE' AND b.status = 'ACTIVE'
-                GROUP BY b.id, i.provider_type, i.display_name, s.last_sweep_at, s.reconcile_was_enabled,
-                         w.last_success_at, w.last_failure_at, w.last_failure_code
+                GROUP BY b.id, b.installation_id, i.status, i.provider_type, i.display_name, s.last_sweep_at,
+                         s.reconcile_was_enabled, w.last_success_at, w.last_failure_at, w.last_failure_code
                 ORDER BY i.display_name, b.id
                 """)
                 .param("tenantId", tenantId)
@@ -552,7 +553,9 @@ public class JdbcMarketplaceAvailabilityStore {
                         row.getObject("reconcile_was_enabled") == null || row.getBoolean("reconcile_was_enabled"),
                         instant(row.getObject("last_success_at", OffsetDateTime.class)),
                         instant(row.getObject("last_failure_at", OffsetDateTime.class)),
-                        row.getString("last_failure_code")))
+                        row.getString("last_failure_code"),
+                        row.getObject("installation_id", UUID.class),
+                        "ACTIVE".equals(row.getString("installation_status"))))
                 .list();
     }
 
@@ -683,7 +686,9 @@ public class JdbcMarketplaceAvailabilityStore {
             boolean reconcileEnabled,
             @Nullable Instant lastSuccessAt,
             @Nullable Instant lastFailureAt,
-            @Nullable String lastFailureCode) {}
+            @Nullable String lastFailureCode,
+            UUID installationId,
+            boolean installationActive) {}
 
     public record Watermark(String alertState, @Nullable Instant lastSuccessAt, int staleAfterSeconds) {}
 

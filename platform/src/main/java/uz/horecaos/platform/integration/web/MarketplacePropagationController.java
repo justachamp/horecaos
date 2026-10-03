@@ -39,8 +39,9 @@ public class MarketplacePropagationController {
     @Operation(
             summary = "Per marketplace binding: pending and unconfirmed items, and since when",
             description = "ADR 0141. mode is AUTOMATIC (the platform pushes and these counts say how "
-                    + "many items it has not been able to confirm), MANUAL (this provider has no "
-                    + "availability write API: nothing is pushed, update the partner portal by hand) "
+                    + "many items it has not been able to confirm), MANUAL (the platform is not "
+                    + "pushing to this marketplace: update the partner portal by hand; reason is "
+                    + "NO_ADAPTER, INSTALLATION_INACTIVE, CHANNEL_UNRESOLVED or NO_ITEMS_TRACKED) "
                     + "or SUSPENDED (the reconcile switch is off). No item names and no provider "
                     + "response bodies: identifiers, counts, timestamps and stable codes.")
     public ResponseEntity<PropagationResponse> propagation(
@@ -57,6 +58,7 @@ public class MarketplacePropagationController {
             String providerType,
             String displayName,
             String mode,
+            @Nullable String reason,
             int inSync,
             int pending,
             int uncertain,
@@ -74,6 +76,7 @@ public class MarketplacePropagationController {
                     binding.providerType(),
                     binding.displayName(),
                     binding.mode().name(),
+                    binding.reason() == null ? null : binding.reason().name(),
                     binding.inSync(),
                     binding.pending(),
                     binding.uncertain(),
