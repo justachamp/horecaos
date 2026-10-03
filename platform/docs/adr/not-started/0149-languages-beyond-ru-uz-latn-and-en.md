@@ -2,35 +2,71 @@
 
 - Decision status: Proposed
 - Implementation status: Not started — the platform speaks three languages and
-  records that fact in twenty-seven independent declarations (seven lists and enums,
-  four SQL orderings, thirteen constraints and three frontend mirrors, counted by
-  grep on 2026-10-01), before counting the catalogues themselves. None of them is
-  wrong; no one is the source of the others. Backend: `BrandProfile.KNOWN_LOCALES`
+  records that fact in more than sixty independent declarations, counted by grep on
+  the integrated tree (wave 17) on 2026-10-03, before counting the catalogues
+  themselves. None of them is wrong; no one is the source of the others. The first
+  draft of this record counted twenty-seven on 2026-10-01; that count missed
+  declarations that already existed and the ones that arrived with the staff member
+  record (V0453), and its account of where the spelling splits was wrong. Both are
+  corrected here.
+  *Backend, fourteen lists, enums and switches:* `BrandProfile.KNOWN_LOCALES`
   (`tenancy.domain`, "the closed set the console can author content in today"),
   `TenantLocaleSet.PLATFORM_LOCALES` (`tenancy.api`), the enums
-  `notifications.domain.MessageLocale` and `legal.domain.TermsLocale` (each
-  declared locally because "none of those types live in an `api` package another
-  module may depend on"), `OrderOutcomeReasonService.REQUIRED_LOCALES`,
-  `marketing.domain.AudiencePredicate.SUPPORTED_LOCALES`, the Telegram bot's
-  `TelegramBotMessages`, four `CASE t.locale WHEN 'ru' …` fallback orderings in
-  `JdbcCatalogStore` (two of them also know a bare `uz`), and thirteen `CHECK` constraints on a
-  locale column — nine spelling the set `('ru', 'uz-Latn', 'en')` (V0026 twice,
-  V0029, V0043, V0119, V0160, V0244, V0404, V0423) and four spelling it
-  `('uz', 'ru', 'en')` (V0210, V0213, V0215, V0313: the owner invitation, its
-  event log, the password reset and the staff invitation). Clients: the operations
-  and control-plane catalogues (`messages.ru.ts`, `messages.uz-latn.ts`,
-  `messages.en.ts`, typed so a missing key fails the build), the two storefronts'
-  `ru.json` / `uz.json` / `en.json`, the mobile app's `app_ru.arb` / `app_uz.arb` /
-  `app_en.arb`, and three frontend mirrors of the backend list
-  (`brand-profile-page.ts`, `locations-api.ts`, `core/i18n/i18n.ts`). Already open:
-  `tenant.brand_locales` (V0242: a brand's own supported set and default, subset
-  of the known list), `catalog.comment_preset_translations`,
-  `fulfillment.region_translations` and `fulfillment.service_zone_translations` (V0430, V0431: a
-  BCP 47 shape check and no closed set — "so a fourth language does not need a
-  migration"), `TenantLocaleSet.union`, and a brand editor that can hold a set.
-  Not built: any language beyond the three, a typeface for Georgian (and a checked
-  one for Kazakh), a `dir` decision (the operations `index.html` ships `lang="ru"`
-  and no `dir`), and a single place that says which languages exist.
+  `notifications.domain.MessageLocale`, `legal.domain.TermsLocale` and
+  `tenancy.domain.channel.ChannelPageLocale` (each declared locally because "none of
+  those types live in an `api` package another module may depend on"),
+  `OrderOutcomeReasonService.REQUIRED_LOCALES`,
+  `marketing.domain.AudiencePredicate.SUPPORTED_LOCALES`,
+  `ReferenceDataController.LOCALES` (the list the control plane is already served),
+  the Telegram bot's `TelegramBotMessages` and `TelegramUpdateHandler`, and four sets
+  spelled with a bare `uz`: `OwnerInvitationService.LOCALES`,
+  `StaffInvitationService.LOCALES`, `PasswordResetService.LOCALES` and
+  `StaffMembers.UI_LOCALES`. *Four SQL orderings:* `CASE t.locale WHEN 'ru' …` in
+  `JdbcCatalogStore`, two of them also knowing a bare `uz`. *Fourteen closed
+  `CHECK`s on a locale column:* nine spelling the set `('ru', 'uz-Latn', 'en')`
+  (V0026 twice, V0029, V0043, V0119, V0160, V0244, V0404, V0423) and five spelling it
+  with a bare `uz`: `('uz', 'ru', 'en')` in V0210, V0213, V0215 and V0313 (the owner
+  invitation, its event log, the password reset and the staff invitation) and
+  `('ru', 'uz', 'en')` in V0453 (`ck_staff_member_locale`, the staff member's
+  interface language). *Clients:* the operations and control-plane catalogues
+  (`messages.ru.ts`, `messages.uz-latn.ts`, `messages.en.ts`, typed so a missing key
+  fails the build), the two storefronts' `ru.json` / `uz.json` / `en.json`, the mobile
+  app's `app_ru.arb` / `app_uz.arb` / `app_en.arb`, at least nineteen hand-kept
+  lists and union types (operations ten lists and four unions, among them
+  `i18n.ts`, `brand-profile-page.ts`, `locations-api.ts`, `template-editor.ts`,
+  `notifications-page.ts`, `audience-predicates.ts`, `STAFF_LANGUAGES` and
+  `OFFERED_LANGUAGES`; control plane three lists and two unions) and sixteen
+  one-line conversions or comparisons between `uz` and `uz-Latn` in the two consoles.
+  *Where the spelling splits.* A bare `uz` is the stored value in the five
+  constrained columns above; in `customer.customer_accounts.preferred_locale`
+  (V0017, free text), which the storefront's language screen fills with the id of the
+  language it offers (`uz`, `ru`, `en`: `profile-language.ts`, and
+  `StorefrontCustomerSurfaceTests` asserts that `uz` reads back); and, unconstrained,
+  in the catalog's own vocabulary:
+  `catalog.translations.locale` (V0016, free text), the `names` keys inside the
+  published snapshots in `catalog.publication_items.immutable_content_json`
+  (V0016 revokes `UPDATE` and `DELETE` on that table from the application role),
+  `horecaos.catalog.default-locale` (default `uz`) and the storefront's
+  `?locale=uz`. `CatalogLocales` and the console's `toCatalogLocale` translate that
+  vocabulary to and from the platform's `uz-Latn`. Two things that look like the same
+  split are not: `iam.staff_members.spoken_languages` holds ISO 639 language codes
+  (`StaffMemberService.languagesOf` accepts only `[a-z]{2,3}`), where `uz` is right,
+  and the payment page language in `PresentationRequest` is Payme's own vocabulary.
+  The customer column is more than an inconsistency: the marketing metrics refresh
+  copies it verbatim into `marketing.customer_metrics.preferred_locale`, whose V0043
+  constraint admits `uz-Latn` and not `uz`, so a customer who picks Uzbek in the
+  storefront profile hands that statement a value its target refuses. The metrics test
+  seeds `uz-Latn`, so no test meets the two together.
+  Already open: `tenant.brand_locales` (V0242: a brand's own supported set and
+  default, subset of the known list), `tenant.location_content` (V0401),
+  `catalog.comment_preset_translations`, `fulfillment.region_translations` and
+  `fulfillment.service_zone_translations` (V0430, V0431) and
+  `ordering.order_line_comment_preset_labels` (V0433), the last four with a BCP 47
+  shape check and no closed set — "so a fourth language does not need a migration" —
+  `TenantLocaleSet.union`, and a brand editor that can hold a set. Not built: any
+  language beyond the three, a typeface for Georgian (and a checked one for Kazakh), a
+  `dir` decision (the operations `index.html` ships `lang="ru"` and no `dir`), and a
+  single place that says which languages exist.
 - Date proposed: 2026-10-01
 - Date decided: —
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -100,14 +136,26 @@ Kazakhstan must author Kazakh to send an order confirmation. The rule was a good
 one while "the platform's languages" and "this brand's languages" were the same
 list. They no longer are: `tenant.brand_locales` exists.
 
-**Question two: is there a spelling?** `uz` and `uz-Latn` are both in the schema.
-The four invitation-and-reset tables say `uz`; the catalogue tables and every
-client that crosses the API say `uz-Latn`; `JdbcCatalogStore` has a second `CASE`
-that handles both; the storefront's catalogue file is `uz.json` and the mobile
-app's is `app_uz.arb`, with a comment explaining why the script subtag is
-"load-bearing" in code and absent from the file name. Uzbek is written in two
-scripts; a tag that does not say which is a defect waiting for the first Cyrillic
-Uzbek tenant.
+**Question two: is there a spelling?** `uz` and `uz-Latn` are both stored. The five
+tables for owner and staff invitations, password reset and a staff member's interface
+language say `uz` (V0210, V0213, V0215, V0313, V0453), and so does a customer's
+preferred language once the storefront has written it. So does the catalog, in a way
+no constraint shows: `catalog.translations` is free text whose established Uzbek code
+is `uz` (`CatalogLocales` says so in its own Javadoc), and the published menu
+snapshots carry `uz` keys inside `immutable_content_json`, a table the application
+role may not update. The tables that follow ADR 0035 (`tenant.brand_locales`, the
+per-locale preset, region and zone tables, the nine closed `CHECK`s) say `uz-Latn`,
+and so, mostly, do the clients that cross the API, except where a one-line conversion
+turns it into `uz` and back: `CatalogLocales` and the console's `toCatalogLocale` for
+the catalog, `OnboardingInputs.locale` for invitations, a conversion or a comparison
+in each of sixteen places in the consoles. `JdbcCatalogStore` has a second `CASE` that
+handles both; the storefront's catalogue file is `uz.json` and the mobile app's is
+`app_uz.arb`, with a comment explaining why the script subtag is "load-bearing" in
+code and absent from the file name. Uzbek is written in two scripts; a tag that does
+not say which is a defect waiting for the first Cyrillic Uzbek tenant. That defect is
+not the same size everywhere. In an invitation row a bare `uz` is a stray spelling
+that one rewrite removes. In the catalog it is the key of data that is published once
+and never edited, so the record has to decide, not tidy.
 
 **Question three: what is a language's blast radius?** A language touches four
 tiers, and a tenant may need only some of them:
@@ -154,6 +202,16 @@ a tenant needs one.**
    active in all three. `kk` and `ka` are declared with no tier active, which makes
    the cost of each visible in one place and costs nothing at runtime.
 
+   Where a store predates the registry and cannot be rewritten, the entry also names
+   the code that store holds, so the spelling lives in one place and not in a
+   ternary. There is exactly one: `uz-Latn` carries `catalogCode` `uz`, the code
+   `catalog.translations`, the published snapshots, `horecaos.catalog.default-locale`
+   and the storefront's `?locale=` already use (Decision 3 says why it is not
+   migrated). `CatalogLocales` and the consoles' `toCatalogLocale` become calls on the
+   registry. A request that still sends a bare `uz` where a tag is expected (an
+   invitation, a password reset, a staff profile) is read as an alias of `uz-Latn` at
+   the API boundary for as long as old clients exist, and is never stored.
+
 2. **Activation is per tier and each tier has a gate.**
    - *Content:* the storefront catalogue and the mobile catalogue contain the
      language, and the brand lists it in `tenant.brand_locales`.
@@ -168,15 +226,47 @@ a tenant needs one.**
    face. A tenant then *chooses* it by adding it to its brands' supported set. A
    tenant never makes a language exist.
 
-3. **The schema stops hard-coding the set.** One forward migration replaces the
-   thirteen locale `CHECK`s with V0430's BCP 47 shape check, recreated in full per
-   the repository's rule on CHECKs. Which tags are valid is enforced where it is
-   decided: the registry for platform vocabularies and the brand's supported set for
-   tenant content. The same migration rewrites `uz` to `uz-Latn` in the four
-   invitation and reset tables and the mail module reads the registry, so the two
-   spellings end. The customer account's own `preferred_locale` (V0017) carries no
-   closed check and stays as it is; the marketing copy of it (V0043) is one of the
-   thirteen.
+3. **The schema stops hard-coding the set, and the spelling is settled store by
+   store.** One forward migration replaces the fourteen closed locale `CHECK`s with
+   V0430's BCP 47 shape check, recreated in full per the repository's rule on CHECKs.
+   Which tags are valid is enforced where it is decided: the registry for platform
+   vocabularies and the brand's supported set for tenant content. Three groups of
+   stores hold a bare `uz` today, and each is treated on its own terms.
+   - *Migrated.* The same migration, before it recreates their constraints, rewrites
+     `uz` to `uz-Latn` in the six columns that hold it: the owner invitation, its
+     event log, the password reset, the staff invitation, `iam.staff_members.ui_locale`
+     and `customer.customer_accounts.preferred_locale`. The three invitation and reset
+     services, the mail module and `StaffMembers.UI_LOCALES` read the registry. The API
+     still accepts a bare `uz` on input (Decision 1) and answers with the tag, so a
+     client that has not been rebuilt keeps working, among them a storefront that
+     still sends `uz` as a customer's language; the console's `own-profile.ts` mapping
+     and its staff-profile conversions go, and the storefront sends the tag.
+   - *Kept, as the registry's one named alias.* `catalog.translations` and the
+     published menu snapshots keep `uz`, now declared as `uz-Latn`'s `catalogCode`.
+     Migrating them is not a rewrite of one table. `catalog.publication_items` is
+     "written once and never edited": V0016 revokes `UPDATE` and `DELETE` on it from
+     the application role, and a publication's identity is its `content_hash` ("two
+     publications with the same hash are the same menu"). That hash is computed over
+     the snapshot's content with its map keys sorted
+     (`CatalogPublicationService.contentHashOf`), so rewriting the `names` keys inside
+     the snapshots would change the hash of every live menu and every one a rollback
+     can return to. Rewriting `catalog.translations` alone would leave a brand's
+     authoring rows saying `uz-Latn` and every published copy of the same menu saying
+     `uz`, which is the split moved, not ended, and would make `previewDraft` report
+     every brand's draft as different from what is live until it was republished. The catalog already reads
+     through one mapping (`CatalogLocales`, and `CatalogNameLocales` for the readers in
+     ordering and pricing), so folding that mapping into the registry removes the
+     ternaries without touching a published byte. The cost is that `uz` stays, by
+     name, in one place, and a new brand's first publication still writes it.
+   - *Not locales.* `iam.staff_members.spoken_languages` holds ISO 639 language codes
+     (`[a-z]{2,3}`, enforced by `StaffMemberService.languagesOf`), where a person who
+     speaks Uzbek speaks it in either script and `uz` is correct. The payment page
+     language in `PresentationRequest` is Payme's published vocabulary. The SMS text
+     in `VerificationCodeText` keys on the language subtag alone. None is migrated,
+     and the migration test names each so a later reader does not "fix" them.
+
+   The marketing copy of the customer's language (V0043) is one of the fourteen
+   constraints, so after the migration the two columns agree.
 
 4. **"Required" means the brand's locales.** The rule ADR 0020 states — a template
    version must have a wording in every locale before it can be activated — now
@@ -191,8 +281,12 @@ a tenant needs one.**
    subset it already satisfies.
 
 5. **The clients read the list instead of mirroring it.** A read returns the
-   registry's entries and their tiers; the brand editor, the location editor and the
-   audience predicate stop carrying their own `['ru', 'uz-Latn', 'en']`. A client's
+   registry's entries and their tiers (the control plane is already served a list,
+   `ReferenceDataController.LOCALES`; this generalises it); the brand editor, the
+   location editor, the audience predicate and the rest of the nineteen hand-kept
+   lists stop carrying their own `['ru', 'uz-Latn', 'en']` or `['ru', 'uz', 'en']`,
+   and the sixteen `uz-Latn` conversions go, except the catalog's, which become a
+   call on the registry's `catalogCode`. A client's
    *catalogues* stay compile-time and typed (the build failing on a missing key is
    the point), and a client offers a language when its build contains a catalogue and
    the registry says the tier is active. Catalogue file names follow the registry's
@@ -224,11 +318,12 @@ a tenant needs one.**
 | Option | Why not chosen | Revisit when |
 |---|---|---|
 | Add Kazakh and Georgian everywhere now | No tenant in either market; two more catalogues of roughly four hundred kilobytes each to translate and keep in parity, a face, and half-translated screens in the meantime. The registry makes the cost explicit without paying it | The first tenant in either market signs |
-| Do nothing until a tenant signs | Defers the cost but not the debt: thirteen constraints, five enums and a spelling split that a first activation would have to fix under time pressure, and the template rule would break every active template on the day a fourth language is added | Never as the whole plan; activation does wait for demand |
+| Do nothing until a tenant signs | Defers the cost but not the debt: fourteen constraints, a dozen lists and a spelling split that a first activation would have to fix under time pressure, and the template rule would break every active template on the day a fourth language is added | Never as the whole plan; activation does wait for demand |
 | A `reference.locales` table with a foreign key from every locale column | Data-driven, but a language carries a font and a catalogue, which are code. V0242 already chose domain-layer enforcement, V0430 a shape check, and the platform keeps its other closed vocabularies in code (`Capability`, `PlatformRole`, `DevicePrincipalClass`) | Tenants must be able to add a language without a release |
 | Free tenant-defined locales with fallback to the default | The translation tables already allow it for data, but the console, templates and SMS cannot render what they have no catalogue for, and an unreviewed language on a till is worse than a missing one | A translation-management product exists |
 | Angular's `$localize` with one bundle per locale | Compiles a deployment per language; a shared terminal changes language mid-shift (the operations README rejects it for this reason) | Never |
-| Bare `uz` as the tag | The existing four tables use it; but Uzbek has two scripts and the mobile code records exactly why the subtag is load-bearing | Never |
+| Bare `uz` as the tag | Five tables use it today; but Uzbek has two scripts and the mobile code records exactly why the subtag is load-bearing | Never |
+| Migrate `catalog.translations` and the published snapshots to `uz-Latn` as well | A snapshot is written once and its identity is a hash over its keys: rewriting it changes the hash of every live and rollback-able menu, and rewriting only the authoring rows leaves one brand's menu in two spellings and makes every draft read as changed (Decision 3) | A re-publication of every brand is acceptable, or the publication model stops hashing keys |
 | Right-to-left support now | No language in view needs it; it is an audit of every screen, document and SMS | A market needing Arabic or Persian script |
 | Machine translation as the fallback for missing wordings | Unreviewed text on an order confirmation or a kitchen screen | A human-confirmed feature (row `X.5`), not a fallback |
 | Keep "all platform locales required" and require authoring in every one | Forces a Georgian wording from a Tashkent restaurant; the rule exists to prevent a customer getting nothing, which a brand-scoped rule prevents just as well | Never |
@@ -239,17 +334,21 @@ a tenant needs one.**
 
 - A language becomes one entry and a checklist, and the cost of each is visible
   before anyone signs for it.
-- The `uz` / `uz-Latn` split, a real inconsistency in a migration table today,
-  ends.
+- The `uz` / `uz-Latn` split, a real inconsistency in five tables, the customer
+  accounts and sixteen conversions in the consoles today, ends everywhere but the catalog's one named
+  `catalogCode`.
 - A brand serving two languages stops being forced to author three, and a brand
   serving four does not invalidate its neighbours' templates.
-- Three frontend mirrors of one backend list disappear.
+- At least nineteen hand-kept frontend lists of one backend list disappear.
 
 ### Negative
 
-- A migration that recreates thirteen constraints across big append-only tables,
-  and a data rewrite of `uz` in four more, is a risk that buys nothing a customer
+- A migration that recreates fourteen constraints across big append-only tables,
+  and a data rewrite of `uz` in six columns, is a risk that buys nothing a customer
   sees. It must be rehearsed on a restored copy.
+- A bare `uz` stays in the catalog for good, as a named alias, so a reader of
+  `catalog.translations` still meets it. The registry says why and where; it does
+  not remove it.
 - Moving "required" from the platform to the brand shifts a guarantee. The old rule
   made it impossible to activate a template that left an Uzbek-reading customer
   with no wording; the new one makes it impossible only for the languages a brand
@@ -258,7 +357,8 @@ a tenant needs one.**
 - Per-tier activation gives three ways for a language to be half-live, and the
   registry can say what is live but cannot make a catalogue good.
 - A registry in `tenancy.api` is a dependency every module that holds a locale now
-  takes, replacing five local copies that were each deliberately independent.
+  takes, replacing more than a dozen local copies that were each deliberately
+  independent.
 
 ### Accepted trade-offs
 
@@ -275,13 +375,15 @@ a tenant needs one.**
 ```text
 PlatformLocale
   tag               "ru" | "uz-Latn" | "en" | "kk" | "ka" | …      BCP 47, script-tagged where ambiguous
+  catalogCode       "uz" for uz-Latn, else = tag                    what catalog.translations and the snapshots hold
+  inputAliases      "uz" for uz-Latn                                accepted at the API boundary, never stored
   script            CYRL | LATN | GEOR
   direction         LTR
   fallbackRank      int      replaces the SQL CASE
   face              identifier of the bundled or lazy face
   tiers             set of CONTENT | MESSAGES | STAFF_UI           empty = declared, not live
   names             map tag -> display name                          for pickers
-PlatformLocales.all() / active(tier) / byTag(tag) / fallback()
+PlatformLocales.all() / active(tier) / byTag(tag) / parse(input) / byCatalogCode(code) / fallback()
 ```
 
 `GET /api/v1/{surface}/locales` returns the entries and tiers, readable by any
@@ -290,13 +392,20 @@ a table.
 
 ### Migration (forward only; numbers reserved by the wave that builds it)
 
-One migration that, for each of the thirteen constraints, drops it and re-adds it as
-`locale ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$'` (with the `IS NULL OR` form where the
-original had one), and `UPDATE`s `uz` to `uz-Latn` in the owner invitation, its
-event log, the password reset and the staff invitation tables **before** their
-constraints are recreated. The migration test enumerates every `ck_*_locale`
-constraint by name and fails if one remains on a closed list. The build re-greps for
-a fourteenth: the count above is a date-stamped fact.
+One migration that, for each of the fourteen closed constraints, drops it and re-adds it
+as `locale ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$'` (with the `IS NULL OR` form where the
+original had one), and `UPDATE`s `uz` to `uz-Latn` in the owner invitation, its event
+log, the password reset, the staff invitation, `iam.staff_members.ui_locale` and
+`customer.customer_accounts.preferred_locale` **before** the constraints are
+recreated, and widens the five `varchar(8)` columns among them from
+`varchar(8)` to the `varchar(16)` every other locale column uses (the customer's is
+already that wide), because a shape check
+that admits `kaa-Latn-KZ` is no use over a column that cannot hold it. It does not touch
+`catalog.translations`, `catalog.publication_items` or `iam.staff_members.spoken_languages`
+(Decision 3). The migration test enumerates every `ck_*_locale` constraint by name and
+fails if one remains on a closed list. The build re-greps for a fifteenth: the count
+above is a date-stamped fact, and the first draft of this record was already one
+constraint short when it was written.
 
 ### Behaviour changes
 
@@ -304,13 +413,17 @@ a fourteenth: the count above is a date-stamped fact.
   where it counted `MessageLocale.required()`; activation of a version fails with the
   list of the brand's missing locales.
 - `OrderOutcomeReasonService`, `AudiencePredicate`, `CampaignTelegramDeliveryService`,
-  `TermsLocale`, `JdbcCatalogStore`'s ordering and the mail module read
-  `PlatformLocales`.
+  `TermsLocale`, `ChannelPageLocale`, `ReferenceDataController`, `JdbcCatalogStore`'s
+  ordering, the three invitation and reset services, `StaffMembers.UI_LOCALES`
+  (whose message "uiLocale must be one of ru, uz, en" becomes the registry's list)
+  and the mail module read `PlatformLocales`. `CatalogLocales` and
+  `OnboardingInputs.locale` become calls on it.
 - `BrandProfile` validates against `PlatformLocales.active(CONTENT)`.
 
 ### Frontend
 
-`i18n.ts` and the two mirrors read the registry response; `<html dir>` is set beside
+`i18n.ts` and the other mirrors read the registry response; `own-profile.ts` and the
+staff-profile editors stop converting `uz`; `<html dir>` is set beside
 `lang`; a stylelint rule flags new physical `left`/`right` offsets and fixed
 `margin-left`/`margin-right` in touched files only. The catalogue key-parity specs
 (operations, control plane, both storefronts, mobile ARB parity) are the activation
@@ -318,16 +431,26 @@ gate for the staff and content tiers.
 
 ### Testing
 
-- Registry: every entry has a script, a direction and a face; `uz` is not a valid
-  tag; the fallback is registered; no module declares a locale list of its own
+- Registry: every entry has a script, a direction and a face; `uz` is not a tag (it
+  parses as an input alias of `uz-Latn` and is stored only as that entry's
+  `catalogCode`); the fallback is registered; no module declares a locale list of its own
   (an architecture test greps for the literal triple outside the registry, as
   `ChangeDocumentUsageTests` does for flat audit calls).
 - Template rule: a brand with `ru, uz-Latn` activates a two-wording version; a brand
   with `ru, uz-Latn, kk` is refused with `kk` named; the other brand's active
   versions are untouched; a customer with an unsupported preference gets the default.
-- Migration: each constraint accepts `kk` and rejects `Russian`; the four `uz`
-  tables hold only `uz-Latn` afterwards; the mail module sends the owner invitation
-  in each of its three languages.
+- Migration: each constraint accepts `kk` and rejects `Russian`; the six columns that
+  held `uz` (the four invitation and reset tables, `iam.staff_members.ui_locale` and
+  `customer.customer_accounts.preferred_locale`) hold only `uz-Latn` afterwards; **no row in any other table holds a bare `uz` in a
+  locale column** — the test finds the columns by name (`%locale%`) and by the
+  translation tables, so a store added after this record is caught too — with three
+  named exemptions it asserts instead of skipping: `catalog.translations` and
+  `catalog.publication_items` (the catalog's `catalogCode`) and
+  `iam.staff_members.spoken_languages` (ISO 639 language codes). A staff member saved
+  with `uiLocale` `uz` through the API reads back `uz-Latn`; a customer who picks Uzbek
+  in the storefront profile reads back `uz-Latn`, and the marketing metrics refresh
+  succeeds for that customer (seen failing first). The mail module sends the
+  owner invitation in each of its three languages.
 - Frontend: the brand editor lists exactly the registry's `CONTENT` entries;
   `dir` follows the active locale; a declared-but-inactive language is not offered.
 
@@ -348,14 +471,18 @@ and why it is the last step that touches data.
 - [ ] `PlatformLocales` and `GET …/locales`; the architecture test against literal
       lists.
 - [ ] Replace `BrandProfile.KNOWN_LOCALES`, `TenantLocaleSet.PLATFORM_LOCALES`,
-      `MessageLocale`, `TermsLocale`, `REQUIRED_LOCALES`, `SUPPORTED_LOCALES`, the
-      bot's set and the two `JdbcCatalogStore` `CASE`s.
+      `MessageLocale`, `TermsLocale`, `ChannelPageLocale`, `REQUIRED_LOCALES`,
+      `SUPPORTED_LOCALES`, `ReferenceDataController.LOCALES`, the bot's sets, the
+      three invitation and reset `LOCALES`, `StaffMembers.UI_LOCALES` and the four
+      `JdbcCatalogStore` `CASE`s; fold `CatalogLocales` into the registry's
+      `catalogCode`.
 - [ ] Brand-scoped "required" in `NotificationTemplateService` and its tests, each
       seen failing first.
-- [ ] The migration and its by-name test; the `uz` data rewrite; the mail module on
-      the registry.
-- [ ] Frontend mirrors removed; `dir` set; the logical-properties lint on touched
-      files.
+- [ ] The migration and its by-name test; the `uz` data rewrite in six columns; the
+      no-bare-`uz`-anywhere-else scan with its three named exemptions; the mail module
+      on the registry.
+- [ ] Frontend mirrors removed (the nineteen lists and the sixteen conversions, bar the
+      catalog's); `dir` set; the logical-properties lint on touched files.
 - [ ] Per-language activation checklist written into `frontend/operations/README.md`
       beside the section that prices a fourth locale, which this record replaces.
 - [ ] Glyph audit of the bundled face against Kazakh; a Georgian face chosen with its
@@ -365,7 +492,8 @@ and why it is the last step that touches data.
 ## Exit criteria
 
 There is one place in code that says which languages exist, and one command that
-finds no other list. A brand can serve two languages and activate templates in
+finds no other list, and no row anywhere holds a bare `uz` in a locale column except
+the catalog's, which the registry names. A brand can serve two languages and activate templates in
 exactly those. Declaring `kk` active in the registry, adding a Kazakh catalogue and
 a brand's supported set makes that brand's storefront, notifications and (if the
 tier is active) console speak Kazakh, with no migration and no change to any module
@@ -383,6 +511,13 @@ Georgian face.
   `frontend/operations/src/styles.css`, `src/index.html`, `src/app/core/i18n/`
 - `BrandProfile`, `TenantLocaleSet`, `MessageLocale`, `TermsLocale`,
   `OrderOutcomeReasonService`, `AudiencePredicate`, `NotificationTemplateService`,
-  `JdbcCatalogStore`, `SmsSegments`; `V0026`, `V0029`, `V0043`, `V0119`, `V0160`,
-  `V0210`, `V0213`, `V0215`, `V0242`, `V0244`, `V0313`, `V0404`, `V0423`, `V0430`,
-  `V0431`; `mobile/lib/src/l10n/supported_locales.dart`
+  `JdbcCatalogStore`, `SmsSegments`, `CatalogLocales`, `CatalogNameLocales`,
+  `CatalogPublicationService.contentHashOf`, `ChannelPageLocale`,
+  `ReferenceDataController`, `StaffMembers`, `StaffMemberService.languagesOf`,
+  `OwnerInvitationService`, `StaffInvitationService`, `PasswordResetService`,
+  `OnboardingInputs`; `V0016` (`catalog.translations`, the `REVOKE` on
+  `catalog.publication_items`), `V0026`, `V0029`, `V0043`, `V0119`, `V0160`,
+  `V0210`, `V0213`, `V0215`, `V0242`, `V0244`, `V0313`, `V0401`, `V0404`, `V0423`,
+  `V0430`, `V0431`, `V0433`, `V0453`; `mobile/lib/src/l10n/supported_locales.dart`;
+  `frontend/operations/src/app/features/catalog/catalog-domain.ts`
+  (`toCatalogLocale`), `core/auth/own-profile.ts`
