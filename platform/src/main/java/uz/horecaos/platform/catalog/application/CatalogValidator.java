@@ -564,6 +564,29 @@ public class CatalogValidator {
                         "On " + owner + ": " + rangeProblem));
             }
 
+            if (attachment.hidden() && attachment.ownerType() == AttachmentOwnerType.VARIANT) {
+                // Pricing lays the variant's attachment over its product's; the menu and the cart
+                // read the product's alone. A group the product offers as a choice and a variant
+                // applies by itself is asked of the customer and charged again: authoring refuses
+                // to write the pairing, and a row that predates the refusal, or came in through
+                // the product's own attach, is caught here.
+                UUID productId = composite.productIdByVariant().get(attachment.ownerId());
+                composite.attachments().stream()
+                        .filter(other -> other.ownerType() == AttachmentOwnerType.PRODUCT
+                                && other.ownerId().equals(productId)
+                                && other.modifierGroupId().equals(attachment.modifierGroupId())
+                                && !other.hidden())
+                        .findFirst()
+                        .ifPresent(product -> findings.add(ValidationFinding.blocker(
+                                "MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS",
+                                EntityType.MODIFIER_GROUP,
+                                group.id(),
+                                group.code(),
+                                "On " + owner + ": hidden here, while product " + productId
+                                        + " offers the same group to the customer as a choice; the customer "
+                                        + "would be asked for it and charged for it again")));
+            }
+
             if (attachment.hidden()) {
                 long activeOptions = composite.optionsByGroup().getOrDefault(group.id(), List.of()).stream()
                         .filter(option -> option.status() == Status.ACTIVE)

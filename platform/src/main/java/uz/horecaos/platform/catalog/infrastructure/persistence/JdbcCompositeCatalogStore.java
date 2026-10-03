@@ -329,6 +329,44 @@ public class JdbcCompositeCatalogStore {
                 .optional();
     }
 
+    /**
+     * The product-level attachment of a group on the product that owns the variant, if it has
+     * one: the row a variant-level attachment of the same group is laid over.
+     */
+    public Optional<ModifierAttachment> productAttachmentOfVariant(
+            UUID tenantId, UUID brandId, UUID variantId, UUID modifierGroupId) {
+        String sql = "SELECT %s FROM %s WHERE tenant_id = :tenantId AND brand_id = :brandId"
+                        .formatted(ownerSelect(AttachmentOwnerType.PRODUCT), table(AttachmentOwnerType.PRODUCT))
+                + " AND modifier_group_id = :groupId AND product_id = ("
+                + "SELECT product_id FROM catalog.variants"
+                + " WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :variantId)";
+        return jdbc.sql(sql)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("variantId", variantId)
+                .param("groupId", modifierGroupId)
+                .query((row, number) -> mapAttachment(row, AttachmentOwnerType.PRODUCT))
+                .optional();
+    }
+
+    /** The variant-level attachments of a group on the variants of one product, by variant id. */
+    public List<ModifierAttachment> variantAttachmentsOfProduct(
+            UUID tenantId, UUID brandId, UUID productId, UUID modifierGroupId) {
+        String sql = "SELECT %s FROM %s WHERE tenant_id = :tenantId AND brand_id = :brandId"
+                        .formatted(ownerSelect(AttachmentOwnerType.VARIANT), table(AttachmentOwnerType.VARIANT))
+                + " AND modifier_group_id = :groupId AND variant_id IN ("
+                + "SELECT id FROM catalog.variants"
+                + " WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId)"
+                + " ORDER BY variant_id";
+        return jdbc.sql(sql)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("groupId", modifierGroupId)
+                .query((row, number) -> mapAttachment(row, AttachmentOwnerType.VARIANT))
+                .list();
+    }
+
     public List<ModifierAttachment> attachmentsOf(
             UUID tenantId, UUID brandId, AttachmentOwnerType ownerType, UUID ownerId) {
         String sql = "SELECT %s FROM %s WHERE tenant_id = :tenantId AND brand_id = :brandId AND %s = :ownerId"

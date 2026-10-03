@@ -315,6 +315,45 @@ class CompositeProductRulesTests {
                 .doesNotContain("MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS");
     }
 
+    @Test
+    @DisplayName("a variant that applies by itself a group its product offers as a choice blocks publication")
+    void aVariantCannotApplyWhatItsProductOffersAsAChoice() {
+        // The pairing that charges twice: the menu asks the customer for the packing, and pricing,
+        // which lays the variant's attachment over the product's, adds it again.
+        World world = new World();
+        ModifierGroup packing = world.group("PACKING", true, 1, 1);
+        world.option(packing, "BOX", null);
+        world.attach(world.catalogProduct, packing, Visibility.VISIBLE, null);
+        world.attachToVariant(world.container, packing, Visibility.HIDDEN_AUTO_SELECT);
+
+        assertThat(world.blockers())
+                .filteredOn(finding -> finding.code().equals("MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS"))
+                .extracting(ValidationFinding::entityId)
+                .as("named on the group, so the author knows which attachment to change")
+                .containsExactly(packing.id());
+
+        World agree = new World();
+        ModifierGroup alsoHidden = agree.group("PACKING", true, 1, 1);
+        agree.option(alsoHidden, "BOX", null);
+        agree.attach(agree.catalogProduct, alsoHidden, Visibility.HIDDEN_AUTO_SELECT, null);
+        agree.attachToVariant(agree.container, alsoHidden, Visibility.HIDDEN_AUTO_SELECT);
+        assertThat(agree.blockers())
+                .as("the product applies it too: one charge, however many levels say so")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS");
+
+        World exempt = new World();
+        ModifierGroup switchedOff = exempt.group("PACKING", true, 1, 1);
+        exempt.option(switchedOff, "BOX", null);
+        exempt.attach(exempt.catalogProduct, switchedOff, Visibility.HIDDEN_AUTO_SELECT, null);
+        exempt.attachToVariant(exempt.container, switchedOff, Visibility.VISIBLE);
+        assertThat(exempt.blockers())
+                .as("a variant that shows what its product applies switches the charge off: deliberate, and a "
+                        + "customer is asked for nothing")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS");
+    }
+
     // ------------------------------------------------------------ nesting depth
 
     @Test

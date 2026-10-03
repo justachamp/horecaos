@@ -1,6 +1,7 @@
 package uz.horecaos.platform.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -41,6 +42,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCata
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * ADR 0136's publication rules, through the real loader and the real publication
@@ -255,6 +257,96 @@ class CompositePublicationTests {
         assertThat(small).isNotNull();
     }
 
+    @Test
+    @DisplayName("a variant cannot apply by itself a group its product offers as a choice, and the product cannot "
+            + "start offering one a variant applies")
+    void aVariantAndItsProductCannotChargeAGroupTwice() {
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-B", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID packing = authoring.createModifierGroup(TENANT, BRAND, "PACKING", "Packing", LOCALE, true, 1, 1, false);
+        authoring.addModifierOption(TENANT, BRAND, packing, "BOX", "Box", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        authoring.attachModifierGroup(TENANT, BRAND, burger.productId(), packing, 0);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, burger.defaultVariantId(), packing, 0, "tester");
+        AttachmentPolicy applied = new AttachmentPolicy(Visibility.HIDDEN_AUTO_SELECT, null, null, null, null);
+        AttachmentPolicy shown = new AttachmentPolicy(Visibility.VISIBLE, null, null, null, null);
+
+        // The product shows the group, so the menu and the cart ask the customer for it. A variant that
+        // also applied it by itself would be charged it a second time by pricing.
+        Throwable refused = catchThrowable(() -> composites.setAttachmentPolicy(
+                TENANT, BRAND, AttachmentOwnerType.VARIANT, burger.defaultVariantId(), packing, 1, applied, "tester"));
+
+        assertThat(refused).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) refused).properties())
+                .containsEntry("findingCode", CompositeProductAuthoringService.MODIFIER_ATTACHMENT_POLICY_INVALID);
+        assertThat(variantVisibility(burger.defaultVariantId(), packing))
+                .as("nothing was written")
+                .isEqualTo("VISIBLE");
+
+        // Hiding it on the product is allowed (the variant's visible attachment then switches the charge off
+        // for that variant, which is deliberate), and after that the variant may apply it too.
+        composites.setAttachmentPolicy(
+                TENANT, BRAND, AttachmentOwnerType.PRODUCT, burger.productId(), packing, 1, applied, "tester");
+        composites.setAttachmentPolicy(
+                TENANT, BRAND, AttachmentOwnerType.VARIANT, burger.defaultVariantId(), packing, 1, applied, "tester");
+        assertThat(variantVisibility(burger.defaultVariantId(), packing)).isEqualTo("HIDDEN_AUTO_SELECT");
+
+        // And the product cannot go back to showing it while a variant still applies it by itself.
+        Throwable reverse = catchThrowable(() -> composites.setAttachmentPolicy(
+                TENANT, BRAND, AttachmentOwnerType.PRODUCT, burger.productId(), packing, 2, shown, "tester"));
+
+        assertThat(reverse).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) reverse).properties())
+                .containsEntry("findingCode", CompositeProductAuthoringService.MODIFIER_ATTACHMENT_POLICY_INVALID);
+        assertThat(jdbc.sql("""
+                                SELECT visibility FROM catalog.product_modifier_groups
+                                WHERE product_id = :id AND modifier_group_id = :group
+                                """)
+                        .param("id", burger.productId())
+                        .param("group", packing)
+                        .query(String.class)
+                        .single())
+                .as("the product still applies it")
+                .isEqualTo("HIDDEN_AUTO_SELECT");
+    }
+
+    @Test
+    @DisplayName("a variant that hides what its product shows, written before authoring refused it, blocks publication")
+    void aDoubleChargeAlreadyWrittenBlocksPublication() {
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-B", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID packing = authoring.createModifierGroup(TENANT, BRAND, "PACKING", "Packing", LOCALE, true, 1, 1, false);
+        authoring.addModifierOption(TENANT, BRAND, packing, "BOX", "Box", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        authoring.attachModifierGroup(TENANT, BRAND, burger.productId(), packing, 0);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, burger.defaultVariantId(), packing, 0, "tester");
+        jdbc.sql("""
+                UPDATE catalog.variant_modifier_groups SET visibility = 'HIDDEN_AUTO_SELECT'
+                WHERE variant_id = :id AND modifier_group_id = :group
+                """)
+                .param("id", burger.defaultVariantId())
+                .param("group", packing)
+                .update();
+
+        var refused = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        assertThat(refused.status()).isEqualTo(PublicationStatus.REJECTED);
+        assertThat(refused.report().blockers())
+                .filteredOn(finding -> finding.code().equals("MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS"))
+                .extracting(ValidationFinding::entityId)
+                .containsExactly(packing);
+
+        jdbc.sql("""
+                UPDATE catalog.variant_modifier_groups SET visibility = 'VISIBLE'
+                WHERE variant_id = :id AND modifier_group_id = :group
+                """)
+                .param("id", burger.defaultVariantId())
+                .param("group", packing)
+                .update();
+        assertThat(publication
+                        .publish(TENANT, BRAND, catalogId, "STOREFRONT", null)
+                        .status())
+                .isEqualTo(PublicationStatus.PUBLISHED);
+    }
+
     // ----------------------------------------------------------------- nesting
 
     @Test
@@ -357,6 +449,17 @@ class CompositePublicationTests {
      * What pricing would say, and no more: dishes are priced as variants, a combo's
      * container never is, and a component is priced only when a test says so.
      */
+    private String variantVisibility(UUID variantId, UUID groupId) {
+        return jdbc.sql("""
+                        SELECT visibility FROM catalog.variant_modifier_groups
+                        WHERE variant_id = :id AND modifier_group_id = :group
+                        """)
+                .param("id", variantId)
+                .param("group", groupId)
+                .query(String.class)
+                .single();
+    }
+
     private static final class PricingStandIn implements VariantPricingLookup {
 
         private final Set<UUID> variants = new HashSet<>();

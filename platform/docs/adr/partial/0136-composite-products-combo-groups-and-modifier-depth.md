@@ -11,7 +11,10 @@
   console's add-lines amendment dialog cannot choose a combo's picks (the server accepts them); the
   fiscal receipt-line builder per component, reporting by `combo_selection_id` and the Clopos wire
   fields; storefront modifier groups below the first level, modifiers on a combo container and
-  variant-level overrides are not published or enforced; the guest dine-in bill carries no lines;
+  variant-level overrides are not published or enforced, which is why a variant may not apply by
+  itself (`HIDDEN_AUTO_SELECT`) a group its product offers as a choice -- pricing reads the variant
+  level and the menu and cart do not, so the customer would be asked for it and charged for it
+  again; authoring refuses the pairing and publication blocks it; the guest dine-in bill carries no lines;
   duplicating a product does not copy its combo groups; the cart and quote read combo structure
   from the live authoring rows, not the publication; the customer-facing wording that discloses a
   hidden charge is a neutral placeholder pending product and legal.
