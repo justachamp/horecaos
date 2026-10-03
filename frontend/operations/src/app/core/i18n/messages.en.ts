@@ -3965,6 +3965,8 @@ export const messagesEn = {
   'delivery.rates.reasons.trigger': 'Evaluated at',
   'delivery.rates.reasons.trigger.SHIFT_CLOSE': 'Shift close',
   'delivery.rates.reasons.trigger.SETTLEMENT_PERIOD_CLOSE': 'Settlement period close',
+  'delivery.rates.reasons.cashVarianceHint':
+    'Counts the cash variance entries in the settlement period (not an amount): a threshold of 1 means any variance at all. Evaluated only when the period closes.',
 
   'delivery.shifts.title': 'Shifts & attendance',
   'delivery.shifts.loading': 'Loading shifts',

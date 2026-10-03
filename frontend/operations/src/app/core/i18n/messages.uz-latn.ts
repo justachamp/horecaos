@@ -3969,6 +3969,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.rates.reasons.trigger': 'Baholash vaqti',
   'delivery.rates.reasons.trigger.SHIFT_CLOSE': 'Smena yopilganda',
   'delivery.rates.reasons.trigger.SETTLEMENT_PERIOD_CLOSE': 'Hisob-kitob davri yopilganda',
+  'delivery.rates.reasons.cashVarianceHint':
+    'Hisob-kitob davridagi naqd pul farqi yozuvlarini sanaydi (summani emas): 1 chegarasi har qanday farqni bildiradi. Faqat davr yopilganda baholanadi.',
 
   'delivery.shifts.title': 'Smenalar va davomat',
   'delivery.shifts.loading': 'Smenalar yuklanmoqda',

@@ -739,7 +739,7 @@
           {{ 'delivery.rates.reasons.outcomeBasis' | t }}
           <select
             [value]="newReasonOutcomeBasis()"
-            (change)="newReasonOutcomeBasis.set($any($event.target).value)"
+            (change)="chooseOutcomeBasis($any($event.target).value)"
             data-testid="new-reason-basis"
           >
             @for (basis of outcomeBases; track basis) {
@@ -807,11 +807,18 @@
               data-testid="new-reason-threshold"
             />
           </label>
+          @if (basisIsPeriodOnly(newReasonOutcomeBasis())) {
+            <p class="rates__hint" data-testid="new-reason-period-only-hint">
+              {{ 'delivery.rates.reasons.cashVarianceHint' | t }}
+            </p>
+          }
           <label class="rates__field">
             {{ 'delivery.rates.reasons.window' | t }}
             <select
               [value]="newReasonWindow()"
+              [disabled]="basisIsPeriodOnly(newReasonOutcomeBasis())"
               (change)="newReasonWindow.set($any($event.target).value)"
+              data-testid="new-reason-window"
             >
               <option value="SHIFT">{{ 'delivery.rates.reasons.window.SHIFT' | t }}</option>
               <option value="SETTLEMENT_PERIOD">
@@ -823,7 +830,9 @@
             {{ 'delivery.rates.reasons.trigger' | t }}
             <select
               [value]="newReasonTrigger()"
+              [disabled]="basisIsPeriodOnly(newReasonOutcomeBasis())"
               (change)="newReasonTrigger.set($any($event.target).value)"
+              data-testid="new-reason-trigger"
             >
               <option value="SHIFT_CLOSE">
                 {{ 'delivery.rates.reasons.trigger.SHIFT_CLOSE' | t }}

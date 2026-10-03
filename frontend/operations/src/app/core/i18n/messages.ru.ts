@@ -3925,6 +3925,8 @@ export const messagesRu: MessageCatalogue = {
   'delivery.rates.reasons.trigger': 'Оценивается при',
   'delivery.rates.reasons.trigger.SHIFT_CLOSE': 'Закрытии смены',
   'delivery.rates.reasons.trigger.SETTLEMENT_PERIOD_CLOSE': 'Закрытии расчётного периода',
+  'delivery.rates.reasons.cashVarianceHint':
+    'Считает записи о расхождении по наличным в расчётном периоде (не сумму): порог 1 означает любое расхождение. Оценивается только при закрытии периода.',
 
   'delivery.shifts.title': 'Смены и посещаемость',
   'delivery.shifts.loading': 'Загрузка смен',
