@@ -84,7 +84,6 @@ public class PromotionRedemptionService
         List<QuotePromotionAmount> ordered = new ArrayList<>(applied);
         ordered.sort(Comparator.comparing(QuotePromotionAmount::promotionId));
 
-        List<Claimed> claimed = new ArrayList<>();
         for (QuotePromotionAmount amount : ordered) {
             var promotion = store.find(tenantId, brandId, amount.promotionId());
             if (promotion.isEmpty()) {
@@ -95,24 +94,19 @@ public class PromotionRedemptionService
             boolean limited = promotion.get().definition().maximumRedemptions() != null || perCustomer != null;
             if (limited) {
                 if (!store.claimTotal(tenantId, brandId, amount.promotionId(), now)) {
-                    giveBack(tenantId, brandId, claimed);
+                    giveBackEarlierClaims(tenantId, quoteId);
                     return new Result(Result.Outcome.LIMIT_REACHED, amount.promotionId());
                 }
-                boolean customerSlot = false;
                 // A guest's per-customer cap is not enforced, as decided for coupons: there is no
                 // identity to count a guest against.
                 if (perCustomer != null && customerAccountId != null) {
                     if (!store.claimCustomerSlot(
                             tenantId, brandId, amount.promotionId(), customerAccountId, perCustomer)) {
                         store.releaseTotal(tenantId, brandId, amount.promotionId());
-                        giveBack(tenantId, brandId, claimed);
+                        giveBackEarlierClaims(tenantId, quoteId);
                         return new Result(Result.Outcome.PER_CUSTOMER_LIMIT_REACHED, amount.promotionId());
                     }
-                    customerSlot = true;
                 }
-                claimed.add(new Claimed(amount.promotionId(), true, customerSlot ? customerAccountId : null));
-            } else {
-                claimed.add(new Claimed(amount.promotionId(), false, null));
             }
             store.insertRedemption(
                     new NewRedemption(
@@ -133,20 +127,20 @@ public class PromotionRedemptionService
         return new Result(Result.Outcome.CLAIMED, null);
     }
 
-    /** Gives back the counters a partly successful claim already took. */
-    private void giveBack(UUID tenantId, UUID brandId, List<Claimed> claimed) {
-        for (Claimed taken : claimed) {
-            if (taken.counted()) {
-                store.releaseTotal(tenantId, brandId, taken.promotionId());
-            }
-            if (taken.customerAccountId() != null) {
-                store.releaseCustomerSlot(tenantId, taken.promotionId(), taken.customerAccountId());
-            }
-        }
+    /**
+     * Undoes what a refused claim already did for this quote: the counters taken and the
+     * ledger rows written for the promotions claimed before the one that refused.
+     *
+     * <p>The rows matter as much as the counters. A refused checkout answers a settled
+     * rejection and its transaction commits, so a row left behind would be a phantom
+     * redemption for an order that never exists (read by the drill-down and the 7.9 fact), and
+     * it would make a retry of the same quote find "its own rows" and report {@code CLAIMED}
+     * without ever claiming the slot that just ran out. Everything this quote holds belongs to
+     * this call: the idempotency check above returned early if it held anything on entry.
+     */
+    private void giveBackEarlierClaims(UUID tenantId, UUID quoteId) {
+        releaseForQuote(tenantId, quoteId);
     }
-
-    private record Claimed(
-            UUID promotionId, boolean counted, @Nullable UUID customerAccountId) {}
 
     @Override
     @Transactional
