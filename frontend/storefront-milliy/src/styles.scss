@@ -57,9 +57,12 @@
   --font-ui: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   background: var(--surface-page);
@@ -74,10 +77,21 @@ html, body {
   overflow-x: auto;
   scrollbar-width: none;
 }
-.rail::-webkit-scrollbar { width: 0; height: 0; }
+.rail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
 
-a { color: var(--brand-accent-deep); text-decoration: none; }
+a {
+  color: var(--brand-accent-deep);
+  text-decoration: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

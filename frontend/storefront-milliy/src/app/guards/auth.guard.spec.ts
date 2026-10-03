@@ -11,9 +11,7 @@ function setUp() {
 }
 
 function runGuard() {
-  return TestBed.runInInjectionContext(() =>
-    authGuard({} as never, { url: '/home' } as never),
-  );
+  return TestBed.runInInjectionContext(() => authGuard({} as never, { url: '/home' } as never));
 }
 
 describe('authGuard', () => {

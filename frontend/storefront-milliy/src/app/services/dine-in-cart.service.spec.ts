@@ -62,7 +62,7 @@ function notFound(): HorecaOSApiError {
 describe('CartService -- a cart opened on another channel', () => {
   beforeEach(() => localStorage.clear());
 
-  it('opens the cart on the channel it is told, not on the build\'s own', async () => {
+  it("opens the cart on the channel it is told, not on the build's own", async () => {
     const { api, delivery } = setUp();
     api.mutate.mockResolvedValue(cart());
 
@@ -77,7 +77,7 @@ describe('CartService -- a cart opened on another channel', () => {
     );
   });
 
-  it('still opens on the build\'s own channel when none is given -- the delivery and pickup baskets are unchanged', async () => {
+  it("still opens on the build's own channel when none is given -- the delivery and pickup baskets are unchanged", async () => {
     const { api, delivery } = setUp();
     api.mutate.mockResolvedValue(cart({ fulfillmentMode: 'DELIVERY' }));
 
@@ -105,7 +105,7 @@ describe('CartService -- a cart opened on another channel', () => {
 describe('DineInCartService -- the table basket, kept apart from the delivery basket', () => {
   beforeEach(() => localStorage.clear());
 
-  it('is its own instance: the table\'s cart is never the delivery basket\'s cart', async () => {
+  it("is its own instance: the table's cart is never the delivery basket's cart", async () => {
     const { api, delivery, table } = setUp();
     api.mutate.mockResolvedValue(cart({ cartId: 'table-cart' }));
 
@@ -115,7 +115,7 @@ describe('DineInCartService -- the table basket, kept apart from the delivery ba
     expect(delivery.cart()).toBeNull();
   });
 
-  it('opens a DINE_IN cart on the table\'s own channel', async () => {
+  it("opens a DINE_IN cart on the table's own channel", async () => {
     const { api, table } = setUp();
     api.mutate.mockResolvedValue(cart());
 
@@ -145,7 +145,7 @@ describe('DineInCartService -- the table basket, kept apart from the delivery ba
     expect(again.api.mutate).not.toHaveBeenCalled();
   });
 
-  it('gives another table session a cart of its own rather than the earlier evening\'s basket', async () => {
+  it("gives another table session a cart of its own rather than the earlier evening's basket", async () => {
     const { api, table } = setUp();
     api.mutate.mockResolvedValueOnce(cart({ cartId: 'first-evening' }));
     await table.ensure(LOCATION, 'DINE_IN', true, 'QRTABLE', 'session-1');
@@ -193,7 +193,9 @@ describe('DineInCartService -- the table basket, kept apart from the delivery ba
 
   it('the table never picks up the delivery basket either, even at the same location', async () => {
     const { api, delivery, table } = setUp();
-    api.mutate.mockResolvedValueOnce(cart({ cartId: 'delivery-cart', fulfillmentMode: 'DELIVERY' }));
+    api.mutate.mockResolvedValueOnce(
+      cart({ cartId: 'delivery-cart', fulfillmentMode: 'DELIVERY' }),
+    );
     await delivery.ensure(LOCATION, 'DELIVERY', true);
     api.mutate.mockResolvedValueOnce(cart({ cartId: 'table-cart' }));
 
@@ -203,9 +205,11 @@ describe('DineInCartService -- the table basket, kept apart from the delivery ba
     expect(api.get).not.toHaveBeenCalled();
   });
 
-  it('discard() forgets the table cart and leaves the delivery basket\'s remembered id alone', async () => {
+  it("discard() forgets the table cart and leaves the delivery basket's remembered id alone", async () => {
     const { api, delivery, table } = setUp();
-    api.mutate.mockResolvedValueOnce(cart({ cartId: 'delivery-cart', fulfillmentMode: 'DELIVERY' }));
+    api.mutate.mockResolvedValueOnce(
+      cart({ cartId: 'delivery-cart', fulfillmentMode: 'DELIVERY' }),
+    );
     await delivery.ensure(LOCATION, 'DELIVERY', true);
     api.mutate.mockResolvedValueOnce(cart({ cartId: 'table-cart' }));
     await table.ensure(LOCATION, 'DINE_IN', true, 'QRTABLE', 'session-1');

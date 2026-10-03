@@ -34,7 +34,12 @@ describe('AddressBookService.versionOf (via replace/remove)', () => {
     const { service } = setUp();
 
     await expect(
-      service.replace('never-read-id', { label: null, line1: null, latitude: null, longitude: null }),
+      service.replace('never-read-id', {
+        label: null,
+        line1: null,
+        latitude: null,
+        longitude: null,
+      }),
     ).rejects.toThrow('Address never-read-id was not read before it was written to.');
   });
 
@@ -91,7 +96,12 @@ describe('AddressBookService.versionOf (via replace/remove)', () => {
     await service.add({ label: 'Home', line1: 'x', latitude: null, longitude: null });
 
     api.replaceAddress.mockResolvedValue(address('new-1', 2));
-    await service.replace('new-1', { label: 'Home 2', line1: 'y', latitude: null, longitude: null });
+    await service.replace('new-1', {
+      label: 'Home 2',
+      line1: 'y',
+      latitude: null,
+      longitude: null,
+    });
 
     expect(api.replaceAddress).toHaveBeenCalledWith(
       expect.objectContaining({ addressId: 'new-1', expectedVersion: 1 }),

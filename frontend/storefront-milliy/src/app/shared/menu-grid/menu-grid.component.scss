@@ -1,6 +1,11 @@
-:host { display: block; }
+:host {
+  display: block;
+}
 
-.chips { gap: 8px; padding: 16px 24px 8px; }
+.chips {
+  gap: 8px;
+  padding: 16px 24px 8px;
+}
 
 .chip {
   flex-shrink: 0;
@@ -12,12 +17,27 @@
   font: 600 13px/1 var(--font-display);
   cursor: pointer;
 
-  &.is-active { background: var(--brand-accent); color: var(--text-on-accent); }
+  &.is-active {
+    background: var(--brand-accent);
+    color: var(--text-on-accent);
+  }
 }
 
-.section { padding: 12px 24px 0; }
-.section:last-child { padding-bottom: 24px; }
+.section {
+  padding: 12px 24px 0;
+}
+.section:last-child {
+  padding-bottom: 24px;
+}
 
-.section__title { margin: 8px 0 12px; font: 800 20px/1.1 var(--font-display); letter-spacing: -0.01em; }
+.section__title {
+  margin: 8px 0 12px;
+  font: 800 20px/1.1 var(--font-display);
+  letter-spacing: -0.01em;
+}
 
-.section__list { display: flex; flex-direction: column; gap: 12px; }
+.section__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

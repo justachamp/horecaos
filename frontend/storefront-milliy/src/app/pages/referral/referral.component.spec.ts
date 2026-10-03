@@ -26,9 +26,10 @@ function pending(): RedemptionResponse {
 }
 
 class FakeReferralService {
-  myReferral = vi.fn(
-    async (): Promise<MyReferralResponse> => ({ code: 'ABCD1234', redeemedAs: null }),
-  );
+  myReferral = vi.fn(async (): Promise<MyReferralResponse> => ({
+    code: 'ABCD1234',
+    redeemedAs: null,
+  }));
   redeem = vi.fn(async (): Promise<RedemptionResponse> => pending());
 }
 
@@ -52,7 +53,7 @@ async function setUp(configure: (referrals: FakeReferralService) => void = () =>
   return { fixture, referrals };
 }
 
-describe('ReferralComponent -- loading the caller\'s own code', () => {
+describe("ReferralComponent -- loading the caller's own code", () => {
   it('shows the code once loaded', async () => {
     const { fixture } = await setUp();
 
@@ -82,7 +83,7 @@ describe('ReferralComponent -- loading the caller\'s own code', () => {
   });
 });
 
-describe('ReferralComponent -- redeeming a friend\'s code', () => {
+describe("ReferralComponent -- redeeming a friend's code", () => {
   it('shows the redeem form when this account has not redeemed one yet', async () => {
     const { fixture } = await setUp();
 
@@ -103,7 +104,9 @@ describe('ReferralComponent -- redeeming a friend\'s code', () => {
   it('does not submit an empty or whitespace-only code', async () => {
     const { fixture, referrals } = await setUp();
 
-    const button = fixture.nativeElement.querySelector('.redeem-card button.btn') as HTMLButtonElement;
+    const button = fixture.nativeElement.querySelector(
+      '.redeem-card button.btn',
+    ) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
 
     referrals.redeem.mockClear();

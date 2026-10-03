@@ -10,8 +10,6 @@ export class TranslatePipe implements PipeTransform {
   private readonly translate = inject(TranslateService);
 
   transform(key: string, params?: Record<string, string | number>): string {
-    return params
-      ? this.translate.getWithParams(key, params)
-      : this.translate.get(key);
+    return params ? this.translate.getWithParams(key, params) : this.translate.get(key);
   }
 }

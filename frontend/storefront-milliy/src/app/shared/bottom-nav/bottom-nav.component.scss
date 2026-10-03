@@ -20,11 +20,20 @@
   color: var(--text-muted);
   font: 500 11px/1.2 var(--font-ui);
 
-  &.is-active { color: var(--brand-accent-deep); }
-  &:focus-visible { outline: 2px solid var(--brand-accent-deep); outline-offset: 3px; border-radius: 10px; }
+  &.is-active {
+    color: var(--brand-accent-deep);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--brand-accent-deep);
+    outline-offset: 3px;
+    border-radius: 10px;
+  }
 }
 
-.tab__icon { position: relative; display: flex; }
+.tab__icon {
+  position: relative;
+  display: flex;
+}
 
 .tab__badge {
   position: absolute;

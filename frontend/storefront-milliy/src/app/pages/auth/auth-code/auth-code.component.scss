@@ -21,13 +21,34 @@
   cursor: pointer;
 }
 
-.auth__chevron { font: 700 22px/1 var(--font-display); margin-top: -2px; }
+.auth__chevron {
+  font: 700 22px/1 var(--font-display);
+  margin-top: -2px;
+}
 
-.auth__title { margin: 32px 0 0; text-align: center; font: 800 26px/1.15 var(--font-display); letter-spacing: -0.02em; }
-.auth__phone { margin: 12px 0 0; font: 700 16px/1.2 var(--font-ui); }
-.auth__sent { margin: 2px 0 0; color: var(--text-secondary); font: 400 13px/1.4 var(--font-ui); text-align: center; }
+.auth__title {
+  margin: 32px 0 0;
+  text-align: center;
+  font: 800 26px/1.15 var(--font-display);
+  letter-spacing: -0.02em;
+}
+.auth__phone {
+  margin: 12px 0 0;
+  font: 700 16px/1.2 var(--font-ui);
+}
+.auth__sent {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font: 400 13px/1.4 var(--font-ui);
+  text-align: center;
+}
 
-.boxes { margin-top: 28px; display: flex; gap: 8px; width: 100%; }
+.boxes {
+  margin-top: 28px;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
 
 .box {
   flex: 1;
@@ -40,15 +61,32 @@
   font: 800 20px/1 var(--font-display);
   color: var(--text-primary);
 
-  &:focus { outline: 0; border-color: var(--brand-accent-deep); }
-  &--filled { border-color: var(--brand-accent); }
+  &:focus {
+    outline: 0;
+    border-color: var(--brand-accent-deep);
+  }
+  &--filled {
+    border-color: var(--brand-accent);
+  }
 }
 
-.auth__error { margin: 16px 0 0; text-align: center; color: var(--status-error); font: 500 13px/1.4 var(--font-ui); }
+.auth__error {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--status-error);
+  font: 500 13px/1.4 var(--font-ui);
+}
 
-.auth__countdown { margin: 22px 0 0; color: var(--brand-accent-deep); font: 700 18px/1 var(--font-display); }
+.auth__countdown {
+  margin: 22px 0 0;
+  color: var(--brand-accent-deep);
+  font: 700 18px/1 var(--font-display);
+}
 
-.auth__resend { margin-top: 22px; text-align: center; }
+.auth__resend {
+  margin-top: 22px;
+  text-align: center;
+}
 
 .link {
   margin-top: 4px;
@@ -72,5 +110,9 @@
   font: 700 15px/1 var(--font-display);
   cursor: pointer;
 
-  &:disabled { background: var(--line-default); color: var(--text-muted); cursor: not-allowed; }
+  &:disabled {
+    background: var(--line-default);
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
 }

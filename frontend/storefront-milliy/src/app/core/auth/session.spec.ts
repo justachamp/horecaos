@@ -44,7 +44,10 @@ describe('Session', () => {
       session.beginSignIn();
       expect(session.status()).toBe('AUTHENTICATING');
 
-      session.adopt({ accessToken: 'tok-3', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+      session.adopt({
+        accessToken: 'tok-3',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      });
 
       expect(session.status()).toBe('AUTHENTICATED');
     });
@@ -70,7 +73,10 @@ describe('Session', () => {
   describe('accessToken (self-expiring)', () => {
     it('returns the token before its deadline', () => {
       const session = freshSession();
-      session.adopt({ accessToken: 'tok-6', expiresAt: new Date(Date.now() + 10_000).toISOString() });
+      session.adopt({
+        accessToken: 'tok-6',
+        expiresAt: new Date(Date.now() + 10_000).toISOString(),
+      });
 
       expect(session.accessToken()).toBe('tok-6');
     });
@@ -149,7 +155,10 @@ describe('Session', () => {
   describe('expire', () => {
     it('drops the bearer and clears storage', () => {
       const session = freshSession();
-      session.adopt({ accessToken: 'tok-8', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+      session.adopt({
+        accessToken: 'tok-8',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      });
 
       session.expire();
 
@@ -163,7 +172,10 @@ describe('Session', () => {
   describe('signOut', () => {
     it('drops the bearer and clears storage, same as expire', () => {
       const session = freshSession();
-      session.adopt({ accessToken: 'tok-9', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+      session.adopt({
+        accessToken: 'tok-9',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      });
 
       session.signOut();
 

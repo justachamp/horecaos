@@ -1,6 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 
-import { TelegramSignInApi, type TelegramSignInCode, type TelegramSignInPollResult } from '../api/telegram-signin-api';
+import {
+  TelegramSignInApi,
+  type TelegramSignInCode,
+  type TelegramSignInPollResult,
+} from '../api/telegram-signin-api';
 import { HorecaOSApiError } from '../api/problem-details';
 import { newIdempotencyKey } from '../api/idempotency';
 import { Session } from '../auth/session';
@@ -53,7 +57,9 @@ export class TelegramSignIn {
         if (!result.token) {
           // A 200 with no token is not a session -- CustomerOtp.signIn makes
           // the identical refusal for the identical reason.
-          throw new TelegramSignInUnavailableError('The poll answered SIGNED_IN without a session token.');
+          throw new TelegramSignInUnavailableError(
+            'The poll answered SIGNED_IN without a session token.',
+          );
         }
         this.session.adopt({ accessToken: result.token, expiresAt: result.expiresAt });
         return true;

@@ -42,7 +42,10 @@ export class ThemeService {
     if (stored === 'light' || stored === 'dark') {
       return stored;
     }
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-color-scheme: light)').matches
+    ) {
       return 'light';
     }
     return 'dark';
