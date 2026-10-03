@@ -1147,14 +1147,26 @@ public class JdbcDineInStore {
                 .list();
     }
 
-    /** Clears a claimant's id from every guest-opened session of theirs that no longer needs it (ADR 0015). */
+    /**
+     * What {@code opened_by} says once the account it named has been erased. The guest
+     * route writes {@code 'guest:<accountId>'} there as well as into
+     * {@code opened_by_account_id}, and the column is NOT NULL, so it is neutralised
+     * rather than cleared.
+     */
+    private static final String ERASED_OPENER = "guest:erased";
+
+    /**
+     * Clears a claimant's id from every guest-opened session of theirs that no longer
+     * needs it (ADR 0015): the dedicated column, and the same id inside {@code opened_by}.
+     */
     public int clearClaimant(UUID tenantId, UUID accountId) {
         return jdbc.sql("""
                 UPDATE dinein.table_sessions
-                   SET opened_by_account_id = NULL, updated_at = now()
+                   SET opened_by_account_id = NULL, opened_by = :erasedOpener, updated_at = now()
                  WHERE tenant_id = :tenantId AND opened_by_account_id = :accountId
                    AND (confirmed_at IS NOT NULL OR closed_at IS NOT NULL)
                 """)
+                .param("erasedOpener", ERASED_OPENER)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
                 .update();
