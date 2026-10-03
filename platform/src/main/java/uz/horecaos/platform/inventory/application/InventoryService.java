@@ -339,6 +339,39 @@ public class InventoryService implements InventoryReservationPort, ChannelAvaila
     }
 
     /**
+     * The storefront's single-variant read, which names its channel the way the menu does: by
+     * the tenant's own channel code. A code that names a registered channel gives the question
+     * both halves of a {@link ChannelContext} -- the channel's id, which decides which {@code
+     * CHANNEL} and {@code MENU} stops cover it, and its system type, which decides the
+     * remaining-quantity threshold -- so this read says what the menu and the cart say about the
+     * same dish (ADR 0141 Decision 1). A value that names no registered channel is read as a bare
+     * system type ({@code WEB}), exactly as {@link #checkAvailabilityForChannel} always read it:
+     * only the stops that cover every channel apply then, and a typo can never make a dish look
+     * more available than the plain stock check would.
+     *
+     * @param channel a channel code, a channel system type, or null for no channel at all
+     */
+    @Transactional(readOnly = true)
+    public AvailabilityDecision checkAvailabilityOnChannelCode(
+            UUID tenantId, UUID locationId, Set<UUID> variantIds, @Nullable String channel) {
+        rls.bindTenant(tenantId);
+        ChannelContext context;
+        if (channel == null || channel.isBlank()) {
+            context = ChannelContext.none();
+        } else {
+            Optional<uz.horecaos.platform.tenancy.api.SalesChannel> registered =
+                    channels == null ? Optional.empty() : channels.byCode(tenantId, channel);
+            context = registered
+                    .map(found ->
+                            new ChannelContext(found.id(), found.systemType().name()))
+                    .orElseGet(() -> ChannelContext.ofSystemType(channel));
+        }
+        Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
+        variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
+        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, context);
+    }
+
+    /**
      * What a marketplace reconciler asks (ADR 0141 Decision 7): one channel at one
      * location, every variant at quantity one, the offering and the supply, stop and
      * threshold composition all evaluated at the caller's {@code at}. The channel's system

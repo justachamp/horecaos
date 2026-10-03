@@ -3375,6 +3375,10 @@ public class JdbcCatalogStore {
      * stopped today and un-stopped tomorrow reappears in this read on its
      * own, because the predicate is evaluated fresh on every call rather
      * than baked into a stored flag.
+     *
+     * <p>This is the supply half of "not-stopped" only. A stop record (ADR 0141) lives in
+     * inventory and cannot be joined from here, so {@code
+     * CatalogAuthoringService#resolvedRecommendations} lays those over what this returns.
      */
     public List<RecommendationRow> listResolvedRecommendations(
             UUID tenantId, UUID brandId, UUID sourceProductId, UUID locationId, String locale) {

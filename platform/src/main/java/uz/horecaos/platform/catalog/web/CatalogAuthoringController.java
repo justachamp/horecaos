@@ -964,9 +964,11 @@ public class CatalogAuthoringController {
     @Operation(
             summary = "This product's recommendations, filtered to what is safe to render",
             description = "IA 4.2's own filter -- active + in-menu + not-stopped -- resolved here, "
-                    + "at read time, against one location's catalog.location_offerings. Nothing is "
-                    + "pruned from the stored set to get here: a target that is stopped today and "
-                    + "un-stopped tomorrow reappears in this read on its own.")
+                    + "at read time, against one location's catalog.location_offerings. Not-stopped "
+                    + "means the supply is not 86'd and no stop covers every channel at this branch "
+                    + "(a stop on some channels only keeps the target, since this read names none). "
+                    + "Nothing is pruned from the stored set to get here: a target that is stopped "
+                    + "today and un-stopped tomorrow reappears in this read on its own.")
     public ResponseEntity<RecommendationListResponse> effectiveRecommendations(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
