@@ -156,6 +156,78 @@ class AppliedPromotionTests {
         assertThat(result.applied()).containsExactly(new Applied(Source.AUTOMATIC, Effect.SURCHARGE, 9_000L));
     }
 
+    // ------------------------------------------------------------ gift offers
+
+    @Test
+    @DisplayName("a gift the cart does not hold is offered from the quote's own evidence, survives a replay of the "
+            + "quote, and is priced free once the cart holds it")
+    void aMissingGiftIsOfferedAndAddingItPricesItFree() {
+        UUID rule = freeColaWithPizza();
+
+        Quote bare = priceLines("gift-bare", Map.of(fixture.margheritaVariant, 2));
+        AppliedPromotions before = applied.describe(TENANT, bare.quoteId(), null);
+
+        assertThat(bare.discount().minor())
+                .as("pricing never invents a line: the gift is offered, not priced")
+                .isZero();
+        assertThat(before.applied()).isEmpty();
+        assertThat(before.giftOffers())
+                .containsExactly(new AppliedPromotions.GiftOffer(
+                        rule, fixture.colaVariant, java.math.BigDecimal.ONE, false, java.math.BigDecimal.ONE));
+
+        Quote replay = priceLines("gift-bare", Map.of(fixture.margheritaVariant, 2));
+        assertThat(replay.quoteId())
+                .as("an idempotent replay is the same quote")
+                .isEqualTo(bare.quoteId());
+        assertThat(applied.describe(TENANT, replay.quoteId(), null).giftOffers())
+                .as("read from the stored evidence: a replay never runs the engine again")
+                .isEqualTo(before.giftOffers());
+
+        Quote withGift = priceLines("gift-added", Map.of(fixture.margheritaVariant, 2, fixture.colaVariant, 1));
+        AppliedPromotions after = applied.describe(TENANT, withGift.quoteId(), null);
+
+        assertThat(withGift.discount().minor()).as("the Cola, once in the cart").isEqualTo(12_000L);
+        assertThat(after.giftOffers())
+                .containsExactly(new AppliedPromotions.GiftOffer(
+                        rule, fixture.colaVariant, java.math.BigDecimal.ONE, true, java.math.BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("a quote priced before offers were recorded, another tenant's quote and a cart with no gift rule "
+            + "all describe no offer")
+    void noOfferWhereThereIsNone() {
+        Quote plain = priceLines("plain", Map.of(fixture.margheritaVariant, 2));
+        assertThat(applied.describe(TENANT, plain.quoteId(), null).giftOffers()).isEmpty();
+
+        freeColaWithPizza();
+        Quote offered = priceLines("offered", Map.of(fixture.margheritaVariant, 2));
+        assertThat(applied.describe(TENANT, offered.quoteId(), null).giftOffers())
+                .hasSize(1);
+
+        fixture.jdbc
+                .sql("UPDATE pricing.quotes SET calculation_document = calculation_document - 'giftOffers' "
+                        + "WHERE id = :id")
+                .param("id", offered.quoteId())
+                .update();
+        assertThat(applied.describe(TENANT, offered.quoteId(), null).giftOffers())
+                .as("a quote that recorded none")
+                .isEmpty();
+        assertThat(applied.describe(OTHER_TENANT, offered.quoteId(), null).giftOffers())
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("an offer names the variant to add and an opaque rule key, never the promotion's name or code")
+    void anOfferNamesNoPromotion() {
+        freeColaWithPizza();
+        Quote quote = priceLines("named", Map.of(fixture.margheritaVariant, 2));
+
+        String rendered =
+                applied.describe(TENANT, quote.quoteId(), null).giftOffers().toString();
+
+        assertThat(rendered).doesNotContain("FREECOLA").doesNotContain("Promotion ");
+    }
+
     // ------------------------------------------------------------ the typed code
 
     @Test
@@ -313,6 +385,38 @@ class AppliedPromotionTests {
                         null));
         codes.activate(TENANT, BRAND, drafted.couponId());
         return drafted;
+    }
+
+    /** "Free Cola with any Margherita": an automatic FREE_ITEM rule, returning its id. */
+    private UUID freeColaWithPizza() {
+        return fixture.activate(definition(
+                        "FREECOLA",
+                        Promotion.Scope.ITEM,
+                        "gift",
+                        List.of(condition(
+                                1,
+                                Promotion.Condition.Type.PRODUCT,
+                                "productIds",
+                                List.of(fixture.margheritaProduct.toString()))),
+                        List.of(action(
+                                1,
+                                Promotion.Action.Type.FREE_ITEM,
+                                "variantIds",
+                                List.of(fixture.colaVariant.toString()),
+                                "quantity",
+                                1L))))
+                .id();
+    }
+
+    /** The given lines priced for the signed-in customer under an idempotency key. */
+    private Quote priceLines(String idempotencyKey, Map<UUID, Integer> quantities) {
+        List<QuoteRequest.Line> lines = new java.util.ArrayList<>();
+        int index = 0;
+        for (Map.Entry<UUID, Integer> entry : quantities.entrySet()) {
+            lines.add(new QuoteRequest.Line("line-" + index++, entry.getKey(), entry.getValue(), List.of()));
+        }
+        return fixture.quotes.quote(
+                new QuoteRequest(TENANT, BRAND, LOCATION, CUSTOMER, "STOREFRONT", lines, idempotencyKey, null, null));
     }
 
     /** Two Margheritas, 90 000 som, priced for the signed-in customer carrying {@code code}. */

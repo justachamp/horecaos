@@ -161,6 +161,52 @@ class StorefrontOrderingControllerOrderResponseTests {
         assertThat(response.appliedPromotions()).isEmpty();
     }
 
+    @Test
+    void aGiftOfferReachesTheClientAsAnOfferAndNotAsALine() {
+        QuoteSnapshot quote = new QuoteSnapshot(
+                UUID.randomUUID(),
+                TENANT_ID,
+                BRAND_ID,
+                LOCATION_ID,
+                null,
+                "UZS",
+                QuoteSnapshot.Status.ACTIVE,
+                UUID.randomUUID(),
+                "hash",
+                90_000L,
+                0L,
+                0L,
+                0L,
+                90_000L,
+                CREATED_AT,
+                List.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null);
+        UUID rule = UUID.randomUUID();
+        UUID cola = UUID.randomUUID();
+
+        StorefrontOrderingController.PricedCartResponse response = StorefrontOrderingController.PricedCartResponse.of(
+                new CartService.PricedCart(UUID.randomUUID(), 2, quote),
+                new AppliedPromotions(
+                        List.of(),
+                        null,
+                        List.of(new AppliedPromotions.GiftOffer(
+                                rule, cola, java.math.BigDecimal.ONE, false, java.math.BigDecimal.ONE))));
+
+        assertThat(response.giftOffers())
+                .containsExactly(new StorefrontOrderingController.GiftOfferResponse(
+                        rule, cola, java.math.BigDecimal.ONE, false, java.math.BigDecimal.ONE));
+        assertThat(response.totalMinor()).as("an offer changes no amount").isEqualTo(90_000L);
+        assertThat(response.discountMinor()).isZero();
+        assertThat(StorefrontOrderingController.PricedCartResponse.of(
+                                new CartService.PricedCart(UUID.randomUUID(), 2, quote), AppliedPromotions.none())
+                        .giftOffers())
+                .isEmpty();
+    }
+
     private static OrderQueryService.OrderDetail detail(FulfillmentMode fulfillmentMode, UUID locationId) {
         return detail(fulfillmentMode, locationId, 0L);
     }

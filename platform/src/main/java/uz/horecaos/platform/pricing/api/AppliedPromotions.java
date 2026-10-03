@@ -1,6 +1,8 @@
 package uz.horecaos.platform.pricing.api;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -14,22 +16,36 @@ import org.jspecify.annotations.Nullable;
  * it moved the total. A customer-facing title per locale would be a new field on
  * the promotion and is not part of this record.
  *
- * <p>No identifier crosses this boundary: not the promotion's, not the coupon's.
- * Two promotions that do the same thing to the same total are one entry, because
- * "two offers applied" is a fact about the rule set, not about the basket.
+ * <p>No identifier crosses this boundary in {@code applied}: not the promotion's,
+ * not the coupon's. Two promotions that do the same thing to the same total are one
+ * entry, because "two offers applied" is a fact about the rule set, not about the
+ * basket. The one exception is {@code giftOffers}, which has to name the variant a
+ * storefront would add, and carries the rule's id as the opaque key that keeps one
+ * offer from being shown twice -- never a name, a code or a coupon.
  *
  * @param applied       one entry per (source, effect), discounts first
  * @param couponOutcome what became of the code on the cart, or null when the
  *                      cart carries none (always null for an order, which no
  *                      longer has a cart to type a code into)
+ * @param giftOffers    the gifts a firing {@code FREE_ITEM} rule would price free,
+ *                      whether or not the cart holds them yet. An offer, never a
+ *                      line: nothing is added to the cart by pricing, and what the
+ *                      customer is charged is the next quote's business. Empty for
+ *                      an order, which has no cart to add to
  */
 public record AppliedPromotions(
-        List<Applied> applied, @Nullable CouponOutcome couponOutcome) {
+        List<Applied> applied, @Nullable CouponOutcome couponOutcome, List<GiftOffer> giftOffers) {
 
-    private static final AppliedPromotions NONE = new AppliedPromotions(List.of(), null);
+    private static final AppliedPromotions NONE = new AppliedPromotions(List.of(), null, List.of());
 
     public AppliedPromotions {
         applied = applied == null ? List.of() : List.copyOf(applied);
+        giftOffers = giftOffers == null ? List.of() : List.copyOf(giftOffers);
+    }
+
+    /** What the customer is told when no gift is on offer: every caller that predates the offers. */
+    public AppliedPromotions(List<Applied> applied, @Nullable CouponOutcome couponOutcome) {
+        this(applied, couponOutcome, List.of());
     }
 
     /** Nothing applied and no code on the cart. */
@@ -43,6 +59,22 @@ public record AppliedPromotions(
      *                    the direction being the effect's
      */
     public record Applied(Source source, Effect effect, long amountMinor) {}
+
+    /**
+     * A free gift the cart could take up.
+     *
+     * @param ruleId   the rule that would give it; opaque, stable across quotes
+     * @param variantId the variant a storefront would add. A rule naming several
+     *                 variants yields one offer per variant, any of which fills
+     *                 the same allowance
+     * @param quantity the units the rule would give free once taken up, across all
+     *                 the rule's gift variants
+     * @param inCart   whether the cart already holds this variant
+     * @param toAdd    the units still missing for the allowance to be complete; zero
+     *                 when the cart already holds {@code quantity} units of the
+     *                 rule's gift variants, so there is nothing left to offer to add
+     */
+    public record GiftOffer(UUID ruleId, UUID variantId, BigDecimal quantity, boolean inCart, BigDecimal toAdd) {}
 
     /** Whether the customer asked for it. */
     public enum Source {

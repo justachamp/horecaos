@@ -1159,7 +1159,8 @@ public class StorefrontOrderingController {
             // against the lines. Each is already inside its line's price and the total.
             List<HiddenChargeResponse> hiddenCharges,
             List<AppliedPromotionResponse> appliedPromotions,
-            @Nullable String promoCodeOutcome) {
+            @Nullable String promoCodeOutcome,
+            List<GiftOfferResponse> giftOffers) {
 
         static PricedCartResponse of(CartService.PricedCart priced, AppliedPromotions promotions) {
             QuoteSnapshot quote = priced.quote();
@@ -1185,7 +1186,33 @@ public class StorefrontOrderingController {
                     AppliedPromotionResponse.of(promotions),
                     promotions.couponOutcome() == null
                             ? null
-                            : promotions.couponOutcome().name());
+                            : promotions.couponOutcome().name(),
+                    GiftOfferResponse.of(promotions));
+        }
+    }
+
+    /**
+     * A free gift a rule would give, which the customer may add (ADR 0140).
+     *
+     * <p>An offer, never a line: pricing adds nothing to the cart, so the gift is free only
+     * once the customer (or the screen on their behalf, with their say) puts it in and the
+     * cart is priced again. {@code toAdd} is what is still missing; when it is zero the
+     * allowance is already in the cart and the offer is only a way to say so.
+     *
+     * @param ruleId    opaque key of the rule behind the offer, stable across quotes
+     * @param variantId the variant to add
+     * @param quantity  the units the rule gives free once taken up, across its gift variants
+     * @param inCart    whether the cart already holds this variant
+     * @param toAdd     the units still missing for the allowance to be complete
+     */
+    public record GiftOfferResponse(
+            UUID ruleId, UUID variantId, BigDecimal quantity, boolean inCart, BigDecimal toAdd) {
+
+        static List<GiftOfferResponse> of(AppliedPromotions promotions) {
+            return promotions.giftOffers().stream()
+                    .map(offer -> new GiftOfferResponse(
+                            offer.ruleId(), offer.variantId(), offer.quantity(), offer.inCart(), offer.toAdd()))
+                    .toList();
         }
     }
 

@@ -789,6 +789,23 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 document.put("couponVerdicts", verdicts);
             }
         }
+        // ADR 0140: the gifts a firing FREE_ITEM rule would price free, in the cart or not, so
+        // a storefront can offer adding one. Kept on the quote for the same reason as the
+        // verdicts above: an idempotent replay never runs the engine, and the offer has to
+        // survive a page reload. Quantities are strings, exact for a portion (0.5) as for 2.
+        if (!result.giftOffers().isEmpty()) {
+            List<Map<String, Object>> gifts = new ArrayList<>();
+            for (PromotionEvaluator.GiftOffer offer : result.giftOffers()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("ruleId", offer.promotionId().toString());
+                entry.put("variantId", offer.variantId().toString());
+                entry.put("quantity", offer.quantity().toPlainString());
+                entry.put("inCart", offer.inCart());
+                entry.put("toAdd", offer.toAdd().toPlainString());
+                gifts.add(entry);
+            }
+            document.put("giftOffers", gifts);
+        }
         return document;
     }
 
