@@ -5,10 +5,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +45,15 @@ import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore.
  * guessed; one Keycloak has no account for is counted and left alone, because
  * inventing a person from a grant would put a name in a record that nobody typed.
  *
+ * <p><strong>A pass moves on.</strong> Those left-alone subjects stay on the work
+ * list, and they sort wherever their tenant and subject put them, so a list always
+ * read from the head would be filled by the first {@code batchSize} of them and
+ * never reach anybody behind. Each pass therefore carries on from where the last
+ * one stopped, and starts again from the head once it has reached the end, which
+ * is when the ones left for retry come round again. The position is held in
+ * memory: a restart begins at the head, and one lost position costs a pass, not a
+ * subject.
+ *
  * <p><strong>The second pass</strong> promotes a {@code PENDING} member whose
  * invitation was accepted. Acceptance commits the invitation row and then the
  * transaction that promotes the member; losing that second transaction leaves a
@@ -75,6 +86,9 @@ public class StaffMemberReconciler {
     private final StaffMemberService members;
     private final Clock clock;
     private final int batchSize;
+
+    /** Where the previous pass stopped; null at the head, which is where the next pass starts. */
+    private @Nullable SubjectRef cursor;
 
     private final AtomicLong unbackedActive = new AtomicLong();
     private final AtomicLong endedWithAccess = new AtomicLong();
@@ -137,13 +151,14 @@ public class StaffMemberReconciler {
      * One pass: backfill up to a batch of subjects, promote accepted-but-pending
      * members, refresh the gauges.
      */
-    public Report run() {
+    public synchronized Report run() {
         Instant now = clock.instant();
         Map<UUID, Integer> createdByTenant = new LinkedHashMap<>();
         int noAccount = 0;
         int unanswered = 0;
 
-        for (SubjectRef subject : store.unbackedActiveSubjects(now, StaffMembers.MACHINE_ROLE_CODES, batchSize)) {
+        List<SubjectRef> work = nextBatch(now);
+        for (SubjectRef subject : work) {
             Optional<StaffProfile> profile;
             try {
                 profile = accounts.profile(subject.principalSubject());
@@ -181,6 +196,20 @@ public class StaffMemberReconciler {
                 noAccount,
                 unanswered,
                 (int) unbackedActive.get());
+    }
+
+    /**
+     * The next page of the work list. A page that comes back empty after the
+     * cursor means the tail is done, so the head is read in the same pass rather
+     * than spending a whole interval finding that out.
+     */
+    private List<SubjectRef> nextBatch(Instant now) {
+        List<SubjectRef> work = store.unbackedActiveSubjects(now, StaffMembers.MACHINE_ROLE_CODES, batchSize, cursor);
+        if (work.isEmpty() && cursor != null) {
+            work = store.unbackedActiveSubjects(now, StaffMembers.MACHINE_ROLE_CODES, batchSize, null);
+        }
+        cursor = work.size() < batchSize ? null : work.getLast();
+        return work;
     }
 
     private void refreshGauges(Instant now) {
