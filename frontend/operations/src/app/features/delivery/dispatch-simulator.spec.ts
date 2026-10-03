@@ -5,8 +5,11 @@ import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { DISPATCH_OPTIONS } from './dispatch-fixtures.testing';
 import {
+  DispatchOptions,
   DispatchRulesApi,
   DispatchRulesDocument,
+  RecentPlan,
+  ScopeLevel,
   SimulationRequest,
   SimulationResult,
 } from './dispatch-rules-api';
@@ -75,7 +78,12 @@ interface Rendered {
 }
 
 async function render(
-  inputs: { dirty?: boolean; draft?: DispatchRulesDocument | null } = {},
+  inputs: {
+    dirty?: boolean;
+    draft?: DispatchRulesDocument | null;
+    options?: DispatchOptions;
+    scopeLevel?: ScopeLevel;
+  } = {},
   simulate = vi.fn().mockResolvedValue(RESULT),
 ): Promise<Rendered> {
   TestBed.configureTestingModule({
@@ -86,8 +94,8 @@ async function render(
   fixture.componentRef.setInput('tenantId', 't1');
   fixture.componentRef.setInput('brandId', 'b1');
   fixture.componentRef.setInput('locationId', 'l1');
-  fixture.componentRef.setInput('scopeLevel', 'BRAND');
-  fixture.componentRef.setInput('options', DISPATCH_OPTIONS);
+  fixture.componentRef.setInput('scopeLevel', inputs.scopeLevel ?? 'BRAND');
+  fixture.componentRef.setInput('options', inputs.options ?? DISPATCH_OPTIONS);
   fixture.componentRef.setInput('draft', inputs.draft ?? DRAFT);
   fixture.componentRef.setInput('dirty', inputs.dirty ?? false);
   fixture.detectChanges();
@@ -286,6 +294,115 @@ describe('DispatchSimulator (ADR 0142 Decision 4: the simulator is the evaluator
       const [, request] = simulate.mock.calls[0] as [string, SimulationRequest];
       expect(request.planId).toBe('plan-1');
       expect(request.scenario).toBeUndefined();
+    });
+  });
+
+  describe('a recent order of another branch', () => {
+    function plan(planId: string, locationId: string, orderReference: string): RecentPlan {
+      return {
+        planId,
+        locationId,
+        orderReference,
+        status: 'ASSIGNED',
+        sourcingMode: 'FLEET_FIRST',
+        ruleId: null,
+        createdAt: '2026-09-30T10:00:00Z',
+      };
+    }
+
+    const OPTIONS: DispatchOptions = {
+      ...DISPATCH_OPTIONS,
+      locations: [
+        { id: 'l1', brandId: 'b1', displayName: 'Centre' },
+        { id: 'l2', brandId: 'b1', displayName: 'Chilonzor' },
+        { id: 'l3', brandId: 'b2', displayName: 'Other brand' },
+      ],
+      recentPlans: [
+        plan('plan-own', 'l1', 'D-1'),
+        plan('plan-sibling', 'l2', 'D-204'),
+        plan('plan-other-brand', 'l3', 'D-300'),
+        plan('plan-unknown', 'l9', 'D-400'),
+      ],
+    };
+
+    function offered(host: HTMLElement): string[] {
+      return [...control<HTMLSelectElement>(host, 'sim-plan').options]
+        .map((option) => option.value)
+        .filter((value) => value !== '');
+    }
+
+    it('re-reads it at its own branch, because the server only finds a plan at the branch it belongs to', async () => {
+      const { fixture, host, simulate } = await render({ options: OPTIONS });
+      control<HTMLButtonElement>(host, 'sim-mode-plan').click();
+      fixture.detectChanges();
+
+      set(host, 'sim-plan', 'plan-sibling');
+      fixture.detectChanges();
+      control<HTMLButtonElement>(host, 'sim-run').click();
+      await settle(fixture);
+
+      const [, request] = simulate.mock.calls[0] as [string, SimulationRequest];
+      expect(request.planId).toBe('plan-sibling');
+      expect(request.locationId).toBe('l2');
+      expect(request.brandId).toBe('b1');
+    });
+
+    it('still uses the operator’s own branch for a plan of that branch', async () => {
+      const { fixture, host, simulate } = await render({ options: OPTIONS });
+      control<HTMLButtonElement>(host, 'sim-mode-plan').click();
+      fixture.detectChanges();
+
+      set(host, 'sim-plan', 'plan-own');
+      fixture.detectChanges();
+      control<HTMLButtonElement>(host, 'sim-run').click();
+      await settle(fixture);
+
+      const [, request] = simulate.mock.calls[0] as [string, SimulationRequest];
+      expect(request.locationId).toBe('l1');
+      expect(request.brandId).toBe('b1');
+    });
+
+    it('names the branch of a plan that is not the operator’s own, and offers none it cannot place', async () => {
+      const { fixture, host } = await render({ options: OPTIONS });
+      control<HTMLButtonElement>(host, 'sim-mode-plan').click();
+      fixture.detectChanges();
+
+      expect(offered(host)).toEqual(['plan-own', 'plan-sibling']);
+      const labels = [...control<HTMLSelectElement>(host, 'sim-plan').options].map(
+        (option) => option.textContent ?? '',
+      );
+      expect(labels.find((label) => label.includes('D-204'))).toContain('Chilonzor');
+      expect(labels.find((label) => label.includes('D-1'))).not.toContain('Centre');
+    });
+
+    it('cannot run a plan that the scope now shown no longer offers', async () => {
+      const { fixture, host } = await render({ options: OPTIONS, scopeLevel: 'TENANT' });
+      control<HTMLButtonElement>(host, 'sim-mode-plan').click();
+      fixture.detectChanges();
+      set(host, 'sim-plan', 'plan-sibling');
+      fixture.detectChanges();
+      expect(control<HTMLButtonElement>(host, 'sim-run').disabled).toBe(false);
+
+      fixture.componentRef.setInput('scopeLevel', 'LOCATION');
+      fixture.detectChanges();
+
+      expect(control<HTMLButtonElement>(host, 'sim-run').disabled).toBe(true);
+    });
+
+    it('offers only the branch’s own plans when the rules being written are the branch’s own', async () => {
+      const { fixture, host } = await render({ options: OPTIONS, scopeLevel: 'LOCATION' });
+      control<HTMLButtonElement>(host, 'sim-mode-plan').click();
+      fixture.detectChanges();
+
+      expect(offered(host)).toEqual(['plan-own']);
+    });
+
+    it('offers every branch of the company when the rules are the company’s', async () => {
+      const { fixture, host } = await render({ options: OPTIONS, scopeLevel: 'TENANT' });
+      control<HTMLButtonElement>(host, 'sim-mode-plan').click();
+      fixture.detectChanges();
+
+      expect(offered(host)).toEqual(['plan-own', 'plan-sibling', 'plan-other-brand']);
     });
   });
 

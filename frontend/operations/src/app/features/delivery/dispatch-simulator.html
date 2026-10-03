@@ -127,7 +127,7 @@
         >
           <option value=""></option>
           @for (plan of recentPlans(); track plan.planId) {
-            <option [value]="plan.planId">{{ plan.orderReference }} · {{ plan.status }}</option>
+            <option [value]="plan.planId">{{ planLabel(plan) }}</option>
           }
         </select>
       </label>
