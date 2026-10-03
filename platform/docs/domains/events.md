@@ -48,6 +48,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `voice.events` | 3 | 1 | `PT168H` | `delete` |
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
+| `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
 Business-fact retention is the seven-day operational replay window. Commands
@@ -367,6 +368,41 @@ catalogued here: their payload shape (a reservation's lines? a quantity delta?)
 is not yet decided, and a contract with no producer is a promise this
 repository has not made — the same restraint `media.events` states for its own
 five unpublished siblings.
+
+## `integration.events`
+
+- Producing module: `integration`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `bindingId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `MarketplaceAvailabilityPushed` | 1 | `bindingId` | [`MarketplaceAvailabilityPushed.v1`](../../src/main/resources/events/integration.events/MarketplaceAvailabilityPushed.v1.schema.json) | `bindingId`, `locationId`, `variantId`, `providerType`, `externalItemId`, `available`, `desiredSeq`, `confirmedAt` |
+| `MarketplaceChannelWentStale` | 1 | `bindingId` | [`MarketplaceChannelWentStale.v1`](../../src/main/resources/events/integration.events/MarketplaceChannelWentStale.v1.schema.json) | `bindingId`, `locationId`, `providerType`, `staleAfterSeconds`, `unconfirmedItemCount`, `oldestUnconfirmedSince` |
+
+Both are produced by the marketplace availability reconciler (ADR 0141), through the
+outbox, in the same transaction as the row they describe. `MarketplaceAvailabilityPushed`
+is published when a partner's success answer moves what the platform *knows* the partner
+holds for one mapped dish — it was unknown or different before. A resend that repeats an
+already confirmed value, a push the partner refused, and a push whose outcome is unknown
+(which withdraws the belief rather than confirming it) publish nothing, so a consumer reads
+the event as "the partner now holds this", never as "we tried". The partner's own item id is
+the partner's identifier for a dish, not a name; a consumer resolves the dish through the
+authorized catalog API with `variantId`.
+
+`MarketplaceChannelWentStale` is published once per episode when a binding has had a dish
+unconfirmed for longer than `marketplace.availability.stale_after_seconds` (ADR 0030, thirty
+minutes by default), together with an operations alert (ADR 0058, event class
+`MARKETPLACE_CHANNEL_STALE`). The binding is not reported again until it has had nothing
+unconfirmed past its bound and then goes stale again. Counts and instants only. Both events
+are keyed by binding, so one venue's facts keep their order and one venue's poison record
+holds back that venue alone.
+
+ADR 0040 also names `MarketplaceMenuPublished` and `MarketplaceChannelRecovered` for this
+topic. Neither is published and neither is catalogued: there is no menu push, and nothing
+yet says the recovery is a fact somebody consumes, which is the restraint `media.events`
+states for its own unpublished siblings.
 
 ## `pricing.events`
 

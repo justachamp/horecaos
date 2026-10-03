@@ -23,6 +23,7 @@ import uz.horecaos.platform.integration.api.MarketplaceConfigurationKeys;
 import uz.horecaos.platform.integration.api.marketplace.AvailabilityPush;
 import uz.horecaos.platform.integration.api.marketplace.MarketplaceApiCall;
 import uz.horecaos.platform.integration.api.marketplace.MarketplaceApiTransport;
+import uz.horecaos.platform.integration.api.marketplace.MarketplaceAvailabilityPushedPayload;
 import uz.horecaos.platform.integration.api.marketplace.MarketplaceAvailabilityAdapter;
 import uz.horecaos.platform.integration.api.marketplace.PushConclusion;
 import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
@@ -32,6 +33,7 @@ import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityS
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.Outcome;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.SyncState;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.Watermark;
+import uz.horecaos.platform.integration.outbox.MarketplaceOutbox;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
 import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability;
@@ -79,6 +81,17 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * under a lease with {@code FOR UPDATE SKIP LOCKED}, so two overlapping runs send disjoint
  * rows. A state-set call keyed {@code (binding, item, desired_seq)} is idempotent, which makes
  * the rare duplicate harmless rather than merely unlikely.
+ *
+ * <h2>Facts and the stale-channel alert</h2>
+ *
+ * <p>A confirmed push whose answer moved what the platform knows the partner holds publishes
+ * {@code MarketplaceAvailabilityPushed} (ADR 0040) through the outbox, in the same transaction
+ * as the row that records it and only while the worker still holds its lease, so a change is
+ * announced once and an unknown outcome — which withdraws the belief — announces nothing. A
+ * binding with a dish unconfirmed for longer than its bound is reported once per episode by
+ * {@link MarketplaceStaleChannelMonitor}: the {@code MarketplaceChannelWentStale} fact and the
+ * ADR 0058 operations alert, so the manager who stopped the plov hears that the aggregator
+ * still sells it.
  *
  * <h2>Honest about what it cannot do</h2>
  *
@@ -133,6 +146,8 @@ public class MarketplaceAvailabilityReconciler {
     private final TransactionTemplate transactions;
     private final JdbcClient jdbc;
     private final RetryBackoff backoff;
+    private final MarketplaceOutbox outbox;
+    private final MarketplaceStaleChannelMonitor staleMonitor;
 
     /** Bindings whose partner hung, until when they are not called and how many hangs in a row. In memory: a restart simply probes once. */
     private final Map<UUID, HangCooldown> hangs = new ConcurrentHashMap<>();
@@ -154,7 +169,9 @@ public class MarketplaceAvailabilityReconciler {
             Clock clock,
             MeterRegistry meters,
             PlatformTransactionManager transactionManager,
-            JdbcClient jdbc) {
+            JdbcClient jdbc,
+            MarketplaceOutbox outbox,
+            MarketplaceStaleChannelMonitor staleMonitor) {
         this(
                 store,
                 adapters,
@@ -167,7 +184,9 @@ public class MarketplaceAvailabilityReconciler {
                 meters,
                 transactionManager,
                 jdbc,
-                RetryBackoff.of(Duration.ofSeconds(5), Duration.ofMinutes(10)));
+                RetryBackoff.of(Duration.ofSeconds(5), Duration.ofMinutes(10)),
+                outbox,
+                staleMonitor);
     }
 
     /** The injectable backoff is how a test seeds the jitter. */
@@ -183,7 +202,9 @@ public class MarketplaceAvailabilityReconciler {
             MeterRegistry meters,
             PlatformTransactionManager transactionManager,
             JdbcClient jdbc,
-            RetryBackoff backoff) {
+            RetryBackoff backoff,
+            MarketplaceOutbox outbox,
+            MarketplaceStaleChannelMonitor staleMonitor) {
         this.store = store;
         this.adapters = adapters;
         this.transport = transport;
@@ -196,6 +217,8 @@ public class MarketplaceAvailabilityReconciler {
         this.transactions = new TransactionTemplate(transactionManager);
         this.jdbc = jdbc;
         this.backoff = backoff;
+        this.outbox = outbox;
+        this.staleMonitor = staleMonitor;
         // Aggregate gauges only: a binding id as a tag would be unbounded (ADR 0029).
         meters.gauge("horecaos.marketplace.availability.pending_items", pendingItems);
         meters.gauge("horecaos.marketplace.availability.oldest_pending_seconds", oldestPendingSeconds);
@@ -272,6 +295,9 @@ public class MarketplaceAvailabilityReconciler {
         }
 
         int pushed = push(binding, adapter.get());
+        // After the pass, judged at the instant the pass ended: a binding whose pushes have gone
+        // unconfirmed for longer than its bound is reported once, and cleared when it recovers.
+        staleMonitor.evaluate(binding, staleAfterSeconds(binding), clock.instant());
         return new BindingReport(swept, pushed, false, false);
     }
 
@@ -463,7 +489,28 @@ public class MarketplaceAvailabilityReconciler {
 
         switch (conclusion) {
             case CONFIRMED -> {
-                store.recordOutcome(item, owner, sent, Outcome.CONFIRMED, null, now, null);
+                // The row that records the confirmation and the fact that announces it commit
+                // together, and only if this worker still holds the lease: a worker whose lease
+                // lapsed writes neither, so a change is announced once. Announced only when the
+                // platform's belief moved -- it did not know what the partner held, or knew
+                // something else -- so a resend that repeats a confirmed value says nothing.
+                boolean beliefMoved = !Boolean.valueOf(sent).equals(item.confirmedAvailable());
+                transactions.executeWithoutResult(transaction -> {
+                    boolean recorded = store.recordOutcome(item, owner, sent, Outcome.CONFIRMED, null, now, null);
+                    if (recorded && beliefMoved) {
+                        outbox.availabilityPushed(
+                                binding.tenantId(),
+                                new MarketplaceAvailabilityPushedPayload(
+                                        binding.bindingId(),
+                                        binding.locationId(),
+                                        item.variantId(),
+                                        binding.providerType(),
+                                        item.externalEntityId(),
+                                        sent,
+                                        item.desiredSeq(),
+                                        now));
+                    }
+                });
                 activity.recordSuccess(
                         binding.tenantId(),
                         binding.bindingId(),
