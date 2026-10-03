@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -1412,15 +1413,23 @@ public class OrderAmendmentService {
         Map<String, List<QuoteSnapshot.Line>> quotedByKey = quote.lines().stream()
                 .collect(Collectors.groupingBy(
                         QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
-        Map<String, List<UUID>> hiddenByLine = new LinkedHashMap<>();
+        Map<String, List<QuoteSnapshot.Adjustment>> hiddenChargesByLine = new LinkedHashMap<>();
         for (QuoteSnapshot.Adjustment adjustment : quote.adjustments()) {
             if (adjustment.lineKey() != null
                     && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
-                hiddenByLine
+                hiddenChargesByLine
                         .computeIfAbsent(adjustment.lineKey(), key -> new ArrayList<>())
-                        .add(adjustment.sourceId());
+                        .add(adjustment);
             }
         }
+        Map<String, List<UUID>> hiddenByLine = new LinkedHashMap<>();
+        hiddenChargesByLine.forEach((key, charges) -> hiddenByLine.put(
+                key, charges.stream().map(QuoteSnapshot.Adjustment::sourceId).toList()));
+        // The order's adjustments were written once, at checkout, against the lines it was checked out
+        // with. A line this amendment writes is a new row with a new id, so what its hidden options
+        // charged is appended here under that id: read back from the adjustments, a charge with none
+        // shows as free.
+        AtomicInteger adjustmentSequence = new AtomicInteger(orders.nextAdjustmentSequence(tenantId, orderId));
 
         List<JdbcOrderStore.OrderModifierRow> storedModifiers = orders.lineModifiers(tenantId, orderId);
         List<JdbcOrderStore.OrderCommentPresetRow> storedPresets = orders.lineCommentPresets(tenantId, orderId);
@@ -1490,6 +1499,12 @@ public class OrderAmendmentService {
                         storedPresets,
                         hiddenByLine.getOrDefault(priced.lineKey(), List.of()),
                         options);
+                itemiseHiddenCharges(
+                        tenantId,
+                        orderId,
+                        newLineId,
+                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        adjustmentSequence);
             }
         }
 
@@ -1539,7 +1554,44 @@ public class OrderAmendmentService {
                         hiddenByLine.getOrDefault(priced.lineKey(), List.of()),
                         options,
                         List.of());
+                itemiseHiddenCharges(
+                        tenantId,
+                        orderId,
+                        newLineId,
+                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        adjustmentSequence);
             }
+        }
+    }
+
+    /**
+     * Appends what each hidden option charged a line this amendment wrote, copied from the
+     * accepted quote exactly as checkout copies it (ADR 0136).
+     *
+     * <p>The order's itemisation of a charge the customer never chose is read from these rows by
+     * the line they name. Without them a rewritten line's box, whose amount is in its new unit
+     * price all the same, reads as "Delivery box 0" on the console and on the customer's order:
+     * a mandatory charge shown as free. The rows of the lines it closed stay where they are, as
+     * history.
+     */
+    private void itemiseHiddenCharges(
+            UUID tenantId,
+            UUID orderId,
+            UUID newLineId,
+            List<QuoteSnapshot.Adjustment> charges,
+            AtomicInteger sequence) {
+        for (QuoteSnapshot.Adjustment charge : charges) {
+            orders.insertAdjustment(
+                    tenantId,
+                    orderId,
+                    sequence.getAndIncrement(),
+                    newLineId,
+                    charge.adjustmentType(),
+                    charge.sourceType(),
+                    charge.sourceId(),
+                    charge.sourceVersion(),
+                    charge.descriptionCode(),
+                    charge.amountMinor());
         }
     }
 

@@ -403,6 +403,23 @@ public class JdbcOrderStore {
     }
 
     /**
+     * The next {@code sequence} for an adjustment appended to this order after checkout (ADR 0136):
+     * past every one the order has, because a checkout wrote the quote's own sequence and an
+     * amendment's rows follow them.
+     */
+    public int nextAdjustmentSequence(UUID tenantId, UUID orderId) {
+        Integer max = jdbc.sql("""
+                SELECT max(sequence) FROM ordering.order_adjustments
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Integer.class)
+                .single();
+        return (max == null ? 0 : max) + 1;
+    }
+
+    /**
      * The next line number for a new row on this order (ADR 0039 {@code
      * ADD_LINES}/{@code CHANGE_LINE_QUANTITY}).
      *

@@ -1190,6 +1190,74 @@ class ComboOrderFlowEndToEndTests {
         assertThat(totalOf(orderId)).isEqualTo(3 * unit);
     }
 
+    @Test
+    @DisplayName("an amendment that rewrites or adds a line keeps the line's hidden box itemised, not shown as free")
+    void anAmendedLineStillItemisesItsHiddenBox() throws Exception {
+        UUID cart = openCart(FulfillmentMode.DELIVERY);
+        put(cart, "salad", saladVariant, 1, List.of());
+        tx(() -> carts.setDestination(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                new CartService.DestinationCommand(addressId, "Dilnoza", "+998901112233", null)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+
+        amend(orderId, "amend-grow-salad-box", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":2}""".formatted(
+                        orderLines(orderId).get(0).lineId()));
+        amend(orderId, "amend-add-salad-box", """
+                {"type":"ADD_LINES","lines":[{"variantId":"%s","quantity":1}]}""".formatted(saladVariant));
+
+        assertThat(totalOf(orderId))
+                .as("the box is in the total: two salads and one more")
+                .isEqualTo(3 * (SALAD + BOX));
+        JsonNode lines = orderDetail(orderId).get("lines");
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0)
+                        .get("autoSelectedCharges")
+                        .get(0)
+                        .get("amountMinor")
+                        .asLong())
+                .as("the rewritten line's box is two boxes, itemised -- not 'Delivery box 0'")
+                .isEqualTo(2 * BOX);
+        assertThat(lines.get(1)
+                        .get("autoSelectedCharges")
+                        .get(0)
+                        .get("amountMinor")
+                        .asLong())
+                .as("and so is the box of the line the amendment added")
+                .isEqualTo(BOX);
+
+        linkCustomerPrincipal();
+        MvcResult customerRead = mvc.perform(
+                        get("/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND + "/orders/" + orderId)
+                                .with(customerToken()))
+                .andReturn();
+        assertThat(customerRead.getResponse().getStatus())
+                .as(customerRead.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode customerLines =
+                JSON.readTree(customerRead.getResponse().getContentAsString()).get("lines");
+        assertThat(customerLines
+                        .get(0)
+                        .get("autoSelectedCharges")
+                        .get(0)
+                        .get("amountMinor")
+                        .asLong())
+                .as("the customer reads the same figure")
+                .isEqualTo(2 * BOX);
+        assertThat(customerLines
+                        .get(1)
+                        .get("autoSelectedCharges")
+                        .get(0)
+                        .get("amountMinor")
+                        .asLong())
+                .isEqualTo(BOX);
+    }
+
     // ===================================================================== reorder
 
     @Test
