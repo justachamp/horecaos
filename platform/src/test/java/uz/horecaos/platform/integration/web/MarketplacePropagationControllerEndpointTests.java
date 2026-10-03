@@ -142,6 +142,7 @@ class MarketplacePropagationControllerEndpointTests {
         assertThat(body)
                 .contains("\"bindingId\":\"" + manual + "\"")
                 .contains("\"mode\":\"MANUAL\"")
+                .contains("\"reason\":\"NO_ADAPTER\"")
                 .contains("\"bindingId\":\"" + wired + "\"")
                 .contains("\"mode\":\"AUTOMATIC\"")
                 .contains("\"unconfirmed\":1")
@@ -150,6 +151,23 @@ class MarketplacePropagationControllerEndpointTests {
                 .as("no provider body, no item name")
                 .doesNotContain("password")
                 .doesNotContain("secret");
+    }
+
+    @Test
+    void aWiredBindingTheReconcilerCannotResolveIsManualAndSaysWhy() throws Exception {
+        UUID wired = binding(TENANT, BRAND, LOCATION, "WIRED_EDA", "Wired Eda", false);
+
+        MvcResult result =
+                mvc.perform(get(path(LOCATION)).with(tokenFor(MANAGER))).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString())
+                .as("an adapter and a switch that is on are not enough: no channel is backed by the installation, "
+                        + "so nothing would ever be pushed, and the read must not claim it is")
+                .contains("\"bindingId\":\"" + wired + "\"")
+                .contains("\"mode\":\"MANUAL\"")
+                .contains("\"reason\":\"CHANNEL_UNRESOLVED\"")
+                .doesNotContain("\"mode\":\"AUTOMATIC\"");
     }
 
     @Test
@@ -214,7 +232,18 @@ class MarketplacePropagationControllerEndpointTests {
                 .update();
     }
 
+    /** A binding as production has it: its installation backs a sales channel, so the reconciler can act on it. */
     private UUID binding(UUID tenant, UUID brand, UUID location, String providerType, String name) {
+        return binding(tenant, brand, location, providerType, name, true);
+    }
+
+    /**
+     * @param channelBacked whether a sales channel is backed by the installation. Without one the
+     *        reconciler's sweep resolves nothing, and the read says so (ADR 0141) instead of
+     *        claiming it pushes.
+     */
+    private UUID binding(
+            UUID tenant, UUID brand, UUID location, String providerType, String name, boolean channelBacked) {
         UUID installation = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (code, provider_category, provider_type, base_url, is_production, egress_allowlist)
@@ -235,6 +264,19 @@ class MarketplacePropagationControllerEndpointTests {
                 .param("env", "env-" + providerType.toLowerCase())
                 .param("name", name)
                 .update();
+        if (channelBacked) {
+            jdbc.sql("""
+                    INSERT INTO tenant.sales_channels
+                        (id, tenant_id, code, system_type, display_name, provider_installation_id)
+                    VALUES (:id, :t, :code, 'AGGREGATOR', :name, :i)
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", tenant)
+                    .param("code", "CH" + installation.toString().substring(0, 8).toUpperCase())
+                    .param("name", name)
+                    .param("i", installation)
+                    .update();
+        }
         UUID binding = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, location_id, status)
