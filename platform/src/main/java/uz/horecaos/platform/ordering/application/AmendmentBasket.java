@@ -116,18 +116,40 @@ final class AmendmentBasket {
      */
     static List<PricingCommand.Item> pricingItems(
             List<Unit> units, Map<UUID, Integer> changedQuantities, Map<UUID, List<OrderModifierRow>> modifiersByLine) {
+        return pricingItems(units, changedQuantities, modifiersByLine, Map.of());
+    }
+
+    /**
+     * The same request, with weights captured at the scale (ADR 0137) handed in as well.
+     *
+     * <p>A weight capture re-prices the order exactly as an amendment does and for the same
+     * reason: what the order is worth is pricing's answer, never a re-implementation of it
+     * (ADR 0018). It changes no quantity, so the one difference from an amendment's request is
+     * that a plain line carries the weight just captured instead of the one it was stored with.
+     *
+     * @param capturedWeights the whole-line weight in grams to price a plain line at, by order line
+     *        id, taking precedence over the weight the line was stored with
+     */
+    static List<PricingCommand.Item> pricingItems(
+            List<Unit> units,
+            Map<UUID, Integer> changedQuantities,
+            Map<UUID, List<OrderModifierRow>> modifiersByLine,
+            Map<UUID, Integer> capturedWeights) {
         List<PricingCommand.Item> items = new ArrayList<>();
         for (Unit unit : units) {
             items.add(
                     unit.combo()
                             ? comboItem(unit, changedQuantities)
-                            : plainItem(unit, changedQuantities, modifiersByLine));
+                            : plainItem(unit, changedQuantities, modifiersByLine, capturedWeights));
         }
         return items;
     }
 
     private static PricingCommand.Item plainItem(
-            Unit unit, Map<UUID, Integer> changedQuantities, Map<UUID, List<OrderModifierRow>> modifiersByLine) {
+            Unit unit,
+            Map<UUID, Integer> changedQuantities,
+            Map<UUID, List<OrderModifierRow>> modifiersByLine,
+            Map<UUID, Integer> capturedWeights) {
         OrderLineRow line = unit.first();
         Integer changedTo = changedQuantities.get(line.lineId());
         boolean changed = changedTo != null;
@@ -152,18 +174,15 @@ final class AmendmentBasket {
                         requireUuid(optionByModifier.get(row.parentModifierId())), row.sourceOptionId()))
                 .toList();
 
+        // ADR 0137: a line that was already weighed keeps its weight through an
+        // amendment that did not touch it; one whose quantity just changed no longer
+        // has a weight that means anything, and goes back to provisional so the
+        // handover asks for it again. A weight captured now is the line's weight.
+        Integer captured = capturedWeights.get(line.lineId());
+        Integer weight = captured != null ? captured : changed ? null : line.actualWeightGrams();
+
         return new PricingCommand.Item(
-                line.lineId().toString(),
-                line.sourceVariantId(),
-                quantity,
-                chosen,
-                List.of(),
-                nested,
-                // ADR 0137: a line that was already weighed keeps its weight through an
-                // amendment that did not touch it; one whose quantity just changed no longer
-                // has a weight that means anything, and goes back to provisional so the
-                // handover asks for it again.
-                changed ? null : line.actualWeightGrams());
+                line.lineId().toString(), line.sourceVariantId(), quantity, chosen, List.of(), nested, weight);
     }
 
     private static PricingCommand.Item comboItem(Unit unit, Map<UUID, Integer> changedQuantities) {

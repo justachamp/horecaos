@@ -144,6 +144,7 @@ public class OrderAmendmentService {
     private final OrderCatalogSnapshot catalog;
     private final PromotionRedemptionPort promotions;
     private final PromotionQueryPort promotionQuery;
+    private final OrderDeliveryPoint deliveryPoint;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -184,6 +185,7 @@ public class OrderAmendmentService {
         this.catalog = catalog;
         this.promotions = promotions;
         this.promotionQuery = promotionQuery;
+        this.deliveryPoint = new OrderDeliveryPoint(orders, protection, objectMapper);
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
         // apply() settles an expired amendment and then refuses the application, and
@@ -1284,21 +1286,7 @@ public class OrderAmendmentService {
 
     /** The order's current delivery point, decrypted for repricing only — never logged, never returned whole. */
     private @Nullable GeoPoint currentDestinationPoint(OrderRow order) {
-        if (order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
-            return null;
-        }
-        var snapshot =
-                orders.customerSnapshot(order.tenantId(), order.orderId()).orElse(null);
-        if (snapshot == null || snapshot.addressEncrypted() == null) {
-            return null;
-        }
-        String json = protection.reveal(
-                order.tenantId(),
-                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(snapshot.addressEncrypted()),
-                new RecordRef(SNAPSHOT_TABLE, "address_encrypted", order.orderId()),
-                "AMENDMENT_REPRICE");
-        DeliveryDestination destination = objectMapper.readValue(json, DeliveryDestination.class);
-        return new GeoPoint(destination.latitude(), destination.longitude());
+        return deliveryPoint.of(order, "AMENDMENT_REPRICE");
     }
 
     /**

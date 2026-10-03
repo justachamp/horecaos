@@ -2,8 +2,8 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,19 +19,23 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderFieldPatch;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderLineRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionTotals;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
  * The weight captured at handover, and the charge it corrects (ADR 0137).
@@ -51,6 +55,15 @@ import uz.horecaos.platform.pricing.api.QuoteSnapshot;
  * captured weight in, and copies what comes back. A re-implementation here of "quantum
  * rounding, then tax, then the order-level discount" would be a second answer to what an
  * order costs, and two answers to that is the defect ADR 0018 exists to prevent.
+ *
+ * <p>The basket goes back in the way an amendment sends it ({@link AmendmentBasket}) and under
+ * the context the order was bought in: a combo as the combo and its picks and not as its
+ * components, the customer's own choices and not the options the server applied (pricing
+ * applies those again for the order's mode, and handing them back would charge them twice),
+ * the order's fulfilment mode, its delivery point, and the promotion inputs recorded on the
+ * quote behind its current revision (ADR 0140). A weight captured at 15:20 on a delivery order
+ * placed at lunch time is priced as that order, not as a pickup quote of 15:20: the "delivery
+ * orders" promotion, the lunch window and the first-order discount all still hold.
  *
  * <p>Two things are checked on the way back so that a re-price cannot do more than the
  * weight asked of it. A weighed line must still be priced at the per-quantum price the
@@ -100,6 +113,7 @@ public class CatchweightReconciliationService {
     private final QuoteAcceptancePort quoteAcceptance;
     private final PromoCodeRedemptionPort promoCodes;
     private final OrderSettlementPort settlement;
+    private final OrderDeliveryPoint deliveryPoint;
     private final AuditRecorder audit;
     private final Clock clock;
 
@@ -110,6 +124,7 @@ public class CatchweightReconciliationService {
             QuoteAcceptancePort quoteAcceptance,
             PromoCodeRedemptionPort promoCodes,
             OrderSettlementPort settlement,
+            OrderDeliveryPoint deliveryPoint,
             AuditRecorder audit,
             Clock clock) {
         this.orders = orders;
@@ -117,6 +132,7 @@ public class CatchweightReconciliationService {
         this.quoteAcceptance = quoteAcceptance;
         this.promoCodes = promoCodes;
         this.settlement = settlement;
+        this.deliveryPoint = deliveryPoint;
         this.audit = audit;
         this.clock = clock;
     }
@@ -196,19 +212,20 @@ public class CatchweightReconciliationService {
         }
 
         QuoteSnapshot quote = repriceWithWeights(order, live, lineId, actualWeightGrams, expectedVersion);
-        Map<String, QuoteSnapshot.Line> quotedByKey =
-                quote.lines().stream().collect(Collectors.toMap(QuoteSnapshot.Line::lineKey, line -> line));
-        requireNothingElseMoved(live, quotedByKey);
+        Map<UUID, QuoteSnapshot.Line> quotedByLine = quotedByOrderLine(live, quote);
+        requireNothingElseMoved(live, quotedByLine);
 
         // The delivery charge was agreed at checkout and is not a function of the weight: the
-        // goods are re-priced without a destination, so the quote carries no fee, and the order's
-        // own is added back. total = subtotal + tax + fee - discount holds on both sides.
+        // quote's own fee is taken back out of its total and the order's is put in its place. The
+        // destination is passed to pricing only so the delivery-side promotions and zone-bound
+        // conditions are evaluated as they were at checkout, not to re-quote the fee.
+        // total = subtotal + tax + fee - discount holds on both sides.
         RevisionTotals totals = new RevisionTotals(
                 quote.subtotalMinor(),
                 quote.taxMinor(),
                 quote.discountMinor(),
                 order.feeMinor(),
-                Math.addExact(quote.totalMinor(), order.feeMinor()));
+                Math.addExact(Math.subtractExact(quote.totalMinor(), quote.feeMinor()), order.feeMinor()));
         long delta = totals.totalMinor() - order.totalMinor();
 
         if (delta != 0) {
@@ -277,8 +294,7 @@ public class CatchweightReconciliationService {
         before.put("revision", order.currentRevision());
         after.put("revision", newRevision);
         for (OrderLineRow line : live) {
-            QuoteSnapshot.Line quoted =
-                    Objects.requireNonNull(quotedByKey.get(line.lineId().toString()));
+            QuoteSnapshot.Line quoted = Objects.requireNonNull(quotedByLine.get(line.lineId()));
             boolean isTarget = line.lineId().equals(lineId);
             if (!orders.applyReconciledAmounts(
                     tenantId,
@@ -315,7 +331,7 @@ public class CatchweightReconciliationService {
                 .occurredAt(now)
                 .build());
 
-        QuoteSnapshot.Line weighed = Objects.requireNonNull(quotedByKey.get(lineId.toString()));
+        QuoteSnapshot.Line weighed = Objects.requireNonNull(quotedByLine.get(lineId));
         return new Result(
                 true,
                 orderVersion,
@@ -333,26 +349,36 @@ public class CatchweightReconciliationService {
      * The whole live basket, priced again through the cart's own entry point, with the
      * weights already captured plus the one being captured now. Lines nobody has weighed yet
      * go back in provisional, so reconciling one line of three never touches the other two.
+     *
+     * <p>Built the way {@link OrderAmendmentService} builds the same request for an amendment, so
+     * the two ways an order is re-priced cannot disagree about what it was bought as: see the
+     * class documentation, and {@link AmendmentBasket#pricingItems} for the basket itself.
      */
     private QuoteSnapshot repriceWithWeights(
             OrderRow order, List<OrderLineRow> live, UUID weighedLineId, int weighedGrams, int expectedVersion) {
 
-        Map<UUID, List<UUID>> modifiersByLine = orders.lineModifiers(order.tenantId(), order.orderId()).stream()
-                .collect(Collectors.groupingBy(
-                        JdbcOrderStore.OrderModifierRow::orderLineId,
-                        Collectors.mapping(JdbcOrderStore.OrderModifierRow::sourceOptionId, Collectors.toList())));
+        Map<UUID, List<OrderModifierRow>> modifiersByLine =
+                orders.lineModifiers(order.tenantId(), order.orderId()).stream()
+                        .collect(Collectors.groupingBy(OrderModifierRow::orderLineId));
+        List<CartPricingPort.PricingCommand.Item> items = AmendmentBasket.pricingItems(
+                AmendmentBasket.units(live), Map.of(), modifiersByLine, Map.of(weighedLineId, weighedGrams));
 
-        List<CartPricingPort.PricingCommand.Item> items = new ArrayList<>(live.size());
-        for (OrderLineRow line : live) {
-            Integer weight =
-                    line.lineId().equals(weighedLineId) ? Integer.valueOf(weighedGrams) : line.actualWeightGrams();
-            items.add(new CartPricingPort.PricingCommand.Item(
-                    line.lineId().toString(),
-                    line.sourceVariantId(),
-                    line.quantity(),
-                    modifiersByLine.getOrDefault(line.lineId(), List.of()),
-                    weight));
-        }
+        // ADR 0140. The order was bought once, at one instant, by one method, and that is what
+        // it is re-priced under: pricing starts from the promotion inputs recorded on the quote
+        // behind the order's current revision, and the frame overrides nothing a weight changes.
+        // The clock is never an override. An order priced before calculation version 3 recorded
+        // none, and falls back to its own creation time and fulfilment mode.
+        UUID currentQuoteId = orders.revisions(order.tenantId(), order.orderId()).stream()
+                .filter(revision -> revision.revision() == order.currentRevision())
+                .map(RevisionRow::pricingQuoteId)
+                .findFirst()
+                .orElse(order.pricingQuoteId());
+        var frame = new CartPricingPort.PricingCommand.PromotionFrame(
+                null, null, order.fulfillmentMode().name(), currentQuoteId, order.createdAt());
+
+        GeoPoint point = deliveryPoint.of(order, "CATCHWEIGHT_REPRICE");
+        CartPricingPort.PricingCommand.Delivery delivery =
+                point == null ? null : new CartPricingPort.PricingCommand.Delivery(point, PricingAuthority.HORECAOS);
         try {
             return pricing.priceCart(new CartPricingPort.PricingCommand(
                     order.tenantId(),
@@ -365,10 +391,14 @@ public class CatchweightReconciliationService {
                     // retried request prices once and a changed order prices afresh.
                     "catchweight:%s:%s:%d:v%d".formatted(order.orderId(), weighedLineId, weighedGrams, expectedVersion),
                     null,
-                    null,
+                    delivery,
                     // The redemption this order's checkout recorded rides along, exactly as it does
                     // for an amendment, so a promo code earned at checkout is not re-priced away.
-                    order.orderId()));
+                    order.orderId(),
+                    // Which hidden auto-selected groups apply is decided by the order's own mode, and
+                    // a dine-in order is told apart from a pickup one by nothing else.
+                    order.fulfillmentMode(),
+                    frame));
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new RefusedException(
                     refused.code(), Objects.requireNonNullElse(refused.getMessage(), refused.code()));
@@ -376,11 +406,37 @@ public class CatchweightReconciliationService {
     }
 
     /**
+     * The quote's line for each live order line.
+     *
+     * <p>An ordinary line is priced under its own id. A combo is priced as one cart line and
+     * comes back as one line per component, so each stored component line is matched to its
+     * priced component by the pairing it was bought from, exactly as an amendment matches them.
+     */
+    private static Map<UUID, QuoteSnapshot.Line> quotedByOrderLine(List<OrderLineRow> live, QuoteSnapshot quote) {
+        Map<String, List<QuoteSnapshot.Line>> byCartLine = quote.lines().stream()
+                .collect(Collectors.groupingBy(
+                        QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
+        Map<UUID, QuoteSnapshot.Line> byOrderLine = new HashMap<>();
+        for (AmendmentBasket.Unit unit : AmendmentBasket.units(live)) {
+            for (QuoteSnapshot.Line quoted : byCartLine.getOrDefault(unit.key(), List.of())) {
+                try {
+                    byOrderLine.put(unit.replacedBy(quoted).lineId(), quoted);
+                } catch (IllegalStateException unknownComponent) {
+                    throw new RefusedException(
+                            "REPRICE_COMPONENT_MISMATCH",
+                            "The re-price priced a combo component this order never had; nothing is written");
+                }
+            }
+        }
+        return byOrderLine;
+    }
+
+    /**
      * Refuses a re-price that moved anything but the weight (see the class documentation).
      */
-    private static void requireNothingElseMoved(List<OrderLineRow> live, Map<String, QuoteSnapshot.Line> quotedByKey) {
+    private static void requireNothingElseMoved(List<OrderLineRow> live, Map<UUID, QuoteSnapshot.Line> quotedByLine) {
         for (OrderLineRow line : live) {
-            QuoteSnapshot.Line quoted = quotedByKey.get(line.lineId().toString());
+            QuoteSnapshot.Line quoted = quotedByLine.get(line.lineId());
             if (quoted == null) {
                 throw new RefusedException("REPRICE_DROPPED_LINE", "The re-price did not return line " + line.lineId());
             }
