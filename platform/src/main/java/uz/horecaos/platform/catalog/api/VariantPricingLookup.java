@@ -33,6 +33,18 @@ public interface VariantPricingLookup {
     }
 
     /**
+     * The subset of modifier option ids that currently have an active {@code MODIFIER_OPTION}
+     * price in any active price book of the brand -- the channel preview's "priced somewhere,
+     * not on this channel's plane" question, asked of the third priceable type.
+     *
+     * <p>Defaults to none: a stand-in that knows nothing about option prices cannot say an
+     * option is priced elsewhere, so the preview raises no finding on its word.
+     */
+    default Set<UUID> pricedModifierOptions(UUID tenantId, UUID brandId, Set<UUID> optionIds) {
+        return Set.of();
+    }
+
+    /**
      * Whether this implementation actually consults pricing data.
      *
      * <p>Exists so the stand-in used before the pricing module ships can say so,

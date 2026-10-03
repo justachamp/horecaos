@@ -46,8 +46,10 @@ public final class ChannelFindings {
     public static final String CHANNEL_PRICE_BOOK_MISSING = "CHANNEL_PRICE_BOOK_MISSING";
 
     /**
-     * Blocker: the variant is priced somewhere in the brand but not on the plane this channel
-     * resolves to — the case the brand-wide {@code VARIANT_HAS_NO_ACTIVE_PRICE} cannot see.
+     * Blocker: a variant, a modifier option or a combo component is priced somewhere in the brand
+     * but not on the plane this channel resolves to — the case the brand-wide {@code
+     * VARIANT_HAS_NO_ACTIVE_PRICE} and {@code COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE} cannot see. The
+     * finding's entity type says which of the three.
      */
     public static final String CHANNEL_PRICE_MISSING = "CHANNEL_PRICE_MISSING";
 

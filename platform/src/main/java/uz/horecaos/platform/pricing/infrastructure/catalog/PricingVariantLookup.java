@@ -34,6 +34,11 @@ public class PricingVariantLookup implements VariantPricingLookup {
     }
 
     @Override
+    public Set<UUID> pricedModifierOptions(UUID tenantId, UUID brandId, Set<UUID> optionIds) {
+        return store.pricedModifierOptions(tenantId, brandId, optionIds, clock.instant());
+    }
+
+    @Override
     public Set<UUID> pricedComboComponents(UUID tenantId, UUID brandId, Set<UUID> componentIds) {
         return store.pricedComboComponents(tenantId, brandId, componentIds, clock.instant());
     }

@@ -1115,10 +1115,11 @@ a category's channel photo is stored and drawn by the preview, and no menu serve
 yet. It is
 drawn in the `PhoneFrame` family by channel type (aggregator card, kiosk, Telegram
 Mini App), beside the findings: the catalog's own, the channel's (`CHANNEL_*`:
-archived, not enabled at the branch, an empty menu, a variant with no price on this
-channel's plane, an unverified channel photo) and a marketplace ruleset's
-(`MARKETPLACE_*`). Every finding that names a product, or a variant of one, links to
-the editor. A product's card offers **Фото для канала**, which edits the channel's
+archived, not enabled at the branch, an empty menu, a variant, a modifier option or a
+combo component the brand prices but this channel's plane does not, an unverified
+channel photo) and a marketplace ruleset's (`MARKETPLACE_*`). Every finding that names
+a product, a variant of one, or a combo component of one links to the editor. A
+product's card offers **Фото для канала**, which edits the channel's
 image override (`PUT …/channels/{id}/media-overrides/{entityType}/{entityId}`,
 `catalog.author`).
 

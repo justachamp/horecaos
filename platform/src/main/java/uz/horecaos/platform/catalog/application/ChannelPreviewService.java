@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog.application;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -11,18 +12,22 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.catalog.application.ChannelProjection.PriceAuthority;
 import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssembledMenu;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssemblyInput;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuCategory;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuComboComponent;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuComboGroup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroup;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierOption;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuProduct;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore;
@@ -83,6 +88,7 @@ public class ChannelPreviewService {
     private final StorefrontCatalogQuery storefront;
     private final SalesChannelLookup channels;
     private final MarketplaceRulesets rulesets;
+    private final VariantPricingLookup pricing;
 
     public ChannelPreviewService(
             JdbcCatalogStore store,
@@ -91,7 +97,8 @@ public class ChannelPreviewService {
             CatalogSnapshotLoader snapshots,
             StorefrontCatalogQuery storefront,
             SalesChannelLookup channels,
-            MarketplaceRulesets rulesets) {
+            MarketplaceRulesets rulesets,
+            VariantPricingLookup pricing) {
         this.store = store;
         this.projections = projections;
         this.validator = validator;
@@ -99,6 +106,7 @@ public class ChannelPreviewService {
         this.storefront = storefront;
         this.channels = channels;
         this.rulesets = rulesets;
+        this.pricing = pricing;
     }
 
     /**
@@ -176,19 +184,32 @@ public class ChannelPreviewService {
         List<PreviewFinding> findings = new ArrayList<>();
         Map<UUID, UUID> productOfVariant = new HashMap<>();
         snapshot.variants().forEach(variant -> productOfVariant.put(variant.id(), variant.productId()));
+        // A combo component has no page of its own either: it is authored on the product whose variant
+        // is the combo's container.
+        Map<UUID, UUID> productOfComponent = new HashMap<>();
+        for (ComboGroup group : snapshot.composite().comboGroups()) {
+            UUID container = snapshot.composite().productIdByVariant().get(group.containerVariantId());
+            if (container != null) {
+                snapshot.composite()
+                        .componentsByGroup()
+                        .getOrDefault(group.id(), List.of())
+                        .forEach(component -> productOfComponent.put(component.id(), container));
+            }
+        }
         for (ValidationFinding finding : universal.findings()) {
-            findings.add(new PreviewFinding(finding, FindingSource.CATALOG, ownerProduct(finding, productOfVariant)));
+            findings.add(new PreviewFinding(
+                    finding, FindingSource.CATALOG, ownerProduct(finding, productOfVariant, productOfComponent)));
         }
         List<ValidationFinding> projectionFindings = new ArrayList<>(channelItems.findings());
-        projectionFindings.addAll(projectionFindings(channel, enabledHere, projection, snapshot));
+        projectionFindings.addAll(projectionFindings(channel, enabledHere, projection, menu.comboGroups(), snapshot));
         for (ValidationFinding finding : projectionFindings) {
-            findings.add(
-                    new PreviewFinding(finding, FindingSource.PROJECTION, ownerProduct(finding, productOfVariant)));
+            findings.add(new PreviewFinding(
+                    finding, FindingSource.PROJECTION, ownerProduct(finding, productOfVariant, productOfComponent)));
         }
         List<ValidationFinding> marketplaceFindings = marketplaceFindings(target.binding(), projection);
         for (ValidationFinding finding : marketplaceFindings) {
-            findings.add(
-                    new PreviewFinding(finding, FindingSource.MARKETPLACE, ownerProduct(finding, productOfVariant)));
+            findings.add(new PreviewFinding(
+                    finding, FindingSource.MARKETPLACE, ownerProduct(finding, productOfVariant, productOfComponent)));
         }
 
         // What publish decides for this channel: the catalog's blockers and the blockers on the
@@ -307,6 +328,7 @@ public class ChannelPreviewService {
             SalesChannel channel,
             boolean enabledHere,
             ChannelProjection projection,
+            List<MenuComboGroup> comboGroups,
             CatalogValidator.Snapshot snapshot) {
 
         List<ValidationFinding> findings = new ArrayList<>();
@@ -376,9 +398,93 @@ public class ChannelPreviewService {
                         }
                     }
                 }
+                findings.addAll(optionPriceFindings(channel, projection));
+                findings.addAll(componentPriceFindings(channel, projection, comboGroups, snapshot));
             }
         }
 
+        return findings;
+    }
+
+    /**
+     * A modifier option the brand prices but this channel's price plane does not.
+     *
+     * <p>Only options a served product offers are asked about, and only those priced somewhere in
+     * the brand: an option priced nowhere is a modifier nobody has priced yet, which no other rule
+     * of the catalog reports, and saying so for every channel at once would drown the finding that
+     * names a real gap on this one. The same posture as {@code CHANNEL_PRICE_MISSING} for a
+     * variant, whose all-channels twin is {@code VARIANT_HAS_NO_ACTIVE_PRICE}.
+     */
+    private List<ValidationFinding> optionPriceFindings(SalesChannel channel, ChannelProjection projection) {
+        Set<UUID> offered = new java.util.HashSet<>();
+        for (MenuProduct product : projection.products()) {
+            offered.addAll(product.modifierGroupIds());
+        }
+        Map<UUID, MenuModifierOption> unpriced = new LinkedHashMap<>();
+        for (MenuModifierGroup group : projection.modifierGroups()) {
+            if (!offered.contains(group.modifierGroupId())) {
+                continue;
+            }
+            for (MenuModifierOption option : group.options()) {
+                if (option.amountMinor() == null) {
+                    unpriced.put(option.optionId(), option);
+                }
+            }
+        }
+        if (unpriced.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> pricedElsewhere =
+                pricing.pricedModifierOptions(projection.tenantId(), projection.brandId(), unpriced.keySet());
+        List<ValidationFinding> findings = new ArrayList<>();
+        for (MenuModifierOption option : unpriced.values()) {
+            if (pricedElsewhere.contains(option.optionId())) {
+                findings.add(ValidationFinding.blocker(
+                        ChannelFindings.CHANNEL_PRICE_MISSING,
+                        EntityType.MODIFIER_OPTION,
+                        option.optionId(),
+                        option.code(),
+                        "This option has no price on the price plane channel %s resolves to"
+                                .formatted(channel.code())));
+            }
+        }
+        return findings;
+    }
+
+    /**
+     * A combo component the brand prices but this channel's price plane does not -- the same gap as
+     * a variant's or an option's, on a fourth priceable type. A combo whose container this branch
+     * does not serve is not asked about: its components are not on this menu.
+     */
+    private static List<ValidationFinding> componentPriceFindings(
+            SalesChannel channel,
+            ChannelProjection projection,
+            List<MenuComboGroup> comboGroups,
+            CatalogValidator.Snapshot snapshot) {
+        Set<UUID> served = new java.util.HashSet<>();
+        for (MenuProduct product : projection.products()) {
+            for (MenuVariant variant : product.variants()) {
+                served.add(variant.variantId());
+            }
+        }
+        List<ValidationFinding> findings = new ArrayList<>();
+        for (MenuComboGroup group : comboGroups) {
+            if (!served.contains(group.containerVariantId())) {
+                continue;
+            }
+            for (MenuComboComponent component : group.components()) {
+                if (component.amountMinor() == null
+                        && snapshot.composite().pricedComponentIds().contains(component.componentId())) {
+                    findings.add(ValidationFinding.blocker(
+                            ChannelFindings.CHANNEL_PRICE_MISSING,
+                            EntityType.COMBO_COMPONENT,
+                            component.componentId(),
+                            group.code(),
+                            "This combo component has no price on the price plane channel %s resolves to"
+                                    .formatted(channel.code())));
+                }
+            }
+        }
         return findings;
     }
 
@@ -429,13 +535,15 @@ public class ChannelPreviewService {
      * finding to the editor that fixes it: a variant has no page of its own, and
      * nothing else resolves "which product owns this variant".
      */
-    private static @Nullable UUID ownerProduct(ValidationFinding finding, Map<UUID, UUID> productOfVariant) {
+    private static @Nullable UUID ownerProduct(
+            ValidationFinding finding, Map<UUID, UUID> productOfVariant, Map<UUID, UUID> productOfComponent) {
         if (finding.entityId() == null || finding.entityType() == null) {
             return null;
         }
         return switch (finding.entityType()) {
             case PRODUCT -> finding.entityId();
             case VARIANT -> productOfVariant.get(finding.entityId());
+            case COMBO_COMPONENT -> productOfComponent.get(finding.entityId());
             default -> null;
         };
     }

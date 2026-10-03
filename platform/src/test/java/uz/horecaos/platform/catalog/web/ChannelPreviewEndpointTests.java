@@ -44,11 +44,14 @@ import tools.jackson.databind.node.ObjectNode;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.application.ChannelProjection;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
 import uz.horecaos.platform.catalog.application.MarketplaceRuleset;
 import uz.horecaos.platform.catalog.application.MarketplaceRulesets;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
@@ -152,6 +155,9 @@ class ChannelPreviewEndpointTests {
 
     @Autowired
     private CatalogPublicationService publication;
+
+    @Autowired
+    private CompositeProductAuthoringService composites;
 
     @Autowired
     private JdbcCatalogStore store;
@@ -635,6 +641,81 @@ class ChannelPreviewEndpointTests {
                         .path("publishable")
                         .asBoolean())
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a modifier option or a combo component the brand prices but the channel's price plane does not is a blocker, as a variant is")
+    void optionsAndComponentsMissingFromThePlaneAreBlockers() throws Exception {
+        w.offerEverythingAt(w.l1);
+        ProductRef lunch = w.product("LUNCH", "Lunch", w.mainsCategory);
+        ProductRef burger = w.product("BURGER", "Burger", w.mainsCategory);
+        ProductRef cola = w.product("COLA", "Cola", w.mainsCategory);
+        for (ProductRef product : List.of(lunch, burger, cola)) {
+            w.offer(product, OfferingStatus.AVAILABLE);
+        }
+        ComboGroup choice = composites.createComboGroup(
+                new CompositeProductAuthoringService.NewComboGroup(
+                        w.tenant, w.brand, lunch.defaultVariantId(), "MAIN", "Choose", LOCALE, 1, 1, false, 0),
+                "tester");
+        ComboComponent burgerPairing =
+                composites.addComponent(w.tenant, w.brand, choice.id(), burger.defaultVariantId(), 1, 0, "tester");
+        ComboComponent colaPairing =
+                composites.addComponent(w.tenant, w.brand, choice.id(), cola.defaultVariantId(), 1, 1, "tester");
+        // An option nobody has priced anywhere: a modifier not priced yet, which is not this channel's gap.
+        UUID unpriced = authoring.addModifierOption(
+                w.tenant,
+                w.brand,
+                w.extras,
+                "SAUCE",
+                "Sous",
+                LOCALE,
+                null,
+                1,
+                2,
+                FiscalClassification.unclassified(),
+                null);
+
+        // The brand book prices every dish, the paid option and both pairings...
+        w.addPrice(w.brandBook, "VARIANT", burger.defaultVariantId(), 20_000L);
+        w.addPrice(w.brandBook, "VARIANT", cola.defaultVariantId(), 6_000L);
+        w.addPrice(w.brandBook, "MODIFIER_OPTION", w.onion, 2_000L);
+        w.addPrice(w.brandBook, "COMBO_COMPONENT", burgerPairing.id(), 18_000L);
+        w.addPrice(w.brandBook, "COMBO_COMPONENT", colaPairing.id(), 5_000L);
+        // ...and Uzum's own book prices every dish and the burger pairing, but not the cola pairing
+        // and not the onion: a CHANNEL book answers whole, so those two are priced elsewhere only.
+        UUID uzumBook = w.priceBook(
+                "UZUM_BOOK",
+                "CHANNEL",
+                w.uzum,
+                Map.of(
+                        w.lagman, 31_000L, w.plov, 26_000L, w.samsa, 8_500L, w.tea, 5_500L, burger, 21_000L, cola,
+                        6_500L));
+        w.addPrice(uzumBook, "COMBO_COMPONENT", burgerPairing.id(), 19_000L);
+
+        JsonNode uzum = previewAll(w.uzum, "locationId", w.l1.toString());
+
+        assertThat(findings(uzum, ChannelFindings.CHANNEL_PRICE_MISSING))
+                .as("exactly the two gaps: the paid option and the cola pairing, each named by what it is")
+                .extracting(finding -> finding.path("entityType").asText() + ":"
+                        + finding.path("entityId").asText())
+                .containsExactlyInAnyOrder("MODIFIER_OPTION:" + w.onion, "COMBO_COMPONENT:" + colaPairing.id())
+                .doesNotContain("MODIFIER_OPTION:" + unpriced, "COMBO_COMPONENT:" + burgerPairing.id());
+        assertThat(findings(uzum, ChannelFindings.CHANNEL_PRICE_MISSING).stream()
+                        .filter(finding -> finding.path("entityType").asText().equals("COMBO_COMPONENT"))
+                        .map(finding -> finding.path("productId").asText()))
+                .as(
+                        "a component is authored on the product whose variant is the combo's container, so that is where the finding links")
+                .containsExactly(lunch.productId().toString());
+        assertThat(uzum.path("channelReady").asBoolean())
+                .as("a null price would reach the aggregator: the channel is not ready")
+                .isFalse();
+
+        JsonNode storefront = previewAll(w.storefront, "locationId", w.l1.toString());
+        assertThat(findings(storefront, ChannelFindings.CHANNEL_PRICE_MISSING))
+                .as("the storefront resolves the brand book, which prices both")
+                .isEmpty();
+        assertThat(storefront.path("channelReady").asBoolean()).isTrue();
     }
 
     // -------------------------------------------------------------- findings
@@ -1303,6 +1384,10 @@ class ChannelPreviewEndpointTests {
         final UUID storefront;
         final UUID uzum;
         final UUID catalogId;
+        final UUID mainsCategory;
+        final UUID brandBook;
+        final UUID extras;
+        final UUID onion;
         final ProductRef lagman;
         final ProductRef plov;
         final ProductRef samsa;
@@ -1330,15 +1415,15 @@ class ChannelPreviewEndpointTests {
 
             catalogId = authoring.createCatalog(tenant, brand, "MAIN", "Main menu", LOCALE);
             UUID mains = authoring.createCategory(tenant, brand, catalogId, null, "MAINS", "Asosiy", LOCALE, 1);
+            mainsCategory = mains;
             UUID drinks = authoring.createCategory(tenant, brand, catalogId, null, "DRINKS", "Ichimlik", LOCALE, 2);
             lagman = product("LAGMAN", "Lagman", mains);
             plov = product("PLOV", "Osh", mains);
             samsa = product("SAMSA", "Somsa", mains);
             tea = product("TEA", "Choy", drinks);
 
-            UUID extras =
-                    authoring.createModifierGroup(tenant, brand, "EXTRAS", "Qo'shimcha", LOCALE, false, 0, 2, true);
-            authoring.addModifierOption(
+            extras = authoring.createModifierGroup(tenant, brand, "EXTRAS", "Qo'shimcha", LOCALE, false, 0, 2, true);
+            onion = authoring.addModifierOption(
                     tenant,
                     brand,
                     extras,
@@ -1358,7 +1443,7 @@ class ChannelPreviewEndpointTests {
             brandPrices.put(plov, 25_000L);
             brandPrices.put(samsa, 8_000L);
             brandPrices.put(tea, 5_000L);
-            priceBook("BRAND_BOOK", "BRAND", null, brandPrices);
+            brandBook = priceBook("BRAND_BOOK", "BRAND", null, brandPrices);
 
             jdbc.sql("""
                     INSERT INTO iam.grants
@@ -1504,6 +1589,24 @@ class ChannelPreviewEndpointTests {
                     .param("from", yesterday.atOffset(ZoneOffset.UTC))
                     .update());
             return book;
+        }
+
+        /** One more price row in a book that already exists: a modifier option's or a combo component's. */
+        void addPrice(UUID book, String priceableType, UUID priceableId, long amount) {
+            jdbc.sql("""
+                    INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id,
+                        priceable_type, priceable_id, amount_minor, valid_from)
+                    VALUES (:id, :t, :b, :book, :type, :priceable, :amount, :from)
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", tenant)
+                    .param("b", brand)
+                    .param("book", book)
+                    .param("type", priceableType)
+                    .param("priceable", priceableId)
+                    .param("amount", amount)
+                    .param("from", yesterday.atOffset(ZoneOffset.UTC))
+                    .update();
         }
 
         /** A verified, public image of this tenant. */
