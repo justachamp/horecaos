@@ -169,6 +169,52 @@ class AmendmentBasketTests {
         assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
     }
 
+    // ---------------------------------------------------------------- weighing
+
+    @Test
+    @DisplayName("a weight captured at the pass rides on the weighed line only, over the basket an amendment prices")
+    void aCapturedWeightRidesOnTheWeighedLineOnly() {
+        UUID fishVariant = UUID.randomUUID();
+        OrderLineRow weighedNow = weighed(1, fishVariant, null);
+        OrderLineRow weighedEarlier = weighed(2, fishVariant, 1_250);
+        OrderLineRow burger = component(3, BURGER, BURGER_IN_LUNCH, 1, 1, 1);
+        OrderLineRow cola = component(4, COLA, COLA_IN_LUNCH, 1, 1, 1);
+        UUID chili = UUID.randomUUID();
+        UUID hot = UUID.randomUUID();
+        UUID packing = UUID.randomUUID();
+        UUID chiliRow = UUID.randomUUID();
+        List<OrderModifierRow> earlierRows = List.of(
+                modifier(weighedEarlier, chiliRow, chili, null, false),
+                modifier(weighedEarlier, UUID.randomUUID(), hot, chiliRow, false),
+                modifier(weighedEarlier, UUID.randomUUID(), packing, null, true));
+
+        List<PricingCommand.Item> items = AmendmentBasket.pricingItemsWeighing(
+                AmendmentBasket.units(List.of(weighedNow, weighedEarlier, burger, cola)),
+                Map.of(weighedEarlier.lineId(), earlierRows),
+                weighedNow.lineId(),
+                1_300);
+
+        assertThat(items).hasSize(3);
+        assertThat(items.get(0).lineKey()).isEqualTo(weighedNow.lineId().toString());
+        assertThat(items.get(0).actualWeightGrams())
+                .as("the line being weighed carries the grams just captured")
+                .isEqualTo(1_300);
+        assertThat(items.get(1).actualWeightGrams())
+                .as("a line weighed before keeps its weight")
+                .isEqualTo(1_250);
+        assertThat(items.get(1).modifierOptionIds())
+                .as("the packing the server applied is applied again by pricing, never handed back as a choice")
+                .containsExactly(chili);
+        assertThat(items.get(1).nestedModifiers())
+                .extracting(PricingCommand.NestedModifier::parentOptionId, PricingCommand.NestedModifier::optionId)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(chili, hot));
+        assertThat(items.get(2).variantId())
+                .as("a combo on the same order goes back as its container, priced at its combo price")
+                .isEqualTo(LUNCH);
+        assertThat(items.get(2).comboPicks()).hasSize(2);
+        assertThat(items.get(2).actualWeightGrams()).isNull();
+    }
+
     // ------------------------------------------------------------- reserving
 
     @Test
@@ -259,6 +305,33 @@ class AmendmentBasketTests {
                 null,
                 null,
                 null);
+    }
+
+    private static OrderLineRow weighed(int number, UUID variant, @Nullable Integer actualWeightGrams) {
+        return new OrderLineRow(
+                UUID.randomUUID(),
+                number,
+                UUID.randomUUID(),
+                variant,
+                "name",
+                "variant",
+                "SKU",
+                BigDecimal.ONE,
+                20_000L,
+                20_000L,
+                20_000L,
+                0L,
+                "",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                100,
+                1_000,
+                2_000L,
+                actualWeightGrams);
     }
 
     private static OrderModifierRow modifier(

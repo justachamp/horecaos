@@ -419,6 +419,7 @@ public class CompositeProductAuthoringService {
                 policy.maximumOverride(),
                 before.version() + 1);
         requirePolicyConsistent(after, group);
+        requireNoDoubleCharge(after);
 
         if (!store.updateAttachmentPolicy(after, expectedVersion)) {
             int current = store.attachment(tenantId, brandId, ownerType, ownerId, modifierGroupId)
@@ -492,6 +493,62 @@ public class CompositeProductAuthoringService {
         if (problem != null) {
             throw refused(MODIFIER_ATTACHMENT_POLICY_INVALID, problem);
         }
+    }
+
+    /**
+     * A group the product offers the customer as a choice cannot also be applied by the server
+     * on one of its variants.
+     *
+     * <p>Pricing lays a variant's own attachment over its product's, so a variant that hides a
+     * group the product shows is charged the hidden option -- while the menu and the cart, which
+     * read the product's attachments only, still ask the customer to choose that same group and
+     * price what they choose on top. The customer pays for the packing twice. The opposite pairing
+     * is harmless and deliberate: a variant that shows a group its product applies by itself
+     * switches the hidden charge off for that variant, and nothing is asked of the customer.
+     *
+     * <p>A variant's attachment is created visible, so it can only reach the refused pairing here,
+     * or when a product starts to show a group a variant hides; {@link CatalogValidator} asks the
+     * same at publication, because the third way in -- attaching a group to a product that a
+     * variant already hides -- is written elsewhere.
+     */
+    private void requireNoDoubleCharge(ModifierAttachment attachment) {
+        if (attachment.ownerType() == AttachmentOwnerType.VARIANT) {
+            if (!attachment.hidden()) {
+                return;
+            }
+            store.productAttachmentOfVariant(
+                            attachment.tenantId(),
+                            attachment.brandId(),
+                            attachment.ownerId(),
+                            attachment.modifierGroupId())
+                    .filter(product -> !product.hidden())
+                    .ifPresent(product -> {
+                        throw refused(
+                                MODIFIER_ATTACHMENT_POLICY_INVALID,
+                                "This variant's product offers the group to the customer as a choice, so the "
+                                        + "variant cannot also apply it by itself: the customer would be asked for "
+                                        + "it and charged for it again. Make the product's attachment hidden first, "
+                                        + "or leave this one visible");
+                    });
+            return;
+        }
+        if (attachment.hidden()) {
+            return;
+        }
+        store
+                .variantAttachmentsOfProduct(
+                        attachment.tenantId(), attachment.brandId(), attachment.ownerId(), attachment.modifierGroupId())
+                .stream()
+                .filter(ModifierAttachment::hidden)
+                .findFirst()
+                .ifPresent(variant -> {
+                    throw refused(
+                            MODIFIER_ATTACHMENT_POLICY_INVALID,
+                            ("Variant %s of this product applies the group by itself, so the product cannot offer "
+                                            + "it to the customer as a choice: the customer would be asked for it "
+                                            + "and charged for it again. Make that variant's attachment visible first")
+                                    .formatted(variant.ownerId()));
+                });
     }
 
     private int currentGroupVersion(UUID tenantId, UUID brandId, UUID comboGroupId) {
