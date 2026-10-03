@@ -1807,6 +1807,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.contacts.colleague': 'Hamkasb',
   'settings.locations.contacts.colleague.pick': 'Hamkasbni tanlang…',
   'settings.locations.contacts.colleague.required': 'Hamkasbni tanlang',
+  'settings.locations.contacts.colleague.former':
+    'Bu xodim endi ishlamaydi. Qatorni olib tashlang.',
+  'settings.locations.contacts.former': 'Endi ishlamaydi',
   'settings.locations.contacts.addColleague': 'Hamkasb qoʻshish',
   'settings.locations.contacts.addOutside': 'Begona odam qoʻshish',
   'settings.locations.contacts.max': 'Koʻpi bilan oʻnta aloqa shaxsi.',

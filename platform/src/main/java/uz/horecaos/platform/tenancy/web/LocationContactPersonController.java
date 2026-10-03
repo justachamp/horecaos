@@ -61,7 +61,9 @@ public class LocationContactPersonController {
     @Operation(
             summary = "The branch's contact persons",
             description = "A colleague is shown by the name and contact phone the tenant keeps for them "
-                    + "now; an outside person by the name and phone typed for them. The response carries "
+                    + "now, unless their employment has ended: a former colleague is marked "
+                    + "`formerColleague` and carries the reference alone, no name and no phone. An outside "
+                    + "person is shown by the name and phone typed for them. The response carries "
                     + "the location's version, which the next replace must send in If-Match.")
     public ResponseEntity<ContactPersonsResponse> list(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
@@ -74,7 +76,8 @@ public class LocationContactPersonController {
             summary = "Replace the branch's contact persons (at most ten)",
             description = "Each row is a colleague (`staffMemberId` alone) or an outside person (`name` "
                     + "and `phone`), never both. A colleague of another tenant is refused with the same "
-                    + "answer as one that does not exist. Needs If-Match with the location's version.")
+                    + "answer as one that does not exist; one whose employment has ended is refused too. "
+                    + "Needs If-Match with the location's version.")
     public ResponseEntity<ContactPersonsResponse> replace(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -110,7 +113,8 @@ public class LocationContactPersonController {
             @Nullable UUID staffMemberId,
             @Nullable String staffMemberReference,
             @Classified(DataClass.PERSONAL) @Nullable String name,
-            @Classified(DataClass.PERSONAL) @Nullable String phone) {
+            @Classified(DataClass.PERSONAL) @Nullable String phone,
+            boolean formerColleague) {
 
         static ContactPersonResponse of(ContactView view) {
             return new ContactPersonResponse(
@@ -119,7 +123,8 @@ public class LocationContactPersonController {
                     view.staffMemberId(),
                     view.staffMemberReference(),
                     view.name(),
-                    view.phone());
+                    view.phone(),
+                    view.formerColleague());
         }
 
         @Override

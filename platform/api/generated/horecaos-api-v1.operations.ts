@@ -1262,6 +1262,7 @@ export interface ContactPersonRequest {
 }
 
 export interface ContactPersonResponse {
+  formerColleague?: boolean;
   id?: string;
   name?: string;
   phone?: string;

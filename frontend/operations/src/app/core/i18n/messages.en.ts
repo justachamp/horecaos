@@ -1819,6 +1819,9 @@ export const messagesEn = {
   'settings.locations.contacts.colleague': 'Colleague',
   'settings.locations.contacts.colleague.pick': 'Choose a colleague…',
   'settings.locations.contacts.colleague.required': 'Choose a colleague',
+  'settings.locations.contacts.colleague.former':
+    'This person no longer works here. Remove the row.',
+  'settings.locations.contacts.former': 'No longer works here',
   'settings.locations.contacts.addColleague': 'Add a colleague',
   'settings.locations.contacts.addOutside': 'Add an outside person',
   'settings.locations.contacts.max': 'Ten contact persons at most.',

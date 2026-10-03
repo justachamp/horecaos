@@ -1783,6 +1783,9 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.contacts.colleague': 'Коллега',
   'settings.locations.contacts.colleague.pick': 'Выберите коллегу…',
   'settings.locations.contacts.colleague.required': 'Выберите коллегу',
+  'settings.locations.contacts.colleague.former':
+    'Этот сотрудник больше не работает. Уберите строку.',
+  'settings.locations.contacts.former': 'Больше не работает',
   'settings.locations.contacts.addColleague': 'Добавить коллегу',
   'settings.locations.contacts.addOutside': 'Добавить постороннего',
   'settings.locations.contacts.max': 'Не больше десяти контактных лиц.',

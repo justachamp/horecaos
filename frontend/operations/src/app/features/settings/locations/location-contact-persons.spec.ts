@@ -19,6 +19,7 @@ const COLLEAGUE: BranchContactPerson = {
   staffMemberReference: 'S-0001',
   name: 'Aziza Karimova',
   phone: '+998901234542',
+  formerColleague: false,
 };
 const OUTSIDE: BranchContactPerson = {
   id: 'c2',
@@ -27,6 +28,14 @@ const OUTSIDE: BranchContactPerson = {
   staffMemberReference: null,
   name: 'Rustam Ergashev',
   phone: '+998712223344',
+  formerColleague: false,
+};
+/** What the platform sends for a colleague whose employment ended: the reference alone. */
+const LEFT: BranchContactPerson = {
+  ...COLLEAGUE,
+  name: null,
+  phone: null,
+  formerColleague: true,
 };
 
 async function setUp(
@@ -125,6 +134,40 @@ describe('LocationContactPersons (row 9.2b)', () => {
     });
 
     expect(all(fixture, 'location-contacts-item')[0].textContent).toContain('S-0001');
+  });
+
+  it('marks a colleague who left, with the reference and no call link or number', async () => {
+    const { fixture } = await setUp({ contacts: [LEFT] });
+
+    const item = all(fixture, 'location-contacts-item')[0];
+    expect(item.textContent).toContain('S-0001');
+    expect(item.textContent).toContain('No longer works here');
+    expect(all(fixture, 'location-contacts-former')).toHaveLength(1);
+    expect(item.querySelector('a')).toBeNull();
+  });
+
+  it('will not save while a colleague who left is still on a row, until they are removed or replaced', async () => {
+    const { fixture, api } = await setUp({
+      contacts: [LEFT],
+      api: { replace: vi.fn().mockResolvedValue({ contacts: [COLLEAGUE], version: 6 }) },
+    });
+    click(fixture, 'location-contacts-edit');
+    await settle(fixture);
+
+    click(fixture, 'location-contacts-save');
+    await settle(fixture);
+    expect(api.replace).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain('no longer works here');
+
+    // Choosing another person clears the problem; the platform is then asked.
+    type(fixture, 'location-contacts-colleague', 'm2');
+    click(fixture, 'location-contacts-save');
+    await settle(fixture);
+    expect(api.replace).toHaveBeenCalledWith(
+      SCOPE,
+      [{ relationshipCode: 'MANAGER', staffMemberId: 'm2' }],
+      5,
+    );
   });
 
   it('says there are none yet', async () => {
