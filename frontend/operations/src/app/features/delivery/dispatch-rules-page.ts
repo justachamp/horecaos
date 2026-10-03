@@ -117,6 +117,20 @@ export class DispatchRulesPage implements OnInit {
   protected readonly usage = signal<DispatchUsage | null>(null);
 
   protected readonly selectedId = signal<string | null>(null);
+  /**
+   * Whether the selected rule was already in the published document when it was selected, which fixes its
+   * identifier because plans have recorded it. Decided at selection and held, not recomputed from the
+   * identifier: a new rule's id passes through every prefix of what is typed, and one of them can be an id a
+   * published rule once had.
+   */
+  protected readonly selectedIsPublished = signal(false);
+  /**
+   * What is in the identifier box while it is not the selected rule's identifier: text another rule already
+   * uses. It is held here and never written to the draft, because two rules with one id cannot be told apart
+   * by anything that acts on a rule by id -- selecting, editing, reordering and deleting would all land on
+   * the first of them. Null whenever the box shows the rule's own identifier.
+   */
+  protected readonly pendingId = signal<string | null>(null);
   protected readonly reason = signal('');
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -158,12 +172,6 @@ export class DispatchRulesPage implements OnInit {
     return this.draft()?.rules.find((rule) => rule.id === id) ?? null;
   });
 
-  /** A rule is new, and so its id still editable, until a published version holds it. */
-  protected readonly selectedIsPublished = computed(() => {
-    const id = this.selectedId();
-    return this.view()?.rules.some((rule) => rule.id === id) ?? false;
-  });
-
   protected readonly listItems = computed<readonly RuleListItem[]>(() => {
     const draft = this.draft();
     const usage = this.usage();
@@ -179,7 +187,10 @@ export class DispatchRulesPage implements OnInit {
 
   protected readonly idProblem = computed<boolean>(() => {
     const rule = this.selected();
-    return rule !== null && !isWellFormedUniqueId(rule.id, this.draft()?.rules ?? []);
+    return (
+      rule !== null &&
+      (this.pendingId() !== null || !isWellFormedUniqueId(rule.id, this.draft()?.rules ?? []))
+    );
   });
 
   protected readonly canPublish = computed(
@@ -246,7 +257,7 @@ export class DispatchRulesPage implements OnInit {
       this.adopt(loaded.value);
       this.options.set(options);
       this.usage.set(usage);
-      this.selectedId.set(null);
+      this.clearSelection();
       this.reason.set('');
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === 'INSUFFICIENT_CAPABILITY') {
@@ -270,6 +281,14 @@ export class DispatchRulesPage implements OnInit {
 
   protected select(id: string): void {
     this.selectedId.set(id);
+    this.selectedIsPublished.set(this.view()?.rules.some((rule) => rule.id === id) ?? false);
+    this.pendingId.set(null);
+  }
+
+  private clearSelection(): void {
+    this.selectedId.set(null);
+    this.selectedIsPublished.set(false);
+    this.pendingId.set(null);
   }
 
   protected addRule(): void {
@@ -283,6 +302,8 @@ export class DispatchRulesPage implements OnInit {
     );
     this.draft.set({ ...draft, rules: [...draft.rules, created] });
     this.selectedId.set(created.id);
+    this.selectedIsPublished.set(false);
+    this.pendingId.set(null);
     this.notice.set(null);
   }
 
@@ -293,7 +314,7 @@ export class DispatchRulesPage implements OnInit {
       return;
     }
     this.draft.set(removeRule(draft, id));
-    this.selectedId.set(null);
+    this.clearSelection();
   }
 
   protected reorder(ids: RuleReorder): void {
@@ -322,8 +343,20 @@ export class DispatchRulesPage implements OnInit {
     if (!draft || !rule) {
       return;
     }
+    if (draft.rules.some((other) => other !== rule && other.id === value)) {
+      // Typing "far-zone-evening" passes through "far-zone". Writing that to the draft would leave two rules
+      // with one id, and every later keystroke would act on the other one.
+      this.pendingId.set(value);
+      return;
+    }
+    this.pendingId.set(null);
     this.draft.set(replaceRule(draft, rule.id, { ...rule, id: value }));
     this.selectedId.set(value);
+  }
+
+  /** Leaving the box with an identifier another rule has puts the rule's own back. */
+  protected settleId(): void {
+    this.pendingId.set(null);
   }
 
   protected setConditions(when: DispatchConditions): void {
@@ -346,7 +379,7 @@ export class DispatchRulesPage implements OnInit {
     const view = this.view();
     if (view) {
       this.adopt(view);
-      this.selectedId.set(null);
+      this.clearSelection();
       this.reason.set('');
       this.saveError.set(null);
       this.problems.set([]);
@@ -384,7 +417,7 @@ export class DispatchRulesPage implements OnInit {
       );
       this.adopt(published);
       this.reason.set('');
-      this.selectedId.set(null);
+      this.clearSelection();
       this.notice.set(
         this.i18n.t('delivery.rules.published', { version: published.policyVersion }),
       );
@@ -439,7 +472,10 @@ export class DispatchRulesPage implements OnInit {
     if (!draft) {
       return true;
     }
-    return draft.rules.some((rule) => !isWellFormedUniqueId(rule.id, draft.rules));
+    return (
+      this.pendingId() !== null ||
+      draft.rules.some((rule) => !isWellFormedUniqueId(rule.id, draft.rules))
+    );
   }
 
   private describeFailure(failure: unknown): string {

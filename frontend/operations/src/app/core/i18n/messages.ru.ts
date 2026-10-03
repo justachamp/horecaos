@@ -3392,6 +3392,8 @@ export const messagesRu: MessageCatalogue = {
   'delivery.rules.name': 'Название',
   'delivery.rules.id': 'Идентификатор',
   'delivery.rules.id.hint': 'Строчные буквы, цифры, дефисы. После публикации не меняется.',
+  'delivery.rules.id.taken':
+    'У другого правила уже есть такой идентификатор. Продолжайте вводить или выйдите из поля, чтобы вернуть прежний.',
   'delivery.rules.when.heading': 'Когда заказ…',
   'delivery.rules.when.hint': 'Должны выполняться все заданные условия; пустое подходит любому.',
   'delivery.rules.cond.sources': 'Источник заказа',

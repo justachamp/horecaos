@@ -3433,6 +3433,8 @@ export const messagesEn = {
   'delivery.rules.name': 'Name',
   'delivery.rules.id': 'Identifier',
   'delivery.rules.id.hint': 'Lower case letters, digits, dashes. Fixed once published.',
+  'delivery.rules.id.taken':
+    'Another rule already has this identifier. Keep typing, or leave the box to go back to the old one.',
   'delivery.rules.when.heading': 'When an order…',
   'delivery.rules.when.hint': 'Every condition you set must hold; an empty one matches anything.',
   'delivery.rules.cond.sources': 'Comes from',

@@ -176,6 +176,22 @@ function type(host: HTMLElement, testId: string, value: string): void {
   input.dispatchEvent(new Event('input'));
 }
 
+/** Types `text` one character at a time, as a keyboard does, and stops where the box stops accepting input. */
+function typeSlowly(
+  fixture: ComponentFixture<unknown>,
+  host: HTMLElement,
+  testId: string,
+  text: string,
+): void {
+  for (let length = 1; length <= text.length; length++) {
+    if (control<HTMLInputElement>(host, testId).disabled) {
+      return;
+    }
+    type(host, testId, text.slice(0, length));
+    fixture.detectChanges();
+  }
+}
+
 function ruleRows(host: HTMLElement): HTMLElement[] {
   return [...host.querySelectorAll<HTMLElement>('.rule-list__row')];
 }
@@ -262,6 +278,75 @@ describe('DispatchRulesPage (IA 3.8, ADR 0142)', () => {
 
       expect(control<HTMLButtonElement>(host, 'rules-publish').disabled).toBe(true);
       expect(control<HTMLInputElement>(host, 'rule-id').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('lets an identifier be typed through another rule’s identifier without touching that rule', async () => {
+      const api = apiWith(PUBLISHED);
+      const { fixture, host } = await render(api);
+      control<HTMLButtonElement>(host, 'rules-add').click();
+      fixture.detectChanges();
+
+      // "far-zone" is a published rule's identifier, and is the sixth keystroke of the one wanted.
+      typeSlowly(fixture, host, 'rule-id', 'far-zone-evening');
+
+      expect(control<HTMLInputElement>(host, 'rule-id').value).toBe('far-zone-evening');
+      expect(control<HTMLInputElement>(host, 'rule-id').disabled).toBe(false);
+      expect(ruleRows(host)).toHaveLength(3);
+      expect(ruleRows(host)[0].textContent).toContain('Far zone: Yandex first');
+
+      type(host, 'rules-reason', 'Evening rule');
+      fixture.detectChanges();
+      control<HTMLButtonElement>(host, 'rules-publish').click();
+      await settle(fixture);
+      const document = api['publishRules'].mock.calls[0][1];
+      expect(document.rules.map((r: DispatchRule) => r.id)).toEqual([
+        'far-zone',
+        'evenings',
+        'far-zone-evening',
+      ]);
+      expect(document.rules[0].then.mode).toBe('PARTNER_FIRST');
+      expect(document.rules[2].then.mode).toBe('FLEET_FIRST');
+    });
+
+    it('holds back an identifier another rule already has, says so, and puts the old one back on leaving the box', async () => {
+      const { fixture, host } = await render(apiWith(PUBLISHED));
+      control<HTMLButtonElement>(host, 'rules-add').click();
+      fixture.detectChanges();
+      type(host, 'rules-reason', 'Add one');
+      fixture.detectChanges();
+
+      type(host, 'rule-id', 'evenings');
+      fixture.detectChanges();
+
+      expect(control<HTMLInputElement>(host, 'rule-id').value).toBe('evenings');
+      expect(control<HTMLInputElement>(host, 'rule-id').getAttribute('aria-invalid')).toBe('true');
+      expect(control(host, 'rule-id-taken').textContent).toContain('already');
+      expect(control<HTMLButtonElement>(host, 'rules-publish').disabled).toBe(true);
+      expect(ruleRows(host)).toHaveLength(3);
+      expect(ruleRows(host)[1].textContent).toContain('Evenings');
+
+      control<HTMLInputElement>(host, 'rule-id').dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+
+      expect(control<HTMLInputElement>(host, 'rule-id').value).toBe('rule-3');
+      expect(find(host, 'rule-id-taken')).toBeNull();
+      expect(control<HTMLButtonElement>(host, 'rules-publish').disabled).toBe(false);
+    });
+
+    it('does not lock a new rule’s identifier because it passes through one a published rule used to have', async () => {
+      const { fixture, host } = await render(apiWith(PUBLISHED));
+      // Remove the published "evenings", then add a rule and type its identifier from scratch.
+      ruleRows(host)[1].querySelector<HTMLElement>('.rule-list__body')!.click();
+      fixture.detectChanges();
+      control<HTMLButtonElement>(host, 'rule-delete').click();
+      fixture.detectChanges();
+      control<HTMLButtonElement>(host, 'rules-add').click();
+      fixture.detectChanges();
+
+      typeSlowly(fixture, host, 'rule-id', 'evenings-late');
+
+      expect(control<HTMLInputElement>(host, 'rule-id').value).toBe('evenings-late');
+      expect(control<HTMLInputElement>(host, 'rule-id').disabled).toBe(false);
     });
 
     it('fixes a published rule’s identifier, because plans have recorded it', async () => {
