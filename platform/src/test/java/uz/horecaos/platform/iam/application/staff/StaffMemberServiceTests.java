@@ -920,6 +920,87 @@ class StaffMemberServiceTests {
                 .isNull();
     }
 
+    @Test
+    @DisplayName("removing a photo asks the pipeline to delete it, so pressing remove removes the picture")
+    void removingAPhotoDiscardsTheAsset() {
+        UUID id = kit.activeMember(StaffKit.TENANT_A, CHEF, FIRST, LAST, null);
+        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 2, new byte[] {1}, null, null, "corr-photo");
+        UUID photo = kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId();
+
+        kit.inTx(() -> kit.members.updateSelf(
+                StaffKit.TENANT_A, CHEF, 3, new ProfileEdit(FIRST, LAST, null, null, null), true, "corr-remove"));
+
+        assertThat(kit.photos.discarded).containsExactly(photo);
+    }
+
+    @Test
+    @DisplayName("an edit that leaves the photo alone deletes nothing")
+    void anEditThatKeepsThePhotoDiscardsNothing() {
+        kit.activeMember(StaffKit.TENANT_A, CHEF, FIRST, LAST, null);
+        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 2, new byte[] {1}, null, null, "corr-photo");
+
+        kit.inTx(() -> kit.members.updateSelf(
+                StaffKit.TENANT_A, CHEF, 3, new ProfileEdit("Zukhra-2", LAST, null, null, null), false, "corr-edit"));
+
+        assertThat(kit.photos.discarded).isEmpty();
+    }
+
+    @Test
+    @DisplayName("replacing a photo asks the pipeline to delete the one it replaces, and not the new one")
+    void replacingAPhotoDiscardsTheOldOne() {
+        UUID id = kit.activeMember(StaffKit.TENANT_A, CHEF, FIRST, LAST, null);
+        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 2, new byte[] {1}, null, null, "corr-first");
+        UUID first = kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId();
+        assertThat(kit.photos.discarded)
+                .as("the first photo has nothing before it to delete")
+                .isEmpty();
+
+        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 3, new byte[] {2}, null, null, "corr-second");
+
+        UUID second = kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId();
+        assertThat(second).isNotEqualTo(first);
+        assertThat(kit.photos.discarded).containsExactly(first);
+    }
+
+    @Test
+    @DisplayName("a photo that loses the version race is deleted at once, and the record keeps the one it had")
+    void aPhotoThatLosesTheRaceIsDiscarded() {
+        UUID id = kit.activeMember(StaffKit.TENANT_A, CHEF, FIRST, LAST, null);
+        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 2, new byte[] {1}, null, null, "corr-first");
+        UUID kept = kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId();
+        // Somebody else edits the record while the second upload is in flight, so
+        // the version the upload was checked against is stale by the time it counts.
+        kit.photos.whileIngesting = () -> kit.jdbc
+                .sql("UPDATE iam.staff_members SET version = version + 1 WHERE id = :id")
+                .param("id", id)
+                .update();
+
+        assertThatThrownBy(
+                        () -> kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 3, new byte[] {2}, null, null, "corr-lost"))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.STALE_VERSION));
+
+        assertThat(kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId())
+                .as("the record still points at the photo it had")
+                .isEqualTo(kept);
+        assertThat(kit.photos.discarded)
+                .as("the upload that lost is deleted, and the photo still in use is not")
+                .hasSize(1)
+                .doesNotContain(kept);
+    }
+
+    @Test
+    @DisplayName("a refused image deletes nothing, because no asset was made")
+    void aRefusedImageDiscardsNothing() {
+        kit.activeMember(StaffKit.TENANT_A, CHEF, FIRST, LAST, null);
+
+        assertThatThrownBy(() ->
+                        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 2, new byte[] {'X', 1}, null, null, "corr-bad"))
+                .isInstanceOf(ApiException.class);
+
+        assertThat(kit.photos.discarded).isEmpty();
+    }
+
     // -------------------------------------------------------------- anonymise
 
     @Test
@@ -951,6 +1032,7 @@ class StaffMemberServiceTests {
         assertThat(row.displayReference()).isEqualTo("S-0001");
         assertThat(row.employmentStatus()).isEqualTo("ENDED");
         assertThat(kit.contactStore.count(StaffKit.TENANT_A, id)).isZero();
+        assertThat(kit.photos.discarded).as("no photo, nothing to delete").isEmpty();
         assertThat(kit.directory.nameOf(StaffKit.TENANT_A, CHEF))
                 .as("audit and order attribution still resolve to the former employee, by reference")
                 .isEqualTo("S-0001");
@@ -963,5 +1045,24 @@ class StaffMemberServiceTests {
                         "corr-no")))
                 .as("only an ended member can be anonymised")
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("anonymising an ended member deletes their photo as well as dropping the reference to it")
+    void anonymiseDiscardsThePhoto() {
+        UUID id = kit.activeMember(StaffKit.TENANT_A, CHEF, FIRST, LAST, PHONE);
+        kit.members.setPhoto(StaffKit.TENANT_A, CHEF, 2, new byte[] {1}, null, null, "corr-photo");
+        UUID photo = kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId();
+        kit.grant(StaffKit.TENANT_A, CHEF, PlatformRole.LOCATION_STAFF, "LOCATION", StaffKit.LOCATION_1);
+        end(id, OWNER);
+
+        kit.inTx(
+                () -> kit.members.anonymise(StaffKit.TENANT_A, id, "retention", "staff-member-retention", "corr-anon"));
+
+        assertThat(kit.store.find(StaffKit.TENANT_A, id).orElseThrow().photoAssetId())
+                .isNull();
+        assertThat(kit.photos.discarded)
+                .as("a data-subject erasure must not leave the face in storage")
+                .containsExactly(photo);
     }
 }

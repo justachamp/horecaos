@@ -16,12 +16,17 @@
   `ChangeDocuments` with the redaction set extended; `MappingEntityType.OPERATOR` and
   the POS operator pairing; names on the operator leaderboard and the live operator
   band; and the console (People list and card, «Мой профиль», branch contact persons,
-  emergency-contact panel, shell chip, i18n parity, lazy-loaded). Not built: the drift
+  emergency-contact panel, shell chip, i18n parity, lazy-loaded); a photo's picture
+  leaving the store when it is removed, replaced, loses an upload race or its owner is
+  anonymised (`StaffPhotos.discard` marks the private tenant-owned asset
+  `DELETION_REQUESTED` in the caller's transaction and `MediaAssetDeletionWorker`
+  removes the objects and renditions and marks it `DELETED`); and a branch contact list
+  that shows a colleague who has left as a reference alone, marked `formerColleague`,
+  and refuses to list one. Not built: the drift
   half of ADR 0009 (the reconciler only reconciles grants into staff members and
   promotes `PENDING` ones, it does not detect drift in `iam.principals` or
-  `iam.tenant_membership_links`); deleting the photo object on anonymise (there is no
-  media delete port, so the reference is cleared and the object stays) and a retention
-  sweeper that deletes (it ships `REPORT_ONLY` until legal approves a sample); ending a
+  `iam.tenant_membership_links`); a retention sweeper that deletes (it ships
+  `REPORT_ONLY` until legal approves a sample); ending a
   `PENDING` member does not cancel its outstanding invitation, and ending employment is
   `ENDED` first and then a per-grant revoke, not one transaction; operator names on the
   report export (`ReportExportService`); the CRM log's «Оператор» column, the call log

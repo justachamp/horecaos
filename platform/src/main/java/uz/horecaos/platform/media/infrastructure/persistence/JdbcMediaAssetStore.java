@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -145,6 +146,74 @@ public class JdbcMediaAssetStore {
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
+
+    /**
+     * Asks for a private asset that the tenant itself owns to be deleted: the
+     * first half of {@code AVAILABLE -> DELETION_REQUESTED -> DELETED}.
+     *
+     * <p>The guard is in the statement, not in the caller. Only a {@code
+     * PRIVATE} asset owned at {@code TENANT} scope by this very tenant moves, so
+     * the staff photo port that calls this cannot delete a catalogue image, a
+     * brand's logo or another tenant's file whatever id it is handed. An asset
+     * already on its way, already deleted or never verified is left alone, which
+     * is what makes a second request a no-op.
+     *
+     * @return true when this call moved the row
+     */
+    public boolean requestDeletion(UUID tenantId, MediaAssetId assetId) {
+        return jdbc.sql("""
+                UPDATE media.assets
+                SET status = 'DELETION_REQUESTED'
+                WHERE tenant_id = :tenantId AND asset_id = :assetId
+                  AND owner_scope = 'TENANT' AND owner_id = :tenantId
+                  AND visibility = 'PRIVATE'
+                  AND status IN ('UPLOADED', 'AVAILABLE', 'REJECTED')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("assetId", assetId.value())
+                        .update()
+                == 1;
+    }
+
+    /** Assets waiting for their objects to be removed from the store, oldest first. */
+    public List<DeletionCandidate> deletionRequested(int limit) {
+        return jdbc.sql("""
+                SELECT asset_id, tenant_id, bucket, object_key
+                FROM media.assets
+                WHERE status = 'DELETION_REQUESTED'
+                ORDER BY created_at, asset_id
+                LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((row, rowNumber) -> new DeletionCandidate(
+                        new MediaAssetId(row.getObject("asset_id", UUID.class)),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getString("bucket"),
+                        row.getString("object_key")))
+                .list();
+    }
+
+    /**
+     * Records that the object and its renditions are gone.
+     *
+     * @return true when this call performed the transition; false when another
+     *     worker finished the same asset first
+     */
+    public boolean markDeleted(UUID tenantId, MediaAssetId assetId, Instant now) {
+        return jdbc.sql("""
+                UPDATE media.assets
+                SET status = 'DELETED', deleted_at = :now
+                WHERE tenant_id = :tenantId AND asset_id = :assetId AND status = 'DELETION_REQUESTED'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("assetId", assetId.value())
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
+                == 1;
+    }
+
+    /** An asset whose deletion was requested: what the worker needs to find its bytes. */
+    public record DeletionCandidate(MediaAssetId assetId, UUID tenantId, String bucket, String objectKey) {}
 
     private static MediaAsset mapAsset(ResultSet row, int rowNumber) throws SQLException {
         return new MediaAsset(

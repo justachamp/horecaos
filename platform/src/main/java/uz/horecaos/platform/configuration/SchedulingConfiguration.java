@@ -243,11 +243,15 @@ public class SchedulingConfiguration {
      * staff member record for accounts that predate it and keeps the
      * completion gauges, and {@code StaffMemberRetentionSweeper.sweepOnce},
      * which in report-only mode counts the ended employees whose personal data
-     * is past retention. The merged batch carries 74 in all (the other waves of
+     * is past retention. The merged batch carried 74 in all (the other waves of
      * the batch added their own sweepers on branches that could not see each
-     * other), which the pool-size test counts.
+     * other), and the review fixes after it added one more: {@code
+     * MediaAssetDeletionWorker.deleteScheduledBatch}, which removes the objects of
+     * an asset whose deletion was requested -- a staff photo that was removed,
+     * replaced or anonymised used to leave its picture in the store for good.
+     * The pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 74;
+    static final int DEFAULT_POOL_SIZE = 75;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
