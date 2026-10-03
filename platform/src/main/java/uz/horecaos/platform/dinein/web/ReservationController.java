@@ -195,7 +195,7 @@ public class ReservationController {
                     "Seat a booking by opening a session against it, which is what occupies the " + "table");
         }
 
-        ReservationRow moved = reservations.move(
+        ReservationService.ReservationOutcome moved = reservations.moveReporting(
                 tenantId,
                 locationId,
                 reservationId,
@@ -204,7 +204,8 @@ public class ReservationController {
                 currentActor.get().subject(),
                 body.reason());
 
-        return ResponseEntity.ok(ReservationResponse.of(moved, reservations.tablesFor(tenantId, reservationId)));
+        return ResponseEntity.ok(ReservationResponse.of(
+                moved.reservation(), reservations.tablesFor(tenantId, reservationId), moved.tableOccupiedNow()));
     }
 
     @PostMapping("/reservations/{reservationId}/amendments")
@@ -227,7 +228,7 @@ public class ReservationController {
 
         long expected = AggregateVersion.requireIfMatch(request);
 
-        ReservationRow amended = reservations.amend(
+        ReservationService.ReservationOutcome amended = reservations.amendReporting(
                 tenantId,
                 locationId,
                 reservationId,
@@ -242,7 +243,8 @@ public class ReservationController {
                 currentActor.get().subject(),
                 body.reason());
 
-        return ResponseEntity.ok(ReservationResponse.of(amended, reservations.tablesFor(tenantId, reservationId)));
+        return ResponseEntity.ok(ReservationResponse.of(
+                amended.reservation(), reservations.tablesFor(tenantId, reservationId), amended.tableOccupiedNow()));
     }
 
     private static ReservationStatus parse(String value) {
@@ -286,10 +288,21 @@ public class ReservationController {
             int version,
             @Nullable String guestName,
             @Nullable String guestPhone,
-            @Nullable String note) {
+            @Nullable String note,
+            /**
+             * Only on the response to a confirmation or an amendment of a confirmed
+             * booking (ADR 0143): whether a party is already sitting at one of its
+             * tables, so the host sees it. Confirming never bumps them -- the host
+             * decides. Null everywhere else.
+             */
+            @Nullable Boolean tableOccupiedNow) {
 
         static ReservationResponse of(ReservationRow row, List<UUID> tableIds) {
             return of(row, tableIds, null, null, null);
+        }
+
+        static ReservationResponse of(ReservationRow row, List<UUID> tableIds, @Nullable Boolean tableOccupiedNow) {
+            return of(row, tableIds, null, null, null, tableOccupiedNow);
         }
 
         static ReservationResponse of(
@@ -298,6 +311,16 @@ public class ReservationController {
                 @Nullable String guestName,
                 @Nullable String guestPhone,
                 @Nullable String note) {
+            return of(row, tableIds, guestName, guestPhone, note, null);
+        }
+
+        static ReservationResponse of(
+                ReservationRow row,
+                List<UUID> tableIds,
+                @Nullable String guestName,
+                @Nullable String guestPhone,
+                @Nullable String note,
+                @Nullable Boolean tableOccupiedNow) {
             return new ReservationResponse(
                     row.id(),
                     row.partySize(),
@@ -309,7 +332,8 @@ public class ReservationController {
                     row.version(),
                     guestName,
                     guestPhone,
-                    note);
+                    note,
+                    tableOccupiedNow);
         }
     }
 

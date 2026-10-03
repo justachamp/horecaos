@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pos.domain;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -7,6 +8,7 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A stable hash over what an order asked for (ADR 0011).
@@ -40,12 +42,15 @@ public final class LineFingerprint {
         StringBuilder canonical = new StringBuilder();
         lines.stream()
                 .sorted(Comparator.comparing(Line::externalProductId)
-                        .thenComparingInt(Line::quantity)
+                        .thenComparing(Line::quantity)
                         .thenComparingLong(Line::unitAmountMinor))
                 .forEach(line -> canonical
                         .append(line.externalProductId())
                         .append(':')
-                        .append(line.quantity())
+                        // Plain digits of the normalised quantity: a whole number hashes
+                        // exactly as the int it replaced (ADR 0137), so no fingerprint
+                        // already recorded against a provider order stops matching.
+                        .append(Quantities.plain(line.quantity()))
                         .append(':')
                         .append(line.unitAmountMinor())
                         .append('|'));
@@ -80,5 +85,15 @@ public final class LineFingerprint {
      *                        a fingerprint computed through floating point would
      *                        differ between two runs over the same order
      */
-    public record Line(String externalProductId, int quantity, long unitAmountMinor) {}
+    public record Line(String externalProductId, BigDecimal quantity, long unitAmountMinor) {
+
+        public Line {
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public Line(String externalProductId, int quantity, long unitAmountMinor) {
+            this(externalProductId, BigDecimal.valueOf(quantity), unitAmountMinor);
+        }
+    }
 }

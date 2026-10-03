@@ -8,53 +8,107 @@
     </tr>
   </thead>
   <tbody>
-    @for (line of lines(); track line.lineId) {
-      <tr data-testid="order-detail-line">
-        <td class="q-tnum">{{ line.lineNumber }}</td>
-        <td>
-          <div>{{ lineName(line) }}</div>
-          @if (line.variantName) {
-            <div class="q-caption pane__line-variant">{{ line.variantName }}</div>
-          }
-          @if (line.modifiers.length > 0) {
-            <ul class="pane__line-modifiers">
-              @for (modifier of line.modifiers; track modifier) {
-                <li class="q-caption">{{ modifier }}</li>
-              }
-            </ul>
-          }
-          @if (line.commentPresets.length > 0) {
-            <ul class="pane__line-presets" data-testid="order-detail-line-presets">
-              @for (preset of line.commentPresets; track preset.code) {
-                <li class="pane__preset-chip">{{ presetLabel(preset) }}</li>
-              }
-            </ul>
-          }
-          @if (line.hasNote) {
-            @if (revealedNote(line.lineId); as note) {
-              <p class="q-caption pane__line-note">{{ note }}</p>
-            } @else if (revealedNote(line.lineId) === null) {
-              <p class="q-caption pane__line-note">
-                {{ 'orders.detail.lines.note.empty' | t }}
-              </p>
-            } @else {
-              <button
-                type="button"
-                class="pane__reveal-link"
-                [disabled]="isRevealingNote(line.lineId)"
-                (click)="noteRevealRequested.emit(line.lineId)"
-                [attr.data-testid]="'order-detail-line-note-reveal-' + line.lineId"
-              >
-                {{ 'orders.detail.lines.note.hidden' | t }}
-              </button>
+    @for (row of rows(); track row.key) {
+      @if (row.kind === 'combo') {
+        <tr class="pane__combo-head" data-testid="order-detail-combo">
+          <td></td>
+          <td>
+            <div class="pane__combo-name" data-testid="order-detail-combo-name">{{ row.name }}</div>
+            <div class="q-caption pane__line-variant">
+              {{ 'orders.detail.lines.combo.caption' | t }}
+            </div>
+          </td>
+          <td class="pane__num-col q-tnum">{{ row.quantity }}</td>
+          <td class="pane__num-col q-mono q-tnum">
+            {{ formatMoneyMinor(row.totalMinor, currency()) }}
+          </td>
+        </tr>
+      } @else {
+        <tr data-testid="order-detail-line" [class.pane__line--component]="row.inCombo">
+          <td class="q-tnum">{{ row.line.lineNumber }}</td>
+          <td>
+            <div>{{ lineName(row.line) }}</div>
+            @if (row.line.variantName) {
+              <div class="q-caption pane__line-variant">{{ row.line.variantName }}</div>
             }
-          }
-        </td>
-        <td class="pane__num-col q-tnum">{{ line.quantity }}</td>
-        <td class="pane__num-col q-mono q-tnum">
-          {{ formatMoneyMinor(line.finalAmountMinor, currency()) }}
-        </td>
-      </tr>
+            @if (row.line.catchweight; as weighed) {
+              <div class="q-caption pane__line-weight" data-testid="order-detail-line-weight">
+                @if (weighed.provisional) {
+                  {{
+                    'orders.detail.lines.weight.estimate'
+                      | t
+                        : {
+                            weight: estimatedWeight(row.line),
+                            price: formatMoneyMinor(weighed.pricePerQuantumMinor, currency()),
+                            quantum: weightText(weighed.quantumGrams),
+                          }
+                  }}
+                } @else {
+                  {{
+                    'orders.detail.lines.weight.weighed'
+                      | t
+                        : {
+                            weight: weightText(weighed.actualWeightGrams ?? 0),
+                            price: formatMoneyMinor(weighed.pricePerQuantumMinor, currency()),
+                            quantum: weightText(weighed.quantumGrams),
+                          }
+                  }}
+                }
+              </div>
+            }
+            @if (chosenModifiers(row.line).length > 0) {
+              <ul class="pane__line-modifiers">
+                @for (modifier of chosenModifiers(row.line); track $index) {
+                  <li class="q-caption">{{ modifier }}</li>
+                }
+              </ul>
+            }
+            @if (row.line.autoSelectedCharges && row.line.autoSelectedCharges.length > 0) {
+              <ul class="pane__line-modifiers pane__line-auto" data-testid="order-detail-line-auto">
+                @for (charge of row.line.autoSelectedCharges; track $index) {
+                  <li class="q-caption">
+                    {{ charge.name }}
+                    <span class="q-mono q-tnum">{{
+                      formatMoneyMinor(charge.amountMinor, currency())
+                    }}</span>
+                    · {{ 'orders.detail.lines.autoAdded' | t }}
+                  </li>
+                }
+              </ul>
+            }
+            @if (row.line.commentPresets.length > 0) {
+              <ul class="pane__line-presets" data-testid="order-detail-line-presets">
+                @for (preset of row.line.commentPresets; track preset.code) {
+                  <li class="pane__preset-chip">{{ presetLabel(preset) }}</li>
+                }
+              </ul>
+            }
+            @if (row.line.hasNote) {
+              @if (revealedNote(row.line.lineId); as note) {
+                <p class="q-caption pane__line-note">{{ note }}</p>
+              } @else if (revealedNote(row.line.lineId) === null) {
+                <p class="q-caption pane__line-note">
+                  {{ 'orders.detail.lines.note.empty' | t }}
+                </p>
+              } @else {
+                <button
+                  type="button"
+                  class="pane__reveal-link"
+                  [disabled]="isRevealingNote(row.line.lineId)"
+                  (click)="noteRevealRequested.emit(row.line.lineId)"
+                  [attr.data-testid]="'order-detail-line-note-reveal-' + row.line.lineId"
+                >
+                  {{ 'orders.detail.lines.note.hidden' | t }}
+                </button>
+              }
+            }
+          </td>
+          <td class="pane__num-col q-tnum">{{ quantityText(row.line.quantity) }}</td>
+          <td class="pane__num-col q-mono q-tnum">
+            {{ formatMoneyMinor(row.line.finalAmountMinor, currency()) }}
+          </td>
+        </tr>
+      }
     }
   </tbody>
 </table>

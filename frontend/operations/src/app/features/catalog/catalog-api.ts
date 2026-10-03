@@ -51,6 +51,7 @@ import {
   VariantAvailabilityRow,
 } from './catalog-domain';
 import { CursorState, Page, firstPage, nextPage } from '../../core/api/page';
+import { PhysicalAttributesRequest, PhysicalAttributesView } from './physical-attributes';
 
 /**
  * `GET/POST/PUT .../catalog/**` — `CatalogAuthoringController` and
@@ -407,6 +408,33 @@ export class CatalogApi {
     return this.api.put<FiscalClassification, void>(
       catalogPaths.variantFiscalClassification(scope, variantId),
       command(fiscal),
+    );
+  }
+
+  /** ADR 0137: the variant's weight, catchweight, portions and КБЖУ. A variant with none reads as version 0, empty. */
+  physicalAttributes(scope: BrandScope, variantId: string): Observable<PhysicalAttributesView> {
+    return unwrap(
+      this.api.get<PhysicalAttributesView>(
+        catalogPaths.variantPhysicalAttributes(scope, variantId),
+      ),
+    );
+  }
+
+  /**
+   * Writes the whole set under the version it was read at; an empty set clears the row. A
+   * contradiction comes back `VALIDATION_FAILED` with a stable `reason`, a stale version
+   * `STALE_VERSION`.
+   */
+  setPhysicalAttributes(
+    scope: BrandScope,
+    variantId: string,
+    request: PhysicalAttributesRequest,
+    expectedVersion: number,
+  ): Observable<PhysicalAttributesView> {
+    return this.api.put<PhysicalAttributesRequest, PhysicalAttributesView>(
+      catalogPaths.variantPhysicalAttributes(scope, variantId),
+      command(request),
+      { expectedVersion },
     );
   }
 

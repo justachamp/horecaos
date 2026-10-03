@@ -28,6 +28,13 @@ const SETTINGS: DineInSettingsView = {
   guestSessionTtlMinutes: 240,
   serviceChargeRateBp: 1000,
   version: 1,
+  walkInSelfSeat: false,
+  walkInClaimTtlMinutes: 15,
+  walkInHorizonMinutes: 90,
+  walkInMaxUnconfirmed: 5,
+  walkInDailyClaimsPerAccount: 3,
+  walkInPaymentDeferMinutes: 30,
+  sessionCurrency: 'UZS',
 };
 
 const SECTION: SectionView = {
@@ -69,6 +76,9 @@ function session(overrides: Partial<SessionView> = {}): SessionView {
     closeReasonCode: null,
     version: 1,
     tables: [{ tableId: 'tb1', code: 'T1', displayName: 'Table 1' }],
+    origin: 'STAFF',
+    claimExpiresAt: null,
+    confirmedAt: null,
     ...overrides,
   };
 }
@@ -486,5 +496,219 @@ describe('FloorPlanPane', () => {
     );
     expect(live).toHaveBeenCalledTimes(2);
     expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).not.toBeNull();
+  });
+
+  // -------------------------------------------- self-seating settings (ADR 0143)
+
+  function openSettingsEditor(host: HTMLElement): void {
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit')!
+      .click();
+    fixture.detectChanges();
+  }
+
+  it('ships self-seating off and says so in the settings card', async () => {
+    const host = await render();
+
+    expect(host.querySelector('[data-testid="floorplan-self-seat-value"]')?.textContent).toContain(
+      'Off',
+    );
+    // The numbers mean nothing while it is off, so they are not drawn.
+    expect(host.textContent).not.toContain('How long a self-seated table is held');
+  });
+
+  it('turns self-seating on with its numbers and a reason, against the version it read', async () => {
+    const configure = vi.fn().mockResolvedValue({
+      ...SETTINGS,
+      version: 2,
+      walkInSelfSeat: true,
+      walkInClaimTtlMinutes: 20,
+      walkInMaxUnconfirmed: 3,
+    });
+    const host = await render({ configure });
+
+    openSettingsEditor(host);
+    expect(host.querySelector('[data-testid="floorplan-claim-ttl"]')).toBeNull();
+    const toggle = host.querySelector<HTMLInputElement>(
+      '[data-testid="floorplan-self-seat-toggle"]',
+    )!;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    type(host, 'floorplan-claim-ttl', '20');
+    type(host, 'floorplan-max-unconfirmed', '3');
+    const reason = host.querySelector<HTMLInputElement>('#floorplan-settings-reason')!;
+    reason.value = 'Pilot at this branch';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Save')!
+      .click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(configure).toHaveBeenCalledTimes(1);
+    const [scope, input, expectedVersion] = configure.mock.calls[0];
+    expect(scope).toEqual(SCOPE);
+    expect(input).toMatchObject({
+      qrMode: 'ORDER_AND_PAY',
+      walkInSelfSeat: true,
+      walkInClaimTtlMinutes: 20,
+      walkInHorizonMinutes: 90,
+      walkInMaxUnconfirmed: 3,
+      walkInDailyClaimsPerAccount: 3,
+      walkInPaymentDeferMinutes: 30,
+      reason: 'Pilot at this branch',
+    });
+    expect(expectedVersion).toBe(1);
+    expect(host.querySelector('[data-testid="floorplan-self-seat-value"]')?.textContent).toContain(
+      'On',
+    );
+  });
+
+  it('reports a stale settings version as the refusal it is, and keeps the editor open', async () => {
+    const stale = new ApiError(
+      ApiErrorCode.STALE_VERSION,
+      409,
+      { status: 409, expectedVersion: 1, currentVersion: 2 },
+      null,
+    );
+    const host = await render({ configure: vi.fn().mockRejectedValue(stale) });
+
+    openSettingsEditor(host);
+    const reason = host.querySelector<HTMLInputElement>('#floorplan-settings-reason')!;
+    reason.value = 'Pilot';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Save')!
+      .click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(host.querySelector('#floorplan-settings-reason')).not.toBeNull();
+  });
+
+  // ------------------------------------ a guest's self-seated claim (ADR 0143)
+
+  const CLAIM_ENDS = '2026-09-29T14:15:00Z';
+
+  function claim(overrides: Partial<SessionView> = {}): SessionView {
+    return session({
+      sessionId: 'claim1',
+      origin: 'GUEST_QR',
+      claimExpiresAt: CLAIM_ENDS,
+      confirmedAt: null,
+      version: 4,
+      ...overrides,
+    });
+  }
+
+  it('draws a table a guest seated themselves at apart from a seated party, and says it is unconfirmed', async () => {
+    const host = await render(
+      {},
+      { held: MANAGES_SESSIONS, sessions: { live: () => of([claim()]) } },
+    );
+
+    const badge = host.querySelector('[data-testid="table-token-self-seated-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.getAttribute('data-claim')).toBe('unconfirmed');
+    expect(
+      host.querySelector('[data-testid="table-token-tb1"]')!.classList.contains('token--claim'),
+    ).toBe(true);
+
+    selectTable(host);
+    const notice = host.querySelector('[data-testid="floorplan-claim-unconfirmed"]');
+    expect(notice).not.toBeNull();
+    expect(notice!.textContent).toContain('goes back to the room');
+    // A seated party's table offers no second seating, a claim's included.
+    expect(host.querySelector('[data-testid="floorplan-seat-button"]')).toBeNull();
+  });
+
+  it('draws a table a host seated without the self-seated mark', async () => {
+    const host = await render(
+      {},
+      { held: MANAGES_SESSIONS, sessions: { live: () => of([session()]) } },
+    );
+
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="table-token-self-seated-badge"]')).toBeNull();
+    selectTable(host);
+    expect(host.querySelector('[data-testid="floorplan-claim"]')).toBeNull();
+  });
+
+  it('keeps an unconfirmed claim for the guest: a reason, the session version, and the table reads confirmed', async () => {
+    const confirmClaim = vi
+      .fn()
+      .mockReturnValue(
+        of(claim({ confirmedAt: '2026-09-29T14:05:00Z', claimExpiresAt: null, version: 5 })),
+      );
+    const host = await render(
+      {},
+      { held: MANAGES_SESSIONS, sessions: { live: () => of([claim()]), confirmClaim } },
+    );
+
+    selectTable(host);
+    type(host, 'floorplan-claim-reason', 'Guest is at the bar');
+    host.querySelector<HTMLButtonElement>('[data-testid="floorplan-claim-keep"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(confirmClaim).toHaveBeenCalledWith(SCOPE, 'claim1', 'Guest is at the bar', 4);
+    expect(host.querySelector('[data-testid="floorplan-claim-done"]')?.textContent).toContain('T1');
+    expect(host.querySelector('[data-testid="floorplan-claim-confirmed"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="floorplan-claim-keep"]')).toBeNull();
+    expect(
+      host
+        .querySelector('[data-testid="table-token-self-seated-badge"]')!
+        .getAttribute('data-claim'),
+    ).toBe('confirmed');
+  });
+
+  it('releases an unconfirmed claim now, and the table is free again', async () => {
+    const release = vi.fn().mockReturnValue(of(claim({ version: 5 })));
+    const host = await render(
+      {},
+      { held: MANAGES_SESSIONS, sessions: { live: () => of([claim()]), release } },
+    );
+
+    selectTable(host);
+    host.querySelector<HTMLButtonElement>('[data-testid="floorplan-claim-release"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(release).toHaveBeenCalledWith(SCOPE, 'claim1', expect.any(String), 4);
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
+    expect(host.querySelector('[data-testid="floorplan-seat-button"]')).not.toBeNull();
+  });
+
+  it('says why when somebody else decided first, and reads the room again', async () => {
+    const stale = new ApiError(
+      ApiErrorCode.STALE_VERSION,
+      409,
+      { status: 409, expectedVersion: 4, currentVersion: 5 },
+      null,
+    );
+    const live = vi
+      .fn()
+      .mockReturnValueOnce(of([claim()]))
+      .mockReturnValue(of([]));
+    const host = await render(
+      {},
+      {
+        held: MANAGES_SESSIONS,
+        sessions: { live, confirmClaim: vi.fn().mockReturnValue(throwError(() => stale)) },
+      },
+    );
+
+    selectTable(host);
+    host.querySelector<HTMLButtonElement>('[data-testid="floorplan-claim-keep"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(live).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
   });
 });

@@ -21,9 +21,16 @@ export interface OrderLine {
   readonly productName: string;
   readonly variantName?: string | null;
   readonly sku?: string | null;
+  /** A decimal for a line sold by the portion or by weight (ADR 0137): `0.5` is half a portion. */
   readonly quantity: number;
   /** The line's own total, snapshotted at checkout — not a unit price. */
   readonly finalAmountMinor: number;
+  /**
+   * ADR 0137: present on a line sold by weight, absent otherwise. While it is
+   * {@link OrderLineCatchweight.provisional} `finalAmountMinor` was computed against the nominal
+   * weight and the order cannot leave the pass; a weighing replaces it.
+   */
+  readonly catchweight?: OrderLineCatchweight | null;
   readonly modifiers: readonly string[];
   /**
    * Row 2.1b: the coded kitchen-instruction presets this line was checked
@@ -38,6 +45,45 @@ export interface OrderLine {
    * is the separate, audited call that returns it (§3.4).
    */
   readonly hasNote: boolean;
+  /**
+   * ADR 0136: set on each component line of a combo, null on every other line. The lines of one
+   * combo purchase share a `selectionId`; the container is never a line, so the console groups on
+   * the id and shows the name as the header.
+   */
+  readonly combo?: OrderLineCombo | null;
+  /** ADR 0136: the names, within {@link modifiers}, of the options the server applied for this order's fulfilment mode. */
+  readonly autoSelectedModifiers?: readonly string[];
+  /** ADR 0136: the same options with what each cost for the whole line — already inside {@link finalAmountMinor}. */
+  readonly autoSelectedCharges?: readonly OrderLineAutoCharge[];
+}
+
+/** `OperationsOrderController.ComboResponse` — the combo a line was bought as part of. */
+export interface OrderLineCombo {
+  readonly selectionId: string;
+  readonly containerVariantId: string;
+  /** The combo's name as it was sold: copied at checkout, so a rename cannot change an old receipt. */
+  readonly name: string;
+  /** How many combos this purchase was. */
+  readonly quantity: number;
+}
+
+/** `OperationsOrderController.AutoSelectedChargeResponse` — an option the server applied, and what it cost. */
+export interface OrderLineAutoCharge {
+  readonly name: string;
+  readonly amountMinor: number;
+}
+
+/** `OperationsOrderController.OrderLineCatchweightResponse`. */
+export interface OrderLineCatchweight {
+  /** The price the customer agreed to is per this many grams. */
+  readonly quantumGrams: number;
+  /** The weight one unit was estimated at when the order was placed. */
+  readonly nominalGramsPerUnit: number;
+  readonly pricePerQuantumMinor: number;
+  /** True until a weight has been captured. */
+  readonly provisional: boolean;
+  /** The weighed total of the whole line — all its units together — once captured. */
+  readonly actualWeightGrams?: number | null;
 }
 
 /** `OperationsOrderController.CommentPresetChip`. */
@@ -94,10 +140,11 @@ export interface OrderDetailResponse {
   readonly createdByActorId?: string | null;
   /**
    * Gap map row 9.2d: `createdByActorId` resolved to a name server-side
-   * (`StaffDisplayNames`, the same cached lookup the staff activity log
-   * already uses) — null for a non-`"USER"` actor or a subject with no name
-   * on file, in which case {@link actorDisplay} still falls back to the raw
-   * type/id pair rather than showing nothing.
+   * (`StaffDirectory`, ADR 0139: the same lookup the activity log, the People
+   * list and both operator leaderboards read, so one person has one name on
+   * every screen and an edit shows at once) — null for a non-`"USER"` actor or
+   * a subject the tenant keeps no name for, in which case {@link actorDisplay}
+   * still falls back to the raw type/id pair rather than showing nothing.
    */
   readonly createdByDisplayName?: string | null;
   readonly acceptedByActorType?: string | null;

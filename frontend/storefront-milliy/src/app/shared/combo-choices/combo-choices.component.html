@@ -1,0 +1,71 @@
+@for (group of groups(); track group.id) {
+  <section class="group" data-testid="combo-group" [class.is-missing]="isUnmet(group)">
+    <h3 class="group__name">
+      {{ group.name }}
+      <span class="group__rule" data-testid="combo-group-rule">{{
+        rangeOf(group).key | t: rangeOf(group).params
+      }}</span>
+    </h3>
+    <div class="group__options">
+      @for (component of group.components; track component.id) {
+        @if (hasStepper(group) && !isSingle(group)) {
+          <div class="row" [class.is-off]="!component.active" data-testid="combo-component">
+            <span class="row__name">{{ label(component) }}</span>
+            <span class="row__price" data-testid="combo-price">
+              @if (component.active) {
+                {{ priceText(component) }}
+              } @else {
+                <span data-testid="combo-sold-out">{{ 'dish.soldOut' | t }}</span>
+              }
+            </span>
+            <span class="stepper">
+              <button
+                type="button"
+                class="stepper__btn"
+                data-testid="combo-decrease"
+                [disabled]="!component.active || quantityOf(component) <= 0"
+                [attr.aria-label]="'common.decrease' | t"
+                (click)="setQuantity(group, component, quantityOf(component) - 1)"
+              >
+                −
+              </button>
+              <span class="stepper__value" data-testid="combo-quantity">{{
+                quantityOf(component)
+              }}</span>
+              <button
+                type="button"
+                class="stepper__btn"
+                data-testid="combo-increase"
+                [disabled]="!component.active || quantityOf(component) >= ceiling(group, component)"
+                [attr.aria-label]="'common.increase' | t"
+                (click)="setQuantity(group, component, quantityOf(component) + 1)"
+              >
+                +
+              </button>
+            </span>
+          </div>
+        } @else {
+          <button
+            type="button"
+            class="option"
+            data-testid="combo-component"
+            [class.is-active]="quantityOf(component) > 0"
+            [class.is-off]="!component.active"
+            [attr.aria-pressed]="quantityOf(component) > 0"
+            [disabled]="!component.active"
+            (click)="toggle(group, component)"
+          >
+            <span class="option__name">{{ label(component) }}</span>
+            <span class="option__extra" data-testid="combo-price">
+              @if (component.active) {
+                {{ priceText(component) }}
+              } @else {
+                <span data-testid="combo-sold-out">{{ 'dish.soldOut' | t }}</span>
+              }
+            </span>
+          </button>
+        }
+      }
+    </div>
+  </section>
+}

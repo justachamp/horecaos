@@ -1,5 +1,6 @@
 package uz.horecaos.platform.dinein.infrastructure.ordering;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -87,5 +88,20 @@ public class JdbcSessionOrderSource implements SessionOrderSource {
                         row.getInt("round_count"),
                         row.getInt("open_round_count")))
                 .single();
+    }
+
+    @Override
+    public List<RoundStatus> rounds(UUID tenantId, UUID sessionId) {
+        return jdbc.sql("""
+                SELECT o.id, o.status
+                FROM dinein.session_orders so
+                JOIN ordering.orders o ON o.id = so.order_id AND o.tenant_id = so.tenant_id
+                WHERE so.tenant_id = :tenantId AND so.session_id = :sessionId
+                ORDER BY so.sequence
+                """)
+                .param("tenantId", tenantId)
+                .param("sessionId", sessionId)
+                .query((row, number) -> new RoundStatus(row.getObject("id", UUID.class), row.getString("status")))
+                .list();
     }
 }

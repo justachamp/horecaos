@@ -176,11 +176,15 @@ public class OrderQueryService implements OrderCountsQuery {
                     orders.lineCommentPresets(tenantId, orderId).stream()
                             .collect(Collectors.groupingBy(OrderCommentPresetRow::orderLineId));
 
+            // ADR 0136: what each hidden auto-selected option charged, itemised on the order.
+            Map<UUID, Map<UUID, Long>> hiddenCharges = orders.hiddenCharges(tenantId, orderId);
+
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
             lines.forEach(line -> detailLines.add(new DetailLine(
                     line,
                     modifiers.getOrDefault(line.lineId(), List.of()),
-                    commentPresets.getOrDefault(line.lineId(), List.of()))));
+                    commentPresets.getOrDefault(line.lineId(), List.of()),
+                    hiddenCharges.getOrDefault(line.lineId(), Map.of()))));
 
             return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
@@ -686,6 +690,25 @@ public class OrderQueryService implements OrderCountsQuery {
         return orders.revisions(tenantId, orderId);
     }
 
+    /**
+     * The quote the order is priced by right now: the one behind its current revision.
+     *
+     * <p>Not {@code order.pricingQuoteId()}. The order row keeps the quote checkout
+     * accepted, because that is what cancellation releases a redemption by, and an
+     * amendment appends a revision with its own quote and moves the totals onto it.
+     * Anything that explains the order's present price (which promotions are behind
+     * it, ADR 0140) has to read the revision's quote, or it would describe the price
+     * the order had before it was amended.
+     */
+    @Transactional(readOnly = true)
+    public UUID currentPricingQuoteId(JdbcOrderStore.OrderRow order) {
+        return orders.revisions(order.tenantId(), order.orderId()).stream()
+                .filter(revision -> revision.revision() == order.currentRevision())
+                .map(JdbcOrderStore.RevisionRow::pricingQuoteId)
+                .findFirst()
+                .orElse(order.pricingQuoteId());
+    }
+
     /** The one terminal outcome, once the order has ended. */
     @Transactional(readOnly = true)
     public Optional<JdbcOrderStore.OutcomeRow> outcome(UUID tenantId, UUID orderId) {
@@ -704,8 +727,21 @@ public class OrderQueryService implements OrderCountsQuery {
 
     public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings, CustomerDetail customer) {}
 
+    /**
+     * @param hiddenChargeByOption what each hidden auto-selected option on this line charged, by
+     *     option id, for the whole line (ADR 0136). It is already inside the line's final amount
+     */
     public record DetailLine(
-            OrderLineRow line, List<OrderModifierRow> modifiers, List<OrderCommentPresetRow> commentPresets) {}
+            OrderLineRow line,
+            List<OrderModifierRow> modifiers,
+            List<OrderCommentPresetRow> commentPresets,
+            Map<UUID, Long> hiddenChargeByOption) {
+
+        /** What the option the server applied cost for this line, zero when it was free. */
+        public long hiddenChargeOf(UUID optionId) {
+            return hiddenChargeByOption.getOrDefault(optionId, 0L);
+        }
+    }
 
     /**
      * The customer block an ordinary detail read may show (orders.md

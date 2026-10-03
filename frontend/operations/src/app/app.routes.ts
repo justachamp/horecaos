@@ -13,10 +13,9 @@ import { NAV_ITEMS } from './shell/navigation';
  * rail item that does nothing when clicked is a bug report — and because a
  * placeholder that names its specification is more useful to the next
  * developer than a screen half-built against it. The same principle applies
- * one level down inside a built section's own children: `catalog/import` and
- * `delivery/dispatch-rules` are each a not-built placeholder for exactly this
- * reason (see their own comments below), even though the section around them
- * is "built".
+ * one level down inside a built section's own children: `catalog/import` is
+ * a not-built placeholder for exactly this reason (see its own comment below),
+ * even though the section around it is "built".
  *
  * Everything except `/login` and `/invite` is behind {@link authGuard}, which
  * proves only that somebody is signed in, and — for every route beneath the
@@ -103,10 +102,10 @@ export const routes: Routes = [
       },
       // IA 0.2 (My work), wave T01: `0.2a`/`0.2b` are real (the actor-grouped
       // channel read is self-scoped by the token's own subject, per
-      // MyWorkQueryService's own doc); `0.2c`/`0.2d` stay an honest locked
-      // band inside the page itself, naming the staff-identity ADR, rather
-      // than a second not-built route — see `my-work-page.ts`'s own doc for
-      // the boundary.
+      // MyWorkQueryService's own doc); `0.2c` is «Мой профиль» (ADR 0139),
+      // linked from a band inside the page, and `0.2d` stays an honest locked
+      // band inside the page itself rather than a second not-built route —
+      // see `my-work-page.ts`'s own doc for the boundary.
       {
         path: 'today/my-work',
         loadComponent: () => import('./features/today/my-work-page').then((m) => m.MyWorkPage),
@@ -543,17 +542,25 @@ export const routes: Routes = [
         // neither is its own IA row. The other five route to the shared
         // `NotBuiltPage`: §6.1/6.2 have a schema (V0093) and no authoring
         // service or controller above it; §6.5/6.7/6.8 have neither schema
-        // nor service. See `marketing-shell.ts`'s own doc.
+        // nor service. See `marketing-shell.ts`'s own doc. (6.1 and 6.2 have
+        // both since: ADR 0140 and ADR 0072.)
         path: 'marketing',
         loadComponent: () =>
           import('./features/marketing/marketing-shell').then((m) => m.MarketingShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'campaigns' },
+          // 6.1 Promotions (ADR 0140, gap-map row 6.1): automatic discounts and
+          // markups in the closed rule vocabulary, over `PromotionController` —
+          // `q-condition-builder` for the conditions, `q-rule-list` for the
+          // priority order per stacking group, `q-rule-simulator` over the real
+          // engine, and activation that asks a second person above the ADR 0030
+          // thresholds. Promo codes (6.2) are the coupon-gated face of the same row.
           {
             path: 'promotions',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.1 (Promotions)' },
+              import('./features/marketing/promotions/promotions-page').then(
+                (m) => m.PromotionsPage,
+              ),
           },
           // 6.2 Promo codes (ADR 0072, wave 60): a marketer's own promo
           // codes, through the new `PromoCodeController` over V0093's
@@ -684,6 +691,14 @@ export const routes: Routes = [
             path: 'publication',
             loadComponent: () =>
               import('./features/catalog/publication-page').then((m) => m.PublicationPage),
+          },
+          // catalog.md §4.10's preview region, extended by ADR 0138: what one channel
+          // would receive at one branch, with the findings that would stop it. Reached
+          // from a channel card on the publication screen, not from the sub-nav.
+          {
+            path: 'preview',
+            loadComponent: () =>
+              import('./features/catalog/channel-preview-page').then((m) => m.ChannelPreviewPage),
           },
           {
             path: 'prices',
@@ -816,12 +831,10 @@ export const routes: Routes = [
               ),
           },
           // 7.9 Marketing reports (T15): 7.9a per-customer discount history and
-          // 7.9b campaign delivery counts are real this wave — see
-          // `marketing-report-page.ts`'s own doc. 7.9's promo-code summary and
-          // per-code redemption detail stay named-not-built inline on the same
-          // page: ADR 0023 forbids `reporting` reading `pricing` directly, so
-          // they need `reporting.fact_promotion_redemption`, whose grain needs
-          // a promotions ADR that does not exist yet (statistics.md §7).
+          // 7.9b campaign delivery counts, and (ADR 0140) the Promotions tab: the
+          // summary per promotion and the redemption log, both over
+          // `reporting.fact_promotion_redemption`, which day close builds so that
+          // ADR 0023 holds — see `marketing-report-page.ts`'s own doc.
           {
             path: 'marketing',
             loadComponent: () =>
@@ -921,8 +934,7 @@ export const routes: Routes = [
       },
       {
         // IA §3: 3.1 Dispatch board, 3.6 Delivery zones, 3.7 Delivery tariffs
-        // are built; 3.8 Dispatch rules is an honest not-built placeholder —
-        // see `delivery-shell.ts`'s own doc for why. 3.3 Couriers is its own
+        // and 3.8 Dispatch rules are built. 3.3 Couriers is its own
         // top-level route below, per `navigation.ts`'s existing rail grouping.
         path: 'delivery',
         loadComponent: () =>
@@ -986,15 +998,11 @@ export const routes: Routes = [
               import('./features/delivery/courier-policy-page').then((m) => m.CourierPolicyPage),
           },
           {
+            // IA 3.8 / ADR 0142: the ordered rule document per scope, the simulator that runs the
+            // live evaluator, the sourcing timings' writer and the unpaid-order window.
             path: 'dispatch-rules',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'operations-spec/couriers.md §3.8 (Dispatch rules) — the sourcing policy is ' +
-                'already resolved via ADR 0030 (DeliverySourcingPolicies.SOURCING); only a ' +
-                'write endpoint and this screen are missing, over q-condition-builder/q-rule-list',
-            },
+              import('./features/delivery/dispatch-rules-page').then((m) => m.DispatchRulesPage),
           },
         ],
       },

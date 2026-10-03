@@ -11,11 +11,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchDecision;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingDecision;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
@@ -172,6 +175,82 @@ class DeliverySourcingServiceTests {
     }
 
     @Test
+    @DisplayName("a LADDER win that costs more than the customer's fee still leaves its DELIVERY_COST_SUBSIDY fact")
+    void aLadderWinIsPricedAfterItIsBookedAndRecordsTheSubsidy() {
+        RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR));
+        // 17,000 against the 12,000 the customer paid: the platform absorbs 5,000.
+        bookings.quoteOutcome = ShipmentBookingPort.QuoteOutcome.priced(17_000L, "UZS", null, 25 * 60, null, null);
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(emptyFleet(), bookings, sourceAt(), journal);
+
+        DeliverySourcingService.Outcome outcome =
+                service.source(request(SourcingMode.PARTNER_ONLY, DispatchRulesDocument.PartnerSelection.LADDER));
+
+        assertThat(outcome.won()).isTrue();
+        assertThat(bookings.quoteCalls)
+                .as("one price, for the partner that won, and only after the booking settled")
+                .isEqualTo(1);
+        assertThat(journal.subsidies).singleElement().satisfies(subsidy -> {
+            assertThat(subsidy.providerBindingId()).isEqualTo(NOOR.bindingId());
+            assertThat(subsidy.customerDeliveryFeeMinor()).isEqualTo(12_000L);
+            assertThat(subsidy.providerCostMinor()).isEqualTo(17_000L);
+            assertThat(subsidy.subsidyAmountMinor()).isEqualTo(5_000L);
+            assertThat(subsidy.currency()).isEqualTo("UZS");
+        });
+        assertThat(journal.quotes)
+                .as("the price the fact rests on is kept as evidence")
+                .singleElement()
+                .satisfies(quote -> assertThat(quote.priceMinor()).isEqualTo(17_000L));
+    }
+
+    @Test
+    @DisplayName("a LADDER asks no price to choose a partner: a refused booking is never priced")
+    void aLadderRefusalAsksNoQuote() {
+        RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR));
+        bookings.status = ShipmentBookingPort.BookingStatus.REJECTED;
+        bookings.quoteOutcome = ShipmentBookingPort.QuoteOutcome.priced(17_000L, "UZS", null, null, null, null);
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(emptyFleet(), bookings, sourceAt(), journal);
+
+        service.source(request(SourcingMode.PARTNER_ONLY, DispatchRulesDocument.PartnerSelection.LADDER));
+
+        assertThat(bookings.quoteCalls).isZero();
+        assertThat(journal.subsidies).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a LADDER win whose price cannot be had is still a win, and records no subsidy")
+    void aLadderWinSurvivesAFailingPriceCall() {
+        RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR));
+        bookings.quoteFailure = new IllegalStateException("partner price endpoint is down");
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(emptyFleet(), bookings, sourceAt(), journal);
+
+        DeliverySourcingService.Outcome outcome =
+                service.source(request(SourcingMode.PARTNER_ONLY, DispatchRulesDocument.PartnerSelection.LADDER));
+
+        assertThat(outcome.won()).as("the booking is already made").isTrue();
+        assertThat(journal.subsidies)
+                .as("an unpriced booking is not a zero-cost one")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a LADDER win priced at or under the customer's fee absorbs nothing")
+    void aLadderWinUnderTheFeeRecordsNoSubsidy() {
+        RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR));
+        bookings.quoteOutcome = ShipmentBookingPort.QuoteOutcome.priced(12_000L, "UZS", null, null, null, null);
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(emptyFleet(), bookings, sourceAt(), journal);
+
+        DeliverySourcingService.Outcome outcome =
+                service.source(request(SourcingMode.PARTNER_ONLY, DispatchRulesDocument.PartnerSelection.LADDER));
+
+        assertThat(outcome.won()).isTrue();
+        assertThat(journal.subsidies).isEmpty();
+    }
+
+    @Test
     @DisplayName("nothing configured resolves to ADR 0014's provisional timings under a stable id")
     void unconfiguredPolicyIsRecordedAsDefaults() {
         DeliverySourcingService service = service(emptyFleet(), new RecordingBookingPort(List.of(NOOR)), sourceAt());
@@ -191,6 +270,34 @@ class DeliverySourcingServiceTests {
     private static PickupPlan plan() {
         return PickupPlan.forOrder(
                 Instant.parse("2026-08-24T12:00:00Z"), Duration.ofHours(2), TASHKENT, DeliverySourcingPolicy.DEFAULTS);
+    }
+
+    private static SourcingRequest request(SourcingMode mode, DispatchRulesDocument.PartnerSelection selection) {
+        SourcingRequest base = request(mode);
+        DispatchRulesDocument.Action action = new DispatchRulesDocument.Action(
+                mode,
+                new DispatchRulesDocument.PartnerSet(List.of(), List.of(), selection),
+                DispatchRulesDocument.Start.lead(),
+                null,
+                null);
+        return new SourcingRequest(
+                base.tenantId(),
+                base.brandId(),
+                base.locationId(),
+                base.orderId(),
+                base.planId(),
+                base.orderReference(),
+                base.plan(),
+                base.mode(),
+                base.distanceMeters(),
+                base.pickup(),
+                base.dropoff(),
+                base.prepaid(),
+                base.itemValueMinor(),
+                base.currency(),
+                base.customerDeliveryFeeMinor(),
+                base.correlationId(),
+                DispatchDecision.of("test-rule", action, List.of()));
     }
 
     private static SourcingRequest request(SourcingMode mode) {
@@ -272,6 +379,11 @@ class DeliverySourcingServiceTests {
         /** Answered to every {@link #quote}, the default's own "nothing wired" — set to price a run for {@link #theWinningQuotesEtaIsCapturedAtBooking}. */
         private QuoteOutcome quoteOutcome = QuoteOutcome.unavailable(QUOTE_NOT_WIRED);
 
+        /** Thrown from every {@link #quote} when set, for a partner whose price endpoint is down. */
+        private @Nullable RuntimeException quoteFailure;
+
+        private int quoteCalls;
+
         RecordingBookingPort(List<PartnerOption> options) {
             this.options = options;
         }
@@ -283,6 +395,10 @@ class DeliverySourcingServiceTests {
 
         @Override
         public QuoteOutcome quote(BookingCommand command) {
+            quoteCalls++;
+            if (quoteFailure != null) {
+                throw quoteFailure;
+            }
             return quoteOutcome;
         }
 

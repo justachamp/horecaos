@@ -52,6 +52,7 @@ export interface AdmissionResponse {
   openSessionId?: string;
   tableCode?: string;
   tenantId?: string;
+  walkInAvailable?: boolean;
 }
 
 export interface AnalyticsConfigResponse {
@@ -63,6 +64,12 @@ export interface AnalyticsConfigResponse {
 export interface ApiMoney {
   amountMinor?: number;
   currency?: string;
+}
+
+export interface AppliedPromotionResponse {
+  amountMinor?: number;
+  effect?: string;
+  source?: string;
 }
 
 export interface ApplyPromoCodeRequest {
@@ -80,9 +87,11 @@ export interface BalanceResponse {
 }
 
 export interface CartLineResponse {
+  comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
+  nestedModifiers?: Array<NestedModifierResponse>;
   quantity?: number;
   variantId?: string;
 }
@@ -96,9 +105,18 @@ export interface CartResponse {
   fulfillmentMode?: string;
   lines?: Array<CartLineResponse>;
   locationId?: string;
+  paymentMethodCode?: string;
   quoteId?: string;
   status?: string;
   version?: number;
+}
+
+export interface CatchweightLineResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
 }
 
 export interface ChallengeResponse {
@@ -124,6 +142,16 @@ export interface CheckoutResponse {
   status?: string;
   version?: number;
   warnings?: Array<string>;
+}
+
+export interface ComboPickRequest {
+  componentId: string;
+  quantity?: number;
+}
+
+export interface ComboPickResponse {
+  componentId?: string;
+  quantity?: number;
 }
 
 export interface CommentPresetOption {
@@ -240,12 +268,34 @@ export interface GrantResponse {
 }
 
 export interface GuestBillResponse {
+  claimExpiresAt?: string;
+  confirmed?: boolean;
   currency?: string;
   orderIds?: Array<string>;
+  origin?: string;
   roundCount?: number;
   sessionId?: string;
   status?: string;
   totalMinor?: number;
+}
+
+export interface GuestSeatingResponse {
+  claimExpiresAt?: string;
+  confirmed?: boolean;
+  created?: boolean;
+  currency?: string;
+  orderIds?: Array<string>;
+  origin?: string;
+  roundCount?: number;
+  sessionId?: string;
+  status?: string;
+  totalMinor?: number;
+}
+
+export interface HiddenChargeResponse {
+  amountMinor?: number;
+  lineKey?: string;
+  optionId?: string;
 }
 
 export interface HostnameLookupView {
@@ -284,6 +334,30 @@ export interface MenuCategory {
   sortOrder?: number;
 }
 
+export interface MenuComboComponent {
+  amountMinor?: number;
+  componentId?: string;
+  defaultQuantity?: number;
+  name?: string;
+  orderable?: boolean;
+  productId?: string;
+  sortOrder?: number;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface MenuComboGroup {
+  allowSameComponentMultipleTimes?: boolean;
+  code?: string;
+  comboGroupId?: string;
+  components?: Array<MenuComboComponent>;
+  containerVariantId?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  name?: string;
+  sortOrder?: number;
+}
+
 export interface MenuModifierGroup {
   allowSameOptionMultipleTimes?: boolean;
   code?: string;
@@ -295,20 +369,30 @@ export interface MenuModifierGroup {
   required?: boolean;
 }
 
+export interface MenuModifierGroupPolicy {
+  maximumSelections?: number;
+  minimumSelections?: number;
+  modifierGroupId?: string;
+  required?: boolean;
+}
+
 export interface MenuModifierOption {
   amountMinor?: number;
   code?: string;
   maximumQuantity?: number;
+  name?: string;
   optionId?: string;
 }
 
 export interface MenuProduct {
   code?: string;
+  comboGroupIds?: Array<string>;
   commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
   mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
   variants?: Array<MenuVariant>;
@@ -319,6 +403,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   onSaleNow?: boolean;
   orderable?: boolean;
+  physical?: PhysicalFacts;
   remainingQuantity?: number;
   sku?: string;
   unitCode?: string;
@@ -338,7 +423,29 @@ export interface MyReferralResponse {
   redeemedAs?: ReferralStorefrontControllerRedemptionResponse;
 }
 
+export interface NestedModifierRequest {
+  optionId: string;
+  parentOptionId: string;
+}
+
+export interface NestedModifierResponse {
+  optionId?: string;
+  parentOptionId?: string;
+}
+
+export interface NutritionPer100 {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  fatGramsPer100?: number;
+  proteinGramsPer100?: number;
+}
+
 export interface OrderLineResponse {
+  autoSelectedCharges?: Array<StorefrontOrderingControllerAutoSelectedChargeResponse>;
+  autoSelectedModifiers?: Array<string>;
+  catchweight?: CatchweightLineResponse;
+  comboName?: string;
+  comboSelectionId?: string;
   finalAmountMinor?: number;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
@@ -352,9 +459,11 @@ export interface OrderLineResponse {
 }
 
 export interface OrderResponse {
+  appliedPromotions?: Array<AppliedPromotionResponse>;
   confirmedAt?: string;
   createdAt?: string;
   currency?: string;
+  discountMinor?: number;
   feeMinor?: number;
   fulfillmentMode?: string;
   lines?: Array<OrderLineResponse>;
@@ -410,6 +519,17 @@ export interface PaymentSessionRequest {
   returnUrl?: string;
 }
 
+export interface PhysicalFacts {
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  nutrition?: NutritionPer100;
+  portionSize?: number;
+  splittable?: boolean;
+}
+
 export interface PickupLocation {
   acceptsScheduledOrders?: boolean;
   addressLine?: string;
@@ -436,6 +556,7 @@ export interface PickupLocations {
 }
 
 export interface PricedCartResponse {
+  appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
   cartVersion?: number;
   contextHash?: string;
@@ -444,6 +565,8 @@ export interface PricedCartResponse {
   discountMinor?: number;
   expiresAt?: string;
   feeMinor?: number;
+  hiddenCharges?: Array<HiddenChargeResponse>;
+  promoCodeOutcome?: string;
   quoteId?: string;
   subtotalMinor?: number;
   taxMinor?: number;
@@ -466,9 +589,11 @@ export interface ProfileResponse {
 }
 
 export interface PutLineRequest {
+  comboPicks?: Array<ComboPickRequest>;
   commentPresetCodes?: Array<string>;
   customerNote?: string;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierRequest>;
   quantity?: number;
   variantId: string;
 }
@@ -494,8 +619,10 @@ export interface RegistrationResponse {
 }
 
 export interface ReorderLineResponse {
+  comboPicks?: Array<ComboPickResponse>;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierResponse>;
   originalUnitAmountMinor?: number;
   productId?: string;
   productName?: string;
@@ -527,6 +654,14 @@ export interface SaveAddressRequest {
   label?: string;
   latitude?: number;
   longitude?: number;
+}
+
+export interface SeatRequest {
+  partySize: number;
+}
+
+export interface SelectPaymentMethodRequest {
+  paymentMethodCode?: string;
 }
 
 export interface ServiceabilityView {
@@ -598,11 +733,17 @@ export interface StorefrontCustomerControllerUpdateProfileRequest {
 
 export interface StorefrontMenu {
   categories?: Array<MenuCategory>;
+  comboGroups?: Array<MenuComboGroup>;
   currency?: string;
   locale?: string;
   modifierGroups?: Array<MenuModifierGroup>;
   products?: Array<MenuProduct>;
   publicationId?: string;
+}
+
+export interface StorefrontOrderingControllerAutoSelectedChargeResponse {
+  amountMinor?: number;
+  name?: string;
 }
 
 export interface StorefrontOrderingControllerCancelRequest {
@@ -673,6 +814,7 @@ export interface TermsView {
 export interface Operations {
   "resolve_1": { method: "GET"; path: "/api/v1/storefront/channel-hostnames/{hostname}"; request: { parameters: { path: { hostname: string } } }; responses: { "200": HostnameLookupView } };
   "exchange": { method: "POST"; path: "/api/v1/storefront/dine-in/qr/token-exchanges"; request: { parameters: Record<string, never>; body: ExchangeRequest }; responses: { "200": AdmissionResponse } };
+  "seat": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions"; request: { parameters: { header: { "X-Dine-In-Token": string } }; body: SeatRequest }; responses: { "200": GuestSeatingResponse } };
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "addRound": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } }; body: AddRoundRequest }; responses: { "200": GuestBillResponse } };
@@ -687,6 +829,7 @@ export interface Operations {
   "removeLine": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "putLine": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } }; body: PutLineRequest }; responses: { "200": CartResponse } };
   "moveLocation": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/location"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: MoveLocationRequest }; responses: { "200": CartResponse } };
+  "setPaymentMethod": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: SelectPaymentMethodRequest }; responses: { "200": CartResponse } };
   "paymentMethods": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-methods"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PaymentMethodsResponse } };
   "price": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/pricing"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PricedCartResponse } };
   "removePromoCode": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };

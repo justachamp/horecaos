@@ -6,6 +6,7 @@ import {
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 
 import { I18n } from '../../core/i18n/i18n';
@@ -20,11 +21,13 @@ import {
   ConditionTypeDescriptor,
   ConditionValueKind,
   DAY_OF_WEEK_KEYS,
+  clockToMinutes,
   conditionRowIsWorkable,
   descriptorFor,
   emptyConditionRow,
+  minutesToClock,
   newConditionGroup,
-  operatorsForValueKind,
+  operatorsForDescriptor,
 } from './condition-types';
 
 /**
@@ -71,14 +74,29 @@ export class ConditionBuilder {
   /** `false` (the default): exactly one flat AND group, no group chrome — segments' own shape. `true` offers "Add group", each joined by OR. */
   readonly allowGroups = input(false, { transform: booleanAttribute });
 
+  /**
+   * Whether the last row may be removed. `false` (the default): a rule with
+   * nothing in it is nothing to save, so the last row stays. `true` for a rule
+   * where "no condition" is a meaningful rule (a promotion with no condition
+   * applies to every order); the group then renders just its add button.
+   */
+  readonly allowEmpty = input(false, { transform: booleanAttribute });
+
   /** The section caption, already translated by the host page — "Conditions" for segments, a different noun elsewhere. `null` renders none. */
   readonly heading = input<string | null>(null);
 
   protected readonly days = [1, 2, 3, 4, 5, 6, 7] as const;
 
-  /** The last row across every group may not be removed — nothing left to save otherwise. */
+  /** The most chips a searchable list renders at once; the filter box narrows the rest. */
+  protected readonly searchableChipLimit = 40;
+
+  /** What the operator has typed into each searchable row's filter box, by row id. Never emitted — it narrows the chips shown, not the rule. */
+  protected readonly chipFilters = signal<Readonly<Record<string, string>>>({});
+
+  /** The last row across every group may not be removed — nothing left to save otherwise — unless the host allows an empty rule. */
   protected readonly canRemoveAnyRow = computed(
-    () => this.groups().reduce((count, group) => count + group.rows.length, 0) > 1,
+    () =>
+      this.allowEmpty() || this.groups().reduce((count, group) => count + group.rows.length, 0) > 1,
   );
 
   protected typeLabel(type: string): string {
@@ -102,7 +120,76 @@ export class ConditionBuilder {
   }
 
   protected operatorsFor(type: string): readonly ConditionOperator[] {
-    return operatorsForValueKind(this.valueKindOf(type));
+    return operatorsForDescriptor(this.descriptor(type));
+  }
+
+  protected isSearchable(type: string): boolean {
+    return this.descriptor(type).searchable === true;
+  }
+
+  protected clockOf(minutes: string): string {
+    return minutesToClock(minutes);
+  }
+
+  protected setClock(
+    groupIndex: number,
+    rowIndex: number,
+    side: 'numericLow' | 'numericHigh',
+    clock: string,
+  ): void {
+    this.updateRow(groupIndex, rowIndex, { [side]: clockToMinutes(clock) });
+  }
+
+  protected filterOf(row: ConditionRow): string {
+    return this.chipFilters()[row.id] ?? '';
+  }
+
+  protected setFilter(row: ConditionRow, text: string): void {
+    this.chipFilters.update((current) => ({ ...current, [row.id]: text }));
+  }
+
+  /**
+   * The chips a row shows: every fixed value for an ordinary list; for a
+   * searchable one, the selected values and those matching the filter box,
+   * capped at {@link searchableChipLimit} so a thousand-dish menu does not
+   * render a thousand buttons. A selected value the catalogue no longer lists
+   * (a product since archived) still appears, under its raw value, so an
+   * operator can see it and remove it rather than carry it blind.
+   */
+  protected visibleFixedValues(row: ConditionRow): readonly ConditionFixedValue[] {
+    const all = this.fixedValuesOf(row.type) ?? [];
+    if (!this.isSearchable(row.type)) {
+      return all;
+    }
+    const selected = this.selectedFixedValues(row);
+    const known = new Set(all.map((option) => option.value));
+    const unknown = selected
+      .filter((value) => !known.has(value))
+      .map((value) => ({ value, label: value }));
+    const needle = this.filterOf(row).trim().toLocaleLowerCase();
+    const matching = all.filter(
+      (option) =>
+        selected.includes(option.value) ||
+        (needle !== '' && option.label.toLocaleLowerCase().includes(needle)),
+    );
+    const shown =
+      needle === '' ? all.filter((option) => selected.includes(option.value)) : matching;
+    return [...unknown, ...shown.slice(0, this.searchableChipLimit)];
+  }
+
+  /** How many matches a searchable row's filter hides beyond the chip cap. */
+  protected hiddenMatches(row: ConditionRow): number {
+    const needle = this.filterOf(row).trim().toLocaleLowerCase();
+    if (needle === '') {
+      return 0;
+    }
+    const all = this.fixedValuesOf(row.type) ?? [];
+    const matches = all.filter(
+      (option) =>
+        this.selectedFixedValues(row).includes(option.value) ||
+        option.label.toLocaleLowerCase().includes(needle),
+    ).length;
+    return Math.max(0, matches - this.searchableChipLimit);
   }
 
   protected rowIsWorkable(row: ConditionRow): boolean {

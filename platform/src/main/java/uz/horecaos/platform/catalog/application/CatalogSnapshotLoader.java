@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
+import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
@@ -22,14 +23,25 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.CompositeProducts;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
+import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
 
 /**
  * Assembles a whole catalog in one read, then turns it into publication items
@@ -162,7 +174,76 @@ public class CatalogSnapshotLoader {
                 priced,
                 offered,
                 loadFiscalContext(tenantId, brandId, offerings),
-                pricingWired);
+                pricingWired,
+                loadCompositeContext(tenantId, brandId, catalogId),
+                store.physicalAttributesForBrand(tenantId, brandId));
+    }
+
+    /**
+     * The composite-product inputs, read in the same transaction as the rest
+     * (ADR 0136).
+     *
+     * <p>Nothing beyond two small reads happens for a brand with no combo group and no
+     * attachment, which is every brand that has not authored either: the wider
+     * brand-wide reads exist to answer questions a brand without composite data cannot
+     * have.
+     */
+    private CatalogValidator.CompositeContext loadCompositeContext(UUID tenantId, UUID brandId, UUID catalogId) {
+        JdbcCompositeCatalogStore composite = store.composite();
+        List<ComboGroup> comboGroups = composite.comboGroupsInCatalog(tenantId, brandId, catalogId);
+        List<ModifierAttachment> attachments = composite.attachmentsForBrand(tenantId, brandId);
+        if (comboGroups.isEmpty() && attachments.isEmpty()) {
+            return CatalogValidator.CompositeContext.empty();
+        }
+
+        Map<UUID, List<ComboComponent>> componentsByGroup =
+                composite
+                        .componentsForGroups(
+                                tenantId,
+                                brandId,
+                                comboGroups.stream().map(ComboGroup::id).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(ComboComponent::comboGroupId));
+        Set<UUID> activeComponentIds = componentsByGroup.values().stream()
+                .flatMap(List::stream)
+                .filter(component -> component.status() == Status.ACTIVE)
+                .map(ComboComponent::id)
+                .collect(Collectors.toSet());
+        Set<UUID> pricedComponents = activeComponentIds.isEmpty()
+                ? Set.of()
+                : pricing.pricedComboComponents(tenantId, brandId, activeComponentIds);
+
+        List<JdbcCompositeCatalogStore.VariantFact> variantFacts = composite.variantFacts(tenantId, brandId);
+        Map<UUID, UUID> productByVariant = variantFacts.stream()
+                .collect(Collectors.toMap(
+                        JdbcCompositeCatalogStore.VariantFact::variantId,
+                        JdbcCompositeCatalogStore.VariantFact::productId));
+        Map<UUID, Status> statusByVariant = variantFacts.stream()
+                .collect(Collectors.toMap(
+                        JdbcCompositeCatalogStore.VariantFact::variantId,
+                        JdbcCompositeCatalogStore.VariantFact::status));
+
+        List<ModifierGroup> brandGroups = store.modifierGroupsForBrand(tenantId, brandId);
+        Map<UUID, ModifierGroup> groupsById =
+                brandGroups.stream().collect(Collectors.toMap(ModifierGroup::id, group -> group));
+        Map<UUID, List<ModifierOption>> optionsByGroup =
+                store
+                        .optionsForGroups(
+                                tenantId,
+                                brandId,
+                                brandGroups.stream().map(ModifierGroup::id).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(ModifierOption::modifierGroupId));
+
+        return new CatalogValidator.CompositeContext(
+                comboGroups,
+                componentsByGroup,
+                pricedComponents,
+                statusByVariant,
+                attachments,
+                productByVariant,
+                groupsById,
+                optionsByGroup);
     }
 
     /**
@@ -198,6 +279,82 @@ public class CatalogSnapshotLoader {
         return new CatalogValidator.FiscalContext(
                 byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes);
     }
+
+    /**
+     * The items one channel is published, which are the draft's items with the images
+     * that channel shows (ADR 0138 step 4, {@link ChannelMediaLayers}), and what stops
+     * them being published.
+     *
+     * <p>This is what {@code publish} writes and what the channel preview draws, so
+     * the two cannot disagree about a picture or about whether it may be shown. The
+     * channel-agnostic overload above is the draft as the snapshot lists it; a
+     * channel's items differ from it where an image belongs to a channel -- an
+     * override this channel carries, a relation naming this channel, and the absence
+     * of a relation naming another one.
+     */
+    public ChannelItems toPublicationItems(
+            CatalogValidator.Snapshot snapshot, UUID tenantId, UUID brandId, SalesChannel channel) {
+        ChannelMediaLayers.Plan plan = ChannelMediaLayers.plan(
+                channel,
+                snapshot,
+                toPublicationItems(snapshot),
+                store.mediaRelations(tenantId, brandId),
+                store.channelMediaOverrides(tenantId, brandId, channel.id()));
+        return new ChannelItems(
+                plan.items(),
+                plan.resolved(),
+                plan.overridesByEntity(),
+                unavailableOverrideImages(tenantId, plan.overridesByEntity()));
+    }
+
+    /**
+     * An override row is not a relation the universal validator walks, so a channel image
+     * that is still uploading or was withdrawn after it was chosen is caught here -- a menu
+     * pushed to an aggregator with a broken picture is the failure ADR 0138 exists to catch
+     * earlier.
+     */
+    private List<ValidationFinding> unavailableOverrideImages(
+            UUID tenantId, Map<UUID, List<MediaOverrideRow>> overridesByEntity) {
+        Map<UUID, Boolean> displayable = new java.util.HashMap<>();
+        List<ValidationFinding> findings = new ArrayList<>();
+        overridesByEntity.values().stream()
+                .flatMap(List::stream)
+                .sorted(java.util.Comparator.comparing(
+                                (MediaOverrideRow row) -> row.entityType().name())
+                        .thenComparing(MediaOverrideRow::entityId)
+                        .thenComparing(MediaOverrideRow::mediaAssetId))
+                .forEach(row -> {
+                    boolean shown = displayable.computeIfAbsent(
+                            row.mediaAssetId(),
+                            asset -> media.allDisplayable(tenantId, Set.of(new MediaAssetId(asset))));
+                    if (!shown) {
+                        findings.add(ValidationFinding.blocker(
+                                ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE,
+                                row.entityType(),
+                                row.entityId(),
+                                null,
+                                "A channel image for this item is not verified and ready to show"));
+                    }
+                });
+        return List.copyOf(findings);
+    }
+
+    /**
+     * A channel's publication items and the images they carry.
+     *
+     * @param items the draft's items with every product's {@code mediaAssetIds} as this channel
+     *     shows them
+     * @param media the images of every product, variant and category on this channel and the layer
+     *     each came from; only a product's reach a published menu
+     * @param overrides the override rows this channel carries, by entity
+     * @param findings blockers on the channel's own images, which {@code publish} adds to the
+     *     catalog's report and the preview reports beside it
+     */
+    public record ChannelItems(
+            List<PublicationItem> items,
+            Map<UUID, ResolvedMedia> media,
+            Map<UUID, List<MediaOverrideRow>> overrides,
+            List<ValidationFinding> findings) {}
 
     /**
      * Flattens a snapshot into the rows the storefront will read.
@@ -248,6 +405,7 @@ public class CatalogSnapshotLoader {
                                 // must not have to reach back into authoring — which is
                                 // mutable and may have moved on.
                                 putClassification(entry, snapshot.effectiveClassification(variant));
+                                putPhysical(entry, snapshot.physicalByVariant().get(variant.id()));
                                 entry.put("isDefault", variant.isDefault());
                                 entry.put("sortOrder", variant.sortOrder());
                                 entry.put("status", variant.status().name());
@@ -270,6 +428,17 @@ public class CatalogSnapshotLoader {
             content.put(
                     "modifierGroupIds",
                     idStrings(snapshot.modifierGroupIdsByProduct().getOrDefault(product.id(), List.of())));
+            // ADR 0136. Written only when there is something to say, so a product with no
+            // combo and no override publishes exactly the content it always has and the
+            // draft's content hash does not move for a brand that authored neither.
+            List<UUID> comboGroups = comboGroupIdsOf(snapshot, product.id());
+            if (!comboGroups.isEmpty()) {
+                content.put("comboGroupIds", idStrings(comboGroups));
+            }
+            List<Map<String, Object>> policies = modifierGroupPolicies(snapshot, product.id());
+            if (!policies.isEmpty()) {
+                content.put("modifierGroupPolicies", policies);
+            }
 
             items.add(new PublicationItem(EntityType.PRODUCT, product.id(), product.version(), content));
         }
@@ -282,6 +451,14 @@ public class CatalogSnapshotLoader {
                                 entry.put("optionId", option.id().toString());
                                 entry.put("code", option.code());
                                 putIfPresent(entry, "linkedVariantId", option.linkedVariantId());
+                                // What the customer reads on the option. Written only when the
+                                // option has a name in some locale, so an option nobody named
+                                // publishes as it always did and a client falls back to the code.
+                                Map<String, Map<String, String>> optionNames =
+                                        names(snapshot, EntityType.MODIFIER_OPTION, option.id());
+                                if (!optionNames.isEmpty()) {
+                                    entry.put("names", optionNames);
+                                }
                                 putClassification(entry, snapshot.effectiveClassification(option));
                                 entry.put("maximumQuantity", option.maximumQuantity());
                                 entry.put("sortOrder", option.sortOrder());
@@ -303,7 +480,125 @@ public class CatalogSnapshotLoader {
             items.add(new PublicationItem(EntityType.MODIFIER_GROUP, group.id(), group.version(), content));
         }
 
+        for (ComboGroup group : snapshot.composite().comboGroups()) {
+            if (group.status() != Status.ACTIVE) {
+                continue;
+            }
+            items.add(new PublicationItem(
+                    EntityType.COMBO_GROUP, group.id(), group.version(), comboGroupContent(snapshot, group)));
+        }
+
         return List.copyOf(items);
+    }
+
+    /**
+     * What a channel needs to render one combo choice screen with no reach back into
+     * authoring (ADR 0136): the range, the repeat rule, and each active component with the
+     * wording of the dish it stands for.
+     *
+     * <p>No price is written. A component's price is a {@code COMBO_COMPONENT} row on the
+     * price book that resolves at the location and channel, read when the menu is served
+     * exactly as a variant's and an option's are, so the number a customer reads is the
+     * number the quote charges. A copy frozen here would disagree with checkout the moment
+     * a price book moved, which is the one thing the quote exists to prevent.
+     */
+    private static Map<String, Object> comboGroupContent(CatalogValidator.Snapshot snapshot, ComboGroup group) {
+        CatalogValidator.CompositeContext composite = snapshot.composite();
+        List<Map<String, Object>> components =
+                composite.componentsByGroup().getOrDefault(group.id(), List.of()).stream()
+                        .filter(component -> component.status() == Status.ACTIVE)
+                        .sorted(java.util.Comparator.comparingInt(ComboComponent::sortOrder))
+                        .map(component -> {
+                            Map<String, Object> entry = new LinkedHashMap<>();
+                            entry.put("componentId", component.id().toString());
+                            entry.put(
+                                    "variantId", component.componentVariantId().toString());
+                            UUID productId = composite.productIdByVariant().get(component.componentVariantId());
+                            putIfPresent(entry, "productId", productId);
+                            entry.put("defaultQuantity", component.defaultQuantity());
+                            entry.put("sortOrder", component.sortOrder());
+                            // The dish and the size, in every locale they are named in: a
+                            // component is a real variant and its name is its product's,
+                            // with the variant's own wording after it when it has one.
+                            if (productId != null) {
+                                Map<String, Map<String, String>> productNames =
+                                        names(snapshot, EntityType.PRODUCT, productId);
+                                if (!productNames.isEmpty()) {
+                                    entry.put("productNames", productNames);
+                                }
+                            }
+                            Map<String, Map<String, String>> variantNames =
+                                    names(snapshot, EntityType.VARIANT, component.componentVariantId());
+                            if (!variantNames.isEmpty()) {
+                                entry.put("variantNames", variantNames);
+                            }
+                            return entry;
+                        })
+                        .toList();
+
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("code", group.code());
+        content.put("containerVariantId", group.containerVariantId().toString());
+        content.put("minimumSelections", group.minimumSelections());
+        content.put("maximumSelections", group.maximumSelections());
+        content.put("allowSameComponentMultipleTimes", group.allowSameComponentMultipleTimes());
+        content.put("sortOrder", group.sortOrder());
+        content.put("status", group.status().name());
+        content.put("names", names(snapshot, EntityType.COMBO_GROUP, group.id()));
+        content.put("components", components);
+        return content;
+    }
+
+    /**
+     * The active combo groups whose container is one of this product's variants, in the
+     * order the author set.
+     */
+    private static List<UUID> comboGroupIdsOf(CatalogValidator.Snapshot snapshot, UUID productId) {
+        Set<UUID> variantIds = snapshot.variantsByProduct().getOrDefault(productId, List.of()).stream()
+                .map(Variant::id)
+                .collect(Collectors.toSet());
+        return snapshot.composite().comboGroups().stream()
+                .filter(group -> group.status() == Status.ACTIVE)
+                .filter(group -> variantIds.contains(group.containerVariantId()))
+                .sorted(java.util.Comparator.comparingInt(ComboGroup::sortOrder).thenComparing(ComboGroup::code))
+                .map(ComboGroup::id)
+                .toList();
+    }
+
+    /**
+     * The selection rules this product's own use of a shared group states, for every visible
+     * attachment that overrides at least one of them (ADR 0136).
+     *
+     * <p>The three values written are the effective ones -- the override where there is
+     * one, the shared group's own where there is not -- so a client replaces the group's
+     * values outright and never has to know which was which. The shared group is not edited
+     * and is published unchanged, so a second product attaching it is unaffected.
+     */
+    private static List<Map<String, Object>> modifierGroupPolicies(CatalogValidator.Snapshot snapshot, UUID productId) {
+        Map<UUID, ModifierGroup> groups = snapshot.composite().modifierGroupsById();
+        List<Map<String, Object>> policies = new ArrayList<>();
+        for (CompositeProducts.ModifierAttachment attachment :
+                snapshot.composite().attachments()) {
+            if (attachment.ownerType() != CompositeProducts.AttachmentOwnerType.PRODUCT
+                    || !attachment.ownerId().equals(productId)
+                    || attachment.hidden()
+                    || (attachment.requiredOverride() == null
+                            && attachment.minimumOverride() == null
+                            && attachment.maximumOverride() == null)) {
+                continue;
+            }
+            ModifierGroup group = groups.get(attachment.modifierGroupId());
+            if (group == null) {
+                continue;
+            }
+            Map<String, Object> policy = new LinkedHashMap<>();
+            policy.put("groupId", group.id().toString());
+            policy.put("required", attachment.effectiveRequired(group));
+            policy.put("minimumSelections", attachment.effectiveMinimum(group));
+            policy.put("maximumSelections", attachment.effectiveMaximum(group));
+            policies.add(policy);
+        }
+        return List.copyOf(policies);
     }
 
     /**
@@ -344,6 +639,44 @@ public class CatalogSnapshotLoader {
         }
         putIfPresent(target, "alcoholByVolumeBp", fiscal.alcoholByVolumeBasisPoints());
         putIfPresent(target, "ageRestrictionYears", fiscal.ageRestrictionYears());
+    }
+
+    /**
+     * Writes the physical attributes a customer, a cart and the pricing engine read
+     * from the published menu (ADR 0137), omitting the whole block for a variant
+     * that carries none.
+     *
+     * <p>Published rather than read live for the reason the classification is: a
+     * quote has to be priced against the facts the customer was shown, and an
+     * author flipping a variant to catchweight must not reinterpret a price while
+     * the old menu is still on screen. The block is a copy, so it changes only with
+     * the next publication.
+     *
+     * <p>КБЖУ travels in a nested {@code nutrition} object, per 100 g (or per
+     * 100 mL), so the storefront scales it to a portion from the stored figures
+     * rather than from a second stored value that could drift from them.
+     */
+    private static void putPhysical(Map<String, Object> target, @Nullable PhysicalAttributes physical) {
+        if (physical == null) {
+            return;
+        }
+        Map<String, Object> block = new LinkedHashMap<>();
+        putIfPresent(block, "netWeightGrams", physical.netWeightGrams());
+        putIfPresent(block, "netVolumeMillilitres", physical.netVolumeMillilitres());
+        block.put("catchweight", physical.catchweight());
+        putIfPresent(block, "catchweightQuantumGrams", physical.catchweightQuantumGrams());
+        putIfPresent(block, "catchweightNominalGrams", physical.catchweightNominalGrams());
+        block.put("splittable", physical.splittable());
+        putIfPresent(block, "portionSize", physical.portionSize());
+        Map<String, Object> nutrition = new LinkedHashMap<>();
+        putIfPresent(nutrition, "caloriesKcalPer100", physical.caloriesKcalPer100());
+        putIfPresent(nutrition, "proteinGramsPer100", physical.proteinGramsPer100());
+        putIfPresent(nutrition, "fatGramsPer100", physical.fatGramsPer100());
+        putIfPresent(nutrition, "carbohydratesGramsPer100", physical.carbohydratesGramsPer100());
+        if (!nutrition.isEmpty()) {
+            block.put("nutrition", nutrition);
+        }
+        target.put("physical", block);
     }
 
     /**

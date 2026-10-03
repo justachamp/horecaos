@@ -61,6 +61,8 @@ class OrderCompletionAccrualTriggerTests {
     private static final UUID OTHER_TENANT = UUID.randomUUID();
 
     private static final Instant NOW = Instant.parse("2026-09-07T07:00:00Z");
+
+    private final java.util.List<uz.horecaos.platform.audit.api.AuditFact> audits = new java.util.ArrayList<>();
     private static final java.time.OffsetDateTime VALID_FROM =
             NOW.minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC);
 
@@ -134,7 +136,8 @@ class OrderCompletionAccrualTriggerTests {
         redemption = new PointsRedemptionService(store, policies, noEvents, clock);
         LoyaltyAccrualService accrual = new LoyaltyAccrualService(store, policies, noEvents, clock);
         settlements = new OrderSettlementService(settlementStore, redemption, clock);
-        trigger = new OrderCompletionAccrualTrigger(accrual, store);
+        audits.clear();
+        trigger = new OrderCompletionAccrualTrigger(accrual, store, audits::add, clock);
 
         TenantFixture fixture = seedTenancy(TENANT, "trigger-tenant", BRAND, "MAIN");
         locationId = fixture.locationId();
@@ -241,6 +244,46 @@ class OrderCompletionAccrualTriggerTests {
         // earned.
         AccountRow account = store.findAccount(TENANT, BRAND, customerId).orElseThrow();
         assertThat(account.balanceMinor()).isEqualTo(20_000L - 12_000L + 2_160L);
+    }
+
+    @Test
+    @DisplayName("ADR 0140: an order whose promotion suppresses accrual earns nothing, and the skip says why")
+    void aPromotionThatSuppressesAccrualEarnsNothingAndIsAudited() {
+        UUID orderId = orderFor(TENANT, BRAND, locationId, channelId, publicationId, customerId, 100_000L, 0L);
+        jdbc.sql("UPDATE ordering.orders SET loyalty_accrual_allowed = false WHERE id = :id")
+                .param("id", orderId)
+                .update();
+
+        transactions.executeWithoutResult(
+                status -> trigger.onOrderingEvent(completedEvent(TENANT, orderId, BRAND, locationId, 100_000L)));
+
+        assertThat(store.findAccount(TENANT, BRAND, customerId))
+                .as("no points: the double-discount offer is not also a cashback one")
+                .isEmpty();
+        assertThat(audits).singleElement().satisfies(fact -> {
+            assertThat(fact.actionCode()).isEqualTo("loyalty.accrual.skipped");
+            assertThat(fact.reason()).isEqualTo("PROMOTION_SUPPRESSES_ACCRUAL");
+            assertThat(fact.targetId()).isEqualTo(orderId);
+        });
+    }
+
+    @Test
+    @DisplayName("ADR 0140: an order whose promotion blocks redemption cannot reserve points, and says why")
+    void aPromotionThatBlocksRedemptionRefusesThePointsTender() {
+        seedSpendableBalance(customerId, 20_000L);
+        UUID orderId = orderFor(TENANT, BRAND, locationId, channelId, publicationId, customerId, 94_000L, 0L);
+        jdbc.sql("UPDATE ordering.orders SET loyalty_redemption_allowed = false WHERE id = :id")
+                .param("id", orderId)
+                .update();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> redeemAndSettle(orderId, 94_000L, 12_000L))
+                .isInstanceOfSatisfying(
+                        uz.horecaos.platform.web.api.ApiException.class,
+                        e -> assertThat(e.properties()).containsEntry("reason", "REDEMPTION_BLOCKED_BY_PROMOTION"));
+
+        assertThat(store.findAccount(TENANT, BRAND, customerId).orElseThrow().balanceMinor())
+                .as("the balance is untouched")
+                .isEqualTo(20_000L);
     }
 
     @Test

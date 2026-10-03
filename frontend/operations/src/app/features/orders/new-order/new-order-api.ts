@@ -65,6 +65,56 @@ export interface StorefrontMenu {
   readonly categories: readonly MenuCategory[];
   readonly products: readonly MenuProduct[];
   readonly modifierGroups: readonly MenuModifierGroup[];
+  /**
+   * ADR 0136: the choices every combo on this menu asks for. Absent from an older platform, which
+   * sells no combo; an empty list is a menu with none.
+   */
+  readonly comboGroups?: readonly MenuComboGroup[];
+}
+
+/**
+ * ADR 0136 — one choice a combo asks for (`StorefrontCatalogQuery.MenuComboGroup`).
+ *
+ * @property containerVariantId the combo's own variant: the sellable "Комбо №1", never priced or sold
+ *   directly — what is ordered is the components picked from its groups.
+ */
+export interface MenuComboGroup {
+  readonly comboGroupId: string;
+  readonly containerVariantId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly minimumSelections: number;
+  readonly maximumSelections: number;
+  readonly allowSameComponentMultipleTimes: boolean;
+  readonly sortOrder: number;
+  readonly components: readonly MenuComboComponent[];
+}
+
+/**
+ * One dish or drink offered inside a combo group (`MenuComboComponent`).
+ *
+ * @property componentId what a pick names, and what `amountMinor` is keyed to
+ * @property defaultQuantity units one pick puts on the order; `amountMinor` is per unit
+ * @property amountMinor null means no active price — never zero, and never free.
+ */
+export interface MenuComboComponent {
+  readonly componentId: string;
+  readonly variantId: string;
+  readonly productId: string | null;
+  readonly name: string;
+  readonly variantName: string | null;
+  readonly defaultQuantity: number;
+  readonly sortOrder: number;
+  readonly orderable: boolean;
+  readonly amountMinor: number | null;
+}
+
+/** ADR 0136: how one product uses a group it attaches where that differs from the shared group — already the effective values. */
+export interface MenuModifierGroupPolicy {
+  readonly modifierGroupId: string;
+  readonly required: boolean;
+  readonly minimumSelections: number;
+  readonly maximumSelections: number;
 }
 
 export interface MenuCategory {
@@ -86,6 +136,10 @@ export interface MenuProduct {
   readonly modifierGroupIds: readonly string[];
   /** Row 2.1b: the coded kitchen-instruction presets this product offers on a line, in display order. */
   readonly commentPresets: readonly CommentPresetOption[];
+  /** ADR 0136: the combo groups whose container is one of this product's variants; empty for every product that is no combo. */
+  readonly comboGroupIds?: readonly string[];
+  /** ADR 0136: this product's own required/min/max for an attached group, where it overrides the shared group's. */
+  readonly modifierGroupPolicies?: readonly MenuModifierGroupPolicy[];
 }
 
 /**
@@ -118,6 +172,33 @@ export interface MenuVariant {
   readonly orderable: boolean;
   readonly onSaleNow: boolean;
   readonly amountMinor: number | null;
+  /**
+   * ADR 0137: what the variant physically is, as published. Absent for a fixed unit sold whole
+   * (most of the menu). For a catchweight variant `amountMinor` is the price per
+   * `catchweightQuantumGrams`, not per unit.
+   */
+  readonly physical?: MenuPhysicalFacts | null;
+}
+
+/** `StorefrontCatalogQuery.PhysicalFacts`. */
+export interface MenuPhysicalFacts {
+  readonly netWeightGrams?: number | null;
+  readonly netVolumeMillilitres?: number | null;
+  readonly catchweight: boolean;
+  readonly catchweightQuantumGrams?: number | null;
+  readonly catchweightNominalGrams?: number | null;
+  readonly splittable: boolean;
+  /** The step the variant may be ordered in; absent means whole units only. */
+  readonly portionSize?: number | null;
+  readonly nutrition?: MenuNutrition | null;
+}
+
+/** `StorefrontCatalogQuery.PhysicalFacts.NutritionPer100` — per 100 g, or per 100 ml for a volume-measured variant. */
+export interface MenuNutrition {
+  readonly caloriesKcalPer100?: number | null;
+  readonly proteinGramsPer100?: number | null;
+  readonly fatGramsPer100?: number | null;
+  readonly carbohydratesGramsPer100?: number | null;
 }
 
 export interface MenuModifierGroup {
@@ -136,14 +217,24 @@ export interface MenuModifierOption {
   readonly code: string;
   readonly maximumQuantity: number;
   readonly amountMinor: number | null;
+  /** What the customer reads, in the language the menu was asked in; absent when nobody named the option, and the code is shown. */
+  readonly name?: string | null;
 }
 
 // ------------------------------------------------------------ §5.6 placing it
+
+/** ADR 0136: one pick inside a combo — the component and how many times it was picked. */
+export interface ComboPick {
+  readonly componentId: string;
+  readonly quantity: number;
+}
 
 export interface PlaceOrderLine {
   readonly variantId: string;
   readonly quantity: number;
   readonly modifierOptionIds: readonly string[];
+  /** ADR 0136: set exactly when `variantId` is a combo's container; `quantity` then counts combos. */
+  readonly comboPicks?: readonly ComboPick[];
   /** Row 2.1b: the coded presets the operator picked from the product's own offered subset. */
   readonly commentPresetCodes: readonly string[];
   readonly customerNote?: string | null;

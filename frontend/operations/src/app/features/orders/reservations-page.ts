@@ -540,6 +540,12 @@ export class ReservationsPage implements OnInit {
       );
       this.applyUpdate(updated);
       this.pendingAction.set(null);
+      if (updated.tableOccupiedNow === true) {
+        // Not an error: the booking is confirmed, and a party is sitting at one of its
+        // tables now -- a self-seated guest or a walk-in. The host decides what to do
+        // about it, with the room in view (ADR 0143).
+        this.actionNotice.set(this.i18n.t('reservations.notice.tableOccupiedNow'));
+      }
     } catch (error) {
       this.actionNotice.set(
         error instanceof ApiError
@@ -774,6 +780,12 @@ export class ReservationsPage implements OnInit {
     this.applyUpdate(amended);
     this.showCreateForm.set(false);
     this.editTarget.set(null);
+    if (amended.tableOccupiedNow === true) {
+      // As for a confirmation: the amendment is not refused, because the host is the one
+      // who decides what to do about a party already sitting at a table the booking now
+      // holds -- and may be moving the booking onto it knowingly (ADR 0143).
+      this.actionNotice.set(this.i18n.t('reservations.notice.tableOccupiedNowAmended'));
+    }
   }
 
   /** `formFrom`/`formTo` are `HH:mm` from a plain `<input type="time">`, resolved in the branch's own zone for {@link selectedDate}. */

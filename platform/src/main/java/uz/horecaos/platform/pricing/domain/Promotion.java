@@ -31,6 +31,7 @@ public record Promotion(
         UUID tenantId,
         UUID brandId,
         String code,
+        Kind kind,
         Scope scope,
         String stackingGroup,
         boolean exclusive,
@@ -41,12 +42,64 @@ public record Promotion(
         Instant validFrom,
         @Nullable Instant validUntil,
         int definitionVersion,
+        @Nullable Integer maximumRedemptions,
+        @Nullable Integer maximumPerCustomer,
+        LoyaltyAccrual loyaltyAccrual,
+        LoyaltyRedemption loyaltyRedemption,
         List<Condition> conditions,
         List<Action> actions) {
 
+    /**
+     * An automatic or coupon-gated discount with no usage limit and no loyalty
+     * restriction: every promotion that existed before ADR 0140.
+     */
+    public Promotion(
+            UUID promotionId,
+            UUID tenantId,
+            UUID brandId,
+            String code,
+            Scope scope,
+            String stackingGroup,
+            boolean exclusive,
+            int priority,
+            boolean requiresCoupon,
+            @Nullable Long maximumDiscountMinor,
+            String currency,
+            Instant validFrom,
+            @Nullable Instant validUntil,
+            int definitionVersion,
+            List<Condition> conditions,
+            List<Action> actions) {
+        this(
+                promotionId,
+                tenantId,
+                brandId,
+                code,
+                Kind.DISCOUNT,
+                scope,
+                stackingGroup,
+                exclusive,
+                priority,
+                requiresCoupon,
+                maximumDiscountMinor,
+                currency,
+                validFrom,
+                validUntil,
+                definitionVersion,
+                null,
+                null,
+                LoyaltyAccrual.ACCRUE,
+                LoyaltyRedemption.ALLOW,
+                conditions,
+                actions);
+    }
+
     public Promotion {
         Objects.requireNonNull(promotionId, "A promotion id is required");
+        Objects.requireNonNull(kind, "A promotion kind is required");
         Objects.requireNonNull(scope, "A promotion scope is required");
+        Objects.requireNonNull(loyaltyAccrual, "A loyalty accrual rule is required");
+        Objects.requireNonNull(loyaltyRedemption, "A loyalty redemption rule is required");
         Objects.requireNonNull(stackingGroup, "A stacking group is required");
         conditions = conditions == null ? List.of() : List.copyOf(conditions);
         actions = actions == null ? List.of() : List.copyOf(actions);
@@ -80,6 +133,7 @@ public record Promotion(
                 tenantId,
                 brandId,
                 code,
+                kind,
                 scope,
                 stackingGroup,
                 exclusive,
@@ -90,8 +144,45 @@ public record Promotion(
                 validFrom,
                 null,
                 definitionVersion,
+                maximumRedemptions,
+                maximumPerCustomer,
+                loyaltyAccrual,
+                loyaltyRedemption,
                 conditions,
                 actions);
+    }
+
+    /** Whether this promotion carries a usage limit a checkout has to claim (ADR 0140). */
+    public boolean isLimited() {
+        return maximumRedemptions != null || maximumPerCustomer != null;
+    }
+
+    /** Whether any condition of this promotion is of {@code type}. */
+    public boolean hasCondition(Condition.Type type) {
+        return conditions.stream().anyMatch(condition -> condition.type() == type);
+    }
+
+    /**
+     * Whether this rule gives something or charges something.
+     *
+     * <p>A markup is a price-plane step that runs before any discount (ADR 0140);
+     * it is never compared with a discount and exclusivity never suppresses it.
+     */
+    public enum Kind {
+        DISCOUNT,
+        MARKUP
+    }
+
+    /** ADR 0140: whether an order carrying this promotion still earns loyalty points. */
+    public enum LoyaltyAccrual {
+        ACCRUE,
+        SUPPRESS
+    }
+
+    /** ADR 0140: whether loyalty points may be spent on an order carrying this promotion. */
+    public enum LoyaltyRedemption {
+        ALLOW,
+        BLOCK
     }
 
     /**
@@ -142,7 +233,28 @@ public record Promotion(
             /** The customer has never ordered at this brand. No operands. */
             FIRST_ORDER,
             /** Operand: {@code segments}. */
-            CUSTOMER_SEGMENT
+            CUSTOMER_SEGMENT,
+            /**
+             * ADR 0140. Operand: {@code paymentMethodCodes}. The cart's selected money
+             * method, or on an amended order the method recorded on its quote; an
+             * unselected method never matches.
+             */
+            PAYMENT_METHOD,
+            /**
+             * ADR 0140. Operand: {@code channelTypes}, from {@code
+             * tenant.sales_channels.system_type}, so "all app orders" needs no code list.
+             */
+            CHANNEL_TYPE,
+            /**
+             * ADR 0140. Operands: {@code mode} (FIRST, NTH or EVERY_NTH), {@code n} and
+             * {@code basis} (BRAND or CHANNEL). A guest never matches.
+             */
+            ORDER_SEQUENCE,
+            /**
+             * ADR 0140. Operand: {@code zoneIds}, matching the resolved delivery
+             * charge's zone. A promotion never carries a polygon: ADR 0037 owns geometry.
+             */
+            DELIVERY_ZONE
         }
     }
 
@@ -176,13 +288,24 @@ public record Promotion(
             /** Operand: {@code amountMinor} or {@code basisPoints}, off the fee. */
             REDUCED_DELIVERY,
             /**
-             * Operand: {@code variantIds} and {@code quantity}.
+             * Operand: {@code variantIds} and {@code quantity}, plus (ADR 0140)
+             * {@code triggerQuantity} and {@code mode} ({@code ONCE} or
+             * {@code PER_MULTIPLE}).
              *
              * <p>Bounded, and the bound is not optional: an unbounded free item is
              * a promotion that gives away the whole cart when somebody orders
-             * enough of one thing.
+             * enough of one thing. The bound is per promotion across every line the
+             * gift variant sits on, never per line.
              */
-            FREE_ITEM
+            FREE_ITEM,
+            /**
+             * ADR 0140. Operand: {@code basisPoints}, a per-unit uplift on matching
+             * lines, rounded half-up to whole som per unit so unit price times
+             * quantity stays an integer. A markup, not a discount.
+             */
+            ITEM_PERCENTAGE_MARKUP,
+            /** ADR 0140. Operand: {@code amountMinor}, added to each matching unit. */
+            ITEM_FIXED_MARKUP
         }
     }
 
@@ -222,6 +345,14 @@ public record Promotion(
             return value instanceof Number number
                     ? java.util.Optional.of(number.longValue())
                     : java.util.Optional.empty();
+        }
+
+        public boolean optionalBoolean(String key, boolean fallback) {
+            return values.get(key) instanceof Boolean flag ? flag : fallback;
+        }
+
+        public java.util.Optional<String> optionalString(String key) {
+            return values.get(key) instanceof String text ? java.util.Optional.of(text) : java.util.Optional.empty();
         }
 
         /** Identifiers as a set, so membership is a hash lookup and not a scan. */

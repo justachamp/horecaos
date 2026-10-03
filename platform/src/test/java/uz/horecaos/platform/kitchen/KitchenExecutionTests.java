@@ -1001,6 +1001,54 @@ class KitchenExecutionTests {
     }
 
     @Test
+    @DisplayName("half portions are counted against a station's ceiling as the whole plates they occupy (ADR 0137)")
+    void halfPortionsCountAsWholePlatesAgainstTheCeiling() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        stationService.createCapacityWindow(new KitchenStationService.NewCapacityWindow(
+                TENANT,
+                BRAND,
+                branch,
+                grillStation,
+                java.time.DayOfWeek.TUESDAY.getValue(),
+                LocalTime.of(20, 0),
+                LocalTime.of(21, 0),
+                5));
+        Instant promisedAt = NOON.plus(Duration.ofHours(9));
+
+        // Three lines of a portion and a half: 4.5 plates asked of the grill, which is five
+        // plates once, summed first and rounded up once.
+        UUID first = seedConfirmedOrder("A-146", promisedAt, 25, 20, burger, burger, burger);
+        setLineQuantities(first, "1.5");
+        TicketRow firstTicket = tickets.open(TENANT, first, ReleaseMode.AUTO_ON_CONFIRM);
+        assertThat(firstTicket.releaseAt())
+                .as("five plates against a ceiling of five leaves no overage")
+                .isEqualTo(promisedAt.minus(Duration.ofMinutes(45)));
+        assertThat(store.itemsOf(TENANT, firstTicket.id()))
+                .extracting(JdbcKitchenStore.TicketItemRow::quantity)
+                .as("the ticket says 1.5 plates three times, not 2 or 1")
+                .allSatisfy(quantity -> assertThat(quantity).isEqualByComparingTo("1.5"));
+
+        // Half a portion more is still a plate somebody has to make room for: 5 committed + 1 = 6
+        // against 5, one plate of overage, twelve minutes of lead -- exactly the shift a whole plate
+        // would have caused. Truncating the half to nothing would have left the ticket unshifted.
+        UUID second = seedConfirmedOrder("A-147", promisedAt, 25, 20, burger);
+        setLineQuantities(second, "0.5");
+        TicketRow secondTicket = tickets.open(TENANT, second, ReleaseMode.AUTO_ON_CONFIRM);
+
+        assertThat(secondTicket.releaseAt()).isEqualTo(promisedAt.minus(Duration.ofMinutes(57)));
+        assertThat(store.itemsOf(TENANT, secondTicket.id()))
+                .singleElement()
+                .satisfies(item -> assertThat(item.quantity()).isEqualByComparingTo("0.5"));
+    }
+
+    private void setLineQuantities(UUID orderId, String quantity) {
+        jdbc.sql("UPDATE ordering.order_lines SET quantity = :quantity::numeric WHERE order_id = :orderId")
+                .param("quantity", quantity)
+                .param("orderId", orderId)
+                .update();
+    }
+
+    @Test
     @DisplayName("a ceiling that cannot be honoured before the promise fires the ticket anyway " + "and records why")
     void aCeilingThatCannotBeHonouredFiresAnywayAndRecordsWhy() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);

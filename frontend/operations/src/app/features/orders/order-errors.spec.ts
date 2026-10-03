@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { MessageKey } from '../../core/i18n/messages.en';
-import { accessRefusal, describeApiError } from './order-errors';
+import { accessRefusal, describeApiError, mutationErrorNotice } from './order-errors';
 
 /** Every caller passes `I18n.t`; this stands in for it without the DI overhead. */
 const translate = (key: MessageKey, values?: Readonly<Record<string, string | number>>): string => {
@@ -12,6 +12,7 @@ const translate = (key: MessageKey, values?: Readonly<Record<string, string | nu
     'error.detailed': '{detail} Reference {correlationId}.',
     'error.detailed.noReference': '{detail}',
     'error.RESOURCE_NOT_FOUND': 'That no longer exists.',
+    'orders.action.catchweightNotReconciled': 'Weigh it first.',
   };
   let template = templates[key] ?? key;
   for (const [name, value] of Object.entries(values ?? {})) {
@@ -152,5 +153,39 @@ describe('accessRefusal', () => {
     const error = new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, { status: 404 }, null);
 
     expect(accessRefusal(error)).toBeNull();
+  });
+});
+
+describe('mutationErrorNotice: CATCHWEIGHT_NOT_RECONCILED (ADR 0137)', () => {
+  const status = (value: string) => value;
+
+  it('tells the operator to weigh, and does not throw the order away by re-reading it', () => {
+    const refused = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      {
+        status: 409,
+        code: ApiErrorCode.RESOURCE_CONFLICT,
+        reason: 'CATCHWEIGHT_NOT_RECONCILED',
+        orderLineIds: ['line-1'],
+      },
+      'corr-1',
+    );
+
+    const notice = mutationErrorNotice(refused, translate, status);
+
+    expect(notice.text).toBe('Weigh it first.');
+    expect(notice.shouldReread).toBe(false);
+  });
+
+  it('leaves every other conflict as it was', () => {
+    const refused = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, code: ApiErrorCode.RESOURCE_CONFLICT, reason: 'SOMETHING_ELSE' },
+      null,
+    );
+
+    expect(mutationErrorNotice(refused, translate, status).text).not.toBe('Weigh it first.');
   });
 });

@@ -22,6 +22,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.AttachedGroup;
@@ -30,6 +31,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.ProductRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Reading back what {@link CatalogAuthoringService} wrote (ADR 0016).
@@ -237,7 +239,15 @@ public class CatalogQueryService {
                 .toList();
 
         List<AttachedModifierGroup> groupViews = groups.stream()
-                .map(g -> new AttachedModifierGroup(g.groupId(), g.sortOrder()))
+                .map(g -> new AttachedModifierGroup(
+                        g.groupId(),
+                        g.sortOrder(),
+                        g.visibility(),
+                        g.modes(),
+                        g.requiredOverride(),
+                        g.minimumOverride(),
+                        g.maximumOverride(),
+                        g.version()))
                 .toList();
 
         List<MediaRelation> mediaViews = media.stream()
@@ -627,7 +637,30 @@ public class CatalogQueryService {
         }
     }
 
-    public record AttachedModifierGroup(UUID groupId, int sortOrder) {}
+    /**
+     * A modifier group a product offers, and how (ADR 0136).
+     *
+     * @param modes null = every fulfilment mode; only a hidden attachment sets it
+     * @param requiredOverride null falls back to the shared group's own value, as
+     *                         do the two selection overrides
+     * @param version the attachment's own version, the value an overrides write's
+     *                {@code If-Match} carries
+     */
+    public record AttachedModifierGroup(
+            UUID groupId,
+            int sortOrder,
+            Visibility visibility,
+            @Nullable Set<FulfillmentMode> modes,
+            @Nullable Boolean requiredOverride,
+            @Nullable Integer minimumSelectionsOverride,
+            @Nullable Integer maximumSelectionsOverride,
+            int version) {
+
+        /** A plain visible attachment with no overrides, at its first version. */
+        public AttachedModifierGroup(UUID groupId, int sortOrder) {
+            this(groupId, sortOrder, Visibility.VISIBLE, null, null, null, null, 1);
+        }
+    }
 
     /** @param channelCode {@code 'ALL'} or a {@code tenant.sales_channels.code} override (V0223, IA 4.2f) */
     public record MediaRelation(UUID mediaAssetId, String role, int sortOrder, String channelCode) {}

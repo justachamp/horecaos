@@ -1,0 +1,197 @@
+<div class="action">
+  <label class="action__field q-caption">
+    {{ 'delivery.rules.mode' | t }}
+    <select
+      class="q-body field"
+      [value]="action().mode"
+      (change)="setMode($any($event.target).value)"
+      [attr.data-testid]="idPrefix() + '-mode'"
+    >
+      @for (mode of modes; track mode) {
+        <option [value]="mode">{{ modeLabel(mode) | t }}</option>
+      }
+    </select>
+  </label>
+
+  @if (asksPartners()) {
+    <fieldset class="action__group">
+      <legend class="q-caption">{{ 'delivery.rules.partners' | t }}</legend>
+      <p class="q-caption action__muted">{{ 'delivery.rules.partners.hint' | t }}</p>
+
+      @if (installations().length === 0) {
+        <p class="q-caption action__muted">{{ 'delivery.rules.partners.none' | t }}</p>
+      } @else {
+        <ol class="action__partners" role="list">
+          @for (id of action().partners.order; track id; let index = $index) {
+            <li class="action__partner" [attr.data-testid]="idPrefix() + '-partner-' + id">
+              <span class="q-tnum action__position">{{ index + 1 }}</span>
+              <span class="q-body-sm action__partnerName">{{ installationLabel(id) }}</span>
+              @if (!isKnown(id)) {
+                <span class="q-mono q-caption action__muted">{{ id }}</span>
+              }
+              <button
+                type="button"
+                class="action__icon"
+                [disabled]="index === 0"
+                [attr.aria-label]="'delivery.rules.partners.moveUp' | t"
+                (click)="movePartner(index, -1)"
+                [attr.data-testid]="idPrefix() + '-partner-up-' + id"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                class="action__icon"
+                [disabled]="index === action().partners.order.length - 1"
+                [attr.aria-label]="'delivery.rules.partners.moveDown' | t"
+                (click)="movePartner(index, 1)"
+                [attr.data-testid]="idPrefix() + '-partner-down-' + id"
+              >
+                ▼
+              </button>
+              <button
+                type="button"
+                class="action__icon"
+                [attr.aria-label]="'delivery.rules.partners.remove' | t"
+                (click)="removePartner(id)"
+                [attr.data-testid]="idPrefix() + '-partner-remove-' + id"
+              >
+                ✕
+              </button>
+            </li>
+          }
+        </ol>
+
+        @if (addable().length > 0) {
+          <select
+            class="q-body field"
+            [attr.aria-label]="'delivery.rules.partners.add' | t"
+            (change)="addPartner($any($event.target).value); $any($event.target).value = ''"
+            [attr.data-testid]="idPrefix() + '-partner-add'"
+          >
+            <option value="">{{ 'delivery.rules.partners.add' | t }}</option>
+            @for (installation of addable(); track installation.id) {
+              <option [value]="installation.id">{{ installation.displayName }}</option>
+            }
+          </select>
+        }
+
+        <div class="action__excludes">
+          <span class="q-caption action__muted">{{ 'delivery.rules.partners.exclude' | t }}</span>
+          @for (installation of installations(); track installation.id) {
+            <label class="action__chip q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="action().partners.exclude.includes(installation.id)"
+                [disabled]="action().partners.order.includes(installation.id)"
+                (change)="toggleExclude(installation.id)"
+                [attr.data-testid]="idPrefix() + '-exclude-' + installation.id"
+              />
+              {{ installation.displayName }}
+            </label>
+          }
+        </div>
+      }
+
+      <label class="action__field q-caption">
+        {{ 'delivery.rules.partners.selection' | t }}
+        <select
+          class="q-body field"
+          [value]="action().partners.selection"
+          (change)="setSelection($any($event.target).value)"
+          [attr.data-testid]="idPrefix() + '-selection'"
+        >
+          @for (selection of selections; track selection) {
+            <option [value]="selection">{{ selectionLabel(selection) | t }}</option>
+          }
+        </select>
+      </label>
+    </fieldset>
+  }
+
+  @if (action().mode !== 'MANUAL') {
+    <fieldset class="action__group action__group--row">
+      <legend class="q-caption">{{ 'delivery.rules.start' | t }}</legend>
+      <select
+        class="q-body field action__grow"
+        [value]="action().dispatchAt.basis"
+        (change)="setBasis($any($event.target).value)"
+        [attr.aria-label]="'delivery.rules.start' | t"
+        [attr.data-testid]="idPrefix() + '-basis'"
+      >
+        @for (basis of startBases; track basis) {
+          <option [value]="basis">{{ startLabel(basis) | t }}</option>
+        }
+      </select>
+      <label class="action__field q-caption">
+        {{ 'delivery.rules.start.offset' | t }}
+        <input
+          class="q-body field action__narrow"
+          type="number"
+          min="-60"
+          max="30"
+          [value]="offsetMinutes()"
+          (input)="setOffsetMinutes($any($event.target).value)"
+          [attr.data-testid]="idPrefix() + '-offset'"
+        />
+      </label>
+    </fieldset>
+  }
+
+  @if (asksFleet()) {
+    <fieldset class="action__group">
+      <legend class="q-caption">{{ 'delivery.rules.grouping' | t }}</legend>
+      @if (groupingAllowed() || action().grouping) {
+        <label class="action__chip q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="action().grouping !== null"
+            [disabled]="!groupingAllowed()"
+            (change)="toggleGrouping($any($event.target).checked)"
+            [attr.data-testid]="idPrefix() + '-grouping'"
+          />
+          {{ 'delivery.rules.grouping.enable' | t }}
+        </label>
+      }
+      @if (!groupingAllowed()) {
+        <p class="q-caption action__muted" [attr.data-testid]="idPrefix() + '-grouping-locked'">
+          {{ 'delivery.rules.grouping.locked' | t }}
+        </p>
+      }
+      @if (action().grouping; as grouping) {
+        <div class="action__row">
+          <label class="action__field q-caption">
+            {{ 'delivery.rules.grouping.radius' | t }}
+            <input
+              class="q-body field action__narrow"
+              type="number"
+              [value]="grouping.mergeRadiusMeters"
+              [disabled]="!groupingAllowed()"
+              (input)="setGrouping('mergeRadiusMeters', $any($event.target).value)"
+            />
+          </label>
+          <label class="action__field q-caption">
+            {{ 'delivery.rules.grouping.orders' | t }}
+            <input
+              class="q-body field action__narrow"
+              type="number"
+              [value]="grouping.maxOrdersPerRun"
+              [disabled]="!groupingAllowed()"
+              (input)="setGrouping('maxOrdersPerRun', $any($event.target).value)"
+            />
+          </label>
+          <label class="action__field q-caption">
+            {{ 'delivery.rules.grouping.wait' | t }}
+            <input
+              class="q-body field action__narrow"
+              type="number"
+              [value]="grouping.maxWaitSeconds"
+              [disabled]="!groupingAllowed()"
+              (input)="setGrouping('maxWaitSeconds', $any($event.target).value)"
+            />
+          </label>
+        </div>
+      }
+    </fieldset>
+  }
+</div>

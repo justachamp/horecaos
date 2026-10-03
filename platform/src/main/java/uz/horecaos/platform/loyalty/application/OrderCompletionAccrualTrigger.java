@@ -1,10 +1,16 @@
 package uz.horecaos.platform.loyalty.application;
 
+import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.OrderFacts;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
@@ -56,10 +62,15 @@ public class OrderCompletionAccrualTrigger {
 
     private final LoyaltyAccrualService accrual;
     private final JdbcLoyaltyStore store;
+    private final AuditRecorder audit;
+    private final Clock clock;
 
-    public OrderCompletionAccrualTrigger(LoyaltyAccrualService accrual, JdbcLoyaltyStore store) {
+    public OrderCompletionAccrualTrigger(
+            LoyaltyAccrualService accrual, JdbcLoyaltyStore store, AuditRecorder audit, Clock clock) {
         this.accrual = accrual;
         this.store = store;
+        this.audit = audit;
+        this.clock = clock;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -82,6 +93,24 @@ public class OrderCompletionAccrualTrigger {
             return;
         }
         OrderFacts order = facts.get();
+
+        // ADR 0140: a promotion the order carries can suppress accrual (a "double
+        // discount" offer is not also a cashback one). The order's flag is the most
+        // restrictive value across its applied promotions, copied from the accepted
+        // quote; accrual's base is otherwise unchanged (money settled, net of fee and
+        // redeemed portion, which is already net of promotions). The skip is recorded
+        // with its reason so a customer asking "where are my points" has an answer.
+        if (!order.accrualAllowed()) {
+            audit.record(AuditFact.of("loyalty.accrual.skipped", AuditClass.BUSINESS)
+                    .by(ActorRef.systemJob("loyalty-accrual"))
+                    .at(ResourceScope.brand(tenantId, completed.brandId()))
+                    .target("Order", completed.orderId())
+                    .because("PROMOTION_SUPPRESSES_ACCRUAL")
+                    .correlatedBy(completed.orderId().toString())
+                    .occurredAt(clock.instant())
+                    .build());
+            return;
+        }
 
         long redeemedMinor = store.settledRedemptionMinor(tenantId, completed.orderId());
         // Never negative: a redemption can never exceed the order total (ADR

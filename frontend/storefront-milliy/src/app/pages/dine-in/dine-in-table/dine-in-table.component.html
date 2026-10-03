@@ -5,8 +5,15 @@
 >
   @if (!admission()) {
     <div class="table__empty" data-testid="dine-in-no-admission">
-      <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
-      <p class="table__body">{{ 'dineIn.noAdmissionBody' | t }}</p>
+      @if (lapsedTable(); as lapsed) {
+        <p class="table__title" data-testid="dine-in-claim-lapsed">
+          {{ 'dineIn.claimLapsedTitle' | t }}
+        </p>
+        <p class="table__body">{{ 'dineIn.claimLapsedBody' | t: { code: lapsed } }}</p>
+      } @else {
+        <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
+        <p class="table__body">{{ 'dineIn.noAdmissionBody' | t }}</p>
+      }
       <a class="table__home" routerLink="/home" data-testid="dine-in-home-link">
         {{ 'dineIn.backHome' | t }}
       </a>
@@ -18,10 +25,84 @@
       </h1>
     </header>
 
-    @if (canOrder() && !isSeated()) {
+    @if (canSitHere()) {
+      <div class="table__sit" data-testid="dine-in-sit">
+        <p class="table__sit-title">{{ 'dineIn.sitHere' | t }}</p>
+        <p class="table__sit-hint">{{ 'dineIn.sitHereHint' | t }}</p>
+        <div class="table__sit-party">
+          <span class="table__sit-label">{{ 'dineIn.partySize' | t }}</span>
+          <div class="table__stepper">
+            <button
+              type="button"
+              class="table__step"
+              data-testid="dine-in-party-decrease"
+              [attr.aria-label]="'dineIn.fewerGuests' | t"
+              [disabled]="partySize() <= 1 || seating()"
+              (click)="stepParty(-1)"
+            >
+              −
+            </button>
+            <span class="table__step-count" data-testid="dine-in-party-size">{{
+              partySize()
+            }}</span>
+            <button
+              type="button"
+              class="table__step"
+              data-testid="dine-in-party-increase"
+              [attr.aria-label]="'dineIn.moreGuests' | t"
+              [disabled]="seating()"
+              (click)="stepParty(1)"
+            >
+              +
+            </button>
+          </div>
+        </div>
+        @if (seatErrorKey(); as key) {
+          <p class="table__error" role="alert" data-testid="dine-in-seat-error">
+            {{ key | t: { seats: tooManySeats() ?? 0 } }}
+          </p>
+        }
+        <button
+          type="button"
+          class="table__sit-cta"
+          data-testid="dine-in-sit-button"
+          [disabled]="seating()"
+          (click)="sitDown()"
+        >
+          @if (!session.isAuthenticated()) {
+            {{ 'dineIn.signInToSit' | t }}
+          } @else if (seating()) {
+            {{ 'dineIn.sitting' | t }}
+          } @else {
+            {{ 'dineIn.sitDown' | t }}
+          }
+        </button>
+      </div>
+    } @else if (canOrder() && !isSeated()) {
       <div class="table__notice" role="status" data-testid="dine-in-not-seated">
         {{ 'dineIn.notSeated' | t }}
       </div>
+      @if (seatErrorKey(); as key) {
+        <p class="table__error" role="alert" data-testid="dine-in-seat-error">{{ key | t }}</p>
+      }
+    }
+
+    @if (ordering() && joinedExisting()) {
+      <div class="table__notice" role="status" data-testid="dine-in-joined-existing">
+        {{ 'dineIn.joinedExisting' | t }}
+      </div>
+    }
+
+    @if (ordering()) {
+      @if (claimMinutesLeft(); as minutes) {
+        <div class="table__notice" role="status" data-testid="dine-in-claim-held">
+          {{ 'dineIn.claimHeld' | t: { minutes: minutes } }}
+        </div>
+      } @else if (claimMinutesLeft() === 0) {
+        <div class="table__notice" role="status" data-testid="dine-in-claim-ending">
+          {{ 'dineIn.claimEnding' | t }}
+        </div>
+      }
     }
 
     @if (sessionEnded()) {
@@ -94,7 +175,7 @@
             <p class="bill__requested" role="status" data-testid="dine-in-bill-requested">
               {{ 'dineIn.billRequested' | t }}
             </p>
-          } @else {
+          } @else if (!claimUnconfirmed()) {
             <button
               type="button"
               class="bill__ask"
@@ -167,6 +248,18 @@
           }}</span>
           <span class="order__total" data-testid="dine-in-cart-total">{{ totalLabel() }}</span>
         </div>
+
+        @if (hiddenCharges().length > 0) {
+          <div class="order__hidden" data-testid="dine-in-hidden-charges">
+            <p class="order__hidden-title">{{ 'cart.hiddenCharge.title' | t }}</p>
+            @for (charge of hiddenCharges(); track charge.optionId) {
+              <p class="order__hidden-row" data-testid="dine-in-hidden-charge">
+                <span>{{ charge.label }}</span>
+                <span>{{ charge.amount }}</span>
+              </p>
+            }
+          </div>
+        }
 
         @if (paymentOptions().length > 1) {
           <div class="order__methods" data-testid="dine-in-payment-options">

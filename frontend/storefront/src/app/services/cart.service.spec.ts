@@ -198,6 +198,52 @@ describe('CartService (withVersion, via putLine)', () => {
   });
 });
 
+describe('CartService.selectPaymentMethod (ADR 0140)', () => {
+  it('PUTs the code to the cart with the held version, and adopts the returned cart', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 4 }));
+    const updated = baseCart({ version: 5, paymentMethodCode: 'CLICK' });
+    api.mutate.mockResolvedValue(updated);
+
+    const result = await service.selectPaymentMethod('CLICK');
+
+    expect(result).toEqual(updated);
+    expect(service.cart()).toEqual(updated);
+    expect(api.mutate).toHaveBeenCalledWith(
+      'PUT',
+      expect.stringContaining('/carts/cart-1/payment-method'),
+      expect.objectContaining({
+        body: { paymentMethodCode: 'CLICK' },
+        expectedVersion: 4,
+        idempotencyKey: expect.any(String),
+      }),
+    );
+  });
+
+  it('sends null to clear the selection', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 2, paymentMethodCode: 'CLICK' }));
+    api.mutate.mockResolvedValue(baseCart({ version: 3, paymentMethodCode: null }));
+
+    await service.selectPaymentMethod(null);
+
+    expect(api.mutate.mock.calls[0][2]?.body).toEqual({ paymentMethodCode: null });
+  });
+
+  it('retries once on STALE_VERSION, against the reloaded version', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate
+      .mockRejectedValueOnce(staleVersion(2))
+      .mockResolvedValueOnce(baseCart({ version: 3, paymentMethodCode: 'CLICK' }));
+    api.get.mockResolvedValueOnce(baseCart({ version: 2 }));
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(api.mutate.mock.calls[1][2]?.expectedVersion).toBe(2);
+  });
+});
+
 describe('CartService.bindTable (ADR 0047)', () => {
   it("puts to the cart's table sub-resource with the version and the guest token header, and no body naming a table", async () => {
     const { service, api } = setUp();
@@ -372,4 +418,58 @@ describe('modifierOptionIdsFromLineKey (inverse of lineKeyFor)', () => {
       expect(decoded).toEqual([...ids].sort());
     },
   );
+});
+
+describe('combo lines (ADR 0136)', () => {
+  const VARIANT = '3f2b8c1e-0000-4000-8000-000000000001';
+  const picks = [
+    { componentId: 'c-1', quantity: 1 },
+    { componentId: 'c-2', quantity: 2 },
+  ];
+
+  it('keys a combo line by its container and a short hash, within the sixty characters the platform allows', () => {
+    const key = lineKeyFor(VARIANT, [], picks);
+
+    expect(key.startsWith(`${VARIANT}c`)).toBe(true);
+    expect(key.length).toBeLessThanOrEqual(60);
+    expect(key).not.toContain('~');
+  });
+
+  it('gives the same combo the same key in any order, and another choice another key', () => {
+    const reordered = [...picks].reverse();
+
+    expect(lineKeyFor(VARIANT, [], reordered)).toBe(lineKeyFor(VARIANT, [], picks));
+    expect(lineKeyFor(VARIANT, [], [{ componentId: 'c-1', quantity: 1 }])).not.toBe(
+      lineKeyFor(VARIANT, [], picks),
+    );
+  });
+
+  it('leaves the key of a line with no picks exactly as it was', () => {
+    expect(lineKeyFor(VARIANT, [])).toBe(VARIANT);
+    expect(lineKeyFor(VARIANT, ['m1'])).toBe(`${VARIANT}+m1`);
+    expect(lineKeyFor(VARIANT, [], [])).toBe(VARIANT);
+  });
+
+  it('puts a combo with its picks: the container as the variant, the picks in the body, the hashed key in the path', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: VARIANT, quantity: 2, comboPicks: picks });
+
+    const [method, path, options] = api.mutate.mock.calls[0];
+    expect(method).toBe('PUT');
+    expect(path).toContain(encodeURIComponent(lineKeyFor(VARIANT, [], picks)));
+    expect(options.body).toMatchObject({ variantId: VARIANT, quantity: 2, comboPicks: picks });
+  });
+
+  it('sends no comboPicks at all for an ordinary line', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: 'v1', quantity: 1 });
+
+    expect(api.mutate.mock.calls[0][2].body).not.toHaveProperty('comboPicks');
+  });
 });

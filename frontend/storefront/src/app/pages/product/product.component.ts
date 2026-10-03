@@ -10,10 +10,21 @@ import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import type {
   MenuItem,
+  MenuItemComboGroup,
   MenuItemCommentPreset,
   MenuItemModifierGroup,
   MenuItemVariant,
 } from '../../types/home.types';
+import { ComboChoicesComponent } from '../../shared/combo-choices/combo-choices.component';
+import {
+  type ComboPickWire,
+  type ComboPicks,
+  canBeSatisfied,
+  comboUnitAmountMinor,
+  comboValid,
+  picksOnTheWire,
+  samePicks,
+} from '../../utils/combo-selection';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
@@ -21,7 +32,16 @@ import { NavigationHistoryService } from '../../services/navigation-history.serv
 import { FEATURES } from '../../core/config/features';
 import { Session } from '../../core/auth/session';
 import { EcommerceItem, pushEcommerceEvent } from '../../core/analytics/ecommerce-events';
+import type { CartResponseItem } from '../../types/cart.types';
 import { presetLabelFor } from '../../utils/preset-label';
+import { PhysicalFactsComponent } from '../../shared/physical-facts/physical-facts.component';
+import {
+  formatQuantity,
+  initialQuantity,
+  portionStep,
+  unitPriceMinor,
+  type PhysicalFacts,
+} from '../../utils/physical';
 
 /** Matches `CartOrderStatusComponent`'s own fallback -- the storefront's launch scope is UZS-only. */
 const FALLBACK_CURRENCY = 'UZS';
@@ -39,6 +59,13 @@ export interface ProductVariantDisplay {
   onSaleNow: boolean;
   /** Rows 4.4c/4.4d: a low remaining count, or null for the ordinary case. See `MenuItemVariant`'s own doc. */
   remainingQuantity: number | null;
+  /** ADR 0137: the variant's weight, portions, weighed pricing and КБЖУ; null for a fixed unit sold whole. */
+  physical: PhysicalFacts | null;
+  /**
+   * What the add button reads: the price, or for a variant sold by weight an estimate for one unit
+   * at its nominal weight (its price row is per quantum, which is not what a unit costs).
+   */
+  priceLabel: string;
 }
 
 export interface ProductDisplay {
@@ -64,6 +91,10 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
       price: v.price,
       onSaleNow: v.onSaleNow,
       remainingQuantity: v.remainingQuantity,
+      physical: v.physical ?? null,
+      priceLabel: v.physical?.catchweight
+        ? `≈ ${formatPriceFn(unitPriceMinor(v.price, v.physical))}`
+        : formatPriceFn(v.price),
     }));
   return {
     id: item.id,
@@ -74,6 +105,24 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
     badge,
     variants,
   };
+}
+
+/** The cart line for one variant with exactly this modifier selection and these combo picks. */
+function lineMatches(
+  line: {
+    variant_id: string;
+    modifierOptionIds: readonly string[];
+    comboPicks?: readonly ComboPickWire[];
+  },
+  variantId: string,
+  selection: readonly string[],
+  picks: readonly ComboPickWire[],
+): boolean {
+  return (
+    line.variant_id === variantId &&
+    sameOptionIds(line.modifierOptionIds, selection) &&
+    samePicks(line.comboPicks ?? [], picks)
+  );
 }
 
 /** Sorted-value comparison; the order a customer picked options in never matters. */
@@ -87,7 +136,15 @@ function sameOptionIds(a: readonly string[], b: readonly string[]): boolean {
 @Component({
   selector: 'app-product',
   standalone: true,
-  imports: [CommonModule, RouterLink, FoodCarouselComponent, CartHintBadgeComponent, TranslatePipe],
+  imports: [
+    CommonModule,
+    RouterLink,
+    FoodCarouselComponent,
+    CartHintBadgeComponent,
+    ComboChoicesComponent,
+    PhysicalFactsComponent,
+    TranslatePipe,
+  ],
   templateUrl: './product.component.html',
   styleUrl: './product.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -140,9 +197,40 @@ export class ProductComponent {
   /** True when the product has no orderable variant at all -- the sole-variant bottom bar's add button must disable rather than silently no-op. */
   readonly noOrderableVariant = computed(() => this.variantId() === null);
 
-  /** The modifier groups this product offers (add-ons, sizes-of-topping, and so on). */
-  readonly modifierGroups = computed<MenuItemModifierGroup[]>(
-    () => this.rawItem()?.modifierGroups ?? [],
+  /**
+   * ADR 0136: the choices this product's combo asks for, empty when it is no combo. A combo's own
+   * variant is never priced or sold on its own: what the customer adds is the components picked here.
+   */
+  readonly comboGroups = computed<MenuItemComboGroup[]>(() => this.rawItem()?.comboGroups ?? []);
+
+  readonly isCombo = computed(() => this.comboGroups().length > 0);
+
+  /** A group that no orderable component can fill makes the whole combo unorderable for now. */
+  readonly comboUnavailable = computed(() => this.comboGroups().some((g) => !canBeSatisfied(g)));
+
+  /** componentId -> how many times it was picked. */
+  readonly comboPicks = signal<ComboPicks>({});
+
+  /** Whether the customer has touched the combo, so its hint names the groups still short instead of greeting them with errors. */
+  readonly comboTouched = signal(false);
+
+  setComboPicks(next: ComboPicks): void {
+    this.comboPicks.set(next);
+    this.comboTouched.set(true);
+  }
+
+  /** What one combo costs with the picks so far, or null while a picked component has no price. */
+  readonly comboUnitAmount = computed(() =>
+    comboUnitAmountMinor(this.comboGroups(), this.comboPicks()),
+  );
+
+  private flattenedComboPicks(): readonly ComboPickWire[] {
+    return picksOnTheWire(this.comboGroups(), this.comboPicks());
+  }
+
+  /** The modifier groups this product offers (add-ons, sizes-of-topping, and so on); none on a combo, whose choices are its components. */
+  readonly modifierGroups = computed<MenuItemModifierGroup[]>(() =>
+    this.isCombo() ? [] : (this.rawItem()?.modifierGroups ?? []),
   );
 
   /** Row 2.1b: the coded comment presets this product offers, in the catalogue's own order. */
@@ -215,12 +303,14 @@ export class ProductComponent {
    */
   readonly modifiersValid = computed(() => {
     const selections = this.selectedOptions();
-    return this.modifierGroups().every((group) => {
+    const modifiersOk = this.modifierGroups().every((group) => {
       const count = (selections[group.id] ?? []).length;
       const min = group.required ? Math.max(group.minimumSelections, 1) : group.minimumSelections;
       const max = group.maximumSelections > 0 ? group.maximumSelections : Number.POSITIVE_INFINITY;
       return count >= min && count <= max;
     });
+    // ADR 0136: and a combo is complete only when every one of its choices is within its range.
+    return modifiersOk && (!this.isCombo() || comboValid(this.comboGroups(), this.comboPicks()));
   });
 
   /** The chosen options, flattened for the wire -- order does not matter to the platform. */
@@ -270,11 +360,8 @@ export class ProductComponent {
     const vid = this.variantId();
     if (!vid) return null;
     const selection = this.flattenedSelection();
-    return (
-      this.cartService
-        .items()
-        .find((i) => i.variant_id === vid && sameOptionIds(i.modifierOptionIds, selection)) ?? null
-    );
+    const picks = this.flattenedComboPicks();
+    return this.cartService.items().find((i) => lineMatches(i, vid, selection, picks)) ?? null;
   });
 
   /** Formatted line total (unit × qty) for bottom bar */
@@ -282,7 +369,7 @@ export class ProductComponent {
     this.translate.current();
     const line = this.cartLine();
     if (!line) return '';
-    return this.formatPrice(line.price * line.quantity);
+    return this.lineTotalText(line);
   });
 
   /** Recommendations from API populars, excluding current */
@@ -339,6 +426,8 @@ export class ProductComponent {
           // does not even exist on this one.
           this.selectedOptions.set({});
           this.selectedPresetCodes.set(new Set());
+          this.comboPicks.set({});
+          this.comboTouched.set(false);
           this.product.set(menuItemToDisplay(item, (n) => this.formatPrice(n)));
           this.loadRecommendations(item.id, item);
           this.trackViewItem(item);
@@ -387,22 +476,59 @@ export class ProductComponent {
 
   qtyForVariant(variantId: string): number {
     const selection = this.flattenedSelection();
+    const picks = this.flattenedComboPicks();
     return (
-      this.cartService
-        .items()
-        .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection))
-        ?.quantity ?? 0
+      this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks))?.quantity ??
+      0
     );
   }
 
   lineTotalForVariant(variantId: string): string {
     this.translate.current();
     const selection = this.flattenedSelection();
-    const line = this.cartService
-      .items()
-      .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
+    const picks = this.flattenedComboPicks();
+    const line = this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks));
     if (!line) return '';
-    return this.formatPrice(line.price * line.quantity);
+    return this.lineTotalText(line);
+  }
+
+  /** A line's amount, marked as an estimate when it is sold by weight (ADR 0137). */
+  private lineTotalText(line: CartResponseItem): string {
+    const amount = this.formatPrice(this.cartService.lineAmount(line));
+    return line.physical?.catchweight ? `≈ ${amount}` : amount;
+  }
+
+  private physicalOf(variantId: string): PhysicalFacts | null {
+    return (this.rawItem()?.variants ?? []).find((v) => v.id === variantId)?.physical ?? null;
+  }
+
+  /** `0,5 порц.`, `3 шт` — a quantity written as the customer's language writes it. */
+  quantityLabel(quantity: number, variantId: string): string {
+    this.translate.current();
+    const unit = this.translate.get(
+      this.physicalOf(variantId)?.splittable ? 'physical.portionsUnit' : 'common.itemsUnit',
+    );
+    return `${formatQuantity(quantity, this.langService.langId())} ${unit}`;
+  }
+
+  /**
+   * The price a variant's add button reads. A combo's container has no price: while the picks are
+   * incomplete this is the least a combo can cost, once they are complete it is what this one costs,
+   * and a combo with a pick that has no price says so rather than showing a smaller sum.
+   */
+  variantPriceLabel(variant: ProductVariantDisplay): string {
+    this.translate.current();
+    if (!this.isCombo()) {
+      // Its own label, which for a variant sold by weight is the estimate of one unit (ADR 0137).
+      return variant.priceLabel;
+    }
+    if (comboValid(this.comboGroups(), this.comboPicks())) {
+      const unit = this.comboUnitAmount();
+      return unit === null ? this.translate.get('product.comboNotPriced') : this.formatPrice(unit);
+    }
+    return this.translate.getWithParams('product.fromPrice', {
+      price: this.formatPrice(variant.price),
+    });
   }
 
   /**
@@ -433,10 +559,11 @@ export class ProductComponent {
     }
     const selection = this.flattenedSelection();
     const presetSelection = this.flattenedPresetSelection();
+    const comboPicks = this.flattenedComboPicks();
     const run = (): void => {
       const line = this.cartService
         .items()
-        .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
+        .find((i) => lineMatches(i, variantId, selection, comboPicks));
       // ADR 0106, gap-map row 10.8e: fired for both branches below -- a
       // bumped existing line and a brand-new one are the same customer
       // action, one more unit of this variant landing in the cart -- right
@@ -446,7 +573,22 @@ export class ProductComponent {
       if (line) {
         this.cartService.increaseQuantity(line);
       } else {
-        void this.cartService.add(variantId, 1, undefined, selection, presetSelection);
+        // ADR 0137: a first tap puts one whole portion in the basket, or the first quantity the
+        // cart accepts for a portion size that does not divide one. A combo's container has no
+        // physical facts, so it starts at one.
+        const quantity = initialQuantity(portionStep(this.physicalOf(variantId)));
+        if (comboPicks.length > 0) {
+          void this.cartService.add(
+            variantId,
+            quantity,
+            undefined,
+            selection,
+            presetSelection,
+            comboPicks,
+          );
+        } else {
+          void this.cartService.add(variantId, quantity, undefined, selection, presetSelection);
+        }
       }
     };
     if (!this.cartService.cartData()) {
@@ -458,9 +600,8 @@ export class ProductComponent {
 
   decreaseVariant(variantId: string): void {
     const selection = this.flattenedSelection();
-    const line = this.cartService
-      .items()
-      .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
+    const picks = this.flattenedComboPicks();
+    const line = this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks));
     if (!line || this.cartService.updating()) return;
     this.cartService.decreaseQuantity(line);
   }

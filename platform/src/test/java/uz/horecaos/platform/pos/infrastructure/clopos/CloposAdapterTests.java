@@ -211,6 +211,56 @@ class CloposAdapterTests {
     }
 
     @Test
+    @DisplayName("a half portion reaches the till as 0.5, and a whole one as the integer it always was (ADR 0137)")
+    void aFractionalQuantityReachesTheTillAsADecimal() {
+        transport
+                .enqueue(authOk())
+                .enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")))
+                .enqueue(RecordingPosTransport.object(Map.of("id", 772, "status", "PENDING")));
+
+        adapter.exportOrder(
+                context(),
+                orderWithLine(new OrderExport.Line(
+                        "41", "Lagman", new java.math.BigDecimal("0.5"), 32000L, List.of(), "0712345")));
+        adapter.exportOrder(context(), order());
+
+        var json = tools.jackson.databind.json.JsonMapper.builder().build();
+        String half = json.writeValueAsString(
+                transport.bodies().get(transport.bodies().size() - 2));
+        String whole = json.writeValueAsString(transport.bodies().getLast());
+        assertThat(half)
+                .as("the till is told half a portion, not zero and not one")
+                .contains("\"count\":0.5");
+        assertThat(whole)
+                .as("a whole quantity is written exactly as it was when quantity was an integer: 2, not 2.000")
+                .contains("\"count\":2,");
+    }
+
+    @Test
+    @DisplayName("the recovery read matches a till order that carries a fractional count")
+    void theRecoveryReadFingerprintsAFractionalCount() {
+        Map<String, Object> half = cloposOrder();
+        half.put(
+                "payload",
+                Map.of(
+                        "customer", Map.of("phone", "+998 90 123 45 67"),
+                        "products", List.of(Map.of("product_id", 41, "count", 0.5, "price", 32000))));
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.list(List.of(half)));
+        List<LineFingerprint.Line> sent =
+                List.of(new LineFingerprint.Line("41", new java.math.BigDecimal("0.5"), 32000L));
+        ExportProbe probe =
+                new ExportProbe("A-1024", "+998901234567", LineFingerprint.of(sent), sent, NOW, NOW.plusSeconds(1800));
+
+        RecoveryRead read = adapter.findExportedOrder(context(), probe);
+
+        assertThat(read.candidates())
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.fingerprintMatches())
+                        .as("0.5 sent, 0.5 read back: not intValue() = 0")
+                        .isTrue());
+    }
+
+    @Test
     @DisplayName("the correlation reference is sent even though the schema omits the field")
     void theCorrelationReferenceIsSentAnyway() {
         transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));

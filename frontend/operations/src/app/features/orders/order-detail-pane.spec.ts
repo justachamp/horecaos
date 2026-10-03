@@ -32,6 +32,7 @@ import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-po
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
+import { OrderWeighingApi } from './order-weighing-api';
 
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -170,6 +171,7 @@ function configure(options: {
   paymentsApi?: Partial<PaymentsApi>;
   newOrderApi?: Partial<NewOrderApi>;
   channelsApi?: Partial<SalesChannelsApi>;
+  weighingApi?: Partial<OrderWeighingApi>;
   router?: Partial<Router>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
@@ -255,6 +257,10 @@ function configure(options: {
         provide: SalesChannelsApi,
         useValue: options.channelsApi ?? { list: () => Promise.resolve([]) },
       },
+      // ADR 0137: only a test about the scale supplies it; the panel is not drawn without a weighed line.
+      ...(options.weighingApi
+        ? [{ provide: OrderWeighingApi, useValue: options.weighingApi }]
+        : []),
       // Row 1.2i's deep link (openPosExportMapping): every test not focused
       // on it gets a harmless no-op, the same rule the collaborators above
       // follow.
@@ -3266,5 +3272,116 @@ describe('OrderDetailPane: its extracted parts stay wired to it', () => {
       expect(message).not.toBeNull();
       expect(message?.textContent?.trim()).not.toBe('');
     });
+  });
+});
+
+describe('OrderDetailPane: lines sold by weight (ADR 0137)', () => {
+  function cakeOrder(
+    provisional: boolean,
+    version: number,
+  ): { value: OrderDetailResponse; version: number } {
+    return {
+      version,
+      value: detail({
+        summary: {
+          ...detail().summary,
+          status: 'READY',
+          version,
+          totalMinor: provisional ? 180_000 : 201_000,
+          actions: [],
+        },
+        lines: [
+          {
+            lineNumber: 1,
+            productName: 'Medovik',
+            quantity: 1,
+            finalAmountMinor: provisional ? 180_000 : 201_000,
+            modifiers: [],
+            commentPresets: [],
+            lineId: 'line-cake',
+            hasNote: false,
+            catchweight: {
+              quantumGrams: 100,
+              nominalGramsPerUnit: 1_200,
+              pricePerQuantumMinor: 15_000,
+              provisional,
+              actualWeightGrams: provisional ? null : 1_340,
+            },
+          },
+        ],
+      }),
+    };
+  }
+
+  it('offers the scale for an order that has a weighed line, scoped to this branch', async () => {
+    const capture = vi.fn(() => NEVER);
+    configure({ get: apiGet(cakeOrder(true, 3)), weighingApi: { captureActualWeight: capture } });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-weighing"]')).not.toBeNull();
+    const input = host.querySelector<HTMLInputElement>('[data-testid="order-weigh-input"]')!;
+    input.value = '1340';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="order-weigh-save"]')!.click();
+
+    expect(capture).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'line-cake', 1_340, 3);
+  });
+
+  it('does not show a scale for an order with nothing sold by weight', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-weighing"]'),
+    ).toBeNull();
+  });
+
+  it('reads the order again after a weighing, so the line, the total and the version are the corrected ones', async () => {
+    let current = cakeOrder(true, 3);
+    const get = vi.fn().mockImplementation((path: string) => {
+      if (path === ORDER_PATH) {
+        return of(current);
+      }
+      if (path === TIMELINE_PATH || path === DECISIONS_PATH) {
+        return of({ value: [], version: null });
+      }
+      return throwError(() => new Error(`unexpected path ${path}`));
+    });
+    configure({
+      get,
+      weighingApi: {
+        captureActualWeight: vi.fn(() => {
+          current = cakeOrder(false, 4);
+          return of({
+            orderId: 'order-1',
+            lineId: 'line-cake',
+            changed: true,
+            actualWeightGrams: 1_340,
+            lineFinalAmountMinor: 201_000,
+            totalMinor: 201_000,
+            deltaTotalMinor: 21_000,
+            revision: 2,
+            orderVersion: 4,
+          });
+        }),
+      },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const input = host.querySelector<HTMLInputElement>('[data-testid="order-weigh-input"]')!;
+    input.value = '1340';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="order-weigh-save"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('Version 4');
+    expect(host.querySelector('[data-testid="order-detail-line-weight"]')?.textContent).toContain(
+      'Weighed',
+    );
   });
 });

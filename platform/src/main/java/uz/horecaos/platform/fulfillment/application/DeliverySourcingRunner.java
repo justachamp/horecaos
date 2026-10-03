@@ -24,6 +24,10 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchB
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore.DispatchBranch;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore.ClaimedJob;
+import uz.horecaos.platform.telemetry.api.RealtimeSignal;
+import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.ScopeKey;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 
 /**
  * One claimed sourcing job, from the lease to the next due time (ADR 0014).
@@ -64,6 +68,7 @@ public class DeliverySourcingRunner {
     private final JdbcDeliveryPlanStore plans;
     private final JdbcSourcingJobStore jobs;
     private final JdbcDispatchBranchStore branches;
+    private final RealtimeSignalPublisher realtime;
     private final Clock clock;
     private final Duration initialBackoff;
     private final Duration maxBackoff;
@@ -76,6 +81,7 @@ public class DeliverySourcingRunner {
             JdbcDeliveryPlanStore plans,
             JdbcSourcingJobStore jobs,
             JdbcDispatchBranchStore branches,
+            RealtimeSignalPublisher realtime,
             Clock clock,
             @Value("${horecaos.fulfillment.sourcing.initial-backoff:5s}") Duration initialBackoff,
             @Value("${horecaos.fulfillment.sourcing.max-backoff:2m}") Duration maxBackoff,
@@ -93,6 +99,7 @@ public class DeliverySourcingRunner {
         this.plans = plans;
         this.jobs = jobs;
         this.branches = branches;
+        this.realtime = realtime;
         this.clock = clock;
         this.initialBackoff = initialBackoff;
         this.maxBackoff = maxBackoff;
@@ -127,6 +134,7 @@ public class DeliverySourcingRunner {
             log.warn("Plan {} already has shipment {}; the tick that won it did not finish", plan.id(), shipment.get());
             plans.settle(plan.tenantId(), plan.id(), PlanStatus.ASSIGNED, now);
             jobs.complete(job.jobId(), job.leaseToken(), now);
+            signalDispatchBoardChanged(plan, now);
             return Optional.empty();
         }
 
@@ -151,7 +159,38 @@ public class DeliverySourcingRunner {
 
         DeliverySourcingService.Outcome outcome = sourcing.source(request(plan, order.get(), branch.get()), progress);
 
-        return Optional.of(settle(job, plan, outcome, now));
+        SourcingDecision decision = settle(job, plan, outcome, now);
+        // ADR 0045: the dispatch board hears about automated sourcing too. Until now only an
+        // operator's own assign or unassign produced a signal, so a plan the scheduler offered,
+        // booked or escalated was visible to a board only on its next ten-second poll.
+        signalDispatchBoardChanged(plan, now);
+        return Optional.of(decision);
+    }
+
+    /**
+     * Publishes the {@code DISPATCH_BOARD} signal for one plan after its tick has settled.
+     *
+     * <p>Fire and forget, like every ADR 0045 signal: it never fails a sourcing tick, and a signal
+     * that is lost costs the board one poll interval, not a delivery. The version is re-read so the
+     * signal carries the plan as the tick left it, which is what lets a board discard a signal older
+     * than the card it already shows.
+     */
+    private void signalDispatchBoardChanged(DeliveryPlan plan, Instant now) {
+        try {
+            int version = plans.find(plan.tenantId(), plan.id())
+                    .map(DeliveryPlan::version)
+                    .orElse(plan.version());
+            realtime.publish(RealtimeSignal.of(
+                    plan.tenantId(),
+                    StreamChannel.DISPATCH_BOARD,
+                    ScopeKey.location(plan.locationId()),
+                    "DeliveryPlan",
+                    plan.id(),
+                    (long) version,
+                    now));
+        } catch (RuntimeException failure) {
+            log.warn("The dispatch board signal for plan {} could not be published", plan.id(), failure);
+        }
     }
 
     // ------------------------------------------------------- what happens next
@@ -255,6 +294,7 @@ public class DeliverySourcingRunner {
         plans.settle(plan.tenantId(), plan.id(), PlanStatus.MANUAL_ACTION_REQUIRED, now);
         jobs.abandon(job.jobId(), job.leaseToken(), reason, now);
         log.error("Plan {} cannot be sourced automatically: {}", plan.id(), reason);
+        signalDispatchBoardChanged(plan, now);
         return new SourcingDecision.EscalateToOperations(reason);
     }
 
@@ -307,6 +347,10 @@ public class DeliverySourcingRunner {
                 // The plan id, not a request id: every log line and every provider
                 // call for this order correlates on the one thing that identifies
                 // the sourcing effort and names nobody.
-                plan.id().toString());
+                plan.id().toString(),
+                // What the dispatch rules decided when the plan was created (ADR 0142). Read
+                // back from the plan, never re-evaluated: an edit to a rule must not change
+                // what happens to an order already in flight.
+                plan.dispatch());
     }
 }

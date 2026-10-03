@@ -29,6 +29,59 @@
   border: 1px solid var(--q-hairline);
 }
 
+.identity__avatar--photo {
+  object-fit: cover;
+}
+
+.identity__avatar--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--q-ink-muted);
+  font-weight: 600;
+}
+
+.identity__reference {
+  margin: 0 0 6px;
+  color: var(--q-ink-muted);
+}
+
+.notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+}
+
+/* Employment ended but a job is still active: the one thing on this card that cannot wait. */
+.drift {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--q-error);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.drift p {
+  margin: 0;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.hint {
+  color: var(--q-ink-muted);
+}
+
 .identity__since {
   margin-left: 8px;
   color: var(--q-ink-muted);

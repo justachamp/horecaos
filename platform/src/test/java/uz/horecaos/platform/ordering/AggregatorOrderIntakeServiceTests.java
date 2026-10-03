@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -378,6 +379,116 @@ class AggregatorOrderIntakeServiceTests {
         var result = service.create(command);
 
         assertThat(result.replayed()).isFalse();
+    }
+
+    // ------------------------------------------------ ADR 0137: decimal quantities
+
+    @Test
+    @DisplayName("a decimal quantity reconciles and is stored as typed: 1.5 x 25,000 and 0.5 x 10,000")
+    void decimalQuantitiesReconcileAndAreStoredExactly() {
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-9101",
+                List.of(
+                        new AggregatorOrderIntakeService.Line(
+                                variantId, "Osh", new java.math.BigDecimal("1.5"), 25_000, null),
+                        new AggregatorOrderIntakeService.Line(
+                                variantId, "Salad", new java.math.BigDecimal("0.5"), 10_000, null)),
+                "UZS",
+                42_500, // 37,500 + 5,000
+                0,
+                0,
+                42_500,
+                "idem-aggregator-decimal-1",
+                "operator-subject-7",
+                null,
+                null,
+                null);
+
+        var result = service.create(command);
+
+        assertThat(result.replayed()).isFalse();
+        var rows = jdbc.sql("""
+                        SELECT quantity, unit_amount_minor, base_amount_minor, final_amount_minor
+                          FROM ordering.order_lines WHERE order_id = :id ORDER BY line_number
+                        """).param("id", result.orderId()).query().listOfRows();
+        assertThat(rows).hasSize(2);
+        assertThat((java.math.BigDecimal) rows.get(0).get("quantity")).isEqualByComparingTo("1.5");
+        assertThat(rows.get(0).get("final_amount_minor")).isEqualTo(37_500L);
+        assertThat((java.math.BigDecimal) rows.get(1).get("quantity")).isEqualByComparingTo("0.5");
+        assertThat(rows.get(1).get("final_amount_minor")).isEqualTo(5_000L);
+        assertThat(rows.get(1).get("unit_amount_minor"))
+                .as("the unit price is what the aggregator charged per whole unit")
+                .isEqualTo(10_000L);
+    }
+
+    @Test
+    @DisplayName("a line rounds once, half up, and the subtotal check and the stored row round the same way")
+    void aHalfSomIsRoundedUpByTheCheckAndTheRowAlike() {
+        // 0.5 x 33,333 = 16,666.5, which is 16,667 half up. A header typed as 16,666 is a mistake,
+        // and 16,667 is the figure the row is written with.
+        Throwable mistyped = catchThrowable(() -> service.create(decimalCommand("YE-9102", "0.5", 33_333, 16_666)));
+        assertThat(mistyped).isInstanceOf(ApiException.class);
+
+        var accepted = service.create(decimalCommand("YE-9103", "0.5", 33_333, 16_667));
+
+        assertThat(jdbc.sql("SELECT final_amount_minor FROM ordering.order_lines WHERE order_id = :id")
+                        .param("id", accepted.orderId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(16_667L);
+    }
+
+    @Test
+    @DisplayName("forgetting the fraction is a mistyped subtotal: 1.5 portions are not 1 portion")
+    void aSubtotalThatIgnoresTheFractionIsRefused() {
+        Throwable refused = catchThrowable(() -> service.create(decimalCommand("YE-9104", "1.5", 25_000, 25_000)));
+
+        assertThat(refused).isInstanceOf(ApiException.class);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders WHERE tenant_id = :tenantId")
+                        .param("tenantId", TENANT)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a quantity the column cannot hold is refused by name, not rounded by the database")
+    void aQuantityThatDoesNotFitIsRefused() {
+        assertThat(catchThrowable(() -> service.create(decimalCommand("YE-9105", "0.0005", 25_000, 13))))
+                .isInstanceOf(ApiException.class);
+        assertThat(catchThrowable(() -> service.create(decimalCommand("YE-9106", "0", 25_000, 0))))
+                .isInstanceOf(ApiException.class);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders WHERE tenant_id = :tenantId")
+                        .param("tenantId", TENANT)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    private AggregatorOrderIntakeService.Command decimalCommand(
+            String externalId, String quantity, long unitAmount, long subtotal) {
+        return new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                externalId,
+                List.of(new AggregatorOrderIntakeService.Line(
+                        variantId, "Osh", new java.math.BigDecimal(quantity), unitAmount, null)),
+                "UZS",
+                subtotal,
+                0,
+                0,
+                subtotal,
+                "idem-" + externalId,
+                "operator-subject-7",
+                null,
+                null,
+                null);
     }
 
     // ------------------------------------------------------------------ fixtures

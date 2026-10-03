@@ -65,6 +65,21 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .optional();
     }
 
+    @Override
+    public Optional<SalesChannel> byProviderInstallation(UUID tenantId, UUID installationId) {
+        List<SalesChannel> channels = jdbc.sql("SELECT " + CHANNEL_COLUMNS + """
+                FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND provider_installation_id = :installationId AND status = 'ACTIVE'
+                ORDER BY id
+                LIMIT 2
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query(JdbcSalesChannelStore::toChannel)
+                .list();
+        return channels.size() == 1 ? Optional.of(channels.get(0)) : Optional.empty();
+    }
+
     /**
      * @see SalesChannelLookup#hallChannelId(UUID)
      */

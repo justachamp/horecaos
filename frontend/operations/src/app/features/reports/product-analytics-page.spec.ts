@@ -331,6 +331,26 @@ describe('ProductAnalyticsPage', () => {
 
   // ----------------------------------------------------------------- СТОП
 
+  it('keeps the portions a product sold: 3.5 is 3,5, not rounded up to 4 (ADR 0137)', async () => {
+    await render({
+      variantSalesMock: vi
+        .fn()
+        .mockResolvedValue(
+          salesResponse([
+            variantRow({ totalQuantity: 3.5, deliveryQuantity: 2.5, pickupQuantity: 1 }),
+          ]),
+        ),
+    });
+
+    const cells = [...(fixture.nativeElement as HTMLElement).querySelectorAll('td.q-tnum')].map(
+      (cell) => cell.textContent?.trim(),
+    );
+    expect(cells).toContain('3,5');
+    expect(cells).toContain('2,5');
+  });
+
+  // ----------------------------------------------------------------- СТОП
+
   it('marks a stopped product with the СТОП badge', async () => {
     await render();
 

@@ -62,7 +62,10 @@
   but its `checkout` sends no token, so a table-bound milliy checkout should be
   refused with `TABLE_TOKEN_REQUIRED` (read from the two codebases and
   `CartCheckoutAndOrderTests#aBoundCartWithoutATokenIsRefused`; not reproduced
-  against a running stack, and not fixed by this note).
+  against a running stack, and not fixed by this note). ADR 0143 (batch 17) extends this record without superseding anything in it: a guest who
+  scans a free table's code may open the table session themselves (a claim, `V0467`),
+  where every session before it was opened by staff; the session lifecycle, the bill and the
+  rounds are unchanged, and `CLAIM_LAPSED` is a new close reason.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance

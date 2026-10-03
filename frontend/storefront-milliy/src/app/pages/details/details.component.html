@@ -43,7 +43,7 @@
                 [class.is-active]="variantId() === variant.id"
                 [class.is-off]="variant.active && !variant.onSaleNow"
                 [disabled]="!variant.active"
-                (click)="variantId.set(variant.id)"
+                (click)="selectVariant(variant.id)"
               >
                 <span class="option__name">{{ variant.name }}</span>
               </button>
@@ -70,7 +70,35 @@
           }
         }
 
-        @for (group of product.modifierGroups; track group.id) {
+        @if (isCombo()) {
+          <app-combo-choices
+            data-testid="details-combo"
+            [groups]="comboGroups()"
+            [picks]="comboPicks()"
+            [currency]="currency()"
+            [showUnmet]="comboTouched()"
+            (picksChange)="setComboPicks($event)"
+          />
+          @if (comboUnavailable()) {
+            <p class="hint hint--error" data-testid="details-combo-unavailable">
+              {{ 'combo.unavailable' | t }}
+            </p>
+          } @else if (!comboComplete()) {
+            <p class="hint" role="status" data-testid="details-combo-incomplete">
+              {{ 'combo.incomplete' | t }}
+            </p>
+          } @else if (comboUnitAmount() !== null) {
+            <p class="hint" data-testid="details-combo-total">
+              {{ 'combo.total' | t: { price: comboTotalText() } }}
+            </p>
+          }
+        }
+
+        @if (selectedVariant(); as portion) {
+          <app-physical-facts [physical]="portion.physical ?? null" [priceMinor]="portion.price" />
+        }
+
+        @for (group of modifierGroups(); track group.id) {
           <h2 class="section">
             {{ group.name }}
             @if (isMandatory(group)) {
@@ -103,7 +131,7 @@
           <button type="button" (click)="step(-1)" [attr.aria-label]="'details.decrease' | t">
             −
           </button>
-          <span class="qty__value">{{ quantity() }}</span>
+          <span class="qty__value">{{ quantityText() }}</span>
           <button type="button" (click)="step(1)" [attr.aria-label]="'details.increase' | t">
             +
           </button>

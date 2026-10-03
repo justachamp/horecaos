@@ -3,7 +3,12 @@ import { Router, provideRouter } from '@angular/router';
 import { Component, signal } from '@angular/core';
 
 import { CheckoutComponent } from './checkout.component';
-import { UiCartService } from '../../services/ui-cart.service';
+import {
+  UiCartService,
+  type HiddenChargeRow,
+  type PromotionNote,
+  type PromotionRow,
+} from '../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { AddressBookService } from '../../services/address-book.service';
 import { PaymentSessionService } from '../../services/payment-session.service';
@@ -90,11 +95,17 @@ class FakeUiCartService {
   hasDiscount = () => false;
   discountFormatted = () => "0 so'm";
   appliedPromoCode = (): string | null => null;
+  discountRows = (): PromotionRow[] => [];
+  promotionNotes = (): PromotionNote[] => [];
+  promoOutcomeKey = (): string | null => null;
   deliveryTimeDisplay = (): string | null => null;
   deliveryUnresolvedMessage = (): string | null => null;
+  hiddenCharges = (): readonly HiddenChargeRow[] => [];
+  hasProvisionalLines = (): boolean => false;
 
   load = vi.fn(async () => {});
   paymentMethods = vi.fn(async (): Promise<readonly string[]> => ['CASH']);
+  selectPaymentMethod = vi.fn(async (_code: string): Promise<void> => {});
   applyPromoCode = vi.fn(async () => true);
   removePromoCode = vi.fn(async () => {});
   applyDestination = vi.fn(async () => true);
@@ -303,6 +314,65 @@ describe('CheckoutComponent.confirm -- guards that must hold before the platform
   });
 });
 
+describe('CheckoutComponent -- the payment method is part of the price (ADR 0140)', () => {
+  it('writes the chosen method to the cart when the customer picks one, so the shown total is priced with it', async () => {
+    const { fixture, cart } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['CASH', 'CLICK']);
+    });
+    expect(cart.selectPaymentMethod).not.toHaveBeenCalled();
+
+    const rows = fixture.nativeElement.querySelectorAll(
+      '.pay-row',
+    ) as NodeListOf<HTMLButtonElement>;
+    rows[1].click();
+    await fixture.whenStable();
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('writes the one method on offer without a tap, because a promotion can read it', async () => {
+    const { cart } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['CLICK']);
+    });
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('puts the method on the cart before it prices, so checkout is not refused for a method the quote was not priced with', async () => {
+    const { fixture, cart } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['CLICK']);
+    });
+    cart.selectPaymentMethod.mockClear();
+
+    (fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+    const select = cart.selectPaymentMethod.mock.invocationCallOrder[0];
+    expect(select).toBeGreaterThan(cart.applyDestination.mock.invocationCallOrder[0]);
+    expect(select).toBeLessThan(cart.priceCart.mock.invocationCallOrder[0]);
+    expect(cart.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentMethodCode: 'CLICK' }),
+    );
+  });
+
+  it('names the reason when the platform refuses the method, and never reaches checkout', async () => {
+    const { fixture, cart } = await setUp();
+    cart.selectPaymentMethod = vi.fn(async () => {
+      throw refusal('PAYMENT_METHOD_UNAVAILABLE');
+    });
+
+    (fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.paymentMethodUnavailable');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.priceCart).not.toHaveBeenCalled();
+    expect(cart.checkout).not.toHaveBeenCalled();
+  });
+});
+
 describe('CheckoutComponent -- promo code (ADR 0072)', () => {
   it('never calls applyPromoCode for a blank field', async () => {
     const { fixture, cart } = await setUp();
@@ -347,6 +417,41 @@ describe('CheckoutComponent -- promo code (ADR 0072)', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('checkout.promoExpired');
+  });
+
+  it('says why a code on the cart did not move the price, and does not claim it applied or took off a discount', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.appliedPromoCode = () => 'SMALL5';
+      cart.hasDiscount = () => true;
+      cart.discountFormatted = () => "18 000 so'm";
+      cart.promoOutcomeKey = () => 'checkout.promoOffersBetter';
+    });
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(
+      (
+        fixture.nativeElement.querySelector('[data-testid="promo-outcome"]') as HTMLElement
+      ).textContent?.trim(),
+    ).toBe('checkout.promoOffersBetter');
+    expect(text).toContain('checkout.promoCodeLabel');
+    expect(text).not.toContain('checkout.promoApplied');
+    expect(fixture.nativeElement.querySelector('.promo-applied__sub')?.textContent).not.toContain(
+      '18 000',
+    );
+  });
+
+  it('shows the applied code with its discount when the platform says it applied', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.appliedPromoCode = () => 'BIG30';
+      cart.hasDiscount = () => true;
+      cart.discountFormatted = () => "27 000 so'm";
+    });
+
+    expect(fixture.nativeElement.querySelector('[data-testid="promo-outcome"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('checkout.promoApplied');
+    expect(fixture.nativeElement.querySelector('.promo-applied__sub')?.textContent).toContain(
+      '27 000',
+    );
   });
 
   it('removing an applied code calls removePromoCode', async () => {
@@ -564,6 +669,46 @@ describe('CheckoutComponent -- a basket the platform would not price on arrival'
 
     expect(
       fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]'),
+    ).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- what the server added by itself (ADR 0136)', () => {
+  it('itemises a charge the customer never chose beside the totals, which already include it', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.hiddenCharges = () => [
+        { optionId: 'o-box', label: 'Delivery box', amountMinor: 2_000, amount: '2 000 so‘m' },
+      ];
+    });
+
+    const rows = [...fixture.nativeElement.querySelectorAll('[data-testid="hidden-charge"]')];
+    expect(rows).toHaveLength(1);
+    expect((rows[0] as HTMLElement).textContent).toContain('Delivery box');
+  });
+
+  it('draws no such block for an order the server added nothing to', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="hidden-charges"]')).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- items sold by weight (ADR 0137)', () => {
+  it('tells the customer before they pay that the total is an estimate while the basket holds a weighed item', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.hasProvisionalLines = () => true;
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
     ).toBeNull();
   });
 });

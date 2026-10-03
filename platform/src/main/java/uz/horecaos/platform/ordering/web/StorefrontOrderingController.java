@@ -4,12 +4,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -38,6 +42,8 @@ import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.pricing.api.AppliedPromotionPort;
+import uz.horecaos.platform.pricing.api.AppliedPromotions;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -101,6 +107,7 @@ public class StorefrontOrderingController {
     private final ReorderPlanService reorderPlans;
     private final CurrentCustomer currentCustomer;
     private final CurrentActor currentActor;
+    private final AppliedPromotionPort appliedPromotions;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public StorefrontOrderingController(
@@ -111,7 +118,9 @@ public class StorefrontOrderingController {
             OrderStateService orderState,
             ReorderPlanService reorderPlans,
             CurrentCustomer currentCustomer,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            AppliedPromotionPort appliedPromotions) {
+        this.appliedPromotions = appliedPromotions;
         this.carts = carts;
         this.checkout = checkout;
         this.paymentOptions = paymentOptions;
@@ -186,6 +195,16 @@ public class StorefrontOrderingController {
                     body.quantity(),
                     body.modifierOptionIds(),
                     body.commentPresetCodes(),
+                    body.comboPicks() == null
+                            ? List.of()
+                            : body.comboPicks().stream()
+                                    .map(ComboPickRequest::toPick)
+                                    .toList(),
+                    body.nestedModifiers() == null
+                            ? List.of()
+                            : body.nestedModifiers().stream()
+                                    .map(NestedModifierRequest::toNested)
+                                    .toList(),
                     body.customerNote());
             return ResponseEntity.ok(CartResponse.of(view));
         } catch (CartService.StaleCartException stale) {
@@ -363,7 +382,9 @@ public class StorefrontOrderingController {
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var priced = carts.price(tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected);
-            return ResponseEntity.ok(PricedCartResponse.of(priced));
+            return ResponseEntity.ok(PricedCartResponse.of(
+                    priced,
+                    appliedPromotions.describe(tenantId, priced.quote().quoteId(), priced.presentedCouponCode())));
         } catch (CartService.StaleCartException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (CartService.CartRefusedException refused) {
@@ -397,6 +418,36 @@ public class StorefrontOrderingController {
             long expected = AggregateVersion.requireIfMatch(request);
             var view = carts.applyPromoCode(
                     tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected, body.code());
+            return ResponseEntity.ok(CartResponse.of(view));
+        } catch (CartService.StaleCartException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CartService.CartRefusedException refused) {
+            throw refusal(refused);
+        }
+    }
+
+    @PutMapping("/carts/{cartId}/payment-method")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Select how the cart will be paid",
+            description = "ADR 0140. The method is an input to the price whenever a promotion reads it "
+                    + "(\"5% off when paying by Click\"), so it is stored on the cart before pricing, and "
+                    + "clears any attached quote the same way a line edit does. A null code clears the "
+                    + "selection, and an unselected method never earns a payment-method promotion. "
+                    + "Checkout with a different method than the cart was priced with is refused "
+                    + "PRICE_CHANGED when such a promotion exists, which is the re-quote the customer "
+                    + "app has to design around.")
+    public ResponseEntity<CartResponse> setPaymentMethod(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID cartId,
+            @Valid @RequestBody SelectPaymentMethodRequest body,
+            jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            var view = carts.setPaymentMethod(
+                    tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected, body.paymentMethodCode());
             return ResponseEntity.ok(CartResponse.of(view));
         } catch (CartService.StaleCartException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
@@ -520,7 +571,18 @@ public class StorefrontOrderingController {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
-                .body(OrderResponse.of(detail));
+                .body(OrderResponse.of(detail, describePromotions(tenantId, detail)));
+    }
+
+    /**
+     * The promotions behind the order's current revision, read from the quote that
+     * priced it: an amendment appends a revision with its own quote, while the order
+     * row keeps the checkout quote, so reading that one would describe the price the
+     * order had before it was amended. A quote that has since been pruned answers
+     * none, and the order's discount is still on the response beside it.
+     */
+    private AppliedPromotions describePromotions(UUID tenantId, OrderQueryService.OrderDetail detail) {
+        return appliedPromotions.describe(tenantId, orderQuery.currentPricingQuoteId(detail.order()), null);
     }
 
     @GetMapping("/orders")
@@ -781,15 +843,86 @@ public class StorefrontOrderingController {
 
     public record PutLineRequest(
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: a decimal, so a splittable variant can be ordered by the portion.
+            // Whether this particular variant takes a fraction is the cart's decision
+            // against its published attributes; this only bounds the number.
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets the customer
             // picked from the product's own offered subset (@Size null-safe
             // below, matching modifierOptionIds' own optional shape).
             @Size(max = 20) List<String> commentPresetCodes,
-            @Size(max = 500) String customerNote) {}
+            // ADR 0136: what the customer picked inside a combo. Present exactly when
+            // variantId is a combo's container, which is never sold on its own.
+            @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks,
+            // ADR 0136: second-level selections, each naming the first-level option whose
+            // linked variant offers the choice. One level and no more.
+            @Size(max = 20) @Nullable List<@Valid NestedModifierRequest> nestedModifiers,
+            @Size(max = 500) String customerNote) {
+
+        /** Every client that predates ADR 0136's combos and nested modifiers. */
+        public PutLineRequest(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                String customerNote) {
+            this(
+                    variantId,
+                    BigDecimal.valueOf(quantity),
+                    modifierOptionIds,
+                    commentPresetCodes,
+                    null,
+                    null,
+                    customerNote);
+        }
+    }
+
+    /**
+     * One pick inside a combo.
+     *
+     * @param componentId the combo component the customer chose (the pairing of a group
+     *                    with a variant, which is also what its price is keyed to)
+     * @param quantity    how many times; absent means once. More than once needs a group
+     *                    that allows the same component repeatedly
+     */
+    public record ComboPickRequest(
+            @NotNull UUID componentId, @Positive @Max(99) Integer quantity) {
+
+        CartService.ComboPick toPick() {
+            return new CartService.ComboPick(componentId, quantity == null ? 1 : quantity);
+        }
+    }
+
+    /**
+     * A second-level modifier selection.
+     *
+     * @param parentOptionId the first-level option the customer chose, whose linked variant
+     *                       carries the group {@code optionId} belongs to
+     * @param optionId       the option chosen from that linked variant's group
+     */
+    public record NestedModifierRequest(
+            @NotNull UUID parentOptionId, @NotNull UUID optionId) {
+
+        CartService.NestedModifier toNested() {
+            return new CartService.NestedModifier(parentOptionId, optionId);
+        }
+    }
 
     public record MoveLocationRequest(@NotNull UUID locationId) {}
+
+    /** ADR 0140. Null clears the selection; otherwise a code the cart's channel sells. */
+    public record SelectPaymentMethodRequest(
+            @Nullable @Size(max = 32) String paymentMethodCode) {}
 
     /** ADR 0072. Normalized (trimmed, upper-cased) by {@code CartService} before lookup. */
     public record ApplyPromoCodeRequest(
@@ -892,7 +1025,8 @@ public class StorefrontOrderingController {
             @Nullable String contextHash,
             Instant expiresAt,
             List<CartLineResponse> lines,
-            @Nullable String appliedPromoCode) {
+            @Nullable String appliedPromoCode,
+            @Nullable String paymentMethodCode) {
 
         // `currency` then `fulfillmentMode`, in that order, and it is worth
         // saying why a line this dull carries a comment. The two arguments were
@@ -920,9 +1054,17 @@ public class StorefrontOrderingController {
                                     line.variantId(),
                                     line.quantity(),
                                     line.commentPresetCodes(),
-                                    line.customerNoteEncrypted() != null))
+                                    line.customerNoteEncrypted() != null,
+                                    view.selectionsOf(line.lineKey()).comboPicks().stream()
+                                            .map(pick -> new ComboPickResponse(pick.componentId(), pick.quantity()))
+                                            .toList(),
+                                    view.selectionsOf(line.lineKey()).nestedModifiers().stream()
+                                            .map(one ->
+                                                    new NestedModifierResponse(one.parentOptionId(), one.optionId()))
+                                            .toList()))
                             .toList(),
-                    view.cart().appliedCouponCode());
+                    view.cart().appliedCouponCode(),
+                    view.cart().paymentMethodCode());
         }
     }
 
@@ -936,10 +1078,18 @@ public class StorefrontOrderingController {
     public record CartLineResponse(
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             // Row 2.1b: the coded presets this line currently carries.
             List<String> commentPresetCodes,
-            boolean hasCustomerNote) {}
+            boolean hasCustomerNote,
+            // ADR 0136: what was picked inside a combo, empty on every other line.
+            List<ComboPickResponse> comboPicks,
+            // ADR 0136: the second-level modifier selections, empty on most lines.
+            List<NestedModifierResponse> nestedModifiers) {}
+
+    public record ComboPickResponse(UUID componentId, int quantity) {}
+
+    public record NestedModifierResponse(UUID parentOptionId, UUID optionId) {}
 
     /**
      * The destination just set on this cart.
@@ -1003,9 +1153,15 @@ public class StorefrontOrderingController {
             long feeMinor,
             long totalMinor,
             Instant expiresAt,
-            @Nullable DeliveryChargeResponse delivery) {
+            @Nullable DeliveryChargeResponse delivery,
+            // ADR 0136: what the server added by itself for this cart's fulfilment mode -- a
+            // delivery box the customer never chose -- itemised so the total can be read
+            // against the lines. Each is already inside its line's price and the total.
+            List<HiddenChargeResponse> hiddenCharges,
+            List<AppliedPromotionResponse> appliedPromotions,
+            @Nullable String promoCodeOutcome) {
 
-        static PricedCartResponse of(CartService.PricedCart priced) {
+        static PricedCartResponse of(CartService.PricedCart priced, AppliedPromotions promotions) {
             QuoteSnapshot quote = priced.quote();
             return new PricedCartResponse(
                     priced.cartId(),
@@ -1019,9 +1175,57 @@ public class StorefrontOrderingController {
                     quote.feeMinor(),
                     quote.totalMinor(),
                     quote.expiresAt(),
-                    DeliveryChargeResponse.of(quote));
+                    DeliveryChargeResponse.of(quote),
+                    quote.adjustments().stream()
+                            .filter(adjustment -> adjustment.lineKey() != null
+                                    && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType()))
+                            .map(adjustment -> new HiddenChargeResponse(
+                                    adjustment.lineKey(), adjustment.sourceId(), adjustment.amountMinor()))
+                            .toList(),
+                    AppliedPromotionResponse.of(promotions),
+                    promotions.couponOutcome() == null
+                            ? null
+                            : promotions.couponOutcome().name());
         }
     }
+
+    /**
+     * One kind of benefit (or surcharge) the price carries, in words a customer may
+     * be shown (ADR 0140).
+     *
+     * <p>Deliberately no promotion name, code or id: the operator's name for a
+     * promotion is internal, and a customer-facing title is not yet a field of the
+     * promotion. {@code source} says whether the customer asked for it by typing a
+     * code; {@code effect} says what it did to the total.
+     *
+     * @param source      {@code AUTOMATIC} or {@code PROMO_CODE}
+     * @param effect      {@code DISCOUNT} (taken off the goods, part of {@code
+     *                    discountMinor}), {@code DELIVERY_DISCOUNT} (taken off the
+     *                    delivery charge, already in {@code feeMinor}) or {@code
+     *                    SURCHARGE} (added to the goods, already in the subtotal)
+     * @param amountMinor always positive; the direction is the effect's
+     */
+    public record AppliedPromotionResponse(String source, String effect, long amountMinor) {
+
+        static List<AppliedPromotionResponse> of(AppliedPromotions promotions) {
+            return promotions.applied().stream()
+                    .map(entry -> new AppliedPromotionResponse(
+                            entry.source().name(), entry.effect().name(), entry.amountMinor()))
+                    .toList();
+        }
+    }
+
+    /**
+     * One option the server applied to a line by itself (ADR 0136).
+     *
+     * @param lineKey the cart line it was applied to; for a combo, that line's key followed by
+     *     the component's position, which is how pricing names each component line
+     * @param optionId the modifier option, which the published menu names in the customer's
+     *     language
+     * @param amountMinor its charge for the whole line, zero when the option is free. Already
+     *     inside the line's price and the cart's total, never added on top
+     */
+    public record HiddenChargeResponse(String lineKey, UUID optionId, long amountMinor) {}
 
     /**
      * The ADR 0037 delivery charge, as far as the resolver got.
@@ -1111,15 +1315,21 @@ public class StorefrontOrderingController {
             String currency,
             long subtotalMinor,
             long taxMinor,
+            long discountMinor,
             long feeMinor,
             long totalMinor,
             int version,
             Instant createdAt,
             @Nullable Instant confirmedAt,
             List<OrderLineResponse> lines,
-            List<String> warnings) {
+            List<String> warnings,
+            List<AppliedPromotionResponse> appliedPromotions) {
 
         static OrderResponse of(OrderQueryService.OrderDetail detail) {
+            return of(detail, AppliedPromotions.none());
+        }
+
+        static OrderResponse of(OrderQueryService.OrderDetail detail, AppliedPromotions promotions) {
             var order = detail.order();
             return new OrderResponse(
                     order.orderId(),
@@ -1130,6 +1340,7 @@ public class StorefrontOrderingController {
                     order.currency(),
                     order.subtotalMinor(),
                     order.taxMinor(),
+                    order.discountMinor(),
                     order.feeMinor(),
                     order.totalMinor(),
                     order.version(),
@@ -1148,11 +1359,28 @@ public class StorefrontOrderingController {
                                     line.modifiers().stream()
                                             .map(m -> m.optionName())
                                             .toList(),
+                                    // A reorder rebuilds what the customer chose: neither the
+                                    // options the server applied nor (for a combo) the component
+                                    // lines are theirs to repeat as they stand.
                                     line.modifiers().stream()
+                                            .filter(m -> !m.autoSelected() && m.parentModifierId() == null)
                                             .map(m -> m.sourceOptionId())
-                                            .toList()))
+                                            .toList(),
+                                    line.line().comboSelectionId(),
+                                    line.line().comboName(),
+                                    line.modifiers().stream()
+                                            .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                            .map(m -> m.optionName())
+                                            .toList(),
+                                    line.modifiers().stream()
+                                            .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                            .map(m -> new AutoSelectedChargeResponse(
+                                                    m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
+                                            .toList(),
+                                    CatchweightLineResponse.of(line.line())))
                             .toList(),
-                    detail.warnings());
+                    detail.warnings(),
+                    AppliedPromotionResponse.of(promotions));
         }
     }
 
@@ -1167,7 +1395,17 @@ public class StorefrontOrderingController {
      * {@code GET /orders/{orderId}/reorder} rather than assuming they still do.
      *
      * @param modifiers the option names as bought, in publication order
-     * @param modifierOptionIds the same options by id, in the same order
+     * @param modifierOptionIds the options the customer chose, by id, first level only. An option
+     *     the server applied by itself (a hidden delivery box) and a second-level choice are in
+     *     {@code modifiers} but not here: a repeat is built from these, and the server applies
+     *     the first again by itself
+     * @param comboSelectionId ADR 0136: set on each component line of a combo, null otherwise.
+     *     The component lines of one purchase share it
+     * @param comboName the combo's name as sold, set exactly when {@code comboSelectionId} is
+     * @param autoSelectedModifiers the names, within {@code modifiers}, of the options the server
+     *     applied for this order's fulfilment mode
+     * @param autoSelectedCharges the same options with what each cost, itemised so a receipt can
+     *     show a charge the customer never chose rather than leave it inside the line's price
      */
     public record OrderLineResponse(
             int lineNumber,
@@ -1175,11 +1413,49 @@ public class StorefrontOrderingController {
             String variantName,
             UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
             long finalAmountMinor,
             List<String> modifiers,
-            List<UUID> modifierOptionIds) {}
+            List<UUID> modifierOptionIds,
+            @Nullable UUID comboSelectionId,
+            @Nullable String comboName,
+            List<String> autoSelectedModifiers,
+            List<AutoSelectedChargeResponse> autoSelectedCharges,
+            @Nullable CatchweightLineResponse catchweight) {}
+
+    /**
+     * An option the server applied to an order line, with what it cost (ADR 0136).
+     *
+     * @param amountMinor the charge for the whole line, already inside the line's final amount
+     */
+    public record AutoSelectedChargeResponse(String name, long amountMinor) {}
+
+    /**
+     * ADR 0137: present on a line sold by weight. {@code provisional} is true until the
+     * kitchen has weighed it at handover, and means {@code finalAmountMinor} was
+     * computed against {@code nominalGramsPerUnit}; the order total the customer sees
+     * then is an estimate that the weighed amount replaces.
+     */
+    public record CatchweightLineResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable CatchweightLineResponse of(JdbcOrderStore.OrderLineRow line) {
+            if (!line.catchweight()) {
+                return null;
+            }
+            return new CatchweightLineResponse(
+                    Objects.requireNonNull(line.catchweightQuantumGrams()),
+                    Objects.requireNonNull(line.catchweightNominalGrams()),
+                    Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),
+                    !line.reconciled(),
+                    line.actualWeightGrams());
+        }
+    }
 
     /**
      * ADR 0074's answer to "can this be ordered again".
@@ -1220,6 +1496,11 @@ public class StorefrontOrderingController {
      *     later
      * @param unitAmountMinor the price today, null when none resolves
      * @param originalUnitAmountMinor what was paid for it
+     * @param comboPicks ADR 0136: set on a combo, whose {@code variantId} is then its container
+     *     and whose {@code quantity} counts combos. Sent back as the cart line's {@code
+     *     comboPicks}. A combo has no price of its own to show, so its {@code unitAmountMinor}
+     *     is null and {@code originalUnitAmountMinor} is what one combo cost
+     * @param nestedModifiers the second-level selections to send back with the line
      */
     public record ReorderLineResponse(
             int lineNumber,
@@ -1227,11 +1508,13 @@ public class StorefrontOrderingController {
             @Nullable String variantName,
             @Nullable UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             String status,
             @Nullable Long unitAmountMinor,
-            long originalUnitAmountMinor) {
+            long originalUnitAmountMinor,
+            List<ComboPickResponse> comboPicks,
+            List<NestedModifierResponse> nestedModifiers) {
 
         static ReorderLineResponse of(ReorderPlanService.PlannedLine line) {
             return new ReorderLineResponse(
@@ -1244,7 +1527,13 @@ public class StorefrontOrderingController {
                     line.modifierOptionIds(),
                     line.status().name(),
                     line.unitAmountMinor(),
-                    line.originalUnitAmountMinor());
+                    line.originalUnitAmountMinor(),
+                    line.comboPicks().stream()
+                            .map(pick -> new ComboPickResponse(pick.componentId(), pick.quantity()))
+                            .toList(),
+                    line.nestedModifiers().stream()
+                            .map(one -> new NestedModifierResponse(one.parentOptionId(), one.optionId()))
+                            .toList());
         }
     }
 

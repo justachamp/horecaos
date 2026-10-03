@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,12 +33,14 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Catalog persistence (ADR 0016).
@@ -51,10 +54,51 @@ public class JdbcCatalogStore {
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
+    private final JdbcCompositeCatalogStore composite;
+    private final JdbcPhysicalAttributesStore physicalAttributes;
+    private final JdbcChannelProjectionStore channelProjections;
 
     public JdbcCatalogStore(JdbcClient jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.composite = new JdbcCompositeCatalogStore(jdbc);
+        this.physicalAttributes = new JdbcPhysicalAttributesStore(jdbc);
+        this.channelProjections = new JdbcChannelProjectionStore(jdbc);
+    }
+
+    /**
+     * Every channel image override the brand has written for one channel (ADR 0138), read with the
+     * rest of a channel's publication so {@code publish} and the preview see the same state.
+     *
+     * <p>Reached through the store the publication loader already holds, like {@link #composite()},
+     * so the loader's several callers -- and the tests that construct one by hand -- keep building
+     * it from the same four arguments.
+     */
+    public List<JdbcChannelProjectionStore.MediaOverrideRow> channelMediaOverrides(
+            UUID tenantId, UUID brandId, UUID channelId) {
+        return channelProjections.mediaOverrides(tenantId, brandId, channelId);
+    }
+
+    /**
+     * Composite products' persistence (ADR 0136): combo groups and the modifier
+     * attachments' policy.
+     *
+     * <p>Reached through the store the publication loader already holds rather than
+     * injected beside it, so the loader's several callers -- and the tests that
+     * construct one by hand -- keep building it from the same four arguments.
+     */
+    public JdbcCompositeCatalogStore composite() {
+        return composite;
+    }
+
+    /**
+     * The variants of one brand that carry ADR 0137 physical attributes, read with the
+     * rest of a publication snapshot so the validator and the published payload see
+     * the same state.
+     */
+    public Map<UUID, uz.horecaos.platform.catalog.domain.PhysicalAttributes> physicalAttributesForBrand(
+            UUID tenantId, UUID brandId) {
+        return physicalAttributes.forBrand(tenantId, brandId);
     }
 
     // ---------------------------------------------------------------- authoring
@@ -421,6 +465,55 @@ public class JdbcCatalogStore {
     }
 
     /**
+     * Copies a product's modifier attachments, policy and all, to another product
+     * (ADR 0136).
+     *
+     * <p>Visibility and overrides travel with the attachment: a duplicate that kept
+     * the group but dropped a hidden packaging policy would be a dish that quietly
+     * stops charging for its box. The copy starts at version 1, like any new row.
+     */
+    public void copyProductModifierAttachments(UUID tenantId, UUID brandId, UUID fromProductId, UUID toProductId) {
+        jdbc.sql("""
+                INSERT INTO catalog.product_modifier_groups (
+                    tenant_id, brand_id, product_id, modifier_group_id, sort_order, visibility,
+                    applicable_fulfillment_modes, required_override, minimum_selections_override,
+                    maximum_selections_override)
+                SELECT tenant_id, brand_id, :toProductId, modifier_group_id, sort_order, visibility,
+                       applicable_fulfillment_modes, required_override, minimum_selections_override,
+                       maximum_selections_override
+                FROM catalog.product_modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :fromProductId
+                ON CONFLICT (product_id, modifier_group_id) DO NOTHING
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("fromProductId", fromProductId)
+                .param("toProductId", toProductId)
+                .update();
+    }
+
+    /** {@link #copyProductModifierAttachments}, for the attachments a variant carries itself. */
+    public void copyVariantModifierAttachments(UUID tenantId, UUID brandId, UUID fromVariantId, UUID toVariantId) {
+        jdbc.sql("""
+                INSERT INTO catalog.variant_modifier_groups (
+                    tenant_id, brand_id, variant_id, modifier_group_id, sort_order, visibility,
+                    applicable_fulfillment_modes, required_override, minimum_selections_override,
+                    maximum_selections_override)
+                SELECT tenant_id, brand_id, :toVariantId, modifier_group_id, sort_order, visibility,
+                       applicable_fulfillment_modes, required_override, minimum_selections_override,
+                       maximum_selections_override
+                FROM catalog.variant_modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND variant_id = :fromVariantId
+                ON CONFLICT (variant_id, modifier_group_id) DO NOTHING
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("fromVariantId", fromVariantId)
+                .param("toVariantId", toVariantId)
+                .update();
+    }
+
+    /**
      * Whether this entity exists in this tenant and brand.
      *
      * <p>{@code catalog.translations.entity_id} is polymorphic across six tables
@@ -442,6 +535,10 @@ public class JdbcCatalogStore {
                     case VARIANT -> "SELECT 1 FROM catalog.variants";
                     case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
                     case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
+                    case COMBO_GROUP -> "SELECT 1 FROM catalog.combo_groups";
+                    // ADR 0136: a pairing is named by the variant it offers; it has no
+                    // translations of its own to write against.
+                    case COMBO_COMPONENT -> null;
                     // ADR 0038: a fee reaches a receipt as a line without being a catalog
                     // item. It has no row anywhere, and no translations, so there is
                     // nothing to resolve and nothing that may be written against it.
@@ -1664,6 +1761,7 @@ public class JdbcCatalogStore {
                        lo.status AS offering_status,
                        lo.fulfillment_modes AS fulfillment_modes,
                        last_movement.reason_code AS stop_reason_code,
+                       last_movement.source_type AS stop_source_type,
                        last_movement.occurred_at AS stop_changed_at
                 FROM catalog.variants v
                 JOIN catalog.products p
@@ -1706,7 +1804,7 @@ public class JdbcCatalogStore {
                 -- who last touched it — ix_movements_by_item (V0019) already
                 -- keys on exactly (stock_item_id, sequence_number DESC).
                 LEFT JOIN LATERAL (
-                    SELECT m.reason_code, m.occurred_at
+                    SELECT m.reason_code, m.source_type, m.occurred_at
                     FROM inventory.movements m
                     WHERE m.stock_item_id = si.id AND m.tenant_id = si.tenant_id
                       AND m.movement_type = 'AVAILABILITY_CHANGE'
@@ -1750,6 +1848,7 @@ public class JdbcCatalogStore {
                     }
                     String fulfillmentModesRaw = row.getString("fulfillment_modes");
                     String stopReasonCode = row.getString("stop_reason_code");
+                    String stopSourceType = row.getString("stop_source_type");
                     OffsetDateTime stopChangedAtRaw = row.getObject("stop_changed_at", OffsetDateTime.class);
                     return new VariantAvailabilityRow(
                             row.getObject("variant_id", UUID.class),
@@ -1759,29 +1858,34 @@ public class JdbcCatalogStore {
                             trackingMode,
                             row.getString("offering_status"),
                             fulfillmentModesRaw == null ? List.of() : List.of(fulfillmentModesRaw.split(",")),
-                            stopSourceOf(stopReasonCode),
+                            stopSourceOf(stopSourceType, stopReasonCode),
                             stopReasonCode,
-                            stopChangedAtRaw == null ? null : stopChangedAtRaw.toInstant());
+                            stopChangedAtRaw == null ? null : stopChangedAtRaw.toInstant(),
+                            List.of());
                 })
                 .list();
     }
 
     /**
-     * The gap map row 2.5b explainer's own three-way classification, off the
-     * one signal already distinguishing the two real sources today: {@code
-     * PosAvailabilityPoll}'s own fixed {@code POS_STOP_LIST} reason code
-     * (that class's own constant) against every other reason a human toggle
-     * sends, single or bulk (the console's {@code
-     * OPERATIONS_STOP_LIST_TOGGLE} and whatever an operator types on a bulk
-     * stop alike). {@code UNKNOWN} is not a fourth source; it is "never
-     * toggled since listed", which is the honest answer when no movement
-     * exists to read a source off at all.
+     * Who last touched the position, read from the movement's own {@code source_type}
+     * (ADR 0141, Phase 0) rather than parsed out of its free-text reason: {@code
+     * OPERATOR}, {@code BOT} or {@code POS}. {@code UNKNOWN} is not a source; it is
+     * "never toggled since listed", the honest answer when no movement exists to read
+     * one off at all.
+     *
+     * <p>One legacy shape is still read by its reason: before the POS poll wrote its own
+     * {@code POS} stop it toggled the position through the operator's door, so its
+     * movements carry {@code source_type = OPERATOR} and the fixed {@code POS_STOP_LIST}
+     * reason. Those rows are history and stay readable as what they were.
      */
-    private static String stopSourceOf(@Nullable String reasonCode) {
-        if (reasonCode == null) {
+    private static String stopSourceOf(@Nullable String sourceType, @Nullable String reasonCode) {
+        if (sourceType == null) {
             return "UNKNOWN";
         }
-        return "POS_STOP_LIST".equals(reasonCode) ? "POS" : "MANUAL";
+        if ("OPERATOR".equals(sourceType) && "POS_STOP_LIST".equals(reasonCode)) {
+            return "POS";
+        }
+        return sourceType;
     }
 
     /**
@@ -1812,13 +1916,30 @@ public class JdbcCatalogStore {
      */
     public VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
+        return variantAvailabilityCounts(tenantId, brandId, locationId, nameLocales, search, java.util.Set.of());
+    }
+
+    /**
+     * The badges with ADR 0141's stops subtracted: a variant a stop covers on every channel
+     * here is on stop whatever its supply says, so it leaves "available" exactly as the
+     * row's own {@code available} does. The stopped ids come from inventory through
+     * {@code StopOverlayLookup}, not from a join on a table this module does not own.
+     */
+    public VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> nameLocales,
+            @Nullable String search,
+            java.util.Set<UUID> stoppedVariantIds) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT
                     COUNT(*) AS total,
                     COUNT(*) FILTER (WHERE
-                        si.tracking_mode = 'UNTRACKED'
-                        OR (si.tracking_mode = 'BINARY' AND pos.binary_available = true)
+                        (si.tracking_mode = 'UNTRACKED'
+                         OR (si.tracking_mode = 'BINARY' AND pos.binary_available = true))
+                        AND NOT (v.id = ANY (CAST(:stoppedIds AS uuid[])))
                     ) AS available
                 FROM catalog.variants v
                 JOIN catalog.products p
@@ -1845,6 +1966,7 @@ public class JdbcCatalogStore {
                 .param("locationId", locationId)
                 .param("nameLocales", nameLocales.toArray(String[]::new))
                 .param("search", searchPattern)
+                .param("stoppedIds", stoppedVariantIds.toArray(UUID[]::new))
                 .query((row, number) -> {
                     long total = row.getLong("total");
                     long available = row.getLong("available");
@@ -1940,9 +2062,11 @@ public class JdbcCatalogStore {
     /**
      * Which modifier groups a product offers.
      *
-     * <p>Product-level only. {@code variant_modifier_groups} exists in V0016 and
-     * nothing writes it, so a variant-level read here would return an empty map
-     * on every catalog and quietly suggest the feature works.
+     * <p>Product-level, customer-facing attachments only. A {@code
+     * HIDDEN_AUTO_SELECT} attachment (ADR 0136) is a charge the quote applies
+     * server-side and is never a choice a customer is shown, so it is not a
+     * member of the list a client renders; publishing it here would put the
+     * delivery box on the storefront's option screen.
      */
     public Map<UUID, List<UUID>> modifierGroupIdsByProduct(UUID tenantId, UUID brandId, UUID catalogId) {
         return membership(jdbc.sql("""
@@ -1955,6 +2079,7 @@ public class JdbcCatalogStore {
                  AND mg.brand_id = pmg.brand_id
                 WHERE pmg.tenant_id = :tenantId AND pmg.brand_id = :brandId
                   AND link.catalog_id = :catalogId
+                  AND pmg.visibility = 'VISIBLE'
                 ORDER BY pmg.sort_order
                 """)
                 .param("tenantId", tenantId)
@@ -1962,18 +2087,43 @@ public class JdbcCatalogStore {
                 .param("catalogId", catalogId));
     }
 
-    /** Which modifier groups one product has attached, with their sort order. */
+    /**
+     * Which modifier groups one product has attached, with their sort order and
+     * (ADR 0136) the visibility and overrides each attachment carries.
+     */
     public List<AttachedGroup> modifierGroupsForProduct(UUID tenantId, UUID brandId, UUID productId) {
         return jdbc.sql("""
-                SELECT modifier_group_id, sort_order FROM catalog.product_modifier_groups
+                SELECT modifier_group_id, sort_order, visibility, applicable_fulfillment_modes,
+                       required_override, minimum_selections_override, maximum_selections_override, version
+                FROM catalog.product_modifier_groups
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
                 ORDER BY sort_order
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("productId", productId)
-                .query((row, number) ->
-                        new AttachedGroup(row.getObject("modifier_group_id", UUID.class), row.getInt("sort_order")))
+                .query((row, number) -> {
+                    java.sql.Array modes = row.getArray("applicable_fulfillment_modes");
+                    Set<FulfillmentMode> parsed = null;
+                    if (modes != null) {
+                        parsed = java.util.EnumSet.noneOf(FulfillmentMode.class);
+                        for (Object element : (Object[]) modes.getArray()) {
+                            parsed.add(FulfillmentMode.valueOf(String.valueOf(element)));
+                        }
+                    }
+                    Object required = row.getObject("required_override");
+                    Object minimum = row.getObject("minimum_selections_override");
+                    Object maximum = row.getObject("maximum_selections_override");
+                    return new AttachedGroup(
+                            row.getObject("modifier_group_id", UUID.class),
+                            row.getInt("sort_order"),
+                            Visibility.valueOf(row.getString("visibility")),
+                            parsed,
+                            required == null ? null : (Boolean) required,
+                            minimum == null ? null : ((Number) minimum).intValue(),
+                            maximum == null ? null : ((Number) maximum).intValue(),
+                            row.getInt("version"));
+                })
                 .list();
     }
 
@@ -2006,6 +2156,39 @@ public class JdbcCatalogStore {
                 .param("groupIds", groupIds.toArray(UUID[]::new))
                 .query(JdbcCatalogStore::mapModifierOption)
                 .list();
+    }
+
+    /**
+     * The names of some entities of one type, by entity and then by locale -- for a screen that
+     * reads a handful of entities and has no use for the brand's whole translation table.
+     */
+    public Map<UUID, Map<String, String>> namesFor(
+            UUID tenantId, UUID brandId, EntityType entityType, Collection<UUID> entityIds) {
+        if (entityIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> names = new LinkedHashMap<>();
+        for (TranslationRow row : jdbc.sql("""
+                        SELECT entity_id, locale, name
+                        FROM catalog.translations
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND entity_type = :entityType AND entity_id = ANY(:ids)
+                        ORDER BY locale
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityType", entityType.name())
+                .param("ids", entityIds.toArray(UUID[]::new))
+                .query((row, number) -> new TranslationRow(
+                        entityType,
+                        row.getObject("entity_id", UUID.class),
+                        row.getString("locale"),
+                        row.getString("name"),
+                        null))
+                .list()) {
+            names.computeIfAbsent(row.entityId(), id -> new LinkedHashMap<>()).put(row.locale(), row.name());
+        }
+        return names;
     }
 
     public List<TranslationRow> translations(UUID tenantId, UUID brandId) {
@@ -2429,6 +2612,22 @@ public class JdbcCatalogStore {
                 .optional();
     }
 
+    /**
+     * The channels this brand has a live ({@code PUBLISHED}) menu on, by code -- the channels whose
+     * draft-versus-live comparison has a live side to compare with.
+     */
+    public List<String> channelsWithLivePublication(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT DISTINCT channel FROM catalog.publications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND status = 'PUBLISHED'
+                ORDER BY channel
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(String.class)
+                .list();
+    }
+
     public Optional<UUID> findActivePublicationId(UUID tenantId, UUID brandId, String channel) {
         return jdbc.sql("""
                 SELECT id FROM catalog.publications
@@ -2742,15 +2941,16 @@ public class JdbcCatalogStore {
      *                         — empty when no offering row exists here at all
      */
     /**
-     * @param stopSource {@code MANUAL} | {@code POS} | {@code UNKNOWN} — gap
-     *                   map row 2.5b's explainer, derived from {@code
-     *                   inventory.movements}' own reason code rather than a
-     *                   new column: {@code POS_STOP_LIST} is {@code
-     *                   PosAvailabilityPoll}'s own reason, every other
-     *                   non-null reason is a human toggle (the console's own
-     *                   single/bulk stop both send one), and {@code UNKNOWN}
-     *                   means the item has never been toggled since it was
-     *                   listed — its current state is the untouched default.
+     * @param stopSource {@code OPERATOR} | {@code BOT} | {@code POS} | {@code
+     *                   UNKNOWN} — gap map row 2.5b's explainer, read from the
+     *                   latest position movement's own {@code source_type} (ADR
+     *                   0141, Phase 0), no longer parsed out of its reason;
+     *                   {@code UNKNOWN} means the item has never been toggled
+     *                   since it was listed — its current state is the untouched
+     *                   default. The stops in force are {@code stops}, each with
+     *                   its own source.
+     * @param stops      ADR 0141: the stops in force that touch this dish at
+     *                   this branch, newest first; empty until a stop exists
      * @param stopReasonCode the raw reason on that same latest movement, for
      *                       an operator who wants more than the three-way
      *                       classification
@@ -2766,7 +2966,28 @@ public class JdbcCatalogStore {
             List<String> fulfillmentModes,
             String stopSource,
             @Nullable String stopReasonCode,
-            @Nullable Instant stopChangedAt) {}
+            @Nullable Instant stopChangedAt,
+            List<uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact> stops) {
+
+        /** The same row with the stops in force laid over it (ADR 0141); a stop on every channel makes it unavailable. */
+        public VariantAvailabilityRow withStops(
+                List<uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact> inForce) {
+            boolean stoppedEverywhere = inForce.stream()
+                    .anyMatch(uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact::everyChannel);
+            return new VariantAvailabilityRow(
+                    variantId,
+                    productName,
+                    categoryName,
+                    available && !stoppedEverywhere,
+                    trackingMode,
+                    offeringStatus,
+                    fulfillmentModes,
+                    stopSource,
+                    stopReasonCode,
+                    stopChangedAt,
+                    List.copyOf(inForce));
+        }
+    }
 
     /** {@link #variantAvailabilityCounts}'s own aggregate. */
     public record VariantAvailabilityCountsRow(long total, long available, long onStop) {}
@@ -2791,8 +3012,21 @@ public class JdbcCatalogStore {
     /** One row of {@link #productsInCatalogPage}. */
     public record ProductRow(UUID id, String code, String status, int version) {}
 
-    /** One row of {@link #modifierGroupsForProduct}: a group a product has attached, and where. */
-    public record AttachedGroup(UUID groupId, int sortOrder) {}
+    /**
+     * One row of {@link #modifierGroupsForProduct}: a group a product has attached,
+     * where, and how it is offered (ADR 0136).
+     *
+     * @param modes null = every fulfilment mode
+     */
+    public record AttachedGroup(
+            UUID groupId,
+            int sortOrder,
+            Visibility visibility,
+            @Nullable Set<FulfillmentMode> modes,
+            @Nullable Boolean requiredOverride,
+            @Nullable Integer minimumOverride,
+            @Nullable Integer maximumOverride,
+            int version) {}
 
     /**
      * Every offered priceable node a brand has, with whether ADR 0038's four
@@ -3172,6 +3406,10 @@ public class JdbcCatalogStore {
      * stopped today and un-stopped tomorrow reappears in this read on its
      * own, because the predicate is evaluated fresh on every call rather
      * than baked into a stored flag.
+     *
+     * <p>This is the supply half of "not-stopped" only. A stop record (ADR 0141) lives in
+     * inventory and cannot be joined from here, so {@code
+     * CatalogAuthoringService#resolvedRecommendations} lays those over what this returns.
      */
     public List<RecommendationRow> listResolvedRecommendations(
             UUID tenantId, UUID brandId, UUID sourceProductId, UUID locationId, String locale) {

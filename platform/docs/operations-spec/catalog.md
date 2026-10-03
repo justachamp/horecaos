@@ -316,9 +316,11 @@ shows the `media.assets.status` — an asset that is not `AVAILABLE` is a
 publication blocker (`MEDIA_NOT_AVAILABLE`) and the tile says so on its face.
 
 **Per-aggregator image override** — Delever's second-image-assigned-to-Wolt
-behaviour — is **not built; ADR 0010** (the matrix names per-channel image
-variants and a content hash as the two missing refinements). The tab reserves the
-slot and states it.
+behaviour — is **built by ADR 0138**, not on this tab: a channel's own photo for a
+product is chosen from the channel preview (see *Aggregator preview and
+pre-publication check*) and is published with that channel alone. This tab edits
+the product's every-channel photos. The content hash per asset (ADR 0010) is still
+not built.
 
 ### Tab 5 — Фискальные данные
 
@@ -359,6 +361,26 @@ wrong code is a tax classification error on a legal document. Assistive search
 over the official list with the operator selecting is the accepted form
 (ADR 0038 alternatives table). AI assist on description and composition is fine
 and belongs on tab 1.
+
+### Tab 5b — Вес и питательность (built: ADR 0137, `4.2c`)
+
+Per variant, one card, one save: `PUT …/variants/{id}/physical-attributes` under
+`If-Match` (`catalog.author` at `BRAND`; an empty set clears the row, which is the common
+case). It sits beside the fiscal tab rather than on tab 1 — ADR 0137 says "tab 1", but
+every field is a fact about a *variant* and tab 1 is the product — and the tab and its
+fields are:
+
+| Field | Notes |
+|---|---|
+| Мера: вес, г / объём, мл | one or the other, never both (a select, then the figure) |
+| Продаётся на вес | the price in the price list then means the price **per quantum**; asks for `Цена указана за, г` and an estimated weight (the net weight stands in; a volume cannot) |
+| Можно продавать частями | asks for the portion size (the step a quantity moves in, at most three decimals) |
+| КБЖУ, на 100 г (на 100 мл for a volume) | calories 0–99 999,9; protein, fat, carbohydrates 0–100 each; no accuracy disclaimer — the owner's decision is still pending with legal (ADR 0137) |
+
+The form checks what `PhysicalAttributes` checks, marks a wrong figure on its own field,
+and puts a refusal the server names (`reason`) on the same field. A marked good (ИКПУ tab,
+«Требуется маркировка») cannot be sold by weight or in parts: the card says so the moment
+the two meet, and `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` blocks publication.
 
 ### Tab 6 — Наличие
 
@@ -1072,9 +1094,48 @@ as a result panel, not as a red toast: the operator now has the list they need.
 Delever ships both (`Предпросмотр меню` in mobile and desktop modes for Glovo,
 Wolt, Yandex Eats and Bolt Food; `Предварительная проверка меню` emitting a
 downloadable deficiency report before pushing to Yandex Eats or Uzum Tezkor).
-Both are worth matching and both are **ADR 0040, not built**. Until then the
-preview button renders the storefront projection only, and says so, rather than
-implying an aggregator's rendering it cannot know.
+
+**Built (ADR 0138, operations batch 17).** A channel card's **Предпросмотр** opens
+`/catalog/preview?channel=…`, which asks `GET …/catalogs/{id}/channels/{id}/preview`
+for one branch of that channel (`catalog.read`; a channel that sells at exactly one
+branch needs no branch named, otherwise the branch picker is fed by
+`GET …/channels/{id}/preview-targets`, which names each branch — the picker reads
+"Chilonzor · Wolt", the branch first and the marketplace binding beside it, because a
+brand-wide binding gives every branch the same name). The answer is a dry run of publication:
+the draft is snapshotted and validated as `publish` does it, then assembled by the
+same code a customer's menu read goes through — the branch's offerings or bound
+named menu, the channel's exclusions, the channel's price plane (no amount at all
+when the aggregator sets the price), and the channel's photos over the product's
+own. The photos are chosen by `ChannelMediaLayers` — the channel's override, else a
+relation that names the channel, else the product's own every-channel photos — and
+`publish` calls the same function for the channel it publishes to, so a product's
+photo in the preview is the photo that channel's menu serves once the draft is
+published (a test publishes and compares, with an override and a relation that names
+another channel in the fixture). A photo that names another channel is not published
+to this one. Only a product's photos are carried by a published menu: a variant's or
+a category's channel photo is stored and drawn by the preview, and no menu serves it
+yet. It is
+drawn in the `PhoneFrame` family by channel type (aggregator card, kiosk, Telegram
+Mini App), beside the findings: the catalog's own, the channel's (`CHANNEL_*`:
+archived, not enabled at the branch, an empty menu, a variant, a modifier option or a
+combo component the brand prices but this channel's plane does not, an unverified
+channel photo) and a marketplace ruleset's (`MARKETPLACE_*`). Every finding that names
+a product, a variant of one, or a combo component of one links to the editor. A
+product's card offers **Фото для канала**, which edits the channel's
+image override (`PUT …/channels/{id}/media-overrides/{entityType}/{entityId}`,
+`catalog.author`, under `If-Match`: the set's version the editor read when it opened, `0`
+when the product has none; a second editor who saved first makes this save a `409
+STALE_VERSION`, and the editor says so, shows what was saved and quotes the new version
+on the next Save).
+
+**Still not built, and said so on screen.** The preview shows what HorecaOS would
+send, in HorecaOS's own frame — never a marketplace's own app chrome, which no
+contract documents and which changes without notice. No marketplace ruleset exists
+yet (Yandex Eda, Uzum Tezkor, Wolt and Express24 content rules are product and
+partnership inputs ADR 0138 leaves open), so a binding names none and the preview
+says `MARKETPLACE_RULESET_NOT_ASSIGNED`: no partner-specific check ran, which is not
+the same as a menu the marketplace will accept. The outbound push that would consume
+the same projection is ADR 0040's.
 
 ### States
 
@@ -1296,7 +1357,7 @@ improvises one into the product editor as a free-text field.
 | Combo (Комбо) with choice-sets and per-variant price maps | **Match later — ADR 0016, not built.** Real demand, real complexity; not pilot |
 | Hidden modifiers auto-selected by order type (packaging) | **Match later — ADR 0016.** Small, and it is how packaging charges reach the receipt |
 | Product physical/nutritional attributes, catchweight, splittable, portions | **Match later — ADR 0016.** `splittable` and marking interact (ADR 0038 forbids splittable on marked goods), so build them together |
-| Аggregator menu preview (mobile/desktop, per marketplace) | **Match later — ADR 0040** |
+| Аggregator menu preview (mobile/desktop, per marketplace) | **Match the data, not the chrome — ADR 0138.** The preview shows what the channel would receive, per branch, in HorecaOS's own frames; a marketplace's own app is not mocked |
 | ABC-XYZ analysis, demand forecasting, holidays, kitchen buffer | **Later — ADR 0043.** Analytics, not catalog; and the forecast's 09:00→09:00 business day is a cross-cutting decision the reporting ADR owns |
 | Auto-add rules (plain, product-triggered, portion-band) | **Match later.** Portion-band is unimplementable without portions as a product attribute — ADR 0016 first |
 | **Skip: AI generation of ИКПУ / package code** | A wrong code is a tax classification error on a legal document, and generating it transfers that risk to HorecaOS invisibly. ADR 0038 permits assistive search with a human selecting. AI on descriptions is fine |
@@ -1359,7 +1420,7 @@ an existing table.
 | Excel import job entity: mapping profile, dry-run result, per-row outcomes | 4.11a | **ADR 0012** — currently scoped to POS sources only and must be widened |
 | POS external-id mapping table with linked / unlinked / conflict states | 4.11b | **ADR 0012** |
 | Auto-add rules: plain, product-triggered, portion-band | 4.9 of the IA | Unowned; closest **ADR 0018 / ADR 0019**. Needs a decision before design |
-| Aggregator menu preview and per-marketplace pre-publication checks | 4.10 | **ADR 0040 (Accepted, Partial — this specific feature not built)** |
+| Aggregator menu preview and per-marketplace pre-publication checks | 4.10 | **ADR 0138 (Accepted, Partial)** — the preview, the findings and the ruleset plug point are built; the per-marketplace rulesets are not (an open input). The outbound push is ADR 0040 |
 | ABC-XYZ, demand forecasting, holiday calendar, kitchen buffer, and the business-day boundary that crosses midnight | not in this section | **ADR 0043** |
 | Promotions, promo codes, markup (наценка), redemption ledger | 4.8 | **ADR 0018** — decided, unbuilt |
 | Tenant-level catalog switches (`Использовать логику остатков`, QR/kiosk price plane) | 4.5, 4.6 | **ADR 0030** scoped configuration; the QR/kiosk half is already expressible as `sales_channels.price_plane_channel_id` and needs no switch |

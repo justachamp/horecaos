@@ -392,11 +392,13 @@ public class JdbcPromoCodeStore {
      */
     public List<Promotion> listActivePromotionsForPricing(UUID tenantId, UUID brandId, Instant now) {
         List<PromotionBase> bases = jdbc.sql("""
-                SELECT id, scope, stacking_group, exclusive, priority, requires_coupon,
-                       maximum_discount_minor, currency, valid_from, valid_until, definition_version
+                SELECT id, code, kind, scope, stacking_group, exclusive, priority, requires_coupon,
+                       maximum_discount_minor, currency, valid_from, valid_until, definition_version,
+                       maximum_redemptions, maximum_per_customer, loyalty_accrual, loyalty_redemption
                 FROM pricing.promotions
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND status = 'ACTIVE'
                   AND valid_from <= :now AND (valid_until IS NULL OR valid_until > :now)
+                ORDER BY id
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
@@ -404,6 +406,51 @@ public class JdbcPromoCodeStore {
                 .query(JdbcPromoCodeStore::mapPromotionBase)
                 .list();
         return assemblePromotions(tenantId, brandId, bases);
+    }
+
+    /**
+     * Every {@code ACTIVE} promotion of the brand whatever its window (ADR 0140).
+     *
+     * <p>The rule engine judges a window at the service instant, which on an
+     * amendment is not now and in the simulator is whatever the marketer asked
+     * about, so the window cannot be a filter in the query. The evaluator reports a
+     * promotion outside its window as {@code OUTSIDE_WINDOW}, which is what the
+     * decision trace needs and a filter would hide.
+     */
+    public List<Promotion> listActivePromotions(UUID tenantId, UUID brandId) {
+        List<PromotionBase> bases = jdbc.sql("""
+                SELECT id, code, kind, scope, stacking_group, exclusive, priority, requires_coupon,
+                       maximum_discount_minor, currency, valid_from, valid_until, definition_version,
+                       maximum_redemptions, maximum_per_customer, loyalty_accrual, loyalty_redemption
+                FROM pricing.promotions
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND status = 'ACTIVE'
+                ORDER BY id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcPromoCodeStore::mapPromotionBase)
+                .list();
+        return assemblePromotions(tenantId, brandId, bases);
+    }
+
+    /**
+     * Which of these promotions apply only to a presented code. One narrow column,
+     * for a caller that needs to tell "the customer typed it" from "it applied by
+     * itself" and has no use for the rest of the rule.
+     */
+    public java.util.Set<UUID> couponGatedPromotionIds(UUID tenantId, Collection<UUID> promotionIds) {
+        if (promotionIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbc.sql("""
+                SELECT id
+                FROM pricing.promotions
+                WHERE tenant_id = :tenantId AND id = ANY(:ids) AND requires_coupon
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", promotionIds.toArray(UUID[]::new))
+                .query((row, n) -> row.getObject("id", UUID.class))
+                .list());
     }
 
     /**
@@ -422,10 +469,12 @@ public class JdbcPromoCodeStore {
             return List.of();
         }
         List<PromotionBase> bases = jdbc.sql("""
-                SELECT id, scope, stacking_group, exclusive, priority, requires_coupon,
-                       maximum_discount_minor, currency, valid_from, valid_until, definition_version
+                SELECT id, code, kind, scope, stacking_group, exclusive, priority, requires_coupon,
+                       maximum_discount_minor, currency, valid_from, valid_until, definition_version,
+                       maximum_redemptions, maximum_per_customer, loyalty_accrual, loyalty_redemption
                 FROM pricing.promotions
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = ANY(:ids)
+                ORDER BY id
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
@@ -438,6 +487,8 @@ public class JdbcPromoCodeStore {
     private static PromotionBase mapPromotionBase(ResultSet row, int number) throws SQLException {
         return new PromotionBase(
                 row.getObject("id", UUID.class),
+                row.getString("code"),
+                row.getString("kind"),
                 row.getString("scope"),
                 row.getString("stacking_group"),
                 row.getBoolean("exclusive"),
@@ -449,7 +500,11 @@ public class JdbcPromoCodeStore {
                 row.getObject("valid_until", OffsetDateTime.class) == null
                         ? null
                         : row.getObject("valid_until", OffsetDateTime.class).toInstant(),
-                row.getInt("definition_version"));
+                row.getInt("definition_version"),
+                row.getObject("maximum_redemptions", Integer.class),
+                row.getObject("maximum_per_customer", Integer.class),
+                row.getString("loyalty_accrual"),
+                row.getString("loyalty_redemption"));
     }
 
     private List<Promotion> assemblePromotions(UUID tenantId, UUID brandId, List<PromotionBase> bases) {
@@ -503,12 +558,13 @@ public class JdbcPromoCodeStore {
                         base.id(),
                         tenantId,
                         brandId,
-                        // Promotion.code (the human-readable coupon word) is a display
-                        // concern the engine itself does not read — matching is by id,
-                        // through presentedCouponPromotionIds — so it is left blank
-                        // rather than joining coupon_codes into a query the engine's
-                        // own tests never exercise with one.
-                        "",
+                        // A promo code's handle IS the customer-redeemable word (ADR 0072),
+                        // a bearer secret that must not reach an adjustment's description
+                        // code, so a coupon-gated promotion carries no code. An automatic
+                        // promotion's handle is what the quote, the order and the trace
+                        // name it by.
+                        base.requiresCoupon() ? "" : base.code(),
+                        Promotion.Kind.valueOf(base.kind()),
                         Promotion.Scope.valueOf(base.scope()),
                         base.stackingGroup(),
                         base.exclusive(),
@@ -519,6 +575,10 @@ public class JdbcPromoCodeStore {
                         base.validFrom(),
                         base.validUntil(),
                         base.definitionVersion(),
+                        base.maximumRedemptions(),
+                        base.maximumPerCustomer(),
+                        Promotion.LoyaltyAccrual.valueOf(base.loyaltyAccrual()),
+                        Promotion.LoyaltyRedemption.valueOf(base.loyaltyRedemption()),
                         conditionsByPromotion.getOrDefault(base.id(), List.of()),
                         actionsByPromotion.getOrDefault(base.id(), List.of())))
                 .toList();
@@ -970,6 +1030,8 @@ public class JdbcPromoCodeStore {
 
     private record PromotionBase(
             UUID id,
+            String code,
+            String kind,
             String scope,
             String stackingGroup,
             boolean exclusive,
@@ -979,5 +1041,9 @@ public class JdbcPromoCodeStore {
             String currency,
             Instant validFrom,
             @Nullable Instant validUntil,
-            int definitionVersion) {}
+            int definitionVersion,
+            @Nullable Integer maximumRedemptions,
+            @Nullable Integer maximumPerCustomer,
+            String loyaltyAccrual,
+            String loyaltyRedemption) {}
 }

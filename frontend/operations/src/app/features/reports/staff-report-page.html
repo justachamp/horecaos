@@ -78,9 +78,15 @@
                         <span class="badge badge--staff q-caption">{{
                           'reports.staff.leaderboard.kind.STAFF' | t
                         }}</span>
-                        <span class="q-mono q-caption operator-subject">{{
-                          shortSubject(row.subject)
-                        }}</span>
+                        @if (row.displayName) {
+                          <span class="q-body-sm operator-name" data-testid="staff-report-name">{{
+                            row.displayName
+                          }}</span>
+                        } @else {
+                          <span class="q-mono q-caption operator-subject">{{
+                            shortSubject(row.subject)
+                          }}</span>
+                        }
                       }
                     </td>
                     <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orderCount) }}</td>
@@ -123,7 +129,7 @@
             {{
               operator.principalKind === 'MACHINE'
                 ? operator.subject
-                : shortSubject(operator.subject)
+                : (operator.displayName ?? shortSubject(operator.subject))
             }}
           </span>
         </h2>
@@ -158,7 +164,7 @@
                     <tr>
                       <td class="q-body-sm">{{ row.productName }}</td>
                       <td class="q-body-sm q-tnum num">
-                        {{ formatCountValue(row.totalQuantity) }}
+                        {{ formatQuantityValue(row.totalQuantity) }}
                       </td>
                       <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.totalNetSom) }}</td>
                     </tr>
@@ -220,7 +226,9 @@
               <tbody>
                 @for (row of telephonyRows(); track row.operatorPrincipalId) {
                   <tr>
-                    <td class="q-body-sm q-mono">{{ shortSubject(row.operatorPrincipalId) }}</td>
+                    <td class="q-body-sm" data-testid="staff-report-telephony-operator">
+                      {{ telephonyOperator(row.operatorPrincipalId) }}
+                    </td>
                     <td class="q-body-sm q-tnum num">{{ formatCountValue(row.offeredCount) }}</td>
                     <td class="q-body-sm q-tnum num">{{ formatCountValue(row.answeredCount) }}</td>
                     <td class="q-body-sm q-tnum num">{{ answerRate(row) }}</td>

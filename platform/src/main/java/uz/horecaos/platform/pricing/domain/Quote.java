@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pricing.domain;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A priced cart (ADR 0018).
@@ -87,20 +89,52 @@ public record Quote(
      *                            and an adjustment has neither
      * @param variantId           null on a {@link LineType#DELIVERY_FEE} line and
      *                            never on an item line
+     * @param quantity            a decimal since ADR 0137; always a whole number
+     *                            for a variant that is not sold by the portion
      * @param descriptionSnapshot the name as shown at pricing time. Copied, so a
      *                            menu rename cannot change what a historical quote
      *                            says the customer was buying
+     * @param comboSelectionId    ADR 0136: groups the component lines of one combo
+     *                            purchase, or null on every other line. One value per
+     *                            combo the customer added, shared by all of its
+     *                            components, so a report counting "Комбо №1 sold"
+     *                            counts distinct values rather than summing a line
+     *                            that does not exist
+     * @param comboContainerVariantId the combo this component was bought as part of,
+     *                            for display and the receipt header; set exactly when
+     *                            {@code comboSelectionId} is. The container itself is
+     *                            never a line and never carries an amount
+     * @param comboComponentId    the {@code catalog.combo_components} pairing this line
+     *                            was priced from; set exactly when {@code comboSelectionId}
+     *                            is. An order keeps it so an amendment prices the same
+     *                            component at the same combo price
+     * @param comboQuantity       how many combos the customer bought on the cart line,
+     *                            the same on every component of one selection
+     * @param comboPickQuantity   how many times the customer picked this component inside
+     *                            one combo. {@code quantity} is the product of
+     *                            {@code comboQuantity}, the pairing's default quantity and
+     *                            this, and the first and last are the customer's own
+     *                            choices, so neither can be recovered from {@code quantity}
+     * @param catchweight         ADR 0137: set only for a catchweight variant, and
+     *                            what makes the line's amounts provisional until a
+     *                            weight is captured
      */
     public record QuoteLine(
             String lineId,
             LineType type,
             @Nullable UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String descriptionSnapshot,
             Money unitAmount,
             Money baseAmount,
             Money finalAmount,
-            Money taxAmount) {
+            Money taxAmount,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId,
+            @Nullable UUID comboComponentId,
+            @Nullable Integer comboQuantity,
+            @Nullable Integer comboPickQuantity,
+            @Nullable Catchweight catchweight) {
 
         public QuoteLine {
             // Mirrors ck_quote_line_variant_agrees, stated as an equivalence so
@@ -110,18 +144,72 @@ public record Quote(
                 throw new IllegalArgumentException(
                         "An item line needs a variant and a fee line must not have one: " + type);
             }
+            // Mirrors ck_quote_line_combo_pair, ck_quote_line_combo_provenance and
+            // ck_quote_line_combo_is_item.
+            if ((comboSelectionId == null) != (comboContainerVariantId == null)
+                    || (comboSelectionId == null) != (comboComponentId == null)
+                    || (comboSelectionId == null) != (comboQuantity == null)
+                    || (comboSelectionId == null) != (comboPickQuantity == null)) {
+                throw new IllegalArgumentException(
+                        "A combo component line carries its selection, container, pairing and quantities, or none");
+            }
+            if ((comboQuantity != null && comboQuantity <= 0)
+                    || (comboPickQuantity != null && comboPickQuantity <= 0)) {
+                throw new IllegalArgumentException("A combo component line needs positive combo and pick quantities");
+            }
+            if (comboSelectionId != null && type != LineType.ITEM) {
+                throw new IllegalArgumentException("Only an item line can be part of a combo: " + type);
+            }
+            quantity = Quantities.normalise(quantity);
         }
 
-        /** An ordinary basket line. */
-        public static QuoteLine item(
+        /**
+         * A line that is neither part of a combo (ADR 0136) nor catchweight (ADR 0137),
+         * which is every line there was before either.
+         */
+        public QuoteLine(
                 String lineId,
-                UUID variantId,
-                int quantity,
+                LineType type,
+                @Nullable UUID variantId,
+                BigDecimal quantity,
                 String descriptionSnapshot,
                 Money unitAmount,
                 Money baseAmount,
                 Money finalAmount,
                 Money taxAmount) {
+            this(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        /** One component of a combo, priced as an ordinary item line that shares a grouping key. */
+        public static QuoteLine comboComponent(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount,
+                UUID comboSelectionId,
+                UUID comboContainerVariantId,
+                UUID comboComponentId,
+                int comboQuantity,
+                int comboPickQuantity) {
             return new QuoteLine(
                     lineId,
                     LineType.ITEM,
@@ -131,7 +219,134 @@ public record Quote(
                     unitAmount,
                     baseAmount,
                     finalAmount,
-                    taxAmount);
+                    taxAmount,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    null);
+        }
+
+        /** An ordinary basket line. */
+        public static QuoteLine item(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount,
+                @Nullable Catchweight catchweight) {
+            return new QuoteLine(
+                    lineId,
+                    LineType.ITEM,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    catchweight);
+        }
+
+        /** An ordinary basket line that is not catchweight. */
+        public static QuoteLine item(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount) {
+            return item(
+                    lineId,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount,
+                    null);
+        }
+
+        /**
+         * The same line carrying a new unit, base and final amount (ADR 0140's markup stage
+         * uplifts all three), with its tax share still to be extracted and everything that
+         * identifies it -- its combo grouping and catchweight facts included -- kept.
+         */
+        public QuoteLine repriced(Money newUnitAmount, Money newBaseAmount, Money newFinalAmount) {
+            return new QuoteLine(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    newUnitAmount,
+                    newBaseAmount,
+                    newFinalAmount,
+                    taxAmount,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    catchweight);
+        }
+
+        /**
+         * The same line with its amounts replaced, keeping everything that identifies it,
+         * its combo grouping and its catchweight facts included.
+         */
+        public QuoteLine withAmounts(Money newFinalAmount, Money newTaxAmount) {
+            return new QuoteLine(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    newFinalAmount,
+                    newTaxAmount,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    catchweight);
+        }
+    }
+
+    /**
+     * What makes a quote line provisional (ADR 0137).
+     *
+     * <p>The price is per {@code quantumGrams}; the quote is computed against
+     * {@code nominalGramsPerUnit} until a weight is captured, after which
+     * {@code actualWeightGrams} is the weight the line was priced at.
+     *
+     * @param pricePerQuantumMinor  the price row's amount, in minor units per quantum
+     * @param actualWeightGrams     null while the line is provisional; the weighed
+     *                              total of the whole line once it is not
+     */
+    public record Catchweight(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        /** Whether a weight has been captured and the line's amounts are final. */
+        public boolean reconciled() {
+            return actualWeightGrams != null;
         }
     }
 
@@ -203,7 +418,15 @@ public record Quote(
              * and they answer to different owners — the waiver to a zone, this to a
              * rate table.
              */
-            DELIVERY_TARIFF_DISCOUNT
+            DELIVERY_TARIFF_DISCOUNT,
+            /**
+             * ADR 0140 stage 2b. A markup promotion's per-unit uplift on a line,
+             * recorded as a positive adjustment beside the base price it raises.
+             * Applied before any discount, so a discount is computed on the marked-up
+             * price, and part of {@code subtotal}: it never touches {@code
+             * discount_minor}, which stays non-negative.
+             */
+            ITEM_MARKUP
         }
     }
 }

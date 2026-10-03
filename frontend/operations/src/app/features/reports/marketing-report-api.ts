@@ -3,6 +3,8 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { promoCodePaths } from '../../core/api/promo-codes-paths';
+import { reportsPaths } from '../../core/api/reports-paths';
+import { ProvenanceResponse } from './reporting-api';
 
 /**
  * Row 7.9a: one row of {@link CustomerDiscountHistory}. Mirrors
@@ -37,7 +39,66 @@ export interface CustomerDiscountHistory {
 }
 
 /**
- * Row 7.9a's own read: `CustomerDiscountHistoryController`, tenant-scoped and
+ * Row 7.9: one promotion over a closed date range. Mirrors
+ * `PromotionReportController.SummaryRowResponse`. Money is whole minor units of
+ * the platform's currency (`...Som`, as the endpoint names them).
+ *
+ * `averageCheckWithSom` and `averageCheckWithoutSom` are a comparison over the
+ * same brand and period, not a causal uplift: customers who use a promotion
+ * differ from those who do not.
+ */
+export interface PromotionSummaryRow {
+  readonly brandId: string;
+  readonly promotionId: string;
+  readonly promotionCode: string;
+  /** `AUTOMATIC` (the redemption ledger) or `COUPON` (a typed promo code). */
+  readonly sourceKind: string;
+  readonly redemptions: number;
+  readonly uniqueCustomers: number;
+  readonly discountSom: number;
+  readonly markupSom: number;
+  readonly revenueWithSom: number;
+  readonly averageCheckWithSom: number | null;
+  readonly averageCheckWithoutSom: number | null;
+}
+
+export interface PromotionSummary {
+  readonly rows: readonly PromotionSummaryRow[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * Row 7.9: one line of the redemption log. Mirrors
+ * `PromotionReportController.RedemptionRowResponse`. `customerSubject` is the
+ * ADR 0029 keyed pseudonym, never an account id: a customer cannot be opened from
+ * here, and that is the honest limit.
+ */
+export interface PromotionRedemptionRow {
+  readonly redemptionId: string;
+  readonly businessDate: string;
+  readonly brandId: string;
+  readonly promotionId: string;
+  readonly promotionCode: string;
+  readonly definitionVersion: number;
+  readonly sourceKind: string;
+  readonly orderId: string;
+  readonly customerSubject: string | null;
+  readonly discountSom: number;
+  readonly markupSom: number;
+  readonly currency: string;
+  readonly redeemedAt: string;
+  /** The order's status in `fact_order`, null while it has none; a cancelled order is still listed. */
+  readonly orderStatus: string | null;
+  readonly channelCode: string | null;
+}
+
+export interface PromotionRedemptionLog {
+  readonly rows: readonly PromotionRedemptionRow[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * Row 7.9's own read: `CustomerDiscountHistoryController`, tenant-scoped and
  * pricing-owned, so it does not fit `MarketingApi` (brand-scoped, ADR 0044)
  * or `CustomersApi` (the customer record's own module). Named after the
  * report screen that is this wave's own consumer; the customer detail pane
@@ -57,6 +118,47 @@ export class MarketingReportApi {
         this.api.get<CustomerDiscountHistory>(
           promoCodePaths.customerDiscountHistory(tenantId, customerAccountId),
         ),
+      )
+    ).value;
+  }
+
+  /**
+   * 7.9, per promotion: redemptions, unique customers, discount and markup given,
+   * revenue with the promotion, and the average check with and without it.
+   * Cancelled, rejected, expired and payment-failed orders are excluded; the log
+   * keeps them. Built at day close, so it lags by up to a business day.
+   */
+  async promotionSummary(
+    tenantId: string,
+    range: { readonly from: string; readonly to: string },
+    brandId: string | null,
+  ): Promise<PromotionSummary> {
+    return (
+      await firstValueFrom(
+        this.api.get<PromotionSummary>(reportsPaths.promotionSummary(tenantId), {
+          params: { from: range.from, to: range.to, brandId: brandId ?? undefined },
+        }),
+      )
+    ).value;
+  }
+
+  /** 7.9, the redemption log: newest first, at most `limit` rows (the endpoint caps it at 500). */
+  async promotionRedemptions(
+    tenantId: string,
+    range: { readonly from: string; readonly to: string },
+    promotionId: string | null,
+    limit = 200,
+  ): Promise<PromotionRedemptionLog> {
+    return (
+      await firstValueFrom(
+        this.api.get<PromotionRedemptionLog>(reportsPaths.promotionRedemptions(tenantId), {
+          params: {
+            from: range.from,
+            to: range.to,
+            promotionId: promotionId ?? undefined,
+            limit,
+          },
+        }),
       )
     ).value;
   }

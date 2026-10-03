@@ -18,10 +18,10 @@ interface AdmissionResponse {
   readonly locationId: string;
   readonly tableCode: string;
   /**
-   * The table's own live session, if a host has already seated it. Null in
+   * The table's own live session, if one is open: a host seated it, or a guest
+   * sat down themselves (ADR 0143, {@link DineInService.seat}). Null in
    * `VIEW_ONLY` (HorecaOS creates nothing there) and in `ORDER_AND_PAY` at a
-   * table nobody has seated yet -- see `DineInTableComponent`'s own doc on why
-   * this client does not open one itself.
+   * table nobody sits at yet.
    */
   readonly openSessionId: string | null;
   /**
@@ -30,6 +30,13 @@ interface AdmissionResponse {
    * build's own channel.
    */
   readonly channelCode: string | null;
+  /**
+   * Whether this guest could seat themselves right now (ADR 0143): the branch has
+   * turned self-seating on, the table is free and no confirmed booking holds it
+   * soon. A hint for the screen -- the platform decides again when the guest asks.
+   * Absent on a visit stored by an earlier build, which reads as false.
+   */
+  readonly walkInAvailable?: boolean;
 }
 
 /**
@@ -49,6 +56,22 @@ export interface DineInBill {
   readonly totalMinor: number;
   readonly roundCount: number;
   readonly orderIds: readonly string[];
+  /** `STAFF` or `GUEST_QR` (ADR 0143). Absent from a platform that predates it, which reads as staff. */
+  readonly origin?: string;
+  /**
+   * When an unconfirmed claim gives the table back to the room; null once an order
+   * the restaurant accepted is on it (or a member of staff took charge), and for a
+   * session a host opened.
+   */
+  readonly claimExpiresAt?: string | null;
+  /** Whether this is an ordinary session. False only for a guest's claim nothing has confirmed yet. */
+  readonly confirmed?: boolean;
+}
+
+/** `QrEntryController.GuestSeatingResponse`: the bill plus whether this very call opened the session. */
+export interface DineInSeating extends DineInBill {
+  /** False when somebody already sat here and this is their session, handed back rather than a second one. */
+  readonly created: boolean;
 }
 
 /**
@@ -132,7 +155,9 @@ export class DineInService {
 
   private guestToken: string | null = null;
   private readonly admissionSignal = signal<DineInAdmission | null>(null);
-  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(this.restorePendingRounds());
+  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(
+    this.restorePendingRounds(),
+  );
   private readonly flushesInFlight = new Map<string, Promise<RoundFlush>>();
 
   constructor() {
@@ -189,6 +214,62 @@ export class DineInService {
   }
 
   /**
+   * Seats the guest at the table they scanned (ADR 0143): opens a provisional
+   * session -- a claim -- without waiting for staff. An explicit act, never a side
+   * effect of scanning, and it needs both credentials a round does: the table's
+   * guest token and the signed-in customer session, so this call is deliberately
+   * not `anonymous`.
+   *
+   * The platform decides again under its locks (a booking may have taken the table
+   * since the scan, a cap may be reached) and answers every "no" with one
+   * `TABLE_NOT_AVAILABLE` conflict. When somebody already sits here it answers with
+   * their session and `created: false`, not a second one.
+   *
+   * On success the stored visit follows: it now has an open session, so a reload
+   * lands on the seated table rather than the invitation to sit.
+   */
+  async seat(partySize: number): Promise<DineInSeating> {
+    const seating = await this.api.mutate<DineInSeating>('POST', '/storefront/dine-in/sessions', {
+      body: { partySize },
+      headers: this.tokenHeader(),
+    });
+    this.updateAdmission({ openSessionId: seating.sessionId, walkInAvailable: false });
+    return seating;
+  }
+
+  /**
+   * The platform said this table cannot be taken from here. Stop offering it: the
+   * guest is told to ask a member of staff instead of being invited to try again.
+   */
+  markWalkInUnavailable(): void {
+    this.updateAdmission({ walkInAvailable: false });
+  }
+
+  /**
+   * The session this device was seated at is no longer the table's live one, yet the
+   * guest token is still accepted. The table may be free again, so the invitation to
+   * sit is offered once more; the platform re-decides when the guest asks.
+   *
+   * Not how a lapsed claim ends: closing a session revokes every guest token minted at
+   * its table, so a claimant whose hold ran out gets a dead token (401) and the visit is
+   * cleared with the reason said (see `DineInTableComponent.endVisit`). A token cannot
+   * be renewed -- the printed code that mints one is not kept.
+   */
+  sessionEnded(): void {
+    this.updateAdmission({ openSessionId: null, walkInAvailable: true });
+  }
+
+  private updateAdmission(change: Partial<DineInAdmission>): void {
+    const current = this.admissionSignal();
+    if (!current) {
+      return;
+    }
+    const next = { ...current, ...change };
+    this.admissionSignal.set(next);
+    this.persist(next, this.guestToken);
+  }
+
+  /**
    * The running bill at the guest's own table. Refused (404) for a `VIEW_ONLY`
    * code or a session that is not this table's own live one.
    */
@@ -225,6 +306,22 @@ export class DineInService {
     bindTable(headers: Readonly<Record<string, string>>): Promise<T>;
   }): Promise<T> {
     return carts.bindTable(this.tokenHeader());
+  }
+
+  /**
+   * Places the table's order with the guest token beside it.
+   *
+   * A basket bound to the table is re-proved at checkout from a live guest token:
+   * the binding is stored state and proves nothing about who is at the table now, so
+   * checkout refuses a bound basket that does not carry one (`TABLE_TOKEN_REQUIRED`).
+   * As with {@link bindCartToTable}, the token never leaves this class: the cart
+   * service is handed a header and nothing else.
+   */
+  async checkoutAtTable<I, T>(
+    carts: { checkout(input: I & { headers: Readonly<Record<string, string>> }): Promise<T> },
+    input: I,
+  ): Promise<T> {
+    return carts.checkout({ ...input, headers: this.tokenHeader() });
   }
 
   /**
@@ -271,7 +368,9 @@ export class DineInService {
     const kept = this.pendingRoundsSignal().filter(
       (round) => !(round.sessionId === sessionId && round.orderId === orderId),
     );
-    this.setPendingRounds([...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT));
+    this.setPendingRounds(
+      [...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT),
+    );
   }
 
   /**
@@ -305,7 +404,9 @@ export class DineInService {
     if (running) {
       return running.then(() => this.flushPendingRounds(sessionId));
     }
-    const pass = this.attachQueuedRounds(sessionId).finally(() => this.flushesInFlight.delete(sessionId));
+    const pass = this.attachQueuedRounds(sessionId).finally(() =>
+      this.flushesInFlight.delete(sessionId),
+    );
     this.flushesInFlight.set(sessionId, pass);
     return pass;
   }

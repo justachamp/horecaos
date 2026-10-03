@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -125,6 +126,107 @@ class JdbcAuthorizationServiceTests {
         availability = new java.util.HashMap<>();
         authorization = new JdbcAuthorizationService(
                 jdbc, clock, actor, tenantId -> availability.getOrDefault(tenantId, TenantAvailability.OPERATING));
+    }
+
+    // ------------------------------------------------ ADR 0139: staff.self.manage
+
+    @Test
+    @DisplayName(
+            "ADR 0139: a location grant never covers a tenant route, yet carries staff.self.manage at some scope in the tenant")
+    void aLocationGrantHoldsTheSelfCapabilityAtSomeScope() {
+        grant("cook-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
+
+        assertThat(authorization.has("cook-1", Capability.STAFF_SELF_MANAGE, ResourceScope.tenant(TENANT)))
+                .as("coverage is downward only: this is exactly why a coverage check cannot serve /staff/me")
+                .isFalse();
+        assertThat(authorization.holdsAtAnyScope("cook-1", Capability.STAFF_SELF_MANAGE, TENANT))
+                .as("but the cook does hold it somewhere in the tenant")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("ADR 0139: holding it in one tenant is nothing in another, and holding nothing is nothing")
+    void theSelfCapabilityIsPerTenant() {
+        grant("cook-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
+
+        assertThat(authorization.holdsAtAnyScope("cook-1", Capability.STAFF_SELF_MANAGE, OTHER_TENANT))
+                .isFalse();
+        assertThat(authorization.holdsAtAnyScope("nobody", Capability.STAFF_SELF_MANAGE, TENANT))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: a capability the job does not carry is not held anywhere, however many grants the person has")
+    void anyScopeIsNotAnyCapability() {
+        grant("cook-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
+
+        assertThat(authorization.holdsAtAnyScope("cook-1", Capability.STAFF_PROFILE_READ, TENANT))
+                .as("a line cook edits their own profile and reads nobody's")
+                .isFalse();
+        assertThat(authorization.holdsAtAnyScope("cook-1", Capability.STAFF_PROFILE_MANAGE, TENANT))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("ADR 0139: a suspended tenant's people read but do not edit, themselves included")
+    void suspensionWithdrawsTheSelfCapability() {
+        grant("cook-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
+        grant("manager-1", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION, TENANT);
+        availability.put(TENANT, TenantAvailability.READ_ONLY);
+
+        assertThat(authorization.holdsAtAnyScope("cook-1", Capability.STAFF_SELF_MANAGE, TENANT))
+                .isFalse();
+        assertThat(authorization.has("manager-1", Capability.STAFF_PROFILE_READ, locationScope()))
+                .as("looking at who works there survives suspension, like every read")
+                .isTrue();
+        assertThat(authorization.has("manager-1", Capability.STAFF_EMERGENCY_CONTACT_READ, locationScope()))
+                .as("but a third party's contact details are taken out, not looked at")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: the staff capabilities sit where the record decides, and the people-managing ones nowhere else")
+    void theStaffCapabilitiesAreWhereTheRecordPutsThem() {
+        for (PlatformRole role : List.of(
+                PlatformRole.TENANT_OWNER,
+                PlatformRole.TENANT_ADMIN,
+                PlatformRole.TENANT_FINANCE,
+                PlatformRole.BRAND_MANAGER,
+                PlatformRole.LOCATION_MANAGER,
+                PlatformRole.LOCATION_STAFF,
+                PlatformRole.COURIER_DISPATCHER,
+                PlatformRole.SUPPORT_AGENT)) {
+            assertThat(role.grants(Capability.STAFF_SELF_MANAGE))
+                    .as("%s: every tenant-visible job edits its own profile", role.code())
+                    .isTrue();
+        }
+        assertThat(holders(Capability.STAFF_PROFILE_READ))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.PLATFORM_ADMIN);
+        assertThat(holders(Capability.STAFF_PROFILE_MANAGE))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.PLATFORM_ADMIN);
+        assertThat(holders(Capability.STAFF_EMERGENCY_CONTACT_READ))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.PLATFORM_ADMIN);
+    }
+
+    private static List<PlatformRole> holders(Capability capability) {
+        return java.util.Arrays.stream(PlatformRole.values())
+                .filter(role -> role.grants(capability))
+                .toList();
     }
 
     @Test
@@ -276,6 +378,10 @@ class JdbcAuthorizationServiceTests {
                 // ADR 0042, gap map row 10.13, wave P38: reading the courier
                 // compensation/delivery policy document takes nothing out.
                 Capability.DELIVERY_POLICY_READ,
+                // ADR 0142, gap map row 3.8: reading the dispatch rules and the simulator's answers
+                // changes nothing -- the simulator evaluates and reports, it books no one -- so a
+                // suspended tenant reading its own rules takes nothing out.
+                Capability.DELIVERY_DISPATCH_RULES_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
                 Capability.RESERVATION_READ,
@@ -284,6 +390,11 @@ class JdbcAuthorizationServiceTests {
                 Capability.CUSTOMER_READ,
                 Capability.POS_SYNC_READ,
                 Capability.POS_EXPORT_READ,
+                // ADR 0139: a suspended tenant's managers may still look at who
+                // works for them -- names, masked phones, employment. Taking a
+                // third party's contact details out is not a read:
+                // STAFF_EMERGENCY_CONTACT_READ is classified a reveal on purpose.
+                Capability.STAFF_PROFILE_READ,
                 Capability.INTEGRATION_FAILURE_READ,
                 Capability.NOTIFICATION_READ,
                 Capability.AUDIENCE_READ,

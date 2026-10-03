@@ -50,6 +50,13 @@ export interface ProblemDetails {
   readonly expectedVersion?: number;
   /** Checkout rejections carry a business reason beside the code. */
   readonly reason?: string;
+  /**
+   * A conflict names which rule refused it (`TABLE_OCCUPIED`, `TABLE_NOT_AVAILABLE`,
+   * `CLAIM_UNCONFIRMED`, ...): the platform's dine-in vocabulary, beside `reason`.
+   */
+  readonly conflict?: string;
+  /** A 422 about a party too large for the table carries the table's seat count. */
+  readonly seats?: number;
 }
 
 export function isProblemDetails(body: unknown): body is ProblemDetails {
@@ -258,8 +265,15 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   // ItemsUnavailable already use, so a customer sees one honest sentence
   // regardless of which of the two ways a dish became unavailable.
   SOLD_OUT: 'errors.reason.itemUnavailable',
+  // ADR 0141: a stop (an operator's, the bot's or the POS's) covers this dish on this channel at
+  // this branch. The customer's sentence is the same honest one -- the dish cannot be ordered
+  // right now -- whichever way it became unavailable; which of them it was is the kitchen's
+  // business, not the customer's.
+  ON_STOP: 'errors.reason.itemUnavailable',
   NOT_STOCKED_AT_LOCATION: 'errors.reason.itemUnavailable',
   RESERVATION_NO_LONGER_HELD: 'errors.reason.holdExpired',
+  // ADR 0140: the cart's channel does not sell the method the customer chose (CartService.setPaymentMethod).
+  PAYMENT_METHOD_UNAVAILABLE: 'errors.reason.paymentMethodUnavailable',
   // CheckoutEligibilityGuard: the quote's fifteen minutes ran out (or it was already
   // accepted). Pricing the cart again cures it.
   QUOTE_EXPIRED: 'errors.reason.quoteExpired',

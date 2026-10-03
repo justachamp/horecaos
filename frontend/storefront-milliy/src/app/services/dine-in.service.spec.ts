@@ -152,7 +152,10 @@ describe('DineInService (ADR 0047)', () => {
     });
 
     it('still resumes a VIEW_ONLY visit stored without a token, which is how it is always stored', () => {
-      const { guestToken: _none, ...viewOnly } = admission({ mode: 'VIEW_ONLY', openSessionId: null });
+      const { guestToken: _none, ...viewOnly } = admission({
+        mode: 'VIEW_ONLY',
+        openSessionId: null,
+      });
       localStorage.setItem(ADMISSION_KEY, JSON.stringify(viewOnly));
 
       const { service } = setUp();
@@ -187,7 +190,7 @@ describe('DineInService (ADR 0047)', () => {
       expect(service.admission()?.tableCode).toBe('T1');
     });
 
-    it('a second scan replaces the first -- and the first table\'s token with it', async () => {
+    it("a second scan replaces the first -- and the first table's token with it", async () => {
       const { service, api } = setUp();
       api.mutate.mockResolvedValueOnce(admission({ tableCode: 'T1', guestToken: 'guest-token-1' }));
       api.mutate.mockResolvedValueOnce(
@@ -212,7 +215,12 @@ describe('DineInService (ADR 0047)', () => {
       api.mutate.mockResolvedValueOnce(admission({ guestToken: 'guest-token-1' }));
       await service.exchange('ordering-table');
       api.mutate.mockResolvedValueOnce(
-        admission({ mode: 'VIEW_ONLY', openSessionId: null, tableCode: 'T9', guestToken: 'guest-token-9' }),
+        admission({
+          mode: 'VIEW_ONLY',
+          openSessionId: null,
+          tableCode: 'T9',
+          guestToken: 'guest-token-9',
+        }),
       );
 
       await service.exchange('menu-only-table');
@@ -254,10 +262,14 @@ describe('DineInService (ADR 0047)', () => {
 
       const result = await service.requestBill('session-1');
 
-      expect(api.mutate).toHaveBeenCalledWith('POST', '/storefront/dine-in/sessions/session-1/bill-requests', {
-        anonymous: true,
-        headers: { 'X-Dine-In-Token': 'guest-token-1' },
-      });
+      expect(api.mutate).toHaveBeenCalledWith(
+        'POST',
+        '/storefront/dine-in/sessions/session-1/bill-requests',
+        {
+          anonymous: true,
+          headers: { 'X-Dine-In-Token': 'guest-token-1' },
+        },
+      );
       expect(result.status).toBe('BILL_REQUESTED');
     });
 
@@ -278,7 +290,7 @@ describe('DineInService (ADR 0047)', () => {
       expect(result.roundCount).toBe(1);
     });
 
-    it('does not mark the attach anonymous, so the customer\'s own signed-in session rides beside the token', async () => {
+    it("does not mark the attach anonymous, so the customer's own signed-in session rides beside the token", async () => {
       const { service, api } = seated();
       api.mutate.mockResolvedValue(bill());
 
@@ -341,7 +353,7 @@ describe('DineInService (ADR 0047)', () => {
       expect(api.mutate).not.toHaveBeenCalled();
     });
 
-    it('refuses once the token\'s own deadline has passed, without asking the platform', async () => {
+    it("refuses once the token's own deadline has passed, without asking the platform", async () => {
       const { service, api } = seated({ expiresAt: new Date(Date.now() - 1000).toISOString() });
 
       await expect(service.bill('session-1')).rejects.toThrow();
@@ -350,11 +362,139 @@ describe('DineInService (ADR 0047)', () => {
     });
   });
 
+  describe('seat -- sitting down at a free table (ADR 0143)', () => {
+    const seating = {
+      ...bill({ sessionId: 'session-new', totalMinor: 0, roundCount: 0, orderIds: [] }),
+      origin: 'GUEST_QR',
+      created: true,
+      claimExpiresAt: '2026-10-01T10:15:00Z',
+      confirmed: false,
+    };
+
+    function scanned() {
+      return seated({ openSessionId: null, walkInAvailable: true });
+    }
+
+    it('posts the party size with the guest token, signed in as the customer -- never anonymous', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      const result = await service.seat(3);
+
+      expect(api.mutate).toHaveBeenLastCalledWith(
+        'POST',
+        '/storefront/dine-in/sessions',
+        expect.objectContaining({
+          body: { partySize: 3 },
+          headers: { 'X-Dine-In-Token': 'guest-token-1' },
+        }),
+      );
+      const options = api.mutate.mock.calls.at(-1)?.[2] as { anonymous?: boolean };
+      expect(options.anonymous).toBeUndefined();
+      expect(result.created).toBe(true);
+    });
+
+    it('moves the stored visit onto the new session, and a reload lands on the seated table', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      await service.seat(2);
+
+      expect(service.admission()?.openSessionId).toBe('session-new');
+      expect(service.admission()?.walkInAvailable).toBe(false);
+      TestBed.resetTestingModule();
+      const { service: resumed } = setUp();
+      expect(resumed.admission()?.openSessionId).toBe('session-new');
+    });
+
+    it('never exposes the guest token on the admission a screen reads', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      await service.seat(2);
+
+      expect(JSON.stringify(service.admission())).not.toContain('guest-token-1');
+    });
+
+    it('leaves the visit alone when the platform refuses', async () => {
+      const { service, api } = scanned();
+      api.mutate.mockRejectedValueOnce(
+        new HorecaOSApiError({
+          status: 409,
+          code: 'RESOURCE_CONFLICT',
+          detail: 'This table cannot be taken from here.',
+          problem: { conflict: 'TABLE_NOT_AVAILABLE' },
+        }),
+      );
+
+      await expect(service.seat(2)).rejects.toBeInstanceOf(HorecaOSApiError);
+
+      expect(service.admission()?.openSessionId).toBeNull();
+      expect(service.admission()?.walkInAvailable).toBe(true);
+    });
+
+    it('refuses without a scanned table, rather than posting with no proof of where', async () => {
+      const { service, api } = setUp();
+
+      await expect(service.seat(2)).rejects.toThrow('No table has been scanned');
+      expect(api.mutate).not.toHaveBeenCalled();
+    });
+
+    it('stops offering the table after a refusal, and offers it again when a session ends', () => {
+      const { service } = scanned();
+
+      service.markWalkInUnavailable();
+      expect(service.admission()?.walkInAvailable).toBe(false);
+
+      service.sessionEnded();
+      expect(service.admission()?.openSessionId).toBeNull();
+      expect(service.admission()?.walkInAvailable).toBe(true);
+    });
+  });
+
+  describe('checkoutAtTable -- the guest token beside the order', () => {
+    it('hands the cart the token as a header and nothing else', async () => {
+      const { service } = seated();
+      const checkout = vi.fn().mockResolvedValue({ orderId: 'order-1' });
+
+      const result = await service.checkoutAtTable(
+        { checkout },
+        { priced: { cartId: 'cart-1' }, paymentMethodCode: 'CASH', idempotencyKey: 'key-1' },
+      );
+
+      expect(checkout).toHaveBeenCalledWith({
+        priced: { cartId: 'cart-1' },
+        paymentMethodCode: 'CASH',
+        idempotencyKey: 'key-1',
+        headers: { 'X-Dine-In-Token': 'guest-token-1' },
+      });
+      expect(result).toEqual({ orderId: 'order-1' });
+    });
+
+    it('refuses when no table has been scanned, so an order cannot go out claiming one', async () => {
+      const { service } = setUp();
+      const checkout = vi.fn();
+
+      await expect(service.checkoutAtTable({ checkout }, {})).rejects.toThrow(
+        'No table has been scanned',
+      );
+      expect(checkout).not.toHaveBeenCalled();
+    });
+  });
+
   describe('isGuestSessionEnded', () => {
     it('is true for UNAUTHENTICATED and false for anything else', () => {
       const { service } = setUp();
-      const ended = new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'session ended' });
-      const other = new HorecaOSApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'no such session' });
+      const ended = new HorecaOSApiError({
+        status: 401,
+        code: 'UNAUTHENTICATED',
+        detail: 'session ended',
+      });
+      const other = new HorecaOSApiError({
+        status: 404,
+        code: 'RESOURCE_NOT_FOUND',
+        detail: 'no such session',
+      });
 
       expect(service.isGuestSessionEnded(ended)).toBe(true);
       expect(service.isGuestSessionEnded(other)).toBe(false);
@@ -362,7 +502,7 @@ describe('DineInService (ADR 0047)', () => {
     });
   });
 
-  describe('queued rounds -- an order that still has to reach its table\'s bill', () => {
+  describe("queued rounds -- an order that still has to reach its table's bill", () => {
     const billAfter = (orderIds: string[]) =>
       bill({ totalMinor: 45_000 * orderIds.length, roundCount: orderIds.length, orderIds });
 
@@ -402,7 +542,11 @@ describe('DineInService (ADR 0047)', () => {
       localStorage.setItem(
         PENDING_KEY,
         JSON.stringify([
-          { sessionId: 'session-1', orderId: 'order-old', queuedAt: Date.now() - 25 * 60 * 60 * 1000 },
+          {
+            sessionId: 'session-1',
+            orderId: 'order-old',
+            queuedAt: Date.now() - 25 * 60 * 60 * 1000,
+          },
           { sessionId: 'session-1', orderId: 'order-new', queuedAt: Date.now() - 60 * 1000 },
         ]),
       );
@@ -452,7 +596,11 @@ describe('DineInService (ADR 0047)', () => {
     });
 
     it.each([
-      ['a 401, because the guest token or the customer session can be renewed', 401, 'UNAUTHENTICATED'],
+      [
+        'a 401, because the guest token or the customer session can be renewed',
+        401,
+        'UNAUTHENTICATED',
+      ],
       ['a 408', 408, 'INTERNAL_ERROR'],
       ['a 429', 429, 'RATE_LIMIT_EXCEEDED'],
       ['a 503', 503, 'INTERNAL_ERROR'],
@@ -481,7 +629,9 @@ describe('DineInService (ADR 0047)', () => {
       service.queueRound('session-1', 'order-1');
       service.queueRound('session-1', 'order-2');
       api.mutate
-        .mockRejectedValueOnce(new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'closed' }))
+        .mockRejectedValueOnce(
+          new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'closed' }),
+        )
         .mockResolvedValueOnce(billAfter(['order-2']));
 
       const flush = await service.flushPendingRounds('session-1');
@@ -491,7 +641,7 @@ describe('DineInService (ADR 0047)', () => {
       expect(service.pendingRoundCount('session-1')).toBe(0);
     });
 
-    it('leaves another session\'s rounds alone', async () => {
+    it("leaves another session's rounds alone", async () => {
       const { service, api } = seated();
       service.queueRound('session-2', 'order-elsewhere');
 
@@ -507,7 +657,10 @@ describe('DineInService (ADR 0047)', () => {
       service.queueRound('session-1', 'order-1');
       api.mutate.mockResolvedValue(billAfter(['order-1']));
 
-      await Promise.all([service.flushPendingRounds('session-1'), service.flushPendingRounds('session-1')]);
+      await Promise.all([
+        service.flushPendingRounds('session-1'),
+        service.flushPendingRounds('session-1'),
+      ]);
 
       expect(api.mutate).toHaveBeenCalledTimes(1);
     });
@@ -522,7 +675,10 @@ describe('DineInService (ADR 0047)', () => {
       const flush = await service.flushPendingRounds('session-1');
       await running;
 
-      expect(api.mutate.mock.calls.map((call) => call[2].body.orderId)).toEqual(['order-1', 'order-2']);
+      expect(api.mutate.mock.calls.map((call) => call[2].body.orderId)).toEqual([
+        'order-1',
+        'order-2',
+      ]);
       expect(flush.pending).toBe(0);
     });
 

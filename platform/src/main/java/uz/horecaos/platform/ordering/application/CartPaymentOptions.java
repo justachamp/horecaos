@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -95,6 +96,21 @@ public class CartPaymentOptions {
                     .sorted()
                     .toList();
 
+            // ADR 0137. A line sold by weight is priced at its nominal weight and corrected at the
+            // scale, and a total a provider has already taken cannot follow the correction, so such a
+            // basket is sold only for money collected at handover. Removed here for the reason every
+            // other filter is: the checkout would refuse it at the last step.
+            List<String> warnings = new ArrayList<>(warnings());
+            if (carts.holdsWeighedLine(tenantId, brandId, cart, view.lines())) {
+                List<String> settledAtHandover = offerable.stream()
+                        .filter(code -> !payments.takesMoneyBeforeHandover(tenantId, code))
+                        .toList();
+                if (settledAtHandover.size() < offerable.size()) {
+                    warnings.add(WEIGHED_LINES_PAY_AT_HANDOVER);
+                }
+                offerable = settledAtHandover;
+            }
+
             return new PaymentOptions(
                     cart.cartId(),
                     cart.locationId(),
@@ -102,9 +118,15 @@ public class CartPaymentOptions {
                     cart.fulfillmentMode(),
                     cart.currency(),
                     offerable,
-                    warnings());
+                    List.copyOf(warnings));
         });
     }
+
+    /**
+     * The warning that says why a method the channel sells is absent from the list: the basket
+     * holds a line sold by weight, which is paid for at handover (ADR 0137).
+     */
+    public static final String WEIGHED_LINES_PAY_AT_HANDOVER = "WEIGHED_LINES_PAY_AT_HANDOVER";
 
     /**
      * The gaps that apply to this answer, in the same shape every other ordering

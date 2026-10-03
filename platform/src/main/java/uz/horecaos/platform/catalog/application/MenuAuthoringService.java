@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
+import uz.horecaos.platform.catalog.api.ChannelAssortmentChanged;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
@@ -55,12 +57,28 @@ public class MenuAuthoringService {
     private final Clock clock;
     private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
+    private final @Nullable ApplicationEventPublisher events;
 
     /**
      * @param brandLocales  the brand's own default language, which a membership list names its
      *                      products in first (row 10.12)
      * @param defaultLocale {@code horecaos.catalog.default-locale} -- where a name is looked for
      *                      when the brand's own default language has none
+     */
+    public MenuAuthoringService(
+            JdbcMenuStore menus,
+            JdbcCatalogStore catalog,
+            SalesChannelLookup channels,
+            AuditRecorder audit,
+            Clock clock,
+            BrandLocaleLookup brandLocales,
+            String defaultLocale) {
+        this(menus, catalog, channels, audit, clock, brandLocales, defaultLocale, null);
+    }
+
+    /**
+     * The full form: also tells the marketplace reconciler when a binding moves (ADR 0141's
+     * dirty marker). A caller that predates it passes no publisher and is exactly as it was.
      */
     @Autowired
     public MenuAuthoringService(
@@ -70,7 +88,9 @@ public class MenuAuthoringService {
             AuditRecorder audit,
             Clock clock,
             BrandLocaleLookup brandLocales,
-            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale,
+            @Nullable ApplicationEventPublisher events) {
+        this.events = events;
         this.menus = menus;
         this.catalog = catalog;
         this.channels = channels;
@@ -88,6 +108,18 @@ public class MenuAuthoringService {
             AuditRecorder audit,
             Clock clock) {
         this(menus, catalog, channels, audit, clock, BrandLocaleLookup.platformFallback(), "uz");
+    }
+
+    /**
+     * A bound menu decides what a branch sells (row 4.4a), so a bind, rebind or unbind is an input
+     * the marketplace reconciler's resolver reads: ADR 0141's dirty marker, once per change. A
+     * branch rebound to a menu that carries a {@code MENU} stop changes what every one of its
+     * items is told without touching a stop row.
+     */
+    private void publishAssortmentChanged(UUID tenantId, UUID brandId, UUID locationId) {
+        if (events != null) {
+            events.publishEvent(new ChannelAssortmentChanged(tenantId, brandId, locationId, clock.instant()));
+        }
     }
 
     // ------------------------------------------------------------------ menus
@@ -375,6 +407,7 @@ public class MenuAuthoringService {
         } catch (DataIntegrityViolationException violation) {
             throw asApiException(JdbcMenuStore.explain(violation));
         }
+        publishAssortmentChanged(tenantId, brandId, locationId);
         String channelScope = channelId == null ? "" : channelId.toString();
         Map<String, Object> beforeFields =
                 before.isEmpty() ? Map.of() : Map.of("menuId", before.get().toString(), "channelId", channelScope);
@@ -404,6 +437,7 @@ public class MenuAuthoringService {
         if (!removed) {
             return;
         }
+        publishAssortmentChanged(tenantId, brandId, locationId);
         Map<String, Object> beforeDoc = new LinkedHashMap<>();
         beforeDoc.put("menuId", before.map(UUID::toString).orElse(null));
         beforeDoc.put("channelId", channelId == null ? "" : channelId.toString());

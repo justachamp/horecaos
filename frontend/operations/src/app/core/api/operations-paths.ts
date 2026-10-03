@@ -130,6 +130,23 @@ export const operationsPaths = {
   },
 
   /**
+   * IA 0.1d, the live board's operator band (ADR 0139): who took and who
+   * accepted how many orders today, with names, across the whole brand.
+   * `OperatorTodayLeaderboardController`; `ORDER_READ` at `BRAND` scope, so a
+   * location-scoped principal is refused and reads {@link
+   * locationOperatorsToday} for their own branch instead -- the same split
+   * {@link brandOrderCounts} has.
+   */
+  brandOperatorsToday(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/orders/operators/today`;
+  },
+
+  /** {@link brandOperatorsToday}, for the one branch a shift supervisor's own grant covers. */
+  locationOperatorsToday(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/orders/operators/today`;
+  },
+
+  /**
    * IA 0.2a (wave T01): the caller's own orders today, by sales channel —
    * `MyWorkQueryService`, self-scoped server-side by the token's own subject.
    * No `actorId` query param is ever built here: the one this endpoint
@@ -192,6 +209,14 @@ export const operationsPaths = {
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
+  },
+
+  /**
+   * ADR 0137: capture the weighed total of one catchweight line at pick or handover. Mutation:
+   * `Idempotency-Key` and `If-Match` (the order's version) required, capability `order.advance`.
+   */
+  orderLineActualWeight(scope: LocationScope, orderId: string, lineId: string): string {
+    return `${this.order(scope, orderId)}/lines/${encodeURIComponent(lineId)}/actual-weight`;
   },
 
   /**
@@ -447,6 +472,48 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0141 — a stop with a scope, a source and an optional end, at this branch
+   * (`InventoryStopController`, same legacy tenant prefix as every
+   * `InventoryController` path above and for the same reason). `POST` stops dishes at
+   * `LOCATION` scope, or one `CHANNEL` here; `GET` lists the stops that touch the branch.
+   * Mutation: key required.
+   */
+  inventoryStopsAtLocation(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/stops`;
+  },
+
+  /** `DELETE` lifts one stop that touches this branch alone. Mutation: key and `If-Match`. */
+  inventoryStopAtLocation(scope: LocationScope, stopId: string): string {
+    return `${this.inventoryStopsAtLocation(scope)}/${encodeURIComponent(stopId)}`;
+  },
+
+  /**
+   * ADR 0141 — the brand-wide route: `POST` stops at `BRAND`, `MENU` or a `CHANNEL`
+   * everywhere (needs `inventory.stop.manage`, which a branch manager does not hold).
+   */
+  inventoryStopsAtBrand(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/inventory/stops`;
+  },
+
+  /** `DELETE` lifts any stop of the brand. Mutation: key and `If-Match`. */
+  inventoryStopAtBrand(scope: LocationScope, stopId: string): string {
+    return `${this.inventoryStopsAtBrand(scope)}/${encodeURIComponent(stopId)}`;
+  },
+
+  /**
+   * ADR 0141 — what each connected marketplace has and has not been told about the stop list
+   * at this branch, and since when (`MarketplacePropagationController`, integration module).
+   */
+  inventoryMarketplacePropagation(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/marketplace-propagation`;
+  },
+
+  /** ADR 0141 — "why can't I sell this?" for one dish here; optional `channel` query param (a channel code). */
+  inventoryAvailabilityExplanation(scope: LocationScope, variantId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability-explanation`;
+  },
+
+  /**
    * Current availability for a set of variants at this location (query param
    * `variantIds`, max 100), with an optional `channel` query param
    * (`tenant.sales_channels.system_type`, e.g. `AGGREGATOR`) that also
@@ -698,9 +765,29 @@ export const operationsPaths = {
   },
 
   /**
+   * Keep a guest's self-seated table for them (ADR 0143, `TableSessionController#confirmClaim`).
+   * `POST` with a reason and `If-Match`; `DINEIN_SESSION_MANAGE`, `Idempotency-Key` required.
+   */
+  dineInSessionClaimConfirmations(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/claim-confirmations`;
+  },
+
+  /**
+   * Ask for the bill, start settling, return to open, or close (ADR 0047,
+   * `TableSessionController#stateAction`). `POST` with a target status, a reason and
+   * `If-Match`; `DINEIN_SESSION_MANAGE`, `Idempotency-Key` required. The console's one
+   * caller releases a guest's unconfirmed claim by closing it (ADR 0143).
+   */
+  dineInSessionStateActions(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/state-actions`;
+  },
+
+  /**
    * Floor plan settings (ADR 0047, `FloorPlanController`, rows `10.2d`/
    * `10.5b`, wave P38): `qrMode`, turnaround buffer, guest-session TTL,
-   * service-charge rate. `GET`/`PUT`, both `DINEIN_FLOORPLAN_MANAGE`.
+   * service-charge rate, and (ADR 0143) self-seating. `GET`/`PUT`, both
+   * `DINEIN_FLOORPLAN_MANAGE`; the `PUT` carries `If-Match` (a never-configured
+   * branch reads as version 0).
    */
   dineInSettings(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/dine-in/settings`;

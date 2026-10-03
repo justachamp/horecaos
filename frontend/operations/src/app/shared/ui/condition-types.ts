@@ -28,7 +28,11 @@ export type ConditionValueKind =
   | 'DATE_RANGE'
   | 'TEXT_SET'
   | 'DAY_OF_WEEK_SET'
-  | 'REFERENCE';
+  | 'REFERENCE'
+  /** A clock-time window in local time: `numericLow`/`numericHigh` hold the minute of the day (0-1440), the editor shows `HH:mm`. A window may wrap past midnight. */
+  | 'TIME_RANGE'
+  /** A condition that is its own value — "is the customer's first order". No operator or value editor renders; the row is workable as it stands. */
+  | 'FLAG';
 
 /**
  * The operator vocabulary every value kind draws from. Not every operator is
@@ -81,6 +85,15 @@ export interface ConditionTypeDescriptor {
   readonly valueKind: ConditionValueKind;
   /** Fixed, already-translated choices for a `TEXT_SET`/`REFERENCE` condition, or `null`/omitted when free text is accepted. */
   readonly fixedValues?: readonly ConditionFixedValue[] | null;
+  /**
+   * The operators this condition offers, when fewer than its value kind's full
+   * set — a promotion's "subtotal at least" has no "at most", and its product
+   * list has "is one of" and "is not one of" but no "is". Omitted: every
+   * operator {@link operatorsForValueKind} lists for the kind.
+   */
+  readonly operators?: readonly ConditionOperator[];
+  /** Renders a filter box above `fixedValues`, for a list too long to scan as chips (a menu's products). Selected values always stay visible. */
+  readonly searchable?: boolean;
 }
 
 /** Every value a row may hold, kept as editable strings — converted at the consumer's own boundary (segments' `AudiencePredicate`, a future promotion condition, …). */
@@ -121,7 +134,18 @@ export function operatorsForValueKind(kind: ConditionValueKind): readonly Condit
       return ['IN', 'NOT_IN'];
     case 'REFERENCE':
       return ['EQUALS', 'IN', 'NOT_IN'];
+    case 'TIME_RANGE':
+      return ['BETWEEN'];
+    case 'FLAG':
+      return ['EQUALS'];
   }
+}
+
+/** The operators one catalogue entry offers: its own restriction, else every operator its value kind accepts. */
+export function operatorsForDescriptor(
+  descriptor: ConditionTypeDescriptor,
+): readonly ConditionOperator[] {
+  return descriptor.operators ?? operatorsForValueKind(descriptor.valueKind);
 }
 
 export function descriptorFor(
@@ -139,7 +163,7 @@ export function emptyConditionRow(
   catalogue: readonly ConditionTypeDescriptor[],
   type: string = catalogue[0].type,
 ): ConditionRow {
-  const operator = operatorsForValueKind(descriptorFor(catalogue, type).valueKind)[0];
+  const operator = operatorsForDescriptor(descriptorFor(catalogue, type))[0];
   return {
     id: nextDomId('condition-row'),
     type,
@@ -183,7 +207,32 @@ export function conditionRowIsWorkable(row: ConditionRow, valueKind: ConditionVa
       return row.textValues.trim().length > 0;
     case 'DAY_OF_WEEK_SET':
       return row.dayOfWeekValues.length > 0;
+    case 'TIME_RANGE':
+      return row.numericLow.trim().length > 0 && row.numericHigh.trim().length > 0;
+    case 'FLAG':
+      return true;
   }
+}
+
+/** `HH:mm` for a minute of the day, `1440` being the end of it (`24:00`) — what a `TIME_RANGE` editor shows. */
+export function minutesToClock(minutes: string): string {
+  if (minutes.trim() === '' || Number.isNaN(Number(minutes))) {
+    return '';
+  }
+  const total = Math.max(0, Math.min(1440, Math.trunc(Number(minutes))));
+  const hours = Math.trunc(total / 60);
+  const rest = total % 60;
+  return `${String(hours).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
+}
+
+/** The inverse of {@link minutesToClock}: a minute of the day from `HH:mm`, or the empty string for anything unreadable. */
+export function clockToMinutes(clock: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(clock.trim());
+  if (!match) {
+    return '';
+  }
+  const total = Number(match[1]) * 60 + Number(match[2]);
+  return total > 1440 ? '' : String(total);
 }
 
 function parseCsv(text: string): readonly string[] {
@@ -295,6 +344,20 @@ export function evaluateConditionRow(
           return false;
       }
     }
+    case 'TIME_RANGE': {
+      const minute = typeof candidateValue === 'number' ? candidateValue : Number(candidateValue);
+      if (Number.isNaN(minute) || row.numericLow.trim() === '' || row.numericHigh.trim() === '') {
+        return false;
+      }
+      const from = Number(row.numericLow);
+      const to = Number(row.numericHigh);
+      // The engine's own window: `from` inclusive, `to` exclusive, and a window
+      // that ends before it starts runs through midnight (22:00 to 02:00).
+      return from <= to ? minute >= from && minute < to : minute >= from || minute < to;
+    }
+    case 'FLAG':
+      // A flag is a yes/no fact about the candidate: "1" or "true" holds it.
+      return String(candidateValue) === '1' || String(candidateValue) === 'true';
   }
 }
 

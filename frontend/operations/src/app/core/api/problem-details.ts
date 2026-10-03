@@ -68,6 +68,8 @@ export const ApiErrorCode = {
   IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
   IDEMPOTENCY_KEY_IN_PROGRESS: 'IDEMPOTENCY_KEY_IN_PROGRESS',
   PRICE_CHANGED: 'PRICE_CHANGED',
+  /** A well-formed request the order's current state refuses; the specific cause is in `reason`. */
+  UNPROCESSABLE_STATE: 'UNPROCESSABLE_STATE',
   UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   /** ADR 0062: a staff sign-in's credentials were correct but a required action stands in the way. */

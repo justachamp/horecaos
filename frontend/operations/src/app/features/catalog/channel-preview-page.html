@@ -1,0 +1,306 @@
+<div class="preview">
+  <header class="preview__header">
+    <div>
+      <h1 class="q-title">{{ 'catalog.preview.title' | t }}</h1>
+      <p class="q-caption preview__honesty" data-testid="preview-honesty">
+        {{ 'catalog.preview.honesty' | t }}
+      </p>
+    </div>
+    <a class="preview__back" routerLink="/catalog/publication">{{ 'catalog.preview.back' | t }}</a>
+  </header>
+
+  @if (loading()) {
+    <div class="preview__skeleton" [attr.aria-label]="'catalog.preview.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="preview__denied" data-testid="preview-denied">
+      <p class="q-body-sm">{{ 'catalog.preview.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="preview__error-band" role="alert" data-testid="preview-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <div class="preview__controls">
+      <label class="preview__control">
+        <span class="q-body-sm">{{ 'catalog.preview.channel.label' | t }}</span>
+        <select
+          [value]="selectedChannelId() ?? ''"
+          (change)="onChannelChosen($any($event.target).value)"
+          data-testid="preview-channel-select"
+        >
+          @for (channel of channels(); track channel.id) {
+            <option [value]="channel.id" [selected]="channel.id === selectedChannelId()">
+              {{ channel.displayName }}
+            </option>
+          }
+        </select>
+      </label>
+      <label class="preview__control">
+        <span class="q-body-sm">{{ 'catalog.preview.branch.label' | t }}</span>
+        <select
+          [value]="selectedLocationId() ?? ''"
+          (change)="onBranchChosen($any($event.target).value)"
+          [disabled]="targets().length === 0"
+          data-testid="preview-branch-select"
+        >
+          @for (target of targets(); track target.locationId) {
+            <option
+              [value]="target.locationId"
+              [selected]="target.locationId === selectedLocationId()"
+            >
+              {{ branchLabel(target) }}
+            </option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="preview__refresh"
+        [disabled]="previewing() || !selectedLocationId()"
+        (click)="refresh()"
+        data-testid="preview-refresh"
+      >
+        {{ 'catalog.preview.refresh' | t }}
+      </button>
+    </div>
+
+    @if (targets().length === 0 && selectedChannelId()) {
+      <p class="q-body-sm" data-testid="preview-no-branches">
+        {{ 'catalog.preview.branch.none' | t }}
+      </p>
+    }
+
+    @if (first(); as body) {
+      <!-- verdict -->
+      <section class="preview__verdict" data-testid="preview-verdict">
+        <h2
+          class="q-subhead"
+          [class.preview__verdict--blocked]="!body.channelReady"
+          data-testid="preview-verdict-line"
+        >
+          @if (body.channelReady) {
+            {{ 'catalog.preview.verdict.ready' | t }}
+          } @else {
+            {{ 'catalog.preview.verdict.blockers' | t: { count: blockerCount() } }}
+          }
+        </h2>
+        <div class="preview__facts">
+          <span class="chip chip--muted" data-testid="preview-pricing">
+            @if (body.pricing.authority === 'EXTERNAL') {
+              {{ 'catalog.preview.pricing.external' | t }}
+            } @else {
+              {{
+                'catalog.preview.pricing.currency' | t: { currency: body.pricing.currency ?? '—' }
+              }}
+            }
+          </span>
+          @if (body.binding; as binding) {
+            <span class="chip chip--muted" data-testid="preview-binding">
+              {{ binding.displayName }}
+            </span>
+            <span class="chip chip--muted" data-testid="preview-ruleset">
+              @if (binding.rulesetCode) {
+                {{ 'catalog.preview.ruleset' | t: { code: binding.rulesetCode } }}
+              } @else {
+                {{ 'catalog.preview.ruleset.none' | t }}
+              }
+            </span>
+          }
+        </div>
+      </section>
+
+      <!-- catalog-level findings: a check that did not run is not a row in a list -->
+      @for (banner of banners(); track $index) {
+        <div
+          class="preview__banner"
+          [class.preview__banner--blocker]="banner.severity === 'BLOCKER'"
+          role="status"
+          data-testid="preview-banner"
+        >
+          <span class="preview__finding-code">{{ banner.code }}</span>
+          <span class="q-body-sm">{{ banner.detail }}</span>
+        </div>
+      }
+
+      <div class="preview__body">
+        <!-- findings -->
+        <section class="preview__findings" data-testid="preview-findings">
+          <h2 class="q-subhead">{{ 'catalog.preview.findings.title' | t }}</h2>
+          <ul class="preview__finding-list">
+            @for (finding of rows(); track $index) {
+              <li
+                class="preview__finding"
+                [class.preview__finding--blocker]="finding.severity === 'BLOCKER'"
+                data-testid="preview-finding"
+              >
+                <div class="preview__finding-main">
+                  <span class="preview__finding-code">{{ finding.code }}</span>
+                  <span class="chip chip--muted" data-testid="preview-finding-source">{{
+                    sourceLabel(finding)
+                  }}</span>
+                  @if (findingEntityLabel(finding); as label) {
+                    <span class="preview__finding-entity">{{ label }}</span>
+                  }
+                  @if (finding.detail) {
+                    <span class="preview__finding-detail">{{ finding.detail }}</span>
+                  }
+                </div>
+                @if (findingLink(finding); as link) {
+                  <a
+                    class="preview__finding-link"
+                    [routerLink]="link"
+                    data-testid="preview-finding-link"
+                    >{{ 'catalog.preview.finding.open' | t }}</a
+                  >
+                }
+              </li>
+            } @empty {
+              <li class="preview__finding-empty" data-testid="preview-findings-empty">
+                {{ 'catalog.preview.findings.none' | t }}
+              </li>
+            }
+          </ul>
+        </section>
+
+        <!-- what the channel receives -->
+        <section class="preview__menu" data-testid="preview-menu">
+          <h2 class="q-subhead">{{ 'catalog.preview.menu.title' | t }}</h2>
+          @switch (frameKind()) {
+            @case ('kiosk') {
+              <q-kiosk-frame [caption]="body.channel.displayName">
+                <ng-container *ngTemplateOutlet="menuBody" />
+              </q-kiosk-frame>
+            }
+            @case ('telegram') {
+              <q-telegram-mini-app-frame
+                [title]="body.channel.displayName"
+                [caption]="
+                  'catalog.preview.caption.channel' | t: { channel: body.channel.displayName }
+                "
+              >
+                <ng-container *ngTemplateOutlet="menuBody" />
+              </q-telegram-mini-app-frame>
+            }
+            @default {
+              <q-phone-frame
+                [caption]="
+                  'catalog.preview.caption.channel' | t: { channel: body.channel.displayName }
+                "
+              >
+                <ng-container *ngTemplateOutlet="menuBody" />
+              </q-phone-frame>
+            }
+          }
+          @if (hasMore()) {
+            <button
+              type="button"
+              class="preview__more"
+              [disabled]="loadingMore()"
+              (click)="loadMore()"
+              data-testid="preview-more"
+            >
+              {{ 'catalog.preview.more' | t }}
+            </button>
+          }
+        </section>
+      </div>
+
+      <ng-template #menuBody>
+        @for (shelf of shelves(); track shelf.key) {
+          <section class="preview__shelf" data-testid="preview-shelf">
+            <h3 class="q-emphasis preview__shelf-name">
+              {{ shelf.name ?? ('catalog.preview.category.other' | t) }}
+            </h3>
+            @for (product of shelf.products; track product.productId) {
+              @if (frameKind() === 'aggregator') {
+                <q-aggregator-card-frame>
+                  <ng-container *ngTemplateOutlet="productCard; context: { $implicit: product }" />
+                </q-aggregator-card-frame>
+              } @else {
+                <div class="preview__plain-card">
+                  <ng-container *ngTemplateOutlet="productCard; context: { $implicit: product }" />
+                </div>
+              }
+            }
+          </section>
+        } @empty {
+          <p class="q-body-sm preview__empty" data-testid="preview-empty">
+            {{ 'catalog.preview.menu.empty' | t }}
+          </p>
+        }
+      </ng-template>
+
+      <ng-template #productCard let-product>
+        <div class="preview__card" data-testid="preview-product">
+          <div class="preview__thumb">
+            @if (thumbOf(product); as url) {
+              <img [src]="url" alt="" class="preview__image" data-testid="preview-image" />
+            } @else {
+              <span class="preview__image-placeholder q-caption">{{
+                'catalog.preview.image.none' | t
+              }}</span>
+            }
+          </div>
+          <div class="preview__card-main">
+            <div class="preview__card-title">
+              <span class="q-emphasis" data-testid="preview-product-name">{{ product.name }}</span>
+              @if (stopped(product)) {
+                <span class="chip chip--muted" data-testid="preview-stopped">{{
+                  'catalog.preview.card.stopped' | t
+                }}</span>
+              }
+            </div>
+            @if (product.description) {
+              <p class="q-caption preview__description">{{ product.description }}</p>
+            }
+            <ul class="preview__variants">
+              @for (variant of product.variants; track variant.variantId) {
+                <li class="preview__variant" data-testid="preview-variant">
+                  <span class="q-caption">{{ variant.sku ?? variant.unitCode }}</span>
+                  <span
+                    class="q-tnum"
+                    [class.preview__price--missing]="!hasPrice(variant)"
+                    data-testid="preview-price"
+                    >{{ priceOf(variant) }}</span
+                  >
+                </li>
+              }
+            </ul>
+            <div class="preview__card-foot">
+              <span
+                class="q-caption preview__photo-source"
+                data-testid="preview-photo-source"
+                [attr.data-source]="product.mediaSource"
+                >{{ photoLabel(product) }}</span
+              >
+              <a [routerLink]="['/catalog/products', product.productId]" class="q-caption">{{
+                'catalog.preview.card.open' | t
+              }}</a>
+              <button
+                type="button"
+                class="q-caption preview__photo-button"
+                (click)="openEditor(product)"
+                data-testid="preview-photo-edit"
+              >
+                {{ 'catalog.preview.card.channelPhoto' | t }}
+              </button>
+            </div>
+            @if (editingProductId() === product.productId) {
+              <q-channel-image-override-panel
+                [choices]="editorChoices()"
+                [current]="overrideAssets(product)"
+                [saving]="editorSaving()"
+                [error]="editorError()"
+                (saved)="saveOverride(product, $event)"
+                (cleared)="clearOverride(product)"
+                (cancelled)="closeEditor()"
+              />
+            }
+          </div>
+        </div>
+      </ng-template>
+    }
+  }
+</div>

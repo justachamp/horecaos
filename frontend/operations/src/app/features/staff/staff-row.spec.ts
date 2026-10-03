@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { GrantView, ScopeDirectory } from './staff-api';
+import { staffMember } from './staff-member.testing';
 import {
   COMPANY_WIDE_GROUP,
   groupIntoPeople,
   groupsFor,
+  hasNoAccess,
+  initialsOf,
+  matchesQuery,
+  nameOf,
+  referenceOf,
   sortByAttention,
   statusOf,
 } from './staff-row';
@@ -194,5 +200,167 @@ describe('groupsFor', () => {
       ],
     };
     expect(groupsFor(person, DIRECTORY)).toEqual([]);
+  });
+});
+
+describe('the staff record joined to the jobs (ADR 0139)', () => {
+  const now = new Date('2026-09-02T10:00:00Z');
+
+  it('makes one person of a subject that has jobs and a record, carrying both', () => {
+    const people = groupIntoPeople(
+      [grant({ principalSubject: 'a' })],
+      [staffMember({ principalSubject: 'a' })],
+    );
+
+    expect(people).toHaveLength(1);
+    expect(people[0].grants).toHaveLength(1);
+    expect(people[0].member?.displayReference).toBe('S-0001');
+  });
+
+  it('keeps a subject that has jobs and no record, with no member', () => {
+    const people = groupIntoPeople([grant({ principalSubject: 'legacy' })], []);
+
+    expect(people).toHaveLength(1);
+    expect(people[0].member).toBeNull();
+  });
+
+  it('keeps a record that has no job at all: the list is where an owner looks for a former colleague', () => {
+    const people = groupIntoPeople([], [staffMember({ principalSubject: 'former' })]);
+
+    expect(people).toHaveLength(1);
+    expect(people[0].grants).toEqual([]);
+    expect(people[0].member?.principalSubject).toBe('former');
+  });
+
+  it('names a person only from a name that was typed, never from the S-reference fallback', () => {
+    const named = { principalSubject: 'a', grants: [], member: staffMember() };
+    const unnamed = {
+      principalSubject: 'b',
+      grants: [],
+      member: staffMember({
+        firstName: null,
+        lastName: null,
+        displayName: 'S-0007',
+        displayReference: 'S-0007',
+      }),
+    };
+    const none = { principalSubject: 'c', grants: [], member: null };
+
+    expect(nameOf(named)).toBe('Aziza Karimova');
+    expect(nameOf(unnamed)).toBeNull();
+    expect(referenceOf(unnamed)).toBe('S-0007');
+    expect(nameOf(none)).toBeNull();
+    expect(referenceOf(none)).toBeNull();
+  });
+
+  it('takes the initials from the first letters of the first and last name', () => {
+    expect(initialsOf({ principalSubject: 'a', grants: [], member: staffMember() })).toBe('AK');
+    expect(
+      initialsOf({
+        principalSubject: 'a',
+        grants: [],
+        member: staffMember({ firstName: 'ёлка', lastName: null }),
+      }),
+    ).toBe('Ё');
+    expect(initialsOf({ principalSubject: 'a', grants: [], member: null })).toBe('');
+  });
+
+  it('is ENDED once employment has ended and no job is left', () => {
+    const person = {
+      principalSubject: 'a',
+      grants: [
+        grant({ status: 'REVOKED', revokedAt: '2026-09-01T00:00:00Z', revokedReason: 'Ended' }),
+      ],
+      member: staffMember({ employmentStatus: 'ENDED', employedUntil: '2026-09-01' }),
+    };
+
+    expect(statusOf(person, now)).toEqual({ kind: 'ENDED', weight: 0, endedOn: '2026-09-01' });
+    expect(hasNoAccess(statusOf(person, now))).toBe(true);
+  });
+
+  it('is ACCESS_DRIFT, not ENDED, when employment has ended and a job is still active', () => {
+    const person = {
+      principalSubject: 'a',
+      grants: [grant({ status: 'ACTIVE' })],
+      member: staffMember({ employmentStatus: 'ENDED', employedUntil: '2026-09-01' }),
+    };
+
+    expect(statusOf(person, now)).toEqual({
+      kind: 'ACCESS_DRIFT',
+      weight: 0,
+      endedOn: '2026-09-01',
+    });
+    expect(hasNoAccess(statusOf(person, now))).toBe(false);
+  });
+
+  it('is INVITED while the record is PENDING, even with no open invitation to say so', () => {
+    const person = {
+      principalSubject: 'a',
+      grants: [grant({ status: 'ACTIVE' })],
+      member: staffMember({ employmentStatus: 'PENDING' }),
+    };
+
+    expect(statusOf(person, now)).toEqual({ kind: 'INVITED', weight: 3 });
+  });
+
+  it('is ON_LEAVE for someone on leave who holds a job, ranking below an ordinary person needing nothing', () => {
+    const person = {
+      principalSubject: 'a',
+      grants: [grant({ status: 'ACTIVE' })],
+      member: staffMember({ employmentStatus: 'ON_LEAVE' }),
+    };
+
+    expect(statusOf(person, now)).toEqual({ kind: 'ON_LEAVE', weight: 4 });
+  });
+
+  it('puts an access drift ahead of everything else, and orders the rest by name', () => {
+    const drift = {
+      principalSubject: 'z-drift',
+      grants: [grant({ status: 'ACTIVE' })],
+      member: staffMember({
+        principalSubject: 'z-drift',
+        firstName: 'Яна',
+        lastName: null,
+        employmentStatus: 'ENDED',
+        employedUntil: '2026-09-01',
+      }),
+    };
+    const ana = {
+      principalSubject: 'a',
+      grants: [grant({ status: 'ACTIVE' })],
+      member: staffMember({ principalSubject: 'a', firstName: 'Анна', lastName: null }),
+    };
+    const bob = {
+      principalSubject: 'b',
+      grants: [grant({ status: 'ACTIVE' })],
+      member: staffMember({ principalSubject: 'b', firstName: 'Боб', lastName: null }),
+    };
+
+    const ordered = sortByAttention([bob, ana, drift], now).map((p) => p.principalSubject);
+
+    expect(ordered).toEqual(['z-drift', 'a', 'b']);
+  });
+});
+
+describe('matchesQuery', () => {
+  const person = {
+    principalSubject: 'Subject-XYZ',
+    grants: [],
+    member: staffMember({ maskedPhone: '+998 90 ••• •• 42' }),
+  };
+
+  it('matches a substring of the name, the reference or the subject, ignoring case', () => {
+    expect(matchesQuery(person, 'KARIM')).toBe(true);
+    expect(matchesQuery(person, 's-00')).toBe(true);
+    expect(matchesQuery(person, 'subject-x')).toBe(true);
+  });
+
+  it('matches everyone on a blank query', () => {
+    expect(matchesQuery(person, '   ')).toBe(true);
+  });
+
+  it('does not match the phone', () => {
+    expect(matchesQuery(person, '+998 90')).toBe(false);
+    expect(matchesQuery(person, '42')).toBe(false);
   });
 });

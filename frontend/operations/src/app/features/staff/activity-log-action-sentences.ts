@@ -150,6 +150,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'catalog.channelMediaOverride.replaced': {
+      en: 'Photos shown on a channel replaced',
+      ru: 'Фото для канала заменены',
+      'uz-Latn': 'Kanal uchun rasmlar almashtirildi',
+    },
     'catalog.channelOffering.bulkSet': {
       en: 'Catalog channel offering bulk set',
       ru: 'Каталог канал предложение массовое установлено',
@@ -159,6 +164,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Catalog channel offering set',
       ru: 'Каталог канал предложение установлено',
       'uz-Latn': 'Katalog kanal taklif oʻrnatildi',
+    },
+    'catalog.comboComponent.added': {
+      en: 'Combo component added',
+      ru: 'Компонент комбо добавлен',
+      'uz-Latn': 'Kombo tarkibi qoʻshildi',
+    },
+    'catalog.comboComponent.updated': {
+      en: 'Combo component updated',
+      ru: 'Компонент комбо обновлён',
+      'uz-Latn': 'Kombo tarkibi yangilandi',
+    },
+    'catalog.comboGroup.created': {
+      en: 'Combo group created',
+      ru: 'Группа комбо создана',
+      'uz-Latn': 'Kombo guruhi yaratildi',
+    },
+    'catalog.comboGroup.updated': {
+      en: 'Combo group updated',
+      ru: 'Группа комбо обновлена',
+      'uz-Latn': 'Kombo guruhi yangilandi',
     },
     'catalog.comment-preset.attached': {
       en: 'Catalog comment preset attached',
@@ -230,6 +255,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог меню обновлено',
       'uz-Latn': 'Katalog menyu yangilandi',
     },
+    'catalog.modifierAttachment.policySet': {
+      en: 'Modifier group attachment policy set',
+      ru: 'Правила подключения группы модификаторов заданы',
+      'uz-Latn': 'Modifier guruhini biriktirish qoidalari oʻrnatildi',
+    },
     'catalog.offering.bulkSet': {
       en: 'Catalog offering bulk set',
       ru: 'Каталог предложение массовое установлено',
@@ -250,6 +280,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог товар остановлено везде',
       'uz-Latn': 'Katalog mahsulot toʻxtatildi hammasida',
     },
+    'catalog.variantModifierGroup.attached': {
+      en: 'Modifier group attached to a variant',
+      ru: 'Группа модификаторов подключена к варианту',
+      'uz-Latn': 'Modifier guruhi variantga biriktirildi',
+    },
     'catalog.recommendation.attached': {
       en: 'Catalog recommendation attached',
       ru: 'Каталог рекомендация прикреплено',
@@ -259,6 +294,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Catalog recommendation detached',
       ru: 'Каталог рекомендация откреплено',
       'uz-Latn': 'Katalog tavsiya ajratildi',
+    },
+    'catalog.variantPhysicalAttributes.set': {
+      en: 'Weight, portions and nutrition of a variant changed',
+      ru: 'Изменены вес, порции и пищевая ценность варианта',
+      'uz-Latn': 'Variantning ogʻirligi, porsiyalari va ozuqaviy qiymati oʻzgartirildi',
     },
     'commercial.entitlement_override.granted': {
       en: 'Commercial entitlement override granted',
@@ -640,6 +680,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Зал бронь запрошено',
       'uz-Latn': 'Zal bron soʻralindi',
     },
+    'dinein.session.claim-confirmed': {
+      en: 'Dinein session claim confirmed',
+      ru: 'Зал сессия самопосадка подтверждено',
+      'uz-Latn': 'Zal sessiya oʻzi oʻtirish tasdiqlandi',
+    },
+    'dinein.session.claim-lapsed': {
+      en: 'Dinein session claim lapsed',
+      ru: 'Зал сессия самопосадка истекло',
+      'uz-Latn': 'Zal sessiya oʻzi oʻtirish muddati tugadi',
+    },
     'dinein.session.opened': {
       en: 'Dinein session opened',
       ru: 'Зал сессия открыто',
@@ -709,6 +759,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'IAM identity drift detected',
       ru: 'Доступ личность расхождение обнаружено',
       'uz-Latn': 'Huquq shaxs farq aniqlandi',
+    },
+    'iam.location_contact.updated': {
+      en: 'Branch contact persons changed',
+      ru: 'Контактные лица филиала изменены',
+      'uz-Latn': 'Filialning aloqa shaxslari oʻzgartirildi',
     },
     'integration.secret_written': {
       en: 'Integration secret written',
@@ -795,6 +850,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Склад остаток установлено',
       'uz-Latn': 'Ombor qoldiq oʻrnatildi',
     },
+    'inventory.stop.created': {
+      en: 'Dish stopped',
+      ru: 'Блюдо поставлено на стоп',
+      'uz-Latn': 'Taom stopga qoʻyildi',
+    },
+    'inventory.stop.expired': {
+      en: 'Dish stop expired',
+      ru: 'Стоп блюда истёк',
+      'uz-Latn': 'Taom stopining muddati tugadi',
+    },
+    'inventory.stop.lifted': {
+      en: 'Dish stop lifted',
+      ru: 'Стоп блюда снят',
+      'uz-Latn': 'Taom stopi olib tashlandi',
+    },
+    'inventory.stop.revised': {
+      en: 'Dish stop changed',
+      ru: 'Стоп блюда изменён',
+      'uz-Latn': 'Taom stopi oʻzgartirildi',
+    },
     'kitchen.device.enrolled': {
       en: 'Kitchen device enrolled',
       ru: 'Кухня устройство зарегистрировано',
@@ -830,6 +905,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Локация обслуживание состояние изменено',
       'uz-Latn': 'Filial xizmat holat oʻzgartirildi',
     },
+    'loyalty.accrual.skipped': {
+      en: 'Loyalty points not earned on an order',
+      ru: 'Баллы лояльности за заказ не начислены',
+      'uz-Latn': 'Buyurtma uchun sodiqlik ballari hisoblanmadi',
+    },
     'marketplace.handover.bypassed': {
       en: 'Marketplace handover bypassed',
       ru: 'Маркетплейс передача пропущено',
@@ -864,6 +944,12 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Ordering order call provenance recorded',
       ru: 'Заказы заказ звонок источник зафиксировано',
       'uz-Latn': 'Buyurtmalar buyurtma qoʻngʻiroq manba qayd etildi',
+    },
+    'ordering.order.catchweight-reconciled': {
+      en: 'Weight of an item sold by weight recorded and the order re-priced',
+      ru: 'Записан вес весовой позиции, заказ пересчитан',
+      'uz-Latn':
+        'Ogʻirlik boʻyicha sotiladigan pozitsiya ogʻirligi yozildi, buyurtma qayta hisoblandi',
     },
     'ordering.outcome-reason.archived': {
       en: 'Order outcome reason retired',
@@ -1000,6 +1086,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Ценообразование цена книга активировано',
       'uz-Latn': 'Narxlash narx kitob faollashtirildi',
     },
+    'pricing.promotion.drafted': {
+      en: 'Promotion drafted',
+      ru: 'Акция создана как черновик',
+      'uz-Latn': 'Aksiya qoralama sifatida yaratildi',
+    },
+    'pricing.promotion.updated': {
+      en: 'Promotion edited',
+      ru: 'Акция изменена',
+      'uz-Latn': 'Aksiya oʻzgartirildi',
+    },
     'reference.public_holiday.added': {
       en: 'Reference public holiday added',
       ru: 'Справочник публичный праздник добавлено',
@@ -1039,6 +1135,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Reporting metric signed',
       ru: 'Отчётность метрика подписано',
       'uz-Latn': 'Hisobotlar koʻrsatkich imzolandi',
+    },
+    'staff.emergency_contact.read': {
+      en: 'Emergency contacts viewed',
+      ru: 'Просмотрены экстренные контакты',
+      'uz-Latn': 'Favqulodda kontaktlar koʻrildi',
+    },
+    'staff.emergency_contact.updated': {
+      en: 'Emergency contacts changed',
+      ru: 'Экстренные контакты изменены',
+      'uz-Latn': 'Favqulodda kontaktlar oʻzgartirildi',
+    },
+    'staff.member.anonymised': {
+      en: 'Former employee’s personal details erased',
+      ru: 'Личные данные бывшего сотрудника стёрты',
+      'uz-Latn': 'Sobiq xodimning shaxsiy maʻlumotlari oʻchirildi',
+    },
+    'staff.member.created': {
+      en: 'Staff profile created',
+      ru: 'Создана карточка сотрудника',
+      'uz-Latn': 'Xodim kartochkasi yaratildi',
+    },
+    'staff.member.employment_ended': {
+      en: 'Employment ended',
+      ru: 'Работа завершена',
+      'uz-Latn': 'Ish tugatildi',
+    },
+    'staff.member.updated': {
+      en: 'Staff profile changed',
+      ru: 'Карточка сотрудника изменена',
+      'uz-Latn': 'Xodim kartochkasi oʻzgartirildi',
     },
     'telemetry.courier_track.revealed': {
       en: 'Telemetry courier track revealed',

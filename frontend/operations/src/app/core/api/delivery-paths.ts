@@ -150,3 +150,47 @@ export const deliveryTariffPaths = {
     return `${this.tariff(scope, tariffId)}/locations`;
   },
 } as const;
+
+/**
+ * The dispatch rules, the sourcing timings and the unpaid-order window (IA 3.8, ADR 0142).
+ *
+ * All three are tenant-path documents with optional `brandId`/`locationId` query parameters --
+ * omit both for the tenant-wide document, supply either for a brand or location one (ADR 0030) --
+ * served by `OperationsDispatchRulesController` and `OperationsPaymentWindowController`. The
+ * simulator is a `POST` only because its body can carry a whole unsaved draft; it writes nothing.
+ */
+export const dispatchRulesPaths = {
+  base(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}`;
+  },
+
+  /** `GET` reads the document in force (ETag = the version authored at exactly this scope); `PUT` publishes the next, `If-Match` required. */
+  rules(tenantId: string): string {
+    return `${this.base(tenantId)}/dispatch-rules`;
+  },
+
+  /** `GET`: everything a rule at the scope may name (installations, zones, channels, branches) and the newest plans. */
+  options(tenantId: string): string {
+    return `${this.rules(tenantId)}/options`;
+  },
+
+  /** `GET ?days=`: plans per rule id over the last N days. */
+  usage(tenantId: string): string {
+    return `${this.rules(tenantId)}/usage`;
+  },
+
+  /** `POST`: which rule and provider an order would get. Calls no provider, asks no quote, writes nothing. */
+  simulations(tenantId: string): string {
+    return `${this.rules(tenantId)}/simulations`;
+  },
+
+  /** `GET`/`PUT`: the `fulfillment.sourcing` timing numbers behind ADR 0014. */
+  timings(tenantId: string): string {
+    return `${this.base(tenantId)}/sourcing-policy`;
+  },
+
+  /** `GET`/`PUT`: the `ordering.payment_window` policy -- how long an unpaid order is waited for. */
+  paymentWindow(tenantId: string): string {
+    return `${this.base(tenantId)}/payment-window`;
+  },
+} as const;

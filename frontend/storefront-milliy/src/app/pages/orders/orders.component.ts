@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, type OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  type OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -123,8 +130,8 @@ export class OrdersComponent implements OnInit {
    */
   protected readonly repeatablePlan = signal<ReorderPlanResponse | null>(null);
 
-  protected readonly active = computed(() =>
-    this.orders().find((order) => ACTIVE_STATUSES.has(order.status?.id ?? '')) ?? null,
+  protected readonly active = computed(
+    () => this.orders().find((order) => ACTIVE_STATUSES.has(order.status?.id ?? '')) ?? null,
   );
 
   protected readonly history = computed(() => {
@@ -238,18 +245,26 @@ export class OrdersComponent implements OnInit {
     this.repeatMessage.set(null);
     try {
       for (const line of plan.lines) {
-        const added = await this.cart.add(
-          line.variantId,
-          line.quantity,
-          undefined,
-          line.modifierOptionIds,
-        );
+        // ADR 0136: a combo repeats as a combo -- its container with the picks the order named.
+        const added =
+          line.comboPicks && line.comboPicks.length > 0
+            ? await this.cart.add(
+                line.variantId,
+                line.quantity,
+                undefined,
+                line.modifierOptionIds,
+                line.comboPicks,
+              )
+            : await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
         if (!added) {
           this.repeatMessage.set({ key: this.cart.errorKey() ?? 'errors.generic' });
           return;
         }
       }
-      this.repeatMessage.set({ key: 'orders.repeatAddedAll', params: { count: plan.lines.length } });
+      this.repeatMessage.set({
+        key: 'orders.repeatAddedAll',
+        params: { count: plan.lines.length },
+      });
       await this.router.navigate(['/cart']);
     } catch {
       this.repeatMessage.set({ key: 'errors.generic' });

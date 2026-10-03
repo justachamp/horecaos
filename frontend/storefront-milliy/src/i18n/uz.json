@@ -130,7 +130,14 @@
     "recipient": "Qabul qiluvchi",
     "recipientName": "Qabul qiluvchi ismi",
     "recipientPhone": "Qabul qiluvchi telefoni",
-    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting."
+    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
+    "hiddenCharge": {
+      "title": "Avtomatik qo'shilgan, jami summaga kiritilgan",
+      "fallbackLabel": "Qo'shimcha to'lov"
+    },
+    "offerDiscount": "Aksiya",
+    "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
+    "surchargeNote": "Ustama {{amount}} hisobga olingan"
   },
   "checkout": {
     "title": "To'lov",
@@ -155,7 +162,11 @@
     "emptyCartTitle": "Savatda buyurtma uchun hech narsa yo'q",
     "emptyCartSubtitle": "Avval savatga taom qo'shing.",
     "loadError": "To'lov sahifasini yuklab bo'lmadi",
-    "onlinePaymentFailed": "To'lov sahifasini ochib bo'lmadi. \"Buyurtmalar\" bo'limini tekshiring."
+    "onlinePaymentFailed": "To'lov sahifasini ochib bo'lmadi. \"Buyurtmalar\" bo'limini tekshiring.",
+    "promoCodeLabel": "Kod {{code}}",
+    "promoOffersBetter": "Hozirgi aksiyalaringiz bu promokoddan foydaliroq, shuning uchun u qoʻllanmadi.",
+    "promoNotApplicable": "Bu promokod ushbu buyurtmaga mos kelmaydi.",
+    "promoNoLongerValid": "Bu promokod endi amal qilmaydi."
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -374,6 +385,7 @@
       "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
       "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
+      "paymentMethodUnavailable": "Bu to'lov usuli hozir mavjud emas. Boshqasini tanlang.",
       "tableNotAtBranch": "Bu stol boshqa filialda. O'z stolingizdagi kodni skanerlang.",
       "quoteExpired": "Narx eskirdi. Buyurtmangizni tekshirib, yana urinib ko'ring.",
       "modifierMinimum": "Bu taom uchun majburiy variantlarni tanlang.",
@@ -433,7 +445,8 @@
   "dish": {
     "soldOut": "Tugagan",
     "outOfSaleWindow": "Hozir sotuvda emas",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "fromPrice": "{{price}} dan"
   },
   "dineIn": {
     "scanFailedTitle": "Bu kod endi ishlamaydi",
@@ -471,6 +484,52 @@
     "pickerOptionUnnamed": "Variant",
     "chooseRequired": "Avval majburiy variantlarni tanlang.",
     "customLinesTitle": "Tanlovingiz bilan taomlar",
-    "lineGone": "Taom endi menyuda yo'q"
+    "lineGone": "Taom endi menyuda yo'q",
+    "sitHere": "Shu stolga oʻtirish",
+    "sitHereHint": "Necha kishi ekaningizni ayting va kutmasdan oʻtiring. Siz tanlayotganingizda stolni ushlab turamiz, buyurtma qabul qilingach esa sizda qoldiramiz.",
+    "partySize": "Necha kishisiz",
+    "fewerGuests": "Mehmonlarni kamaytirish",
+    "moreGuests": "Mehmonlarni koʻpaytirish",
+    "sitDown": "Oʻtirish",
+    "sitting": "Oʻtqazilmoqda...",
+    "signInToSit": "Oʻtirish uchun kiring",
+    "joinedExisting": "Bu stolda allaqachon mehmonlar oʻtiribdi, shuning uchun buyurtmalaringiz bir xil hisobga tushadi.",
+    "claimHeld": "Stol siz uchun yana {{minutes}} daqiqa ushlab turiladi. Qoldirish uchun buyurtma bering.",
+    "claimEnding": "Stolni ushlab turish muddati tugayapti. Qoldirish uchun hozir buyurtma bering.",
+    "claimLapsedTitle": "Stolni ushlab turish tugadi",
+    "claimLapsedBody": "{{code}}-stol endi siz uchun ushlab turilmaydi. Qayta o'tirish uchun stoldagi QR-kodni skanerlang.",
+    "tableNotAvailable": "Bu stolni bu yerdan band qilib boʻlmaydi. Xodimdan sizni oʻtqazishini soʻrang.",
+    "tooManyForTable": "Bu stolda {{seats}} oʻrin bor. Xodimdan kattaroq stol soʻrang.",
+    "seatRateLimited": "Urinishlar juda koʻp. Biroz kuting va qayta urinib koʻring.",
+    "tableChanged": "Siz endi boshqa stoldasiz. Buyurtmangizni shu stolga ko'chirdik: tekshirib, qayta yuboring."
+  },
+  "combo": {
+    "pickExactly": "{{count}} ta tanlang",
+    "pickBetween": "{{min}} dan {{max}} gacha tanlang",
+    "pickUpTo": "{{count}} tagacha tanlang",
+    "included": "Kiritilgan",
+    "notPriced": "Narx mavjud emas",
+    "incomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
+    "unavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "total": "Kombo narxi: {{price}}"
+  },
+  "physical": {
+    "nutritionTitle": "Ozuqaviy qiymati",
+    "nutritionPer100g": "100 g uchun",
+    "nutritionPer100ml": "100 ml uchun",
+    "nutritionPerUnit": "bir porsiyada ({{amount}})",
+    "calories": "Kaloriya",
+    "proteins": "Oqsillar",
+    "fats": "Yog'lar",
+    "carbs": "Uglevodlar",
+    "kcal": "kkal",
+    "pricePerQuantum": "{{quantum}} uchun {{price}}",
+    "estimatedFor": "≈ {{weight}} uchun ≈ {{price}}",
+    "finalWeightNotice": "Yakuniy og'irlik va narx buyurtma topshirilganda aniqlanadi.",
+    "cartNotice": "Summada og'irlik bo'yicha sotiladigan mahsulotlar bor. Yakuniy og'irlik va summa buyurtma topshirilganda aniqlanadi.",
+    "portionsUnit": "porsiya",
+    "portionStep": "{{step}} porsiyalarda buyurtma qilinadi",
+    "weighedLine": "Tortildi: {{weight}}",
+    "estimateLine": "≈ {{weight}}, taxminiy"
   }
 }

@@ -46,6 +46,32 @@ public interface InventoryReservationPort {
             Map<UUID, Integer> quantitiesByVariant);
 
     /**
+     * {@link #reserveForQuote(UUID, UUID, UUID, UUID, Instant, Map)} on a named
+     * channel (ADR 0141 Decision 6): the same hold, additionally refused with
+     * {@code ON_STOP} where an active stop covers a line on that channel at that
+     * location.
+     *
+     * <p>A default method that ignores the channel, so an implementation or a
+     * test double written before stops existed keeps compiling and behaves as it
+     * did; {@code InventoryService} overrides it, and the six-argument form above
+     * is then the "no channel known" case.
+     *
+     * @param channelId {@code tenant.sales_channels.id} of the cart's or order's
+     *     channel; null for no channel, in which case only the stops covering
+     *     every channel at the location apply
+     */
+    default ReservationResult reserveForQuote(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID quoteId,
+            Instant quoteExpiresAt,
+            Map<UUID, Integer> quantitiesByVariant,
+            @org.jspecify.annotations.Nullable UUID channelId) {
+        return reserveForQuote(tenantId, brandId, locationId, quoteId, quoteExpiresAt, quantitiesByVariant);
+    }
+
+    /**
      * Turns a hold into a committed sale when an order is confirmed.
      *
      * @return false when there was no hold to commit, or it had already been
@@ -69,4 +95,18 @@ public interface InventoryReservationPort {
      * can pass the smoke test under a rule its own customers never see.
      */
     AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId, Set<UUID> variantIds);
+
+    /**
+     * {@link #checkAvailability} on a named channel: what the cart asks before it
+     * lets a dish in (ADR 0141 Decision 6), so its refusal agrees with what
+     * checkout will do. A stop covering the channel refuses with {@code ON_STOP};
+     * a per-channel-type threshold still does not — it only ever hides.
+     *
+     * <p>Ignores the channel by default, for the reason the channel-aware {@code
+     * reserveForQuote} above does.
+     */
+    default AvailabilityDecision checkAvailabilityOnChannel(
+            UUID tenantId, UUID locationId, Set<UUID> variantIds, @org.jspecify.annotations.Nullable UUID channelId) {
+        return checkAvailability(tenantId, locationId, variantIds);
+    }
 }

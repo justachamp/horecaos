@@ -1,0 +1,82 @@
+/* Chrome (backdrop/panel/heading/Escape/focus) is `q-modal` — see
+ * `item-modifier-dialog.css`'s identical note for why the rest is styled here. */
+
+.combo-dialog__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 0;
+  border: none;
+}
+
+.combo-dialog__legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 4px;
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.combo-dialog__range {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.combo-dialog__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.combo-dialog__option-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.combo-dialog__stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.combo-dialog__price,
+.combo-dialog__stopped {
+  color: var(--q-ink-subtle);
+  white-space: nowrap;
+}
+
+.combo-dialog__price--missing {
+  color: var(--q-warning-text);
+}
+
+.combo-dialog__error {
+  color: var(--q-error-text);
+  margin: 2px 0 0;
+}
+
+.combo-dialog__total {
+  margin: 8px 0 0;
+  font-weight: 600;
+}
+
+.combo-dialog__dismiss,
+.combo-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.combo-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}

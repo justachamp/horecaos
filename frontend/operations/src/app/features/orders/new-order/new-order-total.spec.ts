@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { BasketLine, computeBasketTotal, lineAmountMinor } from './new-order-total';
+import {
+  BasketComboPick,
+  BasketLine,
+  comboAmountMinor,
+  computeBasketTotal,
+  lineAmountMinor,
+  lineUnitAmountMinor,
+} from './new-order-total';
 
 function line(overrides: Partial<BasketLine> = {}): BasketLine {
   return {
@@ -119,5 +126,121 @@ describe('computeBasketTotal', () => {
     ];
     const total = computeBasketTotal(lines, 'UZS');
     expect(total.fullyPriced).toBe(false);
+  });
+});
+
+describe('comboAmountMinor (ADR 0136)', () => {
+  const pick = (overrides: Partial<BasketComboPick> = {}): BasketComboPick => ({
+    componentId: 'c1',
+    name: 'Burger',
+    pickQuantity: 1,
+    unitQuantity: 1,
+    amountMinor: 25_000,
+    ...overrides,
+  });
+
+  it('is the sum of each pick’s price per unit, times the units one pick puts on the order, times how often it was picked', () => {
+    expect(
+      comboAmountMinor({
+        picks: [
+          pick(),
+          pick({
+            componentId: 'c2',
+            name: 'Cola',
+            pickQuantity: 2,
+            unitQuantity: 2,
+            amountMinor: 3_000,
+          }),
+        ],
+      }),
+    ).toBe(25_000 + 3_000 * 2 * 2);
+  });
+
+  it('is unknown while any picked component has no price, never a smaller sum', () => {
+    expect(
+      comboAmountMinor({ picks: [pick(), pick({ componentId: 'c2', amountMinor: null })] }),
+    ).toBeNull();
+  });
+
+  it('is multiplied by the combo count when the line is totalled', () => {
+    const combo = { picks: [pick({ unitQuantity: 2, amountMinor: 1_000 })] };
+
+    expect(
+      lineAmountMinor(line({ quantity: 3, unitAmountMinor: comboAmountMinor(combo), combo })),
+    ).toBe(6_000);
+  });
+});
+
+describe('a portion and a weighed line (ADR 0137)', () => {
+  it('prices half a portion at half the unit price', () => {
+    expect(lineAmountMinor(line({ unitAmountMinor: 38_000, quantity: 0.5 }))).toBe(19_000);
+  });
+
+  it('rounds a portion once, on the line, half up — as the server does', () => {
+    expect(lineAmountMinor(line({ unitAmountMinor: 18_001, quantity: 0.5 }))).toBe(9_001);
+  });
+
+  it('prices modifiers by the portion too, rounded once on their own sum', () => {
+    const withModifier = line({
+      unitAmountMinor: 38_000,
+      quantity: 0.5,
+      modifiers: [{ optionId: 'm1', code: 'EXTRA', quantity: 1, amountMinor: 5_001 }],
+    });
+    // 19 000 + round(2 500.5)
+    expect(lineAmountMinor(withModifier)).toBe(19_000 + 2_501);
+  });
+
+  it('prices a catchweight line from its price per quantum and the nominal weight of every unit', () => {
+    const cake = line({
+      unitAmountMinor: 15_000, // per 100 g
+      quantity: 1,
+      catchweight: { quantumGrams: 100, nominalGramsPerUnit: 1_200 },
+    });
+
+    expect(lineAmountMinor(cake)).toBe(180_000);
+    expect(lineAmountMinor({ ...cake, quantity: 2 })).toBe(360_000);
+  });
+
+  it('a catchweight line’s modifiers are not weighed', () => {
+    const cake = line({
+      unitAmountMinor: 15_000,
+      quantity: 1,
+      catchweight: { quantumGrams: 100, nominalGramsPerUnit: 1_200 },
+      modifiers: [{ optionId: 'm1', code: 'BOX', quantity: 1, amountMinor: 3_000 }],
+    });
+
+    expect(lineAmountMinor(cake)).toBe(183_000);
+  });
+
+  it('knows what one unit costs, for an aggregator line that states a unit price', () => {
+    expect(lineUnitAmountMinor(line({ unitAmountMinor: 30_000 }))).toBe(30_000);
+    expect(
+      lineUnitAmountMinor(
+        line({
+          unitAmountMinor: 15_000,
+          catchweight: { quantumGrams: 100, nominalGramsPerUnit: 1_200 },
+        }),
+      ),
+    ).toBe(180_000);
+    expect(lineUnitAmountMinor(line({ unitAmountMinor: null }))).toBeNull();
+  });
+
+  it('says the total is provisional while any line is sold by weight', () => {
+    const plain = computeBasketTotal([line()], 'UZS');
+    const weighed = computeBasketTotal(
+      [
+        line(),
+        line({
+          lineKey: 'cake',
+          unitAmountMinor: 15_000,
+          catchweight: { quantumGrams: 100, nominalGramsPerUnit: 1_200 },
+        }),
+      ],
+      'UZS',
+    );
+
+    expect(plain.provisional).toBe(false);
+    expect(weighed.provisional).toBe(true);
+    expect(weighed.subtotalMinor).toBe(30_000 + 180_000);
   });
 });

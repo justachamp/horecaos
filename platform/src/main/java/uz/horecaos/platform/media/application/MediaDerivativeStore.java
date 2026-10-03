@@ -35,4 +35,12 @@ public interface MediaDerivativeStore {
 
     /** Every rendition of an asset, in variant order. */
     List<MediaDerivative> findAll(UUID tenantId, MediaAssetId assetId);
+
+    /**
+     * Forgets an asset's renditions once their objects have been removed from
+     * the store, so no row keeps naming a key that no longer exists.
+     *
+     * @return how many rows were removed
+     */
+    int deleteAll(UUID tenantId, MediaAssetId assetId);
 }

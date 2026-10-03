@@ -32,7 +32,7 @@
           −
         </button>
         <span class="stepper__value" data-testid="dine-in-custom-quantity">{{
-          line.quantity
+          quantityText(line)
         }}</span>
         <button
           type="button"
@@ -40,7 +40,7 @@
           data-testid="dine-in-custom-increase"
           [disabled]="busy() || !line.available"
           [attr.aria-label]="'common.increase' | t"
-          (click)="request(line, line.quantity + 1)"
+          (click)="request(line, raised(line))"
         >
           +
         </button>

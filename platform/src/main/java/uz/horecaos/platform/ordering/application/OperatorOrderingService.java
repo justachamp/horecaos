@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -112,13 +113,50 @@ public class OperatorOrderingService {
     /** One line an operator entered into the basket. */
     public record OrderLine(
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets, same vocabulary
             // and the same offered-subset check a customer's own cart line
             // goes through in CartService.putLine.
             List<String> commentPresetCodes,
-            @Nullable String customerNote) {}
+            @Nullable String customerNote,
+            // ADR 0136: what the operator picked inside a combo and any second-level
+            // modifier selections, through the same cart path a customer's go through.
+            List<CartService.ComboPick> comboPicks,
+            List<CartService.NestedModifier> nestedModifiers) {
+
+        public OrderLine {
+            comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
+            nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
+        }
+
+        /** A line with no combo and no nested selection: every line that predates ADR 0136. */
+        public OrderLine(
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, List.of(), List.of());
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public OrderLine(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(
+                    variantId,
+                    BigDecimal.valueOf(quantity),
+                    modifierOptionIds,
+                    commentPresetCodes,
+                    customerNote,
+                    List.of(),
+                    List.of());
+        }
+    }
 
     /**
      * Where a delivery order is going — a saved address of the resolved
@@ -326,6 +364,8 @@ public class OperatorOrderingService {
                     line.quantity(),
                     line.modifierOptionIds(),
                     line.commentPresetCodes(),
+                    line.comboPicks(),
+                    line.nestedModifiers(),
                     line.customerNote());
             version = view.cart().version();
         }
@@ -364,6 +404,28 @@ public class OperatorOrderingService {
                     version,
                     command.promoCode());
             version = view.cart().version();
+        }
+
+        // ADR 0140: the method the order will be paid by is an input to its price when a
+        // promotion reads it, and checkout refuses a method the cart was not priced with.
+        // An operator names the method up front, so it goes on the cart before pricing.
+        if (command.paymentMethodCode() != null && !command.paymentMethodCode().isBlank()) {
+            try {
+                var view = carts.setPaymentMethod(
+                        command.tenantId(),
+                        command.brandId(),
+                        command.customerAccountId(),
+                        cart.cartId(),
+                        version,
+                        command.paymentMethodCode());
+                version = view.cart().version();
+            } catch (CartService.CartRefusedException unavailable) {
+                if (!"PAYMENT_METHOD_UNAVAILABLE".equals(unavailable.code())) {
+                    throw unavailable;
+                }
+                // A method the channel does not offer is checkout's refusal to make, with its own
+                // typed outcome; the cart simply carries no method and prices as it always did.
+            }
         }
 
         var priced =

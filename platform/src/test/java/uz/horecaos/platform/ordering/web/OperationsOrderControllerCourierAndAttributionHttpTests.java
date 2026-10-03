@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.PlatformRole;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
@@ -48,7 +48,7 @@ import uz.horecaos.platform.support.TestDatabase;
  * Jackson serialization, which is the one hop {@code OrderActionsPolicyTests}
  * and {@code CourierAssignmentQueryService}'s own {@code
  * ManualDispatchServiceTests} coverage cannot reach on their own. {@link
- * StaffDisplayNames} is the one collaborator overridden by {@link
+ * StaffDirectory} is the one collaborator overridden by {@link
  * MockitoBean}: the real bean is Keycloak-backed and this suite has no
  * Keycloak to seed a name into.
  */
@@ -101,7 +101,7 @@ class OperationsOrderControllerCourierAndAttributionHttpTests {
 
     @MockitoBean
     @SuppressWarnings("NullAway")
-    private StaffDisplayNames staffDisplayNames;
+    private StaffDirectory staffDirectory;
 
     private UUID channelId;
     private UUID publicationId;
@@ -158,7 +158,7 @@ class OperationsOrderControllerCourierAndAttributionHttpTests {
             + "leaving the console to show the raw UUID")
     void detailResolvesCreatedByActorIdToADisplayName() throws Exception {
         String operatorSubject = "operator-subject-42";
-        when(staffDisplayNames.displayName(eq(operatorSubject))).thenReturn("Шахзод Каримов");
+        when(staffDirectory.nameOf(eq(TENANT), eq(operatorSubject))).thenReturn("Шахзод Каримов");
 
         UUID orderId = seedConfirmedDeliveryOrder("5003", "USER", operatorSubject);
 
@@ -173,7 +173,7 @@ class OperationsOrderControllerCourierAndAttributionHttpTests {
             + "breaking the read")
     void detailFallsBackToNullWhenNoDisplayNameIsOnFile() throws Exception {
         String operatorSubject = "operator-subject-unknown";
-        when(staffDisplayNames.displayName(eq(operatorSubject))).thenReturn(null);
+        when(staffDirectory.nameOf(eq(TENANT), eq(operatorSubject))).thenReturn(null);
 
         UUID orderId = seedConfirmedDeliveryOrder("5004", "USER", operatorSubject);
 

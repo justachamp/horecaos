@@ -88,7 +88,7 @@ describe('KitchenQueuePage', () => {
   let boardSpy: ReturnType<typeof vi.fn>;
   let realtimeFrameListeners: Array<(frame: RealtimeFrame) => void>;
 
-  async function render(customBoard?: BoardResponse): Promise<void> {
+  async function render(customBoard?: BoardResponse, orderDetail?: unknown): Promise<void> {
     boardResult = customBoard ?? board([DELIVERY_TICKET]);
     revealLineNote = vi.fn(() => of({ lineId: 'line-1', note: 'без лука' }));
     dispatchQueue = vi.fn(() => Promise.resolve<readonly PlanQueueResponse[]>([]));
@@ -124,7 +124,10 @@ describe('KitchenQueuePage', () => {
         },
         {
           provide: ApiClient,
-          useValue: { get: () => of({ value: { lines: [], kitchenNote: null }, version: null }) },
+          useValue: {
+            get: () =>
+              of(orderDetail ?? { value: { lines: [], kitchenNote: null }, version: null }),
+          },
         },
         { provide: OrderRevealApi, useValue: { revealLineNote } },
         { provide: DispatchApi, useValue: { queue: dispatchQueue, assign: dispatchAssign } },
@@ -156,6 +159,99 @@ describe('KitchenQueuePage', () => {
     expect(host.querySelectorAll('[data-testid="kitchen-ticket"]')).toHaveLength(1);
     expect(host.textContent).toContain('A-014');
     expect(host.textContent).toContain('telegram-bot');
+  });
+
+  // ------------------------------------------------- portions and weights (ADR 0137)
+
+  describe('portions and weights (ADR 0137)', () => {
+    function cakeTicket(quantity: number): TicketResponse {
+      return {
+        ...DELIVERY_TICKET,
+        items: [{ ...DELIVERY_TICKET.items[0], quantity }],
+      };
+    }
+
+    function orderWith(catchweight: unknown, quantity = 1) {
+      return {
+        version: null,
+        value: {
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Medovik',
+              quantity,
+              finalAmountMinor: 180_000,
+              modifiers: [],
+              commentPresets: [],
+              lineId: 'line-1',
+              hasNote: false,
+              catchweight,
+            },
+          ],
+          kitchenNote: null,
+        },
+      };
+    }
+
+    async function expanded(ticket: TicketResponse, order?: unknown): Promise<HTMLElement> {
+      await render(board([ticket]), order);
+      const host = fixture.nativeElement as HTMLElement;
+      (host.querySelector('.ticket__header') as HTMLElement).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      return host;
+    }
+
+    it('writes a half portion with the console’s decimal mark', async () => {
+      const host = await expanded(cakeTicket(0.5));
+      TestBed.inject(I18n).setLocale('ru');
+      fixture.detectChanges();
+
+      expect(host.querySelector('td.kitchen__num-col')?.textContent?.trim()).toBe('0,5');
+    });
+
+    it('shows the estimated weight of a weighed line, every unit at its nominal weight', async () => {
+      const host = await expanded(
+        cakeTicket(2),
+        orderWith(
+          {
+            quantumGrams: 100,
+            nominalGramsPerUnit: 1_200,
+            pricePerQuantumMinor: 15_000,
+            provisional: true,
+          },
+          2,
+        ),
+      );
+
+      const weight = host.querySelector('[data-testid="kitchen-line-weight"]');
+      expect(weight?.textContent).toContain('2.4\u00a0kg');
+      expect(weight?.textContent).toContain('estimate');
+    });
+
+    it('shows what a line weighed once it has been weighed', async () => {
+      const host = await expanded(
+        cakeTicket(1),
+        orderWith({
+          quantumGrams: 100,
+          nominalGramsPerUnit: 1_200,
+          pricePerQuantumMinor: 15_000,
+          provisional: false,
+          actualWeightGrams: 1_340,
+        }),
+      );
+
+      const weight = host.querySelector('[data-testid="kitchen-line-weight"]');
+      expect(weight?.textContent).toContain('1.34\u00a0kg');
+      expect(weight?.textContent).toContain('weighed');
+    });
+
+    it('says nothing about weight on a line that is not sold by weight', async () => {
+      const host = await expanded(cakeTicket(1), orderWith(null));
+
+      expect(host.querySelector('[data-testid="kitchen-line-weight"]')).toBeNull();
+    });
   });
 
   it('refreshes at once on a KITCHEN_BOARD frame, the ADR 0045 accelerator (row 2.1)', async () => {
@@ -1029,6 +1125,135 @@ describe('KitchenQueuePage', () => {
     counterSale.click();
 
     expect(navigateByUrl).toHaveBeenCalledWith('/orders/new');
+  });
+
+  // --------------------------------------------------------------- ADR 0136
+
+  it('ADR 0136: a combo’s items sit under one header named from the order line, each still on its own station', async () => {
+    const comboTicket: TicketResponse = {
+      ...DELIVERY_TICKET,
+      items: [
+        {
+          itemId: 'item-burger',
+          orderLineId: 'line-burger',
+          stationId: 'grill',
+          quantity: 2,
+          routedBy: 'LOCATION_VARIANT',
+          status: 'QUEUED',
+          version: 1,
+          comboSelectionId: 'sel-1',
+          comboContainerVariantId: 'cv-1',
+        },
+        {
+          itemId: 'item-cola',
+          orderLineId: 'line-cola',
+          stationId: 'bar',
+          quantity: 2,
+          routedBy: 'LOCATION_VARIANT',
+          status: 'QUEUED',
+          version: 1,
+          comboSelectionId: 'sel-1',
+          comboContainerVariantId: 'cv-1',
+        },
+        {
+          itemId: 'item-soup',
+          orderLineId: 'line-soup',
+          stationId: 'grill',
+          quantity: 1,
+          routedBy: 'LOCATION_VARIANT',
+          status: 'QUEUED',
+          version: 1,
+        },
+      ],
+    };
+    const orderLine = (lineId: string, productName: string, extra: object = {}) => ({
+      lineNumber: 1,
+      productName,
+      quantity: 1,
+      finalAmountMinor: 1000,
+      modifiers: [],
+      commentPresets: [],
+      lineId,
+      hasNote: false,
+      ...extra,
+    });
+    const combo = {
+      selectionId: 'sel-1',
+      containerVariantId: 'cv-1',
+      name: 'Lunch box',
+      quantity: 2,
+    };
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([comboTicket])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('n/a')) },
+        },
+        {
+          provide: ApiClient,
+          useValue: {
+            get: () =>
+              of({
+                value: {
+                  lines: [
+                    orderLine('line-burger', 'Burger', { combo }),
+                    orderLine('line-cola', 'Cola', { combo }),
+                    orderLine('line-soup', 'Soup'),
+                  ],
+                  kitchenNote: null,
+                },
+                version: null,
+              }),
+          },
+        },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        {
+          provide: DispatchApi,
+          useValue: { queue: vi.fn(() => Promise.resolve([])), assign: vi.fn() },
+        },
+        { provide: CouriersApi, useValue: { roster: vi.fn(() => Promise.resolve([])) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(KitchenQueuePage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('.ticket__header') as HTMLElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const heads = host.querySelectorAll('[data-testid="kitchen-combo-head"]');
+    expect(heads).toHaveLength(1);
+    expect(heads[0].textContent).toContain('Lunch box');
+    const names = [...host.querySelectorAll('.ticket__items tbody tr')].map((row) =>
+      row.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(names[0]).toContain('Lunch box');
+    expect(names[1]).toContain('Burger');
+    expect(names[1]).toContain('grill');
+    expect(names[2]).toContain('Cola');
+    expect(names[2]).toContain('bar');
+    expect(names[3]).toContain('Soup');
   });
 });
 

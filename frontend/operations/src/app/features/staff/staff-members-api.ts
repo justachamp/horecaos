@@ -1,0 +1,245 @@
+import { Injectable, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+
+import { ApiClient } from '../../core/api/api-client';
+import { command } from '../../core/api/idempotency';
+import { LocationScope } from '../../core/api/operations-paths';
+import { Page } from '../../core/api/page';
+import { ApiError } from '../../core/api/problem-details';
+import { EmploymentStatus, StaffMember } from '../../core/api/staff-member';
+import { staffPaths } from '../../core/api/staff-paths';
+
+export type { EmploymentStatus, StaffMember };
+
+/**
+ * Mirrors `StaffMemberController.UpdateStaffMemberRequest`. **A replace, not a
+ * patch:** a missing optional field clears it on the server, so a caller sends
+ * every field its form shows (and `employmentStatus` only when it changed).
+ * Jackson refuses a missing primitive, which is why every optional field here
+ * is nullable and the form builds the body from drafts, never from a diff.
+ */
+export interface UpdateStaffMemberRequest {
+  readonly firstName: string;
+  readonly lastName?: string | null;
+  readonly phone?: string | null;
+  readonly uiLocale?: string | null;
+  readonly spokenLanguages?: readonly string[] | null;
+  /** `ACTIVE` or `ON_LEAVE`; omitted to leave the status alone. Ending employment is {@link StaffMembersApi.endEmployment}. */
+  readonly employmentStatus?: EmploymentStatus | null;
+  readonly employeeNumber?: string | null;
+  readonly employedFrom?: string | null;
+  readonly employedUntil?: string | null;
+  readonly reason?: string | null;
+}
+
+/** Mirrors `StaffSelfController.UpdateMyProfileRequest` -- what a person may change about themselves, and nothing else. */
+export interface UpdateMyProfileRequest {
+  readonly firstName: string;
+  readonly lastName?: string | null;
+  readonly phone?: string | null;
+  readonly uiLocale?: string | null;
+  readonly spokenLanguages?: readonly string[] | null;
+  /** `true` drops the photo. */
+  readonly removePhoto?: boolean | null;
+}
+
+/** Mirrors `StaffMemberController.EndEmploymentResponse`. */
+export interface EndEmploymentResult {
+  readonly member: StaffMember;
+  readonly revokedGrants: number;
+  /** Jobs still active after the revoke loop. Non-zero means a revoke failed part-way: call again to finish. */
+  readonly remainingGrants: number;
+}
+
+/** `StaffEmergencyContactService`'s relationship codes. */
+export const EMERGENCY_RELATIONSHIPS = [
+  'SPOUSE',
+  'PARENT',
+  'CHILD',
+  'SIBLING',
+  'FRIEND',
+  'OTHER',
+] as const;
+export type EmergencyRelationship = (typeof EMERGENCY_RELATIONSHIPS)[number];
+
+/** Mirrors `StaffMemberController.EmergencyContactResponse`. A third party's name and phone: render, never log. */
+export interface EmergencyContact {
+  readonly id: string;
+  readonly relationshipCode: EmergencyRelationship;
+  readonly name: string;
+  readonly phone: string;
+  readonly slot: number;
+}
+
+/** Mirrors `StaffMemberController.EmergencyContactsResponse`. */
+export interface EmergencyContacts {
+  readonly contacts: readonly EmergencyContact[];
+  /** The member's version, which the next replace must send in `If-Match`. */
+  readonly memberVersion: number;
+}
+
+/** Mirrors `StaffMemberController.EmergencyContactRequest`. */
+export interface EmergencyContactInput {
+  readonly relationshipCode: EmergencyRelationship;
+  readonly name: string;
+  readonly phone: string;
+}
+
+/**
+ * The staff member record's API seam (ADR 0139): the People screen, the person
+ * card, «Мой профиль» and the branch's colleague picker.
+ *
+ * Every write names the version it was read at in `If-Match` and carries a fresh
+ * `Idempotency-Key` (ADR 0031). A stale version is a 409 the caller shows as
+ * "someone changed this, reload", never retries blindly.
+ *
+ * **No method here caches anything.** The record is personal data (ADR 0029); a
+ * screen holds what it rendered and drops it with the screen, and the one
+ * long-lived copy is `OwnProfile`'s, which is keyed by the signed-in subject.
+ */
+@Injectable({ providedIn: 'root' })
+export class StaffMembersApi {
+  private readonly api = inject(ApiClient);
+
+  /**
+   * Everyone the tenant keeps a record for, ended people included. The list
+   * carries the masked phone and no employee number, photo link or full number:
+   * those exist only on {@link detail}. Sorting and searching are the caller's,
+   * because a name is ciphertext in the database.
+   */
+  async list(tenantId: string): Promise<readonly StaffMember[]> {
+    const result = await firstValueFrom(
+      this.api.get<Page<StaffMember>>(staffPaths.members(tenantId)),
+    );
+    return result.value.items;
+  }
+
+  /**
+   * The people who work at one branch -- the route a branch manager's own grant
+   * covers, and the one the branch's colleague picker reads.
+   */
+  async listAtLocation(scope: LocationScope): Promise<readonly StaffMember[]> {
+    const result = await firstValueFrom(
+      this.api.get<Page<StaffMember>>(staffPaths.locationMembers(scope)),
+    );
+    return result.value.items;
+  }
+
+  /** One person in full: phone, employee number and a short-lived photo link. */
+  async detail(tenantId: string, memberId: string): Promise<StaffMember> {
+    const result = await firstValueFrom(
+      this.api.get<StaffMember>(staffPaths.member(tenantId, memberId)),
+    );
+    return result.value;
+  }
+
+  /** `staff.profile.manage`. Replaces the personal and employment fields; `version` is the record's, from the read. */
+  async update(
+    tenantId: string,
+    memberId: string,
+    request: UpdateStaffMemberRequest,
+    version: number,
+  ): Promise<StaffMember> {
+    return firstValueFrom(
+      this.api.put<UpdateStaffMemberRequest, StaffMember>(
+        staffPaths.member(tenantId, memberId),
+        command(request),
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  /**
+   * «Завершить работу»: sets `ENDED` and revokes each of the person's jobs, one
+   * audited revoke per job and never as one transaction. A `remainingGrants`
+   * above zero is a revoke that failed part-way -- the person stays ended and the
+   * card flags the drift; calling again with the new version finishes it.
+   */
+  async endEmployment(
+    tenantId: string,
+    memberId: string,
+    request: { readonly reason: string; readonly employedUntil?: string | null },
+    version: number,
+  ): Promise<EndEmploymentResult> {
+    return firstValueFrom(
+      this.api.post<typeof request, EndEmploymentResult>(
+        staffPaths.memberEndEmployment(tenantId, memberId),
+        command(request),
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  /** `staff.emergency-contact.read`. **Every call writes an audit fact**, so a screen asks only when the operator does. */
+  async emergencyContacts(tenantId: string, memberId: string): Promise<EmergencyContacts> {
+    const result = await firstValueFrom(
+      this.api.get<EmergencyContacts>(staffPaths.memberEmergencyContacts(tenantId, memberId)),
+    );
+    return result.value;
+  }
+
+  /** `staff.profile.manage`. Replaces the whole set (at most three); `memberVersion` comes from the read. */
+  async replaceEmergencyContacts(
+    tenantId: string,
+    memberId: string,
+    contacts: readonly EmergencyContactInput[],
+    memberVersion: number,
+    reason?: string,
+  ): Promise<EmergencyContacts> {
+    return firstValueFrom(
+      this.api.put<
+        { contacts: readonly EmergencyContactInput[]; reason?: string },
+        EmergencyContacts
+      >(
+        staffPaths.memberEmergencyContacts(tenantId, memberId),
+        command(reason ? { contacts, reason } : { contacts }),
+        { expectedVersion: memberVersion },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------------ my own
+
+  /**
+   * The caller's own record, or `null` when this tenant keeps none for the
+   * account (a HorecaOS support session, a device): 404 here is an answer and
+   * not a fault.
+   */
+  async me(tenantId: string): Promise<StaffMember | null> {
+    try {
+      const result = await firstValueFrom(this.api.get<StaffMember>(staffPaths.me(tenantId)));
+      return result.value;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /** `staff.self.manage`. Needs the record's version; the server resolves the row from the token, so no id is sent. */
+  async updateMe(
+    tenantId: string,
+    request: UpdateMyProfileRequest,
+    version: number,
+  ): Promise<StaffMember> {
+    return firstValueFrom(
+      this.api.put<UpdateMyProfileRequest, StaffMember>(staffPaths.me(tenantId), command(request), {
+        expectedVersion: version,
+      }),
+    );
+  }
+
+  /**
+   * Sets the caller's photo. The body is the image itself with its own
+   * `Content-Type` (jpeg, png, webp or avif; at most 1 MiB, enforced by the
+   * server from the real bytes). The reply carries a short-lived signed link.
+   */
+  async setMyPhoto(tenantId: string, image: Blob, version: number): Promise<StaffMember> {
+    return firstValueFrom(
+      this.api.post<Blob, StaffMember>(staffPaths.mePhoto(tenantId), command(image), {
+        expectedVersion: version,
+      }),
+    );
+  }
+}

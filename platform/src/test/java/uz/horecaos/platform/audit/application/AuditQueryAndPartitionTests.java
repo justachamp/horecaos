@@ -6,9 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -25,6 +23,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.infrastructure.persistence.AuditPartitionManager;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.support.StaffDirectories;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -37,8 +36,8 @@ class AuditQueryAndPartitionTests {
 
     private static TestDatabase.Handle db;
 
-    /** {@link uz.horecaos.platform.iam.api.accounts.StaffDisplayNames} stand-in: only the names a test puts here resolve. */
-    private final Map<String, String> knownDisplayNames = new HashMap<>();
+    /** {@link uz.horecaos.platform.iam.api.staff.StaffDirectory} stand-in: only the names a test registers resolve, and only in the tenant it registers them for. */
+    private final StaffDirectories.Fake knownDisplayNames = StaffDirectories.fake();
 
     private JdbcClient jdbc;
     private AuditQueryService queries;
@@ -70,7 +69,7 @@ class AuditQueryAndPartitionTests {
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC);
         JsonMapper objectMapper = JsonMapper.builder().build();
         knownDisplayNames.clear();
-        queries = new AuditQueryService(jdbc, objectMapper, knownDisplayNames::get);
+        queries = new AuditQueryService(jdbc, objectMapper, knownDisplayNames);
         recorder = new JdbcAuditRecorder(jdbc, objectMapper);
         partitions = new AuditPartitionManager(jdbc, clock);
 
@@ -104,7 +103,7 @@ class AuditQueryAndPartitionTests {
     @Test
     void resolvesActorDisplayAtReadTimeForARowWrittenWithANullDisplay() {
         record("tenant.suspended", TENANT, "operator-1");
-        knownDisplayNames.put("operator-1", "Operator One");
+        knownDisplayNames.name(TENANT, "operator-1", "Operator One");
 
         var results = queries.search(new AuditQueryService.AuditQuery(
                 TENANT, null, null, null, null, null, null, null, null, null, null, null));
@@ -112,6 +111,44 @@ class AuditQueryAndPartitionTests {
         assertThat(results.getFirst().actorDisplay())
                 .as("actor_display was written null; the resolver fills it in on the way out")
                 .isEqualTo("Operator One");
+    }
+
+    /**
+     * ADR 0139: the lookup carries the tenant of the row it resolves for, so one
+     * Keycloak subject who works in two tenants shows two different names on
+     * their two tenants' logs, and a name another tenant keeps is never shown
+     * on this one.
+     */
+    @Test
+    void aSubjectInTwoTenantsShowsEachTenantsOwnName() {
+        record("tenant.suspended", TENANT, "shared-operator");
+        record("tenant.suspended", OTHER_TENANT, "shared-operator");
+        knownDisplayNames.name(TENANT, "shared-operator", "Aziza (first tenant)");
+        knownDisplayNames.name(OTHER_TENANT, "shared-operator", "Aziz (second tenant)");
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                                TENANT, null, null, null, null, null, null, null, null, null, null, null))
+                        .getFirst()
+                        .actorDisplay())
+                .isEqualTo("Aziza (first tenant)");
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                                OTHER_TENANT, null, null, null, null, null, null, null, null, null, null, null))
+                        .getFirst()
+                        .actorDisplay())
+                .isEqualTo("Aziz (second tenant)");
+    }
+
+    @Test
+    void aNameKeptOnlyByAnotherTenantIsNotShownOnThisOne() {
+        record("tenant.suspended", TENANT, "operator-1");
+        knownDisplayNames.name(OTHER_TENANT, "operator-1", "Someone else's colleague");
+
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                                TENANT, null, null, null, null, null, null, null, null, null, null, null))
+                        .getFirst()
+                        .actorDisplay())
+                .as("the directory answers for the tenant it is asked about, and this one keeps no name for them")
+                .isNull();
     }
 
     @Test
@@ -125,7 +162,7 @@ class AuditQueryAndPartitionTests {
                 .correlatedBy("detail-name-test")
                 .occurredAt(Instant.parse("2026-08-20T09:00:00Z"))
                 .build());
-        knownDisplayNames.put("operator-3", "Operator Three");
+        knownDisplayNames.name(TENANT, "operator-3", "Operator Three");
 
         assertThat(queries.findDetail(TENANT, eventId).orElseThrow().actorDisplay())
                 .isEqualTo("Operator Three");
@@ -140,7 +177,7 @@ class AuditQueryAndPartitionTests {
     @Test
     void neverResolvesANameForAPrincipalTheCallerCouldNotOtherwiseSee() {
         record("tenant.suspended", OTHER_TENANT, "operator-2");
-        knownDisplayNames.put("operator-2", "Operator Two");
+        knownDisplayNames.name(OTHER_TENANT, "operator-2", "Operator Two");
 
         assertThat(queries.search(new AuditQueryService.AuditQuery(
                         TENANT, null, null, null, null, null, null, null, null, null, null, null)))
@@ -158,7 +195,7 @@ class AuditQueryAndPartitionTests {
                 .correlatedBy("pre-named")
                 .occurredAt(Instant.parse("2026-08-20T09:00:00Z"))
                 .build());
-        knownDisplayNames.put("operator-1", "Should Never Win");
+        knownDisplayNames.name(TENANT, "operator-1", "Should Never Win");
 
         assertThat(queries.search(new AuditQueryService.AuditQuery(
                                 TENANT, null, null, null, null, null, null, null, null, null, null, null))

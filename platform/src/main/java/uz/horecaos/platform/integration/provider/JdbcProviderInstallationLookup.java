@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.provider;
 
 import java.time.Clock;
 import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -62,26 +63,29 @@ public class JdbcProviderInstallationLookup
 
         // Narrowest scope first: a location binding overrides its brand's, the
         // same direction ADR 0030 resolves configuration.
-        return candidates.stream()
-                .filter(Candidate::primary)
-                .min((left, right) -> {
-                    int byScope = Integer.compare(specificity(right), specificity(left));
-                    return byScope != 0 ? byScope : Integer.compare(left.priority(), right.priority());
-                })
-                .map(Candidate::ref);
+        return candidates.stream().filter(Candidate::primary).min(BINDING_ORDER).map(Candidate::ref);
     }
 
     @Override
     public List<BindingRef> candidateBindings(
             UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
 
-        return candidates(tenantId, brandId, locationId, capabilityCode).stream()
-                .sorted((left, right) -> {
-                    int byScope = Integer.compare(specificity(right), specificity(left));
-                    return byScope != 0 ? byScope : Integer.compare(left.priority(), right.priority());
-                })
-                .map(Candidate::ref)
-                .toList();
+        return inBindingOrder(candidates(tenantId, brandId, locationId, capabilityCode));
+    }
+
+    /**
+     * The order ADR 0026 resolves bindings in, applied to whatever order the database returned them in.
+     *
+     * <p>Narrowest scope first, then the lower priority number. Priority defaults to 100 and is not
+     * unique, so ties are the ordinary case rather than a corner, and {@code SELECT_BINDINGS} has no
+     * {@code ORDER BY}: without a last tie-break the order of two equal bindings is whatever the
+     * planner and the heap happen to produce, which changes when a row is updated. A dispatch rule with
+     * no explicit partner order falls back to exactly this order, so the simulator and the runtime would
+     * disagree, and the same facts could book a different partner from one tick to the next. The binding
+     * id is the last key because it never changes.
+     */
+    static List<BindingRef> inBindingOrder(List<Candidate> candidates) {
+        return candidates.stream().sorted(BINDING_ORDER).map(Candidate::ref).toList();
     }
 
     @Override
@@ -278,7 +282,13 @@ public class JdbcProviderInstallationLookup
         return candidate.ref().locationId() != null ? 2 : 1;
     }
 
-    private record Candidate(BindingRef ref, boolean primary, int priority) {}
+    private static final Comparator<Candidate> BINDING_ORDER = Comparator.comparingInt(
+                    (Candidate candidate) -> specificity(candidate))
+            .reversed()
+            .thenComparingInt(Candidate::priority)
+            .thenComparing(candidate -> candidate.ref().bindingId());
+
+    record Candidate(BindingRef ref, boolean primary, int priority) {}
 
     private record InstallationRow(
             UUID id,

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -21,8 +22,10 @@ import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.domain.PromiseBasis;
 import uz.horecaos.platform.ordering.domain.TransitionTrigger;
+import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.LocalizedLabels;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Order persistence (ADR 0019).
@@ -340,6 +343,83 @@ public class JdbcOrderStore {
     }
 
     /**
+     * The live catchweight lines of an order that nobody has weighed yet (ADR 0137):
+     * the question behind {@code CATCHWEIGHT_NOT_RECONCILED}, which refuses to hand an
+     * order over while any of them is still priced against its nominal weight.
+     */
+    public List<UUID> unreconciledCatchweightLines(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT id FROM ordering.order_lines
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND catchweight_quantum_grams IS NOT NULL
+                  AND actual_weight_grams IS NULL
+                  AND revision_to IS NULL
+                ORDER BY line_number
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .list();
+    }
+
+    /**
+     * Writes a reconciliation onto a live line (ADR 0137): the captured weight, where
+     * the line has one, and the amounts a re-price with that weight produced.
+     *
+     * <p>The only statement that edits an order line's money, and it names its
+     * columns: V0450 grants UPDATE on these four and nothing else. It is guarded by
+     * {@code revision_to IS NULL} so a line an amendment closed is never edited, and
+     * by the tenant and the order so a line id from another order finds nothing.
+     *
+     * @param actualWeightGrams null to leave the stored weight alone (a line the
+     *                          re-price touched only through its tax share)
+     * @return false when the line was not live on this order
+     */
+    public boolean applyReconciledAmounts(
+            UUID tenantId,
+            UUID orderId,
+            UUID lineId,
+            @Nullable Integer actualWeightGrams,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("orderId", orderId);
+        params.put("lineId", lineId);
+        params.put("actualWeight", actualWeightGrams);
+        params.put("base", baseMinor);
+        params.put("finalAmount", finalMinor);
+        params.put("tax", taxMinor);
+        return jdbc.sql("""
+                        UPDATE ordering.order_lines
+                        SET actual_weight_grams = COALESCE(:actualWeight::integer, actual_weight_grams),
+                            base_amount_minor = :base,
+                            final_amount_minor = :finalAmount,
+                            tax_amount_minor = :tax
+                        WHERE tenant_id = :tenantId AND order_id = :orderId AND id = :lineId
+                          AND revision_to IS NULL
+                        """).params(params).update() == 1;
+    }
+
+    /**
+     * The next {@code sequence} for an adjustment appended to this order after checkout (ADR 0136):
+     * past every one the order has, because a checkout wrote the quote's own sequence and an
+     * amendment's rows follow them.
+     */
+    public int nextAdjustmentSequence(UUID tenantId, UUID orderId) {
+        Integer max = jdbc.sql("""
+                SELECT max(sequence) FROM ordering.order_adjustments
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Integer.class)
+                .single();
+        return (max == null ? 0 : max) + 1;
+    }
+
+    /**
      * The next line number for a new row on this order (ADR 0039 {@code
      * ADD_LINES}/{@code CHANGE_LINE_QUANTITY}).
      *
@@ -534,22 +614,182 @@ public class JdbcOrderStore {
             String productName,
             @Nullable String variantName,
             @Nullable String sku,
-            int quantity,
+            BigDecimal quantity,
             long unitMinor,
             long baseMinor,
             long finalMinor,
             long taxMinor,
             @Nullable String noteEncrypted) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                null,
+                null);
+    }
+
+    /**
+     * What a combo's component line remembers about the purchase it was part of (ADR 0136).
+     *
+     * <p>All of it, or none of it: {@code ck_order_line_combo_provenance} says so, and so
+     * does this record, which cannot be built with a part missing.
+     *
+     * @param selectionId the shared grouping key; a report counts distinct values
+     * @param containerVariantId the combo, which is never a line of its own
+     * @param name the container's name as sold, copied so a rename cannot change a receipt
+     * @param componentId the pairing the line was priced from, so an amendment prices the
+     *                    same component at the same combo price
+     * @param comboQuantity combos bought on the cart line
+     * @param pickQuantity times this component was picked inside one combo
+     */
+    public record ComboFacts(
+            UUID selectionId,
+            UUID containerVariantId,
+            String name,
+            UUID componentId,
+            int comboQuantity,
+            int pickQuantity) {}
+
+    /** The same insert, for a line that is one component of a combo when {@code combo} is non-null. */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            BigDecimal quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            @Nullable ComboFacts combo) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                combo,
+                null);
+    }
+
+    /**
+     * {@link #insertLine} for a line that may be sold by weight (ADR 0137): the
+     * catchweight facts of the quote line are snapshotted beside the amounts, so the
+     * order can say what its provisional figures were provisional <em>against</em>
+     * and a later menu repricing cannot change what the customer agreed to per
+     * quantum.
+     */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            BigDecimal quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            QuoteSnapshot.@Nullable Catchweight catchweight) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                null,
+                catchweight);
+    }
+
+    /** One line that may be a combo component (ADR 0136) and may be sold by weight (ADR 0137). */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            BigDecimal quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            @Nullable ComboFacts combo,
+            QuoteSnapshot.@Nullable Catchweight catchweight) {
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
                     product_name_snapshot, variant_name_snapshot, sku_snapshot, quantity,
                     unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                    note_encrypted)
+                    note_encrypted,
+                    combo_selection_id, combo_container_variant_id, combo_name_snapshot,
+                    combo_component_id, combo_quantity, combo_pick_quantity,
+                    catchweight_quantum_grams, catchweight_nominal_grams,
+                    catchweight_price_per_quantum_minor, actual_weight_grams)
                 VALUES (:id, :tenantId, :orderId, :lineNumber, :productId, :variantId,
                     :productName, :variantName, :sku, :quantity,
-                    :unit, :base, :finalAmount, :tax, :note)
+                    :unit, :base, :finalAmount, :tax, :note,
+                    :comboSelectionId, :comboContainerVariantId, :comboName,
+                    :comboComponentId, :comboQuantity, :comboPickQuantity,
+                    :quantum, :nominal, :pricePerQuantum, :actualWeight)
                 """)
+                .param("comboSelectionId", combo == null ? null : combo.selectionId())
+                .param("comboContainerVariantId", combo == null ? null : combo.containerVariantId())
+                .param("comboName", combo == null ? null : combo.name())
+                .param("comboComponentId", combo == null ? null : combo.componentId())
+                .param("comboQuantity", combo == null ? null : combo.comboQuantity())
+                .param("comboPickQuantity", combo == null ? null : combo.pickQuantity())
+                .param("quantum", catchweight == null ? null : catchweight.quantumGrams())
+                .param("nominal", catchweight == null ? null : catchweight.nominalGramsPerUnit())
+                .param("pricePerQuantum", catchweight == null ? null : catchweight.pricePerQuantumMinor())
+                .param("actualWeight", catchweight == null ? null : catchweight.actualWeightGrams())
                 .param("id", lineId)
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
@@ -578,15 +818,55 @@ public class JdbcOrderStore {
             int quantity,
             long unitMinor,
             long finalMinor) {
+        insertLineModifier(
+                tenantId,
+                orderLineId,
+                sourceGroupId,
+                sourceOptionId,
+                groupName,
+                optionName,
+                quantity,
+                unitMinor,
+                finalMinor,
+                null,
+                false);
+    }
+
+    /**
+     * Inserts one modifier selection and returns its id, so a second-level selection can name
+     * it as its parent (ADR 0136).
+     *
+     * @param parentModifierId the first-level selection whose linked variant offered this one,
+     *                         or null on a first-level selection
+     * @param autoSelected true when the server applied a hidden option for the order's
+     *                     fulfilment mode: the customer never chose it
+     */
+    public UUID insertLineModifier(
+            UUID tenantId,
+            UUID orderLineId,
+            @Nullable UUID sourceGroupId,
+            UUID sourceOptionId,
+            @Nullable String groupName,
+            String optionName,
+            int quantity,
+            long unitMinor,
+            long finalMinor,
+            @Nullable UUID parentModifierId,
+            boolean autoSelected) {
+        UUID modifierId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO ordering.order_line_modifiers (
                     id, tenant_id, order_line_id, source_group_id, source_option_id,
                     group_name_snapshot, option_name_snapshot, quantity,
-                    unit_amount_minor, final_amount_minor)
+                    unit_amount_minor, final_amount_minor,
+                    parent_order_line_modifier_id, auto_selected)
                 VALUES (:id, :tenantId, :lineId, :groupId, :optionId,
-                    :groupName, :optionName, :quantity, :unit, :finalAmount)
+                    :groupName, :optionName, :quantity, :unit, :finalAmount,
+                    :parentId, :autoSelected)
                 """)
-                .param("id", UUID.randomUUID())
+                .param("parentId", parentModifierId)
+                .param("autoSelected", autoSelected)
+                .param("id", modifierId)
                 .param("tenantId", tenantId)
                 .param("lineId", orderLineId)
                 .param("groupId", sourceGroupId)
@@ -597,6 +877,7 @@ public class JdbcOrderStore {
                 .param("unit", unitMinor)
                 .param("finalAmount", finalMinor)
                 .update();
+        return modifierId;
     }
 
     /**
@@ -1088,6 +1369,57 @@ public class JdbcOrderStore {
                 .query(Long.class)
                 .single();
         return new OperatorTodayCountsRow(created, accepted);
+    }
+
+    /**
+     * Every staff member who took or accepted an order in this brand (or one of
+     * its branches) inside the window, with the two counts {@link
+     * #operatorTodayCounts} gives for one -- the live operator band (gap map
+     * row 0.1d), read straight off {@code ordering.orders} like the single
+     * operator's card and not off a report.
+     *
+     * <p>Only a {@code USER} actor is a person: an order a bot or the website
+     * placed names a customer or a channel in those columns, and a channel is
+     * not a staff member. The list is ordered by orders accepted, then taken,
+     * and bounded -- a brand's busiest hundred is the band; the rest is the 7.5
+     * report's job.
+     *
+     * @param locationId null for the whole brand, otherwise one branch
+     */
+    public List<OperatorTodayLeaderboardRow> operatorTodayLeaderboard(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, Instant from, Instant to) {
+        String branch = locationId == null ? "" : " AND location_id = :locationId";
+        String sql = """
+                SELECT operator_subject, sum(created) AS created, sum(accepted) AS accepted
+                  FROM (
+                        SELECT created_by_actor_id AS operator_subject, 1 AS created, 0 AS accepted
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND brand_id = :brandId%1$s
+                           AND created_by_actor_type = 'USER' AND created_by_actor_id IS NOT NULL
+                           AND created_at >= :from AND created_at < :to
+                        UNION ALL
+                        SELECT accepted_by_actor_id, 0, 1
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND brand_id = :brandId%1$s
+                           AND accepted_by_actor_type = 'USER' AND accepted_by_actor_id IS NOT NULL
+                           AND accepted_at >= :from AND accepted_at < :to
+                       ) taken
+                 GROUP BY operator_subject
+                 ORDER BY sum(accepted) DESC, sum(created) DESC, operator_subject
+                 LIMIT 100
+                """.formatted(branch);
+        JdbcClient.StatementSpec statement = jdbc.sql(sql)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("from", utc(from))
+                .param("to", utc(to));
+        if (locationId != null) {
+            statement = statement.param("locationId", locationId);
+        }
+        return statement
+                .query((row, number) -> new OperatorTodayLeaderboardRow(
+                        row.getString("operator_subject"), row.getLong("created"), row.getLong("accepted")))
+                .list();
     }
 
     /**
@@ -1835,7 +2167,11 @@ public class JdbcOrderStore {
                 SELECT id, line_number, source_product_id, source_variant_id,
                        product_name_snapshot, variant_name_snapshot, sku_snapshot, quantity,
                        unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                       note_encrypted
+                       note_encrypted,
+                       combo_selection_id, combo_container_variant_id, combo_name_snapshot,
+                       combo_component_id, combo_quantity, combo_pick_quantity,
+                       catchweight_quantum_grams, catchweight_nominal_grams,
+                       catchweight_price_per_quantum_minor, actual_weight_grams
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                   AND (:revision::integer IS NULL
@@ -1853,12 +2189,22 @@ public class JdbcOrderStore {
                         row.getString("product_name_snapshot"),
                         row.getString("variant_name_snapshot"),
                         row.getString("sku_snapshot"),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
                         row.getLong("tax_amount_minor"),
-                        row.getString("note_encrypted")))
+                        row.getString("note_encrypted"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class),
+                        row.getString("combo_name_snapshot"),
+                        row.getObject("combo_component_id", UUID.class),
+                        row.getObject("combo_quantity", Integer.class),
+                        row.getObject("combo_pick_quantity", Integer.class),
+                        row.getObject("catchweight_quantum_grams", Integer.class),
+                        row.getObject("catchweight_nominal_grams", Integer.class),
+                        row.getObject("catchweight_price_per_quantum_minor", Long.class),
+                        row.getObject("actual_weight_grams", Integer.class)))
                 .list();
     }
 
@@ -1875,11 +2221,42 @@ public class JdbcOrderStore {
                 .optional();
     }
 
+    /**
+     * What each hidden auto-selected option charged, by order line and then option (ADR 0136):
+     * the order's own itemisation of a charge the customer never chose.
+     *
+     * <p>Read from the adjustments and not from the modifier rows: a modifier row records which
+     * option the server applied and stores no amount (every modifier's price is folded into its
+     * line's unit price), while the adjustment is where the charge was itemised.
+     */
+    public Map<UUID, Map<UUID, Long>> hiddenCharges(UUID tenantId, UUID orderId) {
+        Map<UUID, Map<UUID, Long>> byLine = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT order_line_id, source_id, SUM(amount_minor) AS amount_minor
+                FROM ordering.order_adjustments
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND order_line_id IS NOT NULL AND source_type = :sourceType
+                GROUP BY order_line_id, source_id
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("sourceType", uz.horecaos.platform.pricing.api.QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE)
+                .query((row, number) -> {
+                    byLine.computeIfAbsent(
+                                    row.getObject("order_line_id", UUID.class), id -> new java.util.LinkedHashMap<>())
+                            .put(row.getObject("source_id", UUID.class), row.getLong("amount_minor"));
+                    return Boolean.TRUE;
+                })
+                .list();
+        return byLine;
+    }
+
     public List<OrderModifierRow> lineModifiers(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                SELECT m.order_line_id, m.source_group_id, m.source_option_id,
+                SELECT m.id, m.order_line_id, m.source_group_id, m.source_option_id,
                        m.group_name_snapshot, m.option_name_snapshot, m.quantity,
-                       m.unit_amount_minor, m.final_amount_minor
+                       m.unit_amount_minor, m.final_amount_minor,
+                       m.parent_order_line_modifier_id, m.auto_selected
                 FROM ordering.order_line_modifiers m
                 JOIN ordering.order_lines l ON l.id = m.order_line_id AND l.tenant_id = m.tenant_id
                 WHERE m.tenant_id = :tenantId AND l.order_id = :orderId
@@ -1895,7 +2272,10 @@ public class JdbcOrderStore {
                         row.getString("option_name_snapshot"),
                         row.getInt("quantity"),
                         row.getLong("unit_amount_minor"),
-                        row.getLong("final_amount_minor")))
+                        row.getLong("final_amount_minor"),
+                        row.getObject("id", UUID.class),
+                        row.getObject("parent_order_line_modifier_id", UUID.class),
+                        row.getBoolean("auto_selected")))
                 .list();
     }
 
@@ -2454,6 +2834,24 @@ public class JdbcOrderStore {
      *                           a leaderboard a later action can rewrite measures
      *                           nothing
      */
+    /**
+     * ADR 0140: records that an applied promotion suppresses loyalty accrual or
+     * blocks spending points. Set once at checkout from the accepted quote and again
+     * when an amendment reprices the order under a different set of promotions.
+     */
+    public void setLoyaltyFlags(UUID tenantId, UUID orderId, boolean accrualAllowed, boolean redemptionAllowed) {
+        jdbc.sql("""
+                UPDATE ordering.orders
+                SET loyalty_accrual_allowed = :accrual, loyalty_redemption_allowed = :redemption
+                WHERE tenant_id = :tenantId AND id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("accrual", accrualAllowed)
+                .param("redemption", redemptionAllowed)
+                .update();
+    }
+
     public record NewOrder(
             UUID orderId,
             String publicOrderNumber,
@@ -3145,6 +3543,9 @@ public class JdbcOrderStore {
     /** One operator's today, from {@link #operatorTodayCounts} — see that method's own doc on why two numbers, not one. */
     public record OperatorTodayCountsRow(long created, long accepted) {}
 
+    /** One operator's line on the live board, from {@link #operatorTodayLeaderboard}. */
+    public record OperatorTodayLeaderboardRow(String operatorSubject, long created, long accepted) {}
+
     /**
      * The thirteen columns a customer's own order list needs, and no others.
      *
@@ -3188,18 +3589,57 @@ public class JdbcOrderStore {
             String productName,
             String variantName,
             String sku,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
             long baseAmountMinor,
             long finalAmountMinor,
             long taxAmountMinor,
-            String noteEncrypted) {
+            String noteEncrypted,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId,
+            @Nullable String comboName,
+            @Nullable UUID comboComponentId,
+            @Nullable Integer comboQuantity,
+            @Nullable Integer comboPickQuantity,
+            @Nullable Integer catchweightQuantumGrams,
+            @Nullable Integer catchweightNominalGrams,
+            @Nullable Long catchweightPricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        public OrderLineRow {
+            quantity = Quantities.normalise(quantity);
+        }
 
         public boolean hasNote() {
             return noteEncrypted != null;
         }
+
+        /** True when this line is one component of a combo (ADR 0136). */
+        public boolean isComboComponent() {
+            return comboSelectionId != null;
+        }
+
+        /** Whether this line is sold by weight (ADR 0137). */
+        public boolean catchweight() {
+            return catchweightQuantumGrams != null;
+        }
+
+        /** Whether a weight has been captured, so the line's amounts are final (ADR 0137). */
+        public boolean reconciled() {
+            return actualWeightGrams != null;
+        }
     }
 
+    /**
+     * One modifier selection on an order line, as it was bought.
+     *
+     * @param modifierId the selection's own id, which a second-level selection names as its parent
+     * @param parentModifierId ADR 0136: the first-level selection whose linked variant offered this
+     *                         one, or null on a first-level selection
+     * @param autoSelected ADR 0136: the server applied this hidden option for the order's
+     *                     fulfilment mode; the customer never chose it, so nothing that rebuilds the
+     *                     customer's selections (a reorder, an amendment's repricing) carries it
+     */
     public record OrderModifierRow(
             UUID orderLineId,
             UUID sourceGroupId,
@@ -3208,7 +3648,10 @@ public class JdbcOrderStore {
             String optionName,
             int quantity,
             long unitAmountMinor,
-            long finalAmountMinor) {}
+            long finalAmountMinor,
+            UUID modifierId,
+            @Nullable UUID parentModifierId,
+            boolean autoSelected) {}
 
     /**
      * Row 2.1b: one preset a line was checked out carrying, labels as of that moment.

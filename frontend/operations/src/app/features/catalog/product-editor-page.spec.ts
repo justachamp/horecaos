@@ -15,6 +15,7 @@ import { MediaUploader } from '../../shared/ui/media-uploader';
 import { CapacityApi } from '../kitchen/capacity-api';
 import { ActivityLogApi } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
+import { CompositeApi } from './composite-api';
 import { InventoryApi } from './inventory-api';
 import { MediaApi } from './media-api';
 import { PricingApi } from './pricing-api';
@@ -132,6 +133,16 @@ function configure(
         provide: PricingApi,
         useValue: {
           resolvedVariantPrices: () => of({ priceBookId: null, currency: null, amountsMinor: {} }),
+          resolvedComponentPrices: () =>
+            of({ priceBookId: null, currency: null, amountsMinor: {} }),
+        },
+      },
+      {
+        // ADR 0136's tabs: nothing attached to a variant, no combo group.
+        provide: CompositeApi,
+        useValue: {
+          variantAttachments: () => of([]),
+          comboGroupsOf: () => of([]),
         },
       },
       { provide: MediaApi, useValue: mediaApi },
@@ -2118,5 +2129,131 @@ describe('ProductEditorPage: its extracted parts stay wired to it', () => {
 
     expect(upload).toHaveBeenCalledTimes(1);
     expect(uploader().uploading()).toBe(true);
+  });
+});
+
+describe('ProductEditorPage — weight and nutrition tab (ADR 0137)', () => {
+  const NOTHING = { catchweight: false, splittable: false, version: 0 };
+
+  function twoVariants(markingRequired = false): ProductDetail {
+    const base = productDetail();
+    return {
+      ...base,
+      variants: [
+        { ...base.variants[0], fiscal: { markingRequired, excisable: false } },
+        {
+          ...base.variants[0],
+          variantId: 'variant-2',
+          sku: 'PLOV-2',
+          isDefault: false,
+          sortOrder: 1,
+          translations: { ru: { name: 'Плов, большая порция' } },
+          fiscal: null,
+        },
+      ],
+    };
+  }
+
+  async function openTab(catalogApi: Partial<CatalogApi>) {
+    configure(catalogApi);
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHYSICAL"]') as HTMLButtonElement).click();
+    harness.detectChanges();
+    await flushMicrotasks();
+    harness.detectChanges();
+    return { host, harness };
+  }
+
+  it('shows one card per variant and reads each variant’s own attributes', async () => {
+    const physicalAttributes = vi.fn().mockReturnValue(of(NOTHING));
+    const { host } = await openTab({ productDetail: () => of(twoVariants()), physicalAttributes });
+
+    const cards = host.querySelectorAll('[data-testid="physical-card"]');
+    expect(cards.length).toBe(2);
+    expect(cards[0].textContent).toContain('Плов, порция');
+    expect(cards[1].textContent).toContain('Плов, большая порция');
+    expect(physicalAttributes.mock.calls.map((call) => call[1]).sort()).toEqual([
+      'variant-1',
+      'variant-2',
+    ]);
+    expect(physicalAttributes.mock.calls[0][0]).toEqual(BRAND_SCOPE);
+  });
+
+  it('does not read any attributes until the tab is opened', async () => {
+    const physicalAttributes = vi.fn().mockReturnValue(of(NOTHING));
+    configure({ productDetail: () => of(twoVariants()), physicalAttributes });
+
+    await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    expect(physicalAttributes).not.toHaveBeenCalled();
+  });
+
+  it('tells a marked variant’s card that it is marked, so splittable warns at once', async () => {
+    const { host, harness } = await openTab({
+      productDetail: () => of(twoVariants(true)),
+      physicalAttributes: vi.fn().mockReturnValue(of(NOTHING)),
+    });
+    const cards = host.querySelectorAll('[data-testid="physical-card"]');
+
+    (cards[0].querySelector('[data-testid="physical-splittable"]') as HTMLInputElement).click();
+    (cards[1].querySelector('[data-testid="physical-splittable"]') as HTMLInputElement).click();
+    harness.detectChanges();
+
+    expect(cards[0].querySelector('[data-testid="physical-marking-conflict"]')).not.toBeNull();
+    expect(cards[1].querySelector('[data-testid="physical-marking-conflict"]')).toBeNull();
+  });
+
+  it('looks at the readiness rail again after a save, since the marking conflict is a publication blocker', async () => {
+    const validate = vi.fn().mockReturnValue(of(CLEAN_REPORT));
+    const { host, harness } = await openTab({
+      productDetail: () => of(twoVariants()),
+      physicalAttributes: vi.fn().mockReturnValue(of(NOTHING)),
+      setPhysicalAttributes: vi.fn((_s, _v, request) => of({ ...request, version: 1 })),
+      validate,
+    });
+    const callsBefore = validate.mock.calls.length;
+    const card = host.querySelector('[data-testid="physical-card"]')!;
+
+    const measure = card.querySelector('[data-testid="physical-measure"]') as HTMLSelectElement;
+    measure.value = 'WEIGHT';
+    measure.dispatchEvent(new Event('change'));
+    harness.detectChanges();
+    const value = card.querySelector('[data-testid="physical-measure-value"]') as HTMLInputElement;
+    value.value = '350';
+    value.dispatchEvent(new Event('input'));
+    harness.detectChanges();
+    (card.querySelector('[data-testid="physical-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(validate.mock.calls.length).toBe(callsBefore + 1);
+  });
+
+  it('words the publication blocker for a marked good that is sold by weight', async () => {
+    const validate = vi.fn().mockReturnValue(
+      of({
+        publishable: false,
+        findings: [
+          {
+            severity: 'BLOCKER',
+            code: 'PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING',
+            entityType: 'VARIANT',
+            entityId: 'variant-1',
+            message: 'x',
+          },
+        ],
+      }),
+    );
+    configure({ productDetail: () => of(twoVariants(true)), validate });
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement!.textContent).toContain(
+      'Маркированный товар нельзя продавать на вес или частями',
+    );
   });
 });

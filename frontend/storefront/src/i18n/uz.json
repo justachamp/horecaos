@@ -126,7 +126,14 @@
     "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
     "deliveryChooseAddress": "Yetkazib berish narxini hisoblash uchun manzil tanlang.",
     "pickupLocation": "Olib ketish filiali",
-    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz."
+    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz.",
+    "hiddenCharge": {
+      "title": "Avtomatik qo'shilgan, jami summaga kiritilgan",
+      "fallbackLabel": "Qo'shimcha to'lov"
+    },
+    "offerDiscount": "Aksiya",
+    "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
+    "surchargeNote": "Ustama {{amount}} hisobga olingan"
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -271,7 +278,17 @@
     "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang.",
     "presetsTitle": "Izohlar",
     "outOfSaleWindow": "Bu taom hozir sotuvda emas.",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "comboTitle": "Kombongizni yig'ing",
+    "comboPickExactly": "{{min}} ta tanlang",
+    "comboPickBetween": "{{min}} dan {{max}} gacha tanlang",
+    "comboPickUpTo": "{{max}} tagacha tanlang",
+    "comboIncluded": "Kiritilgan",
+    "comboNotPriced": "Narx mavjud emas",
+    "comboSoldOut": "Tugagan",
+    "comboIncomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
+    "comboUnavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "fromPrice": "{{price}} dan"
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -310,11 +327,30 @@
     "roundCount": "Buyurtma qilingan: {{count}} marta",
     "askForBill": "Hisobni so'rash",
     "orderPlaced": "Buyurtma oshxonaga yuborildi",
+    "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing.",
     "billRequested": "Hisob so'raldi",
     "roundAttachRetry": "Buyurtma oshxonaga yuborildi, lekin hali stol hisobida yo'q. «Qayta urinish» tugmasini bosing.",
     "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
     "roundRetry": "Qayta urinish",
-    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting."
+    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting.",
+    "sitHere": "Shu stolga oʻtirish",
+    "sitHereHint": "Necha kishi ekaningizni ayting va kutmasdan oʻtiring. Siz tanlayotganingizda stolni ushlab turamiz, buyurtma qabul qilingach esa sizda qoldiramiz.",
+    "partySize": "Necha kishisiz",
+    "fewerGuests": "Mehmonlarni kamaytirish",
+    "moreGuests": "Mehmonlarni koʻpaytirish",
+    "sitDown": "Oʻtirish",
+    "sitting": "Oʻtqazilmoqda...",
+    "signInToSit": "Oʻtirish uchun kiring",
+    "joinedExisting": "Bu stolda allaqachon mehmonlar oʻtiribdi, shuning uchun buyurtmalaringiz bir xil hisobga tushadi.",
+    "claimHeld": "Stol siz uchun yana {{minutes}} daqiqa ushlab turiladi. Qoldirish uchun buyurtma bering.",
+    "claimEnding": "Stolni ushlab turish muddati tugayapti. Qoldirish uchun hozir buyurtma bering.",
+    "claimLapsedTitle": "Stolni ushlab turish tugadi",
+    "claimLapsedBody": "{{code}}-stol endi siz uchun ushlab turilmaydi. Qayta o'tirish uchun stoldagi QR-kodni skanerlang.",
+    "tableNotAvailable": "Bu stolni bu yerdan band qilib boʻlmaydi. Xodimdan sizni oʻtqazishini soʻrang.",
+    "tooManyForTable": "Bu stolda {{seats}} oʻrin bor. Xodimdan kattaroq stol soʻrang.",
+    "seatRateLimited": "Urinishlar juda koʻp. Biroz kuting va qayta urinib koʻring.",
+    "comboChoose": "Kombongizni tanlang",
+    "comboChooseAction": "Tanlash"
   },
   "action": {
     "yourAddress": "Sizning manzil",
@@ -368,12 +404,32 @@
       "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
       "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
-      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
+      "paymentMethodUnavailable": "Bu to'lov usuli hozir mavjud emas. Boshqasini tanlang."
     }
   },
   "money": {
     "unit": {
       "UZS": "so'm"
     }
+  },
+  "physical": {
+    "nutritionTitle": "Ozuqaviy qiymati",
+    "nutritionPer100g": "100 g uchun",
+    "nutritionPer100ml": "100 ml uchun",
+    "nutritionPerUnit": "bir porsiyada ({{amount}})",
+    "calories": "Kaloriya",
+    "proteins": "Oqsillar",
+    "fats": "Yog'lar",
+    "carbs": "Uglevodlar",
+    "kcal": "kkal",
+    "pricePerQuantum": "{{quantum}} uchun {{price}}",
+    "estimatedFor": "≈ {{weight}} uchun ≈ {{price}}",
+    "finalWeightNotice": "Yakuniy og'irlik va narx buyurtma topshirilganda aniqlanadi.",
+    "cartNotice": "Summada og'irlik bo'yicha sotiladigan mahsulotlar bor. Yakuniy og'irlik va summa buyurtma topshirilganda aniqlanadi.",
+    "portionsUnit": "porsiya",
+    "portionStep": "{{step}} porsiyalarda buyurtma qilinadi",
+    "weighedLine": "Tortildi: {{weight}}",
+    "estimateLine": "≈ {{weight}}, taxminiy"
   }
 }

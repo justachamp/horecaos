@@ -1,0 +1,274 @@
+<section class="sim" data-testid="dispatch-simulator">
+  <h3 class="q-subhead">{{ 'delivery.rules.sim.heading' | t }}</h3>
+  <p class="q-caption sim__muted">{{ 'delivery.rules.sim.hint' | t }}</p>
+
+  <div class="sim__modes" role="radiogroup">
+    <button
+      type="button"
+      class="sim__mode q-body-sm"
+      role="radio"
+      [class.sim__mode--on]="mode() === 'facts'"
+      [attr.aria-checked]="mode() === 'facts'"
+      (click)="mode.set('facts')"
+      data-testid="sim-mode-facts"
+    >
+      {{ 'delivery.rules.sim.modeFacts' | t }}
+    </button>
+    <button
+      type="button"
+      class="sim__mode q-body-sm"
+      role="radio"
+      [class.sim__mode--on]="mode() === 'plan'"
+      [attr.aria-checked]="mode() === 'plan'"
+      (click)="mode.set('plan')"
+      data-testid="sim-mode-plan"
+    >
+      {{ 'delivery.rules.sim.modePlan' | t }}
+    </button>
+  </div>
+
+  @if (mode() === 'facts') {
+    <div class="sim__form">
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.source' | t }}
+        <select
+          class="q-body field"
+          [value]="source()"
+          (change)="source.set($any($event.target).value)"
+          data-testid="sim-source"
+        >
+          <option value="">{{ 'delivery.rules.sim.source.any' | t }}</option>
+          @for (type of sourceTypes; track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+      </label>
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.channel' | t }}
+        <select
+          class="q-body field"
+          [value]="channelId()"
+          (change)="channelId.set($any($event.target).value)"
+          data-testid="sim-channel"
+        >
+          <option value="">{{ 'delivery.rules.sim.channel.any' | t }}</option>
+          @for (channel of channels(); track channel.id) {
+            <option [value]="channel.id">{{ channel.displayName }}</option>
+          }
+        </select>
+      </label>
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.zone' | t }}
+        <select
+          class="q-body field"
+          [value]="zoneId()"
+          (change)="zoneId.set($any($event.target).value)"
+          data-testid="sim-zone"
+        >
+          <option value="">{{ 'delivery.rules.sim.zone.any' | t }}</option>
+          @for (zone of zones(); track zone.id) {
+            <option [value]="zone.id">{{ zoneLabel(zone) }}</option>
+          }
+        </select>
+      </label>
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.prep' | t }}
+        <input
+          class="q-body field"
+          type="number"
+          min="0"
+          [value]="preparation()"
+          (input)="preparation.set($any($event.target).value)"
+          data-testid="sim-prep"
+        />
+      </label>
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.distance' | t }}
+        <input
+          class="q-body field"
+          type="number"
+          min="0"
+          [value]="distance()"
+          (input)="distance.set($any($event.target).value)"
+          data-testid="sim-distance"
+        />
+      </label>
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.confirmedAt' | t }}
+        <input
+          class="q-body field"
+          type="datetime-local"
+          [value]="confirmedAt()"
+          (change)="confirmedAt.set($any($event.target).value)"
+          data-testid="sim-confirmed-at"
+        />
+      </label>
+      <label class="sim__check q-body-sm">
+        <input
+          type="checkbox"
+          [checked]="prepaid()"
+          (change)="prepaid.set($any($event.target).checked)"
+          data-testid="sim-prepaid"
+        />
+        {{ 'delivery.rules.sim.prepaid' | t }}
+      </label>
+    </div>
+  } @else {
+    @if (recentPlans().length === 0) {
+      <p class="q-caption sim__muted">{{ 'delivery.rules.sim.plan.none' | t }}</p>
+    } @else {
+      <label class="sim__field q-caption">
+        {{ 'delivery.rules.sim.plan' | t }}
+        <select
+          class="q-body field"
+          [value]="planId()"
+          (change)="planId.set($any($event.target).value)"
+          data-testid="sim-plan"
+        >
+          <option value=""></option>
+          @for (plan of recentPlans(); track plan.planId) {
+            <option [value]="plan.planId">{{ planLabel(plan) }}</option>
+          }
+        </select>
+      </label>
+    }
+  }
+
+  <div class="sim__actions">
+    @if (dirty()) {
+      <label class="sim__check q-body-sm">
+        <input
+          type="checkbox"
+          [checked]="useDraft()"
+          (change)="useDraft.set($any($event.target).checked)"
+          data-testid="sim-use-draft"
+        />
+        {{ 'delivery.rules.sim.useDraft' | t }}
+      </label>
+    }
+    <button
+      type="button"
+      class="q-body primary"
+      [disabled]="!canRun()"
+      (click)="run()"
+      data-testid="sim-run"
+    >
+      {{ running() ? ('delivery.rules.sim.running' | t) : ('delivery.rules.sim.run' | t) }}
+    </button>
+  </div>
+
+  @if (error(); as message) {
+    <p class="q-body-sm sim__error" role="alert" data-testid="sim-error">{{ message }}</p>
+  }
+
+  @if (result(); as r) {
+    <div class="sim__result" data-testid="sim-result">
+      <p class="q-emphasis" data-testid="sim-matched">
+        @if (r.decision.ruleId === 'DEFAULT') {
+          {{ 'delivery.rules.sim.matchedDefault' | t }}
+        } @else {
+          {{ 'delivery.rules.sim.matched' | t: { rule: r.decision.ruleId } }}
+        }
+      </p>
+      <p class="q-body-sm" data-testid="sim-mode">{{ modeLabel(r.decision.mode) | t }}</p>
+
+      <dl class="sim__facts">
+        <div>
+          <dt class="q-caption">{{ 'delivery.rules.sim.lanes' | t }}</dt>
+          <dd class="q-body-sm" data-testid="sim-lanes">
+            @if (r.lanes.length === 0) {
+              {{ 'delivery.rules.sim.lanes.none' | t }}
+            } @else {
+              @for (lane of r.lanes; track lane; let last = $last) {
+                {{ laneLabel(lane) | t }}{{ last ? '' : ' → ' }}
+              }
+            }
+          </dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'delivery.rules.sim.start' | t }}</dt>
+          <dd class="q-body-sm" data-testid="sim-source-at">
+            {{ whenIn(r.pickup.sourceAt, r.facts.branchTimezone) }}
+          </dd>
+        </div>
+      </dl>
+      <p class="q-body-sm" data-testid="sim-window">
+        {{
+          'delivery.rules.sim.window'
+            | t
+              : {
+                  from: whenIn(r.pickup.pickupWindowStart, r.facts.branchTimezone),
+                  to: whenIn(r.pickup.pickupWindowEnd, r.facts.branchTimezone),
+                }
+        }}
+      </p>
+
+      <h4 class="q-caption">{{ 'delivery.rules.sim.ladder' | t }}</h4>
+      @if (r.ladder.length === 0) {
+        <p class="q-caption sim__muted" data-testid="sim-ladder-empty">
+          {{ 'delivery.rules.sim.ladder.empty' | t }}
+        </p>
+      } @else {
+        <ol class="sim__ladder" data-testid="sim-ladder">
+          @for (step of r.ladder; track step.position) {
+            <li class="q-body-sm">{{ step.displayName ?? step.providerType }}</li>
+          }
+        </ol>
+      }
+
+      @if (r.skips.length > 0) {
+        <h4 class="q-caption">{{ 'delivery.rules.sim.skips' | t }}</h4>
+        <ul class="sim__list" data-testid="sim-skips">
+          @for (skip of r.skips; track skip.installationId) {
+            <li class="q-body-sm">
+              {{ installationName(skip.installationId) }}
+              @if (skipLabel(skip.reason); as label) {
+                {{ label | t }}
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      <h4 class="q-caption">{{ 'delivery.rules.sim.trace' | t }}</h4>
+      <ol class="sim__trace" data-testid="sim-trace">
+        @for (entry of r.trace; track entry.ruleId) {
+          <li class="q-body-sm" [class.sim__trace--matched]="entry.state === 'MATCHED'">
+            <span class="sim__ruleName">{{ entry.name || entry.ruleId }}</span>
+            <span class="q-caption sim__muted">
+              {{ stateLabel(entry.state) | t }}
+              @if (entry.failedCondition; as failed) {
+                @if (failedLabel(failed); as failedKey) {
+                  — {{ failedKey | t }}
+                }
+              }
+            </span>
+          </li>
+        }
+      </ol>
+
+      @for (note of r.notes; track note) {
+        @if (noteLabel(note); as noteKey) {
+          <p class="q-caption sim__muted" [attr.data-testid]="'sim-note-' + note">
+            {{ noteKey | t }}
+          </p>
+        }
+      }
+
+      @if (r.violations.length > 0) {
+        <div class="sim__problems" role="alert" data-testid="sim-violations">
+          <p class="q-body-sm">{{ 'delivery.rules.sim.violations' | t }}</p>
+          <ul>
+            @for (violation of r.violations; track violation) {
+              <li class="q-body-sm">{{ violation }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <p class="q-caption sim__muted" data-testid="sim-no-provider">
+        {{ 'delivery.rules.sim.noProvider' | t }}
+      </p>
+    </div>
+  }
+</section>

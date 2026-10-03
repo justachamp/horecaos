@@ -20,6 +20,7 @@ import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
+import uz.horecaos.platform.pricing.api.PromotionQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
@@ -55,6 +56,7 @@ class CheckoutEligibilityGuard {
     private final ConfigurationResolver configuration;
     private final OrderingTenantContext tenancy;
     private final CartSaleWindowRules saleWindows;
+    private final PromotionQueryPort promotionQuery;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutEligibilityGuard(
@@ -70,7 +72,8 @@ class CheckoutEligibilityGuard {
             CustomerBlacklistPort blacklist,
             ConfigurationResolver configuration,
             OrderingTenantContext tenancy,
-            CartSaleWindowRules saleWindows) {
+            CartSaleWindowRules saleWindows,
+            PromotionQueryPort promotionQuery) {
         this.carts = carts;
         this.cartService = cartService;
         this.channels = channels;
@@ -84,6 +87,7 @@ class CheckoutEligibilityGuard {
         this.configuration = configuration;
         this.tenancy = tenancy;
         this.saleWindows = saleWindows;
+        this.promotionQuery = promotionQuery;
     }
 
     /** Every fact a validated checkout needs downstream, gathered in one read-only pass. */
@@ -380,6 +384,43 @@ class CheckoutEligibilityGuard {
             return Result.rejected("PAYMENT_METHOD_UNAVAILABLE", "This channel does not offer " + paymentMethodCode);
         }
 
+        // ADR 0137: a line sold by weight is checked out at its nominal weight and corrected at
+        // the scale, and the correction refuses an order whose money a provider has already taken
+        // (PAYMENT_ALREADY_TAKEN) -- which left the food on the pass behind a handover blocker
+        // nobody could clear. Refused here, where the basket can still be paid for by a method
+        // that settles at the door, for the reason CartPaymentOptions stops offering the method:
+        // the list a customer is shown and this checkout must not disagree.
+        if (payments.takesMoneyBeforeHandover(command.tenantId(), paymentMethodCode)
+                && cartService.holdsWeighedLine(command.tenantId(), command.brandId(), cart, cartLines)) {
+            return Result.rejected(
+                    "WEIGHED_LINES_PAY_AT_HANDOVER",
+                    "This basket has an item sold by weight, whose final price is set at handover, so it "
+                            + "cannot be paid with "
+                            + paymentMethodCode
+                            + " in advance");
+        }
+
+        // ADR 0140: the payment method is an input to the price whenever a promotion reads
+        // it. The cart was priced with the method it had selected (none, until the
+        // customer chose one), so a checkout that names a different method is paying for
+        // a total nobody quoted if a promotion reads either of the two: it is refused
+        // PRICE_CHANGED and re-quoted, never charged the difference.
+        //
+        // Only when the swap can move the price. A brand with "5% off with Click" has an
+        // active payment-method promotion for as long as it runs, and refusing every
+        // checkout that merely differs from the cart's (usually empty) selection would
+        // refuse the customer who pays cash, whose quote is exactly what cash pays, and
+        // would do it for ever, because re-quoting changes nothing about a method nobody
+        // selected. A method no promotion reads cannot move the total away from the quote.
+        String pricedMethodCode = cart.paymentMethodCode();
+        if (!paymentMethodCode.equals(pricedMethodCode)
+                && promotionQuery.paymentMethodMovesTheTotal(
+                        command.tenantId(), command.brandId(), pricedMethodCode, paymentMethodCode)) {
+            return Result.rejected(
+                    "PRICE_CHANGED",
+                    "The payment method changes what this order costs; select it on the cart and request a new quote");
+        }
+
         // ADR 0013's precondition, and the last read-only refusal about the
         // payment method itself. A method with no merchant account behind it is
         // refused here rather than at the payment step, because the alternative
@@ -420,6 +461,22 @@ class CheckoutEligibilityGuard {
         }
         if (quote.status() != QuoteSnapshot.Status.ACTIVE || !quote.expiresAt().isAfter(now)) {
             return Result.rejected("QUOTE_EXPIRED", "This quote has expired or was already accepted");
+        }
+
+        // ADR 0136: a combo's cart line is its container, whose window was re-checked with
+        // the other cart lines above. What is actually sold is the components the quote
+        // lists, and each has a sale window of its own that can close between the pick and
+        // the checkout.
+        if (zone != null) {
+            for (QuoteSnapshot.Line quoted : quote.lines()) {
+                if (quoted.comboSelectionId() != null
+                        && !saleWindows.isOnSaleAt(
+                                command.tenantId(), cart.locationId(), quoted.variantId(), zone, now)) {
+                    return Result.rejected(
+                            "ITEM_OUT_OF_SALE_WINDOW",
+                            "Variant " + quoted.variantId() + " is outside its sale window right now");
+                }
+            }
         }
 
         // ADR 0037. A delivery order is refused here whenever its accepted quote

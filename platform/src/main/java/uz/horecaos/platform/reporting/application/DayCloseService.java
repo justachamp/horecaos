@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,8 +14,10 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionSource;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
@@ -30,6 +33,7 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceOrder;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Builds a business day's facts, and later checks that they were right
@@ -59,13 +63,30 @@ public class DayCloseService {
     private final BusinessDayService businessDays;
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
+    private final @Nullable PromotionRedemptionSource promotionRedemptions;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
+        this(store, businessDays, pseudonym, clock, null);
+    }
+
+    /**
+     * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
+     *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
+     *        null builds no promotion facts, which is what a close with no pricing wired does
+     */
+    @Autowired
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
+        this.promotionRedemptions = promotionRedemptions;
     }
 
     /**
@@ -94,6 +115,14 @@ public class DayCloseService {
         store.clearDay(tenantId, businessDate);
         store.clearMisfiledOrders(
                 tenantId, derived.orders().stream().map(OrderFact::orderId).toList(), businessDate);
+        // The promotion fact is keyed by redemption alone, so a redemption a boundary change moved
+        // onto this day must leave the day it was filed under first.
+        store.clearMisfiledPromotionRedemptions(
+                tenantId,
+                derived.promotionRedemptions().stream()
+                        .map(ReportingFacts.PromotionRedemptionFact::redemptionId)
+                        .toList(),
+                businessDate);
 
         derived.orders().forEach(store::insertOrderFact);
         // P39: the tender producer, right beside the order-fact write and inside
@@ -122,12 +151,16 @@ public class DayCloseService {
         // for the same "a day is written whole or not at all" reason.
         derived.feeResolutions().forEach(store::insertTariffFeeResolutionFact);
         derived.externalDeliveryCosts().forEach(store::insertExternalDeliveryCostFact);
+        // ADR 0140 (7.9): the promotion redemption fact, in the same transaction for the
+        // same "a day is written whole or not at all" reason.
+        derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
-                        + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs",
+                        + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs, "
+                        + "{} promotion redemptions",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -137,7 +170,8 @@ public class DayCloseService {
                 derived.callHours().size(),
                 derived.deliveries().size(),
                 derived.feeResolutions().size(),
-                derived.externalDeliveryCosts().size());
+                derived.externalDeliveryCosts().size(),
+                derived.promotionRedemptions().size());
 
         return new CloseResult(
                 runId,
@@ -154,7 +188,10 @@ public class DayCloseService {
      * <p>Nothing stored is changed. The comparison runs at the branch-day grain
      * on the three figures a person acts on — gross revenue, net revenue, and the
      * completed order count — because a divergence report that lists every column
-     * of every slice is one nobody reads.
+     * of every slice is one nobody reads. The promotion redemption fact (ADR 0140,
+     * report 7.9) is compared beside them, per brand, on the redemption count and
+     * the discount and markup given: the ledger moves after a day closes when an
+     * amendment restates a row, and this is where that is reported.
      */
     @Transactional
     public CloseResult recut(UUID tenantId, LocalDate businessDate) {
@@ -205,6 +242,8 @@ public class DayCloseService {
                     after == null ? 0 : after.orderCount());
         }
 
+        comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
+
         for (Divergence divergence : divergences) {
             store.insertDivergence(
                     UUID.randomUUID(),
@@ -213,7 +252,7 @@ public class DayCloseService {
                     businessDate,
                     divergence.metricName(),
                     divergence.metricVersion(),
-                    describe(divergence.key()),
+                    divergence.dimension(),
                     divergence.storedValue(),
                     divergence.recutValue());
         }
@@ -391,6 +430,38 @@ public class DayCloseService {
                                         source.deliveredAt()))
                         .toList();
 
+        // ADR 0140 (7.9): same instant range as every source read above, against the
+        // ledger's own redeemed_at. The customer becomes the ADR 0029 keyed pseudonym here
+        // and never travels as an account id; a coupon redemption's word never crosses the
+        // port at all.
+        List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact> promotionFacts =
+                promotionRedemptions == null
+                        ? List.of()
+                        : promotionRedemptions.redeemedBetween(tenantId, from, to).stream()
+                                .map(source ->
+                                        new uz.horecaos.platform.reporting.application.ReportingFacts
+                                                .PromotionRedemptionFact(
+                                                tenantId,
+                                                source.redemptionId(),
+                                                businessDate,
+                                                boundary.version(),
+                                                MetricRegistry.CALCULATION_VERSION,
+                                                source.brandId(),
+                                                source.promotionId(),
+                                                source.promotionCode(),
+                                                source.definitionVersion(),
+                                                source.kind().name(),
+                                                source.couponId(),
+                                                source.orderId(),
+                                                source.customerAccountId() == null
+                                                        ? null
+                                                        : pseudonym.of(tenantId, source.customerAccountId()),
+                                                source.discountMinor(),
+                                                source.markupMinor(),
+                                                source.currency(),
+                                                source.redeemedAt()))
+                                .toList();
+
         return new DerivedDay(
                 orders,
                 lines,
@@ -401,7 +472,8 @@ public class DayCloseService {
                 callHours,
                 deliveries,
                 feeResolutions,
-                externalDeliveryCosts);
+                externalDeliveryCosts,
+                promotionFacts);
     }
 
     /**
@@ -462,7 +534,11 @@ public class DayCloseService {
                 ? null
                 : (int) Duration.between(source.promisedAt(), source.closedAt()).toSeconds();
 
-        int itemCount = lines.stream().mapToInt(SourceLine::quantity).sum();
+        // The units the order asked for, whole: item_count is an integer column (V0031)
+        // and a decimal portion (ADR 0137) is counted as the plate it occupies, so the
+        // total is the exact sum rounded up once, not each half portion rounded alone.
+        int itemCount = Quantities.wholeUnitsCeiling(
+                lines.stream().map(SourceLine::quantity).reduce(BigDecimal.ZERO, BigDecimal::add));
 
         // T12: whoever approved the order, else whoever created it, else the
         // channel itself as a pseudo-operator — see OperatorAttribution's own
@@ -555,8 +631,52 @@ public class DayCloseService {
 
     private static void compare(
             List<Divergence> into, BranchDayKey key, String metricName, int metricVersion, long stored, long recut) {
+        compare(into, describe(key), metricName, metricVersion, stored, recut);
+    }
+
+    private static void compare(
+            List<Divergence> into, String dimension, String metricName, int metricVersion, long stored, long recut) {
         if (stored != recut) {
-            into.add(new Divergence(key, metricName, metricVersion, stored, recut));
+            into.add(new Divergence(dimension, metricName, metricVersion, stored, recut));
+        }
+    }
+
+    /**
+     * ADR 0140 (7.9): the redemption count and the discount and markup given, per brand, against
+     * the rows the close stored.
+     *
+     * <p>The ledger is final when an order completes, but an amendment applied or a redemption
+     * recorded late changes a row after the day closed, and the record says such a change is "a
+     * divergence for recut to report, not a silent rewrite". Nothing else would: a promotion's
+     * discount is inside the day's gross and net revenue only as a difference between two figures
+     * that both moved.
+     */
+    private void comparePromotionFacts(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readPromotionDayTotals(tenantId, businessDate)
+                .forEach(total -> stored.put(
+                        total.brandId(), new long[] {total.redemptions(), total.discountMinor(), total.markupMinor()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.brandId(), brand -> new long[3]);
+            totals[0]++;
+            totals[1] += fact.discountMinor();
+            totals[2] += fact.markupMinor();
+        }
+        java.util.Set<UUID> brands = new java.util.LinkedHashSet<>(stored.keySet());
+        brands.addAll(fresh.keySet());
+        long[] none = new long[3];
+        for (UUID brand : brands) {
+            long[] before = stored.getOrDefault(brand, none);
+            long[] after = fresh.getOrDefault(brand, none);
+            String dimension = "brand=%s".formatted(brand);
+            compare(into, dimension, "promotion.redemptions", 1, before[0], after[0]);
+            compare(into, dimension, "promotion.discount", 1, before[1], after[1]);
+            compare(into, dimension, "promotion.markup", 1, before[2], after[2]);
         }
     }
 
@@ -581,7 +701,9 @@ public class DayCloseService {
             List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.TariffFeeResolutionFact> feeResolutions,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact>
-                    externalDeliveryCosts) {}
+                    externalDeliveryCosts,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact>
+                    promotionRedemptions) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.
@@ -590,7 +712,7 @@ public class DayCloseService {
      * along with the figure that is still on the screen.
      */
     public record Divergence(
-            BranchDayKey key, String metricName, int metricVersion, long storedValue, long recutValue) {
+            String dimension, String metricName, int metricVersion, long storedValue, long recutValue) {
 
         public long difference() {
             return recutValue - storedValue;

@@ -8,6 +8,19 @@
       <p class="q-caption access-dialog__warning">{{ 'staff.accessDialog.suspend.caveat' | t }}</p>
     }
 
+    @if (mode() === 'endEmployment') {
+      <label class="access-dialog__field">
+        <span class="q-body-sm">{{ 'staff.accessDialog.endEmployment.date' | t }}</span>
+        <input
+          type="date"
+          class="access-dialog__input"
+          [value]="employedUntil()"
+          (input)="setEmployedUntil($any($event.target).value)"
+          data-testid="staff-access-dialog-until"
+        />
+      </label>
+    }
+
     <label class="access-dialog__field">
       <span class="q-body-sm">{{ 'staff.accessDialog.reason.label' | t }}</span>
       <input

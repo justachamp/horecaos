@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -14,6 +15,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Cart persistence (ADR 0019).
@@ -72,7 +74,7 @@ public class JdbcCartStore {
                 SELECT id, tenant_id, brand_id, location_id, channel_id, customer_account_id,
                        guest_reference_hash, fulfillment_mode, currency, status,
                        pricing_quote_id, pricing_context_hash, catalog_publication_id,
-                       version, expires_at, converted_order_id, applied_coupon_code
+                       version, expires_at, converted_order_id, applied_coupon_code, payment_method_code
                 FROM ordering.carts
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 """)
@@ -103,7 +105,7 @@ public class JdbcCartStore {
                 SELECT id, tenant_id, brand_id, location_id, channel_id, customer_account_id,
                        guest_reference_hash, fulfillment_mode, currency, status,
                        pricing_quote_id, pricing_context_hash, catalog_publication_id,
-                       version, expires_at, converted_order_id, applied_coupon_code
+                       version, expires_at, converted_order_id, applied_coupon_code, payment_method_code
                 FROM ordering.carts
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND customer_account_id = :customerAccountId
@@ -132,7 +134,7 @@ public class JdbcCartStore {
                 SELECT id, tenant_id, brand_id, location_id, channel_id, customer_account_id,
                        guest_reference_hash, fulfillment_mode, currency, status,
                        pricing_quote_id, pricing_context_hash, catalog_publication_id,
-                       version, expires_at, converted_order_id, applied_coupon_code
+                       version, expires_at, converted_order_id, applied_coupon_code, payment_method_code
                 FROM ordering.carts
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 FOR UPDATE
@@ -148,7 +150,8 @@ public class JdbcCartStore {
         return jdbc.sql("""
                 SELECT id, line_key, variant_id, quantity,
                        selected_modifier_snapshot::text AS modifiers, comment_preset_codes,
-                       customer_note_encrypted
+                       customer_note_encrypted,
+                       combo_picks::text AS combo_picks, nested_modifiers::text AS nested_modifiers
                 FROM ordering.cart_lines
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
                 ORDER BY line_key
@@ -159,10 +162,12 @@ public class JdbcCartStore {
                         row.getObject("id", UUID.class),
                         row.getString("line_key"),
                         row.getObject("variant_id", UUID.class),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getString("modifiers"),
                         commentPresetCodes(row.getArray("comment_preset_codes")),
-                        row.getString("customer_note_encrypted")))
+                        row.getString("customer_note_encrypted"),
+                        row.getString("combo_picks"),
+                        row.getString("nested_modifiers")))
                 .list();
     }
 
@@ -196,23 +201,58 @@ public class JdbcCartStore {
             UUID cartId,
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String modifiersJson,
             List<String> commentPresetCodes,
+            @Nullable String noteEncrypted,
+            Instant now) {
+        upsertLine(
+                lineId,
+                tenantId,
+                cartId,
+                lineKey,
+                variantId,
+                quantity,
+                modifiersJson,
+                commentPresetCodes,
+                "[]",
+                "[]",
+                noteEncrypted,
+                now);
+    }
+
+    /**
+     * The same upsert, carrying the two ADR 0136 documents: what the customer picked
+     * inside a combo, and the second-level modifier selections.
+     */
+    public void upsertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID cartId,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            String modifiersJson,
+            List<String> commentPresetCodes,
+            String comboPicksJson,
+            String nestedModifiersJson,
             @Nullable String noteEncrypted,
             Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.cart_lines (
                     id, tenant_id, cart_id, line_key, variant_id, quantity,
-                    selected_modifier_snapshot, comment_preset_codes, customer_note_encrypted, version,
-                    created_at, updated_at)
+                    selected_modifier_snapshot, comment_preset_codes, combo_picks, nested_modifiers,
+                    customer_note_encrypted, version, created_at, updated_at)
                 VALUES (:id, :tenantId, :cartId, :lineKey, :variantId, :quantity,
-                    CAST(:modifiers AS jsonb), :presetCodes, :note, 1, :now, :now)
+                    CAST(:modifiers AS jsonb), :presetCodes, CAST(:comboPicks AS jsonb),
+                    CAST(:nestedModifiers AS jsonb), :note, 1, :now, :now)
                 ON CONFLICT (cart_id, line_key) DO UPDATE
                 SET variant_id = EXCLUDED.variant_id,
                     quantity = EXCLUDED.quantity,
                     selected_modifier_snapshot = EXCLUDED.selected_modifier_snapshot,
                     comment_preset_codes = EXCLUDED.comment_preset_codes,
+                    combo_picks = EXCLUDED.combo_picks,
+                    nested_modifiers = EXCLUDED.nested_modifiers,
                     customer_note_encrypted = EXCLUDED.customer_note_encrypted,
                     version = ordering.cart_lines.version + 1,
                     updated_at = EXCLUDED.updated_at
@@ -225,6 +265,8 @@ public class JdbcCartStore {
                 .param("quantity", quantity)
                 .param("modifiers", modifiersJson)
                 .param("presetCodes", commentPresetCodes.toArray(String[]::new))
+                .param("comboPicks", comboPicksJson)
+                .param("nestedModifiers", nestedModifiersJson)
                 .param("note", noteEncrypted)
                 .param("now", utc(now))
                 .update();
@@ -296,6 +338,36 @@ public class JdbcCartStore {
                         .param("tenantId", tenantId)
                         .param("id", cartId)
                         .param("code", normalizedCode)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * ADR 0140: selects, replaces, or clears the cart's payment method, and
+     * invalidates the attached price exactly as {@link #setCouponCodeAndInvalidatePricing}
+     * does -- a payment-method promotion makes the method an input to the total.
+     *
+     * @param code null to clear the selection
+     * @return false when the expected version has moved on
+     */
+    public boolean setPaymentMethodAndInvalidatePricing(
+            UUID tenantId, UUID cartId, int expectedVersion, @Nullable String code, Instant now) {
+        return jdbc.sql("""
+                UPDATE ordering.carts
+                SET payment_method_code = :code,
+                    version = version + 1,
+                    pricing_quote_id = NULL,
+                    pricing_context_hash = NULL,
+                    catalog_publication_id = NULL,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND version = :expectedVersion AND status = 'ACTIVE'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", cartId)
+                        .param("code", code)
                         .param("expectedVersion", expectedVersion)
                         .param("now", utc(now))
                         .update()
@@ -646,7 +718,8 @@ public class JdbcCartStore {
                 row.getInt("version"),
                 row.getObject("expires_at", OffsetDateTime.class).toInstant(),
                 row.getObject("converted_order_id", UUID.class),
-                row.getString("applied_coupon_code"));
+                row.getString("applied_coupon_code"),
+                row.getString("payment_method_code"));
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -671,6 +744,10 @@ public class JdbcCartStore {
      *                             or null when none is applied. Never trusted as an
      *                             eligibility verdict — every consumer re-resolves it
      *                             against {@code pricing.coupon_codes} itself
+     * @param paymentMethodCode    ADR 0140: the money method the customer intends to pay
+     *                             by, or null while none is selected. A promotion that
+     *                             reads the payment method sees exactly this; an unselected
+     *                             method never matches one
      */
     public record CartRow(
             UUID cartId,
@@ -689,22 +766,74 @@ public class JdbcCartStore {
             int version,
             Instant expiresAt,
             @Nullable UUID convertedOrderId,
-            @Nullable String appliedCouponCode) {}
+            @Nullable String appliedCouponCode,
+            @Nullable String paymentMethodCode) {
+
+        /** Every call site that predates a cart carrying a payment method (ADR 0140). */
+        public CartRow(
+                UUID cartId,
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID channelId,
+                @Nullable UUID customerAccountId,
+                @Nullable String guestReferenceHash,
+                FulfillmentMode fulfillmentMode,
+                String currency,
+                CartStatus status,
+                @Nullable UUID pricingQuoteId,
+                @Nullable String pricingContextHash,
+                @Nullable UUID catalogPublicationId,
+                int version,
+                Instant expiresAt,
+                @Nullable UUID convertedOrderId,
+                @Nullable String appliedCouponCode) {
+            this(
+                    cartId,
+                    tenantId,
+                    brandId,
+                    locationId,
+                    channelId,
+                    customerAccountId,
+                    guestReferenceHash,
+                    fulfillmentMode,
+                    currency,
+                    status,
+                    pricingQuoteId,
+                    pricingContextHash,
+                    catalogPublicationId,
+                    version,
+                    expiresAt,
+                    convertedOrderId,
+                    appliedCouponCode,
+                    null);
+        }
+    }
 
     /**
      * One line of a cart.
      *
      * @param selectedModifiersJson the chosen options, stored whole and read whole
      * @param customerNoteEncrypted null when the customer left no note on this line
+     * @param comboPicksJson ADR 0136: {@code [{componentId, quantity}]}, non-empty exactly
+     *                       when {@code variantId} is a combo's container
+     * @param nestedModifiersJson ADR 0136: {@code [{parentOptionId, optionId}]}
      */
     public record CartLineRow(
             UUID lineId,
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String selectedModifiersJson,
             List<String> commentPresetCodes,
-            @Nullable String customerNoteEncrypted) {}
+            @Nullable String customerNoteEncrypted,
+            String comboPicksJson,
+            String nestedModifiersJson) {
+
+        public CartLineRow {
+            quantity = Quantities.normalise(quantity);
+        }
+    }
 
     /**
      * A cart's destination as it is stored: four ciphertexts and a point.

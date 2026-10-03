@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Objects;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Start;
 
 /**
  * ADR 0014's time model, as a value (ADR 0014 "Time model").
@@ -38,8 +39,14 @@ public record PickupPlan(
         ZoneId branchZone,
         int calculationVersion) {
 
-    /** Bumped when any formula below changes, so a recalculation is visible as one. */
-    public static final int CALCULATION_VERSION = 1;
+    /**
+     * Bumped when any formula below changes, so a recalculation is visible as one.
+     *
+     * <p>2: ADR 0142. {@code source_at} is measured from a named basis plus a bounded
+     * offset (a dispatch rule's {@code dispatchAt}). The default basis and offset
+     * reproduce version 1's number exactly, but a plan now says which formula made it.
+     */
+    public static final int CALCULATION_VERSION = 2;
 
     public PickupPlan {
         Objects.requireNonNull(confirmedAt, "A confirmation instant is required");
@@ -64,11 +71,28 @@ public record PickupPlan(
      */
     public static PickupPlan forOrder(
             Instant confirmedAt, Duration preparation, ZoneId branchZone, DeliverySourcingPolicy policy) {
+        return forOrder(confirmedAt, preparation, branchZone, policy, Start.lead());
+    }
+
+    /**
+     * {@link #forOrder(Instant, Duration, ZoneId, DeliverySourcingPolicy)} with the dispatch start a
+     * rule chose (ADR 0142 Decision 8): a named basis plus a bounded offset.
+     *
+     * <ul>
+     *   <li>{@code LEAD}: the estimated ready time less the in-house lead and the safety buffer
+     *       (version 1's only formula, and the default);
+     *   <li>{@code CONFIRMATION}: the moment the order was confirmed;
+     *   <li>{@code READY}: the estimated ready time.
+     * </ul>
+     *
+     * The offset is added to the basis, and the result is never before the confirmation.
+     */
+    public static PickupPlan forOrder(
+            Instant confirmedAt, Duration preparation, ZoneId branchZone, DeliverySourcingPolicy policy, Start start) {
 
         Instant readyAt = confirmedAt.plus(preparation);
         Instant windowEnd = readyAt.plusSeconds(policy.pickupToleranceSeconds());
-        Instant sourceAt =
-                readyAt.minusSeconds(policy.preparationLeadSeconds()).minusSeconds(policy.safetyBufferSeconds());
+        Instant sourceAt = startInstant(confirmedAt, readyAt, policy, start);
 
         return new PickupPlan(
                 confirmedAt,
@@ -87,6 +111,36 @@ public record PickupPlan(
                 CALCULATION_VERSION);
     }
 
+    /** The unfloored instant a start resolves to; exposed for the lint that asks whether it leaves time for a partner. */
+    static Instant startInstant(Instant confirmedAt, Instant readyAt, DeliverySourcingPolicy policy, Start start) {
+        Instant basis =
+                switch (start.basis()) {
+                    case LEAD ->
+                        readyAt.minusSeconds(policy.preparationLeadSeconds())
+                                .minusSeconds(policy.safetyBufferSeconds());
+                    case CONFIRMATION -> confirmedAt;
+                    case READY -> readyAt;
+                };
+        return basis.plusSeconds(start.offsetSeconds());
+    }
+
+    /**
+     * Where a start lands relative to the estimated ready time, in seconds (negative is before),
+     * for an order with this much preparation and <em>before</em> the floor at the confirmation
+     * instant.
+     *
+     * <p>Publish-time lint asks whether a rule's basis and offset leave a partner enough time,
+     * and the answer must follow the same arithmetic {@link #forOrder} uses. The floor is left
+     * out on purpose: it is what a very short order does to <em>any</em> start, the default
+     * included, and refusing a rule for it would refuse the built-in default too.
+     */
+    public static long secondsFromReady(Duration preparation, DeliverySourcingPolicy policy, Start start) {
+        Instant confirmedAt = Instant.EPOCH;
+        Instant readyAt = confirmedAt.plus(preparation);
+        return Duration.between(readyAt, startInstant(confirmedAt, readyAt, policy, start))
+                .toSeconds();
+    }
+
     /**
      * The plan after the kitchen revised its estimate.
      *
@@ -99,6 +153,11 @@ public record PickupPlan(
      */
     public PickupPlan withPreparation(Duration revised, DeliverySourcingPolicy policy) {
         return forOrder(confirmedAt, revised, branchZone, policy);
+    }
+
+    /** {@link #withPreparation(Duration, DeliverySourcingPolicy)} under the dispatch start the plan was created with. */
+    public PickupPlan withPreparation(Duration revised, DeliverySourcingPolicy policy, Start start) {
+        return forOrder(confirmedAt, revised, branchZone, policy, start);
     }
 
     /** Whether sourcing should have started by this instant. */

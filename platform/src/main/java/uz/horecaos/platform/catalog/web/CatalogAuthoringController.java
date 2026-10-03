@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,6 +13,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -33,6 +35,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.ChannelMediaOverrideService;
+import uz.horecaos.platform.catalog.application.PhysicalAttributesAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
@@ -40,12 +44,15 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -79,6 +86,8 @@ public class CatalogAuthoringController {
     private static final String DEFAULT_EXCLUSION_REASON = "OPERATOR_DISABLED";
 
     private final CatalogAuthoringService authoring;
+    private final ChannelMediaOverrideService channelMedia;
+    private final PhysicalAttributesAuthoringService physicalAttributes;
     private final CurrentActor currentActor;
     private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
@@ -91,10 +100,14 @@ public class CatalogAuthoringController {
      */
     public CatalogAuthoringController(
             CatalogAuthoringService authoring,
+            ChannelMediaOverrideService channelMedia,
+            PhysicalAttributesAuthoringService physicalAttributes,
             CurrentActor currentActor,
             BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.authoring = authoring;
+        this.channelMedia = channelMedia;
+        this.physicalAttributes = physicalAttributes;
         this.currentActor = currentActor;
         this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
@@ -398,6 +411,144 @@ public class CatalogAuthoringController {
             @Valid @RequestBody FiscalClassificationRequest request) {
         authoring.classify(tenantId, brandId, PriceableNode.variant(variantId), request.toClassification(), actorId());
         return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------- row 4.2c: physical and nutritional attributes
+
+    @GetMapping("/variants/{variantId}/physical-attributes")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "A variant's weight, catchweight, portions and КБЖУ",
+            description = "ADR 0137. A variant with none of it reads as version 0 with every field empty "
+                    + "-- the row is optional, so the editor renders empty fields rather than a row that "
+                    + "has to exist to be absent. The ETag is the version to quote in If-Match when writing.")
+    public ResponseEntity<PhysicalAttributesResponse> physicalAttributes(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID variantId) {
+        try {
+            return physicalResponse(physicalAttributes.read(tenantId, brandId, variantId));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/variants/{variantId}/physical-attributes")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Set a variant's weight, catchweight, portions and КБЖУ",
+            description = "ADR 0137. One upsert of the whole set under If-Match (0 when the variant has no "
+                    + "row yet); an empty set clears the row. A catchweight variant's price is per "
+                    + "catchweightQuantumGrams, and a decimal portionSize makes the variant orderable by the "
+                    + "portion. The marking exclusion (a marked good cannot be catchweight or splittable) is "
+                    + "a publication blocker, not a write refusal -- the fiscal classification it is checked "
+                    + "against is authored on another screen.")
+    public ResponseEntity<PhysicalAttributesResponse> setPhysicalAttributes(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID variantId,
+            HttpServletRequest http,
+            @Valid @RequestBody PhysicalAttributesRequest request) {
+        long expected = AggregateVersion.requireIfMatch(http);
+        if (expected < 0 || expected > Integer.MAX_VALUE) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "If-Match must carry a version the editor read");
+        }
+        try {
+            return physicalResponse(physicalAttributes.replace(
+                    tenantId,
+                    brandId,
+                    variantId,
+                    request.toAttributes(),
+                    (int) expected,
+                    currentActor.get().subject()));
+        } catch (PhysicalAttributes.InvalidPhysicalAttributesException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage(), Map.of("reason", invalid.code()));
+        } catch (PhysicalAttributesAuthoringService.StalePhysicalAttributesException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    private static ResponseEntity<PhysicalAttributesResponse> physicalResponse(
+            PhysicalAttributesAuthoringService.View view) {
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(view.version()))
+                .body(PhysicalAttributesResponse.of(view));
+    }
+
+    /**
+     * ADR 0137's one attribute row as an author sends it. Every field is boxed
+     * and optional: Jackson 3 refuses a body that omits a primitive, and the
+     * editor sends only what the author filled in.
+     *
+     * @param catchweight       absent reads as false
+     * @param splittable        absent reads as false
+     * @param portionSize       the step a splittable variant may be ordered in, e.g. 0.5
+     * @param caloriesKcalPer100 КБЖУ per 100 g (per 100 mL for a volume-measured variant)
+     */
+    public record PhysicalAttributesRequest(
+            @Nullable @Positive Integer netWeightGrams,
+            @Nullable @Positive Integer netVolumeMillilitres,
+            @Nullable Boolean catchweight,
+            @Nullable @Positive Integer catchweightQuantumGrams,
+            @Nullable @Positive Integer catchweightNominalGrams,
+            @Nullable Boolean splittable,
+            @Nullable BigDecimal portionSize,
+            @Nullable BigDecimal caloriesKcalPer100,
+            @Nullable BigDecimal proteinGramsPer100,
+            @Nullable BigDecimal fatGramsPer100,
+            @Nullable BigDecimal carbohydratesGramsPer100) {
+
+        PhysicalAttributes toAttributes() {
+            return new PhysicalAttributes(
+                    netWeightGrams,
+                    netVolumeMillilitres,
+                    Boolean.TRUE.equals(catchweight),
+                    catchweightQuantumGrams,
+                    catchweightNominalGrams,
+                    Boolean.TRUE.equals(splittable),
+                    portionSize,
+                    caloriesKcalPer100,
+                    proteinGramsPer100,
+                    fatGramsPer100,
+                    carbohydratesGramsPer100);
+        }
+    }
+
+    /** @param version 0 when the variant carries no attributes */
+    public record PhysicalAttributesResponse(
+            @Nullable Integer netWeightGrams,
+            @Nullable Integer netVolumeMillilitres,
+            boolean catchweight,
+            @Nullable Integer catchweightQuantumGrams,
+            @Nullable Integer catchweightNominalGrams,
+            boolean splittable,
+            @Nullable BigDecimal portionSize,
+            @Nullable BigDecimal caloriesKcalPer100,
+            @Nullable BigDecimal proteinGramsPer100,
+            @Nullable BigDecimal fatGramsPer100,
+            @Nullable BigDecimal carbohydratesGramsPer100,
+            int version) {
+
+        static PhysicalAttributesResponse of(PhysicalAttributesAuthoringService.View view) {
+            PhysicalAttributes attributes = view.attributes();
+            if (attributes == null) {
+                return new PhysicalAttributesResponse(
+                        null, null, false, null, null, false, null, null, null, null, null, view.version());
+            }
+            return new PhysicalAttributesResponse(
+                    attributes.netWeightGrams(),
+                    attributes.netVolumeMillilitres(),
+                    attributes.catchweight(),
+                    attributes.catchweightQuantumGrams(),
+                    attributes.catchweightNominalGrams(),
+                    attributes.splittable(),
+                    attributes.portionSize(),
+                    attributes.caloriesKcalPer100(),
+                    attributes.proteinGramsPer100(),
+                    attributes.fatGramsPer100(),
+                    attributes.carbohydratesGramsPer100(),
+                    view.version());
+        }
     }
 
     @PutMapping("/modifier-options/{optionId}/fiscal-classification")
@@ -813,9 +964,11 @@ public class CatalogAuthoringController {
     @Operation(
             summary = "This product's recommendations, filtered to what is safe to render",
             description = "IA 4.2's own filter -- active + in-menu + not-stopped -- resolved here, "
-                    + "at read time, against one location's catalog.location_offerings. Nothing is "
-                    + "pruned from the stored set to get here: a target that is stopped today and "
-                    + "un-stopped tomorrow reappears in this read on its own.")
+                    + "at read time, against one location's catalog.location_offerings. Not-stopped "
+                    + "means the supply is not 86'd and no stop covers every channel at this branch "
+                    + "(a stop on some channels only keeps the target, since this read names none). "
+                    + "Nothing is pruned from the stored set to get here: a target that is stopped "
+                    + "today and un-stopped tomorrow reappears in this read on its own.")
     public ResponseEntity<RecommendationListResponse> effectiveRecommendations(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -953,6 +1106,93 @@ public class CatalogAuthoringController {
             @RequestParam UUID locationId) {
         return new ChannelExclusionsResponse(
                 List.copyOf(authoring.channelExclusionsAtLocation(tenantId, brandId, channelId, locationId)));
+    }
+
+    @PutMapping("/channels/{channelId}/media-overrides/{entityType}/{entityId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Replaces the images one channel shows for a product, variant or category (ADR 0138)",
+            description = "The whole set every time, matching the photo editor's own whole-set save: "
+                    + "what the screen shows is what is stored. An empty list removes every override and "
+                    + "the item goes back to showing its own images on that channel. Every image must be "
+                    + "a verified asset of this tenant; at most one is PRIMARY. A channel override wins "
+                    + "over the item's per-channel relation (IA 4.2f), which wins over its universal "
+                    + "images; prices are an independent axis and are never affected. It edits the "
+                    + "draft: a preview reads it at once, and the channel's live menu changes when the "
+                    + "draft is next published to that channel and to no other. Only a product's images "
+                    + "reach a published menu; a variant's or a category's are stored and drawn by the "
+                    + "preview but served by no menu yet. A publication is refused while an image the "
+                    + "channel chose is no longer verified. Under If-Match, the set's version the editor "
+                    + "read (0 when the item has no override on the channel): another editor's save in "
+                    + "between answers 409 STALE_VERSION, and saving the set already stored changes "
+                    + "nothing and keeps its version. The response's ETag is the new version.")
+    public ResponseEntity<ChannelMediaOverridesResponse> replaceChannelMediaOverrides(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @PathVariable EntityType entityType,
+            @PathVariable UUID entityId,
+            HttpServletRequest http,
+            @Valid @RequestBody ReplaceChannelMediaRequest request) {
+        long expected = AggregateVersion.requireIfMatch(http);
+        if (expected < 0 || expected > Integer.MAX_VALUE) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "If-Match must carry a version the editor read");
+        }
+        try {
+            ChannelMediaOverrideService.OverrideSet saved = channelMedia.replace(
+                    tenantId,
+                    brandId,
+                    channelId,
+                    entityType,
+                    entityId,
+                    request.images().stream()
+                            .map(image -> new ChannelMediaOverrideService.Image(
+                                    image.mediaAssetId(),
+                                    image.role(),
+                                    image.sortOrder() == null ? 0 : image.sortOrder()))
+                            .toList(),
+                    (int) expected,
+                    currentActor.get().subject());
+            return overrideSetResponse(saved);
+        } catch (ChannelMediaOverrideService.UnknownOverrideTargetException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        } catch (ChannelMediaOverrideService.InvalidOverrideException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        } catch (ChannelMediaOverrideService.StaleOverrideException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        }
+    }
+
+    @GetMapping("/channels/{channelId}/media-overrides")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The images one channel shows instead of an item's own (ADR 0138)",
+            description = "Every override this brand has written for the channel, or only one item's "
+                    + "when entityType and entityId are both given. Empty means every item shows its "
+                    + "own images on that channel. An item's set carries its version, which is also the "
+                    + "ETag (0 when it has none): the value to quote in If-Match when replacing it.")
+    public ResponseEntity<ChannelMediaOverridesResponse> channelMediaOverrides(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @RequestParam(required = false) @Nullable EntityType entityType,
+            @RequestParam(required = false) @Nullable UUID entityId) {
+        try {
+            if (entityType != null && entityId != null) {
+                return overrideSetResponse(channelMedia.read(tenantId, brandId, channelId, entityType, entityId));
+            }
+            return ResponseEntity.ok(ChannelMediaOverridesResponse.of(
+                    channelMedia.list(tenantId, brandId, channelId, entityType, entityId), null));
+        } catch (ChannelMediaOverrideService.UnknownOverrideTargetException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    private static ResponseEntity<ChannelMediaOverridesResponse> overrideSetResponse(
+            ChannelMediaOverrideService.OverrideSet set) {
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(set.version()))
+                .body(ChannelMediaOverridesResponse.of(set.images(), set.version()));
     }
 
     /**
@@ -1269,6 +1509,42 @@ public class CatalogAuthoringController {
     /** ADR 0036 Layer B's read: which variants are currently hidden from one channel at one location. */
     public record ChannelExclusionsResponse(List<UUID> excludedVariantIds) {}
 
+    /** One image of a channel override set. {@code sortOrder} is boxed: Jackson 3 refuses a missing primitive. */
+    public record ChannelMediaImageRequest(
+            @NotNull UUID mediaAssetId,
+            @NotBlank @Pattern(regexp = "PRIMARY|GALLERY") String role,
+            @PositiveOrZero @Nullable Integer sortOrder) {}
+
+    public record ReplaceChannelMediaRequest(
+            @NotNull @Size(max = 20) List<@Valid @NotNull ChannelMediaImageRequest> images) {}
+
+    public record ChannelMediaOverrideView(
+            String entityType, UUID entityId, UUID mediaAssetId, String role, int sortOrder, int version) {
+
+        static ChannelMediaOverrideView of(MediaOverrideRow row) {
+            return new ChannelMediaOverrideView(
+                    row.entityType().name(),
+                    row.entityId(),
+                    row.mediaAssetId(),
+                    row.role(),
+                    row.sortOrder(),
+                    row.version());
+        }
+    }
+
+    /**
+     * @param version the set's version, which is the response's ETag: {@code 0} for an item with no
+     *     override. Null when the listing spans every item of the channel, which has no one version
+     */
+    public record ChannelMediaOverridesResponse(
+            List<ChannelMediaOverrideView> images, @Nullable Integer version) {
+
+        static ChannelMediaOverridesResponse of(List<MediaOverrideRow> rows, @Nullable Integer version) {
+            return new ChannelMediaOverridesResponse(
+                    rows.stream().map(ChannelMediaOverrideView::of).toList(), version);
+        }
+    }
+
     public record IdResponse(UUID id) {}
 
     public record ProductResponse(UUID productId, UUID defaultVariantId) {}
@@ -1292,8 +1568,8 @@ public class CatalogAuthoringController {
      * @param fulfillmentModes empty when {@code offeringStatus} is null
      */
     /**
-     * @param stopSource     gap map row 2.5b's explainer: {@code MANUAL} |
-     *                       {@code POS} | {@code UNKNOWN} — see {@link
+     * @param stopSource     gap map row 2.5b's explainer: {@code OPERATOR} | {@code
+     *                       BOT} | {@code POS} | {@code UNKNOWN} — see {@link
      *                       JdbcCatalogStore.VariantAvailabilityRow}'s own doc
      * @param stopReasonCode the raw reason behind {@code stopSource}, from
      *                       the same latest {@code inventory.movements} row
@@ -1309,7 +1585,8 @@ public class CatalogAuthoringController {
             List<String> fulfillmentModes,
             String stopSource,
             @Nullable String stopReasonCode,
-            @Nullable Instant stopChangedAt) {
+            @Nullable Instant stopChangedAt,
+            List<StopInForceResponse> stops) {
 
         static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
             return new VariantAvailabilityResponse(
@@ -1322,7 +1599,43 @@ public class CatalogAuthoringController {
                     row.fulfillmentModes(),
                     row.stopSource(),
                     row.stopReasonCode(),
-                    row.stopChangedAt());
+                    row.stopChangedAt(),
+                    row.stops().stream().map(StopInForceResponse::of).toList());
+        }
+    }
+
+    /**
+     * One stop in force on a dish at this branch (ADR 0141): its scope, who made it, until
+     * when, and the {@code version} a lift quotes in {@code If-Match}. {@code everyChannel}
+     * false means a partial stop — the dish still sells on the channels it does not name.
+     * {@code reasonCode} is an enumerated code, never free text (ADR 0029).
+     */
+    public record StopInForceResponse(
+            UUID stopId,
+            String scopeType,
+            String source,
+            String reasonCode,
+            @Nullable Instant endsAt,
+            Instant createdAt,
+            @Nullable UUID locationId,
+            @Nullable UUID menuId,
+            @Nullable UUID channelId,
+            boolean everyChannel,
+            int version) {
+
+        static StopInForceResponse of(uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact fact) {
+            return new StopInForceResponse(
+                    fact.stopId(),
+                    fact.scopeType(),
+                    fact.source(),
+                    fact.reasonCode(),
+                    fact.endsAt(),
+                    fact.createdAt(),
+                    fact.locationId(),
+                    fact.menuId(),
+                    fact.channelId(),
+                    fact.everyChannel(),
+                    fact.version());
         }
     }
 

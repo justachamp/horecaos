@@ -19,6 +19,7 @@ import { PhonePipe } from '../../../core/format/phone.pipe';
 import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
 import { describeApiError } from '../../orders/order-errors';
 import { FloorPlanPane } from './floor-plan-pane';
+import { LocationContactPersons } from './location-contact-persons';
 import {
   BandRequest,
   BandView,
@@ -77,13 +78,25 @@ const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
  * bound to more than one location is gated behind a `confirm()` naming how
  * many other locations share it — see `saveHours`'s own doc.
  *
+ * **Contact persons (row `9.2b`, ADR 0139)** sit on tab 1 beside the published
+ * phone and are a component of their own (`q-location-contact-persons`): they
+ * read and write a different endpoint under a different version, and a failure
+ * of one must not touch the other.
+ *
  * **Tabs 4–6** link to the screens that actually own the data (10.7, 10.4,
  * 10.9) rather than duplicating a weaker read of it here, per the spec's own
  * instruction for Tab 4.
  */
 @Component({
   selector: 'q-location-detail-pane',
-  imports: [TPipe, PhonePipe, ScheduleGrid, NgTemplateOutlet, FloorPlanPane],
+  imports: [
+    TPipe,
+    PhonePipe,
+    ScheduleGrid,
+    NgTemplateOutlet,
+    FloorPlanPane,
+    LocationContactPersons,
+  ],
   templateUrl: './location-detail-pane.html',
   styleUrl: './location-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -693,6 +706,21 @@ export class LocationDetailPane {
     } finally {
       this.bandsSaving.set(false);
     }
+  }
+
+  /**
+   * The scope the contact persons are read and written at: the branch's own
+   * brand (from its profile, which names it) and its id. The route that serves
+   * them names the brand, and a grant covers only the routes whose path names
+   * its level (ADR 0025), so it must be the branch's real brand.
+   */
+  protected contactScope(): LocationScope | null {
+    const scope = this.scope();
+    const profile = this.profile();
+    if (!scope || !profile) {
+      return null;
+    }
+    return { tenantId: scope.tenantId, brandId: profile.brandId, locationId: scope.locationId };
   }
 
   protected scope(): LocationScope | null {

@@ -1,0 +1,174 @@
+<section
+  class="scope-panel"
+  data-testid="stop-scope-panel"
+  [attr.aria-label]="'kitchen.stopList.panel.title' | t"
+>
+  <header class="scope-panel__head">
+    <h2 class="q-heading-sm">{{ 'kitchen.stopList.panel.title' | t }}</h2>
+    <span class="q-caption">{{
+      'kitchen.stopList.bulk.selected' | t: { count: variantIds().length }
+    }}</span>
+    <button type="button" class="scope-panel__close" (click)="close()" data-testid="scope-close">
+      ×
+    </button>
+  </header>
+
+  <fieldset class="scope-panel__group">
+    <legend class="q-caption">{{ 'kitchen.stopList.panel.scope' | t }}</legend>
+    <label class="scope-panel__option">
+      <input
+        type="radio"
+        name="stop-scope"
+        [checked]="scope() === 'LOCATION'"
+        (change)="pickScope('LOCATION')"
+        data-testid="scope-location"
+      />
+      {{ scopeLabel('LOCATION') }}
+    </label>
+    <label class="scope-panel__option">
+      <input
+        type="radio"
+        name="stop-scope"
+        [checked]="scope() === 'CHANNEL'"
+        (change)="pickScope('CHANNEL')"
+        data-testid="scope-channel"
+      />
+      {{ scopeLabel('CHANNEL') }}
+    </label>
+    @if (canStopBrandWide()) {
+      <label class="scope-panel__option">
+        <input
+          type="radio"
+          name="stop-scope"
+          [checked]="scope() === 'BRAND'"
+          (change)="pickScope('BRAND')"
+          data-testid="scope-brand"
+        />
+        {{ scopeLabel('BRAND') }}
+      </label>
+      <label class="scope-panel__option">
+        <input
+          type="radio"
+          name="stop-scope"
+          [checked]="scope() === 'MENU'"
+          (change)="pickScope('MENU')"
+          data-testid="scope-menu"
+        />
+        {{ scopeLabel('MENU') }}
+      </label>
+    }
+  </fieldset>
+
+  @if (scope() === 'CHANNEL') {
+    <div class="scope-panel__row">
+      <select
+        class="scope-panel__select"
+        [value]="channelId()"
+        (change)="channelId.set($any($event.target).value)"
+        data-testid="scope-channel-select"
+      >
+        <option value="" disabled>{{ 'kitchen.stopList.panel.channelPlaceholder' | t }}</option>
+        @for (channel of channels(); track channel.id) {
+          <option [value]="channel.id">{{ channel.displayName }}</option>
+        }
+      </select>
+      @if (canStopBrandWide()) {
+        <label class="scope-panel__option">
+          <input
+            type="checkbox"
+            [checked]="channelHereOnly()"
+            (change)="channelHereOnly.set($any($event.target).checked)"
+            data-testid="scope-channel-here"
+          />
+          {{ 'kitchen.stopList.panel.channelHere' | t }}
+        </label>
+      }
+    </div>
+  }
+
+  @if (scope() === 'MENU') {
+    <div class="scope-panel__row">
+      <select
+        class="scope-panel__select"
+        [value]="menuId()"
+        (change)="menuId.set($any($event.target).value)"
+        data-testid="scope-menu-select"
+      >
+        <option value="" disabled>{{ 'kitchen.stopList.panel.menuPlaceholder' | t }}</option>
+        @for (menu of menus(); track menu.menuId) {
+          <option [value]="menu.menuId">{{ menu.name }}</option>
+        }
+      </select>
+    </div>
+  }
+
+  <p class="q-caption scope-panel__hint">{{ 'kitchen.stopList.panel.union' | t }}</p>
+
+  <div class="scope-panel__row">
+    <label class="scope-panel__field">
+      <span class="q-caption">{{ 'kitchen.stopList.panel.duration' | t }}</span>
+      <select
+        class="scope-panel__select"
+        [value]="duration()"
+        (change)="onDuration($any($event.target).value)"
+        data-testid="scope-duration"
+      >
+        <option value="INDEFINITE">{{ 'kitchen.stopList.panel.duration.indefinite' | t }}</option>
+        <option value="END_OF_DAY">{{ 'kitchen.stopList.panel.duration.endOfDay' | t }}</option>
+        <option value="UNTIL">{{ 'kitchen.stopList.panel.duration.until' | t }}</option>
+      </select>
+    </label>
+    @if (duration() === 'UNTIL') {
+      <input
+        type="datetime-local"
+        class="scope-panel__select"
+        [value]="until()"
+        (input)="until.set($any($event.target).value)"
+        data-testid="scope-until"
+      />
+    }
+    <label class="scope-panel__field">
+      <span class="q-caption">{{ 'kitchen.stopList.bulk.reasonPlaceholder' | t }}</span>
+      <select
+        class="scope-panel__select"
+        [value]="reason()"
+        (change)="onReason($any($event.target).value)"
+        data-testid="scope-reason"
+      >
+        <option value="" disabled>{{ 'kitchen.stopList.bulk.reasonPlaceholder' | t }}</option>
+        @for (code of reasonCodes; track code) {
+          <option [value]="code">{{ reasonLabel(code) }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (overLimit()) {
+    <p class="q-body-sm scope-panel__error" role="alert">
+      {{ 'kitchen.stopList.bulk.tooMany' | t: { max: 200 } }}
+    </p>
+  }
+
+  @if (message(); as text) {
+    <p
+      class="q-body-sm"
+      [class.scope-panel__error]="failed()"
+      role="status"
+      data-testid="scope-message"
+    >
+      {{ text }}
+    </p>
+  }
+
+  <footer class="scope-panel__actions">
+    <button
+      type="button"
+      class="scope-panel__apply"
+      [disabled]="!canSubmit()"
+      (click)="submit()"
+      data-testid="scope-apply"
+    >
+      {{ 'kitchen.stopList.panel.apply' | t }}
+    </button>
+  </footer>
+</section>

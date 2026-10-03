@@ -9,11 +9,17 @@ import { ServiceStatus } from './service-status';
 import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { CurrentTenant } from '../core/auth/current-tenant';
+import { OwnProfile } from '../core/auth/own-profile';
 import { ScopeGrant } from '../core/auth/session-context';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
 import { Toasts } from '../shared/ui/toast';
 import { NAV_ITEMS } from './navigation';
+
+class FakeOwnProfile {
+  readonly displayName = signal<string | null>(null);
+  readonly ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
 
 class FakeAuth {
   readonly displayName = signal<string | null>(null);
@@ -77,15 +83,20 @@ describe('Shell', () => {
   let status: ServiceStatus;
   let currentLocation: FakeCurrentLocation;
   let currentTenant: FakeCurrentTenant;
+  let auth: FakeAuth;
+  let ownProfile: FakeOwnProfile;
 
   beforeEach(async () => {
     currentLocation = new FakeCurrentLocation();
     currentTenant = new FakeCurrentTenant();
+    auth = new FakeAuth();
+    ownProfile = new FakeOwnProfile();
     await TestBed.configureTestingModule({
       imports: [Shell],
       providers: [
         provideRouter([]),
-        { provide: Auth, useValue: new FakeAuth() },
+        { provide: Auth, useValue: auth },
+        { provide: OwnProfile, useValue: ownProfile },
         { provide: CurrentLocation, useValue: currentLocation },
         { provide: CurrentTenant, useValue: currentTenant },
       ],
@@ -95,6 +106,35 @@ describe('Shell', () => {
     fixture = TestBed.createComponent(Shell);
     status = TestBed.inject(ServiceStatus);
     fixture.detectChanges();
+  });
+
+  describe('the account chip (ADR 0139)', () => {
+    const chip = (): string | undefined =>
+      fixture.nativeElement.querySelector('.rail__account')?.textContent?.trim();
+
+    it('loads the signed-in person’s own record when the shell mounts', () => {
+      expect(ownProfile.ensureLoaded).toHaveBeenCalled();
+    });
+
+    it('shows the name the tenant keeps, not the token’s name claim, which goes stale after an edit', () => {
+      auth.displayName.set('Old Name');
+      ownProfile.displayName.set('Aziza Karimova');
+      fixture.detectChanges();
+
+      expect(chip()).toBe('Aziza Karimova');
+    });
+
+    it('falls back to the token claim for an account the tenant keeps no record for', () => {
+      auth.displayName.set('Support Agent');
+      ownProfile.displayName.set(null);
+      fixture.detectChanges();
+
+      expect(chip()).toBe('Support Agent');
+    });
+
+    it('shows no chip at all when there is neither', () => {
+      expect(chip()).toBeUndefined();
+    });
   });
 
   it('groups the rail by the working day', () => {

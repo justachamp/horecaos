@@ -138,6 +138,9 @@
           "tenantId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "walkInAvailable" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -163,6 +166,21 @@
             "type" : "integer"
           },
           "currency" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AppliedPromotionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "effect" : {
+            "type" : "string"
+          },
+          "source" : {
             "type" : "string"
           }
         },
@@ -210,6 +228,12 @@
       },
       "CartLineResponse" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickResponse"
+            },
+            "type" : "array"
+          },
           "commentPresetCodes" : {
             "items" : {
               "type" : "string"
@@ -222,9 +246,14 @@
           "lineKey" : {
             "type" : "string"
           },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierResponse"
+            },
+            "type" : "array"
+          },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -265,6 +294,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "paymentMethodCode" : {
+            "type" : "string"
+          },
           "quoteId" : {
             "format" : "uuid",
             "type" : "string"
@@ -273,6 +305,30 @@
             "type" : "string"
           },
           "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CatchweightLineResponse" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nominalGramsPerUnit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pricePerQuantumMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "quantumGrams" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -358,6 +414,35 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ComboPickRequest" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "maximum" : 99,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "componentId" ],
+        "type" : "object"
+      },
+      "ComboPickResponse" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -674,6 +759,13 @@
       },
       "GuestBillResponse" : {
         "properties" : {
+          "claimExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "confirmed" : {
+            "type" : "boolean"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -683,6 +775,9 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
           },
           "roundCount" : {
             "format" : "int32",
@@ -698,6 +793,65 @@
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "GuestSeatingResponse" : {
+        "properties" : {
+          "claimExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "confirmed" : {
+            "type" : "boolean"
+          },
+          "created" : {
+            "type" : "boolean"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "orderIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
+          },
+          "roundCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "HiddenChargeResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineKey" : {
+            "type" : "string"
+          },
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -810,6 +964,84 @@
         },
         "type" : "object"
       },
+      "MenuComboComponent" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "defaultQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "orderable" : {
+            "type" : "boolean"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuComboGroup" : {
+        "properties" : {
+          "allowSameComponentMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "comboGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "components" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboComponent"
+            },
+            "type" : "array"
+          },
+          "containerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MenuModifierGroup" : {
         "properties" : {
           "allowSameOptionMultipleTimes" : {
@@ -845,6 +1077,26 @@
         },
         "type" : "object"
       },
+      "MenuModifierGroupPolicy" : {
+        "properties" : {
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "MenuModifierOption" : {
         "properties" : {
           "amountMinor" : {
@@ -858,6 +1110,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "name" : {
+            "type" : "string"
+          },
           "optionId" : {
             "format" : "uuid",
             "type" : "string"
@@ -869,6 +1124,13 @@
         "properties" : {
           "code" : {
             "type" : "string"
+          },
+          "comboGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "commentPresets" : {
             "items" : {
@@ -895,6 +1157,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modifierGroupPolicies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
           },
@@ -928,6 +1196,9 @@
           },
           "orderable" : {
             "type" : "boolean"
+          },
+          "physical" : {
+            "$ref" : "#/components/schemas/PhysicalFacts"
           },
           "remainingQuantity" : {
             "type" : "number"
@@ -976,8 +1247,74 @@
         },
         "type" : "object"
       },
+      "NestedModifierRequest" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "optionId", "parentOptionId" ],
+        "type" : "object"
+      },
+      "NestedModifierResponse" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "NutritionPer100" : {
+        "properties" : {
+          "caloriesKcalPer100" : {
+            "type" : "number"
+          },
+          "carbohydratesGramsPer100" : {
+            "type" : "number"
+          },
+          "fatGramsPer100" : {
+            "type" : "number"
+          },
+          "proteinGramsPer100" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
+          "autoSelectedCharges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StorefrontOrderingControllerAutoSelectedChargeResponse"
+            },
+            "type" : "array"
+          },
+          "autoSelectedModifiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "catchweight" : {
+            "$ref" : "#/components/schemas/CatchweightLineResponse"
+          },
+          "comboName" : {
+            "type" : "string"
+          },
+          "comboSelectionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "finalAmountMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -1007,8 +1344,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "unitAmountMinor" : {
             "format" : "int64",
@@ -1026,6 +1362,12 @@
       },
       "OrderResponse" : {
         "properties" : {
+          "appliedPromotions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppliedPromotionResponse"
+            },
+            "type" : "array"
+          },
           "confirmedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -1036,6 +1378,10 @@
           },
           "currency" : {
             "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "feeMinor" : {
             "format" : "int64",
@@ -1215,6 +1561,39 @@
         },
         "type" : "object"
       },
+      "PhysicalFacts" : {
+        "properties" : {
+          "catchweight" : {
+            "type" : "boolean"
+          },
+          "catchweightNominalGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "catchweightQuantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netVolumeMillilitres" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nutrition" : {
+            "$ref" : "#/components/schemas/NutritionPer100"
+          },
+          "portionSize" : {
+            "type" : "number"
+          },
+          "splittable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "PickupLocation" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -1290,6 +1669,12 @@
       },
       "PricedCartResponse" : {
         "properties" : {
+          "appliedPromotions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppliedPromotionResponse"
+            },
+            "type" : "array"
+          },
           "cartId" : {
             "format" : "uuid",
             "type" : "string"
@@ -1318,6 +1703,15 @@
           "feeMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "hiddenCharges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HiddenChargeResponse"
+            },
+            "type" : "array"
+          },
+          "promoCodeOutcome" : {
+            "type" : "string"
           },
           "quoteId" : {
             "format" : "uuid",
@@ -1389,6 +1783,14 @@
       },
       "PutLineRequest" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickRequest"
+            },
+            "maxItems" : 40,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "commentPresetCodes" : {
             "items" : {
               "type" : "string"
@@ -1411,11 +1813,18 @@
             "minItems" : 0,
             "type" : "array"
           },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierRequest"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
             "maximum" : 999,
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -1480,6 +1889,12 @@
       },
       "ReorderLineResponse" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickResponse"
+            },
+            "type" : "array"
+          },
           "lineNumber" : {
             "format" : "int32",
             "type" : "integer"
@@ -1488,6 +1903,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierResponse"
             },
             "type" : "array"
           },
@@ -1503,8 +1924,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "status" : {
             "type" : "string"
@@ -1598,6 +2018,28 @@
           }
         },
         "required" : [ "coordinateSource", "fields" ],
+        "type" : "object"
+      },
+      "SeatRequest" : {
+        "properties" : {
+          "partySize" : {
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "partySize" ],
+        "type" : "object"
+      },
+      "SelectPaymentMethodRequest" : {
+        "properties" : {
+          "paymentMethodCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ServiceabilityView" : {
@@ -1792,6 +2234,12 @@
             },
             "type" : "array"
           },
+          "comboGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboGroup"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -1812,6 +2260,18 @@
           },
           "publicationId" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontOrderingControllerAutoSelectedChargeResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
             "type" : "string"
           }
         },
@@ -2087,6 +2547,44 @@
           }
         },
         "summary" : "Exchange a scanned table code for a guest token",
+        "tags" : [ "QR dine-in" ]
+      }
+    },
+    "/api/v1/storefront/dine-in/sessions" : {
+      "post" : {
+        "description" : "A guest who has scanned a free table opens a provisional session -- a claim -- without waiting for staff (ADR 0143). It is an explicit action, never a side effect of scanning, and it needs both credentials a round does: the table's guest token (X-Dine-In-Token, the proof of where) and the customer's ordinary signed-in session (Authorization: Bearer, the proof of who). It never accepts a table, a location or a tenant. The claim becomes an ordinary session once a round the restaurant has accepted is on it, and lapses -- giving the table back to the room -- if nothing follows within its window. If somebody already sits at the table, the call answers with their session and created=false rather than a second one. Every reason the table cannot be taken (the branch has not turned this on, a booking holds the table, a cap is reached, the account is refused, the table is out of service) is one answer, 409 TABLE_NOT_AVAILABLE, with no reason.",
+        "operationId" : "seat",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SeatRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GuestSeatingResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Seat yourself at a free table",
         "tags" : [ "QR dine-in" ]
       }
     },
@@ -2705,6 +3203,61 @@
           }
         },
         "summary" : "Rebuild this cart at another location",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method" : {
+      "put" : {
+        "description" : "ADR 0140. The method is an input to the price whenever a promotion reads it (\"5% off when paying by Click\"), so it is stored on the cart before pricing, and clears any attached quote the same way a line edit does. A null code clears the selection, and an unselected method never earns a payment-method promotion. Checkout with a different method than the cart was priced with is refused PRICE_CHANGED when such a promotion exists, which is the re-quote the customer app has to design around.",
+        "operationId" : "setPaymentMethod",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SelectPaymentMethodRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Select how the cart will be paid",
         "tags" : [ "Storefront ordering" ]
       }
     },
@@ -5047,7 +5600,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability" : {
       "get" : {
-        "description" : "The same channel-aware check the operations console uses (GET .../availability?channel=...), scoped to one variant. The channel is required (tenant.sales_channels.system_type, e.g. WEB) so a per-channel-type stop threshold (gap map row 4.4c) applies to the channel actually asking.",
+        "description" : "The same channel-aware check the storefront menu and the cart make, scoped to one variant. The channel is required and is the tenant's own channel code, as on the menu read (ADR 0141): the stops that cover that channel apply, and so does its channel type's stop threshold (gap map row 4.4c). A value that names no registered channel is read as a bare channel type (e.g. WEB), for which only the stops covering every channel apply.",
         "operationId" : "availability",
         "parameters" : [ {
           "in" : "path",

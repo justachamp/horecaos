@@ -1,0 +1,434 @@
+<form class="editor" (submit)="$event.preventDefault(); canSave() && save.emit()">
+  @if (unsupported().length > 0) {
+    <div class="editor__notice" role="alert" data-testid="promotion-unsupported">
+      <span class="q-body-sm">{{
+        'editor.unsupported' | pt: { types: unsupported().join(', ') }
+      }}</span>
+    </div>
+  }
+
+  @if (locked() && lockedHint(); as hint) {
+    <div class="editor__notice editor__notice--info" data-testid="promotion-locked">
+      <span class="q-body-sm">{{ hint }}</span>
+    </div>
+  }
+
+  <fieldset class="editor__section" [disabled]="readOnly()">
+    <legend class="q-caption">{{ 'editor.basics' | pt }}</legend>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'editor.name' | pt }}</span>
+      <input
+        type="text"
+        maxlength="200"
+        [value]="draft().name"
+        (input)="patch({ name: $any($event.target).value })"
+        data-testid="promotion-name"
+      />
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'editor.code' | pt }}</span>
+      <input
+        type="text"
+        maxlength="64"
+        [value]="draft().code"
+        (input)="patch({ code: $any($event.target).value })"
+        data-testid="promotion-code"
+      />
+      <span class="q-caption editor__hint">{{ 'editor.code.hint' | pt }}</span>
+    </label>
+
+    <div class="editor__row">
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.kind' | pt }}</span>
+        <select
+          [value]="draft().kind"
+          (change)="setKind($any($event.target).value)"
+          data-testid="promotion-kind"
+        >
+          @for (kind of kinds; track kind) {
+            <option [value]="kind">{{ kindLabelKey(kind) | pt }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.scope' | pt }}</span>
+        <select
+          [value]="draft().scope"
+          (change)="setScope($any($event.target).value)"
+          data-testid="promotion-scope"
+        >
+          @for (scope of scopes(); track scope) {
+            <option [value]="scope">{{ scopeLabelKey(scope) | pt }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.currency' | pt }}</span>
+        <input
+          type="text"
+          maxlength="3"
+          class="editor__currency"
+          [value]="draft().currency"
+          (input)="patch({ currency: $any($event.target).value })"
+        />
+      </label>
+    </div>
+
+    @if (draft().kind === 'MARKUP') {
+      <p class="q-caption editor__hint">{{ 'editor.markupNote' | pt }}</p>
+    }
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'editor.group' | pt }}</span>
+      <input
+        type="text"
+        maxlength="64"
+        list="promotion-groups"
+        [value]="draft().stackingGroup"
+        (input)="patch({ stackingGroup: $any($event.target).value })"
+        data-testid="promotion-group"
+      />
+      <datalist id="promotion-groups">
+        @for (group of stackingGroups(); track group) {
+          <option [value]="group"></option>
+        }
+      </datalist>
+      <span class="q-caption editor__hint">{{ 'editor.group.hint' | pt }}</span>
+    </label>
+
+    @if (draft().kind === 'DISCOUNT') {
+      <label class="q-field q-field--checkbox">
+        <input
+          type="checkbox"
+          [checked]="draft().exclusive"
+          (change)="patch({ exclusive: $any($event.target).checked })"
+          data-testid="promotion-exclusive"
+        />
+        <span class="q-caption">{{ 'editor.exclusive' | pt }}</span>
+      </label>
+      <span class="q-caption editor__hint">{{ 'editor.exclusive.hint' | pt }}</span>
+    }
+  </fieldset>
+
+  <fieldset class="editor__section" [disabled]="readOnly()">
+    <legend class="q-caption">{{ 'editor.window' | pt }}</legend>
+    <div class="editor__row">
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.validFrom' | pt }}</span>
+        <input
+          type="datetime-local"
+          [value]="draft().validFrom"
+          (input)="patch({ validFrom: $any($event.target).value })"
+          data-testid="promotion-valid-from"
+        />
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.validUntil' | pt }}</span>
+        <input
+          type="datetime-local"
+          [value]="draft().validUntil"
+          (input)="patch({ validUntil: $any($event.target).value })"
+          data-testid="promotion-valid-until"
+        />
+      </label>
+    </div>
+    <span class="q-caption editor__hint">{{ 'editor.window.hint' | pt }}</span>
+  </fieldset>
+
+  <fieldset class="editor__section" [disabled]="readOnly()">
+    <legend class="q-caption">{{ 'editor.conditions' | pt }}</legend>
+    <p class="q-caption editor__hint">{{ 'editor.conditions.hint' | pt }}</p>
+
+    @if (locations().length > 0) {
+      <label class="q-field editor__menu-branch">
+        <span class="q-caption">{{ 'editor.menuBranch' | pt }}</span>
+        <select
+          [value]="menuLocationId() ?? ''"
+          (change)="menuLocationChange.emit($any($event.target).value)"
+          data-testid="promotion-menu-branch"
+        >
+          @for (location of locations(); track location.value) {
+            <option [value]="location.value">{{ location.label }}</option>
+          }
+        </select>
+        @if (menuLoading()) {
+          <span class="q-caption editor__hint">{{ 'editor.menuLoading' | pt }}</span>
+        }
+      </label>
+    }
+
+    <q-condition-builder
+      [catalogue]="catalogue()"
+      [groups]="draft().conditions"
+      [allowEmpty]="true"
+      (groupsChange)="setConditions($event)"
+    />
+  </fieldset>
+
+  <fieldset class="editor__section" [disabled]="readOnly()">
+    <legend class="q-caption">{{ 'editor.actions' | pt }}</legend>
+
+    @for (action of draft().actions; track action.id; let i = $index) {
+      <div class="action-row" data-testid="promotion-action">
+        <div class="action-row__head">
+          <select
+            class="action-row__type"
+            [attr.aria-label]="'editor.actionType' | pt"
+            [value]="action.type"
+            (change)="updateAction(i, { type: $any($event.target).value })"
+            data-testid="promotion-action-type"
+          >
+            @for (type of actionTypes(); track type) {
+              <option [value]="type">{{ actionLabelKey(type) | pt }}</option>
+            }
+          </select>
+          <button
+            type="button"
+            class="action-row__remove"
+            [attr.aria-label]="'editor.removeAction' | pt"
+            [disabled]="draft().actions.length <= 1"
+            (click)="removeAction(i)"
+          >
+            ×
+          </button>
+        </div>
+
+        @switch (shape(action.type)) {
+          @case ('PERCENT') {
+            <label class="q-field">
+              <span class="q-caption">{{ 'editor.percent' | pt }}</span>
+              <q-percent-input
+                [basisPoints]="action.basisPoints"
+                [ariaLabel]="'editor.percent' | pt"
+                (basisPointsChange)="updateAction(i, { basisPoints: $event })"
+              />
+            </label>
+          }
+          @case ('AMOUNT') {
+            <label class="q-field">
+              <span class="q-caption">{{
+                (action.type === 'ITEM_FIXED_PRICE' ? 'editor.unitPrice' : 'editor.amount') | pt
+              }}</span>
+              <q-money-input
+                [valueMinor]="action.amountMinor"
+                [ariaLabel]="'editor.amount' | pt"
+                (valueMinorChange)="updateAction(i, { amountMinor: $event })"
+              />
+            </label>
+          }
+          @case ('REDUCED') {
+            <div class="editor__row">
+              <label class="q-field">
+                <span class="q-caption">{{ 'editor.reduceBy' | pt }}</span>
+                <select
+                  [value]="action.reduceBy"
+                  (change)="updateAction(i, { reduceBy: $any($event.target).value })"
+                >
+                  <option value="PERCENT">
+                    {{ 'editor.reduceBy.PERCENT' | pt }}
+                  </option>
+                  <option value="AMOUNT">
+                    {{ 'editor.reduceBy.AMOUNT' | pt }}
+                  </option>
+                </select>
+              </label>
+              @if (action.reduceBy === 'PERCENT') {
+                <label class="q-field">
+                  <span class="q-caption">{{ 'editor.percent' | pt }}</span>
+                  <q-percent-input
+                    [basisPoints]="action.basisPoints"
+                    [ariaLabel]="'editor.percent' | pt"
+                    (basisPointsChange)="updateAction(i, { basisPoints: $event })"
+                  />
+                </label>
+              } @else {
+                <label class="q-field">
+                  <span class="q-caption">{{ 'editor.amount' | pt }}</span>
+                  <q-money-input
+                    [valueMinor]="action.amountMinor"
+                    [ariaLabel]="'editor.amount' | pt"
+                    (valueMinorChange)="updateAction(i, { amountMinor: $event })"
+                  />
+                </label>
+              }
+            </div>
+          }
+          @case ('GIFT') {
+            <div class="q-field">
+              <span class="q-caption">{{ 'editor.gift' | pt }}</span>
+              <q-promotion-chip-picker
+                [options]="lookups().variants"
+                [selected]="action.variantIds"
+                (selectedChange)="updateAction(i, { variantIds: $event })"
+              />
+            </div>
+            <div class="editor__row">
+              <label class="q-field">
+                <span class="q-caption">{{ 'editor.giftQuantity' | pt }}</span>
+                <input
+                  type="number"
+                  min="1"
+                  [value]="action.quantity"
+                  (input)="updateAction(i, { quantity: numberFrom($event) })"
+                  data-testid="promotion-gift-quantity"
+                />
+              </label>
+              <label class="q-field">
+                <span class="q-caption">{{ 'editor.giftMode' | pt }}</span>
+                <select
+                  [value]="action.mode"
+                  (change)="updateAction(i, { mode: $any($event.target).value })"
+                  data-testid="promotion-gift-mode"
+                >
+                  <option value="ONCE">
+                    {{ 'editor.giftMode.ONCE' | pt }}
+                  </option>
+                  <option value="PER_MULTIPLE">
+                    {{ 'editor.giftMode.PER_MULTIPLE' | pt }}
+                  </option>
+                </select>
+              </label>
+              @if (action.mode === 'PER_MULTIPLE') {
+                <label class="q-field">
+                  <span class="q-caption">{{ 'editor.giftTrigger' | pt }}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    [value]="action.triggerQuantity"
+                    (input)="updateAction(i, { triggerQuantity: numberFrom($event) })"
+                  />
+                </label>
+              }
+            </div>
+            <span class="q-caption editor__hint">{{ 'editor.gift.hint' | pt }}</span>
+          }
+        }
+      </div>
+    }
+
+    <button type="button" class="secondary" (click)="addAction()">
+      {{ 'editor.addAction' | pt }}
+    </button>
+  </fieldset>
+
+  <fieldset class="editor__section" [disabled]="readOnly()">
+    <legend class="q-caption">{{ 'editor.limits' | pt }}</legend>
+
+    @if (draft().kind === 'DISCOUNT') {
+      <label class="q-field q-field--checkbox">
+        <input
+          type="checkbox"
+          [checked]="draft().hasCap"
+          (change)="patch({ hasCap: $any($event.target).checked })"
+        />
+        <span class="q-caption">{{ 'editor.hasCap' | pt }}</span>
+      </label>
+      @if (draft().hasCap) {
+        <label class="q-field">
+          <span class="q-caption">{{ 'editor.cap' | pt }}</span>
+          <q-money-input
+            [valueMinor]="draft().maximumDiscountMinor"
+            [ariaLabel]="'editor.cap' | pt"
+            (valueMinorChange)="patch({ maximumDiscountMinor: $event })"
+          />
+        </label>
+      }
+    }
+
+    <label class="q-field q-field--checkbox">
+      <input
+        type="checkbox"
+        [checked]="draft().hasTotalLimit"
+        (change)="patch({ hasTotalLimit: $any($event.target).checked })"
+        data-testid="promotion-has-total-limit"
+      />
+      <span class="q-caption">{{ 'editor.hasTotalLimit' | pt }}</span>
+    </label>
+    @if (draft().hasTotalLimit) {
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.totalLimit' | pt }}</span>
+        <input
+          type="number"
+          min="1"
+          [value]="draft().maximumRedemptions"
+          (input)="patch({ maximumRedemptions: numberFrom($event) })"
+        />
+      </label>
+    }
+
+    <label class="q-field q-field--checkbox">
+      <input
+        type="checkbox"
+        [checked]="draft().hasCustomerLimit"
+        (change)="patch({ hasCustomerLimit: $any($event.target).checked })"
+        data-testid="promotion-has-customer-limit"
+      />
+      <span class="q-caption">{{ 'editor.hasCustomerLimit' | pt }}</span>
+    </label>
+    @if (draft().hasCustomerLimit) {
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.customerLimit' | pt }}</span>
+        <input
+          type="number"
+          min="1"
+          [value]="draft().maximumPerCustomer"
+          (input)="patch({ maximumPerCustomer: numberFrom($event) })"
+        />
+      </label>
+    }
+    <span class="q-caption editor__hint">{{ 'editor.limits.hint' | pt }}</span>
+  </fieldset>
+
+  <fieldset class="editor__section" [disabled]="readOnly()">
+    <legend class="q-caption">{{ 'editor.loyalty' | pt }}</legend>
+    <div class="editor__row">
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.loyaltyAccrual' | pt }}</span>
+        <select
+          [value]="draft().loyaltyAccrual"
+          (change)="patch({ loyaltyAccrual: $any($event.target).value })"
+          data-testid="promotion-loyalty-accrual"
+        >
+          @for (choice of accrualChoices; track choice) {
+            <option [value]="choice">{{ accrualLabelKey(choice) | pt }}</option>
+          }
+        </select>
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'editor.loyaltyRedemption' | pt }}</span>
+        <select
+          [value]="draft().loyaltyRedemption"
+          (change)="patch({ loyaltyRedemption: $any($event.target).value })"
+          data-testid="promotion-loyalty-redemption"
+        >
+          @for (choice of redemptionChoices; track choice) {
+            <option [value]="choice">{{ redemptionLabelKey(choice) | pt }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  </fieldset>
+
+  @if (!readOnly() && problems().length > 0) {
+    <ul class="editor__problems" data-testid="promotion-problems">
+      @for (problem of problems(); track problem) {
+        <li class="q-body-sm">{{ problem | pt }}</li>
+      }
+    </ul>
+  }
+
+  @if (!readOnly()) {
+    <div class="editor__actions">
+      <button type="button" class="secondary" (click)="cancel.emit()">
+        {{ 'editor.cancel' | pt }}
+      </button>
+      <button type="submit" class="primary" [disabled]="!canSave()" data-testid="promotion-save">
+        {{ (saving() ? 'editor.saving' : 'editor.save') | pt }}
+      </button>
+    </div>
+  }
+</form>

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.dinein.application.port;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -47,7 +48,19 @@ public interface SessionOrderSource {
     /** The running bill: currency and the sum over the session's rounds. */
     record SessionBill(String currency, long totalMinor, int roundCount, int openRoundCount) {}
 
+    /** One round of a session: the order and the status it is in right now. */
+    record RoundStatus(UUID orderId, String status) {}
+
     Optional<OrderForSession> find(UUID tenantId, UUID orderId);
 
     SessionBill bill(UUID tenantId, UUID sessionId);
+
+    /**
+     * The status of every round attached to a session, in the order they were
+     * attached. What the claim sweeper reads to decide whether a lapsing claim has
+     * something the restaurant accepted on it, something still in flight, or nothing
+     * (ADR 0143, Decision 4) -- the module's existing way to read order facts without
+     * importing ordering.
+     */
+    List<RoundStatus> rounds(UUID tenantId, UUID sessionId);
 }

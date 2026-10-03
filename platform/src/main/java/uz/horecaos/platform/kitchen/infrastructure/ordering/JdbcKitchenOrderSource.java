@@ -71,9 +71,15 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
         }
 
         List<OrderLineForKitchen> lines = jdbc.sql("""
-                SELECT id, line_number, source_product_id, source_variant_id, quantity
+                SELECT id, line_number, source_product_id, source_variant_id, quantity,
+                       combo_selection_id, combo_container_variant_id
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
+                  -- An amendment never edits a line: it closes it and appends its replacement
+                  -- (ADR 0039), and a combo is closed and rewritten whole. A ticket opened after
+                  -- one is made of what the order holds now; read without this it would be made of
+                  -- both versions of every component, and the kitchen would cook the combo twice.
+                  AND revision_to IS NULL
                 ORDER BY line_number
                 """)
                 .param("tenantId", tenantId)
@@ -84,7 +90,9 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                         // Nullable in V0022: a line may name only a variant.
                         row.getObject("source_product_id", UUID.class),
                         row.getObject("source_variant_id", UUID.class),
-                        row.getInt("quantity")))
+                        row.getBigDecimal("quantity"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class)))
                 .list();
 
         Header found = header.get();

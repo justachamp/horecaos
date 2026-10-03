@@ -160,6 +160,17 @@ public class PointsRedemptionService implements PointsRedemptionPort {
                     ErrorCode.VALIDATION_FAILED, "The order and the points account are in different currencies");
         }
 
+        // ADR 0140: a promotion the order carries can block spending points on it. The
+        // order's flag is the most restrictive value across its applied promotions, copied
+        // from the accepted quote, so the refusal is decided by the module that owns the
+        // ledger and not by a storefront that happened to hide the button.
+        if (!order.redemptionAllowed()) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A promotion on this order does not allow spending points on it",
+                    java.util.Map.of("reason", "REDEMPTION_BLOCKED_BY_PROMOTION"));
+        }
+
         RedemptionPolicyRow policy = policies.redemptionPolicy(command.tenantId(), command.brandId(), now)
                 .orElseThrow(() ->
                         new ApiException(ErrorCode.VALIDATION_FAILED, "Redemption is not enabled for this brand"));

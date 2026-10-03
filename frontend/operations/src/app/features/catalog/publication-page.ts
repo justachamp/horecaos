@@ -102,9 +102,14 @@ export class PublicationPage implements OnInit {
       const lastPublished =
         history.find((entry) => entry.channel === channel.code && entry.status === 'PUBLISHED') ??
         null;
+      // Each channel is compared with the draft as it would publish to that channel: the
+      // channels no longer publish identical items once one carries an image of its own.
+      const draftHash = preview
+        ? (preview.channelContentHashes?.[channel.code] ?? preview.contentHash)
+        : null;
       const draftStatus =
-        lastPublished && preview
-          ? lastPublished.contentHash === preview.contentHash
+        lastPublished && draftHash !== null
+          ? lastPublished.contentHash === draftHash
             ? 'MATCHES'
             : 'DIFFERS'
           : 'UNKNOWN';

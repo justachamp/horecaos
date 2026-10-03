@@ -1,10 +1,12 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { DispatchRulesApi } from '../../delivery/dispatch-rules-api';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
 import { LatenessEditorView, LatenessPolicyEditorApi } from './lateness-policy-editor-api';
@@ -140,6 +142,18 @@ describe('OrderPolicyPage', () => {
         { provide: OrderPolicyApi, useValue: policyApi },
         { provide: ConfigurationApi, useValue: configApi },
         { provide: LatenessPolicyEditorApi, useValue: latenessApi },
+        // Card 3's read-only dispatch rules summary (ADR 0142): nothing published, so it only links.
+        {
+          provide: DispatchRulesApi,
+          useValue: {
+            rules: () =>
+              Promise.resolve({
+                value: { rules: [], isBuiltIn: true },
+                version: 0,
+              }),
+          },
+        },
+        provideRouter([]),
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
         { provide: SettingsScope, useValue: settingsScope },
       ],
@@ -632,6 +646,16 @@ describe('OrderPolicyPage', () => {
       TENANT_ID,
       'ordering.late_order_threshold_minutes',
       expect.objectContaining({ scopeType: 'TENANT', integerValue: 25 }),
+    );
+  });
+
+  it('shows the dispatch rules summary on the automation card and links to where rules are written (ADR 0142)', () => {
+    const host = fixture.nativeElement as HTMLElement;
+
+    const card = host.querySelector('[data-testid="dispatch-summary"]');
+    expect(card).not.toBeNull();
+    expect(host.querySelector('[data-testid="dispatch-summary-link"]')?.getAttribute('href')).toBe(
+      '/delivery/dispatch-rules',
     );
   });
 });

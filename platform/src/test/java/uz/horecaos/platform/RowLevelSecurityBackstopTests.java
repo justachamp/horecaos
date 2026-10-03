@@ -67,7 +67,9 @@ class RowLevelSecurityBackstopTests {
             "inventory.positions",
             "inventory.movements",
             "inventory.reservations",
-            "inventory.reservation_lines");
+            "inventory.reservation_lines",
+            // V0462: ADR 0141's stops enforce it from day one, like the module's other tables.
+            "inventory.availability_stops");
 
     private static TestDatabase.Handle db;
     private static DataSource asOwner;

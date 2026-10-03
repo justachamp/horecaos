@@ -1,3 +1,5 @@
+import type { PhysicalFacts } from '../utils/physical';
+
 /** Menu item variant (size/option) */
 export interface MenuItemVariant {
   id: string;
@@ -27,16 +29,23 @@ export interface MenuItemVariant {
    * QUANTITY-tracked at all), never "unlimited".
    */
   remainingQuantity: number | null;
+  /**
+   * ADR 0137: what the variant physically is -- its weight or volume, whether it is sold by a
+   * weight only known at handover (`catchweight`: then `price` is per `catchweightQuantumGrams`,
+   * not per unit), whether it may be ordered by the portion, and its КБЖУ. Absent for a fixed
+   * unit sold whole, which is most of the menu.
+   */
+  physical?: PhysicalFacts | null;
 }
 
 /**
  * One selectable option inside a modifier group (e.g. "extra cheese").
  *
- * `label` is what the publication actually carries for an option: a `code`,
- * which is an authoring identifier, and never a customer-facing name -- the
- * wire's `MenuModifierOption` has no name field at all. This mirrors
- * `MenuService`'s own fallback for a variant with no translated label: shown
- * as what the platform sent rather than invented.
+ * `label` is the option's name in the customer's language when the menu carries
+ * one (`MenuModifierOption.name`, ADR 0136), and otherwise its `code` -- an
+ * authoring identifier -- which is what a menu published before options carried
+ * a name still sends. This mirrors `MenuService`'s own fallback for a variant
+ * with no translated label: shown as what the platform sent rather than invented.
  */
 export interface MenuItemModifierOption {
   id: string;
@@ -59,6 +68,36 @@ export interface MenuItemModifierGroup {
   options: MenuItemModifierOption[];
 }
 
+/**
+ * ADR 0136: one dish or drink offered inside a combo's choice, with what it costs in this combo.
+ *
+ * `amountMinor` is per unit and null when no price applies -- never zero, never free. `id` is the
+ * component (the pairing of the choice with the variant): what a pick names and what the price is
+ * keyed to.
+ */
+export interface MenuItemComboComponent {
+  id: string;
+  name: string;
+  /** The size or form, when the variant carries wording of its own. */
+  variantName: string | null;
+  /** Units one pick puts on the order. */
+  defaultQuantity: number;
+  /** False means sold out: shown, not pickable. */
+  active: boolean;
+  amountMinor: number | null;
+}
+
+/** ADR 0136: one choice a combo asks the customer to make ("choose a main"). */
+export interface MenuItemComboGroup {
+  id: string;
+  name: string;
+  minimumSelections: number;
+  maximumSelections: number;
+  /** Whether one component may be picked more than once. */
+  allowSameComponentMultipleTimes: boolean;
+  components: MenuItemComboComponent[];
+}
+
 /** Menu item (product) */
 export interface MenuItem {
   id: string;
@@ -78,6 +117,12 @@ export interface MenuItem {
   variants: MenuItemVariant[];
   /** The modifier groups this product offers, resolved from the publication. */
   modifierGroups: MenuItemModifierGroup[];
+  /**
+   * ADR 0136: the choices this product's combo asks for, empty on every product that is no combo.
+   * A combo's own variant has no price: `price` is then the least a customer can pay, and the
+   * choices are what the product page asks about.
+   */
+  comboGroups?: MenuItemComboGroup[];
 }
 
 /** Menu category (id + name only) */

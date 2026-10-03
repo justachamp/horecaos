@@ -156,6 +156,29 @@
           </div>
         }
 
+        @if (isCombo()) {
+          <div class="border-b border-zinc-700 pb-4" data-testid="product-combo">
+            <h2 class="mb-3 text-sm font-bold text-text-primary">
+              {{ 'product.comboTitle' | t }}
+            </h2>
+            <app-combo-choices
+              [groups]="comboGroups()"
+              [picks]="comboPicks()"
+              [showUnmet]="comboTouched()"
+              (picksChange)="setComboPicks($event)"
+            />
+            @if (comboUnavailable()) {
+              <p class="mt-3 text-[12px] text-red-400" data-testid="product-combo-unavailable">
+                {{ 'product.comboUnavailable' | t }}
+              </p>
+            } @else if (!modifiersValid()) {
+              <p class="mt-3 text-[12px] text-red-400" data-testid="product-combo-incomplete">
+                {{ 'product.comboIncomplete' | t }}
+              </p>
+            }
+          </div>
+        }
+
         @if (commentPresets().length > 0) {
           <div class="border-b border-zinc-700 pb-4">
             <h2 class="mb-3 text-sm font-bold text-text-primary">
@@ -188,6 +211,7 @@
                   <span class="text-[13px] font-medium leading-snug text-text-primary">{{
                     variant.label
                   }}</span>
+                  <app-physical-facts [physical]="variant.physical" [priceMinor]="variant.price" />
                   @if (variant.remainingQuantity !== null) {
                     <p class="text-[12px] text-amber-400" data-testid="product-low-stock">
                       {{ 'product.lowStock' | t: { count: variant.remainingQuantity } }}
@@ -208,7 +232,7 @@
                         class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-3 py-2 text-center"
                       >
                         <span class="text-xs font-bold leading-tight text-text-primary">
-                          {{ qty }} {{ 'common.itemsUnit' | t }}
+                          {{ quantityLabel(qty, variant.id) }}
                         </span>
                         <span
                           class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"
@@ -220,7 +244,10 @@
                         type="button"
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                         [disabled]="
-                          cartService.updating() || !modifiersValid() || !variant.onSaleNow
+                          cartService.updating() ||
+                          !modifiersValid() ||
+                          !variant.onSaleNow ||
+                          comboUnavailable()
                         "
                         [attr.aria-label]="'common.increase' | t"
                         (click)="increaseVariant(variant.id)"
@@ -232,11 +259,18 @@
                     <button
                       type="button"
                       class="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-brand-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
-                      [disabled]="cartService.updating() || !modifiersValid() || !variant.onSaleNow"
+                      [disabled]="
+                        cartService.updating() ||
+                        !modifiersValid() ||
+                        !variant.onSaleNow ||
+                        comboUnavailable()
+                      "
                       [attr.aria-label]="'cart.addToCart' | t"
                       (click)="increaseVariant(variant.id)"
                     >
-                      <span class="min-w-0 truncate">{{ formatPrice(variant.price) }}</span>
+                      <span class="min-w-0 truncate" data-testid="product-variant-price">{{
+                        variantPriceLabel(variant)
+                      }}</span>
                       <span class="shrink-0 text-lg font-light leading-none" aria-hidden="true"
                         >+</span
                       >
@@ -309,7 +343,7 @@
                   class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-2 py-2 text-center"
                 >
                   <span class="text-xs font-bold leading-tight text-text-primary">
-                    {{ qty() }} {{ 'common.itemsUnit' | t }}
+                    {{ quantityLabel(qty(), variantId()) }}
                   </span>
                   <span
                     class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"

@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -18,6 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.reporting.application.ReportQuery;
 import uz.horecaos.platform.reporting.application.ReportQueryService;
 import uz.horecaos.platform.reporting.domain.Grain;
@@ -27,6 +31,7 @@ import uz.horecaos.platform.reporting.domain.SlaBucketSet;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Quantities;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -53,9 +58,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class ReportingController {
 
     private final ReportQueryService queries;
+    private final StaffDirectory staffDirectory;
 
-    public ReportingController(ReportQueryService queries) {
+    public ReportingController(ReportQueryService queries, StaffDirectory staffDirectory) {
         this.queries = queries;
+        this.staffDirectory = staffDirectory;
     }
 
     @GetMapping("/metrics")
@@ -450,7 +457,7 @@ public class ReportingController {
             @RequestParam(required = false) List<String> fulfilmentType,
             @RequestParam(required = false) Integer limit,
             @RequestParam(defaultValue = "REVENUE_DESC") String sort,
-            @RequestParam(required = false) Integer afterQuantity,
+            @RequestParam(required = false) BigDecimal afterQuantity,
             @RequestParam(required = false) Long afterRevenueSom,
             @RequestParam(required = false) String afterProductName,
             @RequestParam(required = false) UUID afterVariantId) {
@@ -518,7 +525,7 @@ public class ReportingController {
      */
     private static JdbcReportingStore.@Nullable VariantSalesCursor variantSalesCursor(
             JdbcReportingStore.VariantSalesSort sort,
-            @Nullable Integer afterQuantity,
+            @Nullable BigDecimal afterQuantity,
             @Nullable Long afterRevenueSom,
             @Nullable String afterProductName,
             @Nullable UUID afterVariantId) {
@@ -555,9 +562,10 @@ public class ReportingController {
                     + "staff Keycloak subject when a person created or accepted the order, or a "
                     + "pseudo-operator named after its channel (\"channel:BOT\", "
                     + "\"channel:WEBSITE\") otherwise, so the bot and the website compare "
-                    + "against people rather than disappearing from the board. No name is "
-                    + "attached until the staff-identity ADR lands — principalKind and subject "
-                    + "say what this build can say instead of a bare id.")
+                    + "against people rather than disappearing from the board. displayName (ADR "
+                    + "0139) is the tenant's own name for a staff row, composed here and never in "
+                    + "reporting, and null for a pseudo-operator and for a subject the tenant "
+                    + "keeps no name for; principalKind and subject still say what the row is.")
     public ResponseEntity<OperatorLeaderboardResponse> operatorLeaderboard(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -565,8 +573,20 @@ public class ReportingController {
             @RequestParam(required = false) List<UUID> locationId) {
 
         var result = queries.operatorLeaderboard(tenantId, from, to, orEmpty(locationId));
+        // ADR 0139: names are composed here, at the web layer, never in reporting
+        // -- the read models carry the operator's subject and no personal value.
+        // A pseudo-operator ("channel:BOT") is not a person and resolves to
+        // nothing, so it keeps its typed rendering.
+        Map<String, String> names = staffDirectory.namesOf(
+                tenantId,
+                result.rows().stream()
+                        .filter(row -> "STAFF".equals(row.principalKind()))
+                        .map(ReportQueryService.OperatorLeaderboardRow::subject)
+                        .toList());
         return ResponseEntity.ok(new OperatorLeaderboardResponse(
-                result.rows().stream().map(OperatorLeaderboardRowResponse::of).toList(),
+                result.rows().stream()
+                        .map(row -> OperatorLeaderboardRowResponse.of(row, names.get(row.subject())))
+                        .toList(),
                 ProvenanceResponse.of(result.provenance())));
     }
 
@@ -591,7 +611,10 @@ public class ReportingController {
                 operatorPrincipalId,
                 result.rows().stream().map(VariantSalesRowResponse::of).toList(),
                 result.maybeMore(),
-                ProvenanceResponse.of(result.provenance())));
+                ProvenanceResponse.of(result.provenance()),
+                operatorPrincipalId.startsWith("channel:")
+                        ? null
+                        : staffDirectory.nameOf(tenantId, operatorPrincipalId)));
     }
 
     @GetMapping("/demand-history")
@@ -1086,13 +1109,24 @@ public class ReportingController {
             @Nullable UUID variantId,
             @Nullable UUID categoryId,
             String productName,
-            int totalQuantity,
+            BigDecimal totalQuantity,
             long totalGrossSom,
             long totalNetSom,
-            @Nullable Integer deliveryQuantity,
+            @Nullable BigDecimal deliveryQuantity,
             @Nullable Long deliveryNetSom,
-            @Nullable Integer pickupQuantity,
+            @Nullable BigDecimal pickupQuantity,
             @Nullable Long pickupNetSom) {
+
+        /**
+         * A sum over {@code numeric(10,3)} carries three fraction digits whatever it adds up to
+         * and would be written {@code 3.000}; the report reads {@code 3}, as it did when the
+         * column was an integer (ADR 0137), and only a half portion earns a fraction.
+         */
+        public VariantSalesRowResponse {
+            totalQuantity = Quantities.normalise(totalQuantity);
+            deliveryQuantity = deliveryQuantity == null ? null : Quantities.normalise(deliveryQuantity);
+            pickupQuantity = pickupQuantity == null ? null : Quantities.normalise(pickupQuantity);
+        }
 
         static VariantSalesRowResponse of(JdbcReportingStore.VariantSalesRow row) {
             return new VariantSalesRowResponse(
@@ -1159,9 +1193,11 @@ public class ReportingController {
             int pickupCount,
             int dineInCount,
             double avgItemsPerOrder,
-            List<OperatorChannelCountResponse> byChannel) {
+            List<OperatorChannelCountResponse> byChannel,
+            @Classified(DataClass.PERSONAL) @Nullable String displayName) {
 
-        static OperatorLeaderboardRowResponse of(ReportQueryService.OperatorLeaderboardRow row) {
+        static OperatorLeaderboardRowResponse of(
+                ReportQueryService.OperatorLeaderboardRow row, @Nullable String displayName) {
             return new OperatorLeaderboardRowResponse(
                     row.operatorPrincipalId(),
                     row.principalKind(),
@@ -1177,7 +1213,8 @@ public class ReportingController {
                     row.avgItemsPerOrder(),
                     row.byChannel().stream()
                             .map(count -> new OperatorChannelCountResponse(count.channelCode(), count.orderCount()))
-                            .toList());
+                            .toList(),
+                    displayName);
         }
     }
 
@@ -1195,7 +1232,8 @@ public class ReportingController {
             String operatorPrincipalId,
             List<VariantSalesRowResponse> rows,
             boolean maybeMore,
-            ProvenanceResponse provenance) {}
+            ProvenanceResponse provenance,
+            @Classified(DataClass.PERSONAL) @Nullable String operatorDisplayName) {}
 
     /**
      * One hour-of-day's demand sample.

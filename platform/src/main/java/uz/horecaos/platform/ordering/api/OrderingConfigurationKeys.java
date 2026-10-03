@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Set;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
+import uz.horecaos.platform.ordering.domain.PaymentWindowPolicy;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 
@@ -214,6 +215,28 @@ public final class OrderingConfigurationKeys {
             false,
             "Per-fulfilment-mode lateness thresholds: at-risk-before, late-after, and the "
                     + "no-promise fallback (orders.md §2.7).");
+
+    /**
+     * The unpaid-order window (ADR 0142 Decision 7): how long an order may sit in {@code
+     * PAYMENT_AUTHORIZING} before it reaches the stuck list, and what the sweep does then. Replaces the
+     * deploy property {@code horecaos.ordering.workers.payment.stale-after}, which survives as the
+     * fallback when nothing is published. Consumed by {@code OrderPaymentProcess}; authored through
+     * {@code PaymentWindowAuthoringService} behind {@code ORDER_PAYMENT_WINDOW_MANAGE}.
+     *
+     * <p>Settable at tenant, brand and location, never platform: how long to wait for a customer to pay
+     * is a fact about one restaurant's customers, and a platform-wide wait would be every tenant's.
+     */
+    public static final String PAYMENT_WINDOW_POLICY_CODE = "ordering.payment_window";
+
+    /** See {@link #PAYMENT_WINDOW_POLICY_CODE}. */
+    public static final PolicyKey<PaymentWindowPolicy> PAYMENT_WINDOW_POLICY = new PolicyKey<>(
+            PAYMENT_WINDOW_POLICY_CODE,
+            PaymentWindowPolicy.class,
+            Set.of(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION),
+            "ordering",
+            false,
+            "How many minutes an order may sit awaiting payment before it reaches the stuck list, and "
+                    + "whether it is only flagged (cancelling is refused until ADR 0019's open input is answered).");
 
     /** Card 2: "Минимальная сумма заказа" — pickup and dine-in; delivery is a zone concern. */
     public static final String MINIMUM_ORDER_AMOUNT_MINOR_CODE = "ordering.minimum_order_amount_minor";

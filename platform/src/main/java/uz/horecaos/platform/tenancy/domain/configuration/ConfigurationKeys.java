@@ -134,6 +134,54 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0141, rollback switch one (freeze, do not disable). Declared identically in
+     * {@code inventory.api.InventoryConfigurationKeys}, where {@code
+     * AvailabilityStopService} reads it, for the reason recorded on {@link
+     * #INVENTORY_RESERVATION_TTL_SECONDS}.
+     */
+    public static final ConfigurationKey<Boolean> INVENTORY_STOPS_CREATION_ENABLED = ConfigurationKey.of(
+                    "inventory.stops.creation_enabled", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("inventory")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether a new operator or bot stop may be created. Off freezes new "
+                    + "stops (STOPS_FROZEN); stops already in force, lifts, expiry and POS stops continue.")
+            .build();
+
+    /**
+     * ADR 0141, rollback switch two (suspend the reconciler), declared identically in {@code
+     * integration.api.MarketplaceConfigurationKeys} — see that class for why the pair exists.
+     */
+    public static final ConfigurationKey<Boolean> MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED = ConfigurationKey.of(
+                    "marketplace.availability.reconcile_enabled", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether the platform pushes stop-list changes to connected marketplaces. Off "
+                    + "suspends every push; resuming resends every item once.")
+            .build();
+
+    /** ADR 0141: the resync sweep's interval, declared identically in {@code integration.api.MarketplaceConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS =
+            ConfigurationKey.of("marketplace.availability.resync_interval_seconds", Integer.class)
+                    .defaultValue(300)
+                    .ownedBy("integration")
+                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                    .describedAs("Seconds between full recomputations of every mapped marketplace item. The "
+                            + "guarantee that a marketplace converges on the platform's current answer.")
+                    .build();
+
+    /** ADR 0141 / ADR 0040: the staleness bound, declared identically in {@code integration.api.MarketplaceConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS = ConfigurationKey.of(
+                    "marketplace.availability.stale_after_seconds", Integer.class)
+            .defaultValue(1800)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Seconds a marketplace binding may go without a confirmed availability push "
+                    + "before it is treated as stale.")
+            .build();
+
+    /**
      * ADR 0021: the strongest enforcement mode entitlement checks may apply.
      *
      * <p>Declared here so a stored row for it passes the startup validator, and
@@ -553,11 +601,63 @@ public final class ConfigurationKeys {
                     + "the resolver's own refusal does not read this key yet.")
             .build();
 
+    /**
+     * ADR 0140: declared identically in {@code pricing.api.PricingConfigurationKeys}, where it is consumed (this registry is internal to tenancy and a reference the other way would make the modules cyclic). The percentage, in basis points, above which activating a promotion
+     * needs a second person (ADR 0018 asks for four-eyes "above configured risk
+     * thresholds"). 3000 is 30%: provisional, finance to confirm.
+     */
+    public static final ConfigurationKey<Integer> PROMOTION_APPROVAL_PERCENTAGE_OVER_BP = ConfigurationKey.of(
+                    "pricing.promotion.approval.percentage_over_bp", Integer.class)
+            .defaultValue(3000)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("Activating a promotion whose largest percentage exceeds this many basis points "
+                    + "needs a second signature (ADR 0027).")
+            .build();
+
+    /**
+     * ADR 0140: the fixed amount, in minor units, above which activating a promotion
+     * needs a second person. 100 000 (som): provisional, finance to confirm.
+     */
+    public static final ConfigurationKey<Long> PROMOTION_APPROVAL_AMOUNT_OVER_MINOR = ConfigurationKey.of(
+                    "pricing.promotion.approval.amount_over_minor", Long.class)
+            .defaultValue(100000L)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("Activating a promotion whose largest fixed amount exceeds this many minor units "
+                    + "needs a second signature (ADR 0027).")
+            .build();
+
+    /**
+     * ADR 0140: whether activating a markup always needs a second person. A markup
+     * changes what customers pay rather than what they are given; on by default.
+     */
+    public static final ConfigurationKey<Boolean> PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP = ConfigurationKey.of(
+                    "pricing.promotion.approval.always_for_markup", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("Activating a markup always needs a second signature (ADR 0027).")
+            .build();
+
+    /** ADR 0140: the most lines a simulated cart may hold; the simulator is a read and must stay cheap. */
+    public static final ConfigurationKey<Integer> PROMOTION_SIMULATE_MAX_LINES = ConfigurationKey.of(
+                    "pricing.promotion.simulate.max_lines", Integer.class)
+            .defaultValue(50)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("The most lines a promotion simulation may price.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
             COURIER_APPLICANT_RETENTION_MONTHS,
             QUOTE_TTL_SECONDS,
+            PROMOTION_APPROVAL_PERCENTAGE_OVER_BP,
+            PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,
+            PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP,
+            PROMOTION_SIMULATE_MAX_LINES,
             INVENTORY_RESERVATION_TTL_SECONDS,
             COMMERCIAL_ENFORCEMENT_CEILING,
             TELEMETRY_COLLECTION_GATE,
@@ -581,6 +681,10 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             CATALOG_USE_STOCK_LOGIC,
+            INVENTORY_STOPS_CREATION_ENABLED,
+            MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED,
+            MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS,
+            MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS,
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,

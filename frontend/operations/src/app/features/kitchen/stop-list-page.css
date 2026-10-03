@@ -144,3 +144,53 @@
 .stop-list__source-none {
   color: var(--q-ink-subtle);
 }
+
+/* ADR 0141 */
+
+.stop-list__scope-open {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.stop-list__scope-open--active {
+  background: var(--q-surface-1);
+  font-weight: 600;
+}
+
+.status-badge--partial {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.stop-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-caption);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  cursor: help;
+}
+
+.stop-chip--partial {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.stop-chip__lift {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+  line-height: 1;
+}

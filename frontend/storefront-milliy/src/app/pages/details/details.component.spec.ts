@@ -8,7 +8,7 @@ import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import type { MenuItem, MenuItemModifierGroup } from '../../types/home.types';
+import type { MenuItem, MenuItemComboGroup, MenuItemModifierGroup } from '../../types/home.types';
 
 const TEST_APP_CONFIG: AppConfig = {
   apiBaseUrl: '/api/v1',
@@ -81,6 +81,7 @@ function product(overrides: Partial<MenuItem> = {}): MenuItem {
 }
 
 class FakeMenuService {
+  readonly currency = signal<string | null>('UZS');
   item = vi.fn(async () => product());
 }
 class FakeUiCartService {
@@ -139,7 +140,11 @@ interface InternalDetails {
   canAdd(): boolean;
   addError(): string | null;
   step(by: number): void;
+  selectVariant(variantId: string): void;
   addToCart(): Promise<void>;
+  setComboPicks(next: Readonly<Record<string, number>>): void;
+  comboComplete(): boolean;
+  comboUnavailable(): boolean;
 }
 
 describe('DetailsComponent', () => {
@@ -508,5 +513,282 @@ describe('DetailsComponent.addToCart -- a refusal stays on the page and says why
 
     await comp.addToCart();
     expect(comp.canAdd()).toBe(true);
+  });
+});
+
+describe('DetailsComponent -- a combo (ADR 0136)', () => {
+  const comboGroup = (overrides: Partial<MenuItemComboGroup> = {}): MenuItemComboGroup => ({
+    id: 'g-main',
+    name: 'Main',
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameComponentMultipleTimes: false,
+    components: [
+      {
+        id: 'c-burger',
+        name: 'Burger',
+        variantName: null,
+        defaultQuantity: 1,
+        active: true,
+        amountMinor: 25_000,
+      },
+      {
+        id: 'c-wrap',
+        name: 'Wrap',
+        variantName: null,
+        defaultQuantity: 1,
+        active: true,
+        amountMinor: 22_000,
+      },
+    ],
+    ...overrides,
+  });
+  const combo = (groups: MenuItemComboGroup[] = [comboGroup()]) =>
+    product({ variants: [product().variants[0]], comboGroups: groups });
+  const q = (fixture: { nativeElement: unknown }, testId: string) =>
+    (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${testId}"]`);
+
+  it('draws its choices instead of the modifier groups, and says they are incomplete until the minimum is met', async () => {
+    const { fixture, comp } = await setUp(combo());
+
+    expect(q(fixture, 'details-combo')).not.toBeNull();
+    expect(q(fixture, 'details-combo-incomplete')).not.toBeNull();
+    expect(comp.canAdd()).toBe(false);
+  });
+
+  it('refuses the add until the choices are made, and never writes a bare container', async () => {
+    const { comp, cart } = await setUp(combo());
+
+    await comp.addToCart();
+
+    expect(cart.add).not.toHaveBeenCalled();
+  });
+
+  it('puts the container into the basket with the picks, once the minimum is met', async () => {
+    const { fixture, comp, cart } = await setUp(combo());
+
+    comp.setComboPicks({ 'c-burger': 1 });
+    fixture.detectChanges();
+    comp.step(1);
+    await comp.addToCart();
+
+    expect(cart.add).toHaveBeenCalledWith(
+      'v1',
+      2,
+      undefined,
+      [],
+      [{ componentId: 'c-burger', quantity: 1 }],
+    );
+  });
+
+  it('shows what one combo costs once complete', async () => {
+    const { fixture, comp } = await setUp(combo());
+
+    comp.setComboPicks({ 'c-wrap': 1 });
+    fixture.detectChanges();
+
+    expect(q(fixture, 'details-combo-total')?.textContent).toContain('combo.total');
+    expect(q(fixture, 'details-combo-incomplete')).toBeNull();
+  });
+
+  it('shows no total while a picked component has no price', async () => {
+    const { fixture, comp } = await setUp(
+      combo([
+        comboGroup({
+          components: [
+            {
+              id: 'c-burger',
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              active: true,
+              amountMinor: null,
+            },
+          ],
+        }),
+      ]),
+    );
+
+    comp.setComboPicks({ 'c-burger': 1 });
+    fixture.detectChanges();
+
+    expect(comp.comboComplete()).toBe(true);
+    expect(q(fixture, 'details-combo-total')).toBeNull();
+  });
+
+  it('cannot be added when a choice has no orderable component, and says so', async () => {
+    const { fixture, comp, cart } = await setUp(
+      combo([
+        comboGroup({
+          components: [
+            {
+              id: 'c-burger',
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              active: false,
+              amountMinor: 25_000,
+            },
+          ],
+        }),
+      ]),
+    );
+
+    expect(comp.comboUnavailable()).toBe(true);
+    expect(q(fixture, 'details-combo-unavailable')).not.toBeNull();
+    expect(comp.canAdd()).toBe(false);
+    await comp.addToCart();
+    expect(cart.add).not.toHaveBeenCalled();
+  });
+
+  it('adds a dish that is no combo exactly as before, with no picks argument', async () => {
+    const { comp, cart } = await setUp();
+
+    await comp.addToCart();
+
+    expect(cart.add).toHaveBeenCalledWith('v1', 1, undefined, []);
+  });
+});
+
+describe('DetailsComponent -- portions and weighed items (ADR 0137)', () => {
+  const NBSP = '\u00a0';
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+  const CAKE = {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+    netWeightGrams: 1_200,
+  } as const;
+
+  /** A single-portion dish whose one variant carries the given physical facts. */
+  function withPhysical(physical: unknown, price = 48_000): MenuItem {
+    const base = product();
+    return product({
+      variants: [{ ...base.variants[0], price, physical } as MenuItem['variants'][number]],
+    });
+  }
+
+  it('starts a splittable variant at one whole portion', async () => {
+    const { comp } = await setUp(withPhysical(SPLITTABLE));
+
+    expect(comp.quantity()).toBe(1);
+  });
+
+  it('starts a variant whose portion does not divide one at the first quantity the cart accepts', async () => {
+    const { comp } = await setUp(
+      withPhysical({ catchweight: false, splittable: true, portionSize: 0.3 }),
+    );
+
+    expect(comp.quantity()).toBe(1.2);
+  });
+
+  it('steps by the portion size and never below one portion', async () => {
+    const { comp } = await setUp(withPhysical(SPLITTABLE));
+
+    comp.step(1);
+    expect(comp.quantity()).toBe(1.5);
+    comp.step(-1);
+    comp.step(-1);
+    expect(comp.quantity()).toBe(0.5);
+    comp.step(-1);
+    expect(comp.quantity()).toBe(0.5);
+  });
+
+  it('sends the fraction the guest chose to the basket', async () => {
+    const { comp, cart } = await setUp(withPhysical(SPLITTABLE));
+
+    comp.step(-1);
+    await comp.addToCart();
+
+    expect(cart.add).toHaveBeenCalledWith('v1', 0.5, undefined, []);
+  });
+
+  it('keeps a plain variant in whole units, as before', async () => {
+    const { comp } = await setUp();
+
+    comp.step(1);
+
+    expect(comp.quantity()).toBe(2);
+  });
+
+  it('follows the chosen portion: switching to a variant with another step snaps the quantity to it', async () => {
+    const base = product();
+    const item = product({
+      variants: [
+        { ...base.variants[0], physical: SPLITTABLE },
+        {
+          ...base.variants[1],
+          physical: { catchweight: false, splittable: true, portionSize: 0.4 },
+        },
+      ] as MenuItem['variants'],
+    });
+    const { comp } = await setUp(item);
+    comp.step(1);
+    expect(comp.quantity()).toBe(1.5);
+
+    comp.selectVariant('v2');
+
+    expect(comp.variantId()).toBe('v2');
+    expect(comp.quantity()).toBe(1.2);
+  });
+
+  it('keeps the quantity when the next portion accepts it', async () => {
+    const base = product();
+    const item = product({
+      variants: [
+        { ...base.variants[0], physical: SPLITTABLE },
+        { ...base.variants[1], physical: SPLITTABLE },
+      ] as MenuItem['variants'],
+    });
+    const { comp } = await setUp(item);
+    comp.step(2);
+
+    comp.selectVariant('v2');
+
+    expect(comp.quantity()).toBe(2);
+  });
+
+  it('writes the quantity with the language’s decimal mark', async () => {
+    const { comp, fixture } = await setUp(withPhysical(SPLITTABLE));
+    comp.step(-1);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.qty__value')?.textContent?.trim(),
+    ).toBe('0,5');
+  });
+
+  it('shows the selected portion’s weight and nutrition', async () => {
+    const { fixture } = await setUp(
+      withPhysical({
+        catchweight: false,
+        splittable: false,
+        netWeightGrams: 350,
+        nutrition: { caloriesKcalPer100: 215 },
+      }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="physical-measure"]')?.textContent?.trim()).toBe(
+      `350${NBSP}g`,
+    );
+    expect(host.querySelector('[data-testid="physical-nutrition"]')).not.toBeNull();
+  });
+
+  it('says a weighed portion is priced per quantum and its final weight is set at handover', async () => {
+    const { fixture } = await setUp(withPhysical(CAKE, 15_000));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="physical-price-per-quantum"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="physical-final-weight-notice"]')).not.toBeNull();
+  });
+
+  it('says nothing physical about a fixed unit', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="physical-facts"]'),
+    ).toBeNull();
   });
 });

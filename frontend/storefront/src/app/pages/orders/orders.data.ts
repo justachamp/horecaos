@@ -1,3 +1,4 @@
+import type { PromotionRow } from '../../services/applied-promotions';
 export interface OrderItem {
   id: string;
   title: string;
@@ -114,9 +115,66 @@ export interface OrderLineItem {
   name: string;
   image: string;
   quantity: number;
+  /** `0,5 порц.`, `3 шт` — the quantity as the customer's language writes it (ADR 0137). */
+  quantityText: string;
   unitPrice: string;
+  /** ADR 0137: set for a line sold by weight — its weight (estimated or weighed) and its own amount. */
+  weight?: { text: string; amountText: string; provisional: boolean };
   /** For @for track when items can share the same name */
   variantId?: string;
+  /** ADR 0136: set on each component line of a combo; the lines of one purchase share it. */
+  comboSelectionId?: string;
+  /** ADR 0136: the combo's name as it was sold. */
+  comboName?: string;
+}
+
+/**
+ * One row of the order's lines: a combo's header (its name) or a line (ADR 0136).
+ *
+ * A combo is several ordinary lines sharing a selection id, so the header is derived here and never a
+ * line of its own -- nothing about the order's arithmetic changes.
+ */
+export type OrderLineRow =
+  | { readonly kind: 'combo'; readonly key: string; readonly name: string }
+  | {
+      readonly kind: 'line';
+      readonly key: string;
+      readonly item: OrderLineItem;
+      readonly inCombo: boolean;
+    };
+
+/** The lines in order with a header ahead of each combo's components, which stay together beneath it. */
+export function orderLineRows(items: readonly OrderLineItem[]): readonly OrderLineRow[] {
+  const members = new Map<string, OrderLineItem[]>();
+  for (const item of items) {
+    if (item.comboSelectionId) {
+      members.set(item.comboSelectionId, [...(members.get(item.comboSelectionId) ?? []), item]);
+    }
+  }
+  const rows: OrderLineRow[] = [];
+  const placed = new Set<string>();
+  items.forEach((item, index) => {
+    const selection = item.comboSelectionId;
+    if (!selection) {
+      rows.push({ kind: 'line', key: `line:${index}`, item, inCombo: false });
+      return;
+    }
+    if (placed.has(selection)) {
+      return;
+    }
+    placed.add(selection);
+    rows.push({ kind: 'combo', key: `combo:${selection}`, name: item.comboName ?? '' });
+    (members.get(selection) ?? []).forEach((member, offset) =>
+      rows.push({ kind: 'line', key: `line:${selection}:${offset}`, item: member, inCombo: true }),
+    );
+  });
+  return rows;
+}
+
+/** ADR 0136: an option the server added to the order by itself, and what it cost. */
+export interface OrderHiddenCharge {
+  readonly label: string;
+  readonly amount: string;
 }
 
 /** Full order detail for /orders/detail/:id */
@@ -135,6 +193,11 @@ export interface OrderDetail {
   /** `DELIVERY`, `PICKUP` or `DINE_IN`, when the API sent one. */
   fulfillmentMode?: string;
   lineItems: OrderLineItem[];
+  /**
+   * ADR 0136: what the server added by itself for this order's fulfilment mode -- a delivery box the
+   * customer never chose -- one row per option, each already inside the total. Absent when nothing was.
+   */
+  hiddenCharges?: OrderHiddenCharge[];
   subtotal: string;
   /**
    * `OrderResponse.taxMinor` (StorefrontOrderingController), when it is
@@ -151,6 +214,14 @@ export interface OrderDetail {
    * is already handled.
    */
   deliveryFee?: string;
+  /**
+   * ADR 0140: one row per kind of discount (an offer, a typed code), each with the
+   * platform's own amount. Their sum is what the order's total is short of
+   * `subtotal + tax + deliveryFee`. Empty when nothing was discounted.
+   */
+  discountRows?: readonly PromotionRow[];
+  /** ADR 0140: benefits already inside the delivery fee or the goods, shown as captions. */
+  promotionNotes?: readonly PromotionRow[];
   total: string;
   /** Packaging fee when > 0 */
   packaging?: string;

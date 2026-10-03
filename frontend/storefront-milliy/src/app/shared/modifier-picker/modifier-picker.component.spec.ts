@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '../../services/translate.service';
 import type {
   MenuItem,
+  MenuItemComboGroup,
   MenuItemModifierGroup,
   MenuItemModifierOption,
   MenuItemVariant,
@@ -454,5 +455,195 @@ describe("ModifierPickerComponent -- choosing a dish's options at a table (ADR 0
       expect(dialog.getAttribute('aria-label')).toBe('Osh');
       expect(document.activeElement).toBe(dialog);
     });
+  });
+});
+
+describe('ModifierPickerComponent -- choosing the picks of a combo (ADR 0136)', () => {
+  const comboGroup = (overrides: Partial<MenuItemComboGroup> = {}): MenuItemComboGroup => ({
+    id: 'g-main',
+    name: 'Main',
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameComponentMultipleTimes: false,
+    components: [
+      {
+        id: 'c-burger',
+        name: 'Burger',
+        variantName: null,
+        defaultQuantity: 1,
+        active: true,
+        amountMinor: 25_000,
+      },
+      {
+        id: 'c-wrap',
+        name: 'Wrap',
+        variantName: null,
+        defaultQuantity: 1,
+        active: true,
+        amountMinor: 22_000,
+      },
+    ],
+    ...overrides,
+  });
+  const combo = (groups: MenuItemComboGroup[] = [comboGroup()]): MenuItem => ({
+    ...dish([]),
+    comboGroups: groups,
+  });
+  const tapComponent = (view: ReturnType<typeof render>, name: string) => {
+    const found = view.all('combo-component').find((entry) => entry.textContent?.includes(name));
+    expect(found, `no component named ${name}`).toBeDefined();
+    found!.click();
+    view.fixture.detectChanges();
+  };
+
+  it('asks for the combo’s choices, and refuses to add until the minimum is met', () => {
+    const view = render(combo());
+
+    expect(view.q('picker-combo')).not.toBeNull();
+    expect(view.all('combo-component').length).toBe(2);
+    expect(view.addDisabled()).toBe(true);
+    expect(view.q('modifier-picker-missing')?.textContent).toContain('Main');
+
+    view.add();
+    expect(view.state.confirmed).toEqual([]);
+  });
+
+  it('shows what one combo costs as the picks are made, and confirms with the picks on the wire', () => {
+    const view = render(combo());
+
+    tapComponent(view, 'Burger');
+
+    expect(view.q('picker-combo-total')?.textContent).toContain('25');
+    expect(view.addDisabled()).toBe(false);
+
+    view.add();
+    expect(view.state.confirmed).toEqual([
+      {
+        variantId: 'v1',
+        quantity: 1,
+        modifierOptionIds: [],
+        comboPicks: [{ componentId: 'c-burger', quantity: 1 }],
+      },
+    ]);
+  });
+
+  it('sends the combo’s quantity with its picks, so two combos are two sets of the picks', () => {
+    const view = render(combo());
+
+    tapComponent(view, 'Wrap');
+    view.q('modifier-picker-increase')!.click();
+    view.fixture.detectChanges();
+    view.add();
+
+    expect(view.state.confirmed[0]).toMatchObject({
+      quantity: 2,
+      comboPicks: [{ componentId: 'c-wrap', quantity: 1 }],
+    });
+  });
+
+  it('shows no total while a picked component has no price, instead of counting it as free', () => {
+    const view = render(
+      combo([
+        comboGroup({
+          components: [
+            {
+              id: 'c-burger',
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              active: true,
+              amountMinor: null,
+            },
+          ],
+        }),
+      ]),
+    );
+
+    tapComponent(view, 'Burger');
+
+    expect(view.q('picker-combo-total')).toBeNull();
+  });
+
+  it('says so and cannot be confirmed when a choice has too few components to reach its minimum', () => {
+    const view = render(
+      combo([
+        comboGroup({
+          components: [
+            {
+              id: 'c-burger',
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              active: false,
+              amountMinor: 25_000,
+            },
+          ],
+        }),
+      ]),
+    );
+
+    expect(view.q('picker-combo-unavailable')).not.toBeNull();
+    expect(view.addDisabled()).toBe(true);
+  });
+
+  it('sends no comboPicks at all for a dish that is no combo', () => {
+    const view = render(dish([group()]));
+
+    view.tap('SMALL');
+    view.add();
+
+    expect(view.state.confirmed[0]).not.toHaveProperty('comboPicks');
+  });
+});
+
+describe('ModifierPickerComponent -- portions (ADR 0137)', () => {
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+
+  function splittable(portionSize = 0.5) {
+    return dish([group()], [variant({ physical: { ...SPLITTABLE, portionSize } })]);
+  }
+
+  it('starts a splittable portion at one whole portion', () => {
+    const view = render(splittable());
+
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('1');
+  });
+
+  it('starts a portion that does not divide one at the first quantity the cart accepts', () => {
+    const view = render(splittable(0.3));
+
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('1,2');
+  });
+
+  it('steps by the portion size and never below one portion', () => {
+    const view = render(splittable());
+
+    view.q('modifier-picker-increase')!.click();
+    view.fixture.detectChanges();
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('1,5');
+    view.q('modifier-picker-decrease')!.click();
+    view.q('modifier-picker-decrease')!.click();
+    view.fixture.detectChanges();
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('0,5');
+    expect((view.q('modifier-picker-decrease') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('hands the chosen fraction to the screen', () => {
+    const view = render(splittable());
+    view.tap('SMALL');
+
+    view.q('modifier-picker-decrease')!.click();
+    view.q('modifier-picker-add')!.click();
+
+    expect(view.state.confirmed[0].quantity).toBe(0.5);
+  });
+
+  it('keeps a plain portion in whole units, as before', () => {
+    const view = render();
+
+    view.q('modifier-picker-increase')!.click();
+    view.fixture.detectChanges();
+
+    expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('2');
   });
 });

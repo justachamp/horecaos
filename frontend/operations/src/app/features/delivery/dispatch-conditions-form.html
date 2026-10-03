@@ -1,0 +1,210 @@
+<div class="conditions">
+  <fieldset class="conditions__group">
+    <legend class="q-caption">{{ 'delivery.rules.cond.sources' | t }}</legend>
+    <div class="conditions__chips">
+      @for (source of sourceTypes; track source) {
+        <label class="conditions__chip q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="has(conditions().sources, source)"
+            (change)="toggleSource(source)"
+            [attr.data-testid]="idPrefix() + '-source-' + source"
+          />
+          {{ source }}
+        </label>
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="conditions__group">
+    <legend class="q-caption">{{ 'delivery.rules.cond.channels' | t }}</legend>
+    @if ((options()?.channels ?? []).length === 0) {
+      <p class="q-caption conditions__muted">{{ 'delivery.rules.cond.noOptions' | t }}</p>
+    } @else {
+      <div class="conditions__chips">
+        @for (channel of options()?.channels ?? []; track channel.id) {
+          <label class="conditions__chip q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="has(conditions().channelIds, channel.id)"
+              (change)="toggleChannel(channel.id)"
+              [attr.data-testid]="idPrefix() + '-channel-' + channel.id"
+            />
+            {{ channel.displayName }}
+          </label>
+        }
+      </div>
+    }
+  </fieldset>
+
+  <fieldset class="conditions__group">
+    <legend class="q-caption">{{ 'delivery.rules.cond.zones' | t }}</legend>
+    @if ((options()?.zones ?? []).length === 0) {
+      <p class="q-caption conditions__muted">{{ 'delivery.rules.cond.noOptions' | t }}</p>
+    } @else {
+      <div class="conditions__chips">
+        @for (zone of options()?.zones ?? []; track zone.id) {
+          <label class="conditions__chip q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="has(conditions().zoneIds, zone.id)"
+              (change)="toggleZone(zone.id)"
+              [attr.data-testid]="idPrefix() + '-zone-' + zone.id"
+            />
+            {{ zoneLabel(zone) }}
+          </label>
+        }
+      </div>
+      <p class="q-caption conditions__muted">{{ 'delivery.rules.cond.zones.hint' | t }}</p>
+    }
+  </fieldset>
+
+  @if (showBranches()) {
+    <fieldset class="conditions__group">
+      <legend class="q-caption">{{ 'delivery.rules.cond.locations' | t }}</legend>
+      @if ((options()?.locations ?? []).length === 0) {
+        <p class="q-caption conditions__muted">{{ 'delivery.rules.cond.noOptions' | t }}</p>
+      } @else {
+        <div class="conditions__chips">
+          @for (location of options()?.locations ?? []; track location.id) {
+            <label class="conditions__chip q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="has(conditions().locationIds, location.id)"
+                (change)="toggleLocation(location.id)"
+                [attr.data-testid]="idPrefix() + '-location-' + location.id"
+              />
+              {{ location.displayName }}
+            </label>
+          }
+        </div>
+      }
+    </fieldset>
+  }
+
+  <fieldset class="conditions__group conditions__group--row">
+    <legend class="q-caption">{{ 'delivery.rules.cond.prep' | t }}</legend>
+    <label class="conditions__number q-caption">
+      {{ 'delivery.rules.cond.min' | t }}
+      <input
+        class="q-body field"
+        type="number"
+        min="0"
+        [value]="rangeEnd('prepMinutes', 'min')"
+        (input)="setRange('prepMinutes', 'min', $any($event.target).value)"
+        [attr.data-testid]="idPrefix() + '-prep-min'"
+      />
+    </label>
+    <label class="conditions__number q-caption">
+      {{ 'delivery.rules.cond.max' | t }}
+      <input
+        class="q-body field"
+        type="number"
+        min="0"
+        [value]="rangeEnd('prepMinutes', 'max')"
+        (input)="setRange('prepMinutes', 'max', $any($event.target).value)"
+        [attr.data-testid]="idPrefix() + '-prep-max'"
+      />
+    </label>
+  </fieldset>
+
+  <fieldset class="conditions__group conditions__group--row">
+    <legend class="q-caption">{{ 'delivery.rules.cond.distance' | t }}</legend>
+    <label class="conditions__number q-caption">
+      {{ 'delivery.rules.cond.min' | t }}
+      <input
+        class="q-body field"
+        type="number"
+        min="0"
+        [value]="rangeEnd('distanceMeters', 'min')"
+        (input)="setRange('distanceMeters', 'min', $any($event.target).value)"
+        [attr.data-testid]="idPrefix() + '-distance-min'"
+      />
+    </label>
+    <label class="conditions__number q-caption">
+      {{ 'delivery.rules.cond.max' | t }}
+      <input
+        class="q-body field"
+        type="number"
+        min="0"
+        [value]="rangeEnd('distanceMeters', 'max')"
+        (input)="setRange('distanceMeters', 'max', $any($event.target).value)"
+        [attr.data-testid]="idPrefix() + '-distance-max'"
+      />
+    </label>
+  </fieldset>
+
+  <fieldset class="conditions__group">
+    <legend class="q-caption">{{ 'delivery.rules.cond.time' | t }}</legend>
+    @if (window(); as w) {
+      <div class="conditions__chips" role="group">
+        @for (day of weekdays; track day; let index = $index) {
+          <button
+            type="button"
+            class="conditions__day q-caption"
+            [class.conditions__day--on]="w.days.includes(day)"
+            [attr.aria-pressed]="w.days.includes(day)"
+            (click)="toggleDay(day)"
+            [attr.data-testid]="idPrefix() + '-day-' + day"
+          >
+            {{ dayKeys[index] | t }}
+          </button>
+        }
+      </div>
+      <div class="conditions__row">
+        <label class="conditions__number q-caption">
+          {{ 'delivery.rules.cond.time.from' | t }}
+          <input
+            class="q-body field"
+            type="time"
+            [value]="inputTime(w.from)"
+            (change)="setFrom($any($event.target).value)"
+            [attr.data-testid]="idPrefix() + '-time-from'"
+          />
+        </label>
+        <label class="conditions__number q-caption">
+          {{ 'delivery.rules.cond.time.to' | t }}
+          <input
+            class="q-body field"
+            type="time"
+            [value]="inputTime(w.to)"
+            (change)="setTo($any($event.target).value)"
+            [attr.data-testid]="idPrefix() + '-time-to'"
+          />
+        </label>
+        <button
+          type="button"
+          class="q-caption conditions__link"
+          (click)="anyTime()"
+          [attr.data-testid]="idPrefix() + '-time-clear'"
+        >
+          {{ 'delivery.rules.cond.time.clear' | t }}
+        </button>
+      </div>
+      <p class="q-caption conditions__muted">{{ 'delivery.rules.cond.time.hint' | t }}</p>
+    } @else {
+      <button
+        type="button"
+        class="q-caption conditions__link"
+        (click)="limitHours()"
+        [attr.data-testid]="idPrefix() + '-time-add'"
+      >
+        {{ 'delivery.rules.cond.time.add' | t }}
+      </button>
+    }
+  </fieldset>
+
+  <fieldset class="conditions__group">
+    <legend class="q-caption">{{ 'delivery.rules.cond.prepaid' | t }}</legend>
+    <select
+      class="q-body field"
+      [value]="prepaidValue()"
+      (change)="setPrepaid($any($event.target).value)"
+      [attr.data-testid]="idPrefix() + '-prepaid'"
+    >
+      <option value="any">{{ 'delivery.rules.cond.prepaid.any' | t }}</option>
+      <option value="true">{{ 'delivery.rules.cond.prepaid.true' | t }}</option>
+      <option value="false">{{ 'delivery.rules.cond.prepaid.false' | t }}</option>
+    </select>
+  </fieldset>
+</div>

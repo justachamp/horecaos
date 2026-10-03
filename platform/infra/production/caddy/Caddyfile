@@ -215,7 +215,8 @@
 	}
 
 	# ADR 0047's guest dine-in flows: the QR table-token exchange, the
-	# running-bill request, and the running-bill read. Grouped separately
+	# running-bill request, and the running-bill read; and ADR 0143's
+	# self-seating open, POST /dine-in/sessions with no id. Grouped separately
 	# from the plain browse surface above because these are authorised by
 	# possession of a token rather than being open reads, and because a
 	# whole table of guests legitimately shares one venue Wi-Fi address —
@@ -225,6 +226,7 @@
 	@dine_in_guest {
 		method GET POST
 		path /api/v1/storefront/dine-in/qr/token-exchanges
+		path /api/v1/storefront/dine-in/sessions
 		path /api/v1/storefront/dine-in/sessions/*/bill-requests
 		path /api/v1/storefront/dine-in/sessions/*
 	}

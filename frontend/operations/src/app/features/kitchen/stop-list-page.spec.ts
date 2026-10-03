@@ -34,14 +34,17 @@ describe('StopListPage', () => {
       put?: ReturnType<typeof vi.fn>;
       get?: ReturnType<typeof vi.fn>;
       post?: ReturnType<typeof vi.fn>;
+      send?: ReturnType<typeof vi.fn>;
       scope?: LocationScope;
     } = {},
   ): Promise<{
     put: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
     post: ReturnType<typeof vi.fn>;
+    send: ReturnType<typeof vi.fn>;
   }> {
     const put = options.put ?? vi.fn().mockReturnValue(of(undefined));
+    const send = options.send ?? vi.fn().mockReturnValue(of({ status: 200 }));
     const get = options.get ?? vi.fn().mockReturnValue(of({ value: DEFAULT_COUNTS }));
     const post =
       options.post ??
@@ -59,7 +62,7 @@ describe('StopListPage', () => {
             ensureLoaded: () => Promise.resolve(),
           },
         },
-        { provide: ApiClient, useValue: { page, put, get, post } },
+        { provide: ApiClient, useValue: { page, put, get, post, send } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -67,7 +70,7 @@ describe('StopListPage', () => {
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
-    return { put, get, post };
+    return { put, get, post, send };
   }
 
   it('lists a location’s variants, split into available and on-stop', async () => {
@@ -362,7 +365,11 @@ describe('StopListPage', () => {
     );
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(get).toHaveBeenCalledTimes(1);
+    // The page also reads the marketplace propagation status (ADR 0141), so only the counts
+    // endpoint is counted here: one read, however many other things the page asks.
+    expect(
+      get.mock.calls.filter(([path]) => String(path).includes('availability-counts')),
+    ).toHaveLength(1);
     const tabs = [...host.querySelectorAll('.tab')] as HTMLButtonElement[];
     expect(tabs[0].querySelector('.tab__count')?.textContent?.trim()).toBe('250');
   });
@@ -689,5 +696,201 @@ describe('StopListPage', () => {
     const otherHost = fixture.nativeElement as HTMLElement;
     expect(otherHost.textContent).toContain('Lagman');
     expect(otherHost.textContent).toContain('Somsa');
+  });
+
+  // --------------------------------------------------- ADR 0141: stops with a scope
+
+  const STOPPED_BY_BRAND = {
+    stopId: 's-brand',
+    scopeType: 'BRAND',
+    source: 'OPERATOR',
+    reasonCode: 'RECALL',
+    endsAt: null,
+    createdAt: '2026-10-01T08:00:00Z',
+    locationId: null,
+    menuId: null,
+    channelId: null,
+    everyChannel: true,
+    version: 3,
+  };
+
+  it('shows every stop in force on a dish with its scope and source, and a dish stopped on some channels only as partly stopped', async () => {
+    await render(
+      vi.fn().mockReturnValue(
+        of({
+          items: [
+            {
+              variantId: 'v1',
+              productName: 'Lagman',
+              category: 'Soups',
+              available: false,
+              stopSource: 'UNKNOWN',
+              stops: [STOPPED_BY_BRAND],
+            },
+            {
+              variantId: 'v2',
+              productName: 'Somsa',
+              category: 'Bakery',
+              available: true,
+              stopSource: 'UNKNOWN',
+              stops: [
+                {
+                  ...STOPPED_BY_BRAND,
+                  stopId: 's-channel',
+                  scopeType: 'CHANNEL',
+                  source: 'POS',
+                  channelId: 'c1',
+                  everyChannel: false,
+                },
+              ],
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    const chips = [...host.querySelectorAll('[data-testid="stop-list-stop"]')].map((chip) =>
+      (chip.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    );
+
+    expect(chips).toEqual(['Whole brand · Kitchen ×', 'One channel · POS ×']);
+    expect(host.querySelectorAll('[data-testid="stop-list-partial"]')).toHaveLength(1);
+    expect(host.textContent).toContain('Partly stopped');
+  });
+
+  it('lifts a stop through the brand route for a brand-wide stop, quoting the version the row showed', async () => {
+    const page = vi.fn().mockReturnValue(
+      of({
+        items: [
+          {
+            variantId: 'v1',
+            productName: 'Lagman',
+            category: 'Soups',
+            available: false,
+            stopSource: 'UNKNOWN',
+            stops: [STOPPED_BY_BRAND],
+          },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const { send } = await render(page);
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="stop-list-lift"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const [method, path, , options] = send.mock.calls[0];
+    expect(method).toBe('DELETE');
+    // A literal path: comparing against the builder's own output cannot fail whichever prefix is wrong.
+    expect(path).toBe('/api/v1/tenants/t1/brands/b1/inventory/stops/s-brand');
+    expect(options).toEqual({ expectedVersion: 3 });
+    // The row's truth is the server's after a lift: a lifted brand stop frees many rows.
+    expect(page.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('lifts a branch stop through the branch route', async () => {
+    const { send } = await render(
+      vi.fn().mockReturnValue(
+        of({
+          items: [
+            {
+              variantId: 'v1',
+              productName: 'Lagman',
+              category: 'Soups',
+              available: false,
+              stopSource: 'UNKNOWN',
+              stops: [
+                {
+                  ...STOPPED_BY_BRAND,
+                  stopId: 's-here',
+                  scopeType: 'LOCATION',
+                  locationId: 'l1',
+                  version: 1,
+                },
+              ],
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="stop-list-lift"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(send.mock.calls[0][1]).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/stops/s-here',
+    );
+    expect(send.mock.calls[0][3]).toEqual({ expectedVersion: 1 });
+  });
+
+  it('opens the scope panel over the selected rows only', async () => {
+    await render(
+      vi.fn().mockReturnValue(
+        of({
+          items: [
+            {
+              variantId: 'v1',
+              productName: 'Lagman',
+              category: 'Soups',
+              available: true,
+              stopSource: 'UNKNOWN',
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="stop-scope-open"]')).toBeNull();
+
+    (host.querySelectorAll('[data-testid="dt-row-select"]')[0] as HTMLInputElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="stop-scope-open"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="stop-scope-panel"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="stop-scope-panel"]')?.textContent).toContain(
+      '1 selected',
+    );
+  });
+
+  it('shows what each marketplace has been told, from the propagation read', async () => {
+    const get = vi.fn().mockImplementation((path: string) =>
+      of({
+        value: String(path).includes('marketplace-propagation')
+          ? {
+              bindings: [
+                {
+                  bindingId: 'b-1',
+                  providerType: 'WOLT',
+                  displayName: 'Wolt',
+                  mode: 'MANUAL',
+                  inSync: 0,
+                  pending: 0,
+                  uncertain: 0,
+                  rejectedUnmapped: 0,
+                  unconfirmed: 0,
+                  unconfirmedItems: [],
+                },
+              ],
+            }
+          : DEFAULT_COUNTS,
+      }),
+    );
+    await render(vi.fn().mockReturnValue(of({ items: [], nextCursor: null })), { get });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(get.mock.calls.map(([path]) => path)).toContain(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/marketplace-propagation',
+    );
+    expect(host.querySelector('[data-testid="stop-propagation"]')?.textContent).toContain(
+      'Wolt: not propagated automatically',
+    );
   });
 });

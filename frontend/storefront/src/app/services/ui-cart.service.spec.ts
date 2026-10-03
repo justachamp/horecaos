@@ -15,6 +15,7 @@ import { LangService } from './lang.service';
 import { ApiClient } from '../core/api/api-client';
 import { CustomerApi } from '../core/api/customer-api';
 import { APP_CONFIG, type AppConfig } from '../core/config/app-config';
+import { HorecaOSApiError } from '../core/api/problem-details';
 import type { CartResponseItem } from '../types/cart.types';
 
 const CONFIG: AppConfig = {
@@ -39,6 +40,7 @@ class FakeCartService {
   paymentMethods = vi.fn();
   checkout = vi.fn();
   discard = vi.fn();
+  selectPaymentMethod = vi.fn();
 }
 
 class FakeMenuService {
@@ -721,6 +723,133 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
   });
 });
 
+describe('UiCartService.selectPaymentMethod (ADR 0140)', () => {
+  function cartPayingBy(code: string | null): PlatformCart {
+    return baseCart({
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+      paymentMethodCode: code,
+    });
+  }
+
+  it("writes the method to the cart and re-prices, so the total is the platform's answer for that method", async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(cartPayingBy(null));
+    const selected = cartPayingBy('CLICK');
+    carts.selectPaymentMethod.mockResolvedValue(selected);
+    carts.price.mockResolvedValue(pricedFor(selected));
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(carts.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+    expect(carts.price).toHaveBeenCalled();
+  });
+
+  it('writes nothing when the cart already carries the method, so it is free to repeat before every checkout', async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(cartPayingBy('CLICK'));
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(carts.selectPaymentMethod).not.toHaveBeenCalled();
+    expect(carts.price).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when there is no cart yet', async () => {
+    const { service, carts } = setUp();
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(carts.selectPaymentMethod).not.toHaveBeenCalled();
+  });
+
+  it("throws the platform's refusal to the caller, which owns the screen's error", async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(cartPayingBy(null));
+    carts.selectPaymentMethod.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'refused',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'PAYMENT_METHOD_UNAVAILABLE' },
+      }),
+    );
+
+    await expect(service.selectPaymentMethod('CLICK')).rejects.toBeInstanceOf(HorecaOSApiError);
+  });
+});
+
+describe('UiCartService promotions behind the price (ADR 0140)', () => {
+  async function priceWith(overrides: Partial<PricedCart>): Promise<UiCartService> {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart, overrides));
+    menu.menu.mockResolvedValue(emptyMenu());
+    await service.load();
+    return service;
+  }
+
+  it("prints each discount as its own line with the platform's amount, an offer apart from a typed code", async () => {
+    const service = await priceWith({
+      discountMinor: 6_000,
+      appliedPromotions: [
+        { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 },
+        { source: 'PROMO_CODE', effect: 'DISCOUNT', amountMinor: 2_000 },
+      ],
+    });
+
+    expect(service.discountRows()).toEqual([
+      { labelKey: 'cart.offerDiscount', amount: fmt(4_000) },
+      { labelKey: 'cart.promoCode', amount: fmt(2_000) },
+    ]);
+  });
+
+  it('keeps a discount the platform did not break down as one generic line rather than a gap in the total', async () => {
+    const service = await priceWith({ discountMinor: 5_000 });
+
+    expect(service.discountRows()).toEqual([{ labelKey: 'cart.discount', amount: fmt(5_000) }]);
+  });
+
+  it('has no discount line when nothing was discounted', async () => {
+    const service = await priceWith({ discountMinor: 0, appliedPromotions: [] });
+
+    expect(service.discountRows()).toEqual([]);
+  });
+
+  it('explains a delivery offer and a surcharge as captions and never as lines', async () => {
+    const service = await priceWith({
+      appliedPromotions: [
+        { source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 5_000 },
+        { source: 'AUTOMATIC', effect: 'SURCHARGE', amountMinor: 1_500 },
+      ],
+    });
+
+    expect(service.discountRows()).toEqual([]);
+    expect(service.promotionNotes()).toEqual([
+      { labelKey: 'cart.deliveryOfferNote', amount: fmt(5_000) },
+      { labelKey: 'cart.surchargeNote', amount: fmt(1_500) },
+    ]);
+  });
+});
+
 describe('UiCartService.fulfillmentMode reflects the loaded cart, not a stale default', () => {
   // A reload-style construction -- a fresh injection with nothing else having
   // called `switchFulfillmentMode` first, exactly what a full page load of
@@ -757,5 +886,449 @@ describe('UiCartService.fulfillmentMode reflects the loaded cart, not a stale de
     expect(service.fulfillmentMode()).toBe('PICKUP');
     expect(service.deliveryFee()).toBe('—');
     expect(service.canPlaceOrder()).toBe(true);
+  });
+});
+
+describe('UiCartService: combos and what the server added (ADR 0136)', () => {
+  const picks = [
+    { componentId: 'c-burger', quantity: 1 },
+    { componentId: 'c-cola', quantity: 2 },
+  ];
+
+  function comboMenu(): PublishedMenu {
+    const component = (
+      componentId: string,
+      name: string,
+      amountMinor: number,
+      defaultQuantity = 1,
+    ) => ({
+      componentId,
+      variantId: `${componentId}-v`,
+      productId: null,
+      name,
+      variantName: null,
+      defaultQuantity,
+      sortOrder: 0,
+      orderable: true,
+      amountMinor,
+    });
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p-lunch',
+          code: null,
+          name: 'Lunch box',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v-lunch',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              amountMinor: null,
+              onSaleNow: true,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: [],
+          commentPresets: [],
+          comboGroupIds: ['g-main'],
+        },
+      ],
+      comboGroups: [
+        {
+          comboGroupId: 'g-main',
+          containerVariantId: 'v-lunch',
+          code: 'MAIN',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 3,
+          allowSameComponentMultipleTimes: true,
+          sortOrder: 0,
+          components: [
+            component('c-burger', 'Burger', 25_000),
+            component('c-cola', 'Cola', 3_000, 2),
+          ],
+        },
+      ],
+    });
+  }
+
+  it('shows a combo line as the container with its components, priced as the sum of what its picks cost', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-lunchcabc',
+          variantId: 'v-lunch',
+          quantity: 2,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+          comboPicks: picks,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(comboMenu());
+
+    await service.load();
+
+    const [item] = service.cartData()?.items ?? [];
+    expect(item.name).toBe('Lunch box');
+    // 25 000 + 2 picks of a cola at 3 000 x 2 units each = 25 000 + 12 000, per combo.
+    expect(item.price).toBe(37_000);
+    expect(item.comboPicks).toEqual(picks);
+    expect(item.comboComponents?.map((c) => [c.name, c.quantity])).toEqual([
+      ['Burger', 1],
+      ['Cola', 4],
+    ]);
+  });
+
+  it('puts a combo into the cart with its picks, and a plain line without any', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockResolvedValue(baseCart());
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.add('v-lunch', 1, undefined, [], [], picks);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', comboPicks: picks }),
+    );
+  });
+
+  it('resends a combo’s picks on a quantity change, or its quantity would strip them', async () => {
+    const { service, carts } = setUp();
+    carts.putLine.mockResolvedValue(baseCart());
+    const item: CartResponseItem = {
+      variant_id: 'v-lunch',
+      price: 37_000,
+      item_id: 'v-lunchcabc',
+      name: 'Lunch box',
+      active: true,
+      image: null,
+      quantity: 1,
+      note: null,
+      modifierOptionIds: [],
+      modifiers: [],
+      commentPresetCodes: [],
+      commentPresets: [],
+      comboPicks: picks,
+    };
+
+    await service.setQuantity(item, 2);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', quantity: 2, comboPicks: picks }),
+    );
+  });
+
+  it('carries a combo’s picks across a change of fulfilment mode', async () => {
+    const { service, carts, menu } = setUp();
+    carts.cart.set(
+      baseCart({
+        lines: [
+          {
+            lineKey: 'v-lunchcabc',
+            variantId: 'v-lunch',
+            quantity: 1,
+            commentPresetCodes: [],
+            hasCustomerNote: false,
+            comboPicks: picks,
+          },
+        ],
+      }),
+    );
+    carts.create.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    carts.putLine.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.switchFulfillmentMode('PICKUP');
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', comboPicks: picks }),
+    );
+  });
+
+  it('itemises what the server added by itself, named from the menu, one row per option with the lines summed', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-1',
+          variantId: 'v-1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(
+      pricedFor(cart, {
+        hiddenCharges: [
+          { lineKey: 'v-1', optionId: 'o-box', amountMinor: 2_000 },
+          { lineKey: 'v-2', optionId: 'o-box', amountMinor: 2_000 },
+        ],
+      }),
+    );
+    menu.menu.mockResolvedValue(
+      emptyMenu({
+        products: [
+          {
+            productId: 'p-1',
+            code: null,
+            name: 'Salad',
+            description: null,
+            mediaAssetIds: [],
+            imageUrls: [],
+            variants: [
+              {
+                variantId: 'v-1',
+                sku: null,
+                unitCode: null,
+                isDefault: true,
+                orderable: true,
+                amountMinor: 20_000,
+                onSaleNow: true,
+                remainingQuantity: null,
+              },
+            ],
+            modifierGroupIds: [],
+            commentPresets: [],
+          },
+        ],
+        modifierGroups: [
+          {
+            modifierGroupId: 'g-box',
+            code: 'BOX',
+            name: 'Box',
+            required: true,
+            minimumSelections: 1,
+            maximumSelections: 1,
+            allowSameOptionMultipleTimes: false,
+            options: [
+              {
+                optionId: 'o-box',
+                code: 'BOX',
+                maximumQuantity: 1,
+                amountMinor: 2_000,
+                name: 'Delivery box',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await service.load();
+
+    expect(service.hiddenCharges()).toEqual([
+      { optionId: 'o-box', label: 'Delivery box', amountMinor: 4_000, amount: fmt(4_000) },
+    ]);
+  });
+
+  it('shows nothing of the kind for a cart the server added nothing to', async () => {
+    const { service, carts } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-1',
+          variantId: 'v-1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart, { hiddenCharges: [] }));
+
+    await service.load();
+
+    expect(service.hiddenCharges()).toEqual([]);
+  });
+
+  it('names a charge whose option the menu does not carry with a neutral label rather than an id', async () => {
+    const { service, carts } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-1',
+          variantId: 'v-1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(
+      pricedFor(cart, {
+        hiddenCharges: [{ lineKey: 'v-1', optionId: 'o-unknown', amountMinor: 0 }],
+      }),
+    );
+
+    await service.load();
+
+    expect(service.hiddenCharges()[0].label).toBe('cart.hiddenCharge.fallbackLabel');
+    expect(service.hiddenCharges()[0].amountMinor).toBe(0);
+  });
+});
+
+describe('UiCartService with portions and weighed items (ADR 0137)', () => {
+  function variant(
+    variantId: string,
+    amountMinor: number,
+    physical: PublishedMenu['products'][number]['variants'][number]['physical'],
+  ): PublishedMenu['products'][number]['variants'][number] {
+    return {
+      variantId,
+      sku: null,
+      unitCode: null,
+      isDefault: true,
+      orderable: true,
+      amountMinor,
+      onSaleNow: true,
+      remainingQuantity: null,
+      physical,
+    };
+  }
+
+  function product(
+    productId: string,
+    name: string,
+    variants: PublishedMenu['products'][number]['variants'],
+  ): PublishedMenu['products'][number] {
+    return {
+      productId,
+      code: null,
+      name,
+      description: null,
+      mediaAssetIds: [],
+      imageUrls: [],
+      variants,
+      modifierGroupIds: [],
+      commentPresets: [],
+    };
+  }
+
+  const PLOV = variant('v-plov', 38_000, {
+    catchweight: false,
+    splittable: true,
+    portionSize: 0.5,
+  });
+  const CAKE = variant('v-cake', 15_000, {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+  });
+  const COLA = variant('v-cola', 9_000, null);
+
+  async function loaded(quantities: Record<string, number>) {
+    const fakes = setUp();
+    const cart = baseCart({
+      lines: Object.entries(quantities).map(([variantId, quantity]) => ({
+        lineKey: variantId,
+        variantId,
+        quantity,
+        commentPresetCodes: [],
+        hasCustomerNote: false,
+      })),
+    });
+    fakes.carts.cart.set(cart);
+    fakes.carts.ensure.mockResolvedValue(cart);
+    fakes.carts.price.mockResolvedValue(pricedFor(cart));
+    fakes.carts.putLine.mockResolvedValue(cart);
+    fakes.carts.removeLine.mockResolvedValue(cart);
+    fakes.menu.menu.mockResolvedValue(
+      emptyMenu({
+        products: [
+          product('p-plov', 'Plov', [PLOV]),
+          product('p-cake', 'Medovik', [CAKE]),
+          product('p-cola', 'Cola', [COLA]),
+        ],
+      }),
+    );
+    await fakes.service.load();
+    return fakes;
+  }
+
+  function itemOf(service: UiCartService, variantId: string): CartResponseItem {
+    return service.items().find((item) => item.variant_id === variantId) as CartResponseItem;
+  }
+
+  it('carries each variant’s physical facts onto its cart line', async () => {
+    const { service } = await loaded({ 'v-plov': 0.5, 'v-cola': 2 });
+
+    expect(itemOf(service, 'v-plov').physical?.portionSize).toBe(0.5);
+    expect(itemOf(service, 'v-cola').physical ?? null).toBeNull();
+  });
+
+  it('moves a splittable line by its portion size, and a plain one by one', async () => {
+    const { service, carts } = await loaded({ 'v-plov': 1, 'v-cola': 2 });
+
+    await service.setQuantity(itemOf(service, 'v-plov'), 1.5);
+    service.increaseQuantity(itemOf(service, 'v-plov'));
+    service.decreaseQuantity(itemOf(service, 'v-cola'));
+    await Promise.resolve();
+
+    const quantities = carts.putLine.mock.calls.map((call) => [
+      call[0].variantId,
+      call[0].quantity,
+    ]);
+    expect(quantities).toContainEqual(['v-plov', 1.5]);
+    expect(quantities).toContainEqual(['v-plov', 1.5]);
+    expect(quantities).toContainEqual(['v-cola', 1]);
+  });
+
+  it('a half portion is stepped down to nothing, which removes the line rather than writing zero', async () => {
+    const { service, carts } = await loaded({ 'v-plov': 0.5 });
+
+    service.decreaseQuantity(itemOf(service, 'v-plov'));
+    await Promise.resolve();
+
+    expect(carts.removeLine).toHaveBeenCalledWith('v-plov');
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('does not let floating-point noise reach the platform: 0.2 + 0.1 is written 0.3', async () => {
+    const { service, carts } = await loaded({ 'v-plov': 0.2 });
+    const item = {
+      ...itemOf(service, 'v-plov'),
+      physical: { catchweight: false, splittable: true, portionSize: 0.1 },
+    };
+
+    service.increaseQuantity(item);
+    await Promise.resolve();
+
+    expect(carts.putLine.mock.calls[0][0].quantity).toBe(0.3);
+  });
+
+  it('prices a portion at its share of the price, and a weighed line at its estimated weight', async () => {
+    const { service } = await loaded({ 'v-plov': 0.5, 'v-cake': 2, 'v-cola': 3 });
+
+    expect(service.lineAmount(itemOf(service, 'v-plov'))).toBe(19_000);
+    expect(service.lineAmount(itemOf(service, 'v-cake'))).toBe(360_000);
+    expect(service.lineAmount(itemOf(service, 'v-cola'))).toBe(27_000);
+  });
+
+  it('counts a half portion as one plate in the basket badge, not as half of one', async () => {
+    const { service } = await loaded({ 'v-plov': 0.5, 'v-cola': 2 });
+
+    expect(service.totalItemsCount()).toBe(3);
+  });
+
+  it('knows when the basket holds something sold by weight, so its total is an estimate', async () => {
+    expect((await loaded({ 'v-cola': 2, 'v-cake': 1 })).service.hasProvisionalLines()).toBe(true);
+  });
+
+  it('does not call a basket of fixed units an estimate', async () => {
+    expect((await loaded({ 'v-cola': 2 })).service.hasProvisionalLines()).toBe(false);
   });
 });

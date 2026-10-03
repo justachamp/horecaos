@@ -156,9 +156,15 @@ public class JdbcPosOrderSource implements PosOrderSource {
 
         return jdbc.sql("""
                 SELECT id, source_variant_id, product_name_snapshot, variant_name_snapshot,
-                       quantity, unit_amount_minor
+                       quantity, unit_amount_minor,
+                       combo_selection_id, combo_container_variant_id, combo_name_snapshot
                   FROM ordering.order_lines
                  WHERE tenant_id = :tenantId AND order_id = :orderId
+                   -- An amendment closes a line and appends its replacement (ADR 0039); the
+                   -- till is told what the order holds now, not also what it once held. A
+                   -- combo is closed and rewritten whole, so without this it would arrive
+                   -- as both versions of every component.
+                   AND revision_to IS NULL
                  ORDER BY line_number
                 """)
                 .param("tenantId", tenantId)
@@ -170,10 +176,13 @@ public class JdbcPosOrderSource implements PosOrderSource {
                             row.getObject("source_variant_id", UUID.class),
                             row.getString("product_name_snapshot"),
                             row.getString("variant_name_snapshot"),
-                            row.getInt("quantity"),
+                            row.getBigDecimal("quantity"),
                             row.getLong("unit_amount_minor"),
                             modifiersByLine.getOrDefault(lineId, List.of()),
-                            commentPresetsByLine.getOrDefault(lineId, List.of()));
+                            commentPresetsByLine.getOrDefault(lineId, List.of()),
+                            row.getObject("combo_selection_id", UUID.class),
+                            row.getObject("combo_container_variant_id", UUID.class),
+                            row.getString("combo_name_snapshot"));
                 })
                 .list();
     }

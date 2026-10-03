@@ -102,6 +102,18 @@ public enum Capability {
      */
     INVENTORY_AVAILABILITY_MANAGE("inventory.availability.manage", "inventory", "availability.manage"),
 
+    /**
+     * ADR 0141: stopping a dish for a whole brand, a menu or a channel, and lifting
+     * such a stop. Held at {@code BRAND} scope and above.
+     *
+     * <p>Separate from {@link #INVENTORY_AVAILABILITY_MANAGE}, which a location
+     * manager holds at {@code LOCATION}: a branch manager must not be able to take a
+     * dish off sale across the brand, and one endpoint can declare only one scope.
+     * The location-path routes keep the narrower capability, so the two reaches are
+     * two grants rather than one grant checked twice.
+     */
+    INVENTORY_STOP_MANAGE("inventory.stop.manage", "inventory", "stop.manage"),
+
     PRICING_READ("pricing.read", "pricing", "read"),
     PRICING_AUTHOR("pricing.author", "pricing", "author"),
     PRICING_ACTIVATE("pricing.activate", "pricing", "activate"),
@@ -198,6 +210,17 @@ public enum Capability {
      * their own capabilities.
      */
     ORDER_ACCEPTANCE_POLICY_MANAGE("order.acceptance-policy.manage", "order", "acceptance-policy.manage"),
+
+    /**
+     * ADR 0142 Decision 7: publishing the {@code ordering.payment_window} policy -- how long an order
+     * may sit in {@code PAYMENT_AUTHORIZING} before it reaches the stuck list, and what is done then.
+     *
+     * <p>Its own capability rather than {@link #ORDER_ACCEPTANCE_POLICY_MANAGE}: the acceptance policy
+     * decides whether an order is taken, this decides how long an unpaid one is waited for, and the
+     * record names the borrowing it declines. Held by the same roles, for the same argument that
+     * capability's documentation makes.
+     */
+    ORDER_PAYMENT_WINDOW_MANAGE("order.payment-window.manage", "order", "payment-window.manage"),
 
     /**
      * ADR 0039: an operator entering an order on a customer's behalf — a
@@ -434,6 +457,29 @@ public enum Capability {
      * consumers and no controller injected it for this key.
      */
     DELIVERY_POLICY_WRITE("delivery.policy.write", "delivery", "policy.write"),
+
+    /**
+     * ADR 0142, gap map row {@code 3.8}: reading the dispatch rules -- which delivery installation
+     * serves an order by source, zone and branch, whether the in-house fleet or the partners are asked
+     * first, and when sourcing starts -- together with the {@code fulfillment.sourcing} timing numbers,
+     * the simulator that says which rule an order would match, and the per-rule usage counts.
+     *
+     * <p>Not {@link #DELIVERY_POLICY_READ}: that capability's own documentation names it as the
+     * <em>courier compensation policy</em> grant and says why that document got its own -- "different
+     * objects read by different people". A rule that routes orders to a paying partner is a third
+     * object, and the codebase already gives each policy family its own grant ({@code
+     * ORDER_ACCEPTANCE_POLICY_MANAGE}, {@code LOYALTY_POLICY_MANAGE}, {@code REFERRAL_POLICY_MANAGE}).
+     * The timing document reuses this pair, which is one conversation between operations and the branch.
+     */
+    DELIVERY_DISPATCH_RULES_READ("delivery.dispatch_rules.read", "delivery", "dispatch_rules.read"),
+
+    /**
+     * ADR 0142: publishing the next version of the dispatch rules or of the sourcing timing numbers,
+     * over {@code PolicyAuthor}. A wrong rule can send every order to the most expensive partner or to
+     * nobody, so this is held by the roles that already decide delivery policy and by nobody below
+     * them; the record leaves publication unapproved by default and registers no approval action.
+     */
+    DELIVERY_DISPATCH_RULES_WRITE("delivery.dispatch_rules.write", "delivery", "dispatch_rules.write"),
     SHIPMENT_CANCEL("shipment.cancel", "shipment", "cancel"),
 
     /**
@@ -1758,6 +1804,54 @@ public enum Capability {
      * alone would allow.
      */
     TENANT_CONFIGURATION_WRITE("tenant.configuration.write", "tenant", "configuration.write"),
+
+    /**
+     * ADR 0139: reading the people of a tenant -- name, masked phone in a list
+     * and the full number on a single person, photo, languages, employment.
+     *
+     * <p>Declared at {@code TENANT}, {@code BRAND} and {@code LOCATION} scope on
+     * routes that each name their own level, because a grant covers only the
+     * routes whose path names its level (ADR 0025): a branch manager's location
+     * grant cannot reach a tenant route, so the branch has a route of its own,
+     * and it answers "no such member" for anyone with no active job there.
+     */
+    STAFF_PROFILE_READ("staff.profile.read", "staff", "profile.read"),
+
+    /**
+     * ADR 0139: changing another person's profile, employment status and dates,
+     * employee number, and emergency contacts; and ending their employment.
+     *
+     * <p>At a branch the service refuses unless every active job the person
+     * holds is inside that branch. Ending employment is a tenant route only, in
+     * this version, because it also needs {@code iam.grant.manage} at each job's
+     * scope and no branch job holds that until ADR 0103 decides who manages
+     * grants; the service checks the second capability itself.
+     */
+    STAFF_PROFILE_MANAGE("staff.profile.manage", "staff", "profile.manage"),
+
+    /**
+     * ADR 0139: reading a staff member's emergency contacts -- a third party's
+     * name and phone. Every read writes an ADR 0027 fact; there is no bulk read.
+     *
+     * <p>Deliberately <em>not</em> classified a read for ADR 0078 (its action
+     * ends in {@code .reveal}, not {@code .read}): a suspended tenant keeps its
+     * ordinary reads, but taking a third party's contact details out of the
+     * building is the kind of act {@code customer.pii.reveal} and {@code
+     * courier.track.reveal} already withhold from it. The code is the ADR's.
+     */
+    STAFF_EMERGENCY_CONTACT_READ("staff.emergency-contact.read", "staff", "emergency-contact.reveal"),
+
+    /**
+     * ADR 0139: a person editing their own name, phone, photo and languages.
+     * Carried by every tenant-visible job, because a finance clerk edits her own
+     * phone too.
+     *
+     * <p>Authorised by {@code StaffSelfAuthorized}, not by scope coverage: the
+     * capability must be held at any scope in the tenant, and the handler
+     * touches only the caller's own row. It is on no route's
+     * {@code RequiresCapability}.
+     */
+    STAFF_SELF_MANAGE("staff.self.manage", "staff", "self.manage"),
 
     /**
      * Global control-plane administration. Issued by Keycloak as described in

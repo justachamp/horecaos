@@ -346,9 +346,15 @@ is a distinct `callEventId` row in `voice.call_events`.
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
 | `InventoryAvailabilityChanged` | 1 | `variantId` | [`InventoryAvailabilityChanged.v1`](../../src/main/resources/events/inventory.events/InventoryAvailabilityChanged.v1.schema.json) | `variantId`, `locationId`, `available`, `reasonCode` |
+| `InventoryStopChanged` | 1 | `variantId` | [`InventoryStopChanged.v1`](../../src/main/resources/events/inventory.events/InventoryStopChanged.v1.schema.json) | `stopId`, `variantId`, `scopeType`, `locationId?`, `menuId?`, `channelId?`, `source`, `active`, `endsAt?`, `reasonCode` |
 
 Symmetric by construction: `available` carries the direction, so a dish going
-off and a dish coming back are the same event type rather than two. Never a
+off and a dish coming back are the same event type rather than two. `InventoryStopChanged` (ADR
+0141) is symmetric the same way: `active` carries the direction, and a stop
+that is made, revised, lifted or expired is one event type. It names the stop
+(`stopId`), its scope (`LOCATION`, `BRAND`, `MENU` or `CHANNEL`), its source
+(`OPERATOR`, `BOT`, `POS`; `KITCHEN_DEVICE` and `RULE` are reserved) and an
+optional end — identifiers and stable codes only, never a name or free text. Never a
 product or variant name — a consumer resolves that through the authorized
 catalog API with `variantId` — and never `brandId`, which a consumer holding
 `locationId` can already resolve.
@@ -372,6 +378,8 @@ five unpublished siblings.
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
 | `PriceBookActivated` | 1 | `priceBookId` | [`PriceBookActivated.v1`](../../src/main/resources/events/pricing.events/PriceBookActivated.v1.schema.json) | `priceBookId`, `brandId`, `version`, `currency` |
+| `PromotionActivated` | 1 | `promotionId` | [`PromotionActivated.v1`](../../src/main/resources/events/pricing.events/PromotionActivated.v1.schema.json) | `promotionId`, `brandId`, `definitionVersion`, `scope`, `kind`, `validFrom`, `validUntil` |
+| `PromotionSuspended` | 1 | `promotionId` | [`PromotionSuspended.v1`](../../src/main/resources/events/pricing.events/PromotionSuspended.v1.schema.json) | `promotionId`, `brandId`, `definitionVersion`, `scope`, `kind` |
 
 Fired once per activation, alongside the ADR 0027 audit fact
 `PriceAuthoringService#activate` writes in the same transaction — a price book
@@ -381,14 +389,20 @@ context hash fails to match. Never an amount: a consumer resolves current
 prices through the authorized price-query API with `priceBookId`, the same
 discipline `inventory.events` applies to a product name.
 
-ADR 0018 names five further pricing facts — `PromotionActivated`,
-`PromotionSuspended`, `PricingQuoteCreated`, `PricingQuoteAccepted`, and the
-coupon/benefit lifecycle events. None is published yet, and none is catalogued
-here: there is no promotion-activation flow yet to produce the first, and
-quote creation/acceptance are high-volume per-request facts whose payload
-shape and retention deserve their own decision rather than riding along with
-a once-a-day control-plane activation — the same restraint `inventory.events`
-states for its own six unpublished siblings.
+`PromotionActivated` and `PromotionSuspended` (ADR 0140, the two facts ADR 0018
+already names) are published when a promotion's lifecycle moves, in the same
+`BEFORE_COMMIT` transaction as the change and its ADR 0027 audit fact. They
+carry ids, the definition version, scope, kind and (for activation) the window
+and nothing else; no consumer is specified. A resume is an activation of the
+same definition version and publishes `PromotionActivated` again.
+
+ADR 0018 names three further pricing facts — `PricingQuoteCreated`,
+`PricingQuoteAccepted`, and the coupon/benefit lifecycle events. None is
+published yet, and none is catalogued here: quote creation/acceptance are
+high-volume per-request facts whose payload shape and retention deserve their
+own decision rather than riding along with a once-a-day control-plane
+activation — the same restraint `inventory.events` states for its own six
+unpublished siblings.
 
 ## `pos.commands`
 

@@ -34,7 +34,16 @@
   authority columns this record defines, plus one `order_external_references`
   row so the board's `reference` filter finds it. No `order_external_pricing`
   or `order_handover_challenges` row is written for a manual entry; ADR
-  0114's own open inputs cover that gap.
+  0114's own open inputs cover that gap. ADR 0141 (batch 17) builds the producer
+  for `marketplace.availability.push`: a level-triggered reconciler
+  (`integration.marketplace_item_availability`, `V0463`/`V0464`), the
+  `marketplace.availability.v1` route and `MarketplaceGateway` with one circuit
+  breaker per binding, and the `MarketplaceAvailabilityAdapter` surface a provider
+  implements to declare the capability. No adapter for Uzum Tezkor, Yandex Eda, Wolt
+  or Express24 ships — whether any of them exposes an availability write API to a
+  third party is still an unanswered commercial question — so every real binding
+  reads `MANUAL`, "not propagated automatically". `MarketplaceAvailabilityPushed`
+  and `MarketplaceChannelWentStale` are still unbuilt.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), finance (settlement), legal (fiscal liability on aggregator-collected payments), product (partner programme terms)

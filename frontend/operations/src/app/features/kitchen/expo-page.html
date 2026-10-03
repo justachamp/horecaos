@@ -52,7 +52,9 @@
                 [class.rollup-chip--ready]="row.readyQuantity === row.totalQuantity"
                 data-testid="expo-rollup-chip"
               >
-                {{ stationLabel(row.stationId) }}: {{ row.readyQuantity }}/{{ row.totalQuantity }}
+                {{ stationLabel(row.stationId) }}: {{ quantityText(row.readyQuantity) }}/{{
+                  quantityText(row.totalQuantity)
+                }}
               </span>
             }
           </div>
@@ -67,27 +69,59 @@
               </tr>
             </thead>
             <tbody>
-              @for (item of ticket.items; track item.itemId) {
-                <tr>
-                  <td>
-                    @if (lineFor(ticket, item); as line) {
-                      <div>{{ line.productName }}</div>
-                      @if (line.variantName) {
-                        <div class="q-caption">{{ line.variantName }}</div>
+              @for (row of itemRows(ticket); track row.key) {
+                @if (row.kind === 'combo') {
+                  <tr class="ticket__combo-head" data-testid="expo-combo-head">
+                    <td colspan="4">
+                      <span class="q-body-sm">{{ row.name ?? ('kitchen.item.combo' | t) }}</span>
+                      <span class="q-caption">{{ 'kitchen.item.comboCaption' | t }}</span>
+                    </td>
+                  </tr>
+                } @else {
+                  @let item = row.item;
+                  <tr [class.ticket__item--component]="row.inCombo">
+                    <td>
+                      @if (lineFor(ticket, item); as line) {
+                        <div>{{ line.productName }}</div>
+                        @if (line.variantName) {
+                          <div class="q-caption">{{ line.variantName }}</div>
+                        }
+                        @if (weightText(line); as weight) {
+                          <div class="q-caption expo__weight" data-testid="expo-line-weight">
+                            {{ weight }}
+                          </div>
+                        }
+                      } @else {
+                        <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
                       }
-                    } @else {
-                      <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
-                    }
-                  </td>
-                  <td>{{ stationLabel(item.stationId) }}</td>
-                  <td class="expo__num-col q-tnum">{{ item.quantity }}</td>
-                  <td>
-                    <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
-                  </td>
-                </tr>
+                    </td>
+                    <td>{{ stationLabel(item.stationId) }}</td>
+                    <td class="expo__num-col q-tnum">{{ quantityText(item.quantity) }}</td>
+                    <td>
+                      <span class="status-badge">{{ itemStatusLabel(item.status) }}</span>
+                    </td>
+                  </tr>
+                }
               }
             </tbody>
           </table>
+
+          @if (hasWeighedLines(ticket) && orderFor(ticket); as order) {
+            <q-order-weighing-panel
+              [scope]="expoScope()"
+              [orderId]="ticket.orderId"
+              [orderVersion]="order.value.summary.version ?? order.version ?? 0"
+              [status]="order.value.summary.status"
+              [lines]="order.value.lines"
+              [currency]="order.value.summary.currency"
+              (orderChanged)="onOrderChanged(ticket.orderId)"
+            />
+          }
+          @if (weighingState(ticket) === 'pending') {
+            <p class="q-caption expo__weigh-first" data-testid="expo-weigh-first">
+              {{ 'kitchen.expo.weighFirst' | t }}
+            </p>
+          }
 
           <label class="ticket__packing">
             <input

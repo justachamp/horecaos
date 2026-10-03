@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
@@ -17,7 +18,14 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.CompositeProducts;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
@@ -54,13 +62,46 @@ public class CatalogValidator {
         validateProducts(snapshot, findings);
         validateVariants(snapshot, findings);
         validateModifierGroups(snapshot, findings);
+        validateComposite(snapshot, findings);
         validateCategoryTree(snapshot, findings);
         validateTranslations(snapshot, findings);
         validateMedia(snapshot, findings);
         validateOfferings(snapshot, findings);
         validateFiscalClassification(snapshot, findings);
+        validatePhysicalAttributes(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
+    }
+
+    /**
+     * The partner-specific findings a marketplace ruleset raises over what a
+     * channel would receive (ADR 0138) — the ruleset-gated half of validation.
+     *
+     * <p>Separate from {@link #validate} on purpose: {@code validate} is the
+     * universal rule set every publication path shares, and a rule one
+     * marketplace enforces may not apply to another. A binding that names no
+     * ruleset yields nothing here, so the four reserved {@code MARKETPLACE_*}
+     * codes cannot fire for it — and none of them fires for anyone until a
+     * ruleset that raises them is authored.
+     *
+     * @param ruleset the binding's ruleset, or null when it names none
+     * @throws IllegalStateException when a ruleset raises a code outside the
+     *     {@code MARKETPLACE_} family — a programming error in the ruleset, caught
+     *     by its own test rather than allowed to pass as a universal rule
+     */
+    public List<ValidationFinding> marketplaceFindings(
+            @Nullable MarketplaceRuleset ruleset, ChannelProjection projection) {
+        if (ruleset == null) {
+            return List.of();
+        }
+        List<ValidationFinding> findings = ruleset.check(projection);
+        for (ValidationFinding finding : findings) {
+            if (!finding.code().startsWith(ChannelFindings.MARKETPLACE_PREFIX)) {
+                throw new IllegalStateException("Marketplace ruleset %s raised %s, which is outside the %s family"
+                        .formatted(ruleset.code(), finding.code(), ChannelFindings.MARKETPLACE_PREFIX));
+            }
+        }
+        return List.copyOf(findings);
     }
 
     /**
@@ -153,6 +194,47 @@ public class CatalogValidator {
                                     + "the Payme path there is no later checkpoint — the line data is "
                                     + "fixed before the customer pays.")
                             .formatted(incomplete)));
+        }
+    }
+
+    /**
+     * The marking exclusion, restated from the physical side (ADR 0137, ADR 0038).
+     *
+     * <p>ADR 0038 already decided that a marked good "forces integer quantity and
+     * forbids splittable or catch-weight semantics": marks are captured one per
+     * physical unit, so a unit that is weighed or split cannot carry one. ADR 0137
+     * enforces it here, at publication, rather than with a constraint across
+     * {@code catalog.fiscal_classifications} and
+     * {@code catalog.variant_physical_attributes}. Postgres cannot express a CHECK
+     * across two tables, and a trigger would be a second enforcement point that
+     * could disagree with this validator about what a conflict is -- the validator
+     * is where every other cross-domain catalog rule (media, pricing, offering) is
+     * reconciled already.
+     *
+     * <p>A blocker, unlike the fiscal coverage warnings above: nothing is waiting
+     * on tooling that does not exist. The author chose both facts, and no
+     * receipt can be built for the combination.
+     */
+    private void validatePhysicalAttributes(Snapshot snapshot, List<ValidationFinding> findings) {
+        for (Variant variant : snapshot.variants()) {
+            if (variant.status() != Status.ACTIVE) {
+                continue;
+            }
+            PhysicalAttributes physical = snapshot.physicalByVariant().get(variant.id());
+            if (physical == null || !(physical.catchweight() || physical.splittable())) {
+                continue;
+            }
+            if (snapshot.effectiveClassification(variant).markingRequired()) {
+                findings.add(ValidationFinding.blocker(
+                        "PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING",
+                        EntityType.VARIANT,
+                        variant.id(),
+                        variant.sku(),
+                        "A marked good (marking_required) cannot also be %s: marking codes are captured "
+                                        .formatted(physical.catchweight() ? "catchweight" : "splittable")
+                                + "one per physical unit, so the unit cannot be weighed at handover or split "
+                                + "into portions"));
+            }
         }
     }
 
@@ -291,6 +373,14 @@ public class CatalogValidator {
             if (variant.status() != Status.ACTIVE) {
                 continue;
             }
+            // A combo's container is never priced or sold directly (ADR 0136): its
+            // components carry the money, and a container with none priced is
+            // COMBO_HAS_NO_PRICED_COMPONENTS instead. The opposite check, not an
+            // exemption from checking -- a reader who misses this carve-out will
+            // read a correctly configured combo as broken.
+            if (snapshot.composite().containerVariantIds().contains(variant.id())) {
+                continue;
+            }
             // Pricing owns money, but a variant with no price cannot be sold, so
             // the absence is a catalog blocker even though the fact is not ours.
             if (!snapshot.pricedVariantIds().contains(variant.id())) {
@@ -351,6 +441,221 @@ public class CatalogValidator {
                             option.id(),
                             option.code(),
                             "Linked variant " + linked + " is not active"));
+                }
+            }
+        }
+    }
+
+    /**
+     * The rules ADR 0136 adds: combo groups, hidden modifier groups, attachment
+     * overrides, and the depth of nested variant-modifiers.
+     *
+     * <p>Every one of them is a publication blocker, not a warning. Each describes a
+     * menu a customer cannot finish ordering from (a combo with nothing priced, a
+     * choice that cannot be completed) or a charge the server cannot apply
+     * unambiguously (a hidden group with two options), and the record places them at
+     * publication so an author gets an error naming the entity rather than a menu
+     * that silently stops one level short of what was built.
+     */
+    private void validateComposite(Snapshot snapshot, List<ValidationFinding> findings) {
+        CompositeContext composite = snapshot.composite();
+        validateComboGroups(snapshot, composite, findings);
+        validateAttachments(snapshot, composite, findings);
+        validateNestingDepth(snapshot, composite, findings);
+    }
+
+    private void validateComboGroups(Snapshot snapshot, CompositeContext composite, List<ValidationFinding> findings) {
+        for (ComboGroup group : composite.comboGroups()) {
+            if (group.status() != Status.ACTIVE) {
+                continue;
+            }
+            List<ComboComponent> components = composite.componentsByGroup().getOrDefault(group.id(), List.of()).stream()
+                    .filter(component -> component.status() == Status.ACTIVE)
+                    .toList();
+
+            for (ComboComponent component : components) {
+                // A pairing pointing at an archived variant adds an item to the basket
+                // that no longer exists -- MODIFIER_OPTION_LINKS_INACTIVE_VARIANT's
+                // analogue, and the same reasoning.
+                if (composite.variantStatuses().get(component.componentVariantId()) != Status.ACTIVE) {
+                    findings.add(ValidationFinding.blocker(
+                            "COMBO_COMPONENT_LINKS_INACTIVE_VARIANT",
+                            EntityType.COMBO_COMPONENT,
+                            component.id(),
+                            group.code(),
+                            "Variant " + component.componentVariantId() + " is not active"));
+                }
+                // The direct analogue of VARIANT_HAS_NO_ACTIVE_PRICE. Not asked when
+                // pricing is unwired -- the report already says that check did not run.
+                if (snapshot.pricingWired() && !composite.pricedComponentIds().contains(component.id())) {
+                    findings.add(ValidationFinding.blocker(
+                            "COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE",
+                            EntityType.COMBO_COMPONENT,
+                            component.id(),
+                            group.code(),
+                            "No active COMBO_COMPONENT price exists for variant "
+                                    + component.componentVariantId()
+                                    + " in this combo group"));
+                }
+            }
+
+            boolean anyPriced = components.stream()
+                    .anyMatch(component -> composite.pricedComponentIds().contains(component.id()));
+            if (snapshot.pricingWired() && !anyPriced) {
+                findings.add(ValidationFinding.blocker(
+                        "COMBO_HAS_NO_PRICED_COMPONENTS",
+                        EntityType.COMBO_GROUP,
+                        group.id(),
+                        group.code(),
+                        "No component of this combo group has an active COMBO_COMPONENT price, so "
+                                + "nothing it offers can be sold"));
+            }
+            if (components.isEmpty()) {
+                continue;
+            }
+
+            // The schema constrains minimum <= maximum, not against the components
+            // that exist. "Choose 3 of 2" passes the check and still traps the customer.
+            int capacity = group.selectableCapacity(components.size());
+            if (group.minimumSelections() > capacity) {
+                findings.add(ValidationFinding.blocker(
+                        "COMBO_GROUP_MINIMUM_UNSATISFIABLE",
+                        EntityType.COMBO_GROUP,
+                        group.id(),
+                        group.code(),
+                        "Requires %d selections but only %d are available"
+                                .formatted(group.minimumSelections(), capacity)));
+            }
+        }
+    }
+
+    /**
+     * Hidden groups and attachment overrides, for the products and variants this
+     * catalog sells.
+     *
+     * <p>Attachments elsewhere in the brand are somebody else's catalog: they are
+     * loaded because a nested option may reach them, not because this publication
+     * answers for them.
+     */
+    private void validateAttachments(Snapshot snapshot, CompositeContext composite, List<ValidationFinding> findings) {
+        Set<UUID> productIds = snapshot.products().stream().map(Product::id).collect(Collectors.toSet());
+        Set<UUID> variantIds = snapshot.variants().stream().map(Variant::id).collect(Collectors.toSet());
+
+        for (ModifierAttachment attachment : composite.attachments()) {
+            boolean ownedHere = attachment.ownerType() == AttachmentOwnerType.PRODUCT
+                    ? productIds.contains(attachment.ownerId())
+                    : variantIds.contains(attachment.ownerId());
+            ModifierGroup group = composite.modifierGroupsById().get(attachment.modifierGroupId());
+            if (!ownedHere || group == null || group.status() != Status.ACTIVE) {
+                continue;
+            }
+            String owner =
+                    attachment.ownerType().name().toLowerCase(java.util.Locale.ROOT) + " " + attachment.ownerId();
+
+            String rangeProblem = attachment.rangeProblem(group);
+            if (rangeProblem != null) {
+                // The group can move after an override was written, so the row-level
+                // checks and the write-time refusal are not enough on their own.
+                findings.add(ValidationFinding.blocker(
+                        "MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS",
+                        EntityType.MODIFIER_GROUP,
+                        group.id(),
+                        group.code(),
+                        "On " + owner + ": " + rangeProblem));
+            }
+
+            if (attachment.hidden() && attachment.ownerType() == AttachmentOwnerType.VARIANT) {
+                // Pricing lays the variant's attachment over its product's; the menu and the cart
+                // read the product's alone. A group the product offers as a choice and a variant
+                // applies by itself is asked of the customer and charged again: authoring refuses
+                // to write the pairing, and a row that predates the refusal, or came in through
+                // the product's own attach, is caught here.
+                UUID productId = composite.productIdByVariant().get(attachment.ownerId());
+                composite.attachments().stream()
+                        .filter(other -> other.ownerType() == AttachmentOwnerType.PRODUCT
+                                && other.ownerId().equals(productId)
+                                && other.modifierGroupId().equals(attachment.modifierGroupId())
+                                && !other.hidden())
+                        .findFirst()
+                        .ifPresent(product -> findings.add(ValidationFinding.blocker(
+                                "MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS",
+                                EntityType.MODIFIER_GROUP,
+                                group.id(),
+                                group.code(),
+                                "On " + owner + ": hidden here, while product " + productId
+                                        + " offers the same group to the customer as a choice; the customer "
+                                        + "would be asked for it and charged for it again")));
+            }
+
+            if (attachment.hidden()) {
+                long activeOptions = composite.optionsByGroup().getOrDefault(group.id(), List.of()).stream()
+                        .filter(option -> option.status() == Status.ACTIVE)
+                        .count();
+                // "Auto-selected" only means something when there is exactly one thing to
+                // select. With no customer gesture to resolve a choice, a second option
+                // would be picked by row order, and an optional group by nothing at all.
+                if (!attachment.effectiveRequired(group) || activeOptions != 1) {
+                    findings.add(ValidationFinding.blocker(
+                            "HIDDEN_MODIFIER_GROUP_AMBIGUOUS_DEFAULT",
+                            EntityType.MODIFIER_GROUP,
+                            group.id(),
+                            group.code(),
+                            "Hidden on %s but %s"
+                                    .formatted(
+                                            owner,
+                                            !attachment.effectiveRequired(group)
+                                                    ? "not required; an auto-selected group must be required"
+                                                    : "it has %d active options; exactly one can be auto-selected"
+                                                            .formatted(activeOptions))));
+                }
+            }
+        }
+    }
+
+    /**
+     * A third level of nested variant-modifiers (ADR 0136).
+     *
+     * <p>The record stops at one: an option may link a variant that carries groups of
+     * its own, and an option <em>of those</em> may not link a variant that carries
+     * groups again. Reported on the over-nested option, not the root, because that is
+     * the row an author edits to fix it -- and reported at publication so the
+     * alternative, a system that silently stops one level short of what was built,
+     * never happens.
+     *
+     * <p>Only customer-facing (visible) groups count as nesting. A hidden group is a
+     * charge the server applies to a priced line, not a choice a customer descends
+     * into, so a bottle-deposit group on a drink does not make the drink a nesting
+     * level.
+     */
+    private void validateNestingDepth(Snapshot snapshot, CompositeContext composite, List<ValidationFinding> findings) {
+        Set<UUID> reported = new HashSet<>();
+        for (Variant root : snapshot.variants()) {
+            if (root.status() != Status.ACTIVE) {
+                continue;
+            }
+            for (ModifierGroup firstLevel : composite.visibleGroupsOf(root.id())) {
+                for (ModifierOption option : composite.activeOptionsOf(firstLevel.id())) {
+                    if (option.linkedVariantId() == null) {
+                        continue;
+                    }
+                    for (ModifierGroup secondLevel : composite.visibleGroupsOf(option.linkedVariantId())) {
+                        for (ModifierOption nested : composite.activeOptionsOf(secondLevel.id())) {
+                            UUID deeper = nested.linkedVariantId();
+                            if (deeper != null
+                                    && !composite.visibleGroupsOf(deeper).isEmpty()
+                                    && reported.add(nested.id())) {
+                                findings.add(ValidationFinding.blocker(
+                                        "MODIFIER_NESTING_DEPTH_EXCEEDED",
+                                        EntityType.MODIFIER_OPTION,
+                                        nested.id(),
+                                        nested.code(),
+                                        ("Option %s links variant %s, which carries modifier groups of its own: "
+                                                        + "that is a third level, reached through %s -> %s. "
+                                                        + "One level of nesting is supported.")
+                                                .formatted(nested.code(), deeper, option.code(), nested.code())));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -430,6 +735,12 @@ public class CatalogValidator {
                         "MISSING_TRANSLATION", EntityType.MODIFIER_GROUP, group.id(), group.code(), reason));
             }
         }
+        for (ComboGroup group : snapshot.composite().comboGroups()) {
+            if (group.status() == Status.ACTIVE && !snapshot.hasName(EntityType.COMBO_GROUP, group.id())) {
+                findings.add(ValidationFinding.blocker(
+                        "MISSING_TRANSLATION", EntityType.COMBO_GROUP, group.id(), group.code(), reason));
+            }
+        }
     }
 
     /**
@@ -481,6 +792,8 @@ public class CatalogValidator {
      *                         no name in {@code defaultLocale} may have one instead
      * @param pricedVariantIds contributed by pricing; catalog does not own money
      * @param displayableMedia contributed by media; catalog does not own bytes
+     * @param physicalByVariant ADR 0137: the variants that carry a physical-attributes row; a variant
+     *                         absent from the map is a fixed unit sold whole
      */
     public record Snapshot(
             String defaultLocale,
@@ -500,7 +813,144 @@ public class CatalogValidator {
             Set<UUID> pricedVariantIds,
             Set<UUID> offeredVariantIds,
             FiscalContext fiscal,
-            boolean pricingWired) {
+            boolean pricingWired,
+            CompositeContext composite,
+            Map<UUID, PhysicalAttributes> physicalByVariant) {
+
+        /**
+         * A snapshot with no composite products (ADR 0136) and no variant carrying
+         * physical attributes (ADR 0137): every snapshot that predates either, and every
+         * test with nothing to say about them.
+         */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    CompositeContext.empty(),
+                    Map.of());
+        }
+
+        /** A snapshot with composite products (ADR 0136) and no physical attributes (ADR 0137). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                CompositeContext composite) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    composite,
+                    Map.of());
+        }
+
+        /** A snapshot with physical attributes (ADR 0137) and no composite products (ADR 0136). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                Map<UUID, PhysicalAttributes> physicalByVariant) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    CompositeContext.empty(),
+                    physicalByVariant);
+        }
 
         /**
          * The classification a variant would actually be fiscalized under
@@ -613,6 +1063,80 @@ public class CatalogValidator {
         /** For a test or a caller with nothing fiscal to say. */
         public static FiscalContext empty() {
             return new FiscalContext(Map.of(), List.of(), false, false, Set.of());
+        }
+    }
+
+    /**
+     * Everything the composite-product rules need (ADR 0136), loaded with the rest of
+     * the snapshot.
+     *
+     * <p>Brand-wide where the question crosses catalogs, catalog-scoped where it does
+     * not: the groups are those whose container this catalog sells, but the attachments
+     * and the modifier groups they name are the brand's, because a nested option links a
+     * variant whose product may sit in another of the brand's catalogs and a
+     * catalog-scoped read would report that variant as carrying no groups.
+     *
+     * @param comboGroups        groups whose container variant is sold from this catalog
+     * @param pricedComponentIds components with an active {@code COMBO_COMPONENT} price,
+     *                           contributed by pricing as {@code pricedVariantIds} is
+     * @param variantStatuses    status of every variant a component or a nested option
+     *                           reaches
+     * @param attachments        every product- and variant-level modifier attachment
+     * @param productIdByVariant which product each of the brand's variants belongs to,
+     *                           for resolving the product-level attachments a variant
+     *                           inherits
+     */
+    public record CompositeContext(
+            List<ComboGroup> comboGroups,
+            Map<UUID, List<ComboComponent>> componentsByGroup,
+            Set<UUID> pricedComponentIds,
+            Map<UUID, Status> variantStatuses,
+            List<ModifierAttachment> attachments,
+            Map<UUID, UUID> productIdByVariant,
+            Map<UUID, ModifierGroup> modifierGroupsById,
+            Map<UUID, List<ModifierOption>> optionsByGroup) {
+
+        public static CompositeContext empty() {
+            return new CompositeContext(
+                    List.of(), Map.of(), Set.of(), Map.of(), List.of(), Map.of(), Map.of(), Map.of());
+        }
+
+        /** Variants that are the container of a combo group that has not been archived. */
+        public Set<UUID> containerVariantIds() {
+            return comboGroups.stream()
+                    .filter(group -> group.status() != Status.ARCHIVED)
+                    .map(ComboGroup::containerVariantId)
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+
+        public List<ModifierOption> activeOptionsOf(UUID groupId) {
+            return optionsByGroup.getOrDefault(groupId, List.of()).stream()
+                    .filter(option -> option.status() == Status.ACTIVE)
+                    .toList();
+        }
+
+        /**
+         * The customer-facing, active groups a variant is offered with: its product's
+         * attachments with the variant's own laid over them (a variant-level attachment
+         * of the same group wins).
+         */
+        public List<ModifierGroup> visibleGroupsOf(UUID variantId) {
+            UUID productId = productIdByVariant.get(variantId);
+            List<ModifierAttachment> productLevel = productId == null
+                    ? List.of()
+                    : attachments.stream()
+                            .filter(attachment -> attachment.ownerType() == AttachmentOwnerType.PRODUCT
+                                    && attachment.ownerId().equals(productId))
+                            .toList();
+            List<ModifierAttachment> variantLevel = attachments.stream()
+                    .filter(attachment -> attachment.ownerType() == AttachmentOwnerType.VARIANT
+                            && attachment.ownerId().equals(variantId))
+                    .toList();
+            return CompositeProducts.effectiveAttachments(productLevel, variantLevel).stream()
+                    .filter(attachment -> !attachment.hidden())
+                    .map(attachment -> modifierGroupsById.get(attachment.modifierGroupId()))
+                    .filter(group -> group != null && group.status() == Status.ACTIVE)
+                    .toList();
         }
     }
 }

@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchDecision;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PlanStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
@@ -79,6 +80,15 @@ public class JdbcDeliveryPlanStore {
         params.put("policyId", plan.policyId());
         params.put("policyVersion", plan.policyVersion());
         params.put("destinationLabel", plan.destinationLabel());
+        params.put("dispatchPolicyId", plan.dispatchPolicyId());
+        params.put("dispatchPolicyVersion", plan.dispatchPolicyVersion());
+        // The column is null for the built-in default and the document's own default alike: only a
+        // rule that actually matched is worth an index entry, and "DEFAULT" in a column of rule ids
+        // would collide with a rule an operator named that.
+        params.put(
+                "dispatchRuleId",
+                plan.dispatch().matchedARule() ? plan.dispatch().ruleId() : null);
+        params.put("dispatchDecision", DispatchDecisionCodec.write(plan.dispatch()));
 
         jdbc.sql("""
                 INSERT INTO fulfillment.delivery_plans (
@@ -90,7 +100,8 @@ public class JdbcDeliveryPlanStore {
                     promised_delivery_start, promised_delivery_end,
                     source_at, latest_assignment_at, branch_zone, calculation_version,
                     distance_meters, distance_source, policy_id, policy_version,
-                    destination_label)
+                    destination_label,
+                    dispatch_policy_id, dispatch_policy_version, dispatch_rule_id, dispatch_decision)
                 VALUES (
                     :id, :tenantId, :brandId, :locationId, :orderId,
                     :status, :mode, :serviceLevel,
@@ -100,7 +111,9 @@ public class JdbcDeliveryPlanStore {
                     :promisedStart, :promisedEnd,
                     :sourceAt, :latestAssignmentAt, :branchZone, :calculationVersion,
                     :distanceMeters, :distanceSource, :policyId, :policyVersion,
-                    :destinationLabel)
+                    :destinationLabel,
+                    :dispatchPolicyId, :dispatchPolicyVersion, :dispatchRuleId,
+                    CAST(:dispatchDecision AS jsonb))
                 ON CONFLICT (tenant_id, order_id) WHERE status <> 'CANCELLED' DO NOTHING
                 """).params(params).update();
 
@@ -262,7 +275,8 @@ public class JdbcDeliveryPlanStore {
                    promised_delivery_start, promised_delivery_end, source_at,
                    latest_assignment_at, branch_zone, calculation_version,
                    distance_meters, distance_source, policy_id, policy_version, version,
-                   destination_label
+                   destination_label,
+                   dispatch_policy_id, dispatch_policy_version, dispatch_decision::text AS dispatch_decision
             FROM fulfillment.delivery_plans
             """;
 
@@ -306,7 +320,14 @@ public class JdbcDeliveryPlanStore {
                 row.getObject("policy_id", UUID.class),
                 row.getObject("policy_version", Integer.class),
                 row.getInt("version"),
-                row.getString("destination_label"));
+                row.getString("destination_label"),
+                row.getObject("dispatch_policy_id", UUID.class),
+                row.getObject("dispatch_policy_version", Integer.class),
+                // A plan created before V0465 has no stored decision and was sourced exactly as
+                // the built-in default sources: fleet first, partners in binding order.
+                row.getString("dispatch_decision") == null
+                        ? DispatchDecision.builtInDefault()
+                        : DispatchDecisionCodec.read(row.getString("dispatch_decision")));
     }
 
     static @Nullable Instant instant(java.sql.ResultSet row, String column) throws java.sql.SQLException {

@@ -81,6 +81,14 @@
   flex: 1 1 220px;
 }
 
+.predicate-row__value--time {
+  flex: 0 0 110px;
+}
+
+.chip-filter {
+  flex: 1 1 100%;
+}
+
 .value-hint {
   color: var(--q-ink-subtle);
 }

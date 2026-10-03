@@ -90,6 +90,14 @@ public class JdbcMediaDerivativeStore implements MediaDerivativeStore {
                 .list();
     }
 
+    @Override
+    public int deleteAll(UUID tenantId, MediaAssetId assetId) {
+        return jdbc.sql("DELETE FROM media.derivatives WHERE tenant_id = :tenantId AND asset_id = :assetId")
+                .param("tenantId", tenantId)
+                .param("assetId", assetId.value())
+                .update();
+    }
+
     private static MediaDerivative mapDerivative(ResultSet row, int rowNumber) throws SQLException {
         return new MediaDerivative(
                 row.getObject("derivative_id", UUID.class),

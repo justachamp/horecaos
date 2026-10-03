@@ -115,6 +115,48 @@ export const catalogPaths = {
     return `${this.product(scope, productId)}/modifier-groups/${encodeURIComponent(groupId)}`;
   },
 
+  // -------------------------------------------------- ADR 0136: composite products
+
+  /** Create a combo group on a container variant (`POST`). */
+  comboGroups(scope: BrandScope): string {
+    return `${this.base(scope)}/combo-groups`;
+  },
+
+  /** One combo group with its components. `GET`, and `PUT` (If-Match) for its range, repeat rule, order and status. */
+  comboGroup(scope: BrandScope, comboGroupId: string): string {
+    return `${this.comboGroups(scope)}/${encodeURIComponent(comboGroupId)}`;
+  },
+
+  /** Offer a variant inside a combo group (`POST`). */
+  comboGroupComponents(scope: BrandScope, comboGroupId: string): string {
+    return `${this.comboGroup(scope, comboGroupId)}/components`;
+  },
+
+  /** One component's quantity, order and status (`PUT`, If-Match). Archiving is how it leaves a combo. */
+  comboComponent(scope: BrandScope, componentId: string): string {
+    return `${this.base(scope)}/combo-components/${encodeURIComponent(componentId)}`;
+  },
+
+  /** Every combo group a container variant offers. Empty for a variant that is not a container. */
+  variantComboGroups(scope: BrandScope, variantId: string): string {
+    return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/combo-groups`;
+  },
+
+  /** The modifier groups attached to a variant itself (`GET`) — the nested level. */
+  variantModifierGroups(scope: BrandScope, variantId: string): string {
+    return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/modifier-groups`;
+  },
+
+  /** Attach (or re-sort) a modifier group on a variant (`PUT`). */
+  variantModifierGroup(scope: BrandScope, variantId: string, groupId: string): string {
+    return `${this.variantModifierGroups(scope, variantId)}/${encodeURIComponent(groupId)}`;
+  },
+
+  /** How a product offers an attached group: visibility, fulfilment modes, overrides (`PUT`, If-Match). */
+  productModifierGroupOverrides(scope: BrandScope, productId: string, groupId: string): string {
+    return `${this.productModifierGroup(scope, productId, groupId)}/overrides`;
+  },
+
   /** Set one entity's name/description in one locale (upsert). */
   translations(scope: BrandScope): string {
     return `${this.base(scope)}/translations`;
@@ -133,6 +175,15 @@ export const catalogPaths = {
   /** ИКПУ/MXIK and packaging for a variant. */
   variantFiscalClassification(scope: BrandScope, variantId: string): string {
     return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/fiscal-classification`;
+  },
+
+  /**
+   * Weight or volume, catchweight, portions and КБЖУ for a variant (ADR 0137, row 4.2c). `GET` reads
+   * the set with its version (0 when the variant has none); `PUT` writes the whole set under
+   * `If-Match`, and an empty set clears the row.
+   */
+  variantPhysicalAttributes(scope: BrandScope, variantId: string): string {
+    return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/physical-attributes`;
   },
 
   /** ИКПУ/MXIK and packaging for a modifier option. */
@@ -257,6 +308,38 @@ export const catalogPaths = {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/draft-preview`;
   },
 
+  // -------------------------------------------------- ADR 0138: marketplace projection preview
+
+  /**
+   * What one channel would receive at one branch if the draft were published now
+   * (`CatalogPublicationController#channelPreview`). A read: `catalog.read`, no side
+   * effect, nothing referenceable afterwards. Query params `locationId` or `bindingId`
+   * (a channel that sells at one branch needs neither), `locale`, `cursor`, `limit`.
+   */
+  channelPreview(scope: BrandScope, catalogId: string, channelId: string): string {
+    return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/channels/${encodeURIComponent(channelId)}/preview`;
+  },
+
+  /** The branches a channel sells at, each with the marketplace binding that covers it. */
+  previewTargets(scope: BrandScope, channelId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/preview-targets`;
+  },
+
+  /** `GET`: every image override a channel carries (query params `entityType` + `entityId` narrow it to one item). */
+  channelMediaOverrides(scope: BrandScope, channelId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/media-overrides`;
+  },
+
+  /** `PUT`: replaces the whole set of images a channel shows for one product, variant or category. */
+  channelMediaOverride(
+    scope: BrandScope,
+    channelId: string,
+    entityType: string,
+    entityId: string,
+  ): string {
+    return `${this.channelMediaOverrides(scope, channelId)}/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`;
+  },
+
   // -------------------------------------------------- P47: per-item sale schedule and cross-sell
 
   /** Row 4.2g: one variant's weekly sale windows at one location. Same path for `GET` and `PUT` (whole-set replace). */
@@ -377,6 +460,11 @@ export const pricingPaths = {
   /** Sets what a variant costs in a given book. */
   variantPrice(scope: BrandScope, priceBookId: string, variantId: string): string {
     return `${this.priceBook(scope, priceBookId)}/variant-prices/${encodeURIComponent(variantId)}`;
+  },
+
+  /** What a variant costs inside one combo, keyed to the combo component (ADR 0136). */
+  comboComponentPrice(scope: BrandScope, priceBookId: string, componentId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/combo-component-prices/${encodeURIComponent(componentId)}`;
   },
 
   /** Row 4.8a — every variant priced in this book, next to the brand's base price and the delta. */

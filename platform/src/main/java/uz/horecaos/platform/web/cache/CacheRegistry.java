@@ -79,14 +79,22 @@ public enum CacheRegistry {
     TENANT_STATUS("tenant.status", Duration.ofSeconds(30), 10_000, "TenantSuspended, TenantReactivated"),
 
     /**
-     * Staff 9.3b's actor-display resolution: a name for a Keycloak subject id,
-     * read live from the admin API on a miss. Ten minutes because a name
-     * changes rarely and every miss is a network round trip to Keycloak, not a
-     * database read — this is the one cache in the registry with no domain
-     * event to invalidate it, so the TTL is the whole mechanism rather than a
-     * backstop on top of one.
+     * The display name of a staff member, keyed by {@code (tenant, subject)}
+     * (ADR 0139; Staff 9.3b).
+     *
+     * <p>Ten minutes, with a real invalidation source since the tenant's own
+     * staff member record replaced the Keycloak read it used to cache: every
+     * profile write evicts the entry once its transaction commits, so a name
+     * edited on the self-service screen is the name on the audit log and the
+     * order detail at the next request, not ten minutes later. The TTL is the
+     * backstop, as it is for every other cache here. The key carries the tenant,
+     * which the interim subject-only key did not.
      */
-    STAFF_DISPLAY_NAMES("staff.display_names", Duration.ofMinutes(10), 20_000, "TTL only (no name-change event yet)");
+    STAFF_DISPLAY_NAMES(
+            "staff.display_names",
+            Duration.ofMinutes(10),
+            20_000,
+            "StaffMemberChanged (evicted on every profile write)");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

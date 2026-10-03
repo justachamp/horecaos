@@ -46,6 +46,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.OutgoingMail;
 import uz.horecaos.platform.mail.api.PlatformMailer;
+import uz.horecaos.platform.support.RecordingStaffMemberRegistry;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStaffInvitationStore;
 import uz.horecaos.platform.web.api.ApiException;
@@ -82,6 +83,7 @@ class StaffInvitationFlowTests {
     private FakeOrganizations organizations;
     private FakeMailer mailer;
     private StaffInvitationService service;
+    private RecordingStaffMemberRegistry registry;
 
     @BeforeAll
     static void startDatabase() {
@@ -136,6 +138,7 @@ class StaffInvitationFlowTests {
                 clock);
         store = new JdbcStaffInvitationStore(jdbc);
         accounts = new FakeStaffAccounts();
+        registry = new RecordingStaffMemberRegistry();
         organizations = new FakeOrganizations();
         mailer = new FakeMailer();
         TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
@@ -150,7 +153,8 @@ class StaffInvitationFlowTests {
                 audit,
                 transactions,
                 clock,
-                "http://localhost:4200");
+                "http://localhost:4200",
+                registry);
 
         new RoleRegistrySynchronizer(jdbc).synchronize();
         insertTenant();
@@ -575,6 +579,113 @@ class StaffInvitationFlowTests {
                 .isNotBlank();
     }
 
+    // ------------------------------------------------------------------ ADR 0139
+
+    private StaffInvitationService.InviteCommand aNewHire(String phone) {
+        return new StaffInvitationService.InviteCommand(
+                "Aziza",
+                "Karimova",
+                phone,
+                null,
+                "location-staff",
+                ResourceScope.location(TENANT, BRAND, BRAND),
+                "new hire",
+                null,
+                "ru");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: the member is recorded with the invitation, by the inviting manager, and acceptance activates it")
+    void theMemberIsRecordedWithTheInvitationAndActivatedAtAcceptance() {
+        StaffInvitationService.Created created =
+                service.invite(TENANT, aNewHire("+998901234567"), ActorRef.user(OWNER, null), "corr-invite");
+
+        assertThat(registry.invited)
+                .containsExactly(new RecordingStaffMemberRegistry.Invited(TENANT, created.principalSubject(), OWNER));
+        assertThat(registry.activated).isEmpty();
+
+        service.accept(tokenFrom(created.inviteLink()), "Aziza", "Karimova", "a-long-enough-pass", "corr-accept");
+
+        assertThat(registry.activated)
+                .containsExactly(new RecordingStaffMemberRegistry.Activated(TENANT, created.principalSubject()));
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: if the member cannot be written the whole invitation is undone -- no live grant, no account, no row, phone free")
+    void aFailureWritingTheMemberUndoesTheWholeInvitation() {
+        IllegalStateException memberInsertFailed = new IllegalStateException("the member insert failed");
+        registry.failInvite = memberInsertFailed;
+
+        assertThatThrownBy(() ->
+                        service.invite(TENANT, aNewHire("+998901112233"), ActorRef.user(OWNER, null), "corr-undone"))
+                .as("the caller sees the original failure, not the cleanup's")
+                .isSameAs(memberInsertFailed);
+
+        String subject = accounts.created.getFirst();
+        assertThat(accounts.deleted).as("the Keycloak account is deleted").containsExactly(subject);
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.grants WHERE principal_subject = :s AND status = 'ACTIVE'")
+                        .param("s", subject)
+                        .query(Integer.class)
+                        .single())
+                .as("a grant resting on a deleted account would be authority resting on nothing")
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.grants WHERE principal_subject = :s AND status = 'REVOKED'")
+                        .param("s", subject)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code = 'iam.grant.revoked'")
+                        .query(Integer.class)
+                        .single())
+                .as("and the withdrawal is audited like any other revoke")
+                .isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM tenant.staff_invitations")
+                        .query(Integer.class)
+                        .single())
+                .as("the invitation row and its audit fact rolled back with the member")
+                .isZero();
+        assertThat(jdbc.sql(
+                                "SELECT count(*) FROM audit.audit_events WHERE action_code = 'tenant.staff_invitation.invited'")
+                        .query(Integer.class)
+                        .single())
+                .isZero();
+        assertThat(accounts.findByPhone("+998901112233"))
+                .as("the phone can be invited again")
+                .isEmpty();
+
+        registry.failInvite = null;
+        assertThat(service.invite(TENANT, aNewHire("+998901112233"), ActorRef.user(OWNER, null), "corr-retry")
+                        .principalSubject())
+                .isNotBlank();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: a cleanup that also fails still rethrows the original error and leaves orphan_left for an operator")
+    void aFailedCleanupLeavesOrphanLeft() {
+        IllegalStateException memberInsertFailed = new IllegalStateException("the member insert failed");
+        registry.failInvite = memberInsertFailed;
+        accounts.failDelete = new IllegalStateException("keycloak would not delete");
+
+        assertThatThrownBy(() ->
+                        service.invite(TENANT, aNewHire("+998901445566"), ActorRef.user(OWNER, null), "corr-orphan"))
+                .isSameAs(memberInsertFailed);
+
+        assertThat(jdbc.sql(
+                                "SELECT count(*) FROM audit.audit_events WHERE action_code = 'tenant.staff_invitation.orphan_left'")
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.grants WHERE status = 'ACTIVE' AND principal_subject = :s")
+                        .param("s", accounts.created.getFirst())
+                        .query(Integer.class)
+                        .single())
+                .as("the grant was withdrawn before the delete was even tried")
+                .isZero();
+    }
+
     /**
      * S05: {@code JdbcStaffInvitationStore#byId} filters by {@code (id,
      * tenant_id)} correctly by inspection, but nothing exercised it against
@@ -752,8 +863,15 @@ class StaffInvitationFlowTests {
             return account;
         }
 
+        /** When set, the next {@link #delete} throws it -- the cleanup failing too. */
+        @Nullable
+        RuntimeException failDelete;
+
         @Override
         public void delete(String subjectId) {
+            if (failDelete != null) {
+                throw failDelete;
+            }
             byId.remove(subjectId);
             phoneToSubject.values().removeIf(id -> id.equals(subjectId));
             deleted.add(subjectId);

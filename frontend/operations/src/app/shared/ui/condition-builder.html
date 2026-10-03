@@ -41,16 +41,19 @@
               <option [value]="descriptor.type">{{ typeLabel(descriptor.type) }}</option>
             }
           </select>
-          <select
-            class="predicate-row__operator"
-            [attr.aria-label]="operatorLabel(row.operator)"
-            [value]="row.operator"
-            (change)="updateRow(gi, ri, { operator: $any($event.target).value })"
-          >
-            @for (operator of operatorsFor(row.type); track operator) {
-              <option [value]="operator">{{ operatorLabel(operator) }}</option>
-            }
-          </select>
+          @if (valueKindOf(row.type) !== 'FLAG') {
+            <select
+              class="predicate-row__operator"
+              [attr.aria-label]="operatorLabel(row.operator)"
+              [value]="row.operator"
+              [disabled]="operatorsFor(row.type).length === 1"
+              (change)="updateRow(gi, ri, { operator: $any($event.target).value })"
+            >
+              @for (operator of operatorsFor(row.type); track operator) {
+                <option [value]="operator">{{ operatorLabel(operator) }}</option>
+              }
+            </select>
+          }
 
           @switch (valueKindOf(row.type)) {
             @case ('NUMERIC') {
@@ -131,6 +134,24 @@
                 (input)="updateRow(gi, ri, { dateHigh: $any($event.target).value })"
               />
             }
+            @case ('TIME_RANGE') {
+              <input
+                type="time"
+                class="predicate-row__value predicate-row__value--time"
+                [attr.aria-label]="'ui.conditionBuilder.timeFrom' | t"
+                [value]="clockOf(row.numericLow)"
+                (input)="setClock(gi, ri, 'numericLow', $any($event.target).value)"
+              />
+              <span class="q-caption">—</span>
+              <input
+                type="time"
+                class="predicate-row__value predicate-row__value--time"
+                [attr.aria-label]="'ui.conditionBuilder.timeTo' | t"
+                [value]="clockOf(row.numericHigh)"
+                (input)="setClock(gi, ri, 'numericHigh', $any($event.target).value)"
+              />
+            }
+            @case ('FLAG') {}
             @case ('DAY_OF_WEEK_SET') {
               <div class="dow-chips">
                 @for (day of days; track day) {
@@ -149,7 +170,17 @@
             @default {
               @if (fixedValuesOf(row.type); as fixed) {
                 <div class="fixed-chips">
-                  @for (option of fixed; track option.value) {
+                  @if (isSearchable(row.type)) {
+                    <input
+                      type="search"
+                      class="predicate-row__value predicate-row__value--wide chip-filter"
+                      [attr.aria-label]="'ui.conditionBuilder.filterPlaceholder' | t"
+                      [placeholder]="'ui.conditionBuilder.filterPlaceholder' | t"
+                      [value]="filterOf(row)"
+                      (input)="setFilter(row, $any($event.target).value)"
+                    />
+                  }
+                  @for (option of visibleFixedValues(row); track option.value) {
                     <button
                       type="button"
                       class="dow-chip"
@@ -159,6 +190,11 @@
                     >
                       {{ option.label }}
                     </button>
+                  }
+                  @if (hiddenMatches(row) > 0) {
+                    <span class="q-caption">{{
+                      'ui.conditionBuilder.moreMatches' | t: { count: hiddenMatches(row) }
+                    }}</span>
                   }
                 </div>
               } @else {

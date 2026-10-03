@@ -9,7 +9,18 @@ import { MenuService } from '../../../services/menu.service';
 import { AnalyticsInjector } from '../../../core/analytics/analytics-injector';
 import { pushEcommerceEvent } from '../../../core/analytics/ecommerce-events';
 import { money, toMajorUnits } from '../../../core/money/money';
-import type { ApiOrderDetail, ApiOrderLineItem } from '../../../services/orders.service';
+import { LangService } from '../../../services/lang.service';
+import {
+  discountRowsFor,
+  noteRowsFor,
+  type PromotionRow,
+} from '../../../services/applied-promotions';
+import type {
+  ApiOrderDetail,
+  ApiOrderLineItem,
+  OrderLineCatchweight,
+} from '../../../services/orders.service';
+import { formatQuantity, formatWeight } from '../../../utils/physical';
 
 /** Fallback ISO currency when the menu that built this cart was never loaded this session. */
 const FALLBACK_CURRENCY = 'UZS';
@@ -78,6 +89,7 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly ordersService = inject(OrdersService);
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
   private readonly menuService = inject(MenuService);
   private readonly analytics = inject(AnalyticsInjector);
 
@@ -156,8 +168,54 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
     return this.order()?.items ?? [];
   }
 
+  /**
+   * A line's amount: the platform's own `finalAmountMinor` when the order carries it (ADR 0137 —
+   * `unit × quantity` is wrong once a weighed line has been weighed, and is the price of a whole
+   * portion for half of one), otherwise unit × quantity as before.
+   */
   lineTotal(item: ApiOrderLineItem): number {
-    return (item.price ?? 0) * (item.quantity ?? 0);
+    const own = Number(item['lineAmount']);
+    return Number.isFinite(own) ? own : (item.price ?? 0) * (item.quantity ?? 0);
+  }
+
+  /** `≈ 180 000 so'm` while a weighed line is still an estimate; the plain amount otherwise. */
+  lineAmountText(item: ApiOrderLineItem): string {
+    const amount = this.formatPrice(this.lineTotal(item));
+    return this.catchweightOf(item)?.provisional ? `≈ ${amount}` : amount;
+  }
+
+  /** `0,5 порц.`, `3 шт` — the quantity as the customer's language writes it. */
+  quantityText(item: ApiOrderLineItem): string {
+    const quantity = item.quantity ?? 0;
+    const unit = this.translate.get(
+      Number.isInteger(quantity) ? 'common.itemsUnit' : 'physical.portionsUnit',
+    );
+    return `${formatQuantity(quantity, this.lang.langId())} ${unit}`;
+  }
+
+  /** A weighed line's estimated weight, or what it weighed once weighed; null for a fixed unit. */
+  weightText(item: ApiOrderLineItem): string | null {
+    const catchweight = this.catchweightOf(item);
+    if (!catchweight) {
+      return null;
+    }
+    const langId = this.lang.langId();
+    return catchweight.provisional
+      ? this.translate.getWithParams('physical.estimateLine', {
+          weight: formatWeight((item.quantity ?? 0) * catchweight.nominalGramsPerUnit, langId),
+        })
+      : this.translate.getWithParams('physical.weighedLine', {
+          weight: formatWeight(catchweight.actualWeightGrams ?? 0, langId),
+        });
+  }
+
+  /** ADR 0137: a line is still priced at its estimated weight, so the final weight and total are set at handover. */
+  hasProvisionalLines(): boolean {
+    return this.lineItems().some((item) => this.catchweightOf(item)?.provisional);
+  }
+
+  private catchweightOf(item: ApiOrderLineItem): OrderLineCatchweight | null {
+    return (item['catchweight'] as OrderLineCatchweight | null | undefined) ?? null;
   }
 
   formatPrice(value: number): string {
@@ -171,6 +229,19 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
 
   totalFormatted(): string {
     return this.formatPrice(this.priceOf(this.order()?.total));
+  }
+
+  /** ADR 0140: one row per kind of discount, with the platform's own amount. */
+  discountRows(): readonly PromotionRow[] {
+    const order = this.order();
+    return discountRowsFor(order?.promotions, this.priceOf(order?.discount), (minor) =>
+      this.formatPrice(minor),
+    );
+  }
+
+  /** ADR 0140: benefits already inside the delivery fee or the goods, as captions. */
+  promotionNotes(): readonly PromotionRow[] {
+    return noteRowsFor(this.order()?.promotions, (minor) => this.formatPrice(minor));
   }
 
   close(): void {

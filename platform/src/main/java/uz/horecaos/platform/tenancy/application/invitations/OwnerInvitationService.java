@@ -31,6 +31,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedException;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
+import uz.horecaos.platform.iam.api.staff.StaffMemberRegistry;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationEventStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore.OverviewRow;
@@ -141,6 +142,14 @@ public class OwnerInvitationService implements OwnerInvitations {
 
     private final Clock clock;
 
+    /**
+     * The tenant's own record of its people (ADR 0139). An owner is never
+     * invited through {@code StaffInvitationService}, so this is where the
+     * platform first learns the owner's name, and the row is created here
+     * ({@code ACTIVE}) in the transaction that records the acceptance.
+     */
+    private final StaffMemberRegistry staffMembers;
+
     public OwnerInvitationService(
             JdbcOwnerInvitationStore store,
             JdbcOwnerInvitationEventStore events,
@@ -148,7 +157,8 @@ public class OwnerInvitationService implements OwnerInvitations {
             AuthorizationService authorization,
             AuditRecorder audit,
             TransactionTemplate transactions,
-            Clock clock) {
+            Clock clock,
+            StaffMemberRegistry staffMembers) {
         this.store = store;
         this.events = events;
         this.accounts = accounts;
@@ -156,6 +166,7 @@ public class OwnerInvitationService implements OwnerInvitations {
         this.audit = audit;
         this.transactions = transactions;
         this.clock = clock;
+        this.staffMembers = staffMembers;
     }
 
     /**
@@ -534,6 +545,10 @@ public class OwnerInvitationService implements OwnerInvitations {
                     Map.of("field", "password", "policy", refused.policy()));
         }
         transactions.executeWithoutResult(ignored -> {
+            // ADR 0139: the owner's name, typed a moment ago, becomes the
+            // tenant's record of them -- in the same transaction that records
+            // the acceptance, so the two commit or roll back together.
+            staffMembers.activate(row.tenantId(), row.subjectId(), firstName.strip(), lastName.strip(), correlationId);
             events.append(new JdbcOwnerInvitationEventStore.Entry(
                     row.tenantId(),
                     row.id(),

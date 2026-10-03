@@ -170,6 +170,16 @@ export interface VariantDetail {
 export interface AttachedModifierGroup {
   readonly groupId: string;
   readonly sortOrder: number;
+  /** ADR 0136: a choice the customer makes (the default), or a charge the server applies by order type. */
+  readonly visibility?: 'VISIBLE' | 'HIDDEN_AUTO_SELECT';
+  /** Which order types a hidden group applies to; absent or `null` means every one. */
+  readonly applicableFulfillmentModes?: readonly ('DELIVERY' | 'PICKUP' | 'DINE_IN')[] | null;
+  /** This product's own rule for the group; `null` falls back to the shared group's value. */
+  readonly requiredOverride?: boolean | null;
+  readonly minimumSelectionsOverride?: number | null;
+  readonly maximumSelectionsOverride?: number | null;
+  /** The attachment's own version — the `If-Match` a settings write carries. */
+  readonly version?: number;
 }
 
 /** The universal channel: no per-aggregator override, every channel without one of its own falls back to this. */
@@ -498,10 +508,18 @@ export interface PublicationResult {
   readonly validation: ValidationReport;
 }
 
-/** `DraftPreviewResponse` — the content hash the draft would publish as right now, without writing anything. */
+/**
+ * `DraftPreviewResponse` — the content hash the draft would publish as right now, without writing anything.
+ *
+ * `contentHash` is the channel-agnostic draft. A channel's own live menu is compared with
+ * `channelContentHashes[code]` instead, because an image that belongs to a channel is
+ * published to that channel alone (ADR 0138 step 4) and so the draft hashes differently per
+ * channel; `contentHash` stands in for a channel that has no live menu to compare with.
+ */
 export interface DraftPreview {
   readonly contentHash: string;
   readonly itemCount: number;
+  readonly channelContentHashes?: Readonly<Record<string, string>>;
 }
 
 // ------------------------------------------------------------ pricing.web.PriceAuthoringController

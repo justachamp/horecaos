@@ -3,11 +3,13 @@ package uz.horecaos.platform.inventory.infrastructure.catalog;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.MenuAvailabilityLookup;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
+import uz.horecaos.platform.inventory.api.ChannelContext;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -51,19 +53,18 @@ public class InventoryMenuAvailabilityLookup implements MenuAvailabilityLookup {
             return Map.of();
         }
 
-        // An unregistered channel code resolves to no system type rather than
-        // to a default one, the same "no plane matches" shape
-        // PricingMenuPriceLookup uses for its own channel resolution. Every
-        // per-channel-type threshold simply fails to match, which is
-        // identical to how checkAvailabilityForChannel already treats a null
-        // channel: no early cutoff, real stock exhaustion only.
-        String channelSystemType = channels.byCode(tenantId, channelCode)
-                .map(SalesChannel::systemType)
-                .map(Enum::name)
-                .orElse(null);
+        // An unregistered channel code resolves to no channel at all rather than to a
+        // default one, the same "no plane matches" shape PricingMenuPriceLookup uses for
+        // its own channel resolution. With no channel id only the stops that cover every
+        // channel apply, and with no system type every per-channel-type threshold simply
+        // fails to match: identical to how a null channel was always treated -- no early
+        // cutoff, real stock exhaustion only.
+        Optional<SalesChannel> channel = channels.byCode(tenantId, channelCode);
+        ChannelContext context = new ChannelContext(
+                channel.map(SalesChannel::id).orElse(null),
+                channel.map(SalesChannel::systemType).map(Enum::name).orElse(null));
 
-        AvailabilityDecision decision =
-                inventory.checkAvailabilityForChannel(tenantId, locationId, variantIds, channelSystemType);
+        AvailabilityDecision decision = inventory.checkAvailabilityOnMenu(tenantId, locationId, variantIds, context);
         Map<UUID, String> unavailableReasons = new HashMap<>();
         decision.unavailableItems().forEach(item -> unavailableReasons.put(item.variantId(), item.reason()));
 

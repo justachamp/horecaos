@@ -234,9 +234,24 @@ public class SchedulingConfiguration {
      * DNS-TXT hostname challenge (V0428) and promotes it once the tenant's
      * DNS answers, closing row 10.5's WEB verification gap that otherwise
      * left a submitted hostname stuck at PENDING forever with nothing to
-     * ever re-check it.
+     * ever re-check it. Batch 17 added three: {@code
+     * TableSessionClaimSweeper.sweepOnce} (ADR 0143), which gives a guest's
+     * self-seated table back to the room when nothing the restaurant accepted
+     * follows the claim -- without it an abandoned phone holds a table until a
+     * person notices; and, from ADR 0139, {@code
+     * StaffMemberReconciler.reconcileOnce}, which backfills the tenant's own
+     * staff member record for accounts that predate it and keeps the
+     * completion gauges, and {@code StaffMemberRetentionSweeper.sweepOnce},
+     * which in report-only mode counts the ended employees whose personal data
+     * is past retention. The merged batch carried 74 in all (the other waves of
+     * the batch added their own sweepers on branches that could not see each
+     * other), and the review fixes after it added one more: {@code
+     * MediaAssetDeletionWorker.deleteScheduledBatch}, which removes the objects of
+     * an asset whose deletion was requested -- a staff photo that was removed,
+     * replaced or anonymised used to leave its picture in the store for good.
+     * The pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 69;
+    static final int DEFAULT_POOL_SIZE = 75;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

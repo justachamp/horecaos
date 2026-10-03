@@ -1,0 +1,295 @@
+<section class="sim" data-testid="promotion-simulator">
+  <h2 class="q-subhead">{{ 'sim.title' | pt }}</h2>
+  <p class="q-body-sm sim__intro">{{ 'sim.intro' | pt }}</p>
+
+  <div class="sim__grid">
+    <label class="q-field">
+      <span class="q-caption">{{ 'sim.branch' | pt }}</span>
+      <select
+        [value]="menuLocationId() ?? ''"
+        (change)="menuLocationChange.emit($any($event.target).value)"
+        data-testid="sim-branch"
+      >
+        @for (location of locations(); track location.value) {
+          <option [value]="location.value">{{ location.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'sim.channel' | pt }}</span>
+      <select
+        [value]="channelCode()"
+        (change)="channelCode.set($any($event.target).value)"
+        data-testid="sim-channel"
+      >
+        <option value="">—</option>
+        @for (channel of channels(); track channel.value) {
+          <option [value]="channel.value">{{ channel.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'sim.mode' | pt }}</span>
+      <select
+        [value]="mode()"
+        (change)="mode.set($any($event.target).value)"
+        data-testid="sim-mode"
+      >
+        @for (m of modes; track m) {
+          <option [value]="m">{{ modeLabelKey(m) | pt }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'sim.payment' | pt }}</span>
+      <select
+        [value]="paymentMethodCode()"
+        (change)="paymentMethodCode.set($any($event.target).value)"
+        data-testid="sim-payment"
+      >
+        <option value="">—</option>
+        @for (method of paymentMethods(); track method.value) {
+          <option [value]="method.value">{{ method.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'sim.instant' | pt }}</span>
+      <input
+        type="datetime-local"
+        [value]="serviceLocal()"
+        (input)="serviceLocal.set($any($event.target).value)"
+        data-testid="sim-instant"
+      />
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'sim.coupon' | pt }}</span>
+      <input
+        type="text"
+        maxlength="32"
+        [value]="couponCode()"
+        (input)="couponCode.set($any($event.target).value)"
+      />
+    </label>
+  </div>
+
+  @if (mode() === 'DELIVERY') {
+    <div class="sim__grid">
+      <label class="q-field">
+        <span class="q-caption">{{ 'sim.latitude' | pt }}</span>
+        <input
+          type="number"
+          step="any"
+          [value]="latitude()"
+          (input)="latitude.set($any($event.target).value)"
+        />
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'sim.longitude' | pt }}</span>
+        <input
+          type="number"
+          step="any"
+          [value]="longitude()"
+          (input)="longitude.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+    <p class="q-caption sim__hint">{{ 'sim.destination.hint' | pt }}</p>
+  }
+
+  <fieldset class="sim__section">
+    <legend class="q-caption">{{ 'sim.customer' | pt }}</legend>
+    <p class="q-caption sim__hint">{{ 'sim.customer.hint' | pt }}</p>
+    <div class="sim__grid">
+      <label class="q-field">
+        <span class="q-caption">{{ 'sim.brandPosition' | pt }}</span>
+        <input
+          type="number"
+          min="1"
+          [value]="brandOrderPosition()"
+          (input)="brandOrderPosition.set($any($event.target).value)"
+          data-testid="sim-brand-position"
+        />
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'sim.channelPosition' | pt }}</span>
+        <input
+          type="number"
+          min="1"
+          [value]="channelOrderPosition()"
+          (input)="channelOrderPosition.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+    @if (segments().length > 0) {
+      <div class="sim__chips">
+        @for (segment of segments(); track segment.value) {
+          <button
+            type="button"
+            class="chip"
+            [class.chip--active]="segmentIds().includes(segment.value)"
+            [attr.aria-pressed]="segmentIds().includes(segment.value)"
+            (click)="toggleSegment(segment.value)"
+          >
+            {{ segment.label }}
+          </button>
+        }
+      </div>
+    }
+  </fieldset>
+
+  <fieldset class="sim__section">
+    <legend class="q-caption">{{ 'sim.cart' | pt }}</legend>
+    <q-combobox
+      [query]="lineQuery()"
+      (queryChange)="onLineQuery($event)"
+      [options]="lineOptions()"
+      [placeholder]="'sim.addDish' | pt"
+      [ariaLabel]="'sim.addDish' | pt"
+      (optionSelected)="addLine($event)"
+      data-testid="sim-add-dish"
+    />
+    @if (lines().length === 0) {
+      <p class="q-body-sm sim__hint">{{ 'sim.cart.empty' | pt }}</p>
+    } @else {
+      <ul class="sim__lines">
+        @for (line of lines(); track line.id) {
+          <li class="sim__line" data-testid="sim-line">
+            <span class="q-body-sm sim__line-label">{{ line.label }}</span>
+            <input
+              type="number"
+              min="1"
+              max="999"
+              class="sim__qty"
+              [attr.aria-label]="'sim.quantity' | pt"
+              [value]="line.quantity"
+              (input)="setQuantity(line.id, +$any($event.target).value)"
+            />
+            <button
+              type="button"
+              class="sim__remove"
+              [attr.aria-label]="'sim.removeLine' | pt"
+              (click)="removeLine(line.id)"
+            >
+              ×
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </fieldset>
+
+  @if (candidate() !== null || replay() !== null) {
+    <fieldset class="sim__section">
+      <legend class="q-caption">{{ 'sim.try' | pt }}</legend>
+      @if (candidate() !== null) {
+        <label class="q-field q-field--checkbox">
+          <input
+            type="checkbox"
+            [checked]="useCandidate()"
+            (change)="useCandidate.set($any($event.target).checked)"
+            data-testid="sim-use-candidate"
+          />
+          <span class="q-caption">{{ 'sim.useCandidate' | pt }}</span>
+        </label>
+      }
+      @if (replay(); as choice) {
+        @if (choice.versions.length > 0) {
+          <label class="q-field">
+            <span class="q-caption">{{ 'sim.replay' | pt: { code: choice.code } }}</span>
+            <select
+              [value]="replayVersion()"
+              (change)="replayVersion.set($any($event.target).value)"
+              data-testid="sim-replay"
+            >
+              <option value="">{{ 'sim.replay.current' | pt }}</option>
+              @for (version of choice.versions; track version) {
+                <option [value]="version">
+                  {{ 'sim.replay.version' | pt: { version: version } }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+      }
+    </fieldset>
+  }
+
+  <div class="sim__run">
+    <button
+      type="button"
+      class="primary"
+      [disabled]="!canRun()"
+      (click)="run()"
+      data-testid="sim-run"
+    >
+      {{ (running() ? 'sim.running' : 'sim.run') | pt }}
+    </button>
+  </div>
+
+  @if (error(); as message) {
+    <div class="sim__error" role="alert" data-testid="sim-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+
+  @if (result(); as outcome) {
+    <div class="sim__result" data-testid="sim-result">
+      <dl class="sim__totals">
+        <dt class="q-caption">{{ 'sim.subtotal' | pt }}</dt>
+        <dd class="q-tnum" data-testid="sim-subtotal">{{ money(outcome.subtotalMinor) }}</dd>
+        <dt class="q-caption">{{ 'sim.discount' | pt }}</dt>
+        <dd class="q-tnum" data-testid="sim-discount">−{{ money(outcome.discountMinor) }}</dd>
+        <dt class="q-caption">{{ 'sim.fee' | pt }}</dt>
+        <dd class="q-tnum">{{ money(outcome.feeMinor) }}</dd>
+        <dt class="q-caption">{{ 'sim.tax' | pt }}</dt>
+        <dd class="q-tnum">{{ money(outcome.taxMinor) }}</dd>
+        <dt class="q-caption sim__total-label">{{ 'sim.total' | pt }}</dt>
+        <dd class="q-tnum sim__total" data-testid="sim-total">{{ money(outcome.totalMinor) }}</dd>
+      </dl>
+
+      <p class="q-caption sim__hint">
+        {{
+          'sim.inputs'
+            | pt
+              : {
+                  instant: outcome.serviceInstant,
+                  zone: outcome.timeZone,
+                  mode: outcome.fulfillmentMode,
+                }
+        }}
+      </p>
+      @if (!outcome.loyaltyAccrualAllowed) {
+        <p class="q-caption sim__hint">{{ 'sim.noAccrual' | pt }}</p>
+      }
+      @if (!outcome.loyaltyRedemptionAllowed) {
+        <p class="q-caption sim__hint">{{ 'sim.noRedemption' | pt }}</p>
+      }
+
+      @if (outcome.adjustments.length > 0) {
+        <h3 class="q-body-sm sim__sub">{{ 'sim.adjustments' | pt }}</h3>
+        <ul class="sim__adjustments">
+          @for (adjustment of outcome.adjustments; track adjustment.sequence) {
+            <li class="q-body-sm sim__adjustment">
+              <span>{{ adjustmentLabel(adjustment) }}</span>
+              <span class="q-tnum">{{ money(adjustment.amountMinor) }}</span>
+            </li>
+          }
+        </ul>
+      }
+
+      <h3 class="q-body-sm sim__sub">{{ 'sim.trace' | pt }}</h3>
+      <q-rule-simulator
+        [catalogue]="catalogue()"
+        [rules]="[]"
+        [externalResults]="verdicts()"
+        data-testid="sim-trace"
+      />
+    </div>
+  }
+</section>

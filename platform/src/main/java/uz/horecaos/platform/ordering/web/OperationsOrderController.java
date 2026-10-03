@@ -1,16 +1,20 @@
 package uz.horecaos.platform.ordering.web;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -40,7 +44,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService;
 import uz.horecaos.platform.ordering.application.BranchResolutionQueryService;
@@ -75,6 +79,8 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
+import uz.horecaos.platform.ordering.web.StorefrontOrderingController.ComboPickRequest;
+import uz.horecaos.platform.ordering.web.StorefrontOrderingController.NestedModifierRequest;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -118,7 +124,7 @@ public class OperationsOrderController {
     private final AggregatorOrderIntakeService aggregatorOrders;
     private final ShipmentCancellationPort deliveryCancellation;
     private final MyWorkQueryService myWork;
-    private final StaffDisplayNames staffDisplayNames;
+    private final StaffDirectory staffDirectory;
     private final ItemDisplayLookup itemDisplayLookup;
     private final BranchResolutionQueryService branchResolution;
     private final BranchOverrideReasonQueryService branchOverrideReasons;
@@ -160,7 +166,7 @@ public class OperationsOrderController {
             AggregatorOrderIntakeService aggregatorOrders,
             ShipmentCancellationPort deliveryCancellation,
             MyWorkQueryService myWork,
-            StaffDisplayNames staffDisplayNames,
+            StaffDirectory staffDirectory,
             ItemDisplayLookup itemDisplayLookup,
             BranchResolutionQueryService branchResolution,
             BranchOverrideReasonQueryService branchOverrideReasons) {
@@ -180,7 +186,7 @@ public class OperationsOrderController {
         this.aggregatorOrders = aggregatorOrders;
         this.deliveryCancellation = deliveryCancellation;
         this.myWork = myWork;
-        this.staffDisplayNames = staffDisplayNames;
+        this.staffDirectory = staffDirectory;
         this.itemDisplayLookup = itemDisplayLookup;
         this.branchResolution = branchResolution;
         this.branchOverrideReasons = branchOverrideReasons;
@@ -806,7 +812,7 @@ public class OperationsOrderController {
                         amendmentAwaitingOperator,
                         presentablePayment,
                         table,
-                        staffDisplayNames));
+                        staffDirectory));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -1005,6 +1011,8 @@ public class OperationsOrderController {
                     illegal.getMessage(),
                     java.util.Map.of(
                             "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
+            throw catchweightNotReconciled(unweighed);
         }
     }
 
@@ -1202,11 +1210,29 @@ public class OperationsOrderController {
                     illegal.getMessage(),
                     java.util.Map.of(
                             "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
+            throw catchweightNotReconciled(unweighed);
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
+    }
+
+    /**
+     * ADR 0137's {@code CATCHWEIGHT_NOT_RECONCILED}: a conflict with the order's current
+     * state, carrying the lines still to weigh so the console can take the operator to them.
+     */
+    private static ApiException catchweightNotReconciled(
+            OrderStateService.CatchweightNotReconciledException unweighed) {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                unweighed.getMessage(),
+                java.util.Map.of(
+                        "reason",
+                        "CATCHWEIGHT_NOT_RECONCILED",
+                        "orderLineIds",
+                        unweighed.lineIds().stream().map(UUID::toString).toList()));
     }
 
     // ------------------------------------------------------------ amendments
@@ -1752,12 +1778,54 @@ public class OperationsOrderController {
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: a decimal; whether this variant takes a fraction is the cart's
+            // decision against its published attributes.
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets the operator
             // picked from the product's own offered subset.
             @Size(max = 20) List<String> commentPresetCodes,
-            @Size(max = 500) @Nullable String customerNote) {
+            @Size(max = 500) @Nullable String customerNote,
+            // ADR 0136: what the operator picked inside a combo, and the second-level
+            // modifier selections, in the shape a storefront cart line carries them.
+            @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks,
+            @Size(max = 20) @Nullable List<@Valid NestedModifierRequest> nestedModifiers) {
+
+        /** Every request that predates ADR 0136's combos and nested modifiers. */
+        public OrderLineRequest(
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, null, null);
+        }
+
+        /** A whole number of units, with no combo and no nested modifiers. */
+        public OrderLineRequest(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(
+                    variantId,
+                    BigDecimal.valueOf(quantity),
+                    modifierOptionIds,
+                    commentPresetCodes,
+                    customerNote,
+                    null,
+                    null);
+        }
 
         OperatorOrderingService.OrderLine toLine() {
             return new OperatorOrderingService.OrderLine(
@@ -1765,7 +1833,15 @@ public class OperationsOrderController {
                     quantity,
                     modifierOptionIds == null ? List.of() : modifierOptionIds,
                     commentPresetCodes == null ? List.of() : commentPresetCodes,
-                    customerNote);
+                    customerNote,
+                    comboPicks == null
+                            ? List.of()
+                            : comboPicks.stream().map(ComboPickRequest::toPick).toList(),
+                    nestedModifiers == null
+                            ? List.of()
+                            : nestedModifiers.stream()
+                                    .map(NestedModifierRequest::toNested)
+                                    .toList());
         }
     }
 
@@ -1870,7 +1946,18 @@ public class OperationsOrderController {
     public record AggregatorOrderLineRequest(
             @Nullable UUID variantId,
             @NotBlank @Size(max = 200) String nameSnapshot,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: an aggregator may sell by the portion or by weight, so a manual
+            // entry takes a decimal quantity like the order line it becomes.
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @PositiveOrZero long unitAmountMinor,
             @Size(max = 128) @Nullable String externalItemReference) {
 
@@ -2062,14 +2149,32 @@ public class OperationsOrderController {
         }
     }
 
-    /** One line {@code ADD_LINES} carries. */
+    /**
+     * One line {@code ADD_LINES} carries.
+     *
+     * @param comboPicks ADR 0136: what the operator picked inside a combo, when {@code variantId}
+     *     is a combo's container. {@code quantity} is then how many combos. A combo is added as
+     *     the several ordinary lines it is, each at its own combo price
+     */
     public record AddLineRequest(
             @NotNull UUID variantId,
             @Positive int quantity,
-            @Size(max = 10) List<UUID> modifierOptionIds) {
+            @Size(max = 10) List<UUID> modifierOptionIds,
+            @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks) {
+
+        /** Every request that predates ADR 0136's combos. */
+        public AddLineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+            this(variantId, quantity, modifierOptionIds, null);
+        }
 
         OrderAmendmentService.AmendmentCommand.LineRequest toLineRequest() {
-            return new OrderAmendmentService.AmendmentCommand.LineRequest(variantId, quantity, modifierOptionIds);
+            return new OrderAmendmentService.AmendmentCommand.LineRequest(
+                    variantId,
+                    quantity,
+                    modifierOptionIds,
+                    comboPicks == null
+                            ? List.of()
+                            : comboPicks.stream().map(ComboPickRequest::toPick).toList());
         }
     }
 
@@ -2660,14 +2765,16 @@ public class OperationsOrderController {
      *                       and {@link #revealAddress} are the capability-gated
      *                       calls that return them
      * @param createdByDisplayName  {@code createdByActorId} resolved to a name
-     *                       (gap map row 9.2d) through {@code StaffDisplayNames}
-     *                       — the same cached, read-time lookup {@code
-     *                       AuditQueryService} already uses for an audit row's
-     *                       actor — or null when the actor is not a {@code USER}
-     *                       (a system/integration actor has no Keycloak identity
-     *                       to resolve) or the subject has none on file. The
-     *                       raw {@code createdByActorId} stays on the response
-     *                       too, for a caller that still wants the subject id.
+     *                       (gap map row 9.2d) through {@code StaffDirectory}
+     *                       — the same tenant-scoped, read-time lookup {@code
+     *                       AuditQueryService} uses for an audit row's actor, so
+     *                       the two cannot disagree about who someone is (ADR
+     *                       0139) — or null when the actor is not a {@code USER}
+     *                       (a system/integration actor has no staff record to
+     *                       resolve) or this tenant has no name for the subject.
+     *                       The raw {@code createdByActorId} stays on the
+     *                       response too, for a caller that still wants the
+     *                       subject id.
      * @param acceptedByDisplayName the same resolution for {@code
      *                       acceptedByActorId}
      */
@@ -2702,7 +2809,7 @@ public class OperationsOrderController {
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
-                StaffDisplayNames staffDisplayNames) {
+                StaffDirectory staffDirectory) {
             var order = detail.order();
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
@@ -2720,10 +2827,12 @@ public class OperationsOrderController {
                     order.currentRevision(),
                     order.createdByActorType(),
                     order.createdByActorId(),
-                    displayNameOf(staffDisplayNames, order.createdByActorType(), order.createdByActorId()),
+                    displayNameOf(
+                            staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId()),
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
-                    displayNameOf(staffDisplayNames, order.acceptedByActorType(), order.acceptedByActorId()),
+                    displayNameOf(
+                            staffDirectory, order.tenantId(), order.acceptedByActorType(), order.acceptedByActorId()),
                     order.acceptedAt(),
                     order.callbackRequested(),
                     order.callbackResolvedAt(),
@@ -2741,16 +2850,29 @@ public class OperationsOrderController {
          * screen showed before this wave — resolved only for a {@code "USER"}
          * actor, the same restriction {@code AuditQueryService
          * .withResolvedActorDisplay} applies for the same reason: a system job,
-         * an integration or a migration run has no Keycloak identity to look up,
+         * an integration or a migration run has no staff record to look up,
          * and {@code null} in means {@code null} out rather than a lookup for a
-         * subject that was never supplied.
+         * subject that was never supplied. Asked of this order's own tenant
+         * (ADR 0139), so a name is the one that tenant keeps.
          */
         private static @Nullable String displayNameOf(
-                StaffDisplayNames staffDisplayNames, @Nullable String actorType, @Nullable String actorId) {
+                StaffDirectory staffDirectory, UUID tenantId, @Nullable String actorType, @Nullable String actorId) {
             if (actorId == null || !"USER".equals(actorType)) {
                 return null;
             }
-            return staffDisplayNames.displayName(actorId);
+            return staffDirectory.nameOf(tenantId, actorId);
+        }
+
+        private static @Nullable ComboResponse comboOf(JdbcOrderStore.OrderLineRow line) {
+            if (!line.isComboComponent()) {
+                return null;
+            }
+            // The provenance constraint (ck_order_line_combo_provenance) makes these all-or-none.
+            return new ComboResponse(
+                    Objects.requireNonNull(line.comboSelectionId()),
+                    Objects.requireNonNull(line.comboContainerVariantId()),
+                    Objects.requireNonNull(line.comboName()),
+                    Objects.requireNonNull(line.comboQuantity()));
         }
 
         private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {
@@ -2768,7 +2890,18 @@ public class OperationsOrderController {
                                             p.code(), p.labelRu(), p.labelUz(), p.labelEn(), p.labels()))
                                     .toList(),
                             line.line().lineId(),
-                            line.line().hasNote()))
+                            line.line().hasNote(),
+                            comboOf(line.line()),
+                            line.modifiers().stream()
+                                    .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                    .map(m -> m.optionName())
+                                    .toList(),
+                            line.modifiers().stream()
+                                    .filter(JdbcOrderStore.OrderModifierRow::autoSelected)
+                                    .map(m -> new AutoSelectedChargeResponse(
+                                            m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
+                                    .toList(),
+                            OrderLineCatchweightResponse.of(line.line())))
                     .toList();
         }
     }
@@ -2993,7 +3126,7 @@ public class OperationsOrderController {
             String productName,
             String variantName,
             String sku,
-            int quantity,
+            BigDecimal quantity,
             long finalAmountMinor,
             List<String> modifiers,
             // Row 2.1b: the coded kitchen-instruction presets this line was
@@ -3001,7 +3134,61 @@ public class OperationsOrderController {
             // locale, so the console renders whichever the operator is in.
             List<CommentPresetChip> commentPresets,
             UUID lineId,
-            boolean hasNote) {}
+            boolean hasNote,
+            // ADR 0136: set on each component line of a combo, null on every other line. The
+            // lines of one combo share a selection id; a console groups on it and shows the name
+            // as the header, because the container itself is never a line.
+            @Nullable ComboResponse combo,
+            // ADR 0136: the names, within {@code modifiers}, of the options the server applied
+            // for this order's fulfilment mode -- a delivery box the customer was never shown.
+            List<String> autoSelectedModifiers,
+            // ADR 0136: the same options with what each cost, already inside {@code
+            // finalAmountMinor}, so the console can itemise a charge the customer never chose.
+            List<AutoSelectedChargeResponse> autoSelectedCharges,
+            // ADR 0137: present on a line sold by weight. provisional is true until the
+            // kitchen has weighed it, and means finalAmountMinor was computed against
+            // the nominal weight.
+            @Nullable OrderLineCatchweightResponse catchweight) {}
+
+    /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
+    public record AutoSelectedChargeResponse(String name, long amountMinor) {}
+
+    /**
+     * The combo a line was bought as part of (ADR 0136).
+     *
+     * @param selectionId  groups the component lines of one combo purchase
+     * @param name         the combo's name as it was sold; copied, so a rename cannot change it
+     * @param quantity     how many combos this purchase was
+     */
+    public record ComboResponse(UUID selectionId, UUID containerVariantId, String name, int quantity) {}
+
+    /**
+     * ADR 0137: what makes an order line's amount provisional, for the console's
+     * "weigh before handover" prompt and the order detail's weighed/nominal figure.
+     *
+     * @param pricePerQuantumMinor the price the customer agreed to, per {@code quantumGrams}
+     * @param provisional          true until a weight has been captured
+     * @param actualWeightGrams    the weighed total of the whole line, once captured
+     */
+    public record OrderLineCatchweightResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable OrderLineCatchweightResponse of(JdbcOrderStore.OrderLineRow line) {
+            if (!line.catchweight()) {
+                return null;
+            }
+            return new OrderLineCatchweightResponse(
+                    Objects.requireNonNull(line.catchweightQuantumGrams()),
+                    Objects.requireNonNull(line.catchweightNominalGrams()),
+                    Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),
+                    !line.reconciled(),
+                    line.actualWeightGrams());
+        }
+    }
 
     /**
      * Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape.

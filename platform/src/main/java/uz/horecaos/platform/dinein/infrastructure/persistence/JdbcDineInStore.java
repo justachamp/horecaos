@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.dinein.domain.QrMode;
 import uz.horecaos.platform.dinein.domain.ReservationStatus;
+import uz.horecaos.platform.dinein.domain.SessionOrigin;
 import uz.horecaos.platform.dinein.domain.SessionStatus;
 
 /**
@@ -56,6 +57,9 @@ public class JdbcDineInStore {
     /** The name V0034 gives the one-party-per-table index. */
     public static final String TABLE_OCCUPIED_INDEX = "ux_session_table_occupied";
 
+    /** The name V0467 gives the one-live-unconfirmed-claim-per-account-per-branch index (ADR 0143). */
+    public static final String CLAIM_ACCOUNT_INDEX = "ux_claim_account_branch";
+
     private final JdbcClient jdbc;
 
     public JdbcDineInStore(JdbcClient jdbc) {
@@ -66,11 +70,10 @@ public class JdbcDineInStore {
 
     public Optional<SettingsRow> findSettings(UUID tenantId, UUID locationId) {
         return jdbc.sql("""
-                SELECT tenant_id, brand_id, location_id, qr_mode, turnaround_minutes,
-                       guest_session_ttl_minutes, service_charge_rate_bp, version
+                SELECT %s
                 FROM dinein.location_settings
                 WHERE tenant_id = :tenantId AND location_id = :locationId
-                """)
+                """.formatted(SETTINGS_COLUMNS))
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .query(JdbcDineInStore::mapSettings)
@@ -78,40 +81,117 @@ public class JdbcDineInStore {
     }
 
     /**
-     * Writes the branch's dine-in settings, creating the row on first use.
+     * The branch's settings row, locked for the rest of the transaction (ADR 0143).
      *
-     * <p>An upsert rather than a create-then-update pair because a branch has
-     * exactly one of these and there is no meaningful difference between
-     * configuring it and reconfiguring it. The version still moves, so ADR 0031's
-     * expected-version check has something to compare.
+     * <p>{@code FOR NO KEY UPDATE}, the lock a plain {@code UPDATE} of a non-key
+     * column takes: it queues behind an in-flight claim and the other way round, and
+     * it does not block a foreign key check on the tenant's other rows. The row is
+     * the one thing every claim at a branch has in common, which is what lets the
+     * branch cap and the daily cap (aggregates over rows that do not exist yet) be
+     * counted rather than assumed -- see {@code WalkInSeatingService}. A branch with
+     * no row is off, and there is nothing to lock.
      */
-    public SettingsRow upsertSettings(SettingsRow settings, Instant now) {
-        jdbc.sql("""
+    public Optional<SettingsRow> lockSettings(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT %s
+                FROM dinein.location_settings
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                FOR NO KEY UPDATE
+                """.formatted(SETTINGS_COLUMNS))
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query(JdbcDineInStore::mapSettings)
+                .optional();
+    }
+
+    /**
+     * Creates the branch's settings row on first use.
+     *
+     * <p>{@code ON CONFLICT DO NOTHING} rather than an upsert: a branch has exactly
+     * one of these, and two managers configuring a never-configured branch in the
+     * same second must produce one row and one refusal, not two writes of which the
+     * second silently wins (ADR 0031's expected version has to mean something on the
+     * first write too).
+     *
+     * @return whether this call created the row
+     */
+    public boolean insertSettings(SettingsRow settings, Instant now) {
+        return jdbc.sql("""
                 INSERT INTO dinein.location_settings (
                     tenant_id, brand_id, location_id, qr_mode, turnaround_minutes,
                     guest_session_ttl_minutes, service_charge_rate_bp,
+                    walk_in_self_seat, walk_in_claim_ttl_minutes, walk_in_horizon_minutes,
+                    walk_in_max_unconfirmed, walk_in_daily_claims_per_account,
+                    walk_in_payment_defer_minutes, session_currency,
                     version, created_at, updated_at)
                 VALUES (:tenantId, :brandId, :locationId, :qrMode, :turnaround,
-                    :ttl, :serviceCharge, 1, :now, :now)
-                ON CONFLICT (location_id) DO UPDATE SET
-                    qr_mode = EXCLUDED.qr_mode,
-                    turnaround_minutes = EXCLUDED.turnaround_minutes,
-                    guest_session_ttl_minutes = EXCLUDED.guest_session_ttl_minutes,
-                    service_charge_rate_bp = EXCLUDED.service_charge_rate_bp,
-                    version = dinein.location_settings.version + 1,
-                    updated_at = EXCLUDED.updated_at
+                    :ttl, :serviceCharge,
+                    :selfSeat, :claimTtl, :horizon, :maxUnconfirmed, :dailyClaims,
+                    :paymentDefer, :currency,
+                    1, :now, :now)
+                ON CONFLICT (location_id) DO NOTHING
                 """)
-                .param("tenantId", settings.tenantId())
-                .param("brandId", settings.brandId())
-                .param("locationId", settings.locationId())
-                .param("qrMode", settings.qrMode().name())
-                .param("turnaround", settings.turnaroundMinutes())
-                .param("ttl", settings.guestSessionTtlMinutes())
-                .param("serviceCharge", settings.serviceChargeRateBp())
-                .param("now", utc(now))
-                .update();
+                        .param("tenantId", settings.tenantId())
+                        .param("brandId", settings.brandId())
+                        .param("locationId", settings.locationId())
+                        .param("qrMode", settings.qrMode().name())
+                        .param("turnaround", settings.turnaroundMinutes())
+                        .param("ttl", settings.guestSessionTtlMinutes())
+                        .param("serviceCharge", settings.serviceChargeRateBp())
+                        .param("selfSeat", settings.walkIn().selfSeat())
+                        .param("claimTtl", settings.walkIn().claimTtlMinutes())
+                        .param("horizon", settings.walkIn().horizonMinutes())
+                        .param("maxUnconfirmed", settings.walkIn().maxUnconfirmed())
+                        .param("dailyClaims", settings.walkIn().dailyClaimsPerAccount())
+                        .param("paymentDefer", settings.walkIn().paymentDeferMinutes())
+                        .param("currency", settings.sessionCurrency())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
 
-        return findSettings(settings.tenantId(), settings.locationId()).orElseThrow();
+    /**
+     * Rewrites the branch's settings, conditionally on the version the caller read
+     * (ADR 0031), so two managers editing one branch's settings produce one change
+     * and one stale-version refusal rather than a silent last-writer-wins.
+     *
+     * @return whether the row moved
+     */
+    public boolean updateSettings(SettingsRow settings, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE dinein.location_settings
+                   SET qr_mode = :qrMode,
+                       turnaround_minutes = :turnaround,
+                       guest_session_ttl_minutes = :ttl,
+                       service_charge_rate_bp = :serviceCharge,
+                       walk_in_self_seat = :selfSeat,
+                       walk_in_claim_ttl_minutes = :claimTtl,
+                       walk_in_horizon_minutes = :horizon,
+                       walk_in_max_unconfirmed = :maxUnconfirmed,
+                       walk_in_daily_claims_per_account = :dailyClaims,
+                       walk_in_payment_defer_minutes = :paymentDefer,
+                       session_currency = :currency,
+                       version = version + 1,
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND location_id = :locationId AND version = :expectedVersion
+                """)
+                        .param("qrMode", settings.qrMode().name())
+                        .param("turnaround", settings.turnaroundMinutes())
+                        .param("ttl", settings.guestSessionTtlMinutes())
+                        .param("serviceCharge", settings.serviceChargeRateBp())
+                        .param("selfSeat", settings.walkIn().selfSeat())
+                        .param("claimTtl", settings.walkIn().claimTtlMinutes())
+                        .param("horizon", settings.walkIn().horizonMinutes())
+                        .param("maxUnconfirmed", settings.walkIn().maxUnconfirmed())
+                        .param("dailyClaims", settings.walkIn().dailyClaimsPerAccount())
+                        .param("paymentDefer", settings.walkIn().paymentDeferMinutes())
+                        .param("currency", settings.sessionCurrency())
+                        .param("now", utc(now))
+                        .param("tenantId", settings.tenantId())
+                        .param("locationId", settings.locationId())
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
     }
 
     /**
@@ -687,16 +767,28 @@ public class JdbcDineInStore {
         params.put("status", session.status().name());
         params.put("serviceCharge", session.serviceChargeRateBpSnapshot());
         params.put("currency", session.currency());
+        // The claim columns travel in the INSERT, not in a second statement (ADR 0143,
+        // Eligibility step 8): a session that is a claim for even one statement is a
+        // session the sweeper and the unique index cannot see.
+        params.put("origin", session.origin().name());
+        params.put("claimant", session.openedByAccountId());
+        params.put("claimExpiresAt", nullableUtc(session.claimExpiresAt()));
+        params.put("confirmedAt", nullableUtc(session.confirmedAt()));
+        params.put("confirmedBy", session.confirmedBy());
         params.put("now", utc(now));
 
         jdbc.sql("""
                 INSERT INTO dinein.table_sessions (
                     id, tenant_id, brand_id, location_id, reservation_id, party_size,
                     business_date, opened_by, opened_at, status,
-                    service_charge_rate_bp_snapshot, currency, version, created_at, updated_at)
+                    service_charge_rate_bp_snapshot, currency,
+                    origin, opened_by_account_id, claim_expires_at, confirmed_at, confirmed_by,
+                    version, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :reservationId, :partySize,
                     :businessDate, :openedBy, :openedAt, :status,
-                    :serviceCharge, :currency, 1, :now, :now)
+                    :serviceCharge, :currency,
+                    :origin, :claimant, :claimExpiresAt, :confirmedAt, :confirmedBy,
+                    1, :now, :now)
                 """).params(params).update();
     }
 
@@ -726,6 +818,24 @@ public class JdbcDineInStore {
 
     public Optional<SessionRow> findSession(UUID tenantId, UUID sessionId) {
         return jdbc.sql(SELECT_SESSION + " WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", sessionId)
+                .query(JdbcDineInStore::mapSession)
+                .optional();
+    }
+
+    /**
+     * One session, locked for the rest of the transaction (ADR 0143).
+     *
+     * <p>Taken by the two paths that can disagree about a claim's fate on the same
+     * row: attaching a round to it, and the sweeper deciding to lapse or confirm it.
+     * Serialized on this lock they have exactly one outcome -- the sweeper decides on
+     * a view that already contains the round, or the attach finds a session the
+     * sweeper has closed and is refused with the stable "takes no more rounds"
+     * answer -- rather than a round attached to a table that was just given back.
+     */
+    public Optional<SessionRow> lockSession(UUID tenantId, UUID sessionId) {
+        return jdbc.sql(SELECT_SESSION + " WHERE tenant_id = :tenantId AND id = :id FOR UPDATE")
                 .param("tenantId", tenantId)
                 .param("id", sessionId)
                 .query(JdbcDineInStore::mapSession)
@@ -778,6 +888,41 @@ public class JdbcDineInStore {
             @Nullable Long settledTotalMinor,
             @Nullable String closeReasonCode,
             Instant now) {
+        return moveSession(
+                tenantId,
+                sessionId,
+                from,
+                to,
+                expectedVersion,
+                closedAt,
+                settledTotalMinor,
+                closeReasonCode,
+                null,
+                now);
+    }
+
+    /**
+     * {@link #moveSession} that also confirms an unconfirmed guest claim in the same
+     * conditional {@code UPDATE} (ADR 0143, Decision 4): a staff move of a claim past
+     * {@code OPEN} means someone in the room has taken charge of the table, and that
+     * fact and the move it follows must not be two statements a lapse can slip
+     * between.
+     *
+     * @param confirmedBy the staff subject to record, or null to leave confirmation
+     *                    alone. Ignored for a session that is not an unconfirmed
+     *                    guest claim
+     */
+    public boolean moveSession(
+            UUID tenantId,
+            UUID sessionId,
+            SessionStatus from,
+            SessionStatus to,
+            int expectedVersion,
+            @Nullable Instant closedAt,
+            @Nullable Long settledTotalMinor,
+            @Nullable String closeReasonCode,
+            @Nullable String confirmedBy,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -788,6 +933,7 @@ public class JdbcDineInStore {
         params.put("closedAt", nullableUtc(closedAt));
         params.put("settledTotal", settledTotalMinor);
         params.put("closeReason", closeReasonCode);
+        params.put("confirmedBy", confirmedBy);
         params.put("now", utc(now));
 
         return jdbc.sql("""
@@ -796,11 +942,234 @@ public class JdbcDineInStore {
                        closed_at = :closedAt,
                        settled_total_minor = COALESCE(:settledTotal::bigint, settled_total_minor),
                        close_reason_code = COALESCE(:closeReason::varchar, close_reason_code),
+                       confirmed_at = CASE
+                           WHEN :confirmedBy::varchar IS NOT NULL
+                                AND origin = 'GUEST_QR' AND confirmed_at IS NULL
+                           THEN :now ELSE confirmed_at END,
+                       confirmed_by = CASE
+                           WHEN :confirmedBy::varchar IS NOT NULL
+                                AND origin = 'GUEST_QR' AND confirmed_at IS NULL
+                           THEN :confirmedBy::varchar ELSE confirmed_by END,
                        version = version + 1,
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status = :from AND version = :expectedVersion
                 """).params(params).update() == 1;
+    }
+
+    /**
+     * Confirms an unconfirmed guest claim without moving it (ADR 0143): the round the
+     * restaurant accepted, or a member of staff keeping the table for a guest who has
+     * not ordered yet.
+     *
+     * <p>Conditional on the version the caller read and on the claim still being
+     * live and unconfirmed, so a confirmation racing the sweeper's lapse has exactly
+     * one winner and the loser learns it from the row count.
+     *
+     * @param expectedVersion the version the caller read, or null when "still live and
+     *                        unconfirmed" is the whole question (a round that attached
+     *                        without touching the session's version)
+     * @return whether the claim was confirmed by this call
+     */
+    public boolean confirmClaim(
+            UUID tenantId, UUID sessionId, @Nullable Integer expectedVersion, String confirmedBy, Instant now) {
+        return jdbc.sql("""
+                UPDATE dinein.table_sessions
+                   SET confirmed_at = :now,
+                       confirmed_by = :confirmedBy,
+                       version = version + 1,
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id
+                   AND origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL
+                   AND (:expectedVersion::integer IS NULL OR version = :expectedVersion::integer)
+                """)
+                        .param("now", utc(now))
+                        .param("confirmedBy", confirmedBy)
+                        .param("tenantId", tenantId)
+                        .param("id", sessionId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
+    }
+
+    // ----------------------------------------------------- walk-in claims (ADR 0143)
+
+    /**
+     * Locks tables for the rest of the transaction, in id order.
+     *
+     * <p>The one lock a guest opening a table and a host confirming or amending a
+     * booking over it have in common, so the two serialize instead of both
+     * succeeding on stale reads (ADR 0143, Decision 5). Id order, because two
+     * transactions locking the same pair in opposite orders is a deadlock, and the
+     * ordering column is the key, which an update never changes.
+     *
+     * @return the locked rows, in id order. A table that does not exist at this
+     *         tenant is simply absent
+     */
+    public List<TableRow> lockTables(UUID tenantId, Collection<UUID> tableIds) {
+        if (tableIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql(SELECT_TABLE + """
+                 WHERE tenant_id = :tenantId AND id IN (:ids)
+                 ORDER BY id
+                 FOR UPDATE
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", tableIds)
+                .query(JdbcDineInStore::mapTable)
+                .list();
+    }
+
+    /**
+     * Whether a CONFIRMED booking holds this table for any part of {@code [from, to)}.
+     *
+     * <p>The same interval the exclusion constraint keeps (reservation_tables.held_during,
+     * which already includes the turnaround buffer), read the way the constraint
+     * reads it. Only {@code CONFIRMED}: a {@code REQUESTED} booking holds nothing
+     * yet, and a {@code SEATED} one has a session of its own that occupies the table
+     * (ADR 0143, Decision 5).
+     */
+    public boolean tableHeldByConfirmedBooking(UUID tenantId, UUID tableId, Instant from, Instant to) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM dinein.reservation_tables rt
+                     WHERE rt.tenant_id = :tenantId AND rt.table_id = :tableId
+                       AND rt.status = 'CONFIRMED'
+                       AND rt.held_during && tstzrange(:from::timestamptz, :to::timestamptz, '[)'))
+                """)
+                .param("tenantId", tenantId)
+                .param("tableId", tableId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(Boolean.class)
+                .single());
+    }
+
+    /** Which of these tables a live session sits at right now. */
+    public List<UUID> occupiedTables(UUID tenantId, Collection<UUID> tableIds) {
+        if (tableIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT DISTINCT table_id FROM dinein.session_tables
+                 WHERE tenant_id = :tenantId AND table_id IN (:ids) AND left_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", tableIds)
+                .query((row, number) -> row.getObject("table_id", UUID.class))
+                .list();
+    }
+
+    /** Live unconfirmed guest claims at a branch: the number the branch cap is measured against. */
+    public int countLiveUnconfirmedClaims(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM dinein.table_sessions
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** Whether this account already holds a live unconfirmed claim at this branch. */
+    public boolean accountHasLiveUnconfirmedClaim(UUID tenantId, UUID locationId, UUID accountId) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM dinein.table_sessions
+                     WHERE tenant_id = :tenantId AND location_id = :locationId
+                       AND opened_by_account_id = :accountId
+                       AND origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL)
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("accountId", accountId)
+                .query(Boolean.class)
+                .single());
+    }
+
+    /**
+     * Claims this account opened at this branch since {@code since}, whatever became
+     * of them. A count over {@code table_sessions} rather than a cache entry, so it
+     * survives a restart and is the same number an operator can query.
+     */
+    public int countClaimsOpenedSince(UUID tenantId, UUID locationId, UUID accountId, Instant since) {
+        return jdbc.sql("""
+                SELECT count(*) FROM dinein.table_sessions
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND opened_by_account_id = :accountId
+                   AND origin = 'GUEST_QR' AND opened_at >= :since
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("accountId", accountId)
+                .param("since", utc(since))
+                .query(Integer.class)
+                .single();
+    }
+
+    /**
+     * Every live unconfirmed guest claim whose window has passed, in any live status,
+     * soonest first and across every tenant (ADR 0143, Decision 4).
+     *
+     * <p>The sweeper's one read. It selects on {@code closed_at IS NULL}, not on
+     * {@code status = 'OPEN'}: a guest can move a session to {@code BILL_REQUESTED}
+     * with the table's token alone, and a status-list selector would never see a claim
+     * one tap had moved out of {@code OPEN}. Cross-tenant by design -- a sweep has no
+     * tenant -- and safe for the reason the other platform sweepers' reads are: every
+     * row it returns carries its own tenant, and everything the sweeper does next is
+     * scoped by it.
+     */
+    public List<SessionRow> dueClaims(Instant now, int limit) {
+        return jdbc.sql(SELECT_SESSION + """
+                 WHERE origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL
+                   AND claim_expires_at <= :now
+                 ORDER BY claim_expires_at
+                 LIMIT :limit
+                """)
+                .param("now", utc(now))
+                .param("limit", limit)
+                .query(JdbcDineInStore::mapSession)
+                .list();
+    }
+
+    /** The live unconfirmed claims this account holds, at any branch of the tenant. */
+    public List<SessionRow> liveUnconfirmedClaimsOf(UUID tenantId, UUID accountId) {
+        return jdbc.sql(SELECT_SESSION + """
+                 WHERE tenant_id = :tenantId AND opened_by_account_id = :accountId
+                   AND origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(JdbcDineInStore::mapSession)
+                .list();
+    }
+
+    /**
+     * What {@code opened_by} says once the account it named has been erased. The guest
+     * route writes {@code 'guest:<accountId>'} there as well as into
+     * {@code opened_by_account_id}, and the column is NOT NULL, so it is neutralised
+     * rather than cleared.
+     */
+    private static final String ERASED_OPENER = "guest:erased";
+
+    /**
+     * Clears a claimant's id from every guest-opened session of theirs that no longer
+     * needs it (ADR 0015): the dedicated column, and the same id inside {@code opened_by}.
+     */
+    public int clearClaimant(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                UPDATE dinein.table_sessions
+                   SET opened_by_account_id = NULL, opened_by = :erasedOpener, updated_at = now()
+                 WHERE tenant_id = :tenantId AND opened_by_account_id = :accountId
+                   AND (confirmed_at IS NOT NULL OR closed_at IS NOT NULL)
+                """)
+                .param("erasedOpener", ERASED_OPENER)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .update();
     }
 
     /** Every table this session has sat at, including any it has already left. */
@@ -952,6 +1321,14 @@ public class JdbcDineInStore {
 
     // ------------------------------------------------------------- row types
 
+    /**
+     * @param walkIn          ADR 0143's per-branch switch and numbers. The defaults
+     *                        are {@link WalkInPolicy#OFF}: a branch with no settings
+     *                        row, or one that never turned the capability on, has it
+     *                        off
+     * @param sessionCurrency the currency a guest-opened session bills in (interim,
+     *                        ADR 0055's single-currency pilot)
+     */
     public record SettingsRow(
             UUID tenantId,
             UUID brandId,
@@ -960,7 +1337,33 @@ public class JdbcDineInStore {
             int turnaroundMinutes,
             int guestSessionTtlMinutes,
             int serviceChargeRateBp,
-            int version) {}
+            int version,
+            WalkInPolicy walkIn,
+            String sessionCurrency) {}
+
+    /**
+     * ADR 0143's walk-in settings, with the record's own proposed defaults.
+     *
+     * @param selfSeat               whether a guest may open a claim at all
+     * @param claimTtlMinutes        how long an unconfirmed claim holds a table (2..60)
+     * @param horizonMinutes         how far ahead a CONFIRMED booking's hold blocks a
+     *                               walk-in (0..480)
+     * @param maxUnconfirmed         the branch-wide cap on live unconfirmed claims
+     * @param dailyClaimsPerAccount  claims one account may open at one branch in 24h
+     * @param paymentDeferMinutes    how long past its expiry a claim with a round in
+     *                               flight is deferred
+     */
+    public record WalkInPolicy(
+            boolean selfSeat,
+            int claimTtlMinutes,
+            int horizonMinutes,
+            int maxUnconfirmed,
+            int dailyClaimsPerAccount,
+            int paymentDeferMinutes) {
+
+        /** Off, with every number at the record's proposal. */
+        public static final WalkInPolicy OFF = new WalkInPolicy(false, 15, 90, 5, 3, 30);
+    }
 
     public record SectionRow(
             UUID id,
@@ -1042,7 +1445,22 @@ public class JdbcDineInStore {
             @Nullable Long settledTotalMinor,
             @Nullable Instant closedAt,
             @Nullable String closeReasonCode,
-            int version) {}
+            int version,
+            SessionOrigin origin,
+            @Nullable UUID openedByAccountId,
+            @Nullable Instant claimExpiresAt,
+            @Nullable Instant confirmedAt,
+            @Nullable String confirmedBy) {
+
+        /**
+         * Whether this is a guest's provisional claim that nobody has confirmed: the
+         * one kind of session that lapses (ADR 0143). A confirmed claim, and every
+         * staff session, is an ordinary session.
+         */
+        public boolean unconfirmedClaim() {
+            return origin == SessionOrigin.GUEST_QR && confirmedAt == null;
+        }
+    }
 
     /**
      * One table's read of a requested window: whether it is booked, occupied,
@@ -1055,6 +1473,13 @@ public class JdbcDineInStore {
             UUID tableId, String code, int seats, UUID sectionId, String status, boolean booked, boolean occupied) {}
 
     // --------------------------------------------------------------- mapping
+
+    private static final String SETTINGS_COLUMNS = """
+            tenant_id, brand_id, location_id, qr_mode, turnaround_minutes,
+            guest_session_ttl_minutes, service_charge_rate_bp, version,
+            walk_in_self_seat, walk_in_claim_ttl_minutes, walk_in_horizon_minutes,
+            walk_in_max_unconfirmed, walk_in_daily_claims_per_account,
+            walk_in_payment_defer_minutes, session_currency""";
 
     private static final String SELECT_TABLE = """
             SELECT id, tenant_id, brand_id, location_id, section_id, code, display_name,
@@ -1076,7 +1501,8 @@ public class JdbcDineInStore {
             SELECT id, tenant_id, brand_id, location_id, reservation_id, party_size,
                    business_date, opened_by, opened_at, status,
                    service_charge_rate_bp_snapshot, currency, settled_total_minor,
-                   closed_at, close_reason_code, version
+                   closed_at, close_reason_code, version,
+                   origin, opened_by_account_id, claim_expires_at, confirmed_at, confirmed_by
             FROM dinein.table_sessions
             """;
 
@@ -1089,7 +1515,15 @@ public class JdbcDineInStore {
                 row.getInt("turnaround_minutes"),
                 row.getInt("guest_session_ttl_minutes"),
                 row.getInt("service_charge_rate_bp"),
-                row.getInt("version"));
+                row.getInt("version"),
+                new WalkInPolicy(
+                        row.getBoolean("walk_in_self_seat"),
+                        row.getInt("walk_in_claim_ttl_minutes"),
+                        row.getInt("walk_in_horizon_minutes"),
+                        row.getInt("walk_in_max_unconfirmed"),
+                        row.getInt("walk_in_daily_claims_per_account"),
+                        row.getInt("walk_in_payment_defer_minutes")),
+                row.getString("session_currency"));
     }
 
     private static SectionRow mapSection(ResultSet row, int number) throws SQLException {
@@ -1180,7 +1614,12 @@ public class JdbcDineInStore {
                 row.getObject("settled_total_minor", Long.class),
                 nullableInstant(row, "closed_at"),
                 row.getString("close_reason_code"),
-                row.getInt("version"));
+                row.getInt("version"),
+                SessionOrigin.valueOf(row.getString("origin")),
+                row.getObject("opened_by_account_id", UUID.class),
+                nullableInstant(row, "claim_expires_at"),
+                nullableInstant(row, "confirmed_at"),
+                row.getString("confirmed_by"));
     }
 
     /**

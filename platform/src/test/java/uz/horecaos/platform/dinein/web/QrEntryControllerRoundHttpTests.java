@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -164,6 +166,80 @@ class QrEntryControllerRoundHttpTests {
                         .query(Integer.class)
                         .single())
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an attach that confirms the claim answers confirmed, with no expiry left to count down")
+    void anAttachThatConfirmsTheClaimAnswersConfirmed() throws Exception {
+        // ADR 0143, Decision 4: a round the restaurant has already accepted (a cash order at
+        // an auto-accepting branch, say) makes the claim an ordinary session at attach time.
+        // The response used to be built from the row read before that, so the storefront was
+        // told "unconfirmed, expires at ..." about a session that was already ordinary.
+        TableRow table = createTable("T1");
+        floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, LOCATION, "ORDER_AND_PAY", 15, 240, 0),
+                "manager",
+                "QR ordering on");
+        String printed = rotate(table);
+        SignedIn customer = signIn();
+        SessionRow claim = openClaim(table.id(), customer.accountId());
+        assertThat(claim.unconfirmedClaim()).isTrue();
+        UUID orderId = seedDineInOrder("T1-006", 45_000, customer.accountId());
+        String guestToken = exchange(printed);
+
+        MvcResult attach = mvc.perform(post(roundsPath(claim.id()))
+                        .header("X-Dine-In-Token", guestToken)
+                        .with(session(customer.token()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + orderId + "\"}"))
+                .andReturn();
+
+        assertThat(attach.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json(attach);
+        assertThat(jdbc.sql("SELECT confirmed_at IS NOT NULL FROM dinein.table_sessions WHERE id = :id")
+                        .param("id", claim.id())
+                        .query(Boolean.class)
+                        .single())
+                .as("the accepted round confirmed the claim")
+                .isTrue();
+        assertThat(body.path("confirmed").asBoolean())
+                .as("the response must say what the attach made of the session, not what it was before")
+                .isTrue();
+        assertThat(body.path("claimExpiresAt").isNull()).isTrue();
+        assertThat(body.path("roundCount").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an attach that leaves the claim unconfirmed still answers unconfirmed, with its expiry")
+    void anAttachThatLeavesTheClaimAloneAnswersUnconfirmed() throws Exception {
+        TableRow table = createTable("T1");
+        floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, LOCATION, "ORDER_AND_PAY", 15, 240, 0),
+                "manager",
+                "QR ordering on");
+        String printed = rotate(table);
+        SignedIn customer = signIn();
+        SessionRow claim = openClaim(table.id(), customer.accountId());
+        UUID orderId = seedDineInOrder("T1-007", 45_000, customer.accountId());
+        // Still in flight: attaching alone confirms nothing (BILLABLE counts it, the
+        // restaurant has not accepted it).
+        jdbc.sql("UPDATE ordering.orders SET status = 'RECEIVED', confirmed_at = NULL WHERE id = :id")
+                .param("id", orderId)
+                .update();
+        String guestToken = exchange(printed);
+
+        MvcResult attach = mvc.perform(post(roundsPath(claim.id()))
+                        .header("X-Dine-In-Token", guestToken)
+                        .with(session(customer.token()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + orderId + "\"}"))
+                .andReturn();
+
+        assertThat(attach.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json(attach);
+        assertThat(body.path("confirmed").asBoolean()).isFalse();
+        assertThat(body.path("claimExpiresAt").isNull()).isFalse();
+        assertThat(body.path("roundCount").asInt()).isEqualTo(1);
     }
 
     @Test
@@ -390,6 +466,22 @@ class QrEntryControllerRoundHttpTests {
                 new TableSessionService.OpenSession(
                         TENANT, BRAND, LOCATION, null, List.of(tableId), 2, "UZS", "waiter"),
                 "Walk-in");
+    }
+
+    /** A guest's provisional session, as the walk-in route opens it (ADR 0143). */
+    private SessionRow openClaim(UUID tableId, UUID accountId) {
+        return sessions.open(
+                new TableSessionService.OpenSession(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        null,
+                        List.of(tableId),
+                        2,
+                        "UZS",
+                        "guest:" + accountId,
+                        new TableSessionService.Claim(accountId, Instant.now().plus(Duration.ofMinutes(10)))),
+                "Sat down");
     }
 
     private String exchange(String printedToken) throws Exception {

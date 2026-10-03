@@ -54,9 +54,12 @@ import {
 } from './product-comment-presets-api';
 import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/comment-presets-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { ProductComboPanel } from './product-combo-panel';
 import { ProductEditorHeader } from './product-editor-header';
+import { ProductModifierPolicyPanel } from './product-modifier-policy-panel';
 import { ProductPhotosPanel } from './product-photos-panel';
 import { ListingNotice, ProductUnlistedBanner, UnlistedRow } from './product-unlisted-banner';
+import { VariantPhysicalAttributes } from './variant-physical-attributes';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
@@ -64,8 +67,10 @@ type EditorTab =
   | 'BASIC'
   | 'VARIANTS'
   | 'MODIFIERS'
+  | 'COMBO'
   | 'PHOTOS'
   | 'FISCAL'
+  | 'PHYSICAL'
   | 'AVAILABILITY'
   | 'SCHEDULE'
   | 'RECOMMENDATIONS'
@@ -76,8 +81,10 @@ const TABS: readonly EditorTab[] = [
   'BASIC',
   'VARIANTS',
   'MODIFIERS',
+  'COMBO',
   'PHOTOS',
   'FISCAL',
+  'PHYSICAL',
   'AVAILABILITY',
   'SCHEDULE',
   'RECOMMENDATIONS',
@@ -88,8 +95,10 @@ const TAB_LABEL: Readonly<Record<EditorTab, MessageKey>> = {
   BASIC: 'catalog.editor.tab.basic',
   VARIANTS: 'catalog.editor.tab.variants',
   MODIFIERS: 'catalog.editor.tab.modifiers',
+  COMBO: 'catalog.editor.tab.combo',
   PHOTOS: 'catalog.editor.tab.photos',
   FISCAL: 'catalog.editor.tab.fiscal',
+  PHYSICAL: 'catalog.editor.tab.physical',
   AVAILABILITY: 'catalog.editor.tab.availability',
   SCHEDULE: 'catalog.editor.tab.schedule',
   RECOMMENDATIONS: 'catalog.editor.tab.recommendations',
@@ -140,6 +149,18 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
   FISCAL_CLASSIFICATION_MISSING: 'catalog.editor.finding.FISCAL_CLASSIFICATION_MISSING',
   FISCAL_CLASSIFICATION_NOT_ENFORCED: 'catalog.editor.finding.FISCAL_CLASSIFICATION_NOT_ENFORCED',
   PRICING_VALIDATION_NOT_WIRED: 'catalog.editor.finding.PRICING_VALIDATION_NOT_WIRED',
+  COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE: 'catalog.editor.finding.COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE',
+  COMBO_HAS_NO_PRICED_COMPONENTS: 'catalog.editor.finding.COMBO_HAS_NO_PRICED_COMPONENTS',
+  COMBO_GROUP_MINIMUM_UNSATISFIABLE: 'catalog.editor.finding.COMBO_GROUP_MINIMUM_UNSATISFIABLE',
+  COMBO_COMPONENT_LINKS_INACTIVE_VARIANT:
+    'catalog.editor.finding.COMBO_COMPONENT_LINKS_INACTIVE_VARIANT',
+  HIDDEN_MODIFIER_GROUP_AMBIGUOUS_DEFAULT:
+    'catalog.editor.finding.HIDDEN_MODIFIER_GROUP_AMBIGUOUS_DEFAULT',
+  MODIFIER_NESTING_DEPTH_EXCEEDED: 'catalog.editor.finding.MODIFIER_NESTING_DEPTH_EXCEEDED',
+  MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS:
+    'catalog.editor.finding.MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS',
+  PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING:
+    'catalog.editor.finding.PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING',
 };
 
 /**
@@ -178,7 +199,11 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * the official dataset is imported — an unanswered finance/owner input this
  * wave does not resolve).
  *
- * **Still not built:** combo groups and nested/hidden modifiers. Photos
+ * **Composite products (ADR 0136).** The Combo tab and the group settings under
+ * Modifiers are their own components (`ProductComboPanel`,
+ * `ProductModifierPolicyPanel`): a combo's choices and each component's price,
+ * and how this product offers each attached group (hidden by order type,
+ * per-product overrides, the one nested level). Photos
  * (Tab 4) gained a channel picker (gap map row `4.2f`, wave w7): choosing a
  * channel above the grid scopes the whole tab to that channel's own gallery
  * — upload, reorder and detach all act on it alone, and the universal
@@ -228,10 +253,13 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
     LocalizedFieldGroup,
     ActorChip,
     Combobox,
+    ProductComboPanel,
     ProductEditorHeader,
+    ProductModifierPolicyPanel,
     ProductPhotosPanel,
     ProductUnlistedBanner,
     ScheduleGrid,
+    VariantPhysicalAttributes,
   ],
   templateUrl: './product-editor-page.html',
   styleUrl: './product-editor-page.css',
@@ -255,6 +283,8 @@ export class ProductEditorPage implements OnInit {
   private readonly localeSet = inject(LocaleSet);
 
   protected readonly tabs = TABS;
+  /** The brand the editor writes under, for the cards that own their own reads and writes. */
+  protected readonly brandScope = computed(() => this.brand.scope());
   protected readonly tabLabel = TAB_LABEL;
   /**
    * Row 10.12: the brand's own supported locales (default first, mapped to
@@ -1085,17 +1115,34 @@ export class ProductEditorPage implements OnInit {
           product.modifierGroups.length,
         ),
       );
-      this.product.set({
-        ...product,
-        modifierGroups: [
-          ...product.modifierGroups,
-          { groupId: group.groupId, sortOrder: product.modifierGroups.length },
-        ],
-      });
+      // Re-read rather than append: the attachment's own version is the `If-Match` the group
+      // settings below send, and only the server knows it.
+      this.product.set(await firstValueFrom(this.api.productDetail(scope, product.productId)));
     } catch (error) {
       this.handleSaveError(error);
     } finally {
       this.savingField.set(null);
+    }
+  }
+
+  /**
+   * The Combo tab or the group settings wrote something. Combo findings are about entities that
+   * are not this product's own, so the readiness rail is re-read and the product is re-read too:
+   * an attachment write moves a version the next write has to carry.
+   */
+  protected async onCompositeSaved(): Promise<void> {
+    const scope = this.brand.scope();
+    const product = this.product();
+    this.saveNotice.set(this.i18n.t('catalog.editor.saved'));
+    if (!scope || !product) {
+      return;
+    }
+    try {
+      const fresh = await firstValueFrom(this.api.productDetail(scope, product.productId));
+      this.product.set(fresh);
+      void this.loadReadiness(fresh);
+    } catch {
+      // The write itself landed; a failed re-read leaves what was on screen, which a reload fixes.
     }
   }
 
@@ -1360,6 +1407,21 @@ export class ProductEditorPage implements OnInit {
       this.handleSaveError(error);
     } finally {
       this.savingField.set(null);
+    }
+  }
+
+  // ------------------------------------------------------------ Tab 6 — Вес и питательность (ADR 0137)
+
+  /**
+   * A set of physical attributes was written. The card owns the read and the
+   * write; the page only has to look at the readiness rail again, because
+   * `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` is a publication blocker that a
+   * save here can raise or clear.
+   */
+  protected onPhysicalSaved(): void {
+    const product = this.product();
+    if (product) {
+      void this.loadReadiness(product);
     }
   }
 

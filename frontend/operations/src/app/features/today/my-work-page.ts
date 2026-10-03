@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
@@ -45,21 +46,21 @@ interface PaymentMixSlice {
  * **What "done" means here is narrower than the row it discharges, on
  * purpose.** The IA lists four capabilities under `0.2`: `0.2a` personal
  * statistics by channel and `0.2b` revenue by payment method, both built
- * below; `0.2c` personal data (own profile) and `0.2d` UI personalization,
- * both deferred behind the staff-identity ADR and rendered as a named,
- * honest lock rather than an empty section — the same "omit, do not
- * disable" rule `not-built-page.ts` follows elsewhere, applied inline
- * because the rest of this page is real. `0.2c`/`0.2d` keep their own rows
- * on the gap map; this page does not discharge them, and does not pretend
- * to by rendering a profile store with nothing in it.
+ * below; `0.2c` personal data (own profile), which is «Мой профиль» (ADR
+ * 0139) and is linked from here rather than repeated; and `0.2d` UI
+ * personalization, still deferred and rendered as a named, honest lock rather
+ * than an empty section — the same "omit, do not disable" rule
+ * `not-built-page.ts` follows elsewhere, applied inline because the rest of
+ * this page is real. `0.2d` keeps its own row on the gap map; this page does
+ * not discharge it, and does not pretend to by rendering a settings store with
+ * nothing in it.
  *
- * **Why this page can exist at all when the live board's own operator
- * leaderboard (`0.1d`) cannot.** Every other actor-facing read needs a
- * staff person record to turn a Keycloak subject into a name — the
- * dependency `0.1d`, `9.2` and a dozen other rows share. This page needs no
- * such lookup: `0.2a` asks "how many orders did *I* take today", which the
- * console can answer from the token's own subject with nobody's name
- * printed at all, staff directory or not.
+ * **Why this page needs no name lookup.** The live board's operator band
+ * (`0.1d`) turns a Keycloak subject into a name through the tenant's own
+ * staff record (ADR 0139). This page asks a different question — `0.2a` is
+ * "how many orders did *I* take today", which the console answers from the
+ * token's own subject with nobody's name printed at all, staff directory or
+ * not.
  *
  * **The two bands are gated independently, not as one page-level state.**
  * `0.2a` reads `ORDER_READ`, which every operator this page is for already
@@ -71,7 +72,7 @@ interface PaymentMixSlice {
  */
 @Component({
   selector: 'q-my-work-page',
-  imports: [TPipe, BarChart, DonutChart, DeniedState, LockedState],
+  imports: [TPipe, RouterLink, BarChart, DonutChart, DeniedState, LockedState],
   templateUrl: './my-work-page.html',
   styleUrl: './my-work-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

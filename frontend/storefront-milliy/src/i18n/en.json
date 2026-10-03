@@ -130,7 +130,14 @@
     "recipient": "Recipient",
     "recipientName": "Recipient name",
     "recipientPhone": "Recipient phone",
-    "recipientRequired": "Add a recipient name and phone for this delivery."
+    "recipientRequired": "Add a recipient name and phone for this delivery.",
+    "hiddenCharge": {
+      "title": "Added automatically, already in the total",
+      "fallbackLabel": "Added charge"
+    },
+    "offerDiscount": "Special offer",
+    "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
+    "surchargeNote": "Includes a surcharge of {{amount}}"
   },
   "checkout": {
     "title": "Checkout",
@@ -155,7 +162,11 @@
     "emptyCartTitle": "There is nothing in your cart to check out",
     "emptyCartSubtitle": "Add some dishes to your cart first.",
     "loadError": "The checkout page could not be loaded",
-    "onlinePaymentFailed": "The payment page could not be opened. Check your orders."
+    "onlinePaymentFailed": "The payment page could not be opened. Check your orders.",
+    "promoCodeLabel": "Code {{code}}",
+    "promoOffersBetter": "Your current offers are already better than this code, so it was not applied.",
+    "promoNotApplicable": "This code does not apply to this order.",
+    "promoNoLongerValid": "This code is no longer valid."
   },
   "orders": {
     "title": "Orders",
@@ -374,6 +385,7 @@
       "presetNotOffered": "That comment is no longer offered for this item.",
       "itemUnavailable": "This item just sold out.",
       "holdExpired": "Your basket hold expired. Please review your order and try again.",
+      "paymentMethodUnavailable": "This payment method is not available right now. Choose a different one.",
       "tableNotAtBranch": "This table is at another branch. Scan the code on your own table.",
       "quoteExpired": "The price has expired. Please review your order and try again.",
       "modifierMinimum": "Choose the required options for this dish.",
@@ -433,7 +445,8 @@
   "dish": {
     "soldOut": "Sold out",
     "outOfSaleWindow": "Not on sale right now",
-    "lowStock": "Only {{count}} left"
+    "lowStock": "Only {{count}} left",
+    "fromPrice": "from {{price}}"
   },
   "dineIn": {
     "scanFailedTitle": "This code is not in service",
@@ -471,6 +484,52 @@
     "pickerOptionUnnamed": "Option",
     "chooseRequired": "Choose the required options first.",
     "customLinesTitle": "Dishes with your choices",
-    "lineGone": "A dish that is no longer on the menu"
+    "lineGone": "A dish that is no longer on the menu",
+    "sitHere": "Sit at this table",
+    "sitHereHint": "Tell us how many of you there are and sit down without waiting. We hold the table while you choose, and keep it once your order is accepted.",
+    "partySize": "How many of you",
+    "fewerGuests": "Fewer guests",
+    "moreGuests": "More guests",
+    "sitDown": "Sit down",
+    "sitting": "Seating you...",
+    "signInToSit": "Sign in to sit down",
+    "joinedExisting": "Someone at this table is already seated, so your orders go on the same bill.",
+    "claimHeld": "This table is held for you for {{minutes}} more minutes. Place an order to keep it.",
+    "claimEnding": "Your hold on this table is ending. Place an order now to keep it.",
+    "claimLapsedTitle": "Your hold on this table has ended",
+    "claimLapsedBody": "Table {{code}} is no longer held for you. To sit down again, scan the QR code on the table.",
+    "tableNotAvailable": "This table cannot be taken from here. Please ask a member of staff to seat you.",
+    "tooManyForTable": "This table seats {{seats}}. Please ask a member of staff for a larger table.",
+    "seatRateLimited": "Too many tries. Please wait a moment and try again.",
+    "tableChanged": "You are at a different table now. We moved your order to it: check it and place it again."
+  },
+  "combo": {
+    "pickExactly": "Choose {{count}}",
+    "pickBetween": "Choose {{min}} to {{max}}",
+    "pickUpTo": "Choose up to {{count}}",
+    "included": "Included",
+    "notPriced": "Price unavailable",
+    "incomplete": "Choose from every required group above before adding to cart.",
+    "unavailable": "This combo cannot be ordered right now.",
+    "total": "Combo price: {{price}}"
+  },
+  "physical": {
+    "nutritionTitle": "Nutrition",
+    "nutritionPer100g": "per 100 g",
+    "nutritionPer100ml": "per 100 ml",
+    "nutritionPerUnit": "per serving ({{amount}})",
+    "calories": "Calories",
+    "proteins": "Protein",
+    "fats": "Fat",
+    "carbs": "Carbs",
+    "kcal": "kcal",
+    "pricePerQuantum": "{{price}} per {{quantum}}",
+    "estimatedFor": "≈ {{price}} for ≈ {{weight}}",
+    "finalWeightNotice": "The final weight and price are determined at handover.",
+    "cartNotice": "The total includes items sold by weight. The final weight and amount are determined at handover.",
+    "portionsUnit": "portion",
+    "portionStep": "Ordered in portions of {{step}}",
+    "weighedLine": "Weighed: {{weight}}",
+    "estimateLine": "≈ {{weight}}, estimate"
   }
 }

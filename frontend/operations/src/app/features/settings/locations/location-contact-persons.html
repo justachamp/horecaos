@@ -1,0 +1,196 @@
+<section class="contacts" data-testid="location-contact-persons">
+  <h3 class="q-subhead">{{ 'settings.locations.contacts.title' | t }}</h3>
+
+  @switch (phase()) {
+    @case ('loading') {
+      <p class="q-body-sm hint">{{ 'settings.integrations.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm hint" data-testid="location-contacts-denied">
+        {{ 'settings.locations.contacts.denied' | t }}
+      </p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error" role="alert">{{ loadError() }}</p>
+    }
+    @case ('ready') {
+      <p class="q-caption hint">{{ 'settings.locations.contacts.lead' | t }}</p>
+
+      @if (notice(); as message) {
+        <p class="q-body-sm notice" role="status" data-testid="location-contacts-notice">
+          {{ message }}
+        </p>
+      }
+
+      @if (!editing()) {
+        @if (contacts().length === 0) {
+          <p class="q-body-sm hint" data-testid="location-contacts-empty">
+            {{ 'settings.locations.contacts.empty' | t }}
+          </p>
+        } @else {
+          <ul class="list" data-testid="location-contacts-list">
+            @for (contact of contacts(); track contact.id) {
+              <li class="item" data-testid="location-contacts-item">
+                <span class="q-caption item__role">{{
+                  relationLabelKey(contact.relationshipCode) | t
+                }}</span>
+                <span class="q-body-sm item__name">{{ labelOf(contact) }}</span>
+                @if (contact.formerColleague) {
+                  <span class="q-caption hint" data-testid="location-contacts-former">{{
+                    'staff.status.ended' | t
+                  }}</span>
+                } @else if (contact.phone; as phone) {
+                  <a class="q-body-sm q-tnum item__phone" [href]="'tel:' + phone">{{ phone }}</a>
+                } @else {
+                  <span class="q-body-sm hint">—</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+        @if (canWrite()) {
+          <button
+            type="button"
+            class="primary-button"
+            (click)="startEditing()"
+            data-testid="location-contacts-edit"
+          >
+            {{ 'staff.profile.edit' | t }}
+          </button>
+        }
+      } @else {
+        <p class="q-caption hint">{{ 'settings.locations.contacts.outsideNotice' | t }}</p>
+        <form
+          class="form"
+          (submit)="$event.preventDefault(); save()"
+          data-testid="location-contacts-form"
+        >
+          @for (row of drafts(); track $index; let index = $index) {
+            <div class="row" data-testid="location-contacts-row">
+              <select
+                class="input"
+                [value]="row.relationshipCode"
+                (change)="edit(index, 'relationshipCode', $any($event.target).value)"
+                [disabled]="busy()"
+                [attr.aria-label]="'staff.emergency.relationship' | t"
+              >
+                @for (code of relationships; track code) {
+                  <option [value]="code" [selected]="row.relationshipCode === code">
+                    {{ relationLabelKey(code) | t }}
+                  </option>
+                }
+              </select>
+
+              @if (row.kind === 'COLLEAGUE') {
+                <select
+                  class="input row__wide"
+                  [value]="row.staffMemberId"
+                  (change)="edit(index, 'staffMemberId', $any($event.target).value)"
+                  [disabled]="busy()"
+                  [attr.aria-label]="'settings.locations.contacts.colleague' | t"
+                  [attr.aria-invalid]="attempted() && rowProblem(row) ? 'true' : null"
+                  data-testid="location-contacts-colleague"
+                >
+                  <option value="">{{ 'settings.locations.contacts.colleague.pick' | t }}</option>
+                  @if (!isKnownColleague(row)) {
+                    <option [value]="row.staffMemberId" selected>
+                      {{ listedColleagueLabel(row) }}
+                    </option>
+                  }
+                  @for (member of optionsFor(row); track member.memberId) {
+                    <option
+                      [value]="member.memberId"
+                      [selected]="row.staffMemberId === member.memberId"
+                    >
+                      {{ colleagueLabel(member) }}
+                    </option>
+                  }
+                </select>
+              } @else {
+                <input
+                  type="text"
+                  class="input"
+                  [value]="row.name"
+                  (input)="edit(index, 'name', $any($event.target).value)"
+                  [disabled]="busy()"
+                  maxlength="100"
+                  [placeholder]="'staff.emergency.name' | t"
+                  [attr.aria-invalid]="attempted() && rowProblem(row) === 'name' ? 'true' : null"
+                  data-testid="location-contacts-name"
+                />
+                <input
+                  type="tel"
+                  class="input"
+                  [value]="row.phone"
+                  (input)="edit(index, 'phone', $any($event.target).value)"
+                  [disabled]="busy()"
+                  maxlength="40"
+                  [placeholder]="'staff.emergency.phone' | t"
+                  [attr.aria-invalid]="attempted() && rowProblem(row) === 'phone' ? 'true' : null"
+                  data-testid="location-contacts-phone"
+                />
+              }
+
+              <button
+                type="button"
+                class="text-button text-button--destructive"
+                (click)="removeDraft(index)"
+                [disabled]="busy()"
+                data-testid="location-contacts-remove"
+              >
+                {{ 'staff.action.remove' | t }}
+              </button>
+              @if (attempted() && rowProblem(row); as problem) {
+                <span class="q-caption error row__problem">{{ problemKey(problem) | t }}</span>
+              }
+            </div>
+          }
+
+          @if (drafts().length < maxContacts) {
+            <div class="adders">
+              <button
+                type="button"
+                class="text-button"
+                (click)="addDraft('COLLEAGUE')"
+                [disabled]="busy()"
+                data-testid="location-contacts-add-colleague"
+              >
+                {{ 'settings.locations.contacts.addColleague' | t }}
+              </button>
+              <button
+                type="button"
+                class="text-button"
+                (click)="addDraft('OUTSIDE')"
+                [disabled]="busy()"
+                data-testid="location-contacts-add-outside"
+              >
+                {{ 'settings.locations.contacts.addOutside' | t }}
+              </button>
+            </div>
+          } @else {
+            <p class="q-caption hint">{{ 'settings.locations.contacts.max' | t }}</p>
+          }
+
+          @if (saveError(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="location-contacts-error">
+              {{ message }}
+            </p>
+          }
+          <div class="actions">
+            <button type="button" class="text-button" (click)="cancelEditing()" [disabled]="busy()">
+              {{ 'staff.dialog.cancel' | t }}
+            </button>
+            <button
+              type="submit"
+              class="primary-button"
+              [disabled]="busy()"
+              data-testid="location-contacts-save"
+            >
+              {{ 'staff.profile.save' | t }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+  }
+</section>

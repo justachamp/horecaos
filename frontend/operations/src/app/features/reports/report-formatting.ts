@@ -6,7 +6,12 @@
  * `core/format/datetime.ts`; this file never duplicates it.
  */
 
-import { groupDigits } from '../../core/format/regional-format';
+import {
+  activeRegionalFormats,
+  decimalSeparatorFor,
+  groupDigits,
+} from '../../core/format/regional-format';
+import type { Locale } from '../../core/i18n/i18n';
 
 /** `YYYY-MM-DD` → `DD.MM` (statistics.md §0: "Dates DD.MM"). No zone conversion — a LocalDate has none to do. */
 export function ddmm(iso: string): string {
@@ -65,6 +70,23 @@ export function formatCount(value: number): string {
   const digits = String(Math.abs(Math.round(value)));
   const grouped = groupDigits(digits);
   return negative ? `−${grouped}` : grouped;
+}
+
+/**
+ * A quantity total — items sold — with the portions it is made of (ADR 0137). `formatCount`
+ * rounds to a whole number, which for 3.5 portions of plov says 4: a report that misstates what
+ * was sold. A whole total reads exactly as it does through `formatCount`; a fractional one keeps up
+ * to three decimals, in the brand's decimal mark, with no trailing zeros.
+ */
+export function formatQuantityTotal(value: number, locale: Locale): string {
+  const [whole, fraction = ''] = (Math.round(Math.abs(value) * 1000) / 1000).toFixed(3).split('.');
+  const trimmed = fraction.replace(/0+$/, '');
+  const grouped = groupDigits(whole);
+  const text =
+    trimmed === ''
+      ? grouped
+      : `${grouped}${decimalSeparatorFor(locale, activeRegionalFormats().moneyGrouping)}${trimmed}`;
+  return value < 0 ? `−${text}` : text;
 }
 
 /**

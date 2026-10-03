@@ -25,6 +25,14 @@ export interface TicketItemView {
   /** `QUEUED` | `STARTED` | `READY` | `CANCELLED`. */
   readonly status: string;
   readonly version: number;
+  /**
+   * ADR 0136: the key the component items of one combo purchase share, so a display groups them
+   * under one header — an id and never a name (ADR 0041); the header's text is the order line's
+   * `combo.name`. Null on every other item. Routing never reads it: each component routes by its own
+   * variant, which is what a burger station and a bar each still see only their own item.
+   */
+  readonly comboSelectionId?: string | null;
+  readonly comboContainerVariantId?: string | null;
 }
 
 /** Mirrors `KitchenBoardController.TicketResponse` (wave 30's `fulfilmentMode`/`channelCode`/`createdAt` addition included). */
@@ -161,6 +169,8 @@ export interface VduItemView {
   readonly quantity: number;
   /** `QUEUED` | `STARTED` | `READY` | `CANCELLED`. */
   readonly status: string;
+  /** ADR 0136: the key a combo's component items are grouped on — an id and never a name. */
+  readonly comboSelectionId?: string | null;
 }
 
 /**

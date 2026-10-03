@@ -137,13 +137,29 @@ curl -sX POST 'http://localhost:8080/api/v1/storefront/dine-in/qr/token-exchange
 
 The table starts with no live session — nobody has seated it — so the
 guest token's `openSessionId` reads `null` and the ordering endpoints below
-answer `404` until an operator seats it. There is no local-fixture reservation
-to seat today, so seat it as a walk-in through the operator endpoint directly
-(a manager grant is not seeded here either; see `dev-personas.md`-style notes
-in the team's own memory for a working operator credential, or seat it with a
-direct row in `dinein.table_sessions`/`dinein.session_tables` for a quick
-local check). Once a session is open, the guest token from the exchange above
-reads its bill:
+answer `404` until the table is seated. Self-seating (ADR 0143) is switched on
+for this branch in the local fixture, so the exchange also says
+`"walkInAvailable": true` and a guest can sit down without an operator: sign in
+(the preset customer persona of the section above), then
+
+```bash
+CUSTOMER_TOKEN=... # the customer session from the sign-in above
+curl -sX POST 'http://localhost:8080/api/v1/storefront/dine-in/sessions' \
+  -H "X-Dine-In-Token: $GUEST_TOKEN" \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"partySize": 2}'
+```
+
+opens a *claim*: the table is the guest's for the claim window, and it goes back
+to the room (the sweeper, `horecaos.dinein.claim-sweeper.enabled`) unless an
+order the restaurant accepts is put on it. The storefront's table screen makes
+the same call from its "Sit at this table" button. A member of staff can still
+seat it as a walk-in through the operator endpoint (a manager grant is not
+seeded here; see `dev-personas.md`-style notes in the team's own memory for a
+working operator credential, or seat it with a direct row in
+`dinein.table_sessions`/`dinein.session_tables` for a quick local check). Once
+a session is open, the guest token from the exchange above reads its bill:
 
 ```bash
 GUEST_TOKEN=... # from the exchange above

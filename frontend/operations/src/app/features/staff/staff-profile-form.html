@@ -1,0 +1,199 @@
+<form class="form" (submit)="$event.preventDefault(); submit()" data-testid="staff-profile-form">
+  <div class="form__row">
+    <label class="field">
+      <span class="q-body-sm">{{ 'staff.profile.field.firstName' | t }}</span>
+      <input
+        type="text"
+        class="input"
+        [value]="draft().firstName"
+        (input)="set('firstName', $any($event.target).value)"
+        [disabled]="busy()"
+        maxlength="100"
+        [attr.aria-invalid]="has('firstNameRequired') ? 'true' : null"
+        data-testid="staff-profile-first-name"
+      />
+      @if (has('firstNameRequired')) {
+        <span class="q-caption error">{{ 'staff.profile.firstName.required' | t }}</span>
+      }
+    </label>
+    <label class="field">
+      <span class="q-body-sm">{{ 'staff.profile.field.lastName' | t }}</span>
+      <input
+        type="text"
+        class="input"
+        [value]="draft().lastName"
+        (input)="set('lastName', $any($event.target).value)"
+        [disabled]="busy()"
+        maxlength="100"
+        data-testid="staff-profile-last-name"
+      />
+    </label>
+  </div>
+
+  <label class="field">
+    <span class="q-body-sm">{{ 'staff.profile.field.phone' | t }}</span>
+    <input
+      type="tel"
+      class="input"
+      [value]="draft().phone"
+      (input)="set('phone', $any($event.target).value)"
+      [disabled]="busy()"
+      maxlength="40"
+      placeholder="+998 90 123 45 67"
+      [attr.aria-invalid]="has('phoneInvalid') ? 'true' : null"
+      data-testid="staff-profile-phone"
+    />
+    <span class="q-caption hint">{{ 'staff.profile.phone.hint' | t }}</span>
+    @if (has('phoneInvalid')) {
+      <span class="q-caption error">{{ 'staff.profile.phone.invalid' | t }}</span>
+    }
+  </label>
+
+  <div class="form__row">
+    <label class="field">
+      <span class="q-body-sm">{{ 'staff.profile.field.uiLocale' | t }}</span>
+      <select
+        class="input"
+        [value]="draft().uiLocale"
+        (change)="set('uiLocale', $any($event.target).value)"
+        [disabled]="busy()"
+        data-testid="staff-profile-ui-locale"
+      >
+        <option value="">{{ 'staff.profile.uiLocale.none' | t }}</option>
+        @for (code of languages; track code) {
+          <option [value]="code" [selected]="draft().uiLocale === code">
+            {{ languageName(code) }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <fieldset class="field field--group">
+      <legend class="q-body-sm">{{ 'staff.profile.field.spoken' | t }}</legend>
+      <div class="checks">
+        @for (code of languages; track code) {
+          <label class="check q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="isSpoken(code)"
+              (change)="toggleSpoken(code)"
+              [disabled]="busy()"
+              [attr.data-testid]="'staff-profile-spoken-' + code"
+            />
+            {{ languageName(code) }}
+          </label>
+        }
+      </div>
+    </fieldset>
+  </div>
+
+  @if (manager()) {
+    <div class="form__row">
+      <label class="field">
+        <span class="q-body-sm">{{ 'staff.profile.field.status' | t }}</span>
+        @if (statusEditable()) {
+          <select
+            class="input"
+            [value]="draft().status"
+            (change)="setStatus($any($event.target).value)"
+            [disabled]="busy()"
+            data-testid="staff-profile-status"
+          >
+            <option value="ACTIVE" [selected]="draft().status === 'ACTIVE'">
+              {{ 'staff.profile.status.ACTIVE' | t }}
+            </option>
+            <option value="ON_LEAVE" [selected]="draft().status === 'ON_LEAVE'">
+              {{ 'staff.status.onLeave' | t }}
+            </option>
+          </select>
+        } @else {
+          <span class="q-body-sm static" data-testid="staff-profile-status-static">
+            {{
+              member().employmentStatus === 'PENDING'
+                ? ('staff.status.invited' | t)
+                : ('staff.status.ended' | t)
+            }}
+          </span>
+        }
+      </label>
+      <label class="field">
+        <span class="q-body-sm">{{ 'staff.profile.field.employeeNumber' | t }}</span>
+        <input
+          type="text"
+          class="input"
+          [value]="draft().employeeNumber"
+          (input)="set('employeeNumber', $any($event.target).value)"
+          [disabled]="busy()"
+          maxlength="32"
+          data-testid="staff-profile-employee-number"
+        />
+      </label>
+    </div>
+
+    <div class="form__row">
+      <label class="field">
+        <span class="q-body-sm">{{ 'staff.profile.field.employedFrom' | t }}</span>
+        <input
+          type="date"
+          class="input"
+          [value]="draft().employedFrom"
+          (input)="set('employedFrom', $any($event.target).value)"
+          [disabled]="busy()"
+          data-testid="staff-profile-employed-from"
+        />
+      </label>
+      <label class="field">
+        <span class="q-body-sm">{{ 'staff.profile.field.employedUntil' | t }}</span>
+        <input
+          type="date"
+          class="input"
+          [value]="draft().employedUntil"
+          (input)="set('employedUntil', $any($event.target).value)"
+          [disabled]="busy()"
+          [attr.aria-invalid]="has('datesInvalid') ? 'true' : null"
+          data-testid="staff-profile-employed-until"
+        />
+        @if (has('datesInvalid')) {
+          <span class="q-caption error">{{ 'staff.profile.dates.invalid' | t }}</span>
+        }
+      </label>
+    </div>
+
+    <label class="field">
+      <span class="q-body-sm">{{ 'staff.profile.field.reason' | t }}</span>
+      <input
+        type="text"
+        class="input"
+        [value]="draft().reason"
+        (input)="set('reason', $any($event.target).value)"
+        [disabled]="busy()"
+        maxlength="1000"
+        data-testid="staff-profile-reason"
+      />
+    </label>
+  }
+
+  @if (serverError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="staff-profile-error">{{ message }}</p>
+  }
+
+  <div class="actions">
+    <button
+      type="button"
+      class="text-button"
+      (click)="cancelled.emit()"
+      [disabled]="busy()"
+      data-testid="staff-profile-cancel"
+    >
+      {{ 'staff.dialog.cancel' | t }}
+    </button>
+    <button
+      type="submit"
+      class="primary-button"
+      [disabled]="busy()"
+      data-testid="staff-profile-save"
+    >
+      {{ 'staff.profile.save' | t }}
+    </button>
+  </div>
+</form>

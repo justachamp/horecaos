@@ -149,6 +149,9 @@ function sessionView(overrides: Partial<SessionView> = {}): SessionView {
     closeReasonCode: null,
     version: 1,
     tables: [{ tableId: 't1', code: 'T1', displayName: 'Table 1' }],
+    origin: 'STAFF',
+    claimExpiresAt: null,
+    confirmedAt: null,
     ...overrides,
   };
 }
@@ -366,6 +369,73 @@ describe('ReservationsPage', () => {
     expect(host.querySelector('[data-testid="reservations-detail"]')?.textContent).toContain(
       'Confirmed',
     );
+  });
+
+  it('tells the host when a party is already sitting at a table they just confirmed over (ADR 0143)', async () => {
+    const stateAction = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: true })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation()]),
+      stateAction,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="reservations-action-CONFIRMED"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const code = host.querySelector('[data-testid="order-reason-dialog-code"]') as HTMLInputElement;
+    code.value = 'Table confirmed available';
+    code.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="reservations-detail"]')?.textContent).toContain(
+      'Confirmed',
+    );
+    expect(host.querySelector('[data-testid="reservations-notice"]')?.textContent).toContain(
+      'already sitting',
+    );
+  });
+
+  it('says nothing extra when the confirmed booking’s table is free', async () => {
+    const stateAction = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: false })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation()]),
+      stateAction,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="reservations-action-CONFIRMED"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const code = host.querySelector('[data-testid="order-reason-dialog-code"]') as HTMLInputElement;
+    code.value = 'Table confirmed available';
+    code.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="reservations-notice"]')).toBeNull();
   });
 
   it('offers "mark completed" for a seated booking', async () => {
@@ -593,6 +663,74 @@ describe('ReservationsPage', () => {
     const [, , body] = amend.mock.calls[0];
     expect(body.guestName).toBe('Dilnoza Karimova');
     expect(body.guestPhone).toBeUndefined();
+  });
+
+  it('tells the host when an amended booking now holds a table with a party already sitting at it (ADR 0143)', async () => {
+    // An amendment of a confirmed booking is not refused for an occupied table either: the
+    // platform answers with the fact, and the host is the only one who can act on it.
+    const amend = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: true })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation({ status: 'CONFIRMED' })]),
+      amend,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="reservations-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const reason = host.querySelector(
+      '[data-testid="reservations-form-reason"]',
+    ) as HTMLInputElement;
+    reason.value = 'Moved to the window table';
+    reason.dispatchEvent(new Event('input'));
+
+    (host.querySelector('[data-testid="reservations-form-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(amend).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="reservations-form"]')).toBeNull();
+    const notice = host.querySelector('[data-testid="reservations-notice"]')?.textContent ?? '';
+    expect(notice).toContain('already sitting');
+    // It was amended, not confirmed: the confirmation sentence would misreport what happened.
+    expect(notice).not.toContain('Confirmed.');
+  });
+
+  it('says nothing extra when the amended booking’s tables are free', async () => {
+    const amend = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: false })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation({ status: 'CONFIRMED' })]),
+      amend,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="reservations-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const reason = host.querySelector(
+      '[data-testid="reservations-form-reason"]',
+    ) as HTMLInputElement;
+    reason.value = 'Moved to the window table';
+    reason.dispatchEvent(new Event('input'));
+
+    (host.querySelector('[data-testid="reservations-form-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(amend).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="reservations-notice"]')).toBeNull();
   });
 
   // ------------------------------------------------------------------ X.36 timeline

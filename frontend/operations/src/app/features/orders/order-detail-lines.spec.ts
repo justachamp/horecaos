@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
 import { OrderLine } from './order-detail';
-import { OrderDetailLines } from './order-detail-lines';
+import { OrderDetailLines, orderLineRows } from './order-detail-lines';
 
 function line(overrides: Partial<OrderLine> = {}): OrderLine {
   return {
@@ -139,5 +139,176 @@ describe('OrderDetailLines', () => {
 
     expect(row().querySelector('.pane__line-note')).toBeNull();
     expect(row().querySelector('.pane__reveal-link')).toBeNull();
+  });
+
+  // ------------------------------------------------------------ ADR 0136
+
+  const combo = (selectionId: string, name = 'Lunch box', quantity = 2) => ({
+    selectionId,
+    containerVariantId: 'cv-1',
+    name,
+    quantity,
+  });
+
+  it('draws a combo as a header with its components beneath, the header adding the components up', () => {
+    const { host } = render({
+      lines: [
+        line({
+          lineId: 'a',
+          lineNumber: 1,
+          productName: 'Plov',
+          combo: null,
+          finalAmountMinor: 10_000,
+        }),
+        line({
+          lineId: 'b',
+          lineNumber: 2,
+          productName: 'Burger',
+          combo: combo('sel-1'),
+          finalAmountMinor: 50_000,
+        }),
+        line({
+          lineId: 'c',
+          lineNumber: 3,
+          productName: 'Cola',
+          combo: combo('sel-1'),
+          finalAmountMinor: 6_000,
+        }),
+      ],
+    });
+
+    const rows = [...host.querySelectorAll('tbody tr')].map((row) =>
+      row.getAttribute('data-testid'),
+    );
+    expect(rows).toEqual([
+      'order-detail-line',
+      'order-detail-combo',
+      'order-detail-line',
+      'order-detail-line',
+    ]);
+    const head = host.querySelector('[data-testid="order-detail-combo"]') as HTMLElement;
+    expect(head.textContent).toContain('Lunch box');
+    expect(head.textContent).toContain('2');
+    expect(head.textContent).toMatch(/56\s?000/);
+  });
+
+  it('keeps one combo’s components together even when another line was ordered between them', () => {
+    const rows = orderLineRows([
+      line({ lineId: 'a', combo: combo('sel-1') }),
+      line({ lineId: 'b', combo: null }),
+      line({ lineId: 'c', combo: combo('sel-1') }),
+      line({ lineId: 'd', combo: combo('sel-2', 'Family box') }),
+    ]);
+
+    expect(rows.map((row) => (row.kind === 'combo' ? row.name : row.line.lineId))).toEqual([
+      'Lunch box',
+      'a',
+      'c',
+      'b',
+      'Family box',
+      'd',
+    ]);
+  });
+
+  it('shows a line with no combo exactly as before: no header', () => {
+    const { host } = render({ lines: [line(), line({ lineId: 'l2' })] });
+
+    expect(host.querySelector('[data-testid="order-detail-combo"]')).toBeNull();
+  });
+
+  it('itemises a charge the server added: its name, what it cost, and that the customer did not choose it', () => {
+    const { host } = render({
+      lines: [
+        line({
+          modifiers: ['Extra cheese', 'Delivery box'],
+          autoSelectedModifiers: ['Delivery box'],
+          autoSelectedCharges: [{ name: 'Delivery box', amountMinor: 2_000 }],
+        }),
+      ],
+    });
+
+    const auto = host.querySelector('[data-testid="order-detail-line-auto"]') as HTMLElement;
+    expect(auto.textContent).toContain('Delivery box');
+    expect(auto.textContent).toMatch(/2\s?000/);
+    expect(auto.textContent).toContain('added automatically');
+    const chosen = host.querySelector('.pane__line-modifiers') as HTMLElement;
+    expect(chosen.textContent).toContain('Extra cheese');
+    expect(chosen.textContent).not.toContain('Delivery box');
+  });
+
+  it('lists a hidden option under the chosen ones only when the platform did not say it was applied', () => {
+    const { host } = render({ lines: [line({ modifiers: ['Large'] })] });
+
+    expect(host.querySelector('[data-testid="order-detail-line-auto"]')).toBeNull();
+    expect(host.querySelector('.pane__line-modifiers')?.textContent).toContain('Large');
+  });
+
+  describe('portions and weighed lines (ADR 0137)', () => {
+    const NBSP = '\u00a0';
+
+    it('writes a portion as the console writes a quantity, and a whole quantity without decimals', () => {
+      const { row } = render({
+        lines: [line({ quantity: 0.5 }), line({ lineId: 'l2', lineNumber: 2, quantity: 3 })],
+      });
+
+      expect(row(0).querySelectorAll('td')[2].textContent?.trim()).toBe('0.5');
+      expect(row(1).querySelectorAll('td')[2].textContent?.trim()).toBe('3');
+    });
+
+    it('writes the decimal mark of the console’s language', () => {
+      TestBed.inject(I18n).setLocale('ru');
+      const { row } = render({ lines: [line({ quantity: 0.5 })] });
+
+      expect(row(0).querySelectorAll('td')[2].textContent?.trim()).toBe('0,5');
+    });
+
+    it('says a weighed line is an estimate until it is weighed, with the price per quantum', () => {
+      const { row } = render({
+        lines: [
+          line({
+            quantity: 2,
+            catchweight: {
+              quantumGrams: 100,
+              nominalGramsPerUnit: 1_200,
+              pricePerQuantumMinor: 15_000,
+              provisional: true,
+            },
+          }),
+        ],
+      });
+
+      const weight = row(0).querySelector('[data-testid="order-detail-line-weight"]')!;
+      expect(weight.textContent).toContain(`2.4${NBSP}kg`);
+      expect(weight.textContent).toContain('estimate');
+      expect(weight.textContent).toContain(`100${NBSP}g`);
+    });
+
+    it('shows the weighed weight once it is weighed, and no longer calls it an estimate', () => {
+      const { row } = render({
+        lines: [
+          line({
+            quantity: 1,
+            catchweight: {
+              quantumGrams: 100,
+              nominalGramsPerUnit: 1_200,
+              pricePerQuantumMinor: 15_000,
+              provisional: false,
+              actualWeightGrams: 1_340,
+            },
+          }),
+        ],
+      });
+
+      const weight = row(0).querySelector('[data-testid="order-detail-line-weight"]')!;
+      expect(weight.textContent).toContain(`1.34${NBSP}kg`);
+      expect(weight.textContent).toContain('Weighed');
+      expect(weight.textContent).not.toContain('estimate');
+    });
+
+    it('draws nothing about weight on a line that is not sold by weight', () => {
+      const { row } = render({ lines: [line()] });
+
+      expect(row(0).querySelector('[data-testid="order-detail-line-weight"]')).toBeNull();
+    });
   });
 });

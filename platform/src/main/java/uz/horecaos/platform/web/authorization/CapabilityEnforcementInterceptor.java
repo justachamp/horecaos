@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
 import uz.horecaos.platform.iam.api.TenantAvailability;
 import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
+import uz.horecaos.platform.iam.api.staff.StaffSelfAuthorized;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -81,6 +83,42 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
     }
 
     /**
+     * The check behind {@link StaffSelfAuthorized} (ADR 0139): the caller must
+     * hold the capability at <em>some</em> scope in the path's tenant, and the
+     * tenant must be a real one.
+     *
+     * <p>This is a different statement from the coverage check above and it is
+     * made on purpose, not as a loosening of it. A person's own profile belongs
+     * to no location, a grant at {@code LOCATION} scope never covers a {@code
+     * TENANT} route, and nearly every member of staff holds only a location
+     * grant -- so a coverage check would refuse the very cook the endpoint is
+     * for. What makes the weaker statement safe is the other half of the
+     * contract, which the handler owns and {@code EndpointCapabilityDeclarationTests}
+     * cannot see: it resolves the member from the token subject and this tenant,
+     * never from a supplied id, so the capability can act on the caller's own row
+     * and no other.
+     *
+     * <p>The order matches the check above for the same reason: capability
+     * first, existence second, so the pair of answers is not an oracle for which
+     * tenants exist.
+     */
+    private void requireStaffSelfCapability(HttpServletRequest request, Object handler) {
+        if (!(handler instanceof HandlerMethod method)) {
+            return;
+        }
+        StaffSelfAuthorized self = method.getMethodAnnotation(StaffSelfAuthorized.class);
+        if (self == null) {
+            return;
+        }
+        ResourceScope tenant = scopeOf(request, ScopeType.TENANT);
+        UUID tenantId = Objects.requireNonNull(tenant.tenantId());
+        if (!authorization.holdsAtAnyScope(subject(), self.value(), tenantId)) {
+            throw new AuthorizationService.AccessDeniedException(self.value(), tenant);
+        }
+        requireRealScope(tenant);
+    }
+
+    /**
      * Refuses a scope whose identifiers do not name a real hierarchy.
      *
      * <p>The capability check cannot catch this on its own: the scope is
@@ -112,6 +150,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
         }
         RequiresCapability declaration = declarationOf(handler);
         if (declaration == null) {
+            requireStaffSelfCapability(request, handler);
             return true;
         }
         ResourceScope scope = scopeOf(request, declaration.scope());

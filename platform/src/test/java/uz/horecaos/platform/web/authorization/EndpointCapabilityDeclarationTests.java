@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.ValueConstants;
 import uz.horecaos.platform.courier.api.CourierSelfAuthorized;
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.staff.StaffSelfAuthorized;
 import uz.horecaos.platform.ordering.web.OperationsOrderController;
 import uz.horecaos.platform.partner.api.PartnerBound;
 import uz.horecaos.platform.web.idempotency.Idempotent;
@@ -39,7 +40,8 @@ import uz.horecaos.platform.web.idempotency.NaturallyIdempotent;
  *
  * <p>Staff use {@link RequiresCapability}; customers use {@link CustomerOwned};
  * partner clients use {@link PartnerBound}; and couriers use
- * {@link CourierSelfAuthorized}. What the test refuses is silence and ambiguity:
+ * {@link CourierSelfAuthorized}; and a member of staff editing their own record
+ * uses {@link StaffSelfAuthorized} (ADR 0139). What the test refuses is silence and ambiguity:
  * an endpoint declaring none has made no authorization decision, while one
  * declaring two will be refused by whichever interceptor runs first.
  */
@@ -146,7 +148,8 @@ class EndpointCapabilityDeclarationTests {
 
         assertThat(undeclared).as("""
                         A mutating endpoint must declare one of @RequiresCapability,
-                        @CustomerOwned, @PartnerBound, or @CourierSelfAuthorized. None
+                        @CustomerOwned, @PartnerBound, @CourierSelfAuthorized, or
+                        @StaffSelfAuthorized. None
                         ships with no authorization decision (ADR 0025, ADR 0049).""").isEmpty();
     }
 
@@ -171,6 +174,79 @@ class EndpointCapabilityDeclarationTests {
     }
 
     @Test
+    void aStaffSelfEndpointCombinedWithACapabilityIsRefusedAsAmbiguous() throws NoSuchMethodException {
+        // ADR 0139: the capability interceptor runs first and would answer 403 to
+        // the very caller @StaffSelfAuthorized exists for -- a cook with only a
+        // location grant -- so the two strategies must never share a handler.
+        // The scan above counts the new strategy; this proves the count would
+        // catch the combination, rather than trusting that it does.
+        Method combined = Combined.class.getDeclaredMethod("both");
+        Method selfOnly = Combined.class.getDeclaredMethod("selfOnly");
+
+        assertThat(authorizationDeclarationCount(combined))
+                .as("a handler carrying both strategies must count as more than one")
+                .isGreaterThan(1);
+        assertThat(authorizationDeclarationCount(selfOnly))
+                .as("and the strategy alone counts as exactly one, or the test above could never pass")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void everyStaffSelfEndpointActsOnTheCallersOwnRowOnly() {
+        // The other half of the contract. The interceptor checks that the caller
+        // holds the capability at SOME scope in the tenant -- a weaker statement
+        // than coverage, sound only because the handler can touch nothing but the
+        // caller's own row. That is true exactly when no member id can reach it,
+        // so a path that carries one -- or a brand or a location, which would
+        // invite the coverage reading -- is a different, unsafe endpoint.
+        List<String> offenders = new ArrayList<>();
+        int checked = 0;
+
+        for (Method handler : allControllerMethods()) {
+            if (handler.getAnnotation(StaffSelfAuthorized.class) == null) {
+                continue;
+            }
+            checked++;
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            String path = pathOf(handler);
+            if (!path.contains("{tenantId}")) {
+                offenders.add(where + " has no {tenantId}: the capability is checked against the path's tenant");
+            }
+            for (String identifier : new String[] {"{brandId}", "{locationId}", "{memberId}", "{subject}"}) {
+                if (path.contains(identifier)) {
+                    offenders.add(where + " names " + identifier + ": it must resolve the row from the token alone");
+                }
+            }
+            for (Parameter parameter : handler.getParameters()) {
+                String name = parameter.getName();
+                if (name.equals("memberId") || name.equals("subject") || name.equals("staffMemberId")) {
+                    offenders.add(where + " takes a " + name + " parameter");
+                }
+            }
+            if (handler.getAnnotation(RequiresCapability.class) != null) {
+                offenders.add(where + " also declares @RequiresCapability");
+            }
+        }
+
+        assertThat(checked)
+                .as("a scan that finds no self-service endpoint would pass forever")
+                .isGreaterThanOrEqualTo(3);
+        assertThat(offenders).isEmpty();
+    }
+
+    /** Stand-ins for the combination the test above must be able to see. */
+    @SuppressWarnings("unused")
+    private static final class Combined {
+
+        @StaffSelfAuthorized(uz.horecaos.platform.iam.api.Capability.STAFF_SELF_MANAGE)
+        @RequiresCapability(uz.horecaos.platform.iam.api.Capability.STAFF_PROFILE_READ)
+        void both() {}
+
+        @StaffSelfAuthorized(uz.horecaos.platform.iam.api.Capability.STAFF_SELF_MANAGE)
+        void selfOnly() {}
+    }
+
+    @Test
     void everyResourceCreatingEndpointDeclaresReplayProtection() {
         // Two ways to say it, because idempotency is not a property of the
         // authorization decision. It used to be readable only off
@@ -190,7 +266,9 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
-                    || isDeliveryFeePreviewEndpoint(handler)) {
+                    || isDeliveryFeePreviewEndpoint(handler)
+                    || isDispatchRuleSimulationEndpoint(handler)
+                    || isPromotionSimulationEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -265,6 +343,7 @@ class EndpointCapabilityDeclarationTests {
         count += handler.getAnnotation(CustomerOwned.class) == null ? 0 : 1;
         count += handler.getAnnotation(PartnerBound.class) == null ? 0 : 1;
         count += handler.getAnnotation(CourierSelfAuthorized.class) == null ? 0 : 1;
+        count += handler.getAnnotation(StaffSelfAuthorized.class) == null ? 0 : 1;
         return count;
     }
 
@@ -294,6 +373,9 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isGuestBearerEndpoint(Method handler) {
         String path = pathOf(handler);
         return path.equals("/api/v1/storefront/dine-in/qr/token-exchanges")
+                // ADR 0143: a guest seats themselves. The table is proved by the guest token
+                // and the person by the customer's own session; exact path, never a prefix.
+                || path.equals("/api/v1/storefront/dine-in/sessions")
                 || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests")
                 || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/rounds");
     }
@@ -522,7 +604,37 @@ class EndpointCapabilityDeclarationTests {
      * {@code @Idempotent} rather than {@code RequiresCapability.mutating()}.
      */
     private static boolean isScopeResolvedCourierPolicyEndpoint(Method handler) {
-        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/courier-policy");
+        String path = pathOf(handler);
+        return path.equals("/api/v1/operations/tenants/{tenantId}/courier-policy")
+                || isScopeResolvedDispatchRulesEndpoint(path);
+    }
+
+    /**
+     * ADR 0142: the dispatch rules and the sourcing timings, which mirror the courier policy above for
+     * the identical reason -- one document per scope, with {@code brandId}/{@code locationId} optional
+     * request parameters and the tenant-wide call a real one, so a single declared scope is either too
+     * wide (a brand manager is refused a grant the role bundle gives them) or crashes the call that
+     * omits it. Each handler calls {@code authorization.require} against the scope it resolves
+     * ({@code OperationsDispatchRulesController.scopeOf}, or the {@code POST}'s body), and the two
+     * {@code PUT}s keep replay protection via {@code @Idempotent}.
+     *
+     * <p>The simulator is a {@code POST} only because its body can carry a whole draft document. It
+     * writes nothing, calls no provider and asks no quote, which is why it is also exempt from replay
+     * protection below. Matched on exact paths, the discipline every exemption here keeps.
+     */
+    private static boolean isScopeResolvedDispatchRulesEndpoint(String path) {
+        String base = "/api/v1/operations/tenants/{tenantId}";
+        return path.equals(base + "/dispatch-rules")
+                || path.equals(base + "/dispatch-rules/simulations")
+                || path.equals(base + "/sourcing-policy")
+                // ADR 0142 Decision 7: the unpaid-order window, an ordering policy shown on the same
+                // screen and authored by the identical scope-resolved shape.
+                || path.equals(base + "/payment-window");
+    }
+
+    /** The side-effect-free {@code POST}: a simulation needs no {@code Idempotency-Key}, there is nothing to replay. */
+    private static boolean isDispatchRuleSimulationEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/dispatch-rules/simulations");
     }
 
     /**
@@ -574,6 +686,22 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isDeliveryFeePreviewEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee");
+    }
+
+    /**
+     * Whether this endpoint is the promotion simulator (ADR 0140): a POST only because
+     * its input is a cart, not a query string.
+     *
+     * <p>It writes no quote, no redemption and no counter -- the response says so in
+     * its own documentation and a test asserts it -- so there is no effect for a
+     * replay key to guard, and a marketer pressing "simulate" twice should not be
+     * told to send an {@code Idempotency-Key} for a read. It is not exempt from
+     * authorization: it still declares {@code PRICING_READ} at brand scope, and
+     * {@link #everyMutatingEndpointDeclaresHowItIsAuthorized} still checks that.
+     * Matched on the exact path, as every exemption here is.
+     */
+    private static boolean isPromotionSimulationEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/simulate");
     }
 
     /**

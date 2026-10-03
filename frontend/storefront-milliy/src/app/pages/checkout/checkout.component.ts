@@ -164,6 +164,10 @@ export class CheckoutComponent implements OnInit {
         this.selectedPayment.set(methods[0]);
       }
       this.state.set('ready');
+      if (methods.length === 1) {
+        // The one method on offer is as much a choice as a tap, and a promotion can read it.
+        await this.syncPaymentMethod(methods[0]);
+      }
     } catch {
       this.state.set('error');
     }
@@ -199,8 +203,25 @@ export class CheckoutComponent implements OnInit {
     return KNOWN_METHODS[code] ?? { code, labelKey: '', subKey: '' };
   }
 
-  protected selectPayment(code: string): void {
+  protected async selectPayment(code: string): Promise<void> {
     this.selectedPayment.set(code);
+    await this.syncPaymentMethod(code);
+  }
+
+  /**
+   * Puts the chosen method on the cart, which re-prices it (ADR 0140): "5% off when paying by Click"
+   * is only in the total the customer is shown, and only in the quote checkout accepts, once the
+   * platform has been told the method. A refusal is shown here and retried by {@link confirm}, which
+   * writes the method again before it prices.
+   */
+  private async syncPaymentMethod(code: string): Promise<void> {
+    try {
+      await this.cart.selectPaymentMethod(code);
+    } catch (failure) {
+      this.submitErrorKey.set(
+        failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'errors.generic',
+      );
+    }
   }
 
   protected onCommentInput(value: string): void {
@@ -241,17 +262,21 @@ export class CheckoutComponent implements OnInit {
         this.submitErrorKey.set('cart.addressRequired');
         return;
       }
+      const paymentMethodCode = this.selectedPayment();
+      if (!paymentMethodCode) {
+        this.submitErrorKey.set('cart.noPaymentMethodSelected');
+        return;
+      }
+      // How it will be paid, before it is priced: a promotion can read the method (ADR 0140), and
+      // checkout refuses a method the quote was not priced under. Writing it clears the quote, so
+      // like the destination it comes first.
+      await this.cart.selectPaymentMethod(paymentMethodCode);
       const priced = await this.cart.priceCart();
       if (!priced) {
         // Pricing refused (a branch that closed, a dish that went out of its
         // sale window, ...): `UiCartService` kept the platform's own reason,
         // so say that rather than one sentence for every way pricing can fail.
         this.submitErrorKey.set(this.cart.errorKey() ?? 'errors.generic');
-        return;
-      }
-      const paymentMethodCode = this.selectedPayment();
-      if (!paymentMethodCode) {
-        this.submitErrorKey.set('cart.noPaymentMethodSelected');
         return;
       }
 

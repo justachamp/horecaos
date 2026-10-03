@@ -7,6 +7,7 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError } from '../core/api/problem-details';
 import type { Page } from '../core/api/page';
+import type { AppliedPromotion } from './applied-promotions';
 
 /**
  * The customer's own orders.
@@ -62,9 +63,7 @@ export class OrdersService {
    */
   getOrders(statuses: string[], limit = 50): Observable<ApiOrder[]> {
     const wanted = new Set(statuses.flatMap((token) => PLATFORM_STATUSES[token] ?? []));
-    return from(
-      this.api.list<OrderSummaryResponse>(`${this.brandPath}/orders`, { limit }),
-    ).pipe(
+    return from(this.api.list<OrderSummaryResponse>(`${this.brandPath}/orders`, { limit })).pipe(
       map((page: Page<OrderSummaryResponse>) => {
         for (const row of page.items) {
           this.versions.set(row.orderId, row.version);
@@ -203,8 +202,15 @@ export class OrdersService {
         name: [line.productName, line.variantName].filter(Boolean).join(' '),
         quantity: line.quantity,
         price: line.unitAmountMinor,
+        // ADR 0137: the line's own amount — `unitAmountMinor × quantity` is wrong once a weighed
+        // line has been weighed, and for a portion it is the price of a whole one.
+        lineAmount: line.finalAmountMinor,
+        catchweight: line.catchweight ?? null,
         image: null,
         note: null,
+        comboSelectionId: line.comboSelectionId ?? null,
+        comboName: line.comboName ?? null,
+        autoSelectedCharges: line.autoSelectedCharges ?? [],
       })),
       // The destination is a sub-resource with its own purposed reveal, and is
       // not on the order. Showing "no address" beats fetching a doorstep to
@@ -213,6 +219,10 @@ export class OrdersService {
       payment: undefined,
       subtotal: { price: order.subtotalMinor, discount: 0 },
       tax: { price: order.taxMinor, discount: 0 },
+      // ADR 0140: the discount the order was priced with, and which kinds of
+      // promotion gave it. Without it a discounted order never reconciles.
+      discount: { price: order.discountMinor ?? 0, discount: 0 },
+      promotions: order.appliedPromotions ?? [],
       // The ADR 0037 delivery charge -- zero for PICKUP/DINE_IN and for a
       // waived fee, never absent. `OrderDetailComponent.mapToOrderDetail`
       // hides the row only when this is actually zero, not because the
@@ -307,6 +317,36 @@ export interface OrderLineResponse {
   readonly finalAmountMinor: number;
   readonly modifiers: readonly string[];
   readonly modifierOptionIds: readonly string[];
+  /** ADR 0136: set on each component line of a combo; the component lines of one purchase share it. Null on every other line. */
+  readonly comboSelectionId?: string | null;
+  /** ADR 0136: the combo's name as it was sold, set exactly when `comboSelectionId` is. */
+  readonly comboName?: string | null;
+  /** ADR 0136: the names, within `modifiers`, of the options the server applied for this order's fulfilment mode. */
+  readonly autoSelectedModifiers?: readonly string[];
+  /** ADR 0136: the same options with what each cost for the whole line -- already inside `finalAmountMinor`. */
+  readonly autoSelectedCharges?: readonly AutoSelectedCharge[];
+  /** ADR 0137: present on a line sold by weight, absent otherwise. */
+  readonly catchweight?: OrderLineCatchweight | null;
+}
+
+/** `StorefrontOrderingController.AutoSelectedChargeResponse`, transcribed. */
+export interface AutoSelectedCharge {
+  readonly name: string;
+  readonly amountMinor: number;
+}
+
+/**
+ * ADR 0137: `StorefrontOrderingController.CatchweightLineResponse`. `provisional` is true until the
+ * kitchen has weighed the line at handover, and means `finalAmountMinor` was computed against the
+ * nominal weight; the order total the customer sees then is an estimate the weighed amount
+ * replaces. `actualWeightGrams` is the whole line's weight — all its units together — once weighed.
+ */
+export interface OrderLineCatchweight {
+  readonly quantumGrams: number;
+  readonly nominalGramsPerUnit: number;
+  readonly pricePerQuantumMinor: number;
+  readonly provisional: boolean;
+  readonly actualWeightGrams?: number | null;
 }
 
 /**
@@ -329,11 +369,7 @@ export interface ReorderPlanResponse {
 export type ReorderVerdict = 'READY' | 'PARTIAL' | 'UNAVAILABLE';
 
 export type ReorderLineStatus =
-  | 'AVAILABLE'
-  | 'SOLD_OUT'
-  | 'WITHDRAWN'
-  | 'UNPRICED'
-  | 'MODIFIERS_WITHDRAWN';
+  'AVAILABLE' | 'SOLD_OUT' | 'WITHDRAWN' | 'UNPRICED' | 'MODIFIERS_WITHDRAWN';
 
 export interface ReorderLineResponse {
   readonly lineNumber: number;
@@ -346,6 +382,12 @@ export interface ReorderLineResponse {
   readonly status: ReorderLineStatus;
   readonly unitAmountMinor: number | null;
   readonly originalUnitAmountMinor: number;
+  /**
+   * ADR 0136: set on a combo, whose `variantId` is then its container and whose `quantity` counts
+   * combos. Sent back as the cart line's `comboPicks`. A combo has no price of its own, so its
+   * `unitAmountMinor` is null.
+   */
+  readonly comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
 }
 
 export interface OrderResponse {
@@ -359,6 +401,12 @@ export interface OrderResponse {
   readonly currency: string;
   readonly subtotalMinor: number;
   readonly taxMinor: number;
+  /**
+   * ADR 0140. What promotions took off the goods; the order's total is `subtotalMinor
+   * + taxMinor + feeMinor - discountMinor`, so without this a discounted order's own
+   * screen never reconciles. Zero when nothing was discounted, never absent.
+   */
+  readonly discountMinor: number;
   /** The ADR 0037 delivery charge, already folded into `totalMinor` but
    * carried separately -- see JdbcOrderStore's doc comment on the field --
    * so an order placed with one can show it instead of a total that never
@@ -371,6 +419,13 @@ export interface OrderResponse {
   readonly confirmedAt: string | null;
   readonly lines: readonly OrderLineResponse[];
   readonly warnings: readonly string[];
+  /**
+   * ADR 0140. The kinds of promotion behind the price, in the platform's words:
+   * whether the customer asked for each by typing a code, what it did to the total
+   * and how much. Names no promotion. Read from the quote behind the order's current
+   * revision, so an amended order shows what it is now priced with.
+   */
+  readonly appliedPromotions: readonly AppliedPromotion[];
 }
 
 export interface OrderStateResponse {
@@ -390,6 +445,12 @@ export interface ApiOrderLineItem {
   price?: number;
   image?: string | null;
   note?: string | null;
+  /** ADR 0136: the component lines of one combo purchase share this id. */
+  comboSelectionId?: string | null;
+  /** ADR 0136: the combo's name as it was sold. */
+  comboName?: string | null;
+  /** ADR 0136: options the server added to this line by itself, with what each cost. */
+  autoSelectedCharges?: readonly AutoSelectedCharge[];
   [key: string]: unknown;
 }
 
@@ -414,6 +475,10 @@ export interface ApiOrderDetail {
   payment?: { id: number; name: string; status?: string };
   subtotal?: ApiPriceObject | number;
   tax?: ApiPriceObject | number;
+  /** ADR 0140: what promotions took off the goods. */
+  discount?: ApiPriceObject | number;
+  /** ADR 0140: the kinds of promotion behind the price. */
+  promotions?: readonly AppliedPromotion[];
   delivery?: ApiPriceObject | number;
   packaging?: ApiPriceObject | number;
   total?: ApiPriceObject | number;

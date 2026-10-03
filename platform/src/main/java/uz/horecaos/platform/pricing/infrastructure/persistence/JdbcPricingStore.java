@@ -136,7 +136,28 @@ public class JdbcPricingStore {
 
     /** Which of these variants have an active price anywhere in the brand. */
     public Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
-        if (variantIds.isEmpty()) {
+        return pricedAnywhere(tenantId, brandId, "VARIANT", variantIds, at);
+    }
+
+    /**
+     * Which of these combo components (ADR 0136) have an active price in any active
+     * price book of the brand -- {@link #pricedVariants}' question, asked of the
+     * fourth priceable type.
+     */
+    public Set<UUID> pricedComboComponents(UUID tenantId, UUID brandId, Set<UUID> componentIds, Instant at) {
+        return pricedAnywhere(tenantId, brandId, "COMBO_COMPONENT", componentIds, at);
+    }
+
+    /**
+     * Which of these modifier options have an active price in any active price book of the
+     * brand -- {@link #pricedVariants}' question, asked of the third priceable type.
+     */
+    public Set<UUID> pricedModifierOptions(UUID tenantId, UUID brandId, Set<UUID> optionIds, Instant at) {
+        return pricedAnywhere(tenantId, brandId, "MODIFIER_OPTION", optionIds, at);
+    }
+
+    private Set<UUID> pricedAnywhere(UUID tenantId, UUID brandId, String type, Set<UUID> ids, Instant at) {
+        if (ids.isEmpty()) {
             return Set.of();
         }
         return Set.copyOf(jdbc.sql("""
@@ -144,19 +165,29 @@ public class JdbcPricingStore {
                 FROM pricing.prices p
                 JOIN pricing.price_books pb ON pb.id = p.price_book_id
                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId
-                  AND p.priceable_type = 'VARIANT' AND p.priceable_id = ANY(:ids)
+                  AND p.priceable_type = :type AND p.priceable_id = ANY(:ids)
                   AND pb.status = 'ACTIVE'
                   AND p.valid_from <= :at AND (p.valid_until IS NULL OR p.valid_until > :at)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param("ids", variantIds.toArray(UUID[]::new))
+                .param("type", type)
+                .param("ids", ids.toArray(UUID[]::new))
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query(UUID.class)
                 .list());
     }
 
     public void insertQuote(Quote quote, @Nullable String idempotencyKey, Map<String, Object> calculationDocument) {
+        insertQuote(quote, idempotencyKey, calculationDocument, true, true);
+    }
+
+    public void insertQuote(
+            Quote quote,
+            @Nullable String idempotencyKey,
+            Map<String, Object> calculationDocument,
+            boolean loyaltyAccrualAllowed,
+            boolean loyaltyRedemptionAllowed) {
         jdbc.sql("""
                 INSERT INTO pricing.quotes (
                     id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
@@ -164,13 +195,14 @@ public class JdbcPricingStore {
                     subtotal_minor, tax_minor, fee_minor, discount_minor, total_minor,
                     calculation_document, expires_at, idempotency_key, created_at,
                     delivery_outcome, delivery_shortfall_minor, delivery_min_basket_minor,
-                    delivery_free_from_minor)
+                    delivery_free_from_minor, loyalty_accrual_allowed, loyalty_redemption_allowed)
                 VALUES (
                     :id, :tenantId, :brandId, :locationId, :customerId, :currency, :status,
                     :publicationId, :calculationVersion, :contextHash,
                     :subtotal, :tax, :fee, :discount, :total,
                     CAST(:document AS jsonb), :expiresAt, :idempotencyKey, :createdAt,
-                    :deliveryOutcome, :deliveryShortfall, :deliveryMinBasket, :deliveryFreeFrom)
+                    :deliveryOutcome, :deliveryShortfall, :deliveryMinBasket, :deliveryFreeFrom,
+                    :loyaltyAccrual, :loyaltyRedemption)
                 """)
                 .param("id", quote.quoteId())
                 .param("tenantId", quote.tenantId())
@@ -199,6 +231,8 @@ public class JdbcPricingStore {
                 .param("deliveryShortfall", quote.deliveryShortfallMinor())
                 .param("deliveryMinBasket", quote.deliveryMinBasketMinor())
                 .param("deliveryFreeFrom", quote.deliveryFreeFromMinor())
+                .param("loyaltyAccrual", loyaltyAccrualAllowed)
+                .param("loyaltyRedemption", loyaltyRedemptionAllowed)
                 .update();
 
         for (Quote.QuoteLine line : quote.lines()) {
@@ -211,19 +245,38 @@ public class JdbcPricingStore {
             lineParams.put("lineType", line.type().name());
             lineParams.put("variantId", line.variantId());
             lineParams.put("quantity", line.quantity());
+            Quote.Catchweight catchweight = line.catchweight();
+            lineParams.put("quantum", catchweight == null ? null : catchweight.quantumGrams());
+            lineParams.put("nominal", catchweight == null ? null : catchweight.nominalGramsPerUnit());
+            lineParams.put("pricePerQuantum", catchweight == null ? null : catchweight.pricePerQuantumMinor());
+            lineParams.put("actualWeight", catchweight == null ? null : catchweight.actualWeightGrams());
             lineParams.put("description", line.descriptionSnapshot());
             lineParams.put("unit", line.unitAmount().minor());
             lineParams.put("base", line.baseAmount().minor());
             lineParams.put("finalAmount", line.finalAmount().minor());
             lineParams.put("tax", line.taxAmount().minor());
+            // ADR 0136. Null on every line that is not a combo component; a HashMap
+            // for the same reason variantId is one.
+            lineParams.put("comboSelectionId", line.comboSelectionId());
+            lineParams.put("comboContainerVariantId", line.comboContainerVariantId());
+            lineParams.put("comboComponentId", line.comboComponentId());
+            lineParams.put("comboQuantity", line.comboQuantity());
+            lineParams.put("comboPickQuantity", line.comboPickQuantity());
 
             jdbc.sql("""
                     INSERT INTO pricing.quote_lines (
                         quote_id, line_id, tenant_id, line_type, source_variant_id, quantity,
                         description_snapshot, unit_amount_minor, base_amount_minor,
-                        final_amount_minor, tax_amount_minor)
+                        final_amount_minor, tax_amount_minor,
+                        combo_selection_id, combo_container_variant_id,
+                        combo_component_id, combo_quantity, combo_pick_quantity,
+                        catchweight_quantum_grams, catchweight_nominal_grams,
+                        catchweight_price_per_quantum_minor, actual_weight_grams)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
-                        :description, :unit, :base, :finalAmount, :tax)
+                        :description, :unit, :base, :finalAmount, :tax,
+                        :comboSelectionId, :comboContainerVariantId,
+                        :comboComponentId, :comboQuantity, :comboPickQuantity,
+                        :quantum, :nominal, :pricePerQuantum, :actualWeight)
                     """).params(lineParams).update();
         }
 
@@ -247,6 +300,60 @@ public class JdbcPricingStore {
                     .param("code", adjustment.descriptionCode())
                     .update();
         }
+    }
+
+    /**
+     * The {@code promotionInputs} a quote was priced with, as recorded in its
+     * calculation document (ADR 0140), or empty for a quote priced before
+     * calculation version 3, which recorded none.
+     */
+    public Optional<Map<String, Object>> findPromotionInputs(UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT (calculation_document -> 'promotionInputs')::text
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id AND (calculation_document -> 'promotionInputs') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query(String.class)
+                .optional()
+                .map(json -> objectMapper.readValue(
+                        json, new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+    }
+
+    /**
+     * What the engine decided about each coupon-gated promotion the cart presented,
+     * as recorded in the quote's calculation document when it was priced (ADR 0140):
+     * the promotion id and the {@code PromotionEvaluator.Verdict} name. Empty for a
+     * quote that presented no code, and for one priced before the verdict was
+     * recorded, which the caller then reads from the adjustments instead.
+     *
+     * <p>Read from the stored document rather than re-derived because an
+     * idempotent replay returns the existing quote and never runs the engine, so a
+     * verdict held only in memory would vanish on the first page reload.
+     */
+    public Map<UUID, String> findCouponVerdicts(UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT (calculation_document -> 'couponVerdicts')::text
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id AND (calculation_document -> 'couponVerdicts') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query(String.class)
+                .optional()
+                .map(json -> {
+                    List<Map<String, Object>> entries = objectMapper.readValue(
+                            json, new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                    Map<UUID, String> verdicts = new java.util.LinkedHashMap<>();
+                    for (Map<String, Object> entry : entries) {
+                        verdicts.put(
+                                UUID.fromString(String.valueOf(entry.get("promotionId"))),
+                                String.valueOf(entry.get("verdict")));
+                    }
+                    return Map.copyOf(verdicts);
+                })
+                .orElse(Map.of());
     }
 
     public Optional<QuoteRow> findQuote(UUID tenantId, UUID quoteId) {
@@ -283,7 +390,8 @@ public class JdbcPricingStore {
                 SELECT id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
                        catalog_publication_id, context_hash, subtotal_minor, tax_minor, fee_minor,
                        discount_minor, total_minor, expires_at, delivery_outcome,
-                       delivery_shortfall_minor, delivery_min_basket_minor, delivery_free_from_minor
+                       delivery_shortfall_minor, delivery_min_basket_minor, delivery_free_from_minor,
+                       loyalty_accrual_allowed, loyalty_redemption_allowed
                 FROM pricing.quotes
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -312,7 +420,9 @@ public class JdbcPricingStore {
                                 : DeliveryFeeOutcome.valueOf(row.getString("delivery_outcome")),
                         row.getObject("delivery_shortfall_minor", Long.class),
                         row.getObject("delivery_min_basket_minor", Long.class),
-                        row.getObject("delivery_free_from_minor", Long.class)))
+                        row.getObject("delivery_free_from_minor", Long.class),
+                        row.getBoolean("loyalty_accrual_allowed"),
+                        row.getBoolean("loyalty_redemption_allowed")))
                 .optional();
 
         if (header.isEmpty()) {
@@ -328,22 +438,48 @@ public class JdbcPricingStore {
         // fiscal receipt, and is not this change.
         List<QuoteSnapshot.Line> lines = jdbc.sql("""
                 SELECT line_id, source_variant_id, quantity, description_snapshot,
-                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor
+                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
+                       combo_selection_id, combo_container_variant_id,
+                       combo_component_id, combo_quantity, combo_pick_quantity,
+                       catchweight_quantum_grams, catchweight_nominal_grams,
+                       catchweight_price_per_quantum_minor, actual_weight_grams
                 FROM pricing.quote_lines
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
-                ORDER BY line_id
+                -- A combo's component lines are the cart line's key, a tilde and a position
+                -- (PricingEngine). Compared as text, position 10 would sort before position 2
+                -- and an order would list a combo's components out of the order they were
+                -- priced in; the position is compared as the number it is.
+                ORDER BY split_part(line_id, '~', 1),
+                         CASE WHEN split_part(line_id, '~', 2) ~ '^[0-9]{1,9}$'
+                              THEN split_part(line_id, '~', 2)::integer ELSE 0 END,
+                         line_id
                 """)
                 .param("quoteId", quoteId)
                 .param("tenantId", tenantId)
                 .query((row, number) -> new QuoteSnapshot.Line(
                         row.getString("line_id"),
                         row.getObject("source_variant_id", UUID.class),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getString("description_snapshot"),
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
-                        row.getLong("tax_amount_minor")))
+                        row.getLong("tax_amount_minor"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class),
+                        row.getObject("combo_component_id", UUID.class),
+                        row.getObject("combo_quantity", Integer.class),
+                        row.getObject("combo_pick_quantity", Integer.class),
+                        // Read through getObject: the primitive accessors answer 0
+                        // for a SQL null, and a quantum of 0 grams is not "not sold
+                        // by weight".
+                        row.getObject("catchweight_quantum_grams", Integer.class) == null
+                                ? null
+                                : new QuoteSnapshot.Catchweight(
+                                        row.getInt("catchweight_quantum_grams"),
+                                        row.getInt("catchweight_nominal_grams"),
+                                        row.getLong("catchweight_price_per_quantum_minor"),
+                                        row.getObject("actual_weight_grams", Integer.class))))
                 .list();
 
         List<QuoteSnapshot.Adjustment> adjustments = jdbc.sql("""
@@ -395,7 +531,9 @@ public class JdbcPricingStore {
                 found.deliveryOutcome(),
                 found.deliveryShortfallMinor(),
                 found.deliveryMinBasketMinor(),
-                found.deliveryFreeFromMinor()));
+                found.deliveryFreeFromMinor(),
+                found.loyaltyAccrualAllowed(),
+                found.loyaltyRedemptionAllowed()));
     }
 
     public Optional<UUID> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
@@ -98,17 +99,17 @@ class VariantSalesReportingTests {
                 .containsExactly(VARIANT_PIZZA, VARIANT_SALAD);
 
         JdbcReportingStore.VariantSalesRow pizza = rows.get(0);
-        assertThat(pizza.totalQuantity()).isEqualTo(3);
+        assertThat(pizza.totalQuantity()).isEqualByComparingTo("3");
         assertThat(pizza.totalNetSom()).isEqualTo(120_000L);
-        assertThat(pizza.deliveryQuantity()).isEqualTo(2);
+        assertThat(pizza.deliveryQuantity()).isEqualByComparingTo("2");
         assertThat(pizza.deliveryNetSom()).isEqualTo(80_000L);
-        assertThat(pizza.pickupQuantity()).isEqualTo(1);
+        assertThat(pizza.pickupQuantity()).isEqualByComparingTo("1");
         assertThat(pizza.pickupNetSom()).isEqualTo(40_000L);
 
         JdbcReportingStore.VariantSalesRow salad = rows.get(1);
-        assertThat(salad.totalQuantity()).isEqualTo(3);
+        assertThat(salad.totalQuantity()).isEqualByComparingTo("3");
         assertThat(salad.deliveryQuantity()).isNull();
-        assertThat(salad.pickupQuantity()).isEqualTo(3);
+        assertThat(salad.pickupQuantity()).isEqualByComparingTo("3");
     }
 
     @Test
@@ -137,7 +138,7 @@ class VariantSalesReportingTests {
                 store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
 
         assertThat(rows).hasSize(1);
-        assertThat(rows.get(0).totalQuantity()).isEqualTo(1);
+        assertThat(rows.get(0).totalQuantity()).isEqualByComparingTo("1");
     }
 
     /**
@@ -157,17 +158,17 @@ class VariantSalesReportingTests {
                 store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
         assertThat(unfiltered.get(0).totalQuantity())
                 .as("DINE_IN sums into the total though it has no split column of its own")
-                .isEqualTo(7);
+                .isEqualByComparingTo("7");
 
         List<JdbcReportingStore.VariantSalesRow> deliveryOnly =
                 store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of("DELIVERY"), 100);
         assertThat(deliveryOnly).hasSize(1);
-        assertThat(deliveryOnly.get(0).totalQuantity()).isEqualTo(2);
+        assertThat(deliveryOnly.get(0).totalQuantity()).isEqualByComparingTo("2");
 
         List<JdbcReportingStore.VariantSalesRow> dineInOnly =
                 store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of("DINE_IN"), 100);
         assertThat(dineInOnly).hasSize(1);
-        assertThat(dineInOnly.get(0).totalQuantity()).isEqualTo(5);
+        assertThat(dineInOnly.get(0).totalQuantity()).isEqualByComparingTo("5");
     }
 
     @Test
@@ -287,6 +288,63 @@ class VariantSalesReportingTests {
                 .containsExactly(VARIANT_BURGER, VARIANT_PIZZA);
     }
 
+    // ------------------------------------------------ ADR 0137: fractional quantities
+
+    @Test
+    @DisplayName("half portions are summed exactly: 0.5 delivered and 1.5 collected is 2, never 1 or 3")
+    void fractionalQuantitiesAreSummedExactly() {
+        UUID delivery = insertOrder(TENANT, "F-DELIVERY", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, delivery, LOCATION_A, VARIANT_PIZZA, new java.math.BigDecimal("0.5"), 20_000L, 20_000L);
+        UUID pickup = insertOrder(TENANT, "F-PICKUP", LOCATION_A, "PICKUP");
+        insertLine(TENANT, pickup, LOCATION_A, VARIANT_PIZZA, new java.math.BigDecimal("1.5"), 60_000L, 60_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
+
+        assertThat(rows).singleElement().satisfies(pizza -> {
+            assertThat(pizza.totalQuantity())
+                    .as("a ::integer cast of 0.5 + 1.5 would say 2 by luck; 0.5 alone would say 1")
+                    .isEqualByComparingTo("2");
+            assertThat(pizza.deliveryQuantity()).isEqualByComparingTo("0.5");
+            assertThat(pizza.pickupQuantity()).isEqualByComparingTo("1.5");
+            assertThat(pizza.totalNetSom()).isEqualTo(80_000L);
+        });
+    }
+
+    @Test
+    @DisplayName("a quantity sort and its cursor keep working over fractional totals")
+    void quantitySortAndCursorWorkOverFractionalTotals() {
+        UUID pizzaOrder = insertOrder(TENANT, "FQ-PIZZA", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, pizzaOrder, LOCATION_A, VARIANT_PIZZA, new java.math.BigDecimal("2.5"), 100_000L, 100_000L);
+        UUID saladOrder = insertOrder(TENANT, "FQ-SALAD", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, saladOrder, LOCATION_A, VARIANT_SALAD, new java.math.BigDecimal("2.25"), 90_000L, 90_000L);
+        UUID burgerOrder = insertOrder(TENANT, "FQ-BURGER", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, burgerOrder, LOCATION_A, VARIANT_BURGER, new java.math.BigDecimal("0.75"), 30_000L, 30_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> firstPage = store.readVariantSales(
+                TENANT, DAY, DAY, List.of(), List.of(), JdbcReportingStore.VariantSalesSort.QUANTITY_DESC, 1, null);
+        assertThat(firstPage)
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_PIZZA);
+
+        JdbcReportingStore.VariantSalesRow last = firstPage.get(0);
+        List<JdbcReportingStore.VariantSalesRow> rest = store.readVariantSales(
+                TENANT,
+                DAY,
+                DAY,
+                List.of(),
+                List.of(),
+                JdbcReportingStore.VariantSalesSort.QUANTITY_DESC,
+                100,
+                new JdbcReportingStore.VariantSalesCursor(
+                        last.totalQuantity(), null, null, java.util.Objects.requireNonNull(last.variantId())));
+
+        assertThat(rest)
+                .as("2.25 then 0.75: the cursor compares the numeric total, not its integer part")
+                .extracting(JdbcReportingStore.VariantSalesRow::variantId)
+                .containsExactly(VARIANT_SALAD, VARIANT_BURGER);
+    }
+
     // ----------------------------------------------------------------- fixtures
 
     private static UUID orderId(String seed) {
@@ -335,6 +393,17 @@ class VariantSalesReportingTests {
 
     private void insertLine(
             UUID tenantId, UUID orderId, UUID locationId, UUID variantId, int quantity, long grossSom, long netSom) {
+        insertLine(tenantId, orderId, locationId, variantId, java.math.BigDecimal.valueOf(quantity), grossSom, netSom);
+    }
+
+    private void insertLine(
+            UUID tenantId,
+            UUID orderId,
+            UUID locationId,
+            UUID variantId,
+            java.math.BigDecimal quantity,
+            long grossSom,
+            long netSom) {
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id, category_id,

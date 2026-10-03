@@ -210,6 +210,38 @@ public class ReservationService {
             int expectedVersion,
             String actorSubject,
             String reason) {
+        return moveReporting(tenantId, locationId, reservationId, to, expectedVersion, actorSubject, reason)
+                .reservation();
+    }
+
+    /**
+     * A booking after a move or an amendment, and whether a party is already
+     * sitting at one of its tables (ADR 0143, Staff surface).
+     *
+     * <p>Confirming a booking never bumps a party already seated -- that is the
+     * host's call, made with the room in view -- so the fact has to reach the host in
+     * the response rather than in a refusal. {@code tableOccupiedNow} is read under
+     * the same table lock a guest opening the table takes, so it is the winner's
+     * state: if the guest got there first it is {@code true}, and if the host did, the
+     * guest was refused.
+     *
+     * @param tableOccupiedNow null when the operation holds no table (a rejection, a
+     *                         cancellation, a booking not yet confirmed) and so asked
+     *                         nothing about occupancy
+     */
+    public record ReservationOutcome(
+            ReservationRow reservation, @Nullable Boolean tableOccupiedNow) {}
+
+    /** {@link #move} that also reports whether a confirmed booking's table is occupied now. */
+    @Transactional
+    public ReservationOutcome moveReporting(
+            UUID tenantId,
+            UUID locationId,
+            UUID reservationId,
+            ReservationStatus to,
+            int expectedVersion,
+            String actorSubject,
+            String reason) {
 
         ReservationRow reservation = store.findReservationAtLocation(tenantId, locationId, reservationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
@@ -225,7 +257,15 @@ public class ReservationService {
         Instant now = clock.instant();
         int turnaround = reservation.turnaroundMinutes();
 
+        List<UUID> confirmedTables = List.of();
         if (to == ReservationStatus.CONFIRMED) {
+            // The tables are locked before the hold is taken, in id order, so a guest
+            // opening one of them and this confirmation serialize (ADR 0143, Decision
+            // 5): whichever is second sees the first's state, instead of both
+            // succeeding on stale reads. The exclusion constraint still reads bookings
+            // only, which is why the lock is a rule of every path that touches a table.
+            confirmedTables = store.tablesForReservation(tenantId, reservationId);
+            store.lockTables(tenantId, confirmedTables);
             SettingsRow settings = floorPlan.settings(tenantId, reservation.brandId(), reservation.locationId());
             turnaround = settings.turnaroundMinutes();
             store.rewriteHolds(
@@ -275,7 +315,11 @@ public class ReservationService {
                 .occurredAt(now)
                 .build());
 
-        return store.findReservation(tenantId, reservationId).orElseThrow();
+        Boolean occupiedNow = to == ReservationStatus.CONFIRMED && !confirmedTables.isEmpty()
+                ? !store.occupiedTables(tenantId, confirmedTables).isEmpty()
+                : null;
+        return new ReservationOutcome(
+                store.findReservation(tenantId, reservationId).orElseThrow(), occupiedNow);
     }
 
     /**
@@ -326,6 +370,39 @@ public class ReservationService {
             int expectedVersion,
             String actorSubject,
             String reason) {
+        return amendReporting(
+                        tenantId,
+                        locationId,
+                        reservationId,
+                        partySize,
+                        requestedFrom,
+                        requestedTo,
+                        tableIds,
+                        guestName,
+                        guestPhone,
+                        note,
+                        expectedVersion,
+                        actorSubject,
+                        reason)
+                .reservation();
+    }
+
+    /** {@link #amend} that also reports whether a confirmed booking's tables are occupied now. */
+    @Transactional
+    public ReservationOutcome amendReporting(
+            UUID tenantId,
+            UUID locationId,
+            UUID reservationId,
+            int partySize,
+            Instant requestedFrom,
+            Instant requestedTo,
+            List<UUID> tableIds,
+            @Nullable String guestName,
+            @Nullable String guestPhone,
+            @Nullable String note,
+            int expectedVersion,
+            String actorSubject,
+            String reason) {
 
         if (tableIds == null || tableIds.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking names at least one table");
@@ -348,6 +425,14 @@ public class ReservationService {
         Instant now = clock.instant();
         SettingsRow settings = floorPlan.settings(tenantId, reservation.brandId(), reservation.locationId());
         int turnaround = settings.turnaroundMinutes();
+
+        // A confirmed booking holds its tables, so an amendment that re-takes them takes
+        // the same lock a guest opening one of them takes (ADR 0143, Decision 5). A
+        // REQUESTED booking holds nothing yet and needs none.
+        boolean holdsTables = reservation.status() == ReservationStatus.CONFIRMED;
+        if (holdsTables) {
+            store.lockTables(tenantId, tableIds);
+        }
 
         String trimmedName = blankToNull(guestName);
         String trimmedPhone = blankToNull(guestPhone);
@@ -457,7 +542,10 @@ public class ReservationService {
                 .occurredAt(now)
                 .build());
 
-        return store.findReservation(tenantId, reservationId).orElseThrow();
+        Boolean occupiedNow =
+                holdsTables ? !store.occupiedTables(tenantId, tableIds).isEmpty() : null;
+        return new ReservationOutcome(
+                store.findReservation(tenantId, reservationId).orElseThrow(), occupiedNow);
     }
 
     /**

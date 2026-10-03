@@ -1,0 +1,137 @@
+.contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.contacts h3 {
+  margin: 0;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+  border-radius: var(--q-radius);
+}
+
+.adders {
+  display: flex;
+  gap: 8px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--q-error-text, var(--q-error));
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+}
+
+.item__role {
+  color: var(--q-ink-muted);
+}
+
+.item__name {
+  font-weight: 600;
+}
+
+.item__phone {
+  color: var(--q-primary);
+  text-decoration: none;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 140px 1fr 160px auto;
+}
+
+.row__wide {
+  grid-column: span 2;
+  gap: 8px;
+  align-items: center;
+}
+
+.row__problem {
+  grid-column: 1 / -1;
+}
+
+.input {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--q-error);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.text-button {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--q-primary);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.text-button--destructive {
+  color: var(--q-error-text, var(--q-error));
+}
+
+.primary-button {
+  padding: 8px 16px;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

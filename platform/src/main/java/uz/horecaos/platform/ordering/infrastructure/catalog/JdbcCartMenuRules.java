@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.catalog;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,11 +78,64 @@ public class JdbcCartMenuRules implements CartMenuRules {
             return Optional.empty();
         }
 
+        Map<UUID, PhysicalRules> physical = physicalRules(product.get().content());
         List<UUID> groupIds = idList(product.get().content(), "modifierGroupIds");
         if (groupIds.isEmpty()) {
-            return Optional.of(new ProductRules(product.get().entityId(), List.of()));
+            return Optional.of(new ProductRules(product.get().entityId(), List.of(), physical));
         }
-        return Optional.of(new ProductRules(product.get().entityId(), groups(publicationId.get(), groupIds)));
+        Map<UUID, Policy> policies = policies(product.get().content());
+        List<GroupRules> rules = groups(publicationId.get(), groupIds).stream()
+                .map(group ->
+                        policies.containsKey(group.groupId()) ? group.withPolicy(policies.get(group.groupId())) : group)
+                .toList();
+        return Optional.of(new ProductRules(product.get().entityId(), rules, physical));
+    }
+
+    /**
+     * This product's own use of the groups it attaches, where it overrides the shared group's
+     * rules (ADR 0136). The published values are already the effective ones, so they replace
+     * the group's outright -- the cart then enforces exactly what the storefront showed.
+     */
+    private static Map<UUID, Policy> policies(Map<String, Object> content) {
+        Map<UUID, Policy> byGroup = new LinkedHashMap<>();
+        if (content.get("modifierGroupPolicies") instanceof List<?> published) {
+            for (Object element : published) {
+                if (element instanceof Map<?, ?> policy) {
+                    byGroup.put(
+                            UUID.fromString(String.valueOf(policy.get("groupId"))),
+                            new Policy(
+                                    Boolean.TRUE.equals(policy.get("required")),
+                                    intOf(policy.get("minimumSelections"), 0),
+                                    intOf(policy.get("maximumSelections"), 1)));
+                }
+            }
+        }
+        return byGroup;
+    }
+
+    /**
+     * Each of the product's variants that published a physical block (ADR 0137): whether
+     * it is splittable and in what step. A variant without one is absent, which the rules
+     * read as whole units only.
+     */
+    private static Map<UUID, PhysicalRules> physicalRules(Map<String, Object> content) {
+        Map<UUID, PhysicalRules> byVariant = new LinkedHashMap<>();
+        if (!(content.get("variants") instanceof List<?> variants)) {
+            return byVariant;
+        }
+        for (Object element : variants) {
+            if (!(element instanceof Map<?, ?> variant) || !(variant.get("physical") instanceof Map<?, ?> block)) {
+                continue;
+            }
+            Object portion = block.get("portionSize");
+            byVariant.put(
+                    UUID.fromString(String.valueOf(variant.get("variantId"))),
+                    new PhysicalRules(
+                            Boolean.TRUE.equals(block.get("splittable")),
+                            portion instanceof Number number ? new BigDecimal(number.toString()) : null,
+                            Boolean.TRUE.equals(block.get("catchweight"))));
+        }
+        return byVariant;
     }
 
     private List<GroupRules> groups(UUID publicationId, List<UUID> groupIds) {

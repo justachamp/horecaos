@@ -41,7 +41,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.support.TestDatabase;
@@ -131,12 +131,13 @@ class OperationsBrandOrderBoardHttpTests {
     private RoleRegistrySynchronizer roleRegistry;
 
     /**
-     * The detail read names an order's creator through the identity provider, which
-     * this suite does not run; the board rows it mostly reads name no one.
+     * The detail read names an order's creator through the tenant's staff
+     * directory (ADR 0139), which this suite stubs; the board rows it mostly
+     * reads name no one.
      */
     @MockitoBean
     @SuppressWarnings("NullAway")
-    private StaffDisplayNames staffDisplayNames;
+    private StaffDirectory staffDirectory;
 
     private OrderBoardFixtures fixtures;
 

@@ -70,6 +70,81 @@ const PRESETS: StorefrontMenu['products'][number]['commentPresets'] = [
   { code: 'EXTRA_SPICY', labelRu: 'Поострее', labelUz: 'Achchiqroq', labelEn: 'Extra spicy' },
 ];
 
+/**
+ * ADR 0136: {@link MENU} plus a combo — product `p-lunch`, whose variant `v-lunch` is a container
+ * with a mandatory main (one of a burger or a wrap) and an optional drink, each priced inside this
+ * combo. The container has no price of its own.
+ */
+function menuWithCombo(): StorefrontMenu {
+  const component = (
+    componentId: string,
+    name: string,
+    amountMinor: number | null,
+    orderable = true,
+  ) => ({
+    componentId,
+    variantId: `${componentId}-v`,
+    productId: null,
+    name,
+    variantName: null,
+    defaultQuantity: 1,
+    sortOrder: 0,
+    orderable,
+    amountMinor,
+  });
+  return {
+    ...MENU,
+    products: [
+      ...MENU.products,
+      {
+        productId: 'p-lunch',
+        code: 'LUNCH',
+        name: 'Lunch box',
+        description: null,
+        imageUrls: [],
+        variants: [
+          {
+            variantId: 'v-lunch',
+            sku: null,
+            unitCode: null,
+            isDefault: true,
+            orderable: true,
+            onSaleNow: true,
+            amountMinor: null,
+          },
+        ],
+        modifierGroupIds: [],
+        commentPresets: [],
+        comboGroupIds: ['g-main', 'g-drink'],
+      },
+    ],
+    comboGroups: [
+      {
+        comboGroupId: 'g-main',
+        containerVariantId: 'v-lunch',
+        code: 'MAIN',
+        name: 'Main',
+        minimumSelections: 1,
+        maximumSelections: 1,
+        allowSameComponentMultipleTimes: false,
+        sortOrder: 0,
+        components: [component('c-burger', 'Burger', 25_000), component('c-wrap', 'Wrap', 22_000)],
+      },
+      {
+        comboGroupId: 'g-drink',
+        containerVariantId: 'v-lunch',
+        code: 'DRINK',
+        name: 'Drink',
+        minimumSelections: 0,
+        maximumSelections: 1,
+        allowSameComponentMultipleTimes: false,
+        sortOrder: 1,
+        components: [component('c-cola', 'Cola', 3_000)],
+      },
+    ],
+  };
+}
+
 /** {@link MENU}, with `v-1`'s own variant/product fields overridden — rows 2.1b/4.2g's own fixtures. */
 function menuWith(
   variantOverrides: Partial<StorefrontMenu['products'][number]['variants'][number]>,
@@ -152,6 +227,9 @@ function partySession(overrides: Partial<SessionView> = {}): SessionView {
     closeReasonCode: null,
     version: 1,
     tables: [{ tableId: 'tb-7', code: 'T7', displayName: 'Table 7' }],
+    origin: 'STAFF',
+    claimExpiresAt: null,
+    confirmedAt: null,
     ...overrides,
   };
 }
@@ -1777,5 +1855,514 @@ describe('NewOrderPage', () => {
     fixture.componentInstance['toggleAggregatorMode']();
 
     expect(fixture.componentInstance['fulfillmentMode']()).toBe('PICKUP');
+  });
+
+  // ------------------------------------------------- ADR 0136: combos and overrides
+
+  it('ADR 0136: a combo opens its choice screen instead of going into the basket, and is never added as its container', async () => {
+    await render({ menu: vi.fn().mockResolvedValue(menuWithCombo()) });
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-lunch', label: 'Lunch box' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['pendingCombo']()).not.toBeNull();
+    expect(fixture.componentInstance['pendingCombo']()?.groups).toHaveLength(2);
+    expect(fixture.componentInstance['basket']()).toHaveLength(0);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="combo-picker-dialog"]'),
+    ).not.toBeNull();
+  });
+
+  it('ADR 0136: the confirmed picks become one basket line priced as the sum of its components, with the components listed', async () => {
+    await render({ menu: vi.fn().mockResolvedValue(menuWithCombo()) });
+    fixture.componentInstance['onItemSelected']({ id: 'v-lunch', label: 'Lunch box' });
+    fixture.detectChanges();
+
+    fixture.componentInstance['onComboConfirm']({
+      picks: [
+        {
+          componentId: 'c-burger',
+          name: 'Burger',
+          pickQuantity: 1,
+          unitQuantity: 1,
+          amountMinor: 25_000,
+        },
+        {
+          componentId: 'c-cola',
+          name: 'Cola',
+          pickQuantity: 1,
+          unitQuantity: 1,
+          amountMinor: 3_000,
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    const [line] = fixture.componentInstance['basket']();
+    expect(line.variantId).toBe('v-lunch');
+    expect(line.unitAmountMinor).toBe(28_000);
+    expect(fixture.componentInstance['total']().subtotalMinor).toBe(28_000);
+    expect(fixture.componentInstance['total']().fullyPriced).toBe(true);
+    expect(fixture.componentInstance['pendingCombo']()).toBeNull();
+    const text = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="new-order-line-combo"]',
+    );
+    expect(text?.textContent?.trim()).toBe('Burger, Cola');
+  });
+
+  it('ADR 0136: two combos total twice one, and an unpriced component holds the whole total back', async () => {
+    await render({ menu: vi.fn().mockResolvedValue(menuWithCombo()) });
+    fixture.componentInstance['onItemSelected']({ id: 'v-lunch', label: 'Lunch box' });
+    fixture.componentInstance['onComboConfirm']({
+      picks: [
+        {
+          componentId: 'c-burger',
+          name: 'Burger',
+          pickQuantity: 1,
+          unitQuantity: 1,
+          amountMinor: 25_000,
+        },
+      ],
+    });
+    const line = fixture.componentInstance['basket']()[0];
+
+    fixture.componentInstance['setLineQuantity'](line.lineKey, 2);
+    expect(fixture.componentInstance['total']().subtotalMinor).toBe(50_000);
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-lunch', label: 'Lunch box' });
+    fixture.componentInstance['onComboConfirm']({
+      picks: [
+        {
+          componentId: 'c-wrap',
+          name: 'Wrap',
+          pickQuantity: 1,
+          unitQuantity: 1,
+          amountMinor: null,
+        },
+      ],
+    });
+
+    expect(fixture.componentInstance['total']().fullyPriced).toBe(false);
+  });
+
+  it('ADR 0136: submit sends a combo as its container with the components picked, and a plain line as it always did', async () => {
+    const placeOrder = vi.fn().mockResolvedValue({
+      orderId: 'order-c',
+      publicOrderNumber: '#0010',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    });
+    await render({ placeOrder, menu: vi.fn().mockResolvedValue(menuWithCombo()) });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-lunch', label: 'Lunch box' });
+    fixture.componentInstance['onComboConfirm']({
+      picks: [
+        {
+          componentId: 'c-wrap',
+          name: 'Wrap',
+          pickQuantity: 1,
+          unitQuantity: 1,
+          amountMinor: 22_000,
+        },
+        {
+          componentId: 'c-cola',
+          name: 'Cola',
+          pickQuantity: 1,
+          unitQuantity: 1,
+          amountMinor: 3_000,
+        },
+      ],
+    });
+    fixture.componentInstance['setLineQuantity'](
+      fixture.componentInstance['basket']()[0].lineKey,
+      3,
+    );
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(placeOrder.mock.calls[0][1].lines).toEqual([
+      {
+        variantId: 'v-lunch',
+        quantity: 3,
+        modifierOptionIds: [],
+        commentPresetCodes: [],
+        customerNote: null,
+        comboPicks: [
+          { componentId: 'c-wrap', quantity: 1 },
+          { componentId: 'c-cola', quantity: 1 },
+        ],
+      },
+      {
+        variantId: 'v-1',
+        quantity: 1,
+        modifierOptionIds: [],
+        commentPresetCodes: [],
+        customerNote: null,
+      },
+    ]);
+  });
+
+  it('ADR 0136: a repeat of an order with a combo is a combo again, rebuilt from today’s menu', async () => {
+    const reorderPlan = vi.fn().mockResolvedValue({
+      orderId: 'order-old',
+      publicOrderNumber: '#0900',
+      locationId: 'l1',
+      channelCode: 'call-centre',
+      verdict: 'READY',
+      currency: 'UZS',
+      lines: [
+        {
+          lineNumber: 1,
+          productName: 'Lunch box',
+          variantName: null,
+          productId: 'p-lunch',
+          variantId: 'v-lunch',
+          quantity: 2,
+          modifierOptionIds: [],
+          status: 'AVAILABLE',
+          unitAmountMinor: null,
+          originalUnitAmountMinor: 28_000,
+          comboPicks: [
+            { componentId: 'c-burger', quantity: 1 },
+            { componentId: 'c-cola', quantity: 1 },
+          ],
+        },
+      ],
+    });
+    await render({ menu: vi.fn().mockResolvedValue(menuWithCombo()) }, { reorderPlan });
+    fixture.componentInstance['selectCandidate'](candidate());
+
+    await fixture.componentInstance['reorder']({ orderId: 'order-old' } as never);
+
+    const [line] = fixture.componentInstance['basket']();
+    expect(line.variantId).toBe('v-lunch');
+    expect(line.quantity).toBe(2);
+    expect(line.unitAmountMinor).toBe(28_000);
+    expect(line.combo?.picks.map((pick) => pick.componentId)).toEqual(['c-burger', 'c-cola']);
+  });
+
+  it('ADR 0136: a combo the menu no longer offers is left out of a repeat, and the operator is told', async () => {
+    const reorderPlan = vi.fn().mockResolvedValue({
+      orderId: 'order-old',
+      publicOrderNumber: '#0900',
+      locationId: 'l1',
+      channelCode: 'call-centre',
+      verdict: 'READY',
+      currency: 'UZS',
+      lines: [
+        {
+          lineNumber: 1,
+          productName: 'Lunch box',
+          variantName: null,
+          productId: 'p-lunch',
+          variantId: 'v-lunch',
+          quantity: 1,
+          modifierOptionIds: [],
+          status: 'AVAILABLE',
+          unitAmountMinor: null,
+          originalUnitAmountMinor: 28_000,
+          comboPicks: [{ componentId: 'c-gone', quantity: 1 }],
+        },
+      ],
+    });
+    await render({ menu: vi.fn().mockResolvedValue(menuWithCombo()) }, { reorderPlan });
+    fixture.componentInstance['selectCandidate'](candidate());
+
+    await fixture.componentInstance['reorder']({ orderId: 'order-old' } as never);
+
+    expect(fixture.componentInstance['basket']()).toHaveLength(0);
+    expect(fixture.componentInstance['reorderError']()).toBe(
+      TestBed.inject(I18n).t('orders.newOrder.reorder.partial'),
+    );
+  });
+
+  it('ADR 0136: a product’s own override replaces the shared group’s required, minimum and maximum in its dialog', async () => {
+    const menu: StorefrontMenu = {
+      ...MENU,
+      products: [
+        {
+          ...MENU.products[0],
+          modifierGroupIds: ['g-sauce'],
+          modifierGroupPolicies: [
+            {
+              modifierGroupId: 'g-sauce',
+              required: true,
+              minimumSelections: 1,
+              maximumSelections: 1,
+            },
+          ],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-sauce',
+          code: 'SAUCE',
+          name: 'Sauce',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 3,
+          allowSameOptionMultipleTimes: false,
+          options: [
+            {
+              optionId: 'o-mayo',
+              code: 'MAYO',
+              maximumQuantity: 1,
+              amountMinor: 0,
+              name: 'Mayonnaise',
+            },
+          ],
+        },
+      ],
+    };
+    await render({ menu: vi.fn().mockResolvedValue(menu) });
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    const [group] = fixture.componentInstance['pendingModifiers']()!.groups;
+    expect(group).toMatchObject({ required: true, minimumSelections: 1, maximumSelections: 1 });
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="item-modifier-dialog"]',
+    );
+    expect(dialog?.textContent).toContain('Mayonnaise');
+    expect(dialog?.textContent).not.toContain('MAYO');
+  });
+
+  // ------------------------------------------------ portions and weighed items (ADR 0137)
+
+  describe('portions and weighed items (ADR 0137)', () => {
+    const SPLITTABLE = {
+      splittable: true,
+      portionSize: 0.5,
+      catchweight: false,
+    } as const;
+
+    const CAKE = {
+      catchweight: true,
+      catchweightQuantumGrams: 100,
+      catchweightNominalGrams: 1_200,
+      splittable: false,
+    } as const;
+
+    it('starts a splittable variant at one whole portion and steps it by the portion size', async () => {
+      await render({ menu: vi.fn().mockResolvedValue(menuWith({ physical: SPLITTABLE })) });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+
+      const [line] = fixture.componentInstance['basket']();
+      expect(line.quantity).toBe(1);
+      expect(line.portionStep).toBe(0.5);
+    });
+
+    it('starts at the first whole multiple of a portion size that does not divide one', async () => {
+      await render({
+        menu: vi
+          .fn()
+          .mockResolvedValue(
+            menuWith({ physical: { splittable: true, portionSize: 0.3, catchweight: false } }),
+          ),
+      });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      expect(fixture.componentInstance['basket']()[0].quantity).toBe(1.2);
+    });
+
+    it('prices half a portion at half, and sends the fraction to the platform', async () => {
+      const placeOrder = vi.fn().mockResolvedValue({
+        orderId: 'order-1',
+        publicOrderNumber: '#0001',
+        status: 'CONFIRMED',
+        version: 1,
+        outcome: 'PLACED',
+        warnings: [],
+      });
+      await render({
+        menu: vi.fn().mockResolvedValue(menuWith({ physical: SPLITTABLE })),
+        placeOrder,
+      });
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      fixture.componentInstance['selectCandidate'](candidate());
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      fixture.componentInstance['setLineQuantity'](
+        fixture.componentInstance['basket']()[0].lineKey,
+        0.5,
+      );
+      fixture.detectChanges();
+      await fixture.componentInstance['submit']();
+
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(15_000);
+      expect(placeOrder.mock.calls[0][1].lines[0].quantity).toBe(0.5);
+    });
+
+    it('a variant with no physical facts is still ordered in whole units', async () => {
+      await render();
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      const [line] = fixture.componentInstance['basket']();
+      expect(line.portionStep).toBe(1);
+      expect(line.catchweight).toBeNull();
+    });
+
+    it('prices a weighed variant per quantum at its nominal weight, and says the total is an estimate', async () => {
+      await render({
+        menu: vi.fn().mockResolvedValue(menuWith({ amountMinor: 15_000, physical: CAKE })),
+      });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(180_000);
+      expect(fixture.componentInstance['total']().provisional).toBe(true);
+      const host: HTMLElement = fixture.nativeElement;
+      expect(
+        host.querySelector('[data-testid="new-order-total-provisional"]')?.textContent,
+      ).toContain('estimate');
+    });
+
+    it('does not call a plain basket an estimate', async () => {
+      await render();
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="new-order-total-provisional"]',
+        ),
+      ).toBeNull();
+    });
+
+    it('a weighed variant falls back to its net weight when no estimate was authored', async () => {
+      await render({
+        menu: vi.fn().mockResolvedValue(
+          menuWith({
+            amountMinor: 15_000,
+            physical: {
+              catchweight: true,
+              catchweightQuantumGrams: 100,
+              netWeightGrams: 800,
+              splittable: false,
+            },
+          }),
+        ),
+      });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(120_000);
+    });
+
+    it('«Повторить» gives a reordered line the portion and weight rules of the menu it is ordered from', async () => {
+      const reorderPlan = vi.fn().mockResolvedValue({
+        orderId: 'order-old',
+        publicOrderNumber: '#0900',
+        locationId: 'l1',
+        channelCode: 'call-centre',
+        verdict: 'READY',
+        currency: 'UZS',
+        lines: [
+          {
+            lineNumber: 1,
+            productName: 'Cheeseburger',
+            variantName: null,
+            productId: 'p-1',
+            variantId: 'v-1',
+            quantity: 0.5,
+            modifierOptionIds: [],
+            status: 'AVAILABLE',
+            unitAmountMinor: 30_000,
+            originalUnitAmountMinor: 30_000,
+          },
+        ],
+      });
+      await render(
+        { menu: vi.fn().mockResolvedValue(menuWith({ physical: SPLITTABLE })) },
+        {
+          reorderPlan,
+          ordersPageAtLocation: vi.fn().mockResolvedValue({
+            items: [
+              {
+                orderId: 'order-old',
+                publicOrderNumber: '#0900',
+                locationId: 'l1',
+                fulfillmentMode: 'PICKUP',
+                status: 'COMPLETED',
+                paymentStatus: 'CAPTURED',
+                fulfillmentStatus: 'COLLECTED',
+                currency: 'UZS',
+                totalMinor: 15_000,
+                promisedAt: null,
+                version: 1,
+                placedAt: '2026-09-01T12:00:00Z',
+              },
+            ],
+            nextCursor: null,
+          }),
+        },
+      );
+      fixture.componentInstance['selectCandidate'](candidate());
+      await fixture.componentInstance['toggleHistory']();
+
+      await fixture.componentInstance['reorder'](fixture.componentInstance['historyOrders']()[0]);
+
+      const [line] = fixture.componentInstance['basket']();
+      expect(line.quantity).toBe(0.5);
+      expect(line.portionStep).toBe(0.5);
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(15_000);
+    });
+
+    it('an aggregator entry states the price of one unit, not the price per quantum', async () => {
+      const aggregatorEntry = vi.fn().mockResolvedValue({
+        orderId: 'order-agg',
+        publicOrderNumber: '#0777',
+        status: 'RECEIVED',
+        version: 1,
+        outcome: 'CREATED',
+        warnings: [],
+      });
+      await render(
+        {
+          menu: vi.fn().mockResolvedValue(menuWith({ amountMinor: 15_000, physical: CAKE })),
+          aggregatorEntry,
+        },
+        {},
+        [
+          {
+            id: 'chan-agg',
+            code: 'uzum-tezkor',
+            systemType: 'AGGREGATOR',
+            displayName: 'Uzum Tezkor',
+            status: 'ACTIVE',
+            pricePlaneChannelId: null,
+            externallyPriced: true,
+            guestOrdersAllowed: false,
+            providerInstallationId: 'installation-1',
+            version: 1,
+            locationCount: 1,
+            enabledPaymentMethodCount: 0,
+            enabledFulfillmentModes: [],
+          },
+        ],
+      );
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      fixture.componentInstance['toggleAggregatorMode']();
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.componentInstance['aggregatorExternalOrderId'].set('YE-1');
+      fixture.componentInstance['aggregatorTotalMinor'].set(180_000);
+      fixture.detectChanges();
+
+      await fixture.componentInstance['submitAggregator']();
+
+      expect(aggregatorEntry.mock.calls[0][1].lines[0].unitAmountMinor).toBe(180_000);
+    });
   });
 });

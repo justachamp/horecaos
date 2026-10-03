@@ -67,6 +67,7 @@ export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
   commercial: { ru: 'Тариф и подписка', uz: 'Tarif va obuna', en: 'Plan and billing' },
   loyalty: { ru: 'Программа лояльности', uz: 'Sodiqlik dasturi', en: 'Loyalty' },
   iam: { ru: 'Доступ', uz: 'Kirish huquqlari', en: 'Access' },
+  staff: { ru: 'Сотрудники', uz: 'Xodimlar', en: 'Staff' },
   reporting: { ru: 'Отчёты', uz: 'Hisobotlar', en: 'Reports' },
   audit: { ru: 'Журнал действий', uz: 'Amallar jurnali', en: 'Activity log' },
   approval: { ru: 'Согласования', uz: 'Kelishuvlar', en: 'Approvals' },
@@ -284,6 +285,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     uz: 'Buyurtma qabul qilish qoidalarini sozlash',
     en: 'Manage the order acceptance policy',
   },
+  'order.payment-window.manage': {
+    area: 'order',
+    ru: 'Настраивать срок ожидания оплаты заказа',
+    uz: 'Buyurtma toʻlovini kutish muddatini sozlash',
+    en: 'Manage how long an unpaid order is waited for',
+  },
 
   'payment.read': {
     area: 'payment',
@@ -378,6 +385,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Включать зоны доставки в работу',
     uz: 'Yetkazib berish zonalarini kuchga kiritish',
     en: 'Activate delivery zones',
+  },
+  'delivery.dispatch_rules.read': {
+    area: 'delivery',
+    ru: 'Смотреть правила диспетчеризации и тайминги подбора курьера',
+    uz: 'Dispetcherlik qoidalari va kuryer qidirish vaqtlarini koʻrish',
+    en: 'View the dispatch rules and courier-search timing',
+  },
+  'delivery.dispatch_rules.write': {
+    area: 'delivery',
+    ru: 'Менять правила диспетчеризации и тайминги подбора курьера',
+    uz: 'Dispetcherlik qoidalari va kuryer qidirish vaqtlarini oʻzgartirish',
+    en: 'Change the dispatch rules and courier-search timing',
   },
   'delivery.tariff.manage': {
     area: 'delivery',
@@ -802,6 +821,35 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Назначать должности и права доступа',
     uz: 'Lavozim va kirish huquqlarini tayinlash',
     en: 'Manage staff grants',
+  },
+
+  // ADR 0139: the staff member record. The four sentences name what a person
+  // can do with other people's details -- and, for the emergency contacts,
+  // that each look is written down, since that is the thing worth knowing
+  // before handing the job to a colleague.
+  'staff.profile.read': {
+    area: 'staff',
+    ru: 'Смотреть карточки сотрудников: имя, телефон, занятость',
+    uz: 'Xodimlar kartochkalarini koʻrish: ism, telefon, bandlik',
+    en: 'View staff profiles: name, phone, employment',
+  },
+  'staff.profile.manage': {
+    area: 'staff',
+    ru: 'Менять карточки сотрудников и завершать их работу',
+    uz: 'Xodimlar kartochkalarini oʻzgartirish va ishini tugatish',
+    en: 'Edit staff profiles and end someone’s employment',
+  },
+  'staff.emergency-contact.read': {
+    area: 'staff',
+    ru: 'Смотреть экстренные контакты сотрудников (каждый просмотр записывается)',
+    uz: 'Xodimlarning favqulodda kontaktlarini koʻrish (har bir koʻrish yoziladi)',
+    en: 'View staff emergency contacts (each view is recorded)',
+  },
+  'staff.self.manage': {
+    area: 'staff',
+    ru: 'Менять свои имя, телефон, фото и языки',
+    uz: 'Oʻz ismi, telefoni, rasmi va tillarini oʻzgartirish',
+    en: 'Edit your own name, phone, photo and languages',
   },
 
   'reporting.read': {

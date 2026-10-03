@@ -161,4 +161,39 @@ class ChangeDocumentsTests {
         assertThat(ChangeDocuments.isProtected("status")).isFalse();
         assertThat(ChangeDocuments.isProtected("displayName")).isFalse();
     }
+
+    /**
+     * ADR 0139: the keys the staff member record's facts use for personal values.
+     * The set is name-based and substring-matched, so a key nobody thought of is
+     * recorded in clear: {@code employeeNumber} and {@code emergency*} were not in
+     * it when staff had no record to change.
+     */
+    @Test
+    void everyProtectedStaffFieldKeyIsRedacted() {
+        for (String key : new String[] {
+            "firstName", "lastName", "phone", "employeeNumber", "emergencyContacts", "emergencyContactName"
+        }) {
+            assertThat(ChangeDocuments.isProtected(key)).as(key).isTrue();
+            assertThat(asMap(ChangeDocuments.sanitize(ChangeDocuments.created(Map.of(key, "a value")))
+                            .get(key)))
+                    .as(key)
+                    .containsEntry("after", ChangeDocuments.REDACTED);
+        }
+    }
+
+    @Test
+    void theStaffFactsNonPersonalKeysStayReadable() {
+        for (String key : new String[] {
+            "employmentStatus",
+            "employedFrom",
+            "employedUntil",
+            "uiLocale",
+            "spokenLanguages",
+            "contactCount",
+            "relationships",
+            "photo"
+        }) {
+            assertThat(ChangeDocuments.isProtected(key)).as(key).isFalse();
+        }
+    }
 }

@@ -221,6 +221,14 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/storefront/dine-in/qr/token-exchanges",
+                                // ADR 0143: a guest seats themselves at a free table. Exactly
+                                // this path -- not a prefix -- and it carries two credentials,
+                                // the table's guest token (X-Dine-In-Token) and the customer's
+                                // own bearer session, both resolved to rows in the handler
+                                // before anything is written. permitAll only means the filter
+                                // chain does not demand a principal here; the handler does, and
+                                // answers 401 for a caller with none (QrEntryController#seat).
+                                "/api/v1/storefront/dine-in/sessions",
                                 "/api/v1/storefront/dine-in/sessions/*/bill-requests",
                                 // ADR 0047: closes the "ordering's cart-to-table binding"
                                 // gap the ADR's own "what was not built" section names --

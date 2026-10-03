@@ -1,0 +1,61 @@
+@if (rows().length > 0) {
+  <section class="weigh" data-testid="order-weighing">
+    <h3 class="q-emphasis weigh__title">{{ 'orders.weigh.title' | t }}</h3>
+    <p class="q-caption weigh__intro">{{ 'orders.weigh.intro' | t }}</p>
+    @if (!weighable()) {
+      <p class="q-caption weigh__closed" data-testid="order-weigh-closed">
+        {{ 'orders.weigh.closed' | t }}
+      </p>
+    }
+    <ul class="weigh__lines">
+      @for (line of rows(); track line.lineId) {
+        <li class="weigh__line" data-testid="order-weigh-line">
+          <div class="weigh__what">
+            <span class="q-body-sm">{{ line.productName }}</span>
+            <span class="q-caption weigh__state">
+              {{ line.catchweight?.provisional ? estimateText(line) : weighedText(line) }}
+            </span>
+          </div>
+          <label class="weigh__field">
+            <span class="q-caption">{{ 'orders.weigh.input.label' | t }}</span>
+            <input
+              type="text"
+              inputmode="numeric"
+              class="q-mono"
+              [value]="boxValue(line)"
+              [placeholder]="estimateGrams(line)"
+              [disabled]="!weighable() || busyLineId() !== null"
+              (input)="setTyped(line, $any($event.target).value)"
+              (keydown.enter)="save(line)"
+              data-testid="order-weigh-input"
+            />
+          </label>
+          <button
+            type="button"
+            class="weigh__save"
+            [disabled]="!canSave(line)"
+            (click)="save(line)"
+            data-testid="order-weigh-save"
+          >
+            {{ (busyLineId() === line.lineId ? 'orders.weigh.saving' : 'orders.weigh.save') | t }}
+          </button>
+          @if (showInputError(line)) {
+            <p class="q-caption weigh__error" data-testid="order-weigh-input-error">
+              {{ 'orders.weigh.input.error' | t }}
+            </p>
+          }
+          @if (errors()[line.lineId]; as message) {
+            <p class="q-caption weigh__error" role="alert" data-testid="order-weigh-error">
+              {{ message }}
+            </p>
+          }
+          @if (results()[line.lineId]; as message) {
+            <p class="q-caption weigh__result" role="status" data-testid="order-weigh-result">
+              {{ message }}
+            </p>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+}

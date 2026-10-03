@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.application;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
@@ -229,7 +230,7 @@ public final class ReportingFacts {
             UUID variantId,
             @Nullable UUID categoryId,
             String productNameSnapshot,
-            int quantity,
+            BigDecimal quantity,
             long grossSom,
             long discountSom,
             long netSom,
@@ -481,6 +482,48 @@ public final class ReportingFacts {
             // No answered-vs-offered check here: those two counts share a
             // location-hour, not a row — see fact_call_hour's own migration
             // comment for why that invariant is a rollup, not a per-row one.
+        }
+    }
+
+    /**
+     * ADR 0140 / ADR 0043 (row 7.9): one promotion redeemed on one order, on the
+     * order's business day.
+     *
+     * <p>Built at day close from the {@code PromotionRedemptionSource} port, never
+     * by a report reading {@code pricing} tables (ADR 0023). {@code
+     * customerSubjectHash} is the ADR 0029 keyed pseudonym and never an account id,
+     * which is the honest limit the record states: a manager cannot open the
+     * customer from a redemption row. A coupon's code word is not here; the fact
+     * carries {@code couponId} and the promotion's own handle only.
+     *
+     * @param sourceKind {@code AUTOMATIC}, {@code COUPON} or {@code GRANT}
+     * @param couponId   set exactly for {@code COUPON}
+     */
+    public record PromotionRedemptionFact(
+            UUID tenantId,
+            UUID redemptionId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID promotionId,
+            String promotionCode,
+            int definitionVersion,
+            String sourceKind,
+            @Nullable UUID couponId,
+            UUID orderId,
+            @Nullable String customerSubjectHash,
+            long discountMinor,
+            long markupMinor,
+            String currency,
+            Instant redeemedAt) {
+
+        public PromotionRedemptionFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(redemptionId, "A redemption fact names its ledger row");
+            if ((couponId != null) != "COUPON".equals(sourceKind)) {
+                throw new IllegalArgumentException("couponId is set exactly for a COUPON redemption");
+            }
         }
     }
 }

@@ -2,14 +2,17 @@ import { Injectable, inject, signal } from '@angular/core';
 
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
+import type { PhysicalFacts } from '../utils/physical';
 import type {
   CategoryItem,
   CategoryItemsResponse,
   CustomerUiResponse,
   MenuItem,
+  MenuItemComboGroup,
   MenuItemModifierGroup,
   MenuItemVariant,
 } from '../types/home.types';
+import { comboFromAmountMinor } from '../utils/combo-selection';
 import { preferredSellableVariant } from '../utils/item-availability';
 
 /**
@@ -57,6 +60,15 @@ export class MenuService {
   readonly currency = signal<string | null>(null);
 
   /**
+   * Every modifier option of the menu last read, by id, with the name the customer reads on it (its
+   * name in their language, else its code). The published menu carries the options of groups a
+   * screen never offers -- a delivery box the server applies by itself (ADR 0136) -- and this is how
+   * a screen that holds only a projected `MenuItem` can still say what a charge it was told of is
+   * called.
+   */
+  readonly optionLabels = signal<ReadonlyMap<string, string>>(new Map());
+
+  /**
    * The whole menu for a location, read fresh from the origin every time.
    *
    * There is deliberately no cache here: the server stopped handing out a
@@ -89,6 +101,15 @@ export class MenuService {
       },
     );
     this.currency.set(menu.currency);
+    this.optionLabels.set(
+      new Map(
+        menu.modifierGroups.flatMap((group) =>
+          group.options.map(
+            (option) => [option.optionId, option.name || option.code || ''] as const,
+          ),
+        ),
+      ),
+    );
     return menu;
   }
 
@@ -107,7 +128,9 @@ export class MenuService {
       const items = category.productIds
         .map((id) => byId.get(id))
         .filter((product): product is PublishedProduct => product !== undefined)
-        .map((product) => this.toMenuItem(product, menu.currency, groupsById));
+        .map((product) =>
+          this.toMenuItem(product, menu.currency, groupsById, comboGroupsById(menu)),
+        );
       return {
         id: category.categoryId,
         name: category.name,
@@ -146,14 +169,18 @@ export class MenuService {
       items: category.productIds
         .map((id) => byId.get(id))
         .filter((product): product is PublishedProduct => product !== undefined)
-        .map((product) => this.toMenuItem(product, menu.currency, groupsById)),
+        .map((product) =>
+          this.toMenuItem(product, menu.currency, groupsById, comboGroupsById(menu)),
+        ),
     };
   }
 
   async item(productId: string, locale: string): Promise<MenuItem | null> {
     const menu = await this.menu(locale);
     const product = menu.products.find((entry) => entry.productId === productId);
-    return product ? this.toMenuItem(product, menu.currency, modifierGroupsById(menu)) : null;
+    return product
+      ? this.toMenuItem(product, menu.currency, modifierGroupsById(menu), comboGroupsById(menu))
+      : null;
   }
 
   /**
@@ -178,7 +205,7 @@ export class MenuService {
           product.name.toLocaleLowerCase().includes(needle) ||
           (product.description ?? '').toLocaleLowerCase().includes(needle),
       )
-      .map((product) => this.toMenuItem(product, menu.currency, groupsById));
+      .map((product) => this.toMenuItem(product, menu.currency, groupsById, comboGroupsById(menu)));
   }
 
   /**
@@ -192,7 +219,16 @@ export class MenuService {
     product: PublishedProduct,
     currency: string | null,
     modifierGroups: ReadonlyMap<string, PublishedModifierGroup>,
+    comboGroups: ReadonlyMap<string, PublishedComboGroup> = new Map(),
   ): MenuItem {
+    const combos = (product.comboGroupIds ?? [])
+      .map((id) => comboGroups.get(id))
+      .filter((group): group is PublishedComboGroup => group !== undefined)
+      .map(toMenuItemComboGroup);
+    // A combo's own variant has no price. What the menu shows is the least a customer can pay:
+    // each choice's cheapest way of reaching its minimum. Null when a needed component is
+    // unpriced, which shows as no price rather than as the sum of the priced ones.
+    const comboFrom = combos.length > 0 ? comboFromAmountMinor(combos) : null;
     const variants: MenuItemVariant[] = product.variants.map((variant) => ({
       id: variant.variantId,
       isDefault: variant.isDefault,
@@ -204,9 +240,10 @@ export class MenuService {
       // "off-window" -- the failure that would hide a whole menu.
       onSaleNow: variant.onSaleNow !== false,
       preparation_time: 0,
-      price: variant.amountMinor ?? 0,
-      price_without_discount: variant.amountMinor ?? 0,
+      price: (combos.length > 0 ? comboFrom : variant.amountMinor) ?? 0,
+      price_without_discount: (combos.length > 0 ? comboFrom : variant.amountMinor) ?? 0,
       remainingQuantity: variant.remainingQuantity,
+      physical: variant.physical ?? null,
     }));
     const preferred = preferredVariant(variants);
 
@@ -230,9 +267,68 @@ export class MenuService {
       modifierGroups: product.modifierGroupIds
         .map((id) => modifierGroups.get(id))
         .filter((group): group is PublishedModifierGroup => group !== undefined)
-        .map(toMenuItemModifierGroup),
+        .map((group) => withProductPolicy(toMenuItemModifierGroup(group), product)),
+      comboGroups: combos,
     };
   }
+}
+
+/**
+ * This product's own rule for a group it attaches, where it overrides the shared group's (ADR 0136).
+ * The published values are already the effective ones, so they replace the group's outright and
+ * the add-to-cart guard asks for exactly what the cart will enforce.
+ */
+function withProductPolicy(
+  group: MenuItemModifierGroup,
+  product: PublishedProduct,
+): MenuItemModifierGroup {
+  const policy = (product.modifierGroupPolicies ?? []).find((p) => p.modifierGroupId === group.id);
+  return policy
+    ? {
+        ...group,
+        required: policy.required,
+        minimumSelections: policy.minimumSelections,
+        maximumSelections: policy.maximumSelections,
+      }
+    : group;
+}
+
+function toMenuItemComboGroup(group: PublishedComboGroup): MenuItemComboGroup {
+  return {
+    id: group.comboGroupId,
+    name: group.name,
+    minimumSelections: group.minimumSelections,
+    maximumSelections: group.maximumSelections,
+    allowSameComponentMultipleTimes: group.allowSameComponentMultipleTimes,
+    components: group.components.map((component) => ({
+      id: component.componentId,
+      name: component.name,
+      variantName: component.variantName ?? null,
+      defaultQuantity: component.defaultQuantity,
+      active: component.orderable,
+      amountMinor: component.amountMinor,
+    })),
+  };
+}
+
+/**
+ * The choices a product's combo asks for, in the author's order, for a screen that reads the menu
+ * document itself rather than a projected `MenuItem`. Empty on a product that is no combo.
+ */
+export function comboGroupsOfProduct(
+  menu: PublishedMenu,
+  product: PublishedProduct,
+): MenuItemComboGroup[] {
+  const byId = comboGroupsById(menu);
+  return (product.comboGroupIds ?? [])
+    .map((id) => byId.get(id))
+    .filter((group): group is PublishedComboGroup => group !== undefined)
+    .map(toMenuItemComboGroup);
+}
+
+/** Indexes a menu's combo groups by id, for resolving a product's ids against. */
+function comboGroupsById(menu: PublishedMenu): ReadonlyMap<string, PublishedComboGroup> {
+  return new Map((menu.comboGroups ?? []).map((group) => [group.comboGroupId, group]));
 }
 
 /** Indexes a menu's modifier groups by id, for resolving a product's ids against. */
@@ -250,9 +346,9 @@ function toMenuItemModifierGroup(group: PublishedModifierGroup): MenuItemModifie
     allowSameOptionMultipleTimes: group.allowSameOptionMultipleTimes,
     options: group.options.map((option) => ({
       id: option.optionId,
-      // Not a name -- see MenuItemModifierOption. The wire's MenuModifierOption
-      // has no name field, only a `code`, which is what a customer sees here.
-      label: option.code ?? '',
+      // The option's name in the customer's language when the menu carries one (ADR 0136),
+      // else the authoring code a menu published before options were named still sends.
+      label: option.name || option.code || '',
       amountMinor: option.amountMinor,
       maximumQuantity: option.maximumQuantity,
     })),
@@ -291,6 +387,42 @@ export interface PublishedMenu {
   readonly categories: readonly PublishedCategory[];
   readonly products: readonly PublishedProduct[];
   readonly modifierGroups: readonly PublishedModifierGroup[];
+  /** ADR 0136: the choices every combo on this menu asks for; absent from a platform that sells none. */
+  readonly comboGroups?: readonly PublishedComboGroup[];
+}
+
+/** `StorefrontCatalogQuery.MenuComboGroup`, transcribed. The container is the combo's own variant: never priced, never sold directly. */
+export interface PublishedComboGroup {
+  readonly comboGroupId: string;
+  readonly containerVariantId: string;
+  readonly code: string | null;
+  readonly name: string;
+  readonly minimumSelections: number;
+  readonly maximumSelections: number;
+  readonly allowSameComponentMultipleTimes: boolean;
+  readonly sortOrder: number;
+  readonly components: readonly PublishedComboComponent[];
+}
+
+/** `StorefrontCatalogQuery.MenuComboComponent`, transcribed. `amountMinor` is per unit; null is no price, never free. */
+export interface PublishedComboComponent {
+  readonly componentId: string;
+  readonly variantId: string;
+  readonly productId: string | null;
+  readonly name: string;
+  readonly variantName: string | null;
+  readonly defaultQuantity: number;
+  readonly sortOrder: number;
+  readonly orderable: boolean;
+  readonly amountMinor: number | null;
+}
+
+/** `StorefrontCatalogQuery.MenuModifierGroupPolicy`: how one product uses a group, already the effective values. */
+export interface PublishedModifierGroupPolicy {
+  readonly modifierGroupId: string;
+  readonly required: boolean;
+  readonly minimumSelections: number;
+  readonly maximumSelections: number;
 }
 
 export interface PublishedCategory {
@@ -312,6 +444,10 @@ export interface PublishedProduct {
   readonly imageUrls: readonly string[];
   readonly variants: readonly PublishedVariant[];
   readonly modifierGroupIds: readonly string[];
+  /** ADR 0136: the combo groups whose container is one of this product's variants; absent or empty on a product that is no combo. */
+  readonly comboGroupIds?: readonly string[];
+  /** ADR 0136: this product's own required/min/max for an attached group, where it overrides the shared group's. */
+  readonly modifierGroupPolicies?: readonly PublishedModifierGroupPolicy[];
 }
 
 export interface PublishedVariant {
@@ -337,6 +473,12 @@ export interface PublishedVariant {
    * (null) is the ordinary case, not "unlimited".
    */
   readonly remainingQuantity: number | null;
+  /**
+   * ADR 0137: `StorefrontCatalogQuery.PhysicalFacts`. Omitted for a fixed unit sold whole (most
+   * of the menu); for a catchweight variant `amountMinor` is the price per
+   * `catchweightQuantumGrams`.
+   */
+  readonly physical?: PhysicalFacts | null;
 }
 
 export interface PublishedModifierGroup {
@@ -355,4 +497,6 @@ export interface PublishedModifierOption {
   readonly code: string | null;
   readonly maximumQuantity: number;
   readonly amountMinor: number | null;
+  /** What the customer reads, in their language then the brand's; null/absent when nobody named the option. */
+  readonly name?: string | null;
 }

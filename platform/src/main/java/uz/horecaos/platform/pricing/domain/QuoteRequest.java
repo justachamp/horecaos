@@ -1,11 +1,15 @@
 package uz.horecaos.platform.pricing.domain;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * What a customer wants priced (ADR 0018).
@@ -32,6 +36,18 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  *                          was taken for is presented as-is and only its own
  *                          conditions are evaluated on the new basket. Null
  *                          for every cart price
+ * @param fulfillmentMode ADR 0136: how the order leaves the location, which decides
+ *                          which {@code HIDDEN_AUTO_SELECT} modifier groups the
+ *                          server applies. Null means what a request has always
+ *                          meant: {@code DELIVERY} when a destination is carried,
+ *                          {@code PICKUP} otherwise -- see {@link
+ *                          #effectiveFulfillmentMode()}. Dine-in has to be said,
+ *                          because nothing else in the request tells it from pickup
+ * @param frame ADR 0140: the promotion inputs a caller fixes rather than lets pricing
+ *                          read from the clock -- the cart's payment method and
+ *                          fulfilment mode, or, for an amendment, what the order
+ *                          was placed under. Null prices as the cart path always
+ *                          did
  */
 public record QuoteRequest(
         UUID tenantId,
@@ -43,7 +59,9 @@ public record QuoteRequest(
         @Nullable String idempotencyKey,
         @Nullable Delivery delivery,
         @Nullable String presentedCouponCode,
-        @Nullable UUID carriedRedemptionOrderId) {
+        @Nullable UUID carriedRedemptionOrderId,
+        @Nullable FulfillmentMode fulfillmentMode,
+        @Nullable Frame frame) {
 
     public QuoteRequest {
         Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -55,6 +73,104 @@ public record QuoteRequest(
         }
         channel = channel == null ? "STOREFRONT" : channel;
         lines = List.copyOf(lines);
+    }
+
+    /** Every call site that predates ADR 0136's fulfilment mode and the promotion frame (ADR 0140). */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery,
+            @Nullable String presentedCouponCode,
+            @Nullable UUID carriedRedemptionOrderId) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                channel,
+                lines,
+                idempotencyKey,
+                delivery,
+                presentedCouponCode,
+                carriedRedemptionOrderId,
+                null,
+                null);
+    }
+
+    /** Every call site that predates the promotion frame (ADR 0140): the cart's fulfilment mode, no frame. */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery,
+            @Nullable String presentedCouponCode,
+            @Nullable UUID carriedRedemptionOrderId,
+            @Nullable FulfillmentMode fulfillmentMode) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                channel,
+                lines,
+                idempotencyKey,
+                delivery,
+                presentedCouponCode,
+                carriedRedemptionOrderId,
+                fulfillmentMode,
+                null);
+    }
+
+    /** Every call site that predates ADR 0136's fulfilment mode: a promotion frame, no stated mode. */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery,
+            @Nullable String presentedCouponCode,
+            @Nullable UUID carriedRedemptionOrderId,
+            @Nullable Frame frame) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                channel,
+                lines,
+                idempotencyKey,
+                delivery,
+                presentedCouponCode,
+                carriedRedemptionOrderId,
+                null,
+                frame);
+    }
+
+    /**
+     * The fulfilment mode the order is priced as (ADR 0136).
+     *
+     * <p>Stated when the caller knows it, derived when it does not: a request that
+     * carries a delivery destination is a delivery, and every other request has
+     * always been priced as a collection. The derivation is what keeps a request
+     * that predates the field meaning exactly what it meant.
+     */
+    public FulfillmentMode effectiveFulfillmentMode() {
+        if (fulfillmentMode != null) {
+            return fulfillmentMode;
+        }
+        return delivery != null ? FulfillmentMode.DELIVERY : FulfillmentMode.PICKUP;
     }
 
     /** Every call site that predates a repricing carrying an order's own redemption. */
@@ -78,6 +194,8 @@ public record QuoteRequest(
                 idempotencyKey,
                 delivery,
                 presentedCouponCode,
+                null,
+                null,
                 null);
     }
 
@@ -107,6 +225,31 @@ public record QuoteRequest(
     }
 
     /**
+     * The promotion inputs a caller fixes (ADR 0140).
+     *
+     * <p>On the cart path the caller is {@code CartService}: the payment method and
+     * the fulfilment mode come from the cart and the instant is null, which means
+     * the clock. On the amendment path ({@code inheritFromQuoteId} set) pricing
+     * starts from the {@code promotionInputs} recorded on that quote, the quote
+     * behind the order's current revision, and overrides only what the amendment
+     * itself changes: the basket, the delivery point and, when {@code
+     * paymentMethodCode} is set, the payment method. The clock is never an
+     * override. {@code placedAt} is the fallback service instant for an order
+     * priced before calculation version 3, which recorded none.
+     */
+    public record Frame(
+            @Nullable Instant serviceInstant,
+            @Nullable String paymentMethodCode,
+            @Nullable String fulfillmentMode,
+            @Nullable UUID inheritFromQuoteId,
+            @Nullable Instant placedAt) {
+
+        public boolean isAmendment() {
+            return inheritFromQuoteId != null;
+        }
+    }
+
+    /**
      * Where the order is going, when it is going anywhere (ADR 0037).
      *
      * <p>A coordinate and not an address. Pricing has no use for the text and ADR
@@ -130,19 +273,135 @@ public record QuoteRequest(
     /**
      * One line of the cart being priced.
      *
+     * <p>The quantity is a decimal since ADR 0137: a splittable variant is ordered
+     * by the portion (0.5 of a plov). It is normalised on construction, so {@code 2}
+     * and {@code 2.000} are one quantity and two equal baskets hash equally.
+     *
      * @param lineId stable within the cart, so a re-quote can be compared line by
      *               line rather than by position
      * @param modifierOptionIds priced individually and added to the line
+     * @param comboPicks ADR 0136: what the customer chose inside a combo. Non-empty
+     *               exactly when {@code variantId} is a combo's container, which is
+     *               never priced or sold on its own: the line becomes one ordinary
+     *               quote line per picked component, each at its own price
+     * @param nestedModifiers ADR 0136: second-level selections, each naming the
+     *               first-level option whose linked variant offers it. One level
+     *               and no more -- a nested option cannot itself be a parent
+     * @param actualWeightGrams ADR 0137: the weighed total of this line, in grams
+     *               (all of its units together), once it has been captured at
+     *               pick or handover. Null at cart time, when a catchweight line
+     *               is priced provisionally against its nominal weight. Only
+     *               meaningful for a catchweight variant; pricing refuses it on
+     *               any other
      */
-    public record Line(String lineId, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+    public record Line(
+            String lineId,
+            UUID variantId,
+            BigDecimal quantity,
+            List<UUID> modifierOptionIds,
+            List<ComboPick> comboPicks,
+            List<NestedModifier> nestedModifiers,
+            @Nullable Integer actualWeightGrams) {
 
         public Line {
             Objects.requireNonNull(lineId, "A line id is required");
             Objects.requireNonNull(variantId, "A variant id is required");
-            if (quantity <= 0) {
+            Objects.requireNonNull(quantity, "A quantity is required");
+            if (quantity.signum() <= 0) {
                 throw new IllegalArgumentException("A quote line needs a positive quantity");
             }
+            if (actualWeightGrams != null && actualWeightGrams <= 0) {
+                throw new IllegalArgumentException("A weighed amount must be positive");
+            }
+            quantity = Quantities.normalise(quantity);
             modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
+            comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
+            nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
+            // Each component line is this id, a tilde and a position, and a quote line's
+            // id is 64 characters. Refused here, where the line is built, rather than as a
+            // database error half way through writing the quote.
+            if (!comboPicks.isEmpty() && lineId.length() > MAX_COMBO_LINE_ID_LENGTH) {
+                throw new IllegalArgumentException(
+                        "A combo line's id may be at most %d characters".formatted(MAX_COMBO_LINE_ID_LENGTH));
+            }
+        }
+
+        /** 64 for {@code quote_lines.line_id}, less {@code ~} and a three-digit position. */
+        public static final int MAX_COMBO_LINE_ID_LENGTH = 60;
+
+        /** A line priced provisionally (no weight captured), with no combo and no nested selection. */
+        public Line(String lineId, UUID variantId, BigDecimal quantity, List<UUID> modifierOptionIds) {
+            this(lineId, variantId, quantity, modifierOptionIds, List.of(), List.of(), null);
+        }
+
+        /** A line with a captured weight (ADR 0137) and no combo and no nested selection. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                @Nullable Integer actualWeightGrams) {
+            this(lineId, variantId, quantity, modifierOptionIds, List.of(), List.of(), actualWeightGrams);
+        }
+
+        /** A line with a combo and nested selections (ADR 0136) and no captured weight. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<ComboPick> comboPicks,
+                List<NestedModifier> nestedModifiers) {
+            this(lineId, variantId, quantity, modifierOptionIds, comboPicks, nestedModifiers, null);
+        }
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public Line(String lineId, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+            this(lineId, variantId, BigDecimal.valueOf(quantity), modifierOptionIds, List.of(), List.of(), null);
+        }
+
+        /** A whole number of units with a combo and nested selections. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<ComboPick> comboPicks,
+                List<NestedModifier> nestedModifiers) {
+            this(lineId, variantId, BigDecimal.valueOf(quantity), modifierOptionIds, comboPicks, nestedModifiers, null);
+        }
+    }
+
+    /**
+     * One pick inside a combo (ADR 0136).
+     *
+     * @param componentId the {@code catalog.combo_components} id -- the pairing of a
+     *                    group with a variant, which is also what a price is keyed to
+     * @param quantity    how many times the customer picked it; more than one needs a
+     *                    group that allows the same component repeatedly
+     */
+    public record ComboPick(UUID componentId, int quantity) {
+
+        public ComboPick {
+            Objects.requireNonNull(componentId, "A combo pick names a component");
+            if (quantity <= 0) {
+                throw new IllegalArgumentException("A combo pick needs a positive quantity");
+            }
+        }
+    }
+
+    /**
+     * A second-level modifier selection (ADR 0136).
+     *
+     * @param parentOptionId the first-level option the customer chose, whose linked
+     *                       variant carries the group {@code optionId} belongs to
+     * @param optionId       the option chosen from that linked variant's group
+     */
+    public record NestedModifier(UUID parentOptionId, UUID optionId) {
+
+        public NestedModifier {
+            Objects.requireNonNull(parentOptionId, "A nested selection names its parent option");
+            Objects.requireNonNull(optionId, "A nested selection names an option");
         }
     }
 }

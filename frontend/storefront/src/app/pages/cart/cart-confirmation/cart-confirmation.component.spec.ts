@@ -2,14 +2,19 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { CartConfirmationComponent } from './cart-confirmation.component';
+import type { PromotionRow } from '../../../services/applied-promotions';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
-import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../../services/location-profile.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
+import type { HiddenChargeRow } from '../../../services/ui-cart.service';
 import type { CartResponse } from '../../../types/cart.types';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
 import { APP_CONFIG, type AppConfig } from '../../../core/config/app-config';
@@ -19,18 +24,24 @@ class FakeUiCartService {
   cartData = vi.fn<() => CartResponse | null>(() => cartDataFixture());
   load = vi.fn();
   paymentMethods = vi.fn();
+  selectPaymentMethod = vi.fn().mockResolvedValue(undefined);
   applyDestination = vi.fn();
   priceCart = vi.fn();
   checkout = vi.fn();
   discard = vi.fn();
   deliveryAddress = vi.fn(() => '');
-  subtotalFormatted = vi.fn(() => '10 000 so\'m');
-  deliveryFee = vi.fn(() => '5 000 so\'m');
+  subtotalFormatted = vi.fn(() => "10 000 so'm");
+  deliveryFee = vi.fn(() => "5 000 so'm");
   taxFormatted = vi.fn<() => string | null>(() => null);
   discountFormatted = vi.fn<() => string | null>(() => null);
-  totalWithDelivery = vi.fn(() => '15 000 so\'m');
+  discountRows = vi.fn<() => readonly PromotionRow[]>(() => []);
+  promotionNotes = vi.fn<() => readonly PromotionRow[]>(() => []);
+  totalWithDelivery = vi.fn(() => "15 000 so'm");
   deliveryUnresolvedMessage = vi.fn<() => string | null>(() => null);
   canPlaceOrder = vi.fn(() => true);
+  /** ADR 0136: what the server added by itself, itemised. */
+  hiddenCharges = vi.fn<() => readonly HiddenChargeRow[]>(() => []);
+  hasProvisionalLines = vi.fn(() => false);
 }
 
 class FakeDeliverySelectionService {
@@ -226,7 +237,7 @@ describe('CartConfirmationComponent: the pickup screen names the actual branch',
     };
   }
 
-  it('shows the branch\'s own name and address once the profile read resolves, for the configured location', async () => {
+  it("shows the branch's own name and address once the profile read resolves, for the configured location", async () => {
     const { comp, fixture, locations } = await setUp(
       ['CASH'],
       (cart) => {
@@ -263,6 +274,49 @@ describe('CartConfirmationComponent: the pickup screen names the actual branch',
   });
 });
 
+describe('CartConfirmationComponent: the promotions behind the price (ADR 0140)', () => {
+  const rowsOf = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="discount-row"]')].map((row) =>
+      [...row.querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
+    );
+
+  it("prints one line per kind of discount, with the platform's own amount", async () => {
+    const { fixture } = await setUp(['CASH'], (cart) => {
+      cart.discountRows.mockReturnValue([
+        { labelKey: 'cart.offerDiscount', amount: "4 000 so'm" },
+        { labelKey: 'cart.promoCode', amount: "2 000 so'm" },
+      ]);
+    });
+
+    expect(rowsOf(fixture.nativeElement as HTMLElement)).toEqual([
+      ['cart.offerDiscount', "-4 000 so'm"],
+      ['cart.promoCode', "-2 000 so'm"],
+    ]);
+  });
+
+  it('draws no discount line and no caption when nothing was discounted', async () => {
+    const { fixture } = await setUp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+    expect(host.querySelector('[data-testid="promotion-note"]')).toBeNull();
+  });
+
+  it('explains a delivery offer or a surcharge as a caption, not as a line that would be added twice', async () => {
+    const { fixture } = await setUp(['CASH'], (cart) => {
+      cart.promotionNotes.mockReturnValue([
+        { labelKey: 'cart.deliveryOfferNote', amount: "5 000 so'm" },
+      ]);
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toBe(
+      'cart.deliveryOfferNote',
+    );
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+  });
+});
+
 describe('CartConfirmationComponent: CASH wording matches how it is actually paid, by mode', () => {
   it('a DELIVERY cart describes CASH as paid to the courier on receipt', async () => {
     const { comp } = await setUp(['CASH']);
@@ -279,6 +333,60 @@ describe('CartConfirmationComponent: CASH wording matches how it is actually pai
     });
 
     expect(comp.paymentMethod).toBe('cart.cash / cart.cashSecondaryPickup');
+  });
+});
+
+describe('CartConfirmationComponent: the payment method is part of the price (ADR 0140)', () => {
+  it('writes the method the platform offered to the cart when the screen loads, so a promotion that reads it is in the total', async () => {
+    const { cart } = await setUp(['CLICK']);
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('writes the method to the cart when the customer picks another one', async () => {
+    const { comp, cart } = await setUp(['CASH', 'CLICK']);
+    cart.selectPaymentMethod.mockClear();
+
+    comp.selectPayment('CLICK');
+
+    expect(comp.selectedPaymentId).toBe('CLICK');
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('puts the method on the cart after the destination and before it prices, so checkout is not refused PRICE_CHANGED', async () => {
+    const { comp, cart } = await setUp(['CLICK']);
+    cart.selectPaymentMethod.mockClear();
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockResolvedValue(checkoutResult());
+
+    await comp.submitOrder();
+
+    const destination = cart.applyDestination.mock.invocationCallOrder[0];
+    const select = cart.selectPaymentMethod.mock.invocationCallOrder[0];
+    const price = cart.priceCart.mock.invocationCallOrder[0];
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+    expect(destination).toBeLessThan(select);
+    expect(select).toBeLessThan(price);
+  });
+
+  it('reports the refusal and never reaches checkout when the platform will not take the method', async () => {
+    const { comp, cart } = await setUp(['CLICK']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.selectPaymentMethod.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'refused',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'PAYMENT_METHOD_UNAVAILABLE' },
+      }),
+    );
+
+    await comp.submitOrder();
+
+    expect(comp.orderError()).toBe('errors.reason.paymentMethodUnavailable');
+    expect(cart.priceCart).not.toHaveBeenCalled();
+    expect(cart.checkout).not.toHaveBeenCalled();
   });
 });
 
@@ -613,7 +721,11 @@ describe('CartConfirmationComponent: CLICK opens a payment session and redirects
   });
 
   afterEach(() => {
-    Object.defineProperty(window, 'location', { configurable: true, value: realLocation, writable: true });
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: realLocation,
+      writable: true,
+    });
   });
 
   it('opens the payment session and sends the browser to checkoutUrl, without an Angular navigation', async () => {
@@ -667,5 +779,56 @@ describe('CartConfirmationComponent: CLICK opens a payment session and redirects
 
     expect(paymentSessions.open).not.toHaveBeenCalled();
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'active']);
+  });
+});
+
+describe('CartConfirmationComponent: what the server added by itself (ADR 0136)', () => {
+  it('itemises each added charge by name and amount, and says it is already in the total', async () => {
+    const { fixture } = await setUp(['CASH'], (cart) => {
+      cart.hiddenCharges.mockReturnValue([
+        { optionId: 'o-box', label: 'Delivery box', amountMinor: 2_000, amount: "2 000 so'm" },
+      ]);
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="hidden-charges-title"]')?.textContent).toContain(
+      'cart.hiddenCharge.title',
+    );
+    const rows = host.querySelectorAll('[data-testid="hidden-charge"]');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Delivery box');
+    expect(rows[0].textContent).toContain("2 000 so'm");
+  });
+
+  it('shows no such block for a cart the server added nothing to', async () => {
+    const { fixture } = await setUp(['CASH']);
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="hidden-charges"]'),
+    ).toBeNull();
+  });
+});
+
+describe('CartConfirmationComponent: items sold by weight (ADR 0137)', () => {
+  it('says the amount is an estimate before the customer pays, while the basket holds a weighed item', async () => {
+    const { fixture } = await setUp(['CASH'], (cart) =>
+      cart.hasProvisionalLines.mockReturnValue(true),
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="confirm-provisional-notice"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="confirm-provisional-notice"]',
+      ),
+    ).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
+import type { HiddenChargeRow } from '../../../services/ui-cart.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
+import type { PromotionNote, PromotionRow } from '../../../services/ui-cart.service';
 
 /**
  * The money block on the checkout screen: subtotal, delivery, discount, total.
@@ -23,7 +25,22 @@ export class OrderSummaryComponent {
   readonly deliveryFee = input.required<string>();
   /** Why the delivery line reads as a dash rather than a price, or null when it resolved. */
   readonly unresolvedMessage = input<string | null>(null);
-  readonly hasDiscount = input(false);
-  readonly discount = input('');
+  /**
+   * The discounts, one line per kind with the platform's own amount (ADR 0140).
+   * Their sum is the discount; a code line carries the customer's own code.
+   */
+  readonly discountRows = input<readonly PromotionRow[]>([]);
+  /** Benefits already inside the delivery price or the goods, as captions. */
+  readonly notes = input<readonly PromotionNote[]>([]);
   readonly total = input.required<string>();
+  /**
+   * ADR 0136: what the server added by itself -- a delivery box the customer never chose --
+   * itemised, each already inside the figures above. Empty when nothing was added.
+   */
+  readonly hiddenCharges = input<readonly HiddenChargeRow[]>([]);
+  /**
+   * ADR 0137: the basket holds an item sold by weight, so the total is an estimate at its
+   * nominal weight and the final weight and amount are determined at handover.
+   */
+  readonly provisional = input(false);
 }

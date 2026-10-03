@@ -6,11 +6,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.ordering.domain.PaymentWindowPolicy;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore.ProcessRow;
 
@@ -60,10 +63,25 @@ public class OrderPaymentProcess {
 
     private final JdbcOrderProcessStore processes;
     private final ObjectMapper objectMapper;
+    private final @Nullable PaymentWindowAuthoringService windows;
 
+    @Autowired
+    public OrderPaymentProcess(
+            JdbcOrderProcessStore processes, ObjectMapper objectMapper, PaymentWindowAuthoringService windows) {
+        this.processes = processes;
+        this.objectMapper = objectMapper;
+        this.windows = windows;
+    }
+
+    /**
+     * A sweep that knows only the deploy property: every order is waited for as long as {@code
+     * staleAfter} says. For a caller with no policy store, which is every unit test that predates
+     * ADR 0142's {@code ordering.payment_window}.
+     */
     public OrderPaymentProcess(JdbcOrderProcessStore processes, ObjectMapper objectMapper) {
         this.processes = processes;
         this.objectMapper = objectMapper;
+        this.windows = null;
     }
 
     /**
@@ -95,6 +113,13 @@ public class OrderPaymentProcess {
     /**
      * The stuck list, one pass at a time.
      *
+     * <p>{@code staleAfter} is the <em>fallback</em> window -- the deploy property -- and applies to an
+     * order whose location has no {@code ordering.payment_window} document in its chain. Where one is
+     * published its window replaces it for that order (ADR 0142 Decision 7). What is done at the end of
+     * the window is flagging, and only flagging: a document that somehow carries {@code CANCEL} (the
+     * publisher refuses it) is treated as {@code FLAG_ONLY} and logged, because cancelling an unpaid
+     * order is ADR 0019's open product input and no sweep may answer it by acting as if it had.
+     *
      * <p>Every claimed row gets a write back, never a silent skip: a row left
      * exactly as {@code claim} found it would still satisfy {@code
      * next_attempt_at <= now} on the very next tick and be claimed again
@@ -117,8 +142,21 @@ public class OrderPaymentProcess {
         return checked;
     }
 
-    private void sweepRow(ProcessRow row, Instant now, Duration staleAfter, Duration recheckInterval) {
+    private void sweepRow(ProcessRow row, Instant now, Duration fallbackStaleAfter, Duration recheckInterval) {
         Instant enteredAt = enteredAtOf(row);
+        Duration staleAfter = fallbackStaleAfter;
+        if (windows != null) {
+            PaymentWindowAuthoringService.Window window =
+                    windows.windowFor(row.tenantId(), row.orderId(), fallbackStaleAfter);
+            staleAfter = window.staleAfter();
+            if (window.action() != PaymentWindowPolicy.Action.FLAG_ONLY) {
+                log.error(
+                        "Order {} has a payment window action of {}, which is refused at publish and not "
+                                + "available; it is only flagged",
+                        row.orderId(),
+                        window.action());
+            }
+        }
 
         if (!enteredAt.isAfter(now.minus(staleAfter))) {
             // A fact, not a decision. ADR 0019 leaves cancellation-on-timeout as

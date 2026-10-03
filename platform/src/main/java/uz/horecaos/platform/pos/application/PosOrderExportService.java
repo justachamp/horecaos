@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.catalog.api.PackageCodeLookup;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
@@ -154,6 +155,12 @@ public class PosOrderExportService {
      */
     private final TransactionTemplate unitOfWork;
 
+    /**
+     * Resolves the accepting subject to the tenant's staff member id (ADR 0139),
+     * the key an {@code OPERATOR} mapping is stored under.
+     */
+    private final StaffDirectory staffDirectory;
+
     public PosOrderExportService(
             PosAdapterRegistry adapters,
             ProviderInstallationLookup installations,
@@ -166,7 +173,9 @@ public class PosOrderExportService {
             ApplicationEventPublisher events,
             ProviderActivityRecorder activity,
             Clock clock,
-            TransactionTemplate unitOfWork) {
+            TransactionTemplate unitOfWork,
+            StaffDirectory staffDirectory) {
+        this.staffDirectory = staffDirectory;
         this.adapters = adapters;
         this.installations = installations;
         this.mappings = mappings;
@@ -863,13 +872,28 @@ public class PosOrderExportService {
                                     "A comment preset on line %s has no provider mapping".formatted(line.lineId()))))
                     .forEach(modifiers::add);
 
+            // ADR 0136: a combo's components are exported as the ordinary lines they are, each
+            // mapped, priced and classified as its own variant. What the combo adds is the key
+            // that groups them and, when the till has the combo itself, its identifier.
+            // Resolved for the combo's container and never required: the container is not a
+            // line, so an unmapped combo is a flat export, not a refused one.
+            String comboExternalId = line.comboContainerVariantId() == null
+                    ? null
+                    : mappings.externalIdFor(binding.bindingId(), VARIANT_ENTITY, line.comboContainerVariantId())
+                            .orElse(null);
+
             lines.add(new OrderExport.Line(
                     externalId,
                     displayName(line),
                     line.quantity(),
                     line.unitAmountMinor(),
                     modifiers,
-                    lineClassifications.get(line.sourceVariantId())));
+                    lineClassifications.get(line.sourceVariantId()),
+                    line.comboSelectionId() == null
+                            ? null
+                            : line.comboSelectionId().toString(),
+                    line.comboName(),
+                    comboExternalId));
             fingerprintLines.add(new LineFingerprint.Line(externalId, line.quantity(), line.unitAmountMinor()));
         }
 
@@ -913,7 +937,8 @@ public class PosOrderExportService {
                 // a moment ago, on the other screen.
                 "RESTAURANT_APPROVAL".equals(order.acceptanceMode()) && !"CONFIRMED".equals(order.status()),
                 order.placedAt(),
-                resolveOperatorExternalId(binding.bindingId(), order.acceptedByActorType(), order.acceptedByActorId()));
+                resolveOperatorExternalId(
+                        tenantId, binding.bindingId(), order.acceptedByActorType(), order.acceptedByActorId()));
 
         PosContext context = new PosContext(
                 tenantId,
@@ -929,42 +954,39 @@ public class PosOrderExportService {
     /**
      * {@link OrderExport#operatorExternalId}'s whole resolution (operations-gap-map.md
      * {@code 9.2c}): a HorecaOS operator only ever reaches the till through the
-     * one generic ADR 0026 mapping every other entity here already uses — there
-     * is no separate "operator mapping" table, and none is missing for this to
-     * work.
+     * one generic ADR 0026 mapping every other entity here already uses -- there
+     * is no separate "operator mapping" table. Since ADR 0139 the mapping is keyed
+     * by the tenant's staff member id, the way {@code VARIANT} and {@code COURIER}
+     * key on their own HorecaOS entity, and not by the Keycloak subject, which is
+     * an authentication artefact: the subject on the order is resolved to a member
+     * id through {@link StaffDirectory} first, and an account the tenant keeps no
+     * member row for -- a device, a support session -- resolves to no operator.
      *
      * <p>Package-private, not private, so {@code
      * PosOrderExportOperatorAttributionTests} can exercise it directly: the
      * point of this method is that it has no order-export machinery of its own
-     * to stand up, just a lookup keyed off two fields the order read already
+     * to stand up, just two lookups keyed off two fields the order read already
      * carries.
      *
      * @param acceptedByActorType {@code ordering.orders.accepted_by_actor_type}
-     *                            — only {@code "USER"} names a staff principal;
+     *                            -- only {@code "USER"} names a staff principal;
      *                            every other value (including null, an order
      *                            nobody has accepted yet) resolves to no operator
-     * @param acceptedByActorId   the matching actor id. Parsed as a {@link UUID}
-     *                            only because a {@code USER} actor id always is
-     *                            one (every {@code currentActor.get().subject()}
-     *                            call site in this codebase does the same
-     *                            parse) — an actor id that fails to parse is
-     *                            treated as "no operator" rather than thrown,
-     *                            since a malformed value here is a fact about
-     *                            data, not a reason to fail the whole export
+     * @param acceptedByActorId   the matching actor id, a Keycloak subject. A
+     *                            subject this tenant has no member for is treated
+     *                            as "no operator" rather than thrown, since an
+     *                            unmapped actor is a fact about data, not a reason
+     *                            to fail the whole export
      */
     @Nullable
     String resolveOperatorExternalId(
-            UUID bindingId, @Nullable String acceptedByActorType, @Nullable String acceptedByActorId) {
+            UUID tenantId, UUID bindingId, @Nullable String acceptedByActorType, @Nullable String acceptedByActorId) {
         if (!"USER".equals(acceptedByActorType) || acceptedByActorId == null) {
             return null;
         }
-        UUID operatorPrincipal;
-        try {
-            operatorPrincipal = UUID.fromString(acceptedByActorId);
-        } catch (IllegalArgumentException notAPrincipalUuid) {
-            return null;
-        }
-        return mappings.externalIdFor(bindingId, OPERATOR_ENTITY, operatorPrincipal)
+        return staffDirectory
+                .memberIdOf(tenantId, acceptedByActorId)
+                .flatMap(memberId -> mappings.externalIdFor(bindingId, OPERATOR_ENTITY, memberId))
                 .orElse(null);
     }
 

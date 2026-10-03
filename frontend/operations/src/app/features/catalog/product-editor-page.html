@@ -420,6 +420,21 @@
                     </button>
                   </details>
                 </div>
+                <q-product-modifier-policy-panel
+                  [product]="product"
+                  [library]="modifierLibrary()"
+                  [locale]="editingLocale()"
+                  (changed)="onCompositeSaved()"
+                />
+              </div>
+            }
+            @case ('COMBO') {
+              <div class="editor__section">
+                <q-product-combo-panel
+                  [product]="product"
+                  [locale]="editingLocale()"
+                  (saved)="onCompositeSaved()"
+                />
               </div>
             }
             @case ('PHOTOS') {
@@ -579,6 +594,22 @@
                 }
                 <p class="q-caption">{{ 'catalog.editor.fiscal.notBuilt' | t }}</p>
                 <p class="q-caption">{{ 'catalog.editor.fiscal.mxikReferenceNote' | t }}</p>
+              </div>
+            }
+            @case ('PHYSICAL') {
+              <div class="editor__section editor__physical">
+                <p class="q-caption">{{ 'catalog.editor.physical.intro' | t }}</p>
+                @if (brandScope(); as scope) {
+                  @for (variant of product.variants; track variant.variantId) {
+                    <q-variant-physical-attributes
+                      [scope]="scope"
+                      [variantId]="variant.variantId"
+                      [label]="variantLabel(variant.variantId)"
+                      [markingRequired]="variant.fiscal?.markingRequired ?? false"
+                      (saved)="onPhysicalSaved()"
+                    />
+                  }
+                }
               </div>
             }
             @case ('AVAILABILITY') {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -120,6 +122,33 @@ class OperatorOrderingServiceBranchOverrideTests {
 
         verify(audit, never()).record(any());
         verifyNoInteractions(overrideReasons);
+    }
+
+    @Test
+    void theOperatorsPaymentMethodIsOnTheCartBeforeTheCartIsPriced() {
+        stubHappyCartPath(PROPOSED_LOCATION);
+        stubResolvedProposal(PROPOSED_LOCATION);
+        when(checkout.checkout(any())).thenReturn(created(ORDER_ID));
+
+        service.place(commandFor(PROPOSED_LOCATION, PROPOSED_LOCATION, null, null));
+
+        var inOrder = org.mockito.Mockito.inOrder(carts);
+        inOrder.verify(carts).setPaymentMethod(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt(), eq("CASH"));
+        inOrder.verify(carts).price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt());
+    }
+
+    @Test
+    void aMethodTheChannelDoesNotOfferIsLeftForCheckoutToRefuse() {
+        stubHappyCartPath(PROPOSED_LOCATION);
+        stubResolvedProposal(PROPOSED_LOCATION);
+        when(carts.setPaymentMethod(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt(), eq("CASH")))
+                .thenThrow(new CartService.CartRefusedException("PAYMENT_METHOD_UNAVAILABLE", "not offered"));
+        when(checkout.checkout(any())).thenReturn(created(ORDER_ID));
+
+        service.place(commandFor(PROPOSED_LOCATION, PROPOSED_LOCATION, null, null));
+
+        verify(carts).price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt());
+        verify(checkout).checkout(any());
     }
 
     @Test
@@ -399,10 +428,18 @@ class OperatorOrderingServiceBranchOverrideTests {
                         anyInt(),
                         any(),
                         eq(VARIANT),
-                        eq(1),
+                        // The quantity is a decimal since ADR 0137; a whole one compares equal in value.
+                        argThat((BigDecimal quantity) -> quantity.compareTo(BigDecimal.ONE) == 0),
+                        any(),
+                        any(),
+                        // ADR 0136: the combo picks and the second-level selections an operator
+                        // line carries, empty for the plain dish this suite orders.
                         any(),
                         any(),
                         any()))
+                .thenReturn(new CartService.CartView(lined, List.<CartLineRow>of()));
+        // ADR 0140: the operator's payment method goes on the cart before it is priced.
+        when(carts.setPaymentMethod(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt(), eq("CASH")))
                 .thenReturn(new CartService.CartView(lined, List.<CartLineRow>of()));
         when(carts.price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt()))
                 .thenReturn(new CartService.PricedCart(CART_ID, 1, quote(locationId)));

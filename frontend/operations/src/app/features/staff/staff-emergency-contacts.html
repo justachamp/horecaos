@@ -1,0 +1,169 @@
+<section class="panel" data-testid="staff-emergency-contacts">
+  <h3 class="q-emphasis">{{ 'staff.emergency.title' | t }}</h3>
+
+  @switch (phase()) {
+    @case ('hidden') {
+      <p class="q-body-sm hint">{{ 'staff.emergency.audited' | t }}</p>
+      @if (canRead()) {
+        <button
+          type="button"
+          class="text-button"
+          (click)="show()"
+          data-testid="staff-emergency-show"
+        >
+          {{ 'staff.emergency.show' | t }}
+        </button>
+      } @else {
+        <p class="q-caption hint" data-testid="staff-emergency-denied">
+          {{ 'staff.emergency.denied' | t }}
+        </p>
+      }
+    }
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'staff.people.loading' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error" role="alert">{{ errorMessage() }}</p>
+      <button type="button" class="text-button" (click)="hide()">
+        {{ 'staff.dialog.cancel' | t }}
+      </button>
+    }
+    @case ('shown') {
+      @if (!editing()) {
+        @if (contacts().length === 0) {
+          <p class="q-body-sm hint" data-testid="staff-emergency-empty">
+            {{ 'staff.emergency.empty' | t }}
+          </p>
+        } @else {
+          <ul class="list" data-testid="staff-emergency-list">
+            @for (contact of contacts(); track contact.id) {
+              <li class="item">
+                <span class="q-body-sm item__name">{{ contact.name }}</span>
+                <span class="q-caption hint">{{
+                  relationLabelKey(contact.relationshipCode) | t
+                }}</span>
+                <a class="q-body-sm q-tnum item__phone" [href]="'tel:' + contact.phone">{{
+                  contact.phone
+                }}</a>
+              </li>
+            }
+          </ul>
+        }
+        <div class="actions">
+          <button
+            type="button"
+            class="text-button"
+            (click)="hide()"
+            data-testid="staff-emergency-hide"
+          >
+            {{ 'staff.emergency.hide' | t }}
+          </button>
+          @if (canManage()) {
+            <button
+              type="button"
+              class="text-button"
+              (click)="startEditing()"
+              data-testid="staff-emergency-edit"
+            >
+              {{ 'staff.profile.edit' | t }}
+            </button>
+          }
+        </div>
+      } @else {
+        <form
+          class="form"
+          (submit)="$event.preventDefault(); save()"
+          data-testid="staff-emergency-form"
+        >
+          @for (row of drafts(); track $index; let index = $index) {
+            <div class="row" data-testid="staff-emergency-row">
+              <select
+                class="input"
+                [value]="row.relationshipCode"
+                (change)="edit(index, 'relationshipCode', $any($event.target).value)"
+                [disabled]="busy()"
+                [attr.aria-label]="'staff.emergency.relationship' | t"
+              >
+                @for (code of relationships; track code) {
+                  <option [value]="code" [selected]="row.relationshipCode === code">
+                    {{ relationLabelKey(code) | t }}
+                  </option>
+                }
+              </select>
+              <input
+                type="text"
+                class="input"
+                [value]="row.name"
+                (input)="edit(index, 'name', $any($event.target).value)"
+                [disabled]="busy()"
+                maxlength="100"
+                [placeholder]="'staff.emergency.name' | t"
+                [attr.aria-invalid]="attempted() && rowProblem(row) === 'name' ? 'true' : null"
+                data-testid="staff-emergency-name"
+              />
+              <input
+                type="tel"
+                class="input"
+                [value]="row.phone"
+                (input)="edit(index, 'phone', $any($event.target).value)"
+                [disabled]="busy()"
+                maxlength="40"
+                [placeholder]="'staff.emergency.phone' | t"
+                [attr.aria-invalid]="attempted() && rowProblem(row) === 'phone' ? 'true' : null"
+                data-testid="staff-emergency-phone"
+              />
+              <button
+                type="button"
+                class="text-button text-button--destructive"
+                (click)="removeDraft(index)"
+                [disabled]="busy()"
+                data-testid="staff-emergency-remove"
+              >
+                {{ 'staff.action.remove' | t }}
+              </button>
+              @if (attempted() && rowProblem(row); as problem) {
+                <span class="q-caption error row__problem">{{
+                  (problem === 'name'
+                    ? 'staff.emergency.name.required'
+                    : 'staff.emergency.phone.invalid'
+                  ) | t
+                }}</span>
+              }
+            </div>
+          }
+          @if (drafts().length < maxContacts) {
+            <button
+              type="button"
+              class="text-button"
+              (click)="addDraft()"
+              [disabled]="busy()"
+              data-testid="staff-emergency-add"
+            >
+              {{ 'staff.emergency.add' | t }}
+            </button>
+          } @else {
+            <p class="q-caption hint">{{ 'staff.emergency.max' | t }}</p>
+          }
+          @if (saveError(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="staff-emergency-error">
+              {{ message }}
+            </p>
+          }
+          <div class="actions">
+            <button type="button" class="text-button" (click)="cancelEditing()" [disabled]="busy()">
+              {{ 'staff.dialog.cancel' | t }}
+            </button>
+            <button
+              type="submit"
+              class="primary-button"
+              [disabled]="busy()"
+              data-testid="staff-emergency-save"
+            >
+              {{ 'staff.profile.save' | t }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+  }
+</section>

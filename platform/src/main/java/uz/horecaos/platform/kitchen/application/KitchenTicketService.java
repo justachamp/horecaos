@@ -1,5 +1,6 @@
 package uz.horecaos.platform.kitchen.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -52,6 +53,7 @@ import uz.horecaos.platform.telemetry.api.ScopeKey;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The kitchen aggregate (ADR 0041): routing a confirmed order onto stations,
@@ -325,10 +327,8 @@ public class KitchenTicketService {
             return 0;
         }
 
-        Map<UUID, Long> portionsByStation = new HashMap<>();
-        for (RoutedLine line : routedLines) {
-            portionsByStation.merge(line.stationId(), (long) line.quantity(), Long::sum);
-        }
+        // A station's ceiling counts whole plates (V0144, ADR 0137): see portionsByStation.
+        Map<UUID, Long> portionsByStation = portionsByStation(routedLines);
         if (portionsByStation.isEmpty()) {
             return 0;
         }
@@ -458,7 +458,13 @@ public class KitchenTicketService {
 
             UUID stationId = match.map(ResolvedStation::stationId).orElse(fallbackStation);
             RoutingLevel level = match.map(ResolvedStation::level).orElse(RoutingLevel.FALLBACK);
-            resolved.add(new RoutedLine(line.orderLineId(), stationId, level, line.quantity()));
+            resolved.add(new RoutedLine(
+                    line.orderLineId(),
+                    stationId,
+                    level,
+                    line.quantity(),
+                    line.comboSelectionId(),
+                    line.comboContainerVariantId()));
         }
         return resolved;
     }
@@ -486,7 +492,12 @@ public class KitchenTicketService {
                     null,
                     null,
                     1,
-                    now));
+                    now,
+                    // ADR 0136: the combo this item belongs to, for a display to group on. The
+                    // station above was resolved from this item's own variant, so a combo's
+                    // burger and its drink still go to the grill and the bar.
+                    line.comboSelectionId(),
+                    line.comboContainerVariantId()));
         }
         return unresolved;
     }
@@ -1164,5 +1175,27 @@ public class KitchenTicketService {
     private record Release(ReleaseMode mode, @Nullable Instant releaseAt, boolean fireNow, boolean ceilingExceeded) {}
 
     /** One order line, resolved onto a station but not yet written as a ticket item. */
-    private record RoutedLine(UUID orderLineId, UUID stationId, RoutingLevel level, int quantity) {}
+    private record RoutedLine(
+            UUID orderLineId,
+            UUID stationId,
+            RoutingLevel level,
+            BigDecimal quantity,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {}
+
+    /**
+     * The portions each station is asked to make, for the station's capacity ceiling.
+     *
+     * <p>Summed as decimals and rounded up once per station (ADR 0137): two half portions
+     * are one plate, and a half portion alone is still a plate somebody has to make room for.
+     */
+    private static Map<UUID, Long> portionsByStation(List<RoutedLine> routedLines) {
+        Map<UUID, BigDecimal> exact = new HashMap<>();
+        for (RoutedLine line : routedLines) {
+            exact.merge(line.stationId(), line.quantity(), BigDecimal::add);
+        }
+        Map<UUID, Long> portions = new HashMap<>();
+        exact.forEach((station, sum) -> portions.put(station, (long) Quantities.wholeUnitsCeiling(sum)));
+        return portions;
+    }
 }

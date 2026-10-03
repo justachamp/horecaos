@@ -1,16 +1,21 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -61,6 +66,8 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.api.PromotionQueryPort;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
@@ -135,6 +142,10 @@ public class OrderAmendmentService {
     private final FieldProtection protection;
     private final ConfigurationResolver configuration;
     private final PromoCodeRedemptionPort promoCodes;
+    private final OrderCatalogSnapshot catalog;
+    private final PromotionRedemptionPort promotions;
+    private final PromotionQueryPort promotionQuery;
+    private final OrderDeliveryPoint deliveryPoint;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -153,7 +164,10 @@ public class OrderAmendmentService {
             PaymentIntentPort payments,
             FieldProtection protection,
             ConfigurationResolver configuration,
-            PromoCodeRedemptionPort promoCodes) {
+            PromoCodeRedemptionPort promoCodes,
+            OrderCatalogSnapshot catalog,
+            PromotionRedemptionPort promotions,
+            PromotionQueryPort promotionQuery) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -169,6 +183,10 @@ public class OrderAmendmentService {
         this.protection = protection;
         this.configuration = configuration;
         this.promoCodes = promoCodes;
+        this.catalog = catalog;
+        this.promotions = promotions;
+        this.promotionQuery = promotionQuery;
+        this.deliveryPoint = new OrderDeliveryPoint(orders, protection, objectMapper);
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
         // apply() settles an expired amendment and then refuses the application, and
@@ -242,8 +260,9 @@ public class OrderAmendmentService {
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
         UUID quoteId = null;
-        if (decoded.basket().needsReprice()) {
-            QuoteSnapshot quote = repriceFor(order, decoded.basket(), command.idempotencyKey() + ":quote");
+        if (repricesOrder(order, decoded)) {
+            QuoteSnapshot quote = repriceFor(
+                    order, decoded.basket(), decoded.paymentMethodCode(), command.idempotencyKey() + ":quote");
             quoteId = quote.quoteId();
             deltaTotalMinor = quote.totalMinor() - order.totalMinor();
 
@@ -469,7 +488,7 @@ public class OrderAmendmentService {
         long feeMinor = previous.feeMinor();
         long totalMinor = previous.totalMinor();
 
-        if (decoded.basket().needsReprice()) {
+        if (repricesOrder(order, decoded)) {
             UUID storedQuoteId = Objects.requireNonNull(
                     amendment.quoteId(), "A repricing amendment always priced a quote at propose time");
             QuoteSnapshot quote = quoteAcceptance
@@ -493,11 +512,18 @@ public class OrderAmendmentService {
             }
 
             reserveIncrease(tenantId, order, storedQuoteId, quote, liveLines, decoded.basket());
-            writeLineChanges(tenantId, orderId, liveLines, decoded.basket(), quote, newRevision);
+            writeLineChanges(tenantId, order, liveLines, decoded.basket(), quote, newRevision);
             // The order still holds the one redemption its checkout took; a
             // repriced basket only changes how much discount that redemption
             // stands for. Never a second redemption (see repriceFor).
             promoCodes.restateForOrder(tenantId, orderId, storedQuoteId);
+            // ADR 0140: the same for the automatic promotions. The order keeps one ledger
+            // row per promotion and moves it in place to the quote behind this revision; a
+            // promotion that stopped applying is released and one that newly applies gets
+            // a row. An amendment never claims a slot.
+            promotions.restateForOrder(
+                    tenantId, order.brandId(), orderId, storedQuoteId, newRevision, order.customerAccountId(), now);
+            orders.setLoyaltyFlags(tenantId, orderId, quote.loyaltyAccrualAllowed(), quote.loyaltyRedemptionAllowed());
 
             quoteId = quote.quoteId();
             contextHash = quote.contextHash();
@@ -525,7 +551,7 @@ public class OrderAmendmentService {
                 decoded.orderFields().promisedAt(),
                 decoded.orderFields().promiseBasis(),
                 paymentProjectionPatch,
-                decoded.basket().needsReprice()
+                repricesOrder(order, decoded)
                         ? new JdbcOrderStore.RevisionTotals(
                                 subtotalMinor, taxMinor, discountMinor, feeMinor, totalMinor)
                         : null);
@@ -943,7 +969,8 @@ public class OrderAmendmentService {
     }
 
     /** One line {@link AmendmentCommandType#ADD_LINES} adds, matched back to its priced quote by key. */
-    private record NewLine(String lineKey, UUID variantId, int quantity) {}
+    private record NewLine(
+            String lineKey, UUID variantId, int quantity, List<CartPricingPort.PricingCommand.ComboPick> comboPicks) {}
 
     /**
      * What a batch of commands asks for in the quote and the basket — decoded
@@ -1064,7 +1091,8 @@ public class OrderAmendmentService {
                         addedLines.add(new NewLine(
                                 "amend-new:" + newLineSequence++,
                                 asUuid(Objects.requireNonNull(line.get("variantId"), "A new line needs a variant")),
-                                asInt(Objects.requireNonNull(line.get("quantity"), "A new line needs a quantity"))));
+                                asInt(Objects.requireNonNull(line.get("quantity"), "A new line needs a quantity")),
+                                asComboPicks(line.get("comboPicks"))));
                     }
                 }
                 case CHANGE_LINE_QUANTITY ->
@@ -1117,6 +1145,20 @@ public class OrderAmendmentService {
     }
 
     @SuppressWarnings("unchecked")
+    /** ADR 0136: the picks stored on an {@code ADD_LINES} line, absent on every line that is not a combo. */
+    private static List<CartPricingPort.PricingCommand.ComboPick> asComboPicks(@Nullable Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> picks = (List<Map<String, Object>>) value;
+        return picks.stream()
+                .map(pick -> new CartPricingPort.PricingCommand.ComboPick(
+                        asUuid(Objects.requireNonNull(pick.get("componentId"), "A combo pick names a component")),
+                        asInt(Objects.requireNonNull(pick.get("quantity"), "A combo pick has a quantity"))))
+                .toList();
+    }
+
     private static List<UUID> asUuidList(@Nullable Object value) {
         if (value == null) {
             return List.of();
@@ -1149,31 +1191,17 @@ public class OrderAmendmentService {
      * QuoteService#resolvePromotionInputs}); no second redemption is taken
      * here or in {@link #apply}, which only restates the existing row's amount.
      */
-    private QuoteSnapshot repriceFor(OrderRow order, FinancialIntent intent, String idempotencyKey) {
+    private QuoteSnapshot repriceFor(
+            OrderRow order, FinancialIntent intent, @Nullable String paymentMethodOverride, String idempotencyKey) {
         List<OrderLineRow> liveLines = orders.lines(order.tenantId(), order.orderId());
-        Map<UUID, List<UUID>> modifiersByLine = orders.lineModifiers(order.tenantId(), order.orderId()).stream()
-                .collect(Collectors.groupingBy(
-                        JdbcOrderStore.OrderModifierRow::orderLineId,
-                        Collectors.mapping(JdbcOrderStore.OrderModifierRow::sourceOptionId, Collectors.toList())));
+        Map<UUID, List<JdbcOrderStore.OrderModifierRow>> modifiersByLine =
+                orders.lineModifiers(order.tenantId(), order.orderId()).stream()
+                        .collect(Collectors.groupingBy(JdbcOrderStore.OrderModifierRow::orderLineId));
 
-        List<CartPricingPort.PricingCommand.Item> items = new ArrayList<>();
-        for (OrderLineRow line : liveLines) {
-            int quantity = intent.changedQuantities().getOrDefault(line.lineId(), line.quantity());
-            if (intent.changedQuantities().containsKey(line.lineId()) && quantity <= line.quantity()) {
-                throw new AmendmentRefusedException(
-                        "QUANTITY_DECREASE_NOT_SUPPORTED",
-                        ("Line %s cannot be reduced: releasing already-committed stock has no ADR "
-                                        + "0017 primitive in this build yet (a return-to-stock or write-off "
-                                        + "movement, not one of hold/commit/release). Withdraw this amendment "
-                                        + "and place a new order for the corrected quantity.")
-                                .formatted(line.lineId()));
-            }
-            items.add(new CartPricingPort.PricingCommand.Item(
-                    line.lineId().toString(),
-                    line.sourceVariantId(),
-                    quantity,
-                    modifiersByLine.getOrDefault(line.lineId(), List.of())));
-        }
+        // ADR 0136: the live lines go back to pricing as what the customer bought, which for a
+        // combo is the container and the picks, not the component lines it was stored as.
+        List<CartPricingPort.PricingCommand.Item> items = new ArrayList<>(AmendmentBasket.pricingItems(
+                AmendmentBasket.units(liveLines), intent.changedQuantities(), modifiersByLine));
         for (UUID targeted : intent.changedQuantities().keySet()) {
             if (liveLines.stream().noneMatch(line -> line.lineId().equals(targeted))) {
                 throw new AmendmentRefusedException(
@@ -1182,7 +1210,12 @@ public class OrderAmendmentService {
         }
         for (NewLine added : intent.addedLines()) {
             items.add(new CartPricingPort.PricingCommand.Item(
-                    added.lineKey(), added.variantId(), added.quantity(), List.of()));
+                    added.lineKey(),
+                    added.variantId(),
+                    BigDecimal.valueOf(added.quantity()),
+                    List.of(),
+                    added.comboPicks(),
+                    List.of()));
         }
 
         if (intent.address() != null && order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
@@ -1197,6 +1230,22 @@ public class OrderAmendmentService {
                 ? null
                 : new CartPricingPort.PricingCommand.Delivery(destinationPoint, PricingAuthority.HORECAOS);
 
+        // ADR 0140. The order was bought once, at one instant, by one method, and that is
+        // what it is repriced under. Pricing starts from the promotion inputs recorded on
+        // the quote behind the order's current revision and this frame overrides only what
+        // the amendment itself changes: the basket and delivery point above, and the
+        // payment method when the amendment changes it. The clock is never an override, so
+        // a "lunch 12:00 to 15:00" promotion that priced the order at 12:30 still holds
+        // when a line is added at 15:05. An order priced before calculation version 3
+        // recorded none, and falls back to its own creation time and fulfilment mode.
+        UUID currentQuoteId = orders.revisions(order.tenantId(), order.orderId()).stream()
+                .filter(revision -> revision.revision() == order.currentRevision())
+                .map(RevisionRow::pricingQuoteId)
+                .findFirst()
+                .orElse(order.pricingQuoteId());
+        var frame = new CartPricingPort.PricingCommand.PromotionFrame(
+                null, paymentMethodOverride, order.fulfillmentMode().name(), currentQuoteId, order.createdAt());
+
         try {
             return pricing.priceCart(new CartPricingPort.PricingCommand(
                     order.tenantId(),
@@ -1208,39 +1257,47 @@ public class OrderAmendmentService {
                     idempotencyKey,
                     null,
                     delivery,
-                    order.orderId()));
+                    order.orderId(),
+                    // ADR 0136: which hidden auto-selected modifier groups apply is decided by the
+                    // order's own mode, and a dine-in order is told apart from a pickup one by
+                    // nothing else.
+                    order.fulfillmentMode(),
+                    frame));
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new AmendmentRefusedException(
                     refused.code(), Objects.requireNonNullElse(refused.getMessage(), refused.code()));
         }
     }
 
+    /**
+     * Whether this batch reprices the order. A new line, a larger quantity or a new
+     * address always does; a payment-method change does only when the method can move
+     * the total (ADR 0140), that is when the brand has a payment-method promotion or
+     * the order holds one -- so switching to cash drops a "5% off with Click" promotion
+     * and switching back restores it, the way checkout behaves.
+     */
+    private boolean repricesOrder(OrderRow order, DecodedAmendment decoded) {
+        return decoded.basket().needsReprice()
+                || (decoded.paymentMethodCode() != null
+                        && promotionQuery.paymentMethodChangesTheTotal(
+                                order.tenantId(), order.brandId(), order.orderId()));
+    }
+
     private static final String SNAPSHOT_TABLE = "ordering.order_customer_snapshots";
 
     /** The order's current delivery point, decrypted for repricing only — never logged, never returned whole. */
     private @Nullable GeoPoint currentDestinationPoint(OrderRow order) {
-        if (order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
-            return null;
-        }
-        var snapshot =
-                orders.customerSnapshot(order.tenantId(), order.orderId()).orElse(null);
-        if (snapshot == null || snapshot.addressEncrypted() == null) {
-            return null;
-        }
-        String json = protection.reveal(
-                order.tenantId(),
-                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(snapshot.addressEncrypted()),
-                new RecordRef(SNAPSHOT_TABLE, "address_encrypted", order.orderId()),
-                "AMENDMENT_REPRICE");
-        DeliveryDestination destination = objectMapper.readValue(json, DeliveryDestination.class);
-        return new GeoPoint(destination.latitude(), destination.longitude());
+        return deliveryPoint.of(order, "AMENDMENT_REPRICE");
     }
 
     /**
-     * Reserves the increase only — never the whole repriced basket, which
+     * Reserves the increase only -- never the whole repriced basket, which
      * would double-count stock a still-live line already holds. Nothing to
      * reserve (a fulfilment-time or address-only reprice) is a no-op, never a
      * call with an empty map.
+     *
+     * <p>The increase is read from the accepted quote's lines (ADR 0136), because a combo
+     * that is added or grown is several variants the request never names.
      */
     private void reserveIncrease(
             UUID tenantId,
@@ -1249,28 +1306,24 @@ public class OrderAmendmentService {
             QuoteSnapshot quote,
             List<OrderLineRow> liveLines,
             FinancialIntent intent) {
-        Map<UUID, Integer> increaseByVariant = new LinkedHashMap<>();
-        Map<UUID, Integer> liveQuantityByLine =
-                liveLines.stream().collect(Collectors.toMap(OrderLineRow::lineId, OrderLineRow::quantity));
-        Map<UUID, UUID> liveVariantByLine =
-                liveLines.stream().collect(Collectors.toMap(OrderLineRow::lineId, OrderLineRow::sourceVariantId));
-
-        intent.changedQuantities().forEach((lineId, newQuantity) -> {
-            int delta = newQuantity - liveQuantityByLine.getOrDefault(lineId, 0);
-            if (delta > 0) {
-                UUID variantId = liveVariantByLine.get(lineId);
-                increaseByVariant.merge(variantId, delta, Integer::sum);
-            }
-        });
-        for (NewLine added : intent.addedLines()) {
-            increaseByVariant.merge(added.variantId(), added.quantity(), Integer::sum);
-        }
+        Map<UUID, Integer> increaseByVariant = AmendmentBasket.increases(
+                quote,
+                AmendmentBasket.touched(
+                        AmendmentBasket.units(liveLines),
+                        intent.changedQuantities().keySet()),
+                intent.addedLines().stream().map(NewLine::lineKey).collect(Collectors.toSet()));
         if (increaseByVariant.isEmpty()) {
             return;
         }
 
         ReservationResult reservation = inventory.reserveForQuote(
-                tenantId, order.brandId(), order.locationId(), quoteId, quote.expiresAt(), increaseByVariant);
+                tenantId,
+                order.brandId(),
+                order.locationId(),
+                quoteId,
+                quote.expiresAt(),
+                increaseByVariant,
+                order.channelId());
         if (!reservation.isHeld()) {
             throw new AmendmentRefusedException(
                     "INVENTORY_UNAVAILABLE", "The added quantity is not available: " + reservation.refusal());
@@ -1315,16 +1368,28 @@ public class OrderAmendmentService {
 
     /**
      * Closes and appends {@code order_lines} rows for {@code ADD_LINES}/{@code
-     * CHANGE_LINE_QUANTITY} — never edits one in place, exactly as V0022's own
+     * CHANGE_LINE_QUANTITY} -- never edits one in place, exactly as V0022's own
      * comment on the table describes for a future quantity change. Matched
      * back to the amendment's own already-accepted {@code quote} by the
      * identical line key {@link #repriceFor} priced it under, so what gets
      * written is what was actually quoted, not a second, independent
      * computation of it. A no-op for a batch that never touched the basket.
+     *
+     * <p>A line that is rewritten keeps what the customer attached to it: the selections they
+     * made (and the second-level ones that hang off them), the kitchen instructions and the note.
+     * Rows are append-only, so a replacement that dropped them would lose them from the order for
+     * ever and, worse, from every later repricing, which reads the basket back from these rows. The
+     * options the server applied are not copied but read again from the quote, which is the
+     * authority on what applies now.
+     *
+     * <p>ADR 0136: a combo is rewritten whole. Targeting any component line closes every
+     * component line of the purchase and appends the repriced ones, under the same selection id --
+     * it is the same purchase, only bigger. A combo that is added gets the new selection id pricing
+     * minted for it.
      */
     private void writeLineChanges(
             UUID tenantId,
-            UUID orderId,
+            OrderRow order,
             List<OrderLineRow> liveLines,
             FinancialIntent intent,
             QuoteSnapshot quote,
@@ -1332,64 +1397,318 @@ public class OrderAmendmentService {
         if (intent.addedLines().isEmpty() && intent.changedQuantities().isEmpty()) {
             return;
         }
-        Map<String, QuoteSnapshot.Line> quotedByKey =
-                quote.lines().stream().collect(Collectors.toMap(QuoteSnapshot.Line::lineKey, l -> l));
-        Map<UUID, OrderLineRow> liveById = liveLines.stream().collect(Collectors.toMap(OrderLineRow::lineId, l -> l));
+        UUID orderId = order.orderId();
+        Map<String, List<QuoteSnapshot.Line>> quotedByKey = quote.lines().stream()
+                .collect(Collectors.groupingBy(
+                        QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
+        Map<String, List<QuoteSnapshot.Adjustment>> hiddenChargesByLine = new LinkedHashMap<>();
+        for (QuoteSnapshot.Adjustment adjustment : quote.adjustments()) {
+            if (adjustment.lineKey() != null
+                    && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
+                hiddenChargesByLine
+                        .computeIfAbsent(adjustment.lineKey(), key -> new ArrayList<>())
+                        .add(adjustment);
+            }
+        }
+        Map<String, List<UUID>> hiddenByLine = new LinkedHashMap<>();
+        hiddenChargesByLine.forEach((key, charges) -> hiddenByLine.put(
+                key, charges.stream().map(QuoteSnapshot.Adjustment::sourceId).toList()));
+        // The order's adjustments were written once, at checkout, against the lines it was checked out
+        // with. A line this amendment writes is a new row with a new id, so what its hidden options
+        // charged is appended here under that id: read back from the adjustments, a charge with none
+        // shows as free.
+        AtomicInteger adjustmentSequence = new AtomicInteger(orders.nextAdjustmentSequence(tenantId, orderId));
+
+        List<JdbcOrderStore.OrderModifierRow> storedModifiers = orders.lineModifiers(tenantId, orderId);
+        List<JdbcOrderStore.OrderCommentPresetRow> storedPresets = orders.lineCommentPresets(tenantId, orderId);
+
+        Set<UUID> variantIds = new HashSet<>();
+        Set<UUID> optionIds = new HashSet<>();
+        quote.lines().forEach(quoted -> {
+            variantIds.add(quoted.variantId());
+            if (quoted.comboContainerVariantId() != null) {
+                variantIds.add(quoted.comboContainerVariantId());
+            }
+        });
+        hiddenByLine.values().forEach(optionIds::addAll);
+        Map<UUID, OrderCatalogSnapshot.VariantDescriptor> variants =
+                catalog.variants(order.tenantId(), order.brandId(), variantIds);
+        Map<UUID, OrderCatalogSnapshot.ModifierDescriptor> options =
+                catalog.modifierOptions(order.tenantId(), order.brandId(), optionIds);
+
         int nextNumber = orders.nextLineNumber(tenantId, orderId);
 
-        for (Map.Entry<UUID, Integer> changed : intent.changedQuantities().entrySet()) {
-            UUID lineId = changed.getKey();
-            OrderLineRow original =
-                    Objects.requireNonNull(liveById.get(lineId), "Already validated as a live line by repriceFor");
-            QuoteSnapshot.Line quoted = Objects.requireNonNull(
-                    quotedByKey.get(lineId.toString()), "The accepted quote always prices every changed line");
-            if (!orders.closeLine(tenantId, orderId, lineId, newRevision)) {
-                throw new AmendmentRefusedException(
-                        "ORDER_LINE_NOT_FOUND", "Line " + lineId + " is no longer live on this order");
+        for (AmendmentBasket.Unit unit : AmendmentBasket.touched(
+                AmendmentBasket.units(liveLines), intent.changedQuantities().keySet())) {
+            List<QuoteSnapshot.Line> quoted = Objects.requireNonNull(
+                    quotedByKey.get(unit.key()), "The accepted quote always prices every changed line");
+            for (OrderLineRow original : unit.lines()) {
+                if (!orders.closeLine(tenantId, orderId, original.lineId(), newRevision)) {
+                    throw new AmendmentRefusedException(
+                            "ORDER_LINE_NOT_FOUND", "Line " + original.lineId() + " is no longer live on this order");
+                }
             }
-            orders.insertLine(
-                    UUID.randomUUID(),
-                    tenantId,
-                    orderId,
-                    nextNumber++,
-                    original.sourceProductId(),
-                    original.sourceVariantId(),
-                    quoted.descriptionSnapshot(),
-                    original.variantName(),
-                    original.sku(),
-                    quoted.quantity(),
-                    quoted.unitAmountMinor(),
-                    quoted.baseAmountMinor(),
-                    quoted.finalAmountMinor(),
-                    quoted.taxAmountMinor(),
-                    null);
+            for (QuoteSnapshot.Line priced : quoted) {
+                OrderLineRow original = unit.replacedBy(priced);
+                UUID newLineId = UUID.randomUUID();
+                orders.insertLine(
+                        newLineId,
+                        tenantId,
+                        orderId,
+                        nextNumber++,
+                        original.sourceProductId(),
+                        original.sourceVariantId(),
+                        priced.descriptionSnapshot(),
+                        original.variantName(),
+                        original.sku(),
+                        priced.quantity(),
+                        priced.unitAmountMinor(),
+                        priced.baseAmountMinor(),
+                        priced.finalAmountMinor(),
+                        priced.taxAmountMinor(),
+                        carriedNote(tenantId, original, newLineId),
+                        original.isComboComponent()
+                                ? new JdbcOrderStore.ComboFacts(
+                                        Objects.requireNonNull(original.comboSelectionId()),
+                                        Objects.requireNonNull(priced.comboContainerVariantId()),
+                                        Objects.requireNonNull(original.comboName()),
+                                        Objects.requireNonNull(priced.comboComponentId()),
+                                        Objects.requireNonNull(priced.comboQuantity()),
+                                        Objects.requireNonNull(priced.comboPickQuantity()))
+                                : null,
+                        // ADR 0137: the replacement keeps what its provisional figures were
+                        // provisional against.
+                        priced.catchweight());
+                carryOver(
+                        tenantId,
+                        original,
+                        newLineId,
+                        storedModifiers,
+                        storedPresets,
+                        hiddenByLine.getOrDefault(priced.lineKey(), List.of()),
+                        options);
+                itemiseHiddenCharges(
+                        tenantId,
+                        orderId,
+                        newLineId,
+                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        adjustmentSequence);
+            }
         }
 
         for (NewLine added : intent.addedLines()) {
-            QuoteSnapshot.Line quoted = Objects.requireNonNull(
+            List<QuoteSnapshot.Line> quotedLines = Objects.requireNonNull(
                     quotedByKey.get(added.lineKey()), "The accepted quote always prices every added line");
-            orders.insertLine(
-                    UUID.randomUUID(),
+            for (QuoteSnapshot.Line priced : quotedLines) {
+                UUID newLineId = UUID.randomUUID();
+                var descriptor = variants.get(priced.variantId());
+                var container = priced.comboContainerVariantId() == null
+                        ? null
+                        : variants.get(priced.comboContainerVariantId());
+                orders.insertLine(
+                        newLineId,
+                        tenantId,
+                        orderId,
+                        nextNumber++,
+                        descriptor == null ? null : descriptor.productId(),
+                        priced.variantId(),
+                        priced.descriptionSnapshot(),
+                        descriptor == null ? null : descriptor.variantName(),
+                        descriptor == null ? null : descriptor.sku(),
+                        priced.quantity(),
+                        priced.unitAmountMinor(),
+                        priced.baseAmountMinor(),
+                        priced.finalAmountMinor(),
+                        priced.taxAmountMinor(),
+                        null,
+                        priced.comboSelectionId() == null
+                                ? null
+                                : new JdbcOrderStore.ComboFacts(
+                                        priced.comboSelectionId(),
+                                        Objects.requireNonNull(priced.comboContainerVariantId()),
+                                        container == null
+                                                ? priced.comboContainerVariantId()
+                                                        .toString()
+                                                : container.variantName() == null
+                                                        ? container.productName()
+                                                        : container.productName() + " " + container.variantName(),
+                                        Objects.requireNonNull(priced.comboComponentId()),
+                                        Objects.requireNonNull(priced.comboQuantity()),
+                                        Objects.requireNonNull(priced.comboPickQuantity())),
+                        priced.catchweight());
+                writeHidden(
+                        tenantId,
+                        newLineId,
+                        hiddenByLine.getOrDefault(priced.lineKey(), List.of()),
+                        options,
+                        List.of());
+                itemiseHiddenCharges(
+                        tenantId,
+                        orderId,
+                        newLineId,
+                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        adjustmentSequence);
+            }
+        }
+    }
+
+    /**
+     * Appends what each hidden option charged a line this amendment wrote, copied from the
+     * accepted quote exactly as checkout copies it (ADR 0136).
+     *
+     * <p>The order's itemisation of a charge the customer never chose is read from these rows by
+     * the line they name. Without them a rewritten line's box, whose amount is in its new unit
+     * price all the same, reads as "Delivery box 0" on the console and on the customer's order:
+     * a mandatory charge shown as free. The rows of the lines it closed stay where they are, as
+     * history.
+     */
+    private void itemiseHiddenCharges(
+            UUID tenantId,
+            UUID orderId,
+            UUID newLineId,
+            List<QuoteSnapshot.Adjustment> charges,
+            AtomicInteger sequence) {
+        for (QuoteSnapshot.Adjustment charge : charges) {
+            orders.insertAdjustment(
                     tenantId,
                     orderId,
-                    nextNumber++,
-                    // No catalog lookup here (unlike checkout's CheckoutOrderWriter):
-                    // an amendment has no cart to carry a product id, and the quote's
-                    // own snapshot description is what the customer is actually shown.
-                    // The same fallback CheckoutOrderWriter already takes for a variant
-                    // its own catalog lookup could not describe.
-                    null,
-                    quoted.variantId(),
-                    quoted.descriptionSnapshot(),
-                    null,
-                    null,
-                    quoted.quantity(),
-                    quoted.unitAmountMinor(),
-                    quoted.baseAmountMinor(),
-                    quoted.finalAmountMinor(),
-                    quoted.taxAmountMinor(),
-                    null);
+                    sequence.getAndIncrement(),
+                    newLineId,
+                    charge.adjustmentType(),
+                    charge.sourceType(),
+                    charge.sourceId(),
+                    charge.sourceVersion(),
+                    charge.descriptionCode(),
+                    charge.amountMinor());
         }
+    }
+
+    /**
+     * Carries what was attached to a rewritten line onto its replacement: the customer's own
+     * selections (a nested one keeps its parent), the kitchen presets, and -- re-encrypted for the
+     * new row -- the note. The hidden options come from the new quote, not from the old line.
+     */
+    private void carryOver(
+            UUID tenantId,
+            OrderLineRow original,
+            UUID newLineId,
+            List<JdbcOrderStore.OrderModifierRow> storedModifiers,
+            List<JdbcOrderStore.OrderCommentPresetRow> storedPresets,
+            List<UUID> hiddenOptionIds,
+            Map<UUID, OrderCatalogSnapshot.ModifierDescriptor> options) {
+
+        List<JdbcOrderStore.OrderModifierRow> mine = storedModifiers.stream()
+                .filter(row -> row.orderLineId().equals(original.lineId()))
+                .toList();
+        Map<UUID, UUID> newModifierIdByOld = new HashMap<>();
+        // First level before second, so a nested row's parent already has its new id.
+        for (JdbcOrderStore.OrderModifierRow row : mine) {
+            if (row.autoSelected() || row.parentModifierId() != null) {
+                continue;
+            }
+            newModifierIdByOld.put(
+                    row.modifierId(),
+                    orders.insertLineModifier(
+                            tenantId,
+                            newLineId,
+                            row.sourceGroupId(),
+                            row.sourceOptionId(),
+                            row.groupName(),
+                            row.optionName(),
+                            row.quantity(),
+                            row.unitAmountMinor(),
+                            row.finalAmountMinor(),
+                            null,
+                            false));
+        }
+        for (JdbcOrderStore.OrderModifierRow row : mine) {
+            if (row.autoSelected() || row.parentModifierId() == null) {
+                continue;
+            }
+            orders.insertLineModifier(
+                    tenantId,
+                    newLineId,
+                    row.sourceGroupId(),
+                    row.sourceOptionId(),
+                    row.groupName(),
+                    row.optionName(),
+                    row.quantity(),
+                    row.unitAmountMinor(),
+                    row.finalAmountMinor(),
+                    Objects.requireNonNull(
+                            newModifierIdByOld.get(row.parentModifierId()),
+                            "A nested selection's parent is a first-level selection of the same line"),
+                    false);
+        }
+        writeHidden(tenantId, newLineId, hiddenOptionIds, options, mine);
+
+        for (JdbcOrderStore.OrderCommentPresetRow preset : storedPresets) {
+            if (preset.orderLineId().equals(original.lineId())) {
+                orders.insertLineCommentPreset(
+                        tenantId,
+                        newLineId,
+                        preset.sourcePresetId(),
+                        preset.code(),
+                        preset.labelRu(),
+                        preset.labelUz(),
+                        preset.labelEn(),
+                        preset.labels(),
+                        preset.sortOrder());
+            }
+        }
+    }
+
+    /**
+     * Writes one auto-selected row per hidden option the quote applied. A name already snapshotted
+     * on the line being replaced wins over a fresh catalog read: it is what the order has always
+     * said, and a rename since is not an amendment's business.
+     */
+    private void writeHidden(
+            UUID tenantId,
+            UUID newLineId,
+            List<UUID> hiddenOptionIds,
+            Map<UUID, OrderCatalogSnapshot.ModifierDescriptor> options,
+            List<JdbcOrderStore.OrderModifierRow> previousRows) {
+        for (UUID optionId : hiddenOptionIds) {
+            JdbcOrderStore.OrderModifierRow previous = previousRows.stream()
+                    .filter(row -> row.autoSelected() && row.sourceOptionId().equals(optionId))
+                    .findFirst()
+                    .orElse(null);
+            var descriptor = options.get(optionId);
+            orders.insertLineModifier(
+                    tenantId,
+                    newLineId,
+                    previous != null ? previous.sourceGroupId() : descriptor == null ? null : descriptor.groupId(),
+                    optionId,
+                    previous != null ? previous.groupName() : descriptor == null ? null : descriptor.groupName(),
+                    previous != null
+                            ? previous.optionName()
+                            : descriptor == null ? optionId.toString() : descriptor.optionName(),
+                    1,
+                    0L,
+                    0L,
+                    null,
+                    true);
+        }
+    }
+
+    /** The note of a line being replaced, decrypted and encrypted again for the row that replaces it. */
+    private @Nullable String carriedNote(UUID tenantId, OrderLineRow original, UUID newLineId) {
+        if (!original.hasNote()) {
+            return null;
+        }
+        String plaintext = protection.reveal(
+                tenantId,
+                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(original.noteEncrypted()),
+                new RecordRef("ordering.order_lines", "note_encrypted", original.lineId()),
+                "AMENDMENT_CARRY_OVER");
+        return protection
+                .protect(
+                        tenantId,
+                        DataClass.PERSONAL,
+                        new RecordRef("ordering.order_lines", "note_encrypted", newLineId),
+                        plaintext)
+                .serialize();
     }
 
     /** Encrypts and writes {@link SnapshotChange}, or does nothing when the batch never touched it. */
@@ -1630,6 +1949,20 @@ public class OrderAmendmentService {
                                         Objects.requireNonNull(line.variantId(), "A new line needs a variant"));
                                 one.put("quantity", line.quantity());
                                 one.put("modifierOptionIds", line.modifierOptionIds());
+                                // Only on a combo: a stored command for any other line is
+                                // byte-for-byte what it was before ADR 0136.
+                                if (!line.comboPicks().isEmpty()) {
+                                    one.put(
+                                            "comboPicks",
+                                            line.comboPicks().stream()
+                                                    .map(pick -> {
+                                                        Map<String, Object> picked = new LinkedHashMap<>();
+                                                        picked.put("componentId", pick.componentId());
+                                                        picked.put("quantity", pick.quantity());
+                                                        return picked;
+                                                    })
+                                                    .toList());
+                                }
                                 return one;
                             })
                             .toList());
@@ -1651,11 +1984,23 @@ public class OrderAmendmentService {
             return new AmendmentCommand(AmendmentCommandType.CHANGE_LINE_QUANTITY, payload);
         }
 
-        /** One line {@link #addLines} carries: a variant, a quantity, and its modifiers. */
-        public record LineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+        /**
+         * One line {@link #addLines} carries: a variant, a quantity, and its modifiers.
+         *
+         * @param comboPicks ADR 0136: what is picked inside a combo, when {@code variantId} is a
+         *                   combo's container and {@code quantity} counts combos
+         */
+        public record LineRequest(
+                UUID variantId, int quantity, List<UUID> modifierOptionIds, List<CartService.ComboPick> comboPicks) {
 
             public LineRequest {
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
+                comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
+            }
+
+            /** Every line that is not a combo, which is every line before ADR 0136. */
+            public LineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+                this(variantId, quantity, modifierOptionIds, List.of());
             }
         }
     }

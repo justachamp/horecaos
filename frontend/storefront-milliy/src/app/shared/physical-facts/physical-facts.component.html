@@ -1,0 +1,54 @@
+@if (physical(); as p) {
+  @if (compact()) {
+    @if (measure(); as measure) {
+      <span class="facts__measure facts__measure--compact" data-testid="physical-measure">{{
+        measure
+      }}</span>
+    }
+  } @else {
+    <div class="facts" data-testid="physical-facts">
+      @if (measure(); as measure) {
+        <span class="facts__measure" data-testid="physical-measure">{{ measure }}</span>
+      }
+      @if (portionStep(); as step) {
+        <p class="facts__line" data-testid="physical-portion-step">{{ step }}</p>
+      }
+      @if (catchweight(); as weighed) {
+        <p class="facts__line facts__line--strong" data-testid="physical-price-per-quantum">
+          {{ weighed.perQuantum }}
+        </p>
+        <p class="facts__line" data-testid="physical-estimate">{{ weighed.estimate }}</p>
+        <p class="facts__notice" data-testid="physical-final-weight-notice">
+          {{ 'physical.finalWeightNotice' | t }}
+        </p>
+      }
+      @if (nutrition(); as facts) {
+        <div class="facts__nutrition" data-testid="physical-nutrition">
+          <p class="facts__title">{{ 'physical.nutritionTitle' | t }}</p>
+          <table class="facts__table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>{{ facts.per100Label }}</th>
+                @if (facts.unitLabel) {
+                  <th>{{ facts.unitLabel }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of facts.rows; track row.id) {
+                <tr [attr.data-testid]="'physical-nutrition-' + row.id">
+                  <td>{{ row.label }}</td>
+                  <td>{{ figure(row.per100, row.unitSuffix) }}</td>
+                  @if (facts.unitLabel) {
+                    <td>{{ figure(row.perUnit, row.unitSuffix) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+}

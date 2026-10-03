@@ -60,6 +60,7 @@ function orderResponse(orderId: string, version: number, status = 'RECEIVED'): O
     currency: 'UZS',
     subtotalMinor: 1000,
     taxMinor: 0,
+    discountMinor: 0,
     feeMinor: 0,
     totalMinor: 1000,
     version,
@@ -67,6 +68,7 @@ function orderResponse(orderId: string, version: number, status = 'RECEIVED'): O
     confirmedAt: null,
     lines: [],
     warnings: [],
+    appliedPromotions: [],
   };
 }
 
@@ -221,6 +223,45 @@ describe('OrdersService.getOrderDetail: the delivery fee and tax the backend now
   });
 });
 
+describe('OrdersService.getOrderDetail: the discount and the promotions behind it reach the screen (ADR 0140)', () => {
+  it('maps discountMinor onto discount.price and carries the kinds of promotion through untouched', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...orderResponse('o1', 1),
+      subtotalMinor: 45_000,
+      discountMinor: 9_000,
+      totalMinor: 36_000,
+      appliedPromotions: [
+        { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 9_000 },
+        { source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 3_000 },
+      ],
+    });
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.discount).toEqual({ price: 9_000, discount: 0 });
+    expect(detail.promotions).toEqual([
+      { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 9_000 },
+      { source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 3_000 },
+    ]);
+  });
+
+  it('reads an answer without the fields as an order with no discount', async () => {
+    const { service, api } = setUp();
+    const {
+      discountMinor: _discount,
+      appliedPromotions: _applied,
+      ...legacy
+    } = orderResponse('o1', 1);
+    api.get.mockResolvedValue(legacy);
+
+    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+
+    expect(detail.discount).toEqual({ price: 0, discount: 0 });
+    expect(detail.promotions).toEqual([]);
+  });
+});
+
 describe('OrdersService.getReorderPlan (ADR 0074)', () => {
   it('reads the per-order reorder plan endpoint and returns it untouched', async () => {
     const { service, api } = setUp();
@@ -303,14 +344,17 @@ describe('OrdersService: cancel action reflects the real state-machine guard', (
     expect(detail.actions).toContain('cancel');
   });
 
-  it.each(NOT_CANCELLABLE)('offers no cancel on an order detail read at status %s', async (status) => {
-    const { service, api } = setUp();
-    api.get.mockResolvedValue(orderResponse('o1', 1, status));
+  it.each(NOT_CANCELLABLE)(
+    'offers no cancel on an order detail read at status %s',
+    async (status) => {
+      const { service, api } = setUp();
+      api.get.mockResolvedValue(orderResponse('o1', 1, status));
 
-    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+      const detail = await firstValueFrom(service.getOrderDetail('o1'));
 
-    expect(detail.actions).not.toContain('cancel');
-  });
+      expect(detail.actions).not.toContain('cancel');
+    },
+  );
 });
 
 describe('OrdersService.cancelOrder (single retry)', () => {
@@ -484,5 +528,65 @@ describe('OrdersService.poll', () => {
     expect(source).toHaveBeenCalledTimes(2);
     expect(errors).toEqual([]);
     expect(emissions).toEqual(['tick 2 ok']);
+  });
+});
+
+describe('OrdersService.getOrderDetail: combos and what the server added (ADR 0136)', () => {
+  const line = (
+    overrides: Partial<OrderResponse['lines'][number]> = {},
+  ): OrderResponse['lines'][number] => ({
+    lineNumber: 1,
+    productName: 'Burger',
+    variantName: '',
+    productId: 'p1',
+    variantId: 'v1',
+    quantity: 1,
+    unitAmountMinor: 25_000,
+    finalAmountMinor: 25_000,
+    modifiers: [],
+    modifierOptionIds: [],
+    ...overrides,
+  });
+
+  async function detailOf(lines: OrderResponse['lines']) {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({ ...orderResponse('o1', 1), lines });
+    return firstValueFrom(service.getOrderDetail('o1'));
+  }
+
+  it('carries a combo line’s selection id and the name it was sold under to the screen', async () => {
+    const detail = await detailOf([
+      line({ comboSelectionId: 'sel-1', comboName: 'Lunch box' }),
+      line({
+        lineNumber: 2,
+        productName: 'Cola',
+        comboSelectionId: 'sel-1',
+        comboName: 'Lunch box',
+      }),
+      line({ lineNumber: 3, productName: 'Soup' }),
+    ]);
+
+    expect(detail.items?.map((item) => item.comboSelectionId)).toEqual(['sel-1', 'sel-1', null]);
+    expect(detail.items?.[0].comboName).toBe('Lunch box');
+  });
+
+  it('carries each option the server applied by itself, with what it cost', async () => {
+    const detail = await detailOf([
+      line({
+        autoSelectedModifiers: ['Delivery box'],
+        autoSelectedCharges: [{ name: 'Delivery box', amountMinor: 2_000 }],
+      }),
+    ]);
+
+    expect(detail.items?.[0].autoSelectedCharges).toEqual([
+      { name: 'Delivery box', amountMinor: 2_000 },
+    ]);
+  });
+
+  it('reads an order from a platform that predates both: no combo, no charges', async () => {
+    const detail = await detailOf([line()]);
+
+    expect(detail.items?.[0].comboSelectionId).toBeNull();
+    expect(detail.items?.[0].autoSelectedCharges).toEqual([]);
   });
 });

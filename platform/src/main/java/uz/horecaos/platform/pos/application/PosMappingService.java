@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.iam.api.staff.StaffMemberCards;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.MappingEntityType;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -45,16 +46,19 @@ public class PosMappingService {
     private final JdbcPosBindingConfiguration configuration;
     private final PosAdapterRegistry adapters;
     private final Clock clock;
+    private final StaffMemberCards staffCards;
 
     public PosMappingService(
             JdbcPosMappingStore mappings,
             JdbcPosBindingConfiguration configuration,
             PosAdapterRegistry adapters,
-            Clock clock) {
+            Clock clock,
+            StaffMemberCards staffCards) {
         this.mappings = mappings;
         this.configuration = configuration;
         this.adapters = adapters;
         this.clock = clock;
+        this.staffCards = staffCards;
     }
 
     /**
@@ -76,6 +80,9 @@ public class PosMappingService {
                 .orElse(null);
         Set<UUID> ids = rows.stream().map(MappingRow::horecaosEntityId).collect(java.util.stream.Collectors.toSet());
         Map<UUID, String> names = mappings.resolveHorecaosNames(tenantId, brandId, type, ids);
+        if (type == MappingEntityType.OPERATOR) {
+            names = operatorNames(tenantId, names);
+        }
         return new ListResult(rows, names);
     }
 
@@ -254,6 +261,9 @@ public class PosMappingService {
             case MODIFIER ->
                 notSourced("No provider in this build discovers a modifier list; add the mapping by typing the "
                         + "provider's own modifier code.");
+            case OPERATOR ->
+                notSourced("No provider in this build discovers a till-operator list; add the mapping by typing "
+                        + "the till's own operator id.");
         };
     }
 
@@ -300,7 +310,38 @@ public class PosMappingService {
             case CHANNEL_POS_CODE -> mappings.unmappedSalesChannels(tenantId, binding.bindingId());
             case VARIANT -> mappings.unmappedVariants(tenantId, binding.bindingId(), binding.brandId(), "uz-UZ");
             case MODIFIER -> mappings.unmappedModifierOptions(tenantId, binding.bindingId(), binding.brandId());
+            case OPERATOR -> unmappedOperators(tenantId, binding.bindingId());
         };
+    }
+
+    /**
+     * The tenant's people who are not yet paired with a till operator id, listed
+     * <em>by name</em> (ADR 0139): the pane exists so that a manager can say
+     * "Aziza is operator 17", and a list of references could not. The names are
+     * opened by the staff cards port, scoped to this tenant; this store never
+     * decrypts. Ended members are not offered.
+     */
+    private List<NamedCandidate> unmappedOperators(UUID tenantId, UUID bindingId) {
+        Set<UUID> mapped = mappings.activelyMappedIds(tenantId, bindingId, MappingEntityType.OPERATOR);
+        return staffCards.pickable(tenantId).stream()
+                .filter(card -> !mapped.contains(card.memberId()))
+                .map(card -> new NamedCandidate(
+                        card.memberId(), card.name() != null ? card.name() : card.displayReference()))
+                .toList();
+    }
+
+    /** Upgrades the references the store resolved for operator rows to the tenant's names, where it has them. */
+    private Map<UUID, String> operatorNames(UUID tenantId, Map<UUID, String> references) {
+        if (references.isEmpty()) {
+            return references;
+        }
+        Map<UUID, String> named = new LinkedHashMap<>(references);
+        staffCards.cardsOf(tenantId, references.keySet()).forEach((id, card) -> {
+            if (card.name() != null) {
+                named.put(id, card.name());
+            }
+        });
+        return named;
     }
 
     private static Map<String, List<String>> groupExternalByName(List<ExternalCandidate> candidates) {

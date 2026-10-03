@@ -103,7 +103,17 @@ public class QrEntryService {
              * channel it would otherwise browse under rather than refusing to render
              * a menu at all.
              */
-            @Nullable String channelCode) {}
+            @Nullable String channelCode,
+            /**
+             * Whether this guest could seat themselves right now (ADR 0143): the
+             * branch has turned self-seating on, the code is in {@code ORDER_AND_PAY},
+             * nobody is sitting here and no confirmed booking holds the table inside
+             * the walk-in horizon. One boolean about the table the caller is
+             * physically at; it names no time, guest or booking, and occupancy is
+             * already visible in {@code openSessionId}. The route re-decides under its
+             * locks -- this is a hint for the screen, never a promise.
+             */
+            boolean walkInAvailable) {}
 
     /** What a resolved guest token is allowed to see, with no token in it. */
     public record GuestContext(
@@ -164,6 +174,8 @@ public class QrEntryService {
                         .orElse(null)
                 : null;
 
+        boolean walkInAvailable = openSession == null && walkInOffered(settings, table.tenantId(), table.id(), now);
+
         return new GuestAdmission(
                 guest.plaintext(),
                 expiresAt,
@@ -174,7 +186,24 @@ public class QrEntryService {
                 table.id(),
                 table.code(),
                 openSession,
-                channels.qrTableChannelCode(table.tenantId()).orElse(null));
+                channels.qrTableChannelCode(table.tenantId()).orElse(null),
+                walkInAvailable);
+    }
+
+    /**
+     * The branch offers self-seating and no confirmed booking holds the table inside
+     * the horizon. Occupancy is the caller's to have checked. A plain read: it is a
+     * hint, and the route repeats the question under its locks.
+     */
+    private boolean walkInOffered(SettingsRow settings, UUID tenantId, UUID tableId, Instant now) {
+        if (settings.qrMode() != QrMode.ORDER_AND_PAY || !settings.walkIn().selfSeat()) {
+            return false;
+        }
+        return !store.tableHeldByConfirmedBooking(
+                tenantId,
+                tableId,
+                now,
+                now.plus(Duration.ofMinutes(settings.walkIn().horizonMinutes())));
     }
 
     /**
