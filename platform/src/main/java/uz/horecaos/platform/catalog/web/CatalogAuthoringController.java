@@ -1120,16 +1120,24 @@ public class CatalogAuthoringController {
                     + "draft is next published to that channel and to no other. Only a product's images "
                     + "reach a published menu; a variant's or a category's are stored and drawn by the "
                     + "preview but served by no menu yet. A publication is refused while an image the "
-                    + "channel chose is no longer verified.")
-    public ChannelMediaOverridesResponse replaceChannelMediaOverrides(
+                    + "channel chose is no longer verified. Under If-Match, the set's version the editor "
+                    + "read (0 when the item has no override on the channel): another editor's save in "
+                    + "between answers 409 STALE_VERSION, and saving the set already stored changes "
+                    + "nothing and keeps its version. The response's ETag is the new version.")
+    public ResponseEntity<ChannelMediaOverridesResponse> replaceChannelMediaOverrides(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID channelId,
             @PathVariable EntityType entityType,
             @PathVariable UUID entityId,
+            HttpServletRequest http,
             @Valid @RequestBody ReplaceChannelMediaRequest request) {
+        long expected = AggregateVersion.requireIfMatch(http);
+        if (expected < 0 || expected > Integer.MAX_VALUE) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "If-Match must carry a version the editor read");
+        }
         try {
-            List<MediaOverrideRow> rows = channelMedia.replace(
+            ChannelMediaOverrideService.OverrideSet saved = channelMedia.replace(
                     tenantId,
                     brandId,
                     channelId,
@@ -1141,12 +1149,15 @@ public class CatalogAuthoringController {
                                     image.role(),
                                     image.sortOrder() == null ? 0 : image.sortOrder()))
                             .toList(),
+                    (int) expected,
                     currentActor.get().subject());
-            return ChannelMediaOverridesResponse.of(rows);
+            return overrideSetResponse(saved);
         } catch (ChannelMediaOverrideService.UnknownOverrideTargetException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         } catch (ChannelMediaOverrideService.InvalidOverrideException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        } catch (ChannelMediaOverrideService.StaleOverrideException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
         }
     }
 
@@ -1156,19 +1167,30 @@ public class CatalogAuthoringController {
             summary = "The images one channel shows instead of an item's own (ADR 0138)",
             description = "Every override this brand has written for the channel, or only one item's "
                     + "when entityType and entityId are both given. Empty means every item shows its "
-                    + "own images on that channel.")
-    public ChannelMediaOverridesResponse channelMediaOverrides(
+                    + "own images on that channel. An item's set carries its version, which is also the "
+                    + "ETag (0 when it has none): the value to quote in If-Match when replacing it.")
+    public ResponseEntity<ChannelMediaOverridesResponse> channelMediaOverrides(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID channelId,
             @RequestParam(required = false) @Nullable EntityType entityType,
             @RequestParam(required = false) @Nullable UUID entityId) {
         try {
-            return ChannelMediaOverridesResponse.of(
-                    channelMedia.list(tenantId, brandId, channelId, entityType, entityId));
+            if (entityType != null && entityId != null) {
+                return overrideSetResponse(channelMedia.read(tenantId, brandId, channelId, entityType, entityId));
+            }
+            return ResponseEntity.ok(ChannelMediaOverridesResponse.of(
+                    channelMedia.list(tenantId, brandId, channelId, entityType, entityId), null));
         } catch (ChannelMediaOverrideService.UnknownOverrideTargetException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         }
+    }
+
+    private static ResponseEntity<ChannelMediaOverridesResponse> overrideSetResponse(
+            ChannelMediaOverrideService.OverrideSet set) {
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(set.version()))
+                .body(ChannelMediaOverridesResponse.of(set.images(), set.version()));
     }
 
     /**
@@ -1508,11 +1530,16 @@ public class CatalogAuthoringController {
         }
     }
 
-    public record ChannelMediaOverridesResponse(List<ChannelMediaOverrideView> images) {
+    /**
+     * @param version the set's version, which is the response's ETag: {@code 0} for an item with no
+     *     override. Null when the listing spans every item of the channel, which has no one version
+     */
+    public record ChannelMediaOverridesResponse(
+            List<ChannelMediaOverrideView> images, @Nullable Integer version) {
 
-        static ChannelMediaOverridesResponse of(List<MediaOverrideRow> rows) {
+        static ChannelMediaOverridesResponse of(List<MediaOverrideRow> rows, @Nullable Integer version) {
             return new ChannelMediaOverridesResponse(
-                    rows.stream().map(ChannelMediaOverrideView::of).toList());
+                    rows.stream().map(ChannelMediaOverrideView::of).toList(), version);
         }
     }
 

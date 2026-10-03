@@ -1123,7 +1123,10 @@ channel photo) and a marketplace ruleset's (`MARKETPLACE_*`). Every finding that
 a product, a variant of one, or a combo component of one links to the editor. A
 product's card offers **Фото для канала**, which edits the channel's
 image override (`PUT …/channels/{id}/media-overrides/{entityType}/{entityId}`,
-`catalog.author`).
+`catalog.author`, under `If-Match`: the set's version the editor read when it opened, `0`
+when the product has none; a second editor who saved first makes this save a `409
+STALE_VERSION`, and the editor says so, shows what was saved and quotes the new version
+on the next Save).
 
 **Still not built, and said so on screen.** The preview shows what HorecaOS would
 send, in HorecaOS's own frame — never a marketplace's own app chrome, which no

@@ -9,7 +9,9 @@
   implementation; `GET …/catalogs/{id}/channels/{id}/preview` (cursor-paginated,
   `catalog.read`) and `GET …/channels/{id}/preview-targets` serve it;
   `catalog.channel_media_overrides` (V0451) with `PUT`/`GET …/media-overrides`
-  (`catalog.author`, audited) is the channel
+  (`catalog.author`, audited, `If-Match` the set's version as ADR 0031 asks of a
+  versioned set — `0` for an item with none, `409 STALE_VERSION` for a second editor,
+  writers serialised so a race is a conflict and never a constraint violation) is the channel
   image layer, and `ChannelMediaLayers` is the one function that applies it —
   `publish` calls it for the channel it publishes to, as the preview does, so a
   product's channel photo is what that channel's live menu serves once the draft

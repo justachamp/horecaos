@@ -226,6 +226,27 @@ public class JdbcChannelProjectionStore {
     }
 
     /**
+     * Makes two writers of one entity's override set on one channel run one after the other, for
+     * the length of the surrounding transaction ({@code pg_advisory_xact_lock}: released at commit
+     * or rollback).
+     *
+     * <p>A replace is a delete and some inserts. Two writers of a set that does not exist yet both
+     * delete nothing and both insert, and the loser is refused by {@code
+     * ux_channel_media_override_primary} only after the winner commits -- as a constraint violation
+     * the caller cannot tell from a fault. Under this lock the second writer reads the set the first
+     * left, so its expected version is wrong and it is told so.
+     */
+    public void lockMediaOverrideSet(UUID tenantId, UUID channelId, EntityType entityType, UUID entityId) {
+        String lockKey =
+                "channel_media_override|%s|%s|%s|%s".formatted(tenantId, channelId, entityType.name(), entityId);
+        // The row mapper never reads the void column; consuming the one row is what waits for the lock.
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))")
+                .param("lockKey", lockKey)
+                .query((row, number) -> Boolean.TRUE)
+                .list();
+    }
+
+    /**
      * Replaces one entity's whole override set on one channel — the set a
      * channel shows instead of the entity's own images. An empty list removes
      * every override and the entity goes back to its defaults.

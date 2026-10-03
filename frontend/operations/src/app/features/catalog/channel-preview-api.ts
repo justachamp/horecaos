@@ -7,6 +7,7 @@ import { command } from '../../core/api/idempotency';
 import {
   ChannelMediaImage,
   ChannelMediaOverride,
+  ChannelMediaOverrideSet,
   ChannelPreviewPageBody,
   PreviewTarget,
 } from './channel-preview-domain';
@@ -73,9 +74,35 @@ export class ChannelPreviewApi {
   }
 
   /**
+   * One item's channel photos with the version they were read at — the version the next save has to
+   * quote (ADR 0031), `0` when the item has none.
+   */
+  mediaOverrideSet(
+    scope: BrandScope,
+    channelId: string,
+    entityType: string,
+    entityId: string,
+  ): Observable<ChannelMediaOverrideSet> {
+    return this.api
+      .get<{ images: readonly ChannelMediaOverride[]; version?: number | null }>(
+        catalogPaths.channelMediaOverrides(scope, channelId),
+        { params: { entityType, entityId } },
+      )
+      .pipe(
+        map((result) => ({
+          images: result.value.images,
+          version: result.version ?? result.value.version ?? 0,
+        })),
+      );
+  }
+
+  /**
    * Replaces the whole set of images a channel shows for one item — the whole set every time,
    * matching the photo editor's own whole-set save. An empty list removes the override and the
    * item goes back to its own images on that channel.
+   *
+   * `expectedVersion` is the set's version when the editor opened (`mediaOverrideSet`): a save
+   * after somebody else's is refused with STALE_VERSION instead of silently replacing it.
    */
   replaceMediaOverride(
     scope: BrandScope,
@@ -83,11 +110,13 @@ export class ChannelPreviewApi {
     entityType: string,
     entityId: string,
     images: readonly ChannelMediaImage[],
+    expectedVersion: number,
   ): Observable<readonly ChannelMediaOverride[]> {
     return this.api
       .put<{ images: readonly ChannelMediaImage[] }, { images: readonly ChannelMediaOverride[] }>(
         catalogPaths.channelMediaOverride(scope, channelId, entityType, entityId),
         command({ images }),
+        { expectedVersion },
       )
       .pipe(map((result) => result.images));
   }

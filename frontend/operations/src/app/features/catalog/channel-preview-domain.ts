@@ -141,6 +141,15 @@ export interface ChannelMediaOverride {
   readonly version: number;
 }
 
+/**
+ * `ChannelMediaOverridesResponse` for one item: the photos a channel shows for it, and the version of
+ * that set — `0` when it has none — which is what a save quotes in `If-Match`.
+ */
+export interface ChannelMediaOverrideSet {
+  readonly images: readonly ChannelMediaOverride[];
+  readonly version: number;
+}
+
 export interface ChannelMediaImage {
   readonly mediaAssetId: string;
   readonly role: 'PRIMARY' | 'GALLERY';

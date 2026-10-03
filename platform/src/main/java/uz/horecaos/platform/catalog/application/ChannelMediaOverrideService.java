@@ -80,26 +80,85 @@ public class ChannelMediaOverrideService {
     }
 
     /**
-     * Replaces the whole override set for one entity on one channel.
+     * Replaces the whole override set for one entity on one channel, under the version the editor
+     * read (ADR 0031).
      *
-     * <p>The whole set every time, matching the photo editor's own whole-set
-     * save: what the screen shows is what is stored, never a delta applied to a
-     * state the caller has not seen. An empty list removes every override.
+     * <p>The whole set every time, matching the photo editor's own whole-set save: what the
+     * screen shows is what is stored, never a delta applied to a state the caller has not seen.
+     * An empty list removes every override.
      *
-     * @return the set now in force
+     * <p>The versioning is {@code PhysicalAttributesAuthoringService}'s: a set that does not exist
+     * reads as version {@code 0}, the first write expects {@code 0}, a later one expects what the
+     * read returned, and emptying the set removes it so "no rows" stays the single representation of
+     * "shows its own images". Saving the set that is already stored changes nothing and keeps its
+     * version, so a double click is not an edit another editor is then told about. The set's version
+     * restarts at 1 once it has been emptied, which a stale editor could in principle hit again; the
+     * price of having nowhere to keep a version for a set that has no rows.
+     *
+     * @param expectedVersion {@code 0} when the item has no override on this channel
+     * @return the set now in force and its version
      * @throws UnknownOverrideTargetException the channel or the entity is not this tenant's or brand's
      * @throws InvalidOverrideException the set is malformed or names an asset that is not ready to show
+     * @throws StaleOverrideException the set has changed since the editor read it
      */
     @Transactional
-    public List<MediaOverrideRow> replace(
+    public OverrideSet replace(
             UUID tenantId,
             UUID brandId,
             UUID channelId,
             EntityType entityType,
             UUID entityId,
             List<Image> images,
+            int expectedVersion,
             String actorSubject) {
 
+        requireTarget(tenantId, brandId, channelId, entityType, entityId);
+        validate(tenantId, images);
+
+        projections.lockMediaOverrideSet(tenantId, channelId, entityType, entityId);
+        List<MediaOverrideRow> previous =
+                projections.mediaOverridesFor(tenantId, brandId, channelId, entityType, entityId);
+        int currentVersion = versionOf(previous);
+        if (currentVersion != expectedVersion) {
+            throw new StaleOverrideException(expectedVersion, currentVersion);
+        }
+
+        List<MediaOverrideRow> requested = images.stream()
+                .map(image -> new MediaOverrideRow(
+                        entityType, entityId, image.mediaAssetId(), image.role(), image.sortOrder(), 0))
+                .toList();
+        if (sorted(describe(previous)).equals(sorted(describe(requested)))) {
+            return new OverrideSet(previous, currentVersion);
+        }
+
+        projections.replaceMediaOverrides(tenantId, brandId, channelId, entityType, entityId, requested);
+        List<MediaOverrideRow> now = projections.mediaOverridesFor(tenantId, brandId, channelId, entityType, entityId);
+
+        audit.record(AuditFact.of("catalog.channelMediaOverride.replaced", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("ChannelMediaOverride", entityId)
+                .because(now.isEmpty() ? "Removed the channel images" : "Replaced the channel images")
+                .usingCapability(Capability.CATALOG_AUTHOR.code())
+                .changed(ChangeDocuments.diff(
+                        snapshotOf(channelId, entityType, previous), snapshotOf(channelId, entityType, now)))
+                .correlatedBy(entityId.toString())
+                .occurredAt(clock.instant())
+                .build());
+        return new OverrideSet(now, versionOf(now));
+    }
+
+    /** One item's override set on one channel, with the version to quote when replacing it. */
+    @Transactional(readOnly = true)
+    public OverrideSet read(UUID tenantId, UUID brandId, UUID channelId, EntityType entityType, UUID entityId) {
+        if (channels.byId(tenantId, channelId).isEmpty()) {
+            throw new UnknownOverrideTargetException("No sales channel " + channelId);
+        }
+        List<MediaOverrideRow> rows = projections.mediaOverridesFor(tenantId, brandId, channelId, entityType, entityId);
+        return new OverrideSet(rows, versionOf(rows));
+    }
+
+    private void requireTarget(UUID tenantId, UUID brandId, UUID channelId, EntityType entityType, UUID entityId) {
         if (!OVERRIDABLE.contains(entityType)) {
             throw new InvalidOverrideException(
                     "Only a product, a variant or a category can carry a channel image, not " + entityType);
@@ -114,30 +173,14 @@ public class ChannelMediaOverrideService {
         if (!store.entityExistsInBrand(tenantId, brandId, entityType, entityId)) {
             throw new UnknownOverrideTargetException("No %s %s in this brand".formatted(entityType, entityId));
         }
-        validate(tenantId, images);
+    }
 
-        List<MediaOverrideRow> replacement = images.stream()
-                .map(image -> new MediaOverrideRow(
-                        entityType, entityId, image.mediaAssetId(), image.role(), image.sortOrder(), 0))
-                .toList();
-        List<MediaOverrideRow> previous =
-                projections.replaceMediaOverrides(tenantId, brandId, channelId, entityType, entityId, replacement);
-        List<MediaOverrideRow> now = projections.mediaOverridesFor(tenantId, brandId, channelId, entityType, entityId);
+    private static int versionOf(List<MediaOverrideRow> rows) {
+        return rows.stream().mapToInt(MediaOverrideRow::version).max().orElse(0);
+    }
 
-        if (!describe(previous).equals(describe(now))) {
-            audit.record(AuditFact.of("catalog.channelMediaOverride.replaced", AuditClass.BUSINESS)
-                    .by(ActorRef.user(actorSubject, null))
-                    .at(ResourceScope.brand(tenantId, brandId))
-                    .target("ChannelMediaOverride", entityId)
-                    .because(now.isEmpty() ? "Removed the channel images" : "Replaced the channel images")
-                    .usingCapability(Capability.CATALOG_AUTHOR.code())
-                    .changed(ChangeDocuments.diff(
-                            snapshotOf(channelId, entityType, previous), snapshotOf(channelId, entityType, now)))
-                    .correlatedBy(entityId.toString())
-                    .occurredAt(clock.instant())
-                    .build());
-        }
-        return now;
+    private static List<String> sorted(List<String> values) {
+        return values.stream().sorted().toList();
     }
 
     /** One channel's overrides, brand-wide or narrowed to one entity. */
@@ -202,6 +245,32 @@ public class ChannelMediaOverrideService {
 
     /** One image of a replacement set. */
     public record Image(UUID mediaAssetId, String role, int sortOrder) {}
+
+    /** The images one item shows on one channel and the version of that set; {@code 0} when there are none. */
+    public record OverrideSet(List<MediaOverrideRow> images, int version) {}
+
+    /** The version the editor quoted is no longer the stored one. */
+    public static final class StaleOverrideException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final int expected;
+        private final int actual;
+
+        public StaleOverrideException(int expected, int actual) {
+            super("The channel images are at version " + actual + ", not " + expected);
+            this.expected = expected;
+            this.actual = actual;
+        }
+
+        public int expected() {
+            return expected;
+        }
+
+        public int actual() {
+            return actual;
+        }
+    }
 
     /** The channel or the entity is not this tenant's or brand's. */
     public static final class UnknownOverrideTargetException extends RuntimeException {

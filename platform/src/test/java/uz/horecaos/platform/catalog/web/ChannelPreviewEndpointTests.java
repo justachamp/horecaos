@@ -28,6 +28,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -1089,6 +1090,119 @@ class ChannelPreviewEndpointTests {
 
     @Test
     @DisplayName(
+            "the override set is replaced under the version the editor read: a second editor with the old version is told so, and a save that changes nothing keeps the version")
+    void overrideSetIsVersioned() throws Exception {
+        UUID a = w.asset();
+        UUID b = w.asset();
+        UUID product = w.lagman.productId();
+
+        MvcResult unset = mvc.perform(overrideGet(w.uzum, "PRODUCT", product)).andReturn();
+        assertThat(unset.getResponse().getHeader(HttpHeaders.ETAG))
+                .as("an item with no override reads as version 0, like a variant with no physical attributes")
+                .isEqualTo("W/\"0\"");
+        assertThat(json(unset).path("version").asInt()).isZero();
+
+        // No If-Match at all is refused, and so is one that is not a version: neither is a way around the check.
+        MockHttpServletRequestBuilder noPrecondition = put(overridePath(w.uzum, "PRODUCT", product))
+                .with(owner())
+                .header(
+                        IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                        UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(imageSet(a));
+        assertThat(status(noPrecondition)).as("no If-Match").isEqualTo(400);
+        MockHttpServletRequestBuilder notAVersion = put(overridePath(w.uzum, "PRODUCT", product))
+                .with(owner())
+                .header(
+                        IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                        UUID.randomUUID().toString())
+                .header(HttpHeaders.IF_MATCH, "W/\"not-a-version\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(imageSet(a));
+        assertThat(status(notAVersion)).as("an If-Match that is not a version").isEqualTo(400);
+        assertThat(json(mvc.perform(overrideGet(w.uzum, "PRODUCT", product))).path("images"))
+                .as("the refusals stored nothing")
+                .isEmpty();
+
+        // The first write quotes 0 and the set becomes version 1.
+        MvcResult first = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 0, imageSet(a)))
+                .andReturn();
+        assertThat(first.getResponse().getStatus()).as(body(first)).isEqualTo(200);
+        assertThat(first.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+        assertThat(json(first).path("version").asInt()).isEqualTo(1);
+
+        // A second editor who opened the screen before that save is still at 0: refused, loudly.
+        MvcResult stale = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 0, imageSet(b)))
+                .andReturn();
+        assertThat(stale.getResponse().getStatus()).as(body(stale)).isEqualTo(409);
+        assertThat(body(stale)).contains("STALE_VERSION");
+        assertThat(json(mvc.perform(overrideGet(w.uzum, "PRODUCT", product))).path("images"))
+                .as("and the first editor's set is still what is stored")
+                .extracting(image -> image.path("mediaAssetId").asText())
+                .containsExactly(a.toString());
+
+        // Saving the set that is already stored changes nothing: the version stays, and no audit fact is written.
+        long audited = auditFacts();
+        MvcResult same = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 1, imageSet(a)))
+                .andReturn();
+        assertThat(same.getResponse().getStatus()).as(body(same)).isEqualTo(200);
+        assertThat(same.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+        assertThat(auditFacts()).isEqualTo(audited);
+
+        // A real change moves it.
+        MvcResult changed = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 1, imageSet(a, b)))
+                .andReturn();
+        assertThat(changed.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"2\"");
+        assertThat(auditFacts()).isEqualTo(audited + 1);
+
+        // Emptying it removes it, and the item reads as version 0 again.
+        MvcResult cleared = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 2, "{\"images\":[]}"))
+                .andReturn();
+        assertThat(cleared.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"0\"");
+        assertThat(overrideVersion(w.uzum, "PRODUCT", product)).isZero();
+    }
+
+    @Test
+    @DisplayName("two editors saving a first set at once get one winner and one conflict, never a constraint violation")
+    void concurrentFirstWritesAreSerialised() throws Exception {
+        UUID a = w.asset();
+        UUID b = w.asset();
+        UUID product = w.lagman.productId();
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(2);
+            java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+            List<java.util.concurrent.Future<Integer>> outcomes = new ArrayList<>();
+            // Both quote 0 and both name a PRIMARY: the very case ux_channel_media_override_primary would
+            // refuse as a 500 once the winner commits.
+            for (UUID asset : List.of(a, b)) {
+                outcomes.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return mvc.perform(overridePut(w.uzum, "PRODUCT", product, 0, imageSet(asset)))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus();
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<Integer> statuses = new ArrayList<>();
+            for (java.util.concurrent.Future<Integer> outcome : outcomes) {
+                statuses.add(outcome.get());
+            }
+            assertThat(statuses).containsExactlyInAnyOrder(200, 409);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(json(mvc.perform(overrideGet(w.uzum, "PRODUCT", product))).path("images"))
+                .as("the winner's set, whole")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
             "the override write validates its set, refuses another tenant's image and entity, audits the change, and replays")
     void overrideWrite() throws Exception {
         UUID a = w.asset();
@@ -1174,6 +1288,7 @@ class ChannelPreviewEndpointTests {
         // Idempotency-Key is required on the write.
         assertThat(status(put(overridePath(w.uzum, "PRODUCT", w.lagman.productId()))
                         .with(owner())
+                        .header(HttpHeaders.IF_MATCH, "W/\"0\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"images\":[]}")))
                 .isEqualTo(400);
@@ -1231,14 +1346,47 @@ class ChannelPreviewEndpointTests {
         return merged;
     }
 
-    private MockHttpServletRequestBuilder overridePut(UUID channelId, String entityType, UUID entityId, String body) {
+    /** The write an editor makes: it quotes the version of the set it was shown, read just now. */
+    private MockHttpServletRequestBuilder overridePut(UUID channelId, String entityType, UUID entityId, String body)
+            throws Exception {
+        return overridePut(channelId, entityType, entityId, overrideVersion(channelId, entityType, entityId), body);
+    }
+
+    private MockHttpServletRequestBuilder overridePut(
+            UUID channelId, String entityType, UUID entityId, long expectedVersion, String body) {
         return put(overridePath(channelId, entityType, entityId))
                 .with(owner())
                 .header(
                         IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
                         UUID.randomUUID().toString())
+                .header(HttpHeaders.IF_MATCH, "W/\"" + expectedVersion + "\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body);
+    }
+
+    private MockHttpServletRequestBuilder overrideGet(UUID channelId, String entityType, UUID entityId) {
+        return get(base() + "/channels/" + channelId + "/media-overrides")
+                .with(owner())
+                .queryParam("entityType", entityType)
+                .queryParam("entityId", entityId.toString());
+    }
+
+    /** The version an editor would have read: the ETag of the item's set, or 0 where the read is refused. */
+    private long overrideVersion(UUID channelId, String entityType, UUID entityId) throws Exception {
+        MvcResult read =
+                mvc.perform(overrideGet(channelId, entityType, entityId)).andReturn();
+        String etag = read.getResponse().getHeader(HttpHeaders.ETAG);
+        return etag == null ? 0 : Long.parseLong(etag.replaceAll("[^0-9]", ""));
+    }
+
+    private static String imageSet(UUID... assets) {
+        StringBuilder images = new StringBuilder();
+        for (int i = 0; i < assets.length; i++) {
+            images.append(i == 0 ? "" : ",")
+                    .append("{\"mediaAssetId\":\"%s\",\"role\":\"%s\",\"sortOrder\":%d}"
+                            .formatted(assets[i], i == 0 ? "PRIMARY" : "GALLERY", i));
+        }
+        return "{\"images\":[" + images + "]}";
     }
 
     private String overridePath(UUID channelId, String entityType, UUID entityId) {
@@ -1346,6 +1494,14 @@ class ChannelPreviewEndpointTests {
                 get("/api/v1/storefront/tenants/%s/brands/%s/locations/%s/menu".formatted(w.tenant, w.brand, w.l1))
                         .queryParam("channel", channelCode)
                         .queryParam("locale", LOCALE)));
+    }
+
+    private long auditFacts() {
+        return jdbc.sql(
+                        "SELECT count(*) FROM audit.audit_events WHERE action_code = 'catalog.channelMediaOverride.replaced' AND tenant_id = :t")
+                .param("t", w.tenant)
+                .query(Long.class)
+                .single();
     }
 
     /** A product's images in the order the menu lists them. */
