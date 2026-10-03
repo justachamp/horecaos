@@ -289,6 +289,72 @@ class MarketplaceAvailabilityReconcilerTests {
 
     @Test
     @DisplayName(
+            "a new stop on a row the partner may already hold is sent at once, not after the restore's retry backoff")
+    void aStopOnAnUncertainRowDoesNotWaitOutTheRestoreBackoff() {
+        World w = world();
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        reconcile(w);
+        assertThat(partner.held(w)).containsEntry("ext-A", false);
+
+        // The kitchen lifts the stop; the restore reaches the partner and its answer is lost.
+        lift(w, stop);
+        markDirty(w);
+        partner.script(Scenario.TIMEOUT_AFTER_APPLY);
+        reconcile(w);
+        assertThat(rowState(w, "ext-A")).isEqualTo("UNCERTAIN");
+        assertThat(partner.held(w)).containsEntry("ext-A", true);
+
+        // A recall: the dish is stopped again moments later. The clock does not move, so the
+        // row is still inside the backoff the unknown outcome earned.
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("a stop is pushed before anything else; it does not queue behind a restore's retry timer")
+                .containsEntry("ext-A", false);
+    }
+
+    @Test
+    @DisplayName("a new stop on a never-confirmed row that is backing off after a refused connection is sent at once")
+    void aStopOnAnUnconfirmedBackingOffRowIsSentAtOnce() {
+        World w = world();
+        partner.script(Scenario.CONNECTION_REFUSED, Scenario.CONNECTION_REFUSED);
+        reconcile(w);
+        assertThat(rowState(w, "ext-A")).isEqualTo("PENDING");
+        assertThat(confirmed(w, "ext-A"))
+                .as("the partner has never been heard from")
+                .isNull();
+
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("the platform now holds a fresher instruction than the one that was refused, and sends it")
+                .containsEntry("ext-A", false);
+    }
+
+    @Test
+    @DisplayName("a restore on a row that is backing off still waits out its backoff: only a stop jumps the queue")
+    void aRestoreStillWaitsOutTheBackoff() {
+        World w = world();
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        partner.script(Scenario.CONNECTION_REFUSED, Scenario.CONNECTION_REFUSED);
+        reconcile(w);
+        assertThat(partner.calls).hasSize(2);
+
+        lift(w, stop);
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(partner.calls)
+                .as("the dish is back on sale on our side; telling an unreachable partner can wait")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName(
             "a connection refused in the same position leaves the belief untouched, so the stop-lift pair still collapses")
     void aRefusedConnectionKeepsWhatItBelieved() {
         World w = world();

@@ -236,6 +236,13 @@ public class JdbcMarketplaceAvailabilityStore {
      * confirmed value is known and now equals the new desired value is {@code IN_SYNC}; a row
      * that is {@code UNCERTAIN} or {@code REJECTED_UNMAPPED} stays so (an unknown never becomes
      * "in sync" because a desired value moved).
+     *
+     * <p>The retry time follows the instruction that earned it. A restore that is backing off
+     * keeps waiting, but a value that moves to {@code false} (a stop) is claimable at once on a
+     * row in any state: an {@code UNCERTAIN} row may well be holding {@code true} on the partner,
+     * and a never-confirmed row is waiting on a first push that is now the wrong instruction.
+     * "A stop is pushed before a restore" (ADR 0141 Decision 7) has to hold for the timer as
+     * well as for the claim order.
      */
     public void upsertDesired(
             UUID tenantId,
@@ -281,6 +288,14 @@ public class JdbcMarketplaceAvailabilityStore {
                         WHEN integration.marketplace_item_availability.state IN ('IN_SYNC')
                              AND integration.marketplace_item_availability.desired_available IS DISTINCT FROM EXCLUDED.desired_available
                             THEN EXCLUDED.desired_at
+                        -- A stop on a row that is not in sync is claimable now, whatever retry time the
+                        -- last attempt earned: that time was set for a different instruction (a restore,
+                        -- or a first push), and a stop is pushed before anything else. A NULL stays NULL
+                        -- (already claimable); a time already past is left alone.
+                        WHEN integration.marketplace_item_availability.desired_available IS DISTINCT FROM EXCLUDED.desired_available
+                             AND NOT EXCLUDED.desired_available
+                             AND integration.marketplace_item_availability.next_attempt_at IS NOT NULL
+                            THEN LEAST(integration.marketplace_item_availability.next_attempt_at, EXCLUDED.desired_at)
                         ELSE integration.marketplace_item_availability.next_attempt_at END,
                     updated_at = EXCLUDED.updated_at
                 """)
