@@ -14,7 +14,12 @@
   `/wallboard/vdu` (`WallboardVduPage`), is a sibling of the console shell guarded by
   `authGuard`: it runs on a signed-in staff session, with the station chosen from a
   local `<select>` that a reload forgets and a placeholder timezone
-  (`Asia/Tashkent`) in place of the branch's own. The tablet shell `/device`
+  (`Asia/Tashkent`) in place of the branch's own. The projection is not the only
+  thing that page reads. It also resolves its location from `GET /session/context`,
+  lists the stations for that `<select>` (`kitchen.ticket.read`), reads the tenant's
+  lateness policy from `GET …/orders/lateness-policy` (`order.read`) to colour and
+  rank its tickets, and opens the push stream (`…/operations/streams`, which needs
+  `location.read`, and `kitchen.ticket.read` on the `kitchen_board` channel). The tablet shell `/device`
   (ADR 0119) authenticates as a device but renders only the touch board with start
   and ready. Gap-map row `2.4` records the choice honestly: "A dedicated VDU device
   class is deliberately not added: ADR 0079 names `KITCHEN_KDS` as the only built
@@ -23,8 +28,8 @@
 - Date decided: —
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
   decides
-- Depends on: ADR 0025, ADR 0027, ADR 0028, ADR 0031, ADR 0041, ADR 0045, ADR 0062,
-  ADR 0079, ADR 0119
+- Depends on: ADR 0025, ADR 0027, ADR 0028, ADR 0030, ADR 0031, ADR 0041, ADR 0045,
+  ADR 0062, ADR 0079, ADR 0119
 - Supersedes / Superseded by: — (ADR 0079 anticipated this: a VDU "would reuse this
   primitive with its own role bundle, not reopen this one", "it adds an enum value
   and a role, it does not change this decision")
@@ -75,8 +80,9 @@ whoever last typed a password on it.
 | Configuration | In the page; lost on reload | On the device's record |
 | Who knows it exists | Nobody | The manager who approved it |
 
-The first two rows are the point. The wall needs to read one projection and nothing
-else; the session it runs on can do anything its owner can.
+The first two rows are the point. The wall needs to read its own record and one
+projection, and nothing else (Decision 2 lists every read, because the page it
+reuses makes five); the session it runs on can do anything its owner can.
 
 **The shipped class is the wrong fit in the other direction.** `KITCHEN_KDS` can
 read the board and call `kitchen.ticket.advance`. A touch KDS needs the second; a
@@ -116,14 +122,54 @@ where they are, with their reasons recorded.**
    granted it. The Javadoc sentence on `KITCHEN_DEVICE` that says no device is ever
    granted any other role is rewritten to say each class has exactly one.
 
-2. **A capability for the wall, not a reuse of the ticket read.** `kitchen.display.read`
-   (`LOCATION`) guards the VDU projection and the device's own configuration read.
-   Every existing bundle that holds `kitchen.ticket.read` also holds
-   `kitchen.display.read`, so no staff user loses the VDU page; a role-bundle test
-   makes that an invariant rather than a habit. The wall therefore cannot call
-   `GET …/kitchen/board` or a single ticket (both `kitchen.ticket.read`), and cannot
-   advance anything. The alternative of reusing `kitchen.ticket.read` is in the table
-   below.
+2. **A capability for the wall, not a reuse of the ticket read, and a projection
+   that carries everything the wall renders.** `kitchen.display.read` (`LOCATION`)
+   guards the VDU projection and nothing else. Every existing bundle that holds
+   `kitchen.ticket.read` also holds `kitchen.display.read`, so no staff user loses the
+   VDU page; a role-bundle test makes that an invariant rather than a habit. The wall
+   therefore cannot call `GET …/kitchen/board` or a single ticket (both
+   `kitchen.ticket.read`), and cannot advance anything. The alternative of reusing
+   `kitchen.ticket.read` is in the table below.
+
+   A device that holds one capability can make only the calls that capability opens,
+   and `WallboardVduPage`, the rendering Decision 6 reuses, makes five. Each is
+   accounted for here, so that no read is left to fail quietly on a 403 and fall back
+   to a default:
+
+   | What the page does today | What it needs today | In wall mode |
+   |---|---|---|
+   | Resolve its location: `GET /session/context` | nothing (a self-read) | `GET /api/v1/devices/me` (Decision 5); `/session/context` is not called |
+   | List stations for the `<select>`: `GET …/kitchen/stations` | `kitchen.ticket.read` | not called: the station is the device's own (Decision 4) and its display names ride in `devices/me`; the `<select>` does not exist in wall mode |
+   | Read the tickets: `GET …/kitchen/vdu` | `kitchen.ticket.read`, becoming `kitchen.display.read` | the one data read |
+   | Read the lateness policy: `GET …/orders/lateness-policy` | `order.read` | **carried in the projection** (below) |
+   | Open the push stream: `GET …/operations/streams` | `location.read`, and `kitchen.ticket.read` on the channel | **not opened**; the wall polls every ten seconds, the fallback ADR 0045 requires of every surface anyway |
+
+   *The lateness policy.* The wall colours and ranks a ticket from the tenant's
+   `ordering.lateness` document (ADR 0030; what its thresholds mean is ADR 0150's):
+   the at-risk and late thresholds per fulfilment mode, the fallback for a ticket with
+   no promise, and the tenant's late colour (rows `X.39` and `10.3b`). Without the policy the client does what it does
+   on any refusal: `LatenessPolicyApi.read` swallows the 403 and answers `null`, and
+   `LatenessPolicyTracker.policy` then serves `PLATFORM_DEFAULT_LATENESS_POLICY` (at
+   risk 5 minutes before the promise, late at the promise, 45 minutes when there is
+   none). The kitchen TV shows "on time" for a ticket the manager's console shows
+   late, and nothing on the screen says why. So `VduBoardResponse` gains a
+   `lateness` member: the policy resolved at the location of the call, in the shape
+   `OrderLatenessPolicyController.LatenessPolicyResponse` already serves (the three
+   modes' thresholds and `lateColour`), read through a small port the ordering
+   module publishes in `ordering.api` because `OrderLatenessPolicyService` sits in
+   its `application` package. The resolution is the cached one the boards already
+   use. It is tenant configuration, not customer data. The manager's preview page
+   reads it from the projection too, so there is one source and one request fewer a
+   minute; the server's own 60-second resolution cache still decides how soon a
+   published change shows. `GET …/orders/lateness-policy` is unchanged and still
+   needs `order.read`.
+
+   *The stream.* The wall does not open it. A device cannot satisfy
+   `…/operations/streams` (`location.read`) without a second capability, and the
+   channel's own capability is `kitchen.ticket.read`; widening either is a change to
+   a shared endpoint that this record does not need. The stream is an accelerator
+   (ADR 0045), so the cost is up to ten seconds of delay on a screen read from across
+   a room; the manager's preview on a staff session keeps the stream.
 
 3. **Approval names the class, and may only narrow.** The device's request for a
    class is a claim, shown to the approver on Kitchen → Devices. `KitchenDeviceService.approve`
@@ -143,7 +189,8 @@ where they are, with their reasons recorded.**
 
 5. **A device can ask what it is.** `GET /api/v1/devices/me` answers, for the
    calling device principal, its id, class, tenant, brand and location, the branch's
-   display name and IANA timezone, and (for a VDU) its station. It resolves the
+   display name and IANA timezone, and (for a VDU) its station with its display
+   names in the three languages. It resolves the
    caller through `iam.device_principals.principal_subject`, which is unique, so it
    needs no Keycloak protocol-mapper change — the obstacle ADR 0119 records. It is a
    read of the caller's own record and is declared as such, in the category of
@@ -154,8 +201,12 @@ where they are, with their reasons recorded.**
 
 6. **The wall is a mode of the existing device shell.** After enrolment `/device`
    calls the read above and renders the touch board for a `KITCHEN_KDS` and the wall
-   for a `KITCHEN_VDU`, reusing the wall's rendering from `WallboardVduPage`. No
-   control exists in that mode. `/wallboard/vdu` remains for a manager previewing a
+   for a `KITCHEN_VDU`, reusing the wall's rendering from `WallboardVduPage`. The rendering is
+   reused; the data loading is not. Wall mode takes its location and station from
+   `devices/me`, and its tickets and lateness policy from the projection, and makes no
+   other request (the table in Decision 2). The page's station list, its policy
+   tracker and its stream subscription are staff-session behaviour and stay on the
+   preview route. No control exists in that mode. `/wallboard/vdu` remains for a manager previewing a
    wall on a laptop and says so; a tenant installing a TV is directed to the device
    path.
 
@@ -206,7 +257,8 @@ where they are, with their reasons recorded.**
   disagree with a human's view.
 - Two ways to run a VDU (device and manager preview) to keep in step.
 - A physical TV is physically reachable. A stolen one holds a credential that reads
-  ticket sequence numbers and provider references and cannot do more; it is revoked
+  ticket sequence numbers, provider references and the location's lateness
+  thresholds, and cannot do more; it is revoked
   in one click, and until then it can be pointed at a laptop.
 - The class is a claim until approved; a manager who approves whatever appears on the
   Devices page approves what an attacker nearby requested. The pairing code and the
@@ -216,6 +268,9 @@ where they are, with their reasons recorded.**
 
 - The live board and the expo screen remain as they are, each for a stated reason.
 - The station is enforced for devices and not for the branch's own staff.
+- A wall polls every ten seconds and has no push channel. Giving it one means
+  deciding what a device principal may ask of `…/operations/streams`, which is a
+  separate record.
 - Last-seen is a write on a read, bounded to once a minute per device.
 
 ## Specification
@@ -244,7 +299,9 @@ database to say it.
 ### Endpoints (ADR 0031)
 
 ```text
-GET  …/kitchen/vdu                                  kitchen.display.read, LOCATION   (was kitchen.ticket.read)
+GET  …/kitchen/vdu                                  kitchen.display.read, LOCATION   (was kitchen.ticket.read);
+                                                    response gains lateness: the resolved ordering.lateness
+                                                    policy (three modes + lateColour) at the call's location
 GET  /api/v1/devices/me                             the caller's own device record; a device principal only
 PUT  …/kitchen/devices/{deviceId}/display           kitchen.station.manage, LOCATION, If-Match,
                                                     Idempotency-Key: { stationId | null }
@@ -267,8 +324,14 @@ carries only the outcome. A device with no read for a configurable period appear
 ### Testing
 
 - A `KITCHEN_VDU` device reads `…/kitchen/vdu` and is refused `…/kitchen/board`, a
-  ticket read and `…/advance` (403, with the capability named); a `KITCHEN_KDS` device
-  is unchanged.
+  ticket read, `…/advance`, `…/kitchen/stations`, `…/orders/lateness-policy` and
+  `…/operations/streams` (403, with the capability named); a `KITCHEN_KDS` device is
+  unchanged.
+- **The wall's colours are the tenant's.** With a tenant `ordering.lateness` document
+  that is not the platform default (at risk 10 minutes, late colour `#c0392b`) and a
+  location override on top of it, the projection's `lateness` equals the resolved
+  policy and not the default, for a device caller and a human caller alike. Seen
+  failing first against a projection without the member.
 - Approval: a requested KDS approved as VDU succeeds; a requested VDU approved as KDS
   is refused; the role granted follows the approved class (read back from
   `iam.grants`).
@@ -284,6 +347,13 @@ carries only the outcome. A device with no read for a configurable period appear
   and `ModularArchitectureTests` green.
 - Front end: the device shell renders no control in wall mode; a restart restores the
   station; key parity for the new strings.
+- **Wall mode reads exactly what it is entitled to.** Against the HTTP mock, wall mode
+  requests `devices/me` and the projection and nothing else, and opens no stream, so a
+  read added later without a capability to carry it fails the spec instead of failing
+  quietly on a 403. Given a non-default policy in the projection, a ticket past that
+  policy's late threshold but inside the platform default's is painted late in the
+  tenant's colour (seen failing first against a wall that ignores the policy it was
+  sent).
 
 ## Rollout and rollback
 
@@ -304,6 +374,11 @@ value and table are inert without rows.
       the audit fact carries both classes.
 - [ ] `GET /api/v1/devices/me`; the display-configuration `PUT`; the `vdu` read applies
       the station for a device caller and records the last read.
+- [ ] `VduBoardResponse.lateness` and the `ordering.api` read port behind it; the
+      preview page and wall mode take the policy from the projection and the wall no
+      longer uses `LatenessPolicyTracker`; the `StreamChannel.KITCHEN_BOARD` Javadoc
+      ("rather than a new capability ... nothing here for a fourth capability to
+      separate") rewritten, because it is no longer true of a wall.
 - [ ] Device shell wall mode; Kitchen → Devices shows class, station and last seen and
       lets a manager set the station; the manager preview route says it is a preview.
 - [ ] ru / uz-latn / en strings; the key-parity spec green; the initial-bundle budget
@@ -315,7 +390,9 @@ value and table are inert without rows.
 ## Exit criteria
 
 A manager enrols a TV by pairing code, approves it as a wall for the grill station,
-and the TV shows the grill's tickets after a power cut with nobody touching it. The
+and the TV shows the grill's tickets after a power cut with nobody touching it, late
+in the tenant's own colour at the tenant's own thresholds, having made no read but its
+own record and the projection. The
 same TV cannot read the touch board or advance a ticket. The manager revokes it from
 Kitchen → Devices without signing anyone out, and the password reset of the person who
 paired it changes nothing about any wall.
@@ -328,6 +405,12 @@ paired it changes nothing about any wall.
 - `platform/docs/operations-gap-map.md` rows `2.4`, `0.1e`; wave `T02`
 - `DevicePrincipalClass`, `PlatformRole`, `Capability`, `TenantRoleCatalog`,
   `KitchenDeviceService`, `KitchenDeviceController`, `KitchenBoardController`,
-  `DeviceEnrolmentService`, `GrantController` (`/session/context`); `V0192`, `V0145`
+  `KitchenStationController`, `DeviceEnrolmentService`, `GrantController`
+  (`/session/context`); `OrderLatenessPolicyController` and
+  `OrderLatenessPolicyService` (`order.read`; the cached resolution the projection
+  reuses); `OperationsStreamController` and `StreamChannel.KITCHEN_BOARD`;
+  `V0192`, `V0145`
 - `frontend/operations/src/app/device/`, `wallboard-shell/wallboard-vdu-page.ts`,
+  `core/lateness-policy-api.ts`, `core/lateness-policy.ts` (the platform default),
+  `core/realtime/realtime-client.ts`,
   `features/kitchen/devices-page.ts`, `app.routes.ts`

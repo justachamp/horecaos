@@ -51,7 +51,14 @@
     The document's example shows the callback's `key` arriving empty. Proposed
     default: the receipt endpoint ships behind Decision 4's weaker
     authentication only after one real callback has been captured against a
-    controlled account; until then receipts are read by pull alone.
+    controlled account. Until then VAS has no receipt source at all: a
+    recipient's state stops at what the send and, for an uncertain send, the
+    resolver reported ("handed to the operator"), and `NO_RECEIPT` is not
+    derived, because with nothing listening the absence of a receipt says
+    nothing. Capturing the callback is part of the controlled-account step in
+    the rollout. If it cannot be captured or proves unusable, the "poll every
+    message" row in the alternatives is reopened (its revisit trigger is then
+    met) with a bounded design, as a new decision.
   - **Whether the provider signs callbacks, from which addresses it sends, and
     whether it retries** (integration). Unknown for VAS. Proposed default:
     assume none of the three and rely on the edge allowlist plus Decision 4's
@@ -191,16 +198,26 @@ monotonic, best-effort evidence that never causes a resend.**
    receipt for an unknown id is dropped and counted; a callback creates no data.
    Receipts are written through the ADR 0005 inbox, so a duplicate is a no-op, and
    into `delivery_status_events` with a synthesised event id where the provider
-   gives none. Until a real VAS callback has been captured (open input 2), VAS
-   receipts are read by pull only, and the endpoint answers 404 for it.
+   gives none. Until a real VAS callback has been captured (open input 2), the
+   endpoint answers 404 for VAS and no receipt is read for it by any means;
+   Decision 5 says what a recipient shows meanwhile.
 
-5. **Absence of a receipt is a state, not a failure.** An attempt the provider
-   accepted and never reported on becomes `NO_RECEIPT` after the configured
-   window and is reported as "handed to the operator, no receipt". Nothing resends
-   on it. A pull sweeper runs only for attempts the provider reported as unknown
-   or that are uncertain, because every pull decrypts a number (ADR 0029, a
-   recorded purpose) and chasing "delivered" for every message would turn a best
-   effort signal into a standing PII workload.
+5. **Absence of a receipt is a state, not a failure, and only where a receipt can
+   arrive.** For a provider type whose receipt endpoint is enabled (Decision 4), an
+   attempt the provider accepted and never reported on becomes `NO_RECEIPT` after
+   the configured window and is reported as "handed to the operator, no receipt".
+   For a provider type whose endpoint is not enabled, which is VAS until a real
+   callback has been captured, no attempt becomes `NO_RECEIPT`: the sweeper skips
+   the type, and the attempt stays as the send answered it ("accepted" and "handed
+   to the operator"). Nothing resends on either. A pull sweeper runs only for
+   attempts the provider reported as unknown or that are uncertain, because every
+   pull decrypts a number (ADR 0029, a recorded purpose) and chasing "delivered"
+   for every message would turn a best effort signal into a standing PII workload.
+   When that sweeper resolves an uncertain attempt, the gateway's answer carries the
+   message's own state (`/search` returns `status`, which
+   `VasSmsGatewayAdapter.found` already reads), and that state is recorded as a
+   status event like any other. It is a by-product of resolving, not a source of
+   receipts, and it covers only the attempts that needed resolving.
 
 6. **A hard bounce becomes a suppression, narrowly.** A receipt or search result
    that says the receiver is blacklisted or the number unroutable writes an ADR
@@ -232,6 +249,7 @@ monotonic, best-effort evidence that never causes a resend.**
 | Retry a message the receipt says failed | A retry is a second message and a second charge; a failed receipt is often terminal (blacklist, bad number) | A gateway documents idempotent resend or a failure class that is provably pre-send |
 | Mark absent receipts as failed after a timeout | CDMA subscribers never produce one; it would report successful deliveries as failures and trigger the retry above | A gateway guarantees a receipt for every message |
 | Poll the provider for every message's final state | Each lookup decrypts a number; at pilot volumes that is thousands of purpose-recorded decrypts per day for a signal the provider offers by push | A provider offers neither push nor a bulk status read |
+| Read final state by `/search` for every accepted VAS message until a callback exists | The same standing PII workload as the row above, for a window the record cannot date, and every `/search` returns the text of each message sent to that number that day. It is the honest fallback if the callback cannot be captured, and then it is that row's revisit trigger | The callback cannot be captured or proves unusable, or the owner decides per-recipient delivered state is worth the cost before then; the design is then one lookup per message after a settle delay, audited |
 | An SMS aggregator abstraction from outside the region | Domestic gateways register sender names with the operators and are paid in UZS; ADR 0034 treats them as the domestic processors | A tenant sells outside Uzbekistan |
 | Build email and push contracts in the same record | Row `6.4a` names them, but they have no provider named at all (email has the ADR 0097 SMTP relay for staff mail only) and a different failure model | A provider is named for either |
 
@@ -241,8 +259,10 @@ monotonic, best-effort evidence that never causes a resend.**
 
 - A tenant needs one gateway account for sign-in codes and order messages, and
   the platform stops carrying a placeholder contract nobody can bind.
-- Rows `6.4a` (SMS) and `6.4b` can launch, with per-recipient receipt state, the
-  moment the owner answers which account may carry them.
+- Rows `6.4a` (SMS) and `6.4b` can launch the moment the owner answers which account
+  may carry them. A recipient shows "handed to the operator" from the first
+  message, and delivered, failed or "no receipt" once the receipt endpoint is
+  enabled for the gateway.
 - A second gateway becomes an adapter, a catalogue row, a transcription and a
   route descriptor, not a startup failure.
 - The hard-bounce suppression ADR 0044 already models gets its first producer.
@@ -254,6 +274,12 @@ monotonic, best-effort evidence that never causes a resend.**
   attempt match, monotonic updates, no data creation) limit the damage of a
   forgery to a wrong status on one of our own attempts, and a forged blacklist
   receipt could suppress a customer's marketing SMS.
+- Until a real VAS callback has been captured and the endpoint enabled, a campaign or
+  courier broadcast over SMS can say only "handed to the operator" per recipient,
+  successful deliveries included, and the record cannot date the capture: it needs
+  a controlled account and the provider's cooperation, and it names neither a date
+  nor an owner for them. That is the price of not polling every message, accepted in
+  Decision 5; open input 2 says what reopens it.
 - Resolving an uncertain send by text comparison needs the rendered text at
   resolution time, and the platform keeps only its hash. The comparison is
   therefore hash against hash, which assumes the gateway returns the text
@@ -352,6 +378,10 @@ id. The access log for the receipts path records no body.
 - Receipts: a forged id is dropped; a duplicate is a no-op; an out-of-order
   `DELIVERED` then `SENT` does not regress; a callback with no matching attempt
   creates nothing; a blacklist receipt for another tenant's attempt is ignored.
+- `NO_RECEIPT`: with the receipt endpoint not enabled for VAS, an accepted attempt
+  stays "handed to the operator" however old (a controlled clock); with it enabled,
+  an attempt with no receipt after the window becomes `NO_RECEIPT`, and one with a
+  receipt does not. The sweeper never touches a provider type without receipts.
 - The registry accepts two SMS adapters; a VAS binding sends an order
   confirmation (the case that returns `PROVIDER_ADAPTER_MISMATCH` today).
 - `CampaignMessagePort`: a brand with a binding is wired for SMS and one without
@@ -362,11 +392,18 @@ id. The access log for the receipts path records no body.
 ## Rollout and rollback
 
 Registry and adapter first: VAS carries the order-confirmation SMS to the fake and
-then to one controlled account, with the generic adapter demoted. Then the scoped
+then to one controlled account, with the generic adapter demoted. At that step the
+provider is asked to send callbacks for the controlled account (the document does not
+say how a callback address is registered, so that is the first question to put to
+them) and the first real callback is captured and transcribed into
+`docs/providers/sms-gateway-vas.md`. Then the scoped
 `isWired` and the router, which makes row `6.4b` testable end to end. Then pull
-resolution and the `NO_RECEIPT` sweeper. Then the receipt endpoint, once a real
-callback has been captured. Marketing SMS last, behind the owner's answer. Each
-step is inert until a binding of the right provider type exists. Rollback is
+resolution of uncertain sends. Then the receipt endpoint, once a real callback has
+been captured, and in the same release the `NO_RECEIPT` sweeper for the provider
+types whose receipts it enables. Marketing SMS last, behind the owner's answer; it
+does not wait on receipts, and its recipient view says "handed to the operator"
+until they exist. Each step is inert until a binding of the right provider type
+exists. Rollback is
 unbinding: the channel returns to refused with a visible reason, and no message
 is queued behind it.
 
@@ -380,8 +417,12 @@ is queued behind it.
 - [ ] `resolve` by provider id, else destination and hash; `normalise`;
       `describeAccount`.
 - [ ] Flyway: `provider_segments`, `receipt_state`; granted.
-- [ ] `NO_RECEIPT` sweeper and the unknown-state pull sweeper, with the window as
-      a setting.
+- [ ] The unknown-state pull sweeper (it records the state `/search` returns as a
+      status event).
+- [ ] The `NO_RECEIPT` sweeper, with the window as a setting, enabled per provider
+      type together with its receipt endpoint and skipping every type without one.
+- [ ] The first real VAS callback captured on the controlled account and
+      transcribed.
 - [ ] Receipt endpoint, constant-time secret check where available, edge
       allowlist entry in `deploy/infra/caddy/Caddyfile`, inbox write; enabled only
       after a captured VAS callback.
@@ -399,7 +440,8 @@ is queued behind it.
 
 A tenant bound to the VAS gateway receives an order confirmation by SMS on the
 same binding that carries its customers' sign-in codes; the campaign recipient row
-shows delivered, failed, or "no receipt" for the messages that left; a courier
+shows "handed to the operator" for every message that left and, once the receipt
+endpoint is enabled for the gateway, delivered, failed, or "no receipt"; a courier
 broadcast reaches a controlled account and records its count; a second gateway
 can be registered without touching the first; and no message is ever sent twice
 because a response was lost.
