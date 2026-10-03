@@ -201,6 +201,16 @@ export const operationsPaths = {
     return `${this.orders(scope)}/branch-resolution`;
   },
 
+  /**
+   * Row 1.3e: the price the server would book for the basket on the New order screen --
+   * `OperationsOrderController.quote`, the body of `POST .../orders` run through the same cart
+   * and pricing path and undone, so nothing is written. `ORDER_PLACE` at `LOCATION` scope; needs
+   * a fresh `Idempotency-Key` per call.
+   */
+  orderQuote(scope: LocationScope): string {
+    return `${this.orders(scope)}/quote`;
+  },
+
   /** Row 1.3: the curated list `POST .../orders`'s own `overrideReasonCode` picks from. */
   orderBranchOverrideReasons(scope: LocationScope): string {
     return `${this.orders(scope)}/branch-override-reasons`;
@@ -756,6 +766,23 @@ export const operationsPaths = {
   },
 
   /**
+   * One session and its running bill (ADR 0047, `TableSessionController#find`):
+   * `DINEIN_SESSION_READ`. The bill is summed on every read, never stored.
+   */
+  dineInSession(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}`;
+  },
+
+  /**
+   * Close a table that has not paid (ADR 0047, `TableSessionController#forceClose`): the walkout.
+   * `POST` with a reason code, a reason and `If-Match`; its own capability,
+   * `DINEIN_SESSION_FORCE_CLOSE`, `Idempotency-Key` required.
+   */
+  dineInSessionForceClosures(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/force-closures`;
+  },
+
+  /**
    * One session's rounds (ADR 0047, `TableSessionController#addRound`). `POST`
    * attaches an already-placed order to the session's bill; `DINEIN_SESSION_MANAGE`,
    * `Idempotency-Key` required. The New Order screen's DINE_IN mode is its caller.
@@ -775,8 +802,9 @@ export const operationsPaths = {
   /**
    * Ask for the bill, start settling, return to open, or close (ADR 0047,
    * `TableSessionController#stateAction`). `POST` with a target status, a reason and
-   * `If-Match`; `DINEIN_SESSION_MANAGE`, `Idempotency-Key` required. The console's one
-   * caller releases a guest's unconfirmed claim by closing it (ADR 0143).
+   * `If-Match`; `DINEIN_SESSION_MANAGE`, `Idempotency-Key` required. The console closes a party
+   * here (a host freeing a table, the New order screen closing the party it seated) and
+   * releases a guest's unconfirmed claim by closing it (ADR 0143).
    */
   dineInSessionStateActions(scope: LocationScope, sessionId: string): string {
     return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/state-actions`;
