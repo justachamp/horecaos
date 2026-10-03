@@ -19,6 +19,9 @@ frontend/
   storefront/      Angular — customer storefront
 mobile/       Flutter customer application — on hold for launch (ADR 0055); Angular
               storefront is the customer surface until it resumes
+voice_platform/  Restaurant Contact Center as a Service on Wazo — a separate project with
+              its own stack and decision records (its ADR 0001); integrates with the
+              platform through its public APIs only
 docs/         Monorepo-level documents — the founding review
 ```
 

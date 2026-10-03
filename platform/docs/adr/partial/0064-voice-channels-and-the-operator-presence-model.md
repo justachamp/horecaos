@@ -47,7 +47,13 @@
   (self-hosted) event-socket client, rather than sequencing one ahead of the
   other. Neither has been verified against a real provider account, because
   the owner has not yet named a hosted vendor or supplied any credentials;
-  both are proven only against the fake PBX this wave built.
+  both are proven only against the fake PBX this wave built. **Note 2026-10-03**
+  (owner): the contact centre itself is a separate project in this repository,
+  `voice_platform/` (its ADR 0001 proposes Wazo as the communications platform
+  and owns numbering, the carrier, recording and the agent application that
+  carries audio); how that platform meets this record's `VOICE` provider
+  category and call-centre screen is listed there as a boundary question. This
+  record is not amended by it.
 
 ## Context
 
