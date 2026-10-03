@@ -12,6 +12,7 @@ import uz.horecaos.platform.media.api.MediaAssetIngestion.IngestOutcome;
 import uz.horecaos.platform.media.api.MediaAssetIngestion.OwnerScope;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
+import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 
 /**
  * {@code iam}'s photo port (ADR 0139) over ADR 0010's pipeline.
@@ -31,10 +32,12 @@ class StaffPhotoAdapter implements StaffPhotos {
 
     private final MediaAssetIngestion ingestion;
     private final MediaAssetService assets;
+    private final JdbcMediaAssetStore store;
 
-    StaffPhotoAdapter(MediaAssetIngestion ingestion, MediaAssetService assets) {
+    StaffPhotoAdapter(MediaAssetIngestion ingestion, MediaAssetService assets, JdbcMediaAssetStore store) {
         this.ingestion = ingestion;
         this.assets = assets;
+        this.store = store;
     }
 
     @Override
@@ -56,6 +59,17 @@ class StaffPhotoAdapter implements StaffPhotos {
             return Optional.empty();
         }
         return assets.downloadUrl(tenantId, new MediaAssetId(assetId));
+    }
+
+    /**
+     * Marks the asset for deletion; {@link MediaAssetDeletionWorker} removes the
+     * objects. One statement and no transaction of its own: it commits with the
+     * caller's when there is one, which is what keeps the staff record's
+     * reference and this request from ever disagreeing.
+     */
+    @Override
+    public void discard(UUID tenantId, UUID assetId) {
+        store.requestDeletion(tenantId, new MediaAssetId(assetId));
     }
 
     private boolean privateTenantAsset(UUID tenantId, UUID assetId) {

@@ -148,6 +148,69 @@ class StaffMemberReconciliationTests {
     }
 
     @Test
+    @DisplayName(
+            "subjects a pass cannot resolve do not hold the head of the work list: with a batch smaller than their number the healthy ones behind them still get a row")
+    void unresolvableSubjectsDoNotStarveTheRest() {
+        // Its own registry: a gauge name registered twice on one registry reads the first owner's value.
+        SimpleMeterRegistry smallMeters = new SimpleMeterRegistry();
+        StaffMemberReconciler small =
+                new StaffMemberReconciler(kit.store, kit.accounts, kit.members, kit.clock, smallMeters, 2);
+        // Three subjects Keycloak has no account for, sorting before the healthy two,
+        // and a batch of two: read from the head every time, the first two fill every
+        // pass and nobody behind them is ever reached.
+        for (String gone : new String[] {"aaa-gone-1", "aaa-gone-2", "aaa-gone-3"}) {
+            kit.grant(StaffKit.TENANT_A, gone, PlatformRole.LOCATION_STAFF, "LOCATION", StaffKit.LOCATION_1);
+        }
+        for (String healthy : new String[] {"zzz-ok-1", "zzz-ok-2"}) {
+            kit.grant(StaffKit.TENANT_A, healthy, PlatformRole.LOCATION_STAFF, "LOCATION", StaffKit.LOCATION_1);
+            account(healthy, "Healthy", healthy.substring(healthy.length() - 1), null, true);
+        }
+
+        for (int pass = 0; pass < 4; pass++) {
+            small.run();
+        }
+
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "zzz-ok-1")).isPresent();
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "zzz-ok-2")).isPresent();
+        assertThat(smallMeters.get("horecaos.iam.staff.unbacked_active").gauge().value())
+                .as("the three without an account are still counted: nobody is invented from a grant")
+                .isEqualTo(3.0);
+
+        // The ones left for retry do come round again once the end of the list is reached.
+        account("aaa-gone-1", "Came", "Back", null, true);
+        account("aaa-gone-3", "Also", "Back", null, true);
+        for (int pass = 0; pass < 4; pass++) {
+            small.run();
+        }
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "aaa-gone-1")).isPresent();
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "aaa-gone-3")).isPresent();
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "aaa-gone-2")).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a subject Keycloak could not be asked about is retried on a later pass even when a smaller batch moved on past it")
+    void anUnansweredSubjectIsRetriedAfterTheCursorWraps() {
+        StaffMemberReconciler small =
+                new StaffMemberReconciler(kit.store, kit.accounts, kit.members, kit.clock, meters, 1);
+        kit.grant(StaffKit.TENANT_A, "down-1", PlatformRole.LOCATION_STAFF, "LOCATION", StaffKit.LOCATION_1);
+        kit.grant(StaffKit.TENANT_A, "up-1", PlatformRole.LOCATION_STAFF, "LOCATION", StaffKit.LOCATION_1);
+        account("down-1", "Down", "Time", null, true);
+        account("up-1", "Up", "Time", null, true);
+        kit.accounts.unreachable.add("down-1");
+
+        small.run();
+        small.run();
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "up-1")).isPresent();
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "down-1")).isEmpty();
+
+        kit.accounts.unreachable.clear();
+        small.run();
+        small.run();
+        assertThat(kit.store.findBySubject(StaffKit.TENANT_A, "down-1")).isPresent();
+    }
+
+    @Test
     @DisplayName("a device and a support session are skipped by class: they are grants without a colleague behind them")
     void machinePrincipalsGetNoRow() {
         kit.grant(StaffKit.TENANT_A, "kds-1", PlatformRole.KITCHEN_DEVICE, "LOCATION", StaffKit.LOCATION_1);

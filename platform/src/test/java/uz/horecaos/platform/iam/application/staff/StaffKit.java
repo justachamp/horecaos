@@ -279,6 +279,13 @@ final class StaffKit {
         private final Map<UUID, UUID> tenantOf = new HashMap<>();
         private final Set<UUID> notPrivate = new java.util.HashSet<>();
 
+        /** Every asset the record asked the pipeline to delete, in order. */
+        final java.util.List<UUID> discarded = new java.util.ArrayList<>();
+
+        /** Run once, just before the next {@link #ingest} returns: what another request does while a photo uploads. */
+        @Nullable
+        Runnable whileIngesting;
+
         FakePhotos(JdbcClient jdbc) {
             this.jdbc = jdbc;
         }
@@ -286,6 +293,13 @@ final class StaffKit {
         void clear() {
             tenantOf.clear();
             notPrivate.clear();
+            discarded.clear();
+            whileIngesting = null;
+        }
+
+        @Override
+        public void discard(UUID tenantId, UUID assetId) {
+            discarded.add(assetId);
         }
 
         void markPublic(UUID assetId) {
@@ -311,6 +325,11 @@ final class StaffKit {
                     .param("key", tenantId + "/tenant/" + id)
                     .update();
             tenantOf.put(id, tenantId);
+            Runnable concurrent = whileIngesting;
+            whileIngesting = null;
+            if (concurrent != null) {
+                concurrent.run();
+            }
             return new Ingested(true, id, null);
         }
 

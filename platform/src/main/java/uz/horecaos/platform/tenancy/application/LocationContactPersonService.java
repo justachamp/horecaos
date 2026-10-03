@@ -66,6 +66,9 @@ public class LocationContactPersonService {
     static final int MAX_CONTACTS = 10;
     static final Set<String> RELATIONSHIPS = Set.of("MANAGER", "OWNER", "LANDLORD", "SECURITY", "MAINTENANCE", "OTHER");
 
+    /** {@link Card#status()} of a member whose employment has ended. */
+    private static final String ENDED = "ENDED";
+
     private static final String TABLE = "tenant.location_contact_persons";
     private static final String PURPOSE = "tenancy.location.contact_person";
 
@@ -94,8 +97,12 @@ public class LocationContactPersonService {
      * @param staffMemberId set for a colleague, null for an outside person
      * @param staffMemberReference the colleague's non-personal reference
      * @param name the contact's name; for a colleague, the name the tenant keeps
-     *     for them, or null when it keeps none
-     * @param phone the number; for a colleague, their contact phone as it is now
+     *     for them, or null when it keeps none, or when they have left
+     * @param phone the number; for a colleague, their contact phone as it is now,
+     *     and never once their employment has ended
+     * @param formerColleague true for a colleague whose employment has ended: the
+     *     row stays so a manager can see and remove it, but it carries the
+     *     non-personal reference alone
      */
     public record ContactView(
             UUID id,
@@ -103,7 +110,8 @@ public class LocationContactPersonService {
             @Nullable UUID staffMemberId,
             @Nullable String staffMemberReference,
             @Nullable String name,
-            @Nullable String phone) {
+            @Nullable String phone,
+            boolean formerColleague) {
 
         @Override
         public String toString() {
@@ -219,6 +227,17 @@ public class LocationContactPersonService {
                     "That staff member is not available in this tenant",
                     Map.of("field", "staffMemberId"));
         }
+        if (hasLeft(colleagues.get(memberId))) {
+            // Somebody who left is not who a cook or a cashier should ring about
+            // the branch, and listing them would publish their personal number to
+            // everyone who can read it. A row already on the branch is refused
+            // the same way, so a save that keeps a leaver makes the manager look
+            // at the row and remove it.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "That staff member no longer works here and cannot be listed as a contact",
+                    Map.of("field", "staffMemberId"));
+        }
         if (edit.name() != null || edit.phone() != null) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
@@ -285,13 +304,21 @@ public class LocationContactPersonService {
             UUID memberId = row.staffMemberId();
             if (memberId != null) {
                 Card card = cards.get(memberId);
+                // The row follows the person's own record, and that record says
+                // they left: their name and number are personal data the branch
+                // had a reason to read only while they worked here, and ending
+                // employment never touches this table. So the leaver is hidden at
+                // the one place every read passes through, and stays hidden after
+                // the retention sweeper anonymises them as well.
+                boolean former = card != null && hasLeft(card);
                 views.add(new ContactView(
                         row.id(),
                         row.relationshipCode(),
                         memberId,
                         card == null ? null : card.displayReference(),
-                        card == null ? null : card.name(),
-                        card == null ? null : card.phone()));
+                        card == null || former ? null : card.name(),
+                        card == null || former ? null : card.phone(),
+                        former));
             } else {
                 views.add(new ContactView(
                         row.id(),
@@ -299,10 +326,15 @@ public class LocationContactPersonService {
                         null,
                         null,
                         open(tenantId, row, "protected_name", row.protectedName()),
-                        open(tenantId, row, "protected_phone", row.protectedPhone())));
+                        open(tenantId, row, "protected_phone", row.protectedPhone()),
+                        false));
             }
         }
         return views;
+    }
+
+    private static boolean hasLeft(@Nullable Card card) {
+        return card != null && ENDED.equals(card.status());
     }
 
     private @Nullable String open(UUID tenantId, ContactRow row, String column, @Nullable String stored) {

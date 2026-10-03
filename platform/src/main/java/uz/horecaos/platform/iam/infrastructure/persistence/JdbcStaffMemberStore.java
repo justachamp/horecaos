@@ -335,10 +335,22 @@ public class JdbcStaffMemberStore {
 
     /**
      * Subjects holding an active staff job in a tenant who have no member row:
-     * the backfill's work list, and the {@code unbacked_active} gauge.
+     * the backfill's work list, in {@code (tenant, subject)} order.
+     *
+     * <p>Keyset-paged: {@code after} is the last subject of the previous page, and
+     * only subjects sorting strictly after it are returned. The order alone is not
+     * enough for a work list whose members can stay on it -- a subject the identity
+     * provider has no account for, or cannot be asked about, is never given a row
+     * and so sorts to the head of every {@code LIMIT} -- and a page that always
+     * starts at the head would be filled by them and never reach the rest.
+     *
+     * @param after null for the first page
      */
-    public List<SubjectRef> unbackedActiveSubjects(Instant now, Set<String> machineRoleCodes, int limit) {
-        return jdbc.sql("""
+    public List<SubjectRef> unbackedActiveSubjects(
+            Instant now, Set<String> machineRoleCodes, int limit, @Nullable SubjectRef after) {
+        String pastCursor =
+                after == null ? "" : "AND (g.tenant_id, g.principal_subject) > (:afterTenant, :afterSubject)";
+        JdbcClient.StatementSpec statement = jdbc.sql("""
                         SELECT DISTINCT g.tenant_id, g.principal_subject
                           FROM iam.grants g
                           JOIN iam.roles r ON r.id = g.role_id
@@ -349,12 +361,18 @@ public class JdbcStaffMemberStore {
                            AND NOT EXISTS (
                                SELECT 1 FROM iam.staff_members m
                                 WHERE m.tenant_id = g.tenant_id AND m.principal_subject = g.principal_subject)
+                           %s
                          ORDER BY g.tenant_id, g.principal_subject
                          LIMIT :limit
-                        """)
+                        """.formatted(pastCursor))
                 .param("now", at(now))
                 .param("machineRoles", machineRoleCodes.toArray(String[]::new))
-                .param("limit", limit)
+                .param("limit", limit);
+        if (after != null) {
+            statement =
+                    statement.param("afterTenant", after.tenantId()).param("afterSubject", after.principalSubject());
+        }
+        return statement
                 .query((row, number) ->
                         new SubjectRef(row.getObject("tenant_id", UUID.class), row.getString("principal_subject")))
                 .list();

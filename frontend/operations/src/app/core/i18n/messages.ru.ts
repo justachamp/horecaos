@@ -4488,6 +4488,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.profile.dates.invalid': 'Дата окончания раньше даты начала',
   'staff.profile.field.reason': 'Причина (необязательно)',
   'staff.profile.edit': 'Изменить',
+  'staff.profile.detailFailed': 'Карточка загружена не полностью — правка отключена.',
   'staff.profile.save': 'Сохранить',
   'staff.profile.saved': 'Сохранено',
   'staff.end.done': 'Работа завершена. Снято должностей: {count}.',

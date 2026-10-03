@@ -244,6 +244,20 @@
       </div>
     } @else if (activeTab() === 'profile' && member(); as person) {
       <div class="tab-panel" data-testid="staff-detail-profile">
+        @if (detailFailed()) {
+          <div class="drift" role="alert" data-testid="staff-detail-profile-unavailable">
+            <p class="q-body-sm">{{ 'staff.profile.detailFailed' | t }}</p>
+            <button
+              type="button"
+              class="text-button"
+              [disabled]="detailRetrying()"
+              (click)="retryDetail()"
+              data-testid="staff-detail-profile-retry"
+            >
+              {{ 'orders.queue.error.retry' | t }}
+            </button>
+          </div>
+        }
         @if (editingProfile()) {
           <q-staff-profile-form
             [member]="person"
@@ -311,14 +325,16 @@
           </dl>
           @if (canManageProfile()) {
             <div class="profile-actions">
-              <button
-                type="button"
-                class="primary-button"
-                (click)="startEditingProfile()"
-                data-testid="staff-detail-edit-profile"
-              >
-                {{ 'staff.profile.edit' | t }}
-              </button>
+              @if (!detailFailed()) {
+                <button
+                  type="button"
+                  class="primary-button"
+                  (click)="startEditingProfile()"
+                  data-testid="staff-detail-edit-profile"
+                >
+                  {{ 'staff.profile.edit' | t }}
+                </button>
+              }
               @if (!isSelf() && person.employmentStatus !== 'ENDED') {
                 <button
                   type="button"

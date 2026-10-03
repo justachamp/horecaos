@@ -206,6 +206,62 @@ class LocationContactPersonEndpointTests {
     }
 
     @Test
+    @DisplayName(
+            "a listed colleague whose employment ended is shown as a former colleague: no name, no number, the reference alone")
+    void anEndedColleagueIsNoLongerPublishedToTheBranch() throws Exception {
+        put(
+                path(LOC_1),
+                OWNER,
+                "{\"contacts\":[{\"relationshipCode\":\"MANAGER\",\"staffMemberId\":\"%s\"}]}".formatted(colleagueId),
+                versionOf(get(path(LOC_1), L1_MANAGER)));
+        String whileEmployed = get(path(LOC_1), L1_COOK).getResponse().getContentAsString(UTF_8);
+        assertThat(whileEmployed)
+                .as("while Madina works here the cook sees who to call")
+                .contains("Madina Yusupova", "+998905556677");
+
+        endEmployment(colleagueId);
+
+        String afterwards = get(path(LOC_1), L1_COOK).getResponse().getContentAsString(UTF_8);
+        assertThat(afterwards)
+                .as("a former employee's personal data is not published to the whole branch")
+                .doesNotContain("Madina", "Yusupova", "+998905556677", "905556677");
+        assertThat(afterwards)
+                .as("the row stays, as a reference the manager can recognise and remove")
+                .contains("S-0001");
+        assertThat(afterwards).as("and says that the person has left").contains("\"formerColleague\":true");
+        assertThat(whileEmployed)
+                .as("whereas a current colleague is not marked")
+                .contains("\"formerColleague\":false");
+        assertThat(get(path(LOC_1), OWNER).getResponse().getContentAsString(UTF_8))
+                .as("the owner's reading is no different")
+                .doesNotContain("Madina", "+998905556677");
+    }
+
+    @Test
+    @DisplayName("a colleague whose employment ended cannot be listed as a contact, with a reason that says so")
+    void anEndedColleagueCannotBeAddedAsAContact() throws Exception {
+        endEmployment(colleagueId);
+        long version = versionOf(get(path(LOC_1), L1_MANAGER));
+
+        MvcResult refused = put(
+                path(LOC_1),
+                OWNER,
+                "{\"contacts\":[{\"relationshipCode\":\"MANAGER\",\"staffMemberId\":\"%s\"}]}".formatted(colleagueId),
+                version);
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString(UTF_8)).contains("no longer works");
+        assertThat(jdbc.sql("SELECT count(*) FROM tenant.location_contact_persons")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was written")
+                .isZero();
+        assertThat(versionOf(get(path(LOC_1), L1_MANAGER)))
+                .as("and the location's version did not move")
+                .isEqualTo(version);
+    }
+
+    @Test
     @DisplayName("the fact says that contacts changed and how many, and never a name or a number")
     void theAuditFactCarriesNoPersonalValue() throws Exception {
         put(path(LOC_1), OWNER, """
@@ -389,6 +445,15 @@ class LocationContactPersonEndpointTests {
             registry.registerInvited(tenantId, subject, first, last, phone, "fixture-inviter", "corr");
             registry.activate(tenantId, subject, first, last, "corr");
         });
+    }
+
+    /** What ending employment leaves in the record; the grants are not this test's subject. */
+    private void endEmployment(UUID memberId) {
+        tx.executeWithoutResult(status -> jdbc.sql("""
+                        UPDATE iam.staff_members
+                        SET employment_status = 'ENDED', employed_until = current_date
+                        WHERE id = :id
+                        """).param("id", memberId).update());
     }
 
     private UUID memberId(UUID tenantId, String subject) {

@@ -19,6 +19,7 @@ import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.domain.MediaAsset;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
+import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 
 /**
  * ADR 0139 over ADR 0010: what may become a person's photo.
@@ -36,13 +37,15 @@ class StaffPhotoAdapterTests {
 
     private MediaAssetService assets;
     private MediaAssetIngestion ingestion;
+    private JdbcMediaAssetStore store;
     private StaffPhotoAdapter adapter;
 
     @BeforeEach
     void setUp() {
         assets = mock(MediaAssetService.class);
         ingestion = mock(MediaAssetIngestion.class);
-        adapter = new StaffPhotoAdapter(ingestion, assets);
+        store = mock(JdbcMediaAssetStore.class);
+        adapter = new StaffPhotoAdapter(ingestion, assets, store);
     }
 
     private MediaAsset asset(
@@ -162,5 +165,15 @@ class StaffPhotoAdapterTests {
         assertThat(ok.assetId()).isEqualTo(id.value());
         assertThat(rejected.accepted()).isFalse();
         assertThat(rejected.rejectionCode()).isEqualTo("CONTENT_NOT_AN_IMAGE");
+    }
+
+    @Test
+    @DisplayName("discard hands the tenant and the asset to the store's guarded request, and answers nothing")
+    void discardRequestsDeletionInTheStore() {
+        MediaAssetId id = MediaAssetId.generate();
+
+        adapter.discard(TENANT, id.value());
+
+        verify(store).requestDeletion(TENANT, id);
     }
 }

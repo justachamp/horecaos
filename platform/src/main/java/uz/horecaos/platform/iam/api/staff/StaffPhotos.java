@@ -48,6 +48,24 @@ public interface StaffPhotos {
     Optional<URI> signedReadUrl(UUID tenantId, UUID assetId);
 
     /**
+     * Asks the pipeline to delete a photo the staff record no longer points at:
+     * the asset stops being displayable at once and the object, with its
+     * renditions, is removed from the store by the media module's own worker.
+     *
+     * <p>A database write only, so it joins the caller's transaction and the
+     * reference and the request to delete commit together: a record can never
+     * lose its photo while the picture stays in the store, and a failed commit
+     * never deletes a picture the record still shows. The store round trip is
+     * deliberately not here.
+     *
+     * <p>Idempotent, and it answers the same for an asset that is already going,
+     * one of another tenant, one that does not exist and one that is not a
+     * private tenant-owned asset: it does nothing. That last rule is what stops
+     * this port being a way to delete a catalogue image.
+     */
+    void discard(UUID tenantId, UUID assetId);
+
+    /**
      * @param rejectionCode null when {@code accepted}; otherwise one of the
      *                      codes the media pipeline already uses ({@code
      *                      SIZE_EXCEEDED}, {@code CONTENT_NOT_AN_IMAGE}, {@code

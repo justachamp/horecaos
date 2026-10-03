@@ -37,6 +37,8 @@ interface ContactDraft {
   staffMemberId: string;
   name: string;
   phone: string;
+  /** The colleague already on this row has left; the platform refuses to keep them. */
+  former: boolean;
 }
 
 /**
@@ -163,6 +165,7 @@ export class LocationContactPersons {
         staffMemberId: contact.staffMemberId ?? '',
         name: contact.staffMemberId !== null ? '' : (contact.name ?? ''),
         phone: contact.staffMemberId !== null ? '' : (contact.phone ?? ''),
+        former: contact.formerColleague,
       })),
     );
     this.attempted.set(false);
@@ -191,6 +194,7 @@ export class LocationContactPersons {
         staffMemberId: '',
         name: '',
         phone: '',
+        former: false,
       },
     ]);
   }
@@ -205,14 +209,22 @@ export class LocationContactPersons {
     value: ContactDraft[K],
   ): void {
     this.drafts.update((rows) =>
-      rows.map((row, position) => (position === index ? { ...row, [field]: value } : row)),
+      rows.map((row, position) =>
+        // Picking somebody else is the way out of a row that holds a leaver.
+        position === index
+          ? { ...row, [field]: value, ...(field === 'staffMemberId' ? { former: false } : {}) }
+          : row,
+      ),
     );
   }
 
   /** What stops this row being saved, or `null`. */
-  protected rowProblem(row: ContactDraft): 'colleague' | 'name' | 'phone' | null {
+  protected rowProblem(row: ContactDraft): 'colleague' | 'former' | 'name' | 'phone' | null {
     if (row.kind === 'COLLEAGUE') {
-      return row.staffMemberId === '' ? 'colleague' : null;
+      if (row.staffMemberId === '') {
+        return 'colleague';
+      }
+      return row.former ? 'former' : null;
     }
     if (row.name.trim() === '') {
       return 'name';
@@ -220,10 +232,12 @@ export class LocationContactPersons {
     return row.phone.trim() === '' || !isPlausiblePhone(row.phone) ? 'phone' : null;
   }
 
-  protected problemKey(problem: 'colleague' | 'name' | 'phone'): MessageKey {
+  protected problemKey(problem: 'colleague' | 'former' | 'name' | 'phone'): MessageKey {
     switch (problem) {
       case 'colleague':
         return 'settings.locations.contacts.colleague.required';
+      case 'former':
+        return 'staff.status.ended';
       case 'name':
         return 'staff.emergency.name.required';
       case 'phone':
@@ -244,7 +258,13 @@ export class LocationContactPersons {
 
   protected listedColleagueLabel(row: ContactDraft): string {
     const listed = this.contacts().find((contact) => contact.staffMemberId === row.staffMemberId);
-    return listed ? this.labelOf(listed) : row.staffMemberId;
+    if (!listed) {
+      return row.staffMemberId;
+    }
+    // A leaver reads «S-0142 · Не работает», so the problem under the row has its context.
+    return row.former
+      ? `${this.labelOf(listed)} · ${this.i18n.t('staff.status.ended')}`
+      : this.labelOf(listed);
   }
 
   protected async save(): Promise<void> {

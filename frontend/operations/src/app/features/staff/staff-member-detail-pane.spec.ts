@@ -545,6 +545,51 @@ describe('StaffMemberDetailPane: the tenant’s record of the person (ADR 0139)'
     ).not.toBeNull();
   });
 
+  it('does not offer to edit a person whose full record could not be read: the masked list has no phone and no employee number, and a replace would clear them', async () => {
+    const listed = staffMember({ principalSubject: 'staff-1', version: 4 });
+    const full = staffMemberDetail({ principalSubject: 'staff-1', version: 4 });
+    const detail = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(ApiErrorCode.INTERNAL_ERROR, 503, null, 'corr-9'))
+      .mockResolvedValue(full);
+    const { fixture, membersApi } = await setUp([GRANT], 'staff-1', {
+      listed: [listed],
+      held: ['STAFF_PROFILE_MANAGE'],
+      membersApi: { detail, update: vi.fn().mockResolvedValue(full) },
+    });
+
+    // The card still opens on what the list knows, and says what it could not read.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-title"]')?.textContent,
+    ).toContain('Aziza Karimova');
+    click(fixture, 'staff-detail-tab-profile');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-edit-profile"]'),
+    ).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-profile-unavailable"]'),
+    ).not.toBeNull();
+    expect(membersApi.update).not.toHaveBeenCalled();
+
+    // Trying again reads the full record, and only then is editing offered.
+    click(fixture, 'staff-detail-profile-retry');
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(detail).toHaveBeenCalledTimes(2);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-profile-unavailable"]'),
+    ).toBeNull();
+    click(fixture, 'staff-detail-edit-profile');
+    click(fixture, 'staff-profile-save');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(membersApi.update).toHaveBeenCalledTimes(1);
+    const request = membersApi.update.mock.calls[0][2];
+    expect(request.phone).toBe('+998901234542');
+    expect(request.employeeNumber).toBe('E-17');
+  });
+
   it('ends employment with a reason and the last day, then reloads the jobs and reports how many were taken away', async () => {
     const member = staffMemberDetail({ principalSubject: 'staff-1', version: 2 });
     const ended = staffMemberDetail({

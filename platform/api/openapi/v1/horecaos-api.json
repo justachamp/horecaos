@@ -6426,6 +6426,9 @@
       },
       "ContactPersonResponse" : {
         "properties" : {
+          "formerColleague" : {
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -49027,7 +49030,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/contact-persons" : {
       "get" : {
-        "description" : "A colleague is shown by the name and contact phone the tenant keeps for them now; an outside person by the name and phone typed for them. The response carries the location's version, which the next replace must send in If-Match.",
+        "description" : "A colleague is shown by the name and contact phone the tenant keeps for them now, unless their employment has ended: a former colleague is marked `formerColleague` and carries the reference alone, no name and no phone. An outside person is shown by the name and phone typed for them. The response carries the location's version, which the next replace must send in If-Match.",
         "operationId" : "list",
         "parameters" : [ {
           "in" : "path",
@@ -49070,7 +49073,7 @@
         "tags" : [ "Location contact persons" ]
       },
       "put" : {
-        "description" : "Each row is a colleague (`staffMemberId` alone) or an outside person (`name` and `phone`), never both. A colleague of another tenant is refused with the same answer as one that does not exist. Needs If-Match with the location's version.",
+        "description" : "Each row is a colleague (`staffMemberId` alone) or an outside person (`name` and `phone`), never both. A colleague of another tenant is refused with the same answer as one that does not exist; one whose employment has ended is refused too. Needs If-Match with the location's version.",
         "operationId" : "replace",
         "parameters" : [ {
           "in" : "path",

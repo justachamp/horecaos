@@ -35,6 +35,12 @@ export interface BranchContactPerson {
   readonly staffMemberReference: string | null;
   readonly name: string | null;
   readonly phone: string | null;
+  /**
+   * A colleague whose employment has ended. The row stays so a manager can see
+   * and remove it, but it carries the `S-0142` reference alone: no name, no
+   * phone, and the platform refuses to save it again.
+   */
+  readonly formerColleague: boolean;
 }
 
 /** Mirrors `LocationContactPersonController.ContactPersonsResponse`; `version` is the *location's*. */

@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -80,6 +82,8 @@ public class StaffMemberService implements StaffMemberRegistry {
     private static final int MAX_NAME_LENGTH = 100;
     private static final int MAX_EMPLOYEE_NUMBER_LENGTH = 32;
     private static final String SET = "set";
+
+    private static final Logger log = LoggerFactory.getLogger(StaffMemberService.class);
 
     static final String CREATED = "staff.member.created";
     static final String UPDATED = "staff.member.updated";
@@ -384,9 +388,12 @@ public class StaffMemberService implements StaffMemberRegistry {
      * a connection must not be held across that. The version is checked before
      * the upload so the common conflict costs nothing, and again inside the
      * transaction that stores the asset id, which is the one that counts. A
-     * photo that loses that race leaves an unreferenced private asset, which the
-     * media lifecycle sweeps; a reference to somebody else's asset is not
-     * possible, because the asset is created here, in the caller's tenant.
+     * photo that loses that race, or is refused inside it, is handed straight
+     * back to the pipeline to delete ({@link StaffPhotos#discard}); the photo it
+     * replaces is discarded in the same transaction that replaces it, so the
+     * store never keeps a picture the record has stopped showing. A reference to
+     * somebody else's asset is not possible, because the asset is created here,
+     * in the caller's tenant.
      */
     public MemberView setPhoto(
             UUID tenantId,
@@ -408,30 +415,56 @@ public class StaffMemberService implements StaffMemberRegistry {
         }
         UUID assetId = ingested.assetId();
 
-        MemberView saved = transactions.execute(status -> {
-            MemberRow current =
-                    store.findBySubjectForUpdate(tenantId, subject).orElseThrow(StaffMemberService::noProfile);
-            requireVersion(expectedVersion, current);
-            if (!photos.isPrivateTenantAsset(tenantId, assetId)) {
-                // The asset was created a moment ago in this very tenant; if the
-                // pipeline no longer vouches for it, storing it would be wrong.
-                throw new ApiException(
-                        ErrorCode.VALIDATION_FAILED, "The photo is not available", Map.of("field", "photo"));
-            }
-            MemberRow next = withPhoto(current, assetId, clock.instant());
-            return persist(
-                    current,
-                    next,
-                    UPDATED,
-                    subject,
-                    "The person set their own photo",
-                    null,
-                    correlationId,
-                    fields("photo", markerOf(current.photoAssetId() == null ? null : "photo")),
-                    fields("photo", SET),
-                    placesOf(tenantId, subject));
-        });
+        MemberView saved;
+        try {
+            saved = transactions.execute(status -> {
+                MemberRow current =
+                        store.findBySubjectForUpdate(tenantId, subject).orElseThrow(StaffMemberService::noProfile);
+                requireVersion(expectedVersion, current);
+                if (!photos.isPrivateTenantAsset(tenantId, assetId)) {
+                    // The asset was created a moment ago in this very tenant; if the
+                    // pipeline no longer vouches for it, storing it would be wrong.
+                    throw new ApiException(
+                            ErrorCode.VALIDATION_FAILED, "The photo is not available", Map.of("field", "photo"));
+                }
+                MemberRow next = withPhoto(current, assetId, clock.instant());
+                MemberView view = persist(
+                        current,
+                        next,
+                        UPDATED,
+                        subject,
+                        "The person set their own photo",
+                        null,
+                        correlationId,
+                        fields("photo", markerOf(current.photoAssetId() == null ? null : "photo")),
+                        fields("photo", SET),
+                        placesOf(tenantId, subject));
+                if (current.photoAssetId() != null) {
+                    photos.discard(tenantId, current.photoAssetId());
+                }
+                return view;
+            });
+        } catch (RuntimeException notStored) {
+            // The upload happened outside the transaction, so a stale version or a
+            // refusal inside it leaves an asset nobody references. Say so now rather
+            // than leave a face in the store for a sweep that does not exist.
+            discardQuietly(tenantId, assetId);
+            throw notStored;
+        }
         return Objects.requireNonNull(saved);
+    }
+
+    /** Best effort, in its own transaction: the failure being handled is the one worth reporting. */
+    private void discardQuietly(UUID tenantId, UUID assetId) {
+        try {
+            transactions.executeWithoutResult(status -> photos.discard(tenantId, assetId));
+        } catch (RuntimeException failed) {
+            log.warn(
+                    "An unreferenced staff photo asset {} of tenant {} could not be queued for deletion",
+                    assetId,
+                    tenantId,
+                    failed);
+        }
     }
 
     /**
@@ -798,6 +831,11 @@ public class StaffMemberService implements StaffMemberRegistry {
         if (!store.update(next, current.version())) {
             throw ApiException.staleVersion(current.version(), current.version() + 1);
         }
+        if (current.photoAssetId() != null) {
+            // Dropping the reference is not erasure: the picture is personal data
+            // and has to leave the store too.
+            photos.discard(tenantId, current.photoAssetId());
+        }
         names.evictAfterCommit(tenantId, current.principalSubject());
         Map<String, Object> before = new LinkedHashMap<>();
         before.put("firstName", markerOf(current.protectedFirstName()));
@@ -973,8 +1011,12 @@ public class StaffMemberService implements StaffMemberRegistry {
                 current.version(),
                 current.createdAt(),
                 now);
-        return persist(
+        MemberView view = persist(
                 current, next, UPDATED, actorSubject, reason, capabilityUsed, correlationId, before, after, held);
+        if (current.photoAssetId() != null && photo == null) {
+            photos.discard(tenantId, current.photoAssetId());
+        }
+        return view;
     }
 
     /** Writes the row, evicts the name, publishes the fact, and reads the result back. */
