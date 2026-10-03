@@ -54,6 +54,14 @@ import { portionStep } from '../../../utils/physical';
 /** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
 const CLAIM_CLOCK_MS = 15_000;
 
+/**
+ * The longest the page waits between two reads of a claim whose window has passed. The
+ * platform decides a claim in a sweep that runs every 30 s, so one read at the expiry
+ * usually lands before it; the reads that follow double their gap (15 s, 30 s, 60 s) and
+ * then hold at a minute, which also covers a claim kept open by a payment still in flight.
+ */
+const CLAIM_REREAD_MAX_MS = 60_000;
+
 /** The most a guest can say they are (the platform's own ceiling for a party). */
 const MAX_PARTY = 200;
 
@@ -230,7 +238,15 @@ export class DineInTableComponent implements OnInit {
     }
     return Math.max(0, Math.ceil((Date.parse(bill.claimExpiresAt) - this.now()) / 60_000));
   });
-  private claimReadAfterExpiry = false;
+  /** The expiry of the claim being re-read, so a new claim starts the count again. */
+  private claimReadFor: string | null = null;
+  private claimReads = 0;
+  private claimReadAt = 0;
+  /**
+   * The table whose hold the platform ended, for the screen that says so once the visit is
+   * cleared; null while nothing has lapsed. In memory only: a reload shows the plain prompt.
+   */
+  protected readonly lapsedTable = signal<string | null>(null);
 
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
@@ -412,22 +428,43 @@ export class DineInTableComponent implements OnInit {
   }
 
   /**
-   * Moves the countdown on, and once a claim's window has passed reads the bill once:
-   * the platform may have given the table back, and a screen still offering a table
-   * that is no longer the guest's would let them order onto a bill that is gone.
+   * Moves the countdown on, and once a claim's window has passed keeps reading the bill
+   * until the platform has decided: it may have given the table back, and a screen still
+   * offering a table that is no longer the guest's would let them order onto a bill that
+   * is gone -- or hide "ask for the bill" from a session that has become an ordinary one.
+   *
+   * One read is not enough. The platform decides a claim in a sweep (every 30 s), not at
+   * the instant the window ends, so the first read usually still sees an undecided claim
+   * whose expiry is behind it. A read that does decide changes the bill (confirmed) or ends
+   * the visit (see {@link failBill}), which stops this on its own; until then it asks
+   * again, a little less often each time.
    */
   private tick(): void {
-    this.now.set(Date.now());
+    const now = Date.now();
+    this.now.set(now);
     const bill = this.bill();
     if (
-      bill?.confirmed === false &&
-      bill.claimExpiresAt &&
-      Date.parse(bill.claimExpiresAt) <= Date.now() &&
-      !this.claimReadAfterExpiry
+      bill?.confirmed !== false ||
+      !bill.claimExpiresAt ||
+      Date.parse(bill.claimExpiresAt) > now ||
+      this.billBusy()
     ) {
-      this.claimReadAfterExpiry = true;
-      void this.refreshBill();
+      return;
     }
+    if (this.claimReadFor !== bill.claimExpiresAt) {
+      this.claimReadFor = bill.claimExpiresAt;
+      this.claimReads = 0;
+    }
+    const gap = Math.min(
+      CLAIM_CLOCK_MS * 2 ** Math.max(0, this.claimReads - 1),
+      CLAIM_REREAD_MAX_MS,
+    );
+    if (this.claimReads > 0 && now - this.claimReadAt < gap) {
+      return;
+    }
+    this.claimReads++;
+    this.claimReadAt = now;
+    void this.refreshBill();
   }
 
   protected stepParty(by: number): void {
@@ -452,7 +489,8 @@ export class DineInTableComponent implements OnInit {
     try {
       const seating = await this.dineIn.seat(this.partySize());
       this.joinedExisting.set(!seating.created);
-      this.claimReadAfterExpiry = false;
+      this.claimReadFor = null;
+      this.lapsedTable.set(null);
       this.sessionEnded.set(false);
       this.bill.set(seating);
       this.now.set(Date.now());
@@ -871,7 +909,7 @@ export class DineInTableComponent implements OnInit {
         // The same cue as a guest token the platform stopped recognising: the party this
         // device scanned for is over, so scan the code again.
         this.pendingCheckoutKey = null;
-        this.dineIn.clear();
+        this.endVisit();
         return;
       }
       if (reason === 'TABLE_BINDING_STALE') {
@@ -991,6 +1029,25 @@ export class DineInTableComponent implements OnInit {
   }
 
   /**
+   * The table's guest token is dead: the visit is over, so forget it.
+   *
+   * When the guest was holding a claim nothing had confirmed, that is the lapse. Giving
+   * the table back closes its session, and closing a session revokes every guest token
+   * minted at its table, so the claimant's next call is refused as a dead token (401) --
+   * never as a missing bill. Nothing here can renew the token (the printed code was spent
+   * by the scan and is not kept), so the visit ends; the guest is told the hold is gone
+   * and to scan again, rather than shown the bare prompt to scan a table they were
+   * sitting at a moment ago.
+   */
+  private endVisit(): void {
+    if (this.claimUnconfirmed()) {
+      this.lapsedTable.set(this.admission()?.tableCode ?? '');
+      this.bill.set(null);
+    }
+    this.dineIn.clear();
+  }
+
+  /**
    * What a failed bill call means for the guest, said on the screen.
    *
    * A guest token the platform no longer recognises ends the visit. A session it
@@ -1001,10 +1058,10 @@ export class DineInTableComponent implements OnInit {
    */
   private failBill(failure: unknown): void {
     if (this.dineIn.isGuestSessionEnded(failure)) {
-      this.dineIn.clear();
+      this.endVisit();
     } else if (isNotFound(failure) && this.claimUnconfirmed()) {
-      // The claim lapsed and the table went back to the room. Offer to sit down again;
-      // the platform re-decides when the guest asks.
+      // The token is still live yet the table's live session is not this claim: the table
+      // is free again. Offer to sit down; the platform re-decides when the guest asks.
       this.bill.set(null);
       this.dineIn.sessionEnded();
     } else if (isNotFound(failure)) {

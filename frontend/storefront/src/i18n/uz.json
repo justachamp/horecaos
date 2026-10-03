@@ -343,6 +343,8 @@
     "joinedExisting": "Bu stolda allaqachon mehmonlar oʻtiribdi, shuning uchun buyurtmalaringiz bir xil hisobga tushadi.",
     "claimHeld": "Stol siz uchun yana {{minutes}} daqiqa ushlab turiladi. Qoldirish uchun buyurtma bering.",
     "claimEnding": "Stolni ushlab turish muddati tugayapti. Qoldirish uchun hozir buyurtma bering.",
+    "claimLapsedTitle": "Stolni ushlab turish tugadi",
+    "claimLapsedBody": "{{code}}-stol endi siz uchun ushlab turilmaydi. Qayta o'tirish uchun stoldagi QR-kodni skanerlang.",
     "tableNotAvailable": "Bu stolni bu yerdan band qilib boʻlmaydi. Xodimdan sizni oʻtqazishini soʻrang.",
     "tooManyForTable": "Bu stolda {{seats}} oʻrin bor. Xodimdan kattaroq stol soʻrang.",
     "seatRateLimited": "Urinishlar juda koʻp. Biroz kuting va qayta urinib koʻring.",

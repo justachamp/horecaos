@@ -200,9 +200,14 @@ export class DineInService {
   }
 
   /**
-   * The session this device was seated at is gone (a claim that lapsed, a host who closed
-   * the table). The table may be free again, so the invitation to sit is offered once more;
-   * the platform re-decides when the guest asks.
+   * The session this device was seated at is no longer the table's live one, yet the guest
+   * token is still accepted. The table may be free again, so the invitation to sit is
+   * offered once more; the platform re-decides when the guest asks.
+   *
+   * Not how a lapsed claim ends: closing a session revokes every guest token minted at its
+   * table, so a claimant whose hold ran out gets a dead token (401) and the visit is
+   * cleared with the reason said (see `DineInTableComponent.endVisit`). A token cannot be
+   * renewed -- the printed code that mints one is not kept.
    */
   sessionEnded(): void {
     this.updateAdmission({ openSessionId: null, walkInAvailable: true });

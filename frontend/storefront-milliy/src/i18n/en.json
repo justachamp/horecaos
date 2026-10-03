@@ -495,6 +495,8 @@
     "joinedExisting": "Someone at this table is already seated, so your orders go on the same bill.",
     "claimHeld": "This table is held for you for {{minutes}} more minutes. Place an order to keep it.",
     "claimEnding": "Your hold on this table is ending. Place an order now to keep it.",
+    "claimLapsedTitle": "Your hold on this table has ended",
+    "claimLapsedBody": "Table {{code}} is no longer held for you. To sit down again, scan the QR code on the table.",
     "tableNotAvailable": "This table cannot be taken from here. Please ask a member of staff to seat you.",
     "tooManyForTable": "This table seats {{seats}}. Please ask a member of staff for a larger table.",
     "seatRateLimited": "Too many tries. Please wait a moment and try again.",

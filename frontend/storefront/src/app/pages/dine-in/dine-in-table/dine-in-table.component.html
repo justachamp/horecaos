@@ -1,8 +1,15 @@
 <div class="table" data-testid="dine-in-table">
   @if (!admission()) {
     <div class="table__empty" data-testid="dine-in-no-admission">
-      <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
-      <p class="table__body">{{ 'dineIn.noAdmissionBody' | t }}</p>
+      @if (lapsedTable(); as lapsed) {
+        <p class="table__title" data-testid="dine-in-claim-lapsed">
+          {{ 'dineIn.claimLapsedTitle' | t }}
+        </p>
+        <p class="table__body">{{ 'dineIn.claimLapsedBody' | t: { code: lapsed } }}</p>
+      } @else {
+        <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
+        <p class="table__body">{{ 'dineIn.noAdmissionBody' | t }}</p>
+      }
       <a class="table__home" routerLink="/home" data-testid="dine-in-home-link">
         {{ 'dineIn.backHome' | t }}
       </a>
