@@ -2864,7 +2864,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.preview.image.default': 'Mahsulotning odatiy rasmi',
   'catalog.preview.override.title': 'Kanal uchun rasm',
   'catalog.preview.override.hint':
-    'Mahsulotning oʻz rasmlaridan qaysilari bu kanalda koʻrinishini tanlang. Birinchi tanlangani asosiy. Narxlarga taʻsir qilmaydi. Kanalning jonli menyusi unga keyingi safar nashr qilganingizda oʻzgaradi.',
+    'Mahsulotning oʻz rasmlaridan qaysilari bu kanalda koʻrinishini tanlang. Birinchi tanlangani asosiy. Narxlarga taʻsir qilmaydi.',
   'catalog.preview.override.empty': 'Mahsulotda tanlash uchun oʻz rasmlari yoʻq.',
   'catalog.preview.override.save': 'Saqlash',
   'catalog.preview.override.clear': 'Mahsulotning odatiy rasmlariga qaytish',

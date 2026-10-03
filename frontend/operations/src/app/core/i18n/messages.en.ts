@@ -2867,7 +2867,7 @@ export const messagesEn = {
   'catalog.preview.image.default': 'The product’s own photo',
   'catalog.preview.override.title': 'Photo for this channel',
   'catalog.preview.override.hint':
-    'Pick which of the product’s own photos this channel shows. The first you pick is the main one. Prices are not affected. The channel’s live menu changes the next time you publish to it.',
+    'Pick which of the product’s own photos this channel shows. The first you pick is the main one. Prices are not affected.',
   'catalog.preview.override.empty': 'This product has no photos of its own to choose from.',
   'catalog.preview.override.save': 'Save',
   'catalog.preview.override.clear': 'Use the product’s usual photos',
