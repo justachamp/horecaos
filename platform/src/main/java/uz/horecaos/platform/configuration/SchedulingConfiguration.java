@@ -243,9 +243,11 @@ public class SchedulingConfiguration {
      * staff member record for accounts that predate it and keeps the
      * completion gauges, and {@code StaffMemberRetentionSweeper.sweepOnce},
      * which in report-only mode counts the ended employees whose personal data
-     * is past retention.
+     * is past retention. The merged batch carries 74 in all (the other waves of
+     * the batch added their own sweepers on branches that could not see each
+     * other), which the pool-size test counts.
      */
-    static final int DEFAULT_POOL_SIZE = 72;
+    static final int DEFAULT_POOL_SIZE = 74;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
