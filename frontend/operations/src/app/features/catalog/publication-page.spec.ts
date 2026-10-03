@@ -214,6 +214,65 @@ describe('PublicationPage', () => {
     expect(status?.textContent).toContain('Up to date');
   });
 
+  it('compares a channel with the draft as it would publish to that channel', async () => {
+    // An image that belongs to a channel is published to that channel alone, so the draft hashes
+    // differently per channel. The channel-agnostic hash differs from what is live, and the
+    // channel's own does not: the card must say the draft matches.
+    const liveHash = 'live-hash-for-this-channel';
+    await render(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Main', status: 'ACTIVE' }]),
+        listPublicationHistory: () =>
+          of([
+            {
+              publicationId: 'pub-1',
+              channel: 'STOREFRONT',
+              status: 'PUBLISHED',
+              contentHash: liveHash,
+              createdBy: null,
+              createdAt: '2026-09-01T10:00:00Z',
+              activatedAt: '2026-09-01T10:00:05Z',
+              retiredAt: null,
+              itemCount: 3,
+            },
+          ]),
+        draftPreview: () =>
+          of({
+            contentHash: 'channel-agnostic-hash',
+            itemCount: 3,
+            channelContentHashes: { STOREFRONT: liveHash },
+          }),
+        validate: () => of({ publishable: true, findings: [] }),
+      },
+      {
+        list: () =>
+          Promise.resolve([
+            {
+              id: 'chan-1',
+              code: 'STOREFRONT',
+              systemType: 'WEB',
+              displayName: 'Storefront',
+              status: 'ACTIVE',
+              pricePlaneChannelId: null,
+              externallyPriced: false,
+              guestOrdersAllowed: true,
+              providerInstallationId: null,
+              version: 1,
+              locationCount: 0,
+              enabledPaymentMethodCount: 0,
+              enabledFulfillmentModes: [],
+            },
+          ]),
+      },
+    );
+
+    const host = fixture.nativeElement as HTMLElement;
+    const status = host.querySelector('[data-testid="publication-draft-status"]');
+    expect(status).not.toBeNull();
+    expect(status?.textContent).toContain('Up to date');
+  });
+
   it('flags a channel whose draft differs from what is live', async () => {
     await render(
       {

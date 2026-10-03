@@ -16,6 +16,7 @@ import { CatalogApi } from './catalog-api';
 import { ChannelPreviewApi } from './channel-preview-api';
 import {
   ChannelPreviewPageBody,
+  PreviewBinding,
   PreviewFinding,
   PreviewProduct,
   PreviewTarget,
@@ -134,6 +135,7 @@ function doubles(overrides: Partial<Doubles> = {}): Doubles {
     preview: {
       targets: () => of(TARGETS),
       previewPage: () => of(body()),
+      mediaOverrideSet: () => of({ images: [], version: 0 }),
       ...overrides.preview,
     },
     catalog: {
@@ -432,6 +434,32 @@ describe('ChannelPreviewPage', () => {
     expect(host().querySelector('[data-testid="preview-more"]')).toBeNull();
   });
 
+  it('names each branch by its own name, with the marketplace binding beside it, never a raw id and never one name for every branch', async () => {
+    // A brand-wide binding covers every branch, so each target carries the same binding name.
+    const wolt: PreviewBinding = {
+      bindingId: 'binding-1',
+      status: 'ACTIVE',
+      rulesetCode: null,
+      providerType: 'WOLT',
+      displayName: 'Wolt',
+    };
+    const targets: readonly PreviewTarget[] = [
+      { locationId: 'l1', locationName: 'Chilonzor', binding: wolt },
+      { locationId: 'l2', locationName: 'Yunusobod', binding: wolt },
+      // A channel with no marketplace binding: the branch name is all there is to show.
+      { locationId: 'l3', locationName: 'Sergeli', binding: null },
+    ];
+    await render(
+      doubles({ preview: { targets: () => of(targets), previewPage: () => of(body()) } }),
+    );
+
+    const labels = Array.from(
+      host().querySelectorAll('[data-testid="preview-branch-select"] option'),
+    ).map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
+
+    expect(labels).toEqual(['Chilonzor · Wolt', 'Yunusobod · Wolt', 'Sergeli']);
+  });
+
   it('says so when the channel sells at no branch, instead of drawing an empty phone', async () => {
     await render(doubles({ preview: { targets: () => of([]), previewPage: () => of(body()) } }));
 
@@ -463,7 +491,13 @@ describe('ChannelPreviewPage', () => {
     const previewPage = vi.fn().mockReturnValue(of(body()));
     await render(
       doubles({
-        preview: { targets: () => of(TARGETS), previewPage, replaceMediaOverride },
+        preview: {
+          targets: () => of(TARGETS),
+          previewPage,
+          replaceMediaOverride,
+          // The set is at version 4 when the editor opens: that is the version the save quotes.
+          mediaOverrideSet: () => of({ images: [], version: 4 }),
+        },
         catalog: {
           listCatalogs: () =>
             of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Main', status: 'ACTIVE' }]),
@@ -512,12 +546,82 @@ describe('ChannelPreviewPage', () => {
     fixture.detectChanges();
 
     // The first picked is the main photo; the rest are the gallery, in the order picked.
-    expect(replaceMediaOverride).toHaveBeenCalledWith(BRAND_SCOPE, 'ch1', 'PRODUCT', 'p1', [
-      { mediaAssetId: 'own-2', role: 'PRIMARY', sortOrder: 0 },
-      { mediaAssetId: 'own-1', role: 'GALLERY', sortOrder: 1 },
-    ]);
+    expect(replaceMediaOverride).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      'ch1',
+      'PRODUCT',
+      'p1',
+      [
+        { mediaAssetId: 'own-2', role: 'PRIMARY', sortOrder: 0 },
+        { mediaAssetId: 'own-1', role: 'GALLERY', sortOrder: 1 },
+      ],
+      4,
+    );
     // ...and the preview is read again, so what is on screen is what the server now says.
     expect(previewPage).toHaveBeenCalledTimes(2);
+    expect(host().querySelector('[data-testid="channel-override-panel"]')).toBeNull();
+  });
+  it('says so when somebody else saved the channel photos first, shows theirs, and quotes the new version on the next save', async () => {
+    const stale = new ApiError('STALE_VERSION', 409, null, null);
+    const replaceMediaOverride = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => stale))
+      .mockReturnValue(of([]));
+    const mediaOverrideSet = vi
+      .fn()
+      .mockReturnValueOnce(of({ images: [], version: 1 }))
+      .mockReturnValue(of({ images: [], version: 2 }));
+    const previewPage = vi.fn().mockReturnValue(of(body()));
+    await render(
+      doubles({
+        preview: {
+          targets: () => of(TARGETS),
+          previewPage,
+          replaceMediaOverride,
+          mediaOverrideSet,
+        },
+        catalog: {
+          listCatalogs: () =>
+            of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Main', status: 'ACTIVE' }]),
+          productDetail: () =>
+            of({
+              productId: 'p1',
+              code: 'LAGMAN',
+              status: 'ACTIVE',
+              version: 1,
+              translations: {},
+              catalogIds: [],
+              categoryIds: [],
+              variants: [],
+              modifierGroups: [],
+              media: [{ mediaAssetId: 'own-1', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' }],
+            }),
+        },
+      }),
+    );
+
+    (host().querySelector('[data-testid="preview-photo-edit"]') as HTMLButtonElement).click();
+    await flush();
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-testid="channel-override-choice"]')?.click();
+    fixture.detectChanges();
+    (host().querySelector('[data-testid="channel-override-save"]') as HTMLButtonElement).click();
+    await flush();
+    fixture.detectChanges();
+
+    // Refused: the editor stays open with the reason, the preview is read again so the other save is
+    // on screen, and the version is read again.
+    expect(replaceMediaOverride.mock.calls[0][5]).toBe(1);
+    expect(host().querySelector('[data-testid="channel-override-panel"]')).not.toBeNull();
+    expect(host().querySelector('.override__error')).not.toBeNull();
+    expect(previewPage).toHaveBeenCalledTimes(2);
+    expect(mediaOverrideSet).toHaveBeenCalledTimes(2);
+
+    // Saving again is now a deliberate choice made against version 2, and it goes through.
+    (host().querySelector('[data-testid="channel-override-save"]') as HTMLButtonElement).click();
+    await flush();
+    fixture.detectChanges();
+    expect(replaceMediaOverride.mock.calls[1][5]).toBe(2);
     expect(host().querySelector('[data-testid="channel-override-panel"]')).toBeNull();
   });
 });

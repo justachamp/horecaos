@@ -12,30 +12,26 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uz.horecaos.platform.catalog.application.ChannelProjection.MediaSource;
+import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.catalog.application.ChannelProjection.PriceAuthority;
 import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssembledMenu;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssemblyInput;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuCategory;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuComboComponent;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuComboGroup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroup;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierOption;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuProduct;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
-import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
-import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
-import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
-import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MarketplaceBindingRow;
-import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
-import uz.horecaos.platform.media.api.MediaAssetId;
-import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -62,9 +58,11 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  *       entity's own images.
  * </ol>
  *
- * <p>The first three live in {@code assemble}. The fourth is the one thing a
- * publication snapshot cannot carry — it is the same for every channel — so it is
- * applied here, to the items, before they are assembled.
+ * <p>The first three live in {@code assemble}. The fourth is per channel, which the
+ * draft's channel-agnostic items cannot say, so {@link ChannelMediaLayers} applies it
+ * to the items before they are assembled — and {@code publish} calls the same
+ * function for the channel it publishes to, so the images drawn here are the ones a
+ * customer is served once the draft is published.
  *
  * <p><strong>A read.</strong> Nothing is written, no content hash is minted, and
  * the result cannot be fetched by reference: every call recomputes from the
@@ -83,9 +81,6 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 @Service
 public class ChannelPreviewService {
 
-    /** The sentinel {@code catalog.media_relations.channel_code} for an entity's own, every-channel image. */
-    private static final String UNIVERSAL = JdbcCatalogStore.ALL_CHANNELS;
-
     private final JdbcCatalogStore store;
     private final JdbcChannelProjectionStore projections;
     private final CatalogValidator validator;
@@ -93,7 +88,7 @@ public class ChannelPreviewService {
     private final StorefrontCatalogQuery storefront;
     private final SalesChannelLookup channels;
     private final MarketplaceRulesets rulesets;
-    private final MediaAvailability media;
+    private final VariantPricingLookup pricing;
 
     public ChannelPreviewService(
             JdbcCatalogStore store,
@@ -103,7 +98,7 @@ public class ChannelPreviewService {
             StorefrontCatalogQuery storefront,
             SalesChannelLookup channels,
             MarketplaceRulesets rulesets,
-            MediaAvailability media) {
+            VariantPricingLookup pricing) {
         this.store = store;
         this.projections = projections;
         this.validator = validator;
@@ -111,7 +106,7 @@ public class ChannelPreviewService {
         this.storefront = storefront;
         this.channels = channels;
         this.rulesets = rulesets;
-        this.media = media;
+        this.pricing = pricing;
     }
 
     /**
@@ -141,12 +136,14 @@ public class ChannelPreviewService {
 
         CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, request.catalogId());
         ValidationFinding.Report universal = validator.validate(snapshot);
-        List<PublicationItem> drafted = snapshots.toPublicationItems(snapshot);
+
+        // The channel's own items: the call publish makes for this channel, so what is drawn
+        // below is what would be written, images and the blockers on them included.
+        CatalogSnapshotLoader.ChannelItems channelItems =
+                snapshots.toPublicationItems(snapshot, tenantId, brandId, channel);
 
         String locale = request.locale() == null ? snapshot.defaultLocale() : request.locale();
         PriceAuthority authority = channel.externallyPriced() ? PriceAuthority.EXTERNAL : PriceAuthority.HORECAOS;
-
-        MediaPlan mediaPlan = planMedia(tenantId, brandId, channel, snapshot, drafted);
 
         AssembledMenu menu;
         if (enabledHere) {
@@ -156,10 +153,10 @@ public class ChannelPreviewService {
                     target.locationId(),
                     locale,
                     channel.code(),
-                    itemsOf(mediaPlan.items(), EntityType.CATEGORY),
-                    itemsOf(mediaPlan.items(), EntityType.PRODUCT),
-                    itemsOf(mediaPlan.items(), EntityType.MODIFIER_GROUP),
-                    itemsOf(mediaPlan.items(), EntityType.COMBO_GROUP),
+                    itemsOf(channelItems.items(), EntityType.CATEGORY),
+                    itemsOf(channelItems.items(), EntityType.PRODUCT),
+                    itemsOf(channelItems.items(), EntityType.MODIFIER_GROUP),
+                    itemsOf(channelItems.items(), EntityType.COMBO_GROUP),
                     authority == PriceAuthority.EXTERNAL));
         } else {
             // The channel does not sell at this branch: it would receive nothing,
@@ -182,27 +179,44 @@ public class ChannelPreviewService {
                 menu.categories(),
                 products,
                 menu.modifierGroups(),
-                mediaPlan.resolved());
+                channelItems.media());
 
         List<PreviewFinding> findings = new ArrayList<>();
         Map<UUID, UUID> productOfVariant = new HashMap<>();
         snapshot.variants().forEach(variant -> productOfVariant.put(variant.id(), variant.productId()));
-        for (ValidationFinding finding : universal.findings()) {
-            findings.add(new PreviewFinding(finding, FindingSource.CATALOG, ownerProduct(finding, productOfVariant)));
+        // A combo component has no page of its own either: it is authored on the product whose variant
+        // is the combo's container.
+        Map<UUID, UUID> productOfComponent = new HashMap<>();
+        for (ComboGroup group : snapshot.composite().comboGroups()) {
+            UUID container = snapshot.composite().productIdByVariant().get(group.containerVariantId());
+            if (container != null) {
+                snapshot.composite()
+                        .componentsByGroup()
+                        .getOrDefault(group.id(), List.of())
+                        .forEach(component -> productOfComponent.put(component.id(), container));
+            }
         }
-        List<ValidationFinding> projectionFindings =
-                projectionFindings(tenantId, channel, enabledHere, projection, snapshot, mediaPlan);
+        for (ValidationFinding finding : universal.findings()) {
+            findings.add(new PreviewFinding(
+                    finding, FindingSource.CATALOG, ownerProduct(finding, productOfVariant, productOfComponent)));
+        }
+        List<ValidationFinding> projectionFindings = new ArrayList<>(channelItems.findings());
+        projectionFindings.addAll(projectionFindings(channel, enabledHere, projection, menu.comboGroups(), snapshot));
         for (ValidationFinding finding : projectionFindings) {
-            findings.add(
-                    new PreviewFinding(finding, FindingSource.PROJECTION, ownerProduct(finding, productOfVariant)));
+            findings.add(new PreviewFinding(
+                    finding, FindingSource.PROJECTION, ownerProduct(finding, productOfVariant, productOfComponent)));
         }
         List<ValidationFinding> marketplaceFindings = marketplaceFindings(target.binding(), projection);
         for (ValidationFinding finding : marketplaceFindings) {
-            findings.add(
-                    new PreviewFinding(finding, FindingSource.MARKETPLACE, ownerProduct(finding, productOfVariant)));
+            findings.add(new PreviewFinding(
+                    finding, FindingSource.MARKETPLACE, ownerProduct(finding, productOfVariant, productOfComponent)));
         }
 
-        boolean channelReady = universal.publishable()
+        // What publish decides for this channel: the catalog's blockers and the blockers on the
+        // channel's own images, which publish adds to the catalog's report.
+        boolean publishable =
+                universal.publishable() && channelItems.findings().stream().noneMatch(ChannelPreviewService::isBlocker);
+        boolean channelReady = publishable
                 && projectionFindings.stream().noneMatch(ChannelPreviewService::isBlocker)
                 && marketplaceFindings.stream().noneMatch(ChannelPreviewService::isBlocker);
 
@@ -224,7 +238,7 @@ public class ChannelPreviewService {
                 locale,
                 authority,
                 menu.currency(),
-                universal.publishable(),
+                publishable,
                 channelReady,
                 findings,
                 menu.categories(),
@@ -232,7 +246,7 @@ public class ChannelPreviewService {
                 menu.comboGroups(),
                 List.copyOf(page),
                 hasMore,
-                mediaPlan.resolved());
+                channelItems.media());
     }
 
     /**
@@ -244,10 +258,12 @@ public class ChannelPreviewService {
         SalesChannel channel = channels.byId(tenantId, channelId)
                 .orElseThrow(() -> new UnknownPreviewTargetException("No sales channel " + channelId));
         List<PreviewTarget> targets = new ArrayList<>();
-        for (UUID locationId : projections.activeLocationsOfChannel(tenantId, brandId, channel.id())) {
+        for (JdbcChannelProjectionStore.BranchRow branch :
+                projections.activeBranchesOfChannel(tenantId, brandId, channel.id())) {
             Optional<MarketplaceBindingRow> binding = channel.providerInstallation()
-                    .flatMap(installation -> projections.bindingCovering(tenantId, installation, brandId, locationId));
-            targets.add(new PreviewTarget(locationId, binding.orElse(null)));
+                    .flatMap(installation ->
+                            projections.bindingCovering(tenantId, installation, brandId, branch.locationId()));
+            targets.add(new PreviewTarget(branch.locationId(), branch.displayName(), binding.orElse(null)));
         }
         return List.copyOf(targets);
     }
@@ -299,165 +315,6 @@ public class ChannelPreviewService {
 
     private record Target(UUID locationId, @Nullable MarketplaceBindingRow binding) {}
 
-    // ------------------------------------------------------------------ media
-
-    /**
-     * Applies ADR 0138 step 4 to the drafted items: each product, variant and
-     * category shows, on this channel, the first of
-     *
-     * <ol>
-     *   <li>its {@code channel_media_overrides} rows for this channel, else
-     *   <li>its {@code media_relations} rows naming this channel (V0223), else
-     *   <li>its own universal images.
-     * </ol>
-     *
-     * <p>An entity with nothing in the first two is left exactly as the snapshot
-     * published it — the same list, in the same order, which is what makes the
-     * no-override projection of a channel match the live menu by construction —
-     * unless it has relations naming <em>other</em> channels. The snapshot lists
-     * every relation of an entity whatever channel it names (V0223 added the
-     * column and the loader was never taught to filter on it), so a dish carrying
-     * Uzum Tezkor's own crop would otherwise show that crop on Wolt. Here it
-     * falls back to the universal images only, which is what "default" means.
-     */
-    private MediaPlan planMedia(
-            UUID tenantId,
-            UUID brandId,
-            SalesChannel channel,
-            CatalogValidator.Snapshot snapshot,
-            List<PublicationItem> drafted) {
-
-        Map<UUID, List<MediaRelationRow>> relationsByEntity = new HashMap<>();
-        for (MediaRelationRow relation : store.mediaRelations(tenantId, brandId)) {
-            relationsByEntity
-                    .computeIfAbsent(relation.entityId(), id -> new ArrayList<>())
-                    .add(relation);
-        }
-        Map<UUID, List<MediaOverrideRow>> overridesByEntity = new HashMap<>();
-        for (MediaOverrideRow row : projections.mediaOverrides(tenantId, brandId, channel.id())) {
-            overridesByEntity
-                    .computeIfAbsent(row.entityId(), id -> new ArrayList<>())
-                    .add(row);
-        }
-
-        // The universal sentinel is also a legal channel code ("ALL" matches the
-        // code pattern), and a channel by that name must not read the universal
-        // images as its own override.
-        boolean channelCanOwnRelations = !UNIVERSAL.equals(channel.code());
-
-        Map<UUID, ResolvedMedia> resolved = new LinkedHashMap<>();
-        Map<UUID, List<String>> publishedProductMedia = new HashMap<>();
-        for (PublicationItem item : drafted) {
-            if (item.entityType() == EntityType.PRODUCT && item.content().get("mediaAssetIds") instanceof List<?> ids) {
-                publishedProductMedia.put(
-                        item.entityId(), ids.stream().map(String::valueOf).toList());
-            }
-        }
-
-        for (Product product : snapshot.products()) {
-            resolved.put(
-                    product.id(),
-                    resolveMedia(
-                            product.id(),
-                            overridesByEntity,
-                            relationsByEntity,
-                            channel,
-                            channelCanOwnRelations,
-                            publishedProductMedia.get(product.id())));
-        }
-        for (Variant variant : snapshot.variants()) {
-            resolved.put(
-                    variant.id(),
-                    resolveMedia(
-                            variant.id(), overridesByEntity, relationsByEntity, channel, channelCanOwnRelations, null));
-        }
-        for (Category category : snapshot.categories()) {
-            resolved.put(
-                    category.id(),
-                    resolveMedia(
-                            category.id(),
-                            overridesByEntity,
-                            relationsByEntity,
-                            channel,
-                            channelCanOwnRelations,
-                            null));
-        }
-
-        List<PublicationItem> items = drafted.stream()
-                .map(item -> {
-                    if (item.entityType() != EntityType.PRODUCT) {
-                        return item;
-                    }
-                    ResolvedMedia productMedia = resolved.get(item.entityId());
-                    if (productMedia == null) {
-                        return item;
-                    }
-                    Map<String, Object> content = new LinkedHashMap<>(item.content());
-                    content.put("mediaAssetIds", productMedia.mediaAssetIds());
-                    return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
-                })
-                .toList();
-
-        return new MediaPlan(items, resolved, overridesByEntity);
-    }
-
-    private static ResolvedMedia resolveMedia(
-            UUID entityId,
-            Map<UUID, List<MediaOverrideRow>> overridesByEntity,
-            Map<UUID, List<MediaRelationRow>> relationsByEntity,
-            SalesChannel channel,
-            boolean channelCanOwnRelations,
-            @Nullable List<String> published) {
-
-        List<MediaOverrideRow> overrides = overridesByEntity.getOrDefault(entityId, List.of());
-        if (!overrides.isEmpty()) {
-            return new ResolvedMedia(
-                    overrides.stream()
-                            .sorted(Comparator.comparing((MediaOverrideRow row) -> !"PRIMARY".equals(row.role()))
-                                    .thenComparingInt(MediaOverrideRow::sortOrder)
-                                    .thenComparing(MediaOverrideRow::mediaAssetId))
-                            .map(row -> row.mediaAssetId().toString())
-                            .toList(),
-                    MediaSource.CHANNEL_OVERRIDE);
-        }
-
-        List<MediaRelationRow> relations = relationsByEntity.getOrDefault(entityId, List.of());
-        if (channelCanOwnRelations) {
-            List<MediaRelationRow> own = relations.stream()
-                    .filter(relation -> channel.code().equals(relation.channelCode()))
-                    .toList();
-            if (!own.isEmpty()) {
-                return new ResolvedMedia(orderedAssets(own), MediaSource.CHANNEL_RELATION);
-            }
-        }
-
-        boolean namesAnotherChannel =
-                relations.stream().anyMatch(relation -> !UNIVERSAL.equals(relation.channelCode()));
-        if (published != null && !namesAnotherChannel) {
-            return new ResolvedMedia(published, MediaSource.DEFAULT);
-        }
-        return new ResolvedMedia(
-                orderedAssets(relations.stream()
-                        .filter(relation -> UNIVERSAL.equals(relation.channelCode()))
-                        .toList()),
-                MediaSource.DEFAULT);
-    }
-
-    private static List<String> orderedAssets(List<MediaRelationRow> relations) {
-        return relations.stream()
-                .sorted(Comparator.comparingInt(MediaRelationRow::sortOrder)
-                        .thenComparing(MediaRelationRow::mediaAssetId))
-                .map(MediaRelationRow::mediaAssetId)
-                .map(UUID::toString)
-                .distinct()
-                .toList();
-    }
-
-    private record MediaPlan(
-            List<PublicationItem> items,
-            Map<UUID, ResolvedMedia> resolved,
-            Map<UUID, List<MediaOverrideRow>> overridesByEntity) {}
-
     private static List<PublicationItem> itemsOf(List<PublicationItem> items, EntityType type) {
         return items.stream().filter(item -> item.entityType() == type).toList();
     }
@@ -470,12 +327,11 @@ public class ChannelPreviewService {
      * an aggregator's.
      */
     private List<ValidationFinding> projectionFindings(
-            UUID tenantId,
             SalesChannel channel,
             boolean enabledHere,
             ChannelProjection projection,
-            CatalogValidator.Snapshot snapshot,
-            MediaPlan mediaPlan) {
+            List<MenuComboGroup> comboGroups,
+            CatalogValidator.Snapshot snapshot) {
 
         List<ValidationFinding> findings = new ArrayList<>();
 
@@ -544,24 +400,90 @@ public class ChannelPreviewService {
                         }
                     }
                 }
+                findings.addAll(optionPriceFindings(channel, projection));
+                findings.addAll(componentPriceFindings(channel, projection, comboGroups, snapshot));
             }
         }
 
-        // The universal validator checks the assets a product is attached to; an
-        // override row is not one of them, so a channel image that is still
-        // uploading or was withdrawn is caught here.
-        Map<UUID, Boolean> displayable = new HashMap<>();
-        for (List<MediaOverrideRow> rows : mediaPlan.overridesByEntity().values()) {
-            for (MediaOverrideRow row : rows) {
-                boolean shown = displayable.computeIfAbsent(
-                        row.mediaAssetId(), asset -> media.allDisplayable(tenantId, Set.of(new MediaAssetId(asset))));
-                if (!shown) {
+        return findings;
+    }
+
+    /**
+     * A modifier option the brand prices but this channel's price plane does not.
+     *
+     * <p>Only options a served product offers are asked about, and only those priced somewhere in
+     * the brand: an option priced nowhere is a modifier nobody has priced yet, which no other rule
+     * of the catalog reports, and saying so for every channel at once would drown the finding that
+     * names a real gap on this one. The same posture as {@code CHANNEL_PRICE_MISSING} for a
+     * variant, whose all-channels twin is {@code VARIANT_HAS_NO_ACTIVE_PRICE}.
+     */
+    private List<ValidationFinding> optionPriceFindings(SalesChannel channel, ChannelProjection projection) {
+        Set<UUID> offered = new java.util.HashSet<>();
+        for (MenuProduct product : projection.products()) {
+            offered.addAll(product.modifierGroupIds());
+        }
+        Map<UUID, MenuModifierOption> unpriced = new LinkedHashMap<>();
+        for (MenuModifierGroup group : projection.modifierGroups()) {
+            if (!offered.contains(group.modifierGroupId())) {
+                continue;
+            }
+            for (MenuModifierOption option : group.options()) {
+                if (option.amountMinor() == null) {
+                    unpriced.put(option.optionId(), option);
+                }
+            }
+        }
+        if (unpriced.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> pricedElsewhere =
+                pricing.pricedModifierOptions(projection.tenantId(), projection.brandId(), unpriced.keySet());
+        List<ValidationFinding> findings = new ArrayList<>();
+        for (MenuModifierOption option : unpriced.values()) {
+            if (pricedElsewhere.contains(option.optionId())) {
+                findings.add(ValidationFinding.blocker(
+                        ChannelFindings.CHANNEL_PRICE_MISSING,
+                        EntityType.MODIFIER_OPTION,
+                        option.optionId(),
+                        option.code(),
+                        "This option has no price on the price plane channel %s resolves to"
+                                .formatted(channel.code())));
+            }
+        }
+        return findings;
+    }
+
+    /**
+     * A combo component the brand prices but this channel's price plane does not -- the same gap as
+     * a variant's or an option's, on a fourth priceable type. A combo whose container this branch
+     * does not serve is not asked about: its components are not on this menu.
+     */
+    private static List<ValidationFinding> componentPriceFindings(
+            SalesChannel channel,
+            ChannelProjection projection,
+            List<MenuComboGroup> comboGroups,
+            CatalogValidator.Snapshot snapshot) {
+        Set<UUID> served = new java.util.HashSet<>();
+        for (MenuProduct product : projection.products()) {
+            for (MenuVariant variant : product.variants()) {
+                served.add(variant.variantId());
+            }
+        }
+        List<ValidationFinding> findings = new ArrayList<>();
+        for (MenuComboGroup group : comboGroups) {
+            if (!served.contains(group.containerVariantId())) {
+                continue;
+            }
+            for (MenuComboComponent component : group.components()) {
+                if (component.amountMinor() == null
+                        && snapshot.composite().pricedComponentIds().contains(component.componentId())) {
                     findings.add(ValidationFinding.blocker(
-                            ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE,
-                            row.entityType(),
-                            row.entityId(),
-                            null,
-                            "A channel image for this item is not verified and ready to show"));
+                            ChannelFindings.CHANNEL_PRICE_MISSING,
+                            EntityType.COMBO_COMPONENT,
+                            component.componentId(),
+                            group.code(),
+                            "This combo component has no price on the price plane channel %s resolves to"
+                                    .formatted(channel.code())));
                 }
             }
         }
@@ -615,13 +537,15 @@ public class ChannelPreviewService {
      * finding to the editor that fixes it: a variant has no page of its own, and
      * nothing else resolves "which product owns this variant".
      */
-    private static @Nullable UUID ownerProduct(ValidationFinding finding, Map<UUID, UUID> productOfVariant) {
+    private static @Nullable UUID ownerProduct(
+            ValidationFinding finding, Map<UUID, UUID> productOfVariant, Map<UUID, UUID> productOfComponent) {
         if (finding.entityId() == null || finding.entityType() == null) {
             return null;
         }
         return switch (finding.entityType()) {
             case PRODUCT -> finding.entityId();
             case VARIANT -> productOfVariant.get(finding.entityId());
+            case COMBO_COMPONENT -> productOfComponent.get(finding.entityId());
             default -> null;
         };
     }
@@ -649,8 +573,8 @@ public class ChannelPreviewService {
     /**
      * One channel at one branch, as the dry run leaves it.
      *
-     * @param publishable what {@code GET .../validation} would say and what {@code publish} would
-     *     decide: no universal blocker
+     * @param publishable what {@code publish} would decide for this channel: no blocker in {@code GET
+     *     .../validation}'s report and none on the channel's own images
      * @param channelReady {@code publishable} <em>and</em> no blocker from the projection or the
      *     marketplace ruleset — the verdict a console shows for this channel
      * @param products one page, ordered by product id
@@ -688,8 +612,14 @@ public class ChannelPreviewService {
         MARKETPLACE
     }
 
-    /** A branch a channel sells at, and the marketplace binding that covers it, if any. */
-    public record PreviewTarget(UUID locationId, @Nullable MarketplaceBindingRow binding) {}
+    /**
+     * A branch a channel sells at, and the marketplace binding that covers it, if any.
+     *
+     * @param locationName the branch's own name: the one thing that tells two targets apart when a
+     *     brand-wide binding covers them both
+     */
+    public record PreviewTarget(
+            UUID locationId, String locationName, @Nullable MarketplaceBindingRow binding) {}
 
     /** The catalog, channel, branch or binding named is not this tenant's or brand's. */
     public static final class UnknownPreviewTargetException extends RuntimeException {

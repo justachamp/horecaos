@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
+import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
@@ -24,19 +25,23 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.ChannelFindings;
 import uz.horecaos.platform.catalog.domain.CompositeProducts;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
+import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
 
 /**
  * Assembles a whole catalog in one read, then turns it into publication items
@@ -274,6 +279,82 @@ public class CatalogSnapshotLoader {
         return new CatalogValidator.FiscalContext(
                 byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes);
     }
+
+    /**
+     * The items one channel is published, which are the draft's items with the images
+     * that channel shows (ADR 0138 step 4, {@link ChannelMediaLayers}), and what stops
+     * them being published.
+     *
+     * <p>This is what {@code publish} writes and what the channel preview draws, so
+     * the two cannot disagree about a picture or about whether it may be shown. The
+     * channel-agnostic overload above is the draft as the snapshot lists it; a
+     * channel's items differ from it where an image belongs to a channel -- an
+     * override this channel carries, a relation naming this channel, and the absence
+     * of a relation naming another one.
+     */
+    public ChannelItems toPublicationItems(
+            CatalogValidator.Snapshot snapshot, UUID tenantId, UUID brandId, SalesChannel channel) {
+        ChannelMediaLayers.Plan plan = ChannelMediaLayers.plan(
+                channel,
+                snapshot,
+                toPublicationItems(snapshot),
+                store.mediaRelations(tenantId, brandId),
+                store.channelMediaOverrides(tenantId, brandId, channel.id()));
+        return new ChannelItems(
+                plan.items(),
+                plan.resolved(),
+                plan.overridesByEntity(),
+                unavailableOverrideImages(tenantId, plan.overridesByEntity()));
+    }
+
+    /**
+     * An override row is not a relation the universal validator walks, so a channel image
+     * that is still uploading or was withdrawn after it was chosen is caught here -- a menu
+     * pushed to an aggregator with a broken picture is the failure ADR 0138 exists to catch
+     * earlier.
+     */
+    private List<ValidationFinding> unavailableOverrideImages(
+            UUID tenantId, Map<UUID, List<MediaOverrideRow>> overridesByEntity) {
+        Map<UUID, Boolean> displayable = new java.util.HashMap<>();
+        List<ValidationFinding> findings = new ArrayList<>();
+        overridesByEntity.values().stream()
+                .flatMap(List::stream)
+                .sorted(java.util.Comparator.comparing(
+                                (MediaOverrideRow row) -> row.entityType().name())
+                        .thenComparing(MediaOverrideRow::entityId)
+                        .thenComparing(MediaOverrideRow::mediaAssetId))
+                .forEach(row -> {
+                    boolean shown = displayable.computeIfAbsent(
+                            row.mediaAssetId(),
+                            asset -> media.allDisplayable(tenantId, Set.of(new MediaAssetId(asset))));
+                    if (!shown) {
+                        findings.add(ValidationFinding.blocker(
+                                ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE,
+                                row.entityType(),
+                                row.entityId(),
+                                null,
+                                "A channel image for this item is not verified and ready to show"));
+                    }
+                });
+        return List.copyOf(findings);
+    }
+
+    /**
+     * A channel's publication items and the images they carry.
+     *
+     * @param items the draft's items with every product's {@code mediaAssetIds} as this channel
+     *     shows them
+     * @param media the images of every product, variant and category on this channel and the layer
+     *     each came from; only a product's reach a published menu
+     * @param overrides the override rows this channel carries, by entity
+     * @param findings blockers on the channel's own images, which {@code publish} adds to the
+     *     catalog's report and the preview reports beside it
+     */
+    public record ChannelItems(
+            List<PublicationItem> items,
+            Map<UUID, ResolvedMedia> media,
+            Map<UUID, List<MediaOverrideRow>> overrides,
+            List<ValidationFinding> findings) {}
 
     /**
      * Flattens a snapshot into the rows the storefront will read.

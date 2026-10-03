@@ -50,7 +50,7 @@
               [value]="target.locationId"
               [selected]="target.locationId === selectedLocationId()"
             >
-              {{ target.binding?.displayName ?? target.locationId }}
+              {{ branchLabel(target) }}
             </option>
           }
         </select>

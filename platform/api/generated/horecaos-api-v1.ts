@@ -1548,6 +1548,7 @@ export interface ChannelMediaOverrideView {
 
 export interface ChannelMediaOverridesResponse {
   images?: Array<ChannelMediaOverrideView>;
+  version?: number;
 }
 
 export interface ChannelOption {
@@ -3238,6 +3239,7 @@ export interface DraftModuleRequest {
 }
 
 export interface DraftPreviewResponse {
+  channelContentHashes?: { [key: string]: string };
   contentHash?: string;
   itemCount?: number;
 }
@@ -6687,6 +6689,7 @@ export interface PreviewPricing {
 export interface PreviewTargetView {
   binding?: PreviewBindingView;
   locationId?: string;
+  locationName?: string;
 }
 
 export interface PriceBookMatrixRowResponse {

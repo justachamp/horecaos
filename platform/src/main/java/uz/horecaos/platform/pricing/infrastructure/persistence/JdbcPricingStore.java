@@ -148,6 +148,14 @@ public class JdbcPricingStore {
         return pricedAnywhere(tenantId, brandId, "COMBO_COMPONENT", componentIds, at);
     }
 
+    /**
+     * Which of these modifier options have an active price in any active price book of the
+     * brand -- {@link #pricedVariants}' question, asked of the third priceable type.
+     */
+    public Set<UUID> pricedModifierOptions(UUID tenantId, UUID brandId, Set<UUID> optionIds, Instant at) {
+        return pricedAnywhere(tenantId, brandId, "MODIFIER_OPTION", optionIds, at);
+    }
+
     private Set<UUID> pricedAnywhere(UUID tenantId, UUID brandId, String type, Set<UUID> ids, Instant at) {
         if (ids.isEmpty()) {
             return Set.of();

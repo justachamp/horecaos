@@ -508,10 +508,18 @@ export interface PublicationResult {
   readonly validation: ValidationReport;
 }
 
-/** `DraftPreviewResponse` — the content hash the draft would publish as right now, without writing anything. */
+/**
+ * `DraftPreviewResponse` — the content hash the draft would publish as right now, without writing anything.
+ *
+ * `contentHash` is the channel-agnostic draft. A channel's own live menu is compared with
+ * `channelContentHashes[code]` instead, because an image that belongs to a channel is
+ * published to that channel alone (ADR 0138 step 4) and so the draft hashes differently per
+ * channel; `contentHash` stands in for a channel that has no live menu to compare with.
+ */
 export interface DraftPreview {
   readonly contentHash: string;
   readonly itemCount: number;
+  readonly channelContentHashes?: Readonly<Record<string, string>>;
 }
 
 // ------------------------------------------------------------ pricing.web.PriceAuthoringController

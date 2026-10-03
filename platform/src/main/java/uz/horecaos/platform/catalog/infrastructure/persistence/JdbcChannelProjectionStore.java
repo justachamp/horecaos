@@ -57,6 +57,31 @@ public class JdbcChannelProjectionStore {
                 .list();
     }
 
+    /**
+     * The same branches as {@link #activeLocationsOfChannel}, each with the name the tenant gave it --
+     * what a console labels a branch picker with. A binding's name cannot: a brand-wide binding gives
+     * every branch the same one.
+     */
+    public List<BranchRow> activeBranchesOfChannel(UUID tenantId, UUID brandId, UUID channelId) {
+        return jdbc.sql("""
+                SELECT scl.location_id, l.display_name
+                FROM tenant.sales_channel_locations scl
+                JOIN tenant.locations l ON l.tenant_id = scl.tenant_id AND l.id = scl.location_id
+                WHERE scl.tenant_id = :tenantId AND scl.channel_id = :channelId
+                  AND scl.status = 'ACTIVE' AND l.brand_id = :brandId
+                ORDER BY scl.location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channelId", channelId)
+                .query((row, number) ->
+                        new BranchRow(row.getObject("location_id", UUID.class), row.getString("display_name")))
+                .list();
+    }
+
+    /** A branch a channel sells at and its name. */
+    public record BranchRow(UUID locationId, String displayName) {}
+
     public boolean locationBelongsToBrand(UUID tenantId, UUID brandId, UUID locationId) {
         return jdbc.sql("""
                 SELECT EXISTS (
@@ -197,6 +222,27 @@ public class JdbcChannelProjectionStore {
                 .param("entityType", entityType.name())
                 .param("entityId", entityId)
                 .query(JdbcChannelProjectionStore::mapOverride)
+                .list();
+    }
+
+    /**
+     * Makes two writers of one entity's override set on one channel run one after the other, for
+     * the length of the surrounding transaction ({@code pg_advisory_xact_lock}: released at commit
+     * or rollback).
+     *
+     * <p>A replace is a delete and some inserts. Two writers of a set that does not exist yet both
+     * delete nothing and both insert, and the loser is refused by {@code
+     * ux_channel_media_override_primary} only after the winner commits -- as a constraint violation
+     * the caller cannot tell from a fault. Under this lock the second writer reads the set the first
+     * left, so its expected version is wrong and it is told so.
+     */
+    public void lockMediaOverrideSet(UUID tenantId, UUID channelId, EntityType entityType, UUID entityId) {
+        String lockKey =
+                "channel_media_override|%s|%s|%s|%s".formatted(tenantId, channelId, entityType.name(), entityId);
+        // The row mapper never reads the void column; consuming the one row is what waits for the lock.
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))")
+                .param("lockKey", lockKey)
+                .query((row, number) -> Boolean.TRUE)
                 .list();
     }
 

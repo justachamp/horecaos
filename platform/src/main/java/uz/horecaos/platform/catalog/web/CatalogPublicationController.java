@@ -8,6 +8,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -89,7 +90,8 @@ public class CatalogPublicationController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID catalogId) {
         try {
             var preview = publication.previewDraft(tenantId, brandId, catalogId);
-            return ResponseEntity.ok(new DraftPreviewResponse(preview.contentHash(), preview.itemCount()));
+            return ResponseEntity.ok(new DraftPreviewResponse(
+                    preview.contentHash(), preview.itemCount(), preview.channelContentHashes()));
         } catch (IllegalArgumentException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         }
@@ -163,8 +165,10 @@ public class CatalogPublicationController {
     @Operation(
             summary = "The branches a channel sells at, with the marketplace binding at each (ADR 0138)",
             description = "What a console offers to preview: one entry per branch the channel is active "
-                    + "at, carrying the binding that covers it (and the ruleset it names) when the "
-                    + "channel is backed by a marketplace installation.")
+                    + "at, carrying the branch's own name and the binding that covers it (and the "
+                    + "ruleset it names) when the channel is backed by a marketplace installation. The "
+                    + "binding's name is the installation's, which a brand-wide binding gives to every "
+                    + "branch alike; the branch's name is what tells the entries apart.")
     public List<ChannelPreviewResponse.PreviewTargetView> previewTargets(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID channelId) {
         try {
@@ -317,5 +321,11 @@ public class CatalogPublicationController {
     public record PublicationResponse(
             UUID publicationId, PublicationStatus status, String contentHash, ValidationResponse validation) {}
 
-    public record DraftPreviewResponse(String contentHash, int itemCount) {}
+    /**
+     * @param contentHash the draft, channel-agnostic
+     * @param channelContentHashes the hash the draft would publish as on each channel that has a live
+     *     menu, by channel code: compare a channel's live hash with its entry, falling back to
+     *     {@code contentHash} for a channel without one
+     */
+    public record DraftPreviewResponse(String contentHash, int itemCount, Map<String, String> channelContentHashes) {}
 }

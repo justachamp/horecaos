@@ -249,11 +249,13 @@ public record ChannelPreviewResponse(
 
     /** A branch a channel sells at, and the marketplace binding that covers it. */
     public record PreviewTargetView(
-            UUID locationId, @Nullable PreviewBindingView binding) {
+            UUID locationId, String locationName, @Nullable PreviewBindingView binding) {
 
         static PreviewTargetView of(PreviewTarget target) {
             return new PreviewTargetView(
-                    target.locationId(), target.binding() == null ? null : PreviewBindingView.of(target.binding()));
+                    target.locationId(),
+                    target.locationName(),
+                    target.binding() == null ? null : PreviewBindingView.of(target.binding()));
         }
     }
 }

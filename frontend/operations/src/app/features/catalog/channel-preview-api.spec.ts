@@ -45,17 +45,24 @@ describe('ChannelPreviewApi', () => {
     request.flush({ items: [], nextCursor: null });
   });
 
-  it('replaces a product’s channel photos as the whole set, with an idempotency key', () => {
+  it('replaces a product’s channel photos as the whole set, under the version it read, with an idempotency key', () => {
     let result: unknown;
     api
-      .replaceMediaOverride(SCOPE, 'ch1', 'PRODUCT', 'p1', [
-        { mediaAssetId: 'a1', role: 'PRIMARY', sortOrder: 0 },
-      ])
+      .replaceMediaOverride(
+        SCOPE,
+        'ch1',
+        'PRODUCT',
+        'p1',
+        [{ mediaAssetId: 'a1', role: 'PRIMARY', sortOrder: 0 }],
+        3,
+      )
       .subscribe((value) => (result = value));
 
     const request = http.expectOne(`${BASE}/channels/ch1/media-overrides/PRODUCT/p1`);
     expect(request.request.method).toBe('PUT');
     expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
+    // ADR 0031: a save of a versioned set names the version it was shown, or the server refuses it.
+    expect(request.request.headers.get('If-Match')).toBe('W/"3"');
     expect(request.request.body).toEqual({
       images: [{ mediaAssetId: 'a1', role: 'PRIMARY', sortOrder: 0 }],
     });
@@ -72,6 +79,29 @@ describe('ChannelPreviewApi', () => {
       ],
     });
     expect(result).toHaveLength(1);
+  });
+
+  it('reads one item’s channel photos with the version a save has to quote', () => {
+    let set: unknown;
+    api.mediaOverrideSet(SCOPE, 'ch1', 'PRODUCT', 'p1').subscribe((value) => (set = value));
+
+    const request = http.expectOne((r) => r.url === `${BASE}/channels/ch1/media-overrides`);
+    expect(request.request.params.get('entityType')).toBe('PRODUCT');
+    expect(request.request.params.get('entityId')).toBe('p1');
+    request.flush({ images: [], version: 0 }, { headers: { ETag: 'W/"0"' } });
+
+    expect(set).toEqual({ images: [], version: 0 });
+  });
+
+  it('takes the version from the ETag, which is where the server states it', () => {
+    let set: unknown;
+    api.mediaOverrideSet(SCOPE, 'ch1', 'PRODUCT', 'p1').subscribe((value) => (set = value));
+
+    http
+      .expectOne((r) => r.url === `${BASE}/channels/ch1/media-overrides`)
+      .flush({ images: [] }, { headers: { ETag: 'W/"7"' } });
+
+    expect(set).toEqual({ images: [], version: 7 });
   });
 
   it('lists the branches a channel sells at', () => {

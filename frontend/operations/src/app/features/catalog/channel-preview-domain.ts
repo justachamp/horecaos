@@ -119,9 +119,15 @@ export interface ChannelPreviewPageBody {
   readonly nextCursor?: string | null;
 }
 
-/** `ChannelPreviewResponse.TargetView` — a branch a channel sells at, and the marketplace binding that covers it. */
+/**
+ * `ChannelPreviewResponse.PreviewTargetView` — a branch a channel sells at, and the marketplace binding that covers it.
+ *
+ * `locationName` is the branch's own name; `binding.displayName` is the marketplace installation's, which a
+ * brand-wide binding gives to every branch alike, so it can only ever be the second half of a label.
+ */
 export interface PreviewTarget {
   readonly locationId: string;
+  readonly locationName?: string | null;
   readonly binding?: PreviewBinding | null;
 }
 
@@ -132,6 +138,15 @@ export interface ChannelMediaOverride {
   readonly mediaAssetId: string;
   readonly role: 'PRIMARY' | 'GALLERY';
   readonly sortOrder: number;
+  readonly version: number;
+}
+
+/**
+ * `ChannelMediaOverridesResponse` for one item: the photos a channel shows for it, and the version of
+ * that set — `0` when it has none — which is what a save quotes in `If-Match`.
+ */
+export interface ChannelMediaOverrideSet {
+  readonly images: readonly ChannelMediaOverride[];
   readonly version: number;
 }
 

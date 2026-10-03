@@ -10,7 +10,8 @@ import {
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../core/api/problem-details';
+import { BrandScope } from '../../core/api/catalog-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
@@ -119,6 +120,8 @@ export class ChannelPreviewPage implements OnInit {
   protected readonly editingProductId = signal<string | null>(null);
   protected readonly editorChoices = signal<readonly ChannelImageChoice[]>([]);
   protected readonly editorSaving = signal(false);
+  /** The version of the open product's channel photos when the editor read them: what a save quotes. */
+  private readonly editorVersion = signal(0);
   protected readonly editorError = signal<string | null>(null);
 
   protected readonly selectedChannel = computed<ChannelView | null>(
@@ -435,6 +438,22 @@ export class ChannelPreviewPage implements OnInit {
     }
   }
 
+  /**
+   * What the branch picker offers for one branch: the branch's own name, then the marketplace
+   * binding that covers it.
+   *
+   * The binding's name cannot lead, let alone stand alone: a brand-wide binding covers every
+   * branch, so each would read the same, and a channel with no binding (the storefront, a
+   * kiosk) has none to show. The id is the last resort for a server that sent no name — a
+   * label nobody can read, but one that still tells two branches apart.
+   */
+  protected branchLabel(target: PreviewTarget): string {
+    const parts = [target.locationName, target.binding?.displayName].filter(
+      (part): part is string => !!part && part.trim().length > 0,
+    );
+    return parts.length > 0 ? parts.join(' · ') : target.locationId;
+  }
+
   // ------------------------------------------------------------ channel photo
 
   protected async openEditor(product: PreviewProduct): Promise<void> {
@@ -442,10 +461,15 @@ export class ChannelPreviewPage implements OnInit {
     if (!scope) {
       return;
     }
+    const channelId = this.selectedChannelId();
+    if (!channelId) {
+      return;
+    }
     this.editingProductId.set(product.productId);
     this.editorError.set(null);
     this.editorChoices.set([]);
     try {
+      await this.readEditorVersion(scope, channelId, product);
       const detail = await firstValueFrom(this.catalog.productDetail(scope, product.productId));
       // The product's own, every-channel photos: the pool a channel picks from.
       const own = detail.media.filter((relation) => relation.channelCode === 'ALL');
@@ -457,6 +481,21 @@ export class ChannelPreviewPage implements OnInit {
     } catch (error) {
       this.editorError.set(this.describe(error));
     }
+  }
+
+  /**
+   * The version of the product's channel photos as they are now. Read when the editor opens, because the
+   * only version a save may quote is the one that came with the photos the operator was shown.
+   */
+  private async readEditorVersion(
+    scope: BrandScope,
+    channelId: string,
+    product: PreviewProduct,
+  ): Promise<void> {
+    const current = await firstValueFrom(
+      this.api.mediaOverrideSet(scope, channelId, 'PRODUCT', product.productId),
+    );
+    this.editorVersion.set(current.version);
   }
 
   protected closeEditor(): void {
@@ -499,12 +538,25 @@ export class ChannelPreviewPage implements OnInit {
     this.editorError.set(null);
     try {
       await firstValueFrom(
-        this.api.replaceMediaOverride(scope, channelId, 'PRODUCT', product.productId, images),
+        this.api.replaceMediaOverride(
+          scope,
+          channelId,
+          'PRODUCT',
+          product.productId,
+          images,
+          this.editorVersion(),
+        ),
       );
       this.editingProductId.set(null);
       await this.loadPreview();
     } catch (error) {
       this.editorError.set(this.describe(error));
+      if (error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION) {
+        // Somebody else saved this product's photos for the channel first. Say so, show what they
+        // saved, and take the version it now has: the next Save is then a choice made knowing it.
+        await this.loadPreview();
+        await this.readEditorVersion(scope, channelId, product).catch(() => undefined);
+      }
     } finally {
       this.editorSaving.set(false);
     }

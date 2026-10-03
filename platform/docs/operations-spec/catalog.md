@@ -316,9 +316,11 @@ shows the `media.assets.status` — an asset that is not `AVAILABLE` is a
 publication blocker (`MEDIA_NOT_AVAILABLE`) and the tile says so on its face.
 
 **Per-aggregator image override** — Delever's second-image-assigned-to-Wolt
-behaviour — is **not built; ADR 0010** (the matrix names per-channel image
-variants and a content hash as the two missing refinements). The tab reserves the
-slot and states it.
+behaviour — is **built by ADR 0138**, not on this tab: a channel's own photo for a
+product is chosen from the channel preview (see *Aggregator preview and
+pre-publication check*) and is published with that channel alone. This tab edits
+the product's every-channel photos. The content hash per asset (ADR 0010) is still
+not built.
 
 ### Tab 5 — Фискальные данные
 
@@ -1097,20 +1099,34 @@ downloadable deficiency report before pushing to Yandex Eats or Uzum Tezkor).
 `/catalog/preview?channel=…`, which asks `GET …/catalogs/{id}/channels/{id}/preview`
 for one branch of that channel (`catalog.read`; a channel that sells at exactly one
 branch needs no branch named, otherwise the branch picker is fed by
-`GET …/channels/{id}/preview-targets`). The answer is a dry run of publication:
+`GET …/channels/{id}/preview-targets`, which names each branch — the picker reads
+"Chilonzor · Wolt", the branch first and the marketplace binding beside it, because a
+brand-wide binding gives every branch the same name). The answer is a dry run of publication:
 the draft is snapshotted and validated as `publish` does it, then assembled by the
 same code a customer's menu read goes through — the branch's offerings or bound
 named menu, the channel's exclusions, the channel's price plane (no amount at all
 when the aggregator sets the price), and the channel's photos over the product's
-own — so the preview cannot disagree with what that channel would be served. It is
+own. The photos are chosen by `ChannelMediaLayers` — the channel's override, else a
+relation that names the channel, else the product's own every-channel photos — and
+`publish` calls the same function for the channel it publishes to, so a product's
+photo in the preview is the photo that channel's menu serves once the draft is
+published (a test publishes and compares, with an override and a relation that names
+another channel in the fixture). A photo that names another channel is not published
+to this one. Only a product's photos are carried by a published menu: a variant's or
+a category's channel photo is stored and drawn by the preview, and no menu serves it
+yet. It is
 drawn in the `PhoneFrame` family by channel type (aggregator card, kiosk, Telegram
 Mini App), beside the findings: the catalog's own, the channel's (`CHANNEL_*`:
-archived, not enabled at the branch, an empty menu, a variant with no price on this
-channel's plane, an unverified channel photo) and a marketplace ruleset's
-(`MARKETPLACE_*`). Every finding that names a product, or a variant of one, links to
-the editor. A product's card offers **Фото для канала**, which edits the channel's
+archived, not enabled at the branch, an empty menu, a variant, a modifier option or a
+combo component the brand prices but this channel's plane does not, an unverified
+channel photo) and a marketplace ruleset's (`MARKETPLACE_*`). Every finding that names
+a product, a variant of one, or a combo component of one links to the editor. A
+product's card offers **Фото для канала**, which edits the channel's
 image override (`PUT …/channels/{id}/media-overrides/{entityType}/{entityId}`,
-`catalog.author`).
+`catalog.author`, under `If-Match`: the set's version the editor read when it opened, `0`
+when the product has none; a second editor who saved first makes this save a `409
+STALE_VERSION`, and the editor says so, shows what was saved and quotes the new version
+on the next Save).
 
 **Still not built, and said so on screen.** The preview shows what HorecaOS would
 send, in HorecaOS's own frame — never a marketplace's own app chrome, which no

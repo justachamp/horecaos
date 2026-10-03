@@ -28,6 +28,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -44,11 +45,14 @@ import tools.jackson.databind.node.ObjectNode;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.application.ChannelProjection;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
 import uz.horecaos.platform.catalog.application.MarketplaceRuleset;
 import uz.horecaos.platform.catalog.application.MarketplaceRulesets;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
@@ -152,6 +156,9 @@ class ChannelPreviewEndpointTests {
 
     @Autowired
     private CatalogPublicationService publication;
+
+    @Autowired
+    private CompositeProductAuthoringService composites;
 
     @Autowired
     private JdbcCatalogStore store;
@@ -455,6 +462,263 @@ class ChannelPreviewEndpointTests {
                 .containsExactly(universal.toString());
     }
 
+    @Test
+    @DisplayName(
+            "what publishing serves as a channel's images is what its preview showed: a relation naming another channel is never published here")
+    void publishedImagesAreThePreviewedImages() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID universal = w.asset();
+        UUID uzumCrop = w.asset();
+        UUID onlyUzum = w.asset();
+        // lagman: its own image and a crop that is Uzum's. plov: nothing of its own, only a crop that is
+        // Uzum's. samsa: its own image alone.
+        w.attachDefaultImage(w.lagman.productId(), 0, universal);
+        w.attachChannelRelation(w.lagman.productId(), 1, uzumCrop, "UZUM");
+        w.attachChannelRelation(w.plov.productId(), 0, onlyUzum, "UZUM");
+        w.attachDefaultImage(w.samsa.productId(), 0, universal);
+
+        Map<String, JsonNode> previews = new java.util.LinkedHashMap<>();
+        Map<String, JsonNode> lives = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, UUID> channel :
+                Map.of("STOREFRONT", w.storefront, "UZUM", w.uzum).entrySet()) {
+            previews.put(channel.getKey(), previewAll(channel.getValue(), "locationId", w.l1.toString()));
+            assertThat(publication
+                            .publish(w.tenant, w.brand, w.catalogId, channel.getKey(), null)
+                            .status())
+                    .isEqualTo(PublicationStatus.PUBLISHED);
+            lives.put(channel.getKey(), liveMenu(channel.getKey()));
+        }
+
+        for (String channel : previews.keySet()) {
+            for (ProductRef product : List.of(w.lagman, w.plov, w.samsa)) {
+                assertThat(imagesOf(at(lives, channel), product))
+                        .as("%s: the images a customer is served for %s are the ones its preview drew"
+                                .formatted(channel, product.productId()))
+                        .isEqualTo(imagesOf(at(previews, channel), product));
+            }
+        }
+
+        // Pinned, so the loop above is not satisfied by two lists that are wrong in the same way.
+        assertThat(imagesOf(at(lives, "STOREFRONT"), w.lagman))
+                .as("the storefront does not wear Uzum's crop")
+                .containsExactly(universal.toString());
+        assertThat(imagesOf(at(lives, "STOREFRONT"), w.plov))
+                .as("a dish whose only picture is Uzum's has none on the storefront")
+                .isEmpty();
+        assertThat(imagesOf(at(lives, "STOREFRONT"), w.samsa)).containsExactly(universal.toString());
+        assertThat(imagesOf(at(lives, "UZUM"), w.lagman))
+                .as("Uzum is served its own crop instead of the dish's picture")
+                .containsExactly(uzumCrop.toString());
+        assertThat(imagesOf(at(lives, "UZUM"), w.plov)).containsExactly(onlyUzum.toString());
+        assertThat(imagesOf(at(lives, "UZUM"), w.samsa)).containsExactly(universal.toString());
+    }
+
+    @Test
+    @DisplayName(
+            "the draft is compared with each channel's own live hash, because an image that belongs to a channel is published to that channel alone")
+    void draftIsComparedWithTheChannelsOwnHash() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.attachDefaultImage(w.lagman.productId(), 0, w.asset());
+        w.attachChannelRelation(w.lagman.productId(), 1, w.asset(), "UZUM");
+
+        String storefrontHash = publication
+                .publish(w.tenant, w.brand, w.catalogId, "STOREFRONT", null)
+                .contentHash();
+        String uzumHash = publication
+                .publish(w.tenant, w.brand, w.catalogId, "UZUM", null)
+                .contentHash();
+        assertThat(uzumHash)
+                .as("the fixture is not vacuous: the two channels publish different menus")
+                .isNotEqualTo(storefrontHash);
+
+        CatalogPublicationService.DraftPreview draft = publication.previewDraft(w.tenant, w.brand, w.catalogId);
+        assertThat(draft.contentHashFor("STOREFRONT"))
+                .as("nothing was edited since: each channel's card says the draft matches what is live")
+                .isEqualTo(storefrontHash);
+        assertThat(draft.contentHashFor("UZUM")).isEqualTo(uzumHash);
+
+        JsonNode wire = json(mvc.perform(
+                get(base() + "/catalogs/" + w.catalogId + "/draft-preview").with(owner())));
+        assertThat(wire.path("channelContentHashes").path("UZUM").asText()).isEqualTo(uzumHash);
+        assertThat(wire.path("channelContentHashes").path("STOREFRONT").asText())
+                .isEqualTo(storefrontHash);
+        assertThat(wire.path("contentHash").asText())
+                .as("the channel-agnostic draft is still there for a channel with no live menu")
+                .isNotBlank();
+    }
+
+    @Test
+    @DisplayName(
+            "a channel's image override is published with that channel and with no other, so a customer is served the picture its preview drew")
+    void anOverrideIsPublishedToItsChannel() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID universal = w.asset();
+        UUID override = w.asset();
+        w.attachDefaultImage(w.lagman.productId(), 0, universal);
+        w.attachDefaultImage(w.plov.productId(), 0, universal);
+
+        MvcResult written = mvc.perform(overridePut(w.uzum, "PRODUCT", w.lagman.productId(), """
+                        {"images":[{"mediaAssetId":"%s","role":"PRIMARY","sortOrder":0}]}
+                        """.formatted(override)))
+                .andReturn();
+        assertThat(written.getResponse().getStatus()).as(body(written)).isEqualTo(200);
+
+        JsonNode uzumPreview = previewAll(w.uzum, "locationId", w.l1.toString());
+        assertThat(imagesOf(uzumPreview, w.lagman)).containsExactly(override.toString());
+        for (String channel : List.of("UZUM", "STOREFRONT")) {
+            assertThat(publication
+                            .publish(w.tenant, w.brand, w.catalogId, channel, null)
+                            .status())
+                    .isEqualTo(PublicationStatus.PUBLISHED);
+        }
+
+        JsonNode uzumLive = liveMenu("UZUM");
+        JsonNode storefrontLive = liveMenu("STOREFRONT");
+        assertThat(imagesOf(uzumLive, w.lagman))
+                .as("Uzum's menu serves the photo the operator set for Uzum")
+                .containsExactly(override.toString())
+                .isEqualTo(imagesOf(uzumPreview, w.lagman));
+        assertThat(productOf(uzumLive, w.lagman).path("imageUrls").get(0).asText())
+                .as("and the URL a customer fetches is built from that asset")
+                .endsWith("/media/" + override);
+        assertThat(imagesOf(uzumLive, w.plov))
+                .as("a dish with no override keeps its own picture")
+                .containsExactly(universal.toString());
+        assertThat(imagesOf(storefrontLive, w.lagman))
+                .as("an override names its channel: the storefront still serves the dish's own picture")
+                .containsExactly(universal.toString());
+
+        // Removing the override and publishing again puts the dish's own picture back.
+        mvc.perform(overridePut(w.uzum, "PRODUCT", w.lagman.productId(), "{\"images\":[]}"))
+                .andReturn();
+        publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+        assertThat(imagesOf(liveMenu("UZUM"), w.lagman)).containsExactly(universal.toString());
+    }
+
+    @Test
+    @DisplayName(
+            "publishing refuses a channel whose image was withdrawn after it was chosen, rather than serving a broken picture")
+    void publishRefusesAWithdrawnChannelImage() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID pending = w.asset();
+        jdbc.sql("UPDATE media.assets SET status = 'UPLOADED' WHERE asset_id = :id")
+                .param("id", pending)
+                .update();
+        // Written past the service (which would refuse it) to model an asset withdrawn after it was attached.
+        jdbc.sql("""
+                INSERT INTO catalog.channel_media_overrides (
+                    tenant_id, brand_id, channel_id, entity_type, entity_id, role, media_asset_id, sort_order)
+                VALUES (:t, :b, :c, 'PRODUCT', :p, 'PRIMARY', :asset, 0)
+                """)
+                .param("t", w.tenant)
+                .param("b", w.brand)
+                .param("c", w.uzum)
+                .param("p", w.lagman.productId())
+                .param("asset", pending)
+                .update();
+
+        CatalogPublicationService.PublicationResult uzum =
+                publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+
+        assertThat(uzum.status()).isEqualTo(PublicationStatus.REJECTED);
+        assertThat(uzum.report().blockers())
+                .as("the refusal names the item whose channel image is gone")
+                .anySatisfy(finding -> {
+                    assertThat(finding.code()).isEqualTo(ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE);
+                    assertThat(finding.entityId()).isEqualTo(w.lagman.productId());
+                });
+        assertThat(publication
+                        .publish(w.tenant, w.brand, w.catalogId, "STOREFRONT", null)
+                        .status())
+                .as("the override names Uzum alone: the storefront is not held up by it")
+                .isEqualTo(PublicationStatus.PUBLISHED);
+
+        assertThat(previewAll(w.uzum, "locationId", w.l1.toString())
+                        .path("publishable")
+                        .asBoolean())
+                .as("the preview says what publish would decide")
+                .isFalse();
+        assertThat(previewAll(w.storefront, "locationId", w.l1.toString())
+                        .path("publishable")
+                        .asBoolean())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a modifier option or a combo component the brand prices but the channel's price plane does not is a blocker, as a variant is")
+    void optionsAndComponentsMissingFromThePlaneAreBlockers() throws Exception {
+        w.offerEverythingAt(w.l1);
+        ProductRef lunch = w.product("LUNCH", "Lunch", w.mainsCategory);
+        ProductRef burger = w.product("BURGER", "Burger", w.mainsCategory);
+        ProductRef cola = w.product("COLA", "Cola", w.mainsCategory);
+        for (ProductRef product : List.of(lunch, burger, cola)) {
+            w.offer(product, OfferingStatus.AVAILABLE);
+        }
+        ComboGroup choice = composites.createComboGroup(
+                new CompositeProductAuthoringService.NewComboGroup(
+                        w.tenant, w.brand, lunch.defaultVariantId(), "MAIN", "Choose", LOCALE, 1, 1, false, 0),
+                "tester");
+        ComboComponent burgerPairing =
+                composites.addComponent(w.tenant, w.brand, choice.id(), burger.defaultVariantId(), 1, 0, "tester");
+        ComboComponent colaPairing =
+                composites.addComponent(w.tenant, w.brand, choice.id(), cola.defaultVariantId(), 1, 1, "tester");
+        // An option nobody has priced anywhere: a modifier not priced yet, which is not this channel's gap.
+        UUID unpriced = authoring.addModifierOption(
+                w.tenant,
+                w.brand,
+                w.extras,
+                "SAUCE",
+                "Sous",
+                LOCALE,
+                null,
+                1,
+                2,
+                FiscalClassification.unclassified(),
+                null);
+
+        // The brand book prices every dish, the paid option and both pairings...
+        w.addPrice(w.brandBook, "VARIANT", burger.defaultVariantId(), 20_000L);
+        w.addPrice(w.brandBook, "VARIANT", cola.defaultVariantId(), 6_000L);
+        w.addPrice(w.brandBook, "MODIFIER_OPTION", w.onion, 2_000L);
+        w.addPrice(w.brandBook, "COMBO_COMPONENT", burgerPairing.id(), 18_000L);
+        w.addPrice(w.brandBook, "COMBO_COMPONENT", colaPairing.id(), 5_000L);
+        // ...and Uzum's own book prices every dish and the burger pairing, but not the cola pairing
+        // and not the onion: a CHANNEL book answers whole, so those two are priced elsewhere only.
+        UUID uzumBook = w.priceBook(
+                "UZUM_BOOK",
+                "CHANNEL",
+                w.uzum,
+                Map.of(
+                        w.lagman, 31_000L, w.plov, 26_000L, w.samsa, 8_500L, w.tea, 5_500L, burger, 21_000L, cola,
+                        6_500L));
+        w.addPrice(uzumBook, "COMBO_COMPONENT", burgerPairing.id(), 19_000L);
+
+        JsonNode uzum = previewAll(w.uzum, "locationId", w.l1.toString());
+
+        assertThat(findings(uzum, ChannelFindings.CHANNEL_PRICE_MISSING))
+                .as("exactly the two gaps: the paid option and the cola pairing, each named by what it is")
+                .extracting(finding -> finding.path("entityType").asText() + ":"
+                        + finding.path("entityId").asText())
+                .containsExactlyInAnyOrder("MODIFIER_OPTION:" + w.onion, "COMBO_COMPONENT:" + colaPairing.id())
+                .doesNotContain("MODIFIER_OPTION:" + unpriced, "COMBO_COMPONENT:" + burgerPairing.id());
+        assertThat(findings(uzum, ChannelFindings.CHANNEL_PRICE_MISSING).stream()
+                        .filter(finding -> finding.path("entityType").asText().equals("COMBO_COMPONENT"))
+                        .map(finding -> finding.path("productId").asText()))
+                .as(
+                        "a component is authored on the product whose variant is the combo's container, so that is where the finding links")
+                .containsExactly(lunch.productId().toString());
+        assertThat(uzum.path("channelReady").asBoolean())
+                .as("a null price would reach the aggregator: the channel is not ready")
+                .isFalse();
+
+        JsonNode storefront = previewAll(w.storefront, "locationId", w.l1.toString());
+        assertThat(findings(storefront, ChannelFindings.CHANNEL_PRICE_MISSING))
+                .as("the storefront resolves the brand book, which prices both")
+                .isEmpty();
+        assertThat(storefront.path("channelReady").asBoolean()).isTrue();
+    }
+
     // -------------------------------------------------------------- findings
 
     @Test
@@ -740,6 +1004,30 @@ class ChannelPreviewEndpointTests {
     // ------------------------------------------------------ capability, tenant
 
     @Test
+    @DisplayName(
+            "the branches a channel sells at are named by the branch, so a console can tell them apart whatever binding covers them")
+    void previewTargetsNameTheirBranch() throws Exception {
+        w.bindChannelToLocation(w.uzum, w.l2);
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+
+        JsonNode targets = json(mvc.perform(
+                get(base() + "/channels/" + w.uzum + "/preview-targets").with(owner())));
+
+        assertThat(targets)
+                .as("each branch by its own name; the fixture names a branch by its code")
+                .extracting(target -> target.path("locationId").asText() + "="
+                        + target.path("locationName").asText())
+                .containsExactlyInAnyOrder(w.l1 + "=L1", w.l2 + "=L2");
+        for (JsonNode target : targets) {
+            if (target.path("locationId").asText().equals(w.l1.toString())) {
+                assertThat(target.path("binding").path("bindingId").asText())
+                        .as("the binding is still reported beside the name, where one covers the branch")
+                        .isEqualTo(binding.toString());
+            }
+        }
+    }
+
+    @Test
     @DisplayName("the preview needs catalog.read and the override write needs catalog.author")
     void capabilitiesAreDeclared() throws Exception {
         assertRefused(
@@ -799,6 +1087,119 @@ class ChannelPreviewEndpointTests {
     }
 
     // ------------------------------------------------------ the override write
+
+    @Test
+    @DisplayName(
+            "the override set is replaced under the version the editor read: a second editor with the old version is told so, and a save that changes nothing keeps the version")
+    void overrideSetIsVersioned() throws Exception {
+        UUID a = w.asset();
+        UUID b = w.asset();
+        UUID product = w.lagman.productId();
+
+        MvcResult unset = mvc.perform(overrideGet(w.uzum, "PRODUCT", product)).andReturn();
+        assertThat(unset.getResponse().getHeader(HttpHeaders.ETAG))
+                .as("an item with no override reads as version 0, like a variant with no physical attributes")
+                .isEqualTo("W/\"0\"");
+        assertThat(json(unset).path("version").asInt()).isZero();
+
+        // No If-Match at all is refused, and so is one that is not a version: neither is a way around the check.
+        MockHttpServletRequestBuilder noPrecondition = put(overridePath(w.uzum, "PRODUCT", product))
+                .with(owner())
+                .header(
+                        IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                        UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(imageSet(a));
+        assertThat(status(noPrecondition)).as("no If-Match").isEqualTo(400);
+        MockHttpServletRequestBuilder notAVersion = put(overridePath(w.uzum, "PRODUCT", product))
+                .with(owner())
+                .header(
+                        IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                        UUID.randomUUID().toString())
+                .header(HttpHeaders.IF_MATCH, "W/\"not-a-version\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(imageSet(a));
+        assertThat(status(notAVersion)).as("an If-Match that is not a version").isEqualTo(400);
+        assertThat(json(mvc.perform(overrideGet(w.uzum, "PRODUCT", product))).path("images"))
+                .as("the refusals stored nothing")
+                .isEmpty();
+
+        // The first write quotes 0 and the set becomes version 1.
+        MvcResult first = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 0, imageSet(a)))
+                .andReturn();
+        assertThat(first.getResponse().getStatus()).as(body(first)).isEqualTo(200);
+        assertThat(first.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+        assertThat(json(first).path("version").asInt()).isEqualTo(1);
+
+        // A second editor who opened the screen before that save is still at 0: refused, loudly.
+        MvcResult stale = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 0, imageSet(b)))
+                .andReturn();
+        assertThat(stale.getResponse().getStatus()).as(body(stale)).isEqualTo(409);
+        assertThat(body(stale)).contains("STALE_VERSION");
+        assertThat(json(mvc.perform(overrideGet(w.uzum, "PRODUCT", product))).path("images"))
+                .as("and the first editor's set is still what is stored")
+                .extracting(image -> image.path("mediaAssetId").asText())
+                .containsExactly(a.toString());
+
+        // Saving the set that is already stored changes nothing: the version stays, and no audit fact is written.
+        long audited = auditFacts();
+        MvcResult same = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 1, imageSet(a)))
+                .andReturn();
+        assertThat(same.getResponse().getStatus()).as(body(same)).isEqualTo(200);
+        assertThat(same.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+        assertThat(auditFacts()).isEqualTo(audited);
+
+        // A real change moves it.
+        MvcResult changed = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 1, imageSet(a, b)))
+                .andReturn();
+        assertThat(changed.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"2\"");
+        assertThat(auditFacts()).isEqualTo(audited + 1);
+
+        // Emptying it removes it, and the item reads as version 0 again.
+        MvcResult cleared = mvc.perform(overridePut(w.uzum, "PRODUCT", product, 2, "{\"images\":[]}"))
+                .andReturn();
+        assertThat(cleared.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"0\"");
+        assertThat(overrideVersion(w.uzum, "PRODUCT", product)).isZero();
+    }
+
+    @Test
+    @DisplayName("two editors saving a first set at once get one winner and one conflict, never a constraint violation")
+    void concurrentFirstWritesAreSerialised() throws Exception {
+        UUID a = w.asset();
+        UUID b = w.asset();
+        UUID product = w.lagman.productId();
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(2);
+            java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+            List<java.util.concurrent.Future<Integer>> outcomes = new ArrayList<>();
+            // Both quote 0 and both name a PRIMARY: the very case ux_channel_media_override_primary would
+            // refuse as a 500 once the winner commits.
+            for (UUID asset : List.of(a, b)) {
+                outcomes.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return mvc.perform(overridePut(w.uzum, "PRODUCT", product, 0, imageSet(asset)))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus();
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<Integer> statuses = new ArrayList<>();
+            for (java.util.concurrent.Future<Integer> outcome : outcomes) {
+                statuses.add(outcome.get());
+            }
+            assertThat(statuses).containsExactlyInAnyOrder(200, 409);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(json(mvc.perform(overrideGet(w.uzum, "PRODUCT", product))).path("images"))
+                .as("the winner's set, whole")
+                .hasSize(1);
+    }
 
     @Test
     @DisplayName(
@@ -887,6 +1288,7 @@ class ChannelPreviewEndpointTests {
         // Idempotency-Key is required on the write.
         assertThat(status(put(overridePath(w.uzum, "PRODUCT", w.lagman.productId()))
                         .with(owner())
+                        .header(HttpHeaders.IF_MATCH, "W/\"0\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"images\":[]}")))
                 .isEqualTo(400);
@@ -944,14 +1346,47 @@ class ChannelPreviewEndpointTests {
         return merged;
     }
 
-    private MockHttpServletRequestBuilder overridePut(UUID channelId, String entityType, UUID entityId, String body) {
+    /** The write an editor makes: it quotes the version of the set it was shown, read just now. */
+    private MockHttpServletRequestBuilder overridePut(UUID channelId, String entityType, UUID entityId, String body)
+            throws Exception {
+        return overridePut(channelId, entityType, entityId, overrideVersion(channelId, entityType, entityId), body);
+    }
+
+    private MockHttpServletRequestBuilder overridePut(
+            UUID channelId, String entityType, UUID entityId, long expectedVersion, String body) {
         return put(overridePath(channelId, entityType, entityId))
                 .with(owner())
                 .header(
                         IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
                         UUID.randomUUID().toString())
+                .header(HttpHeaders.IF_MATCH, "W/\"" + expectedVersion + "\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body);
+    }
+
+    private MockHttpServletRequestBuilder overrideGet(UUID channelId, String entityType, UUID entityId) {
+        return get(base() + "/channels/" + channelId + "/media-overrides")
+                .with(owner())
+                .queryParam("entityType", entityType)
+                .queryParam("entityId", entityId.toString());
+    }
+
+    /** The version an editor would have read: the ETag of the item's set, or 0 where the read is refused. */
+    private long overrideVersion(UUID channelId, String entityType, UUID entityId) throws Exception {
+        MvcResult read =
+                mvc.perform(overrideGet(channelId, entityType, entityId)).andReturn();
+        String etag = read.getResponse().getHeader(HttpHeaders.ETAG);
+        return etag == null ? 0 : Long.parseLong(etag.replaceAll("[^0-9]", ""));
+    }
+
+    private static String imageSet(UUID... assets) {
+        StringBuilder images = new StringBuilder();
+        for (int i = 0; i < assets.length; i++) {
+            images.append(i == 0 ? "" : ",")
+                    .append("{\"mediaAssetId\":\"%s\",\"role\":\"%s\",\"sortOrder\":%d}"
+                            .formatted(assets[i], i == 0 ? "PRIMARY" : "GALLERY", i));
+        }
+        return "{\"images\":[" + images + "]}";
     }
 
     private String overridePath(UUID channelId, String entityType, UUID entityId) {
@@ -1049,6 +1484,33 @@ class ChannelPreviewEndpointTests {
         return shaped;
     }
 
+    private static <T> T at(Map<String, T> map, String key) {
+        return java.util.Objects.requireNonNull(map.get(key), key);
+    }
+
+    /** The menu a customer is served on a channel at {@code l1} from its live publication. */
+    private JsonNode liveMenu(String channelCode) throws Exception {
+        return json(mvc.perform(
+                get("/api/v1/storefront/tenants/%s/brands/%s/locations/%s/menu".formatted(w.tenant, w.brand, w.l1))
+                        .queryParam("channel", channelCode)
+                        .queryParam("locale", LOCALE)));
+    }
+
+    private long auditFacts() {
+        return jdbc.sql(
+                        "SELECT count(*) FROM audit.audit_events WHERE action_code = 'catalog.channelMediaOverride.replaced' AND tenant_id = :t")
+                .param("t", w.tenant)
+                .query(Long.class)
+                .single();
+    }
+
+    /** A product's images in the order the menu lists them. */
+    private static List<String> imagesOf(JsonNode menu, ProductRef product) {
+        List<String> images = new ArrayList<>();
+        productOf(menu, product).path("mediaAssetIds").forEach(id -> images.add(id.asText()));
+        return images;
+    }
+
     private static Set<String> ids(JsonNode entries, String key) {
         Set<String> ids = new LinkedHashSet<>();
         entries.forEach(entry -> ids.add(entry.path(key).asText()));
@@ -1102,6 +1564,10 @@ class ChannelPreviewEndpointTests {
         final UUID storefront;
         final UUID uzum;
         final UUID catalogId;
+        final UUID mainsCategory;
+        final UUID brandBook;
+        final UUID extras;
+        final UUID onion;
         final ProductRef lagman;
         final ProductRef plov;
         final ProductRef samsa;
@@ -1129,15 +1595,15 @@ class ChannelPreviewEndpointTests {
 
             catalogId = authoring.createCatalog(tenant, brand, "MAIN", "Main menu", LOCALE);
             UUID mains = authoring.createCategory(tenant, brand, catalogId, null, "MAINS", "Asosiy", LOCALE, 1);
+            mainsCategory = mains;
             UUID drinks = authoring.createCategory(tenant, brand, catalogId, null, "DRINKS", "Ichimlik", LOCALE, 2);
             lagman = product("LAGMAN", "Lagman", mains);
             plov = product("PLOV", "Osh", mains);
             samsa = product("SAMSA", "Somsa", mains);
             tea = product("TEA", "Choy", drinks);
 
-            UUID extras =
-                    authoring.createModifierGroup(tenant, brand, "EXTRAS", "Qo'shimcha", LOCALE, false, 0, 2, true);
-            authoring.addModifierOption(
+            extras = authoring.createModifierGroup(tenant, brand, "EXTRAS", "Qo'shimcha", LOCALE, false, 0, 2, true);
+            onion = authoring.addModifierOption(
                     tenant,
                     brand,
                     extras,
@@ -1157,7 +1623,7 @@ class ChannelPreviewEndpointTests {
             brandPrices.put(plov, 25_000L);
             brandPrices.put(samsa, 8_000L);
             brandPrices.put(tea, 5_000L);
-            priceBook("BRAND_BOOK", "BRAND", null, brandPrices);
+            brandBook = priceBook("BRAND_BOOK", "BRAND", null, brandPrices);
 
             jdbc.sql("""
                     INSERT INTO iam.grants
@@ -1303,6 +1769,24 @@ class ChannelPreviewEndpointTests {
                     .param("from", yesterday.atOffset(ZoneOffset.UTC))
                     .update());
             return book;
+        }
+
+        /** One more price row in a book that already exists: a modifier option's or a combo component's. */
+        void addPrice(UUID book, String priceableType, UUID priceableId, long amount) {
+            jdbc.sql("""
+                    INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id,
+                        priceable_type, priceable_id, amount_minor, valid_from)
+                    VALUES (:id, :t, :b, :book, :type, :priceable, :amount, :from)
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", tenant)
+                    .param("b", brand)
+                    .param("book", book)
+                    .param("type", priceableType)
+                    .param("priceable", priceableId)
+                    .param("amount", amount)
+                    .param("from", yesterday.atOffset(ZoneOffset.UTC))
+                    .update();
         }
 
         /** A verified, public image of this tenant. */
