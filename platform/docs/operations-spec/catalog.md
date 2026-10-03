@@ -1099,7 +1099,9 @@ downloadable deficiency report before pushing to Yandex Eats or Uzum Tezkor).
 `/catalog/preview?channel=…`, which asks `GET …/catalogs/{id}/channels/{id}/preview`
 for one branch of that channel (`catalog.read`; a channel that sells at exactly one
 branch needs no branch named, otherwise the branch picker is fed by
-`GET …/channels/{id}/preview-targets`). The answer is a dry run of publication:
+`GET …/channels/{id}/preview-targets`, which names each branch — the picker reads
+"Chilonzor · Wolt", the branch first and the marketplace binding beside it, because a
+brand-wide binding gives every branch the same name). The answer is a dry run of publication:
 the draft is snapshotted and validated as `publish` does it, then assembled by the
 same code a customer's menu read goes through — the branch's offerings or bound
 named menu, the channel's exclusions, the channel's price plane (no amount at all

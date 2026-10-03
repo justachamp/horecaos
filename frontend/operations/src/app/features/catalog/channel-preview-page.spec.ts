@@ -16,6 +16,7 @@ import { CatalogApi } from './catalog-api';
 import { ChannelPreviewApi } from './channel-preview-api';
 import {
   ChannelPreviewPageBody,
+  PreviewBinding,
   PreviewFinding,
   PreviewProduct,
   PreviewTarget,
@@ -430,6 +431,32 @@ describe('ChannelPreviewPage', () => {
     expect(previewPage.mock.calls[1][5]).toBe('cursor-2');
     expect(host().querySelectorAll('[data-testid="preview-product"]')).toHaveLength(2);
     expect(host().querySelector('[data-testid="preview-more"]')).toBeNull();
+  });
+
+  it('names each branch by its own name, with the marketplace binding beside it, never a raw id and never one name for every branch', async () => {
+    // A brand-wide binding covers every branch, so each target carries the same binding name.
+    const wolt: PreviewBinding = {
+      bindingId: 'binding-1',
+      status: 'ACTIVE',
+      rulesetCode: null,
+      providerType: 'WOLT',
+      displayName: 'Wolt',
+    };
+    const targets: readonly PreviewTarget[] = [
+      { locationId: 'l1', locationName: 'Chilonzor', binding: wolt },
+      { locationId: 'l2', locationName: 'Yunusobod', binding: wolt },
+      // A channel with no marketplace binding: the branch name is all there is to show.
+      { locationId: 'l3', locationName: 'Sergeli', binding: null },
+    ];
+    await render(
+      doubles({ preview: { targets: () => of(targets), previewPage: () => of(body()) } }),
+    );
+
+    const labels = Array.from(
+      host().querySelectorAll('[data-testid="preview-branch-select"] option'),
+    ).map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
+
+    expect(labels).toEqual(['Chilonzor · Wolt', 'Yunusobod · Wolt', 'Sergeli']);
   });
 
   it('says so when the channel sells at no branch, instead of drawing an empty phone', async () => {

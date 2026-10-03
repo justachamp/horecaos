@@ -1003,6 +1003,30 @@ class ChannelPreviewEndpointTests {
     // ------------------------------------------------------ capability, tenant
 
     @Test
+    @DisplayName(
+            "the branches a channel sells at are named by the branch, so a console can tell them apart whatever binding covers them")
+    void previewTargetsNameTheirBranch() throws Exception {
+        w.bindChannelToLocation(w.uzum, w.l2);
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+
+        JsonNode targets = json(mvc.perform(
+                get(base() + "/channels/" + w.uzum + "/preview-targets").with(owner())));
+
+        assertThat(targets)
+                .as("each branch by its own name; the fixture names a branch by its code")
+                .extracting(target -> target.path("locationId").asText() + "="
+                        + target.path("locationName").asText())
+                .containsExactlyInAnyOrder(w.l1 + "=L1", w.l2 + "=L2");
+        for (JsonNode target : targets) {
+            if (target.path("locationId").asText().equals(w.l1.toString())) {
+                assertThat(target.path("binding").path("bindingId").asText())
+                        .as("the binding is still reported beside the name, where one covers the branch")
+                        .isEqualTo(binding.toString());
+            }
+        }
+    }
+
+    @Test
     @DisplayName("the preview needs catalog.read and the override write needs catalog.author")
     void capabilitiesAreDeclared() throws Exception {
         assertRefused(

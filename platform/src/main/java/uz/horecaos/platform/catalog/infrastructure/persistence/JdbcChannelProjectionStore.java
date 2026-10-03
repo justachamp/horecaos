@@ -57,6 +57,31 @@ public class JdbcChannelProjectionStore {
                 .list();
     }
 
+    /**
+     * The same branches as {@link #activeLocationsOfChannel}, each with the name the tenant gave it --
+     * what a console labels a branch picker with. A binding's name cannot: a brand-wide binding gives
+     * every branch the same one.
+     */
+    public List<BranchRow> activeBranchesOfChannel(UUID tenantId, UUID brandId, UUID channelId) {
+        return jdbc.sql("""
+                SELECT scl.location_id, l.display_name
+                FROM tenant.sales_channel_locations scl
+                JOIN tenant.locations l ON l.tenant_id = scl.tenant_id AND l.id = scl.location_id
+                WHERE scl.tenant_id = :tenantId AND scl.channel_id = :channelId
+                  AND scl.status = 'ACTIVE' AND l.brand_id = :brandId
+                ORDER BY scl.location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channelId", channelId)
+                .query((row, number) ->
+                        new BranchRow(row.getObject("location_id", UUID.class), row.getString("display_name")))
+                .list();
+    }
+
+    /** A branch a channel sells at and its name. */
+    public record BranchRow(UUID locationId, String displayName) {}
+
     public boolean locationBelongsToBrand(UUID tenantId, UUID brandId, UUID locationId) {
         return jdbc.sql("""
                 SELECT EXISTS (

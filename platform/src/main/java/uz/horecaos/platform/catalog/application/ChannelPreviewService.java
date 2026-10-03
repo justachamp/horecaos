@@ -258,10 +258,12 @@ public class ChannelPreviewService {
         SalesChannel channel = channels.byId(tenantId, channelId)
                 .orElseThrow(() -> new UnknownPreviewTargetException("No sales channel " + channelId));
         List<PreviewTarget> targets = new ArrayList<>();
-        for (UUID locationId : projections.activeLocationsOfChannel(tenantId, brandId, channel.id())) {
+        for (JdbcChannelProjectionStore.BranchRow branch :
+                projections.activeBranchesOfChannel(tenantId, brandId, channel.id())) {
             Optional<MarketplaceBindingRow> binding = channel.providerInstallation()
-                    .flatMap(installation -> projections.bindingCovering(tenantId, installation, brandId, locationId));
-            targets.add(new PreviewTarget(locationId, binding.orElse(null)));
+                    .flatMap(installation ->
+                            projections.bindingCovering(tenantId, installation, brandId, branch.locationId()));
+            targets.add(new PreviewTarget(branch.locationId(), branch.displayName(), binding.orElse(null)));
         }
         return List.copyOf(targets);
     }
@@ -610,8 +612,14 @@ public class ChannelPreviewService {
         MARKETPLACE
     }
 
-    /** A branch a channel sells at, and the marketplace binding that covers it, if any. */
-    public record PreviewTarget(UUID locationId, @Nullable MarketplaceBindingRow binding) {}
+    /**
+     * A branch a channel sells at, and the marketplace binding that covers it, if any.
+     *
+     * @param locationName the branch's own name: the one thing that tells two targets apart when a
+     *     brand-wide binding covers them both
+     */
+    public record PreviewTarget(
+            UUID locationId, String locationName, @Nullable MarketplaceBindingRow binding) {}
 
     /** The catalog, channel, branch or binding named is not this tenant's or brand's. */
     public static final class UnknownPreviewTargetException extends RuntimeException {

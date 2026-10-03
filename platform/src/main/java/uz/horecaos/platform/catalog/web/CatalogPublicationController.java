@@ -165,8 +165,10 @@ public class CatalogPublicationController {
     @Operation(
             summary = "The branches a channel sells at, with the marketplace binding at each (ADR 0138)",
             description = "What a console offers to preview: one entry per branch the channel is active "
-                    + "at, carrying the binding that covers it (and the ruleset it names) when the "
-                    + "channel is backed by a marketplace installation.")
+                    + "at, carrying the branch's own name and the binding that covers it (and the "
+                    + "ruleset it names) when the channel is backed by a marketplace installation. The "
+                    + "binding's name is the installation's, which a brand-wide binding gives to every "
+                    + "branch alike; the branch's name is what tells the entries apart.")
     public List<ChannelPreviewResponse.PreviewTargetView> previewTargets(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID channelId) {
         try {

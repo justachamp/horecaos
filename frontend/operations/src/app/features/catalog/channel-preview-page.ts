@@ -435,6 +435,22 @@ export class ChannelPreviewPage implements OnInit {
     }
   }
 
+  /**
+   * What the branch picker offers for one branch: the branch's own name, then the marketplace
+   * binding that covers it.
+   *
+   * The binding's name cannot lead, let alone stand alone: a brand-wide binding covers every
+   * branch, so each would read the same, and a channel with no binding (the storefront, a
+   * kiosk) has none to show. The id is the last resort for a server that sent no name — a
+   * label nobody can read, but one that still tells two branches apart.
+   */
+  protected branchLabel(target: PreviewTarget): string {
+    const parts = [target.locationName, target.binding?.displayName].filter(
+      (part): part is string => !!part && part.trim().length > 0,
+    );
+    return parts.length > 0 ? parts.join(' · ') : target.locationId;
+  }
+
   // ------------------------------------------------------------ channel photo
 
   protected async openEditor(product: PreviewProduct): Promise<void> {
