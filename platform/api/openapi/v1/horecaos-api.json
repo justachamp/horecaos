@@ -14554,6 +14554,9 @@
           "providerType" : {
             "type" : "string"
           },
+          "reason" : {
+            "type" : "string"
+          },
           "rejectedUnmapped" : {
             "format" : "int32",
             "type" : "integer"
@@ -38261,7 +38264,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations/effective" : {
       "get" : {
-        "description" : "IA 4.2's own filter -- active + in-menu + not-stopped -- resolved here, at read time, against one location's catalog.location_offerings. Nothing is pruned from the stored set to get here: a target that is stopped today and un-stopped tomorrow reappears in this read on its own.",
+        "description" : "IA 4.2's own filter -- active + in-menu + not-stopped -- resolved here, at read time, against one location's catalog.location_offerings. Not-stopped means the supply is not 86'd and no stop covers every channel at this branch (a stop on some channels only keeps the target, since this read names none). Nothing is pruned from the stored set to get here: a target that is stopped today and un-stopped tomorrow reappears in this read on its own.",
         "operationId" : "effectiveRecommendations",
         "parameters" : [ {
           "in" : "path",
@@ -65444,7 +65447,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability" : {
       "get" : {
-        "description" : "The same channel-aware check the operations console uses (GET .../availability?channel=...), scoped to one variant. The channel is required (tenant.sales_channels.system_type, e.g. WEB) so a per-channel-type stop threshold (gap map row 4.4c) applies to the channel actually asking.",
+        "description" : "The same channel-aware check the storefront menu and the cart make, scoped to one variant. The channel is required and is the tenant's own channel code, as on the menu read (ADR 0141): the stops that cover that channel apply, and so does its channel type's stop threshold (gap map row 4.4c). A value that names no registered channel is read as a bare channel type (e.g. WEB), for which only the stops covering every channel apply.",
         "operationId" : "availability_1",
         "parameters" : [ {
           "in" : "path",
@@ -67383,7 +67386,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation" : {
       "get" : {
-        "description" : "ADR 0141. mode is AUTOMATIC (the platform pushes and these counts say how many items it has not been able to confirm), MANUAL (this provider has no availability write API: nothing is pushed, update the partner portal by hand) or SUSPENDED (the reconcile switch is off). No item names and no provider response bodies: identifiers, counts, timestamps and stable codes.",
+        "description" : "ADR 0141. mode is AUTOMATIC (the platform pushes and these counts say how many items it has not been able to confirm), MANUAL (the platform is not pushing to this marketplace: update the partner portal by hand; reason is NO_ADAPTER, INSTALLATION_INACTIVE, CHANNEL_UNRESOLVED or NO_ITEMS_TRACKED) or SUSPENDED (the reconcile switch is off). No item names and no provider response bodies: identifiers, counts, timestamps and stable codes.",
         "operationId" : "propagation",
         "parameters" : [ {
           "in" : "path",

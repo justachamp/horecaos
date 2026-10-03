@@ -46,6 +46,7 @@ import uz.horecaos.platform.integration.api.marketplace.PushConclusion;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.BindingRow;
 import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.Mode;
+import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.Reason;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.inventory.api.StopSource;
@@ -183,7 +184,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 jdbc,
                 // A seeded jitter would still be a delay; the clock is advanced explicitly.
                 RetryBackoff.randomisedBy(Duration.ofSeconds(5), Duration.ofMinutes(10), new java.util.Random(7)));
-        propagation = new MarketplacePropagationQuery(store, registry, resolver);
+        propagation = new MarketplacePropagationQuery(store, registry, resolver, channels);
     }
 
     // -----------------------------------------------------------------------
@@ -285,6 +286,100 @@ class MarketplaceAvailabilityReconcilerTests {
                 .containsEntry("ext-A", false);
         assertThat(rowState(w, "ext-A")).isEqualTo("IN_SYNC");
         assertThat(confirmed(w, "ext-A")).isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "a new stop on a row the partner may already hold is sent at once, not after the restore's retry backoff")
+    void aStopOnAnUncertainRowDoesNotWaitOutTheRestoreBackoff() {
+        World w = world();
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        reconcile(w);
+        assertThat(partner.held(w)).containsEntry("ext-A", false);
+
+        // The kitchen lifts the stop; the restore reaches the partner and its answer is lost.
+        lift(w, stop);
+        markDirty(w);
+        partner.script(Scenario.TIMEOUT_AFTER_APPLY);
+        reconcile(w);
+        assertThat(rowState(w, "ext-A")).isEqualTo("UNCERTAIN");
+        assertThat(partner.held(w)).containsEntry("ext-A", true);
+
+        // A recall: the dish is stopped again moments later. The clock does not move, so the
+        // row is still inside the backoff the unknown outcome earned.
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("a stop is pushed before anything else; it does not queue behind a restore's retry timer")
+                .containsEntry("ext-A", false);
+    }
+
+    @Test
+    @DisplayName("a new stop on a never-confirmed row that is backing off after a refused connection is sent at once")
+    void aStopOnAnUnconfirmedBackingOffRowIsSentAtOnce() {
+        World w = world();
+        partner.script(Scenario.CONNECTION_REFUSED, Scenario.CONNECTION_REFUSED);
+        reconcile(w);
+        assertThat(rowState(w, "ext-A")).isEqualTo("PENDING");
+        assertThat(confirmed(w, "ext-A"))
+                .as("the partner has never been heard from")
+                .isNull();
+
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("the platform now holds a fresher instruction than the one that was refused, and sends it")
+                .containsEntry("ext-A", false);
+    }
+
+    @Test
+    @DisplayName("a stop recorded while a restore is in flight is not held back by that restore's lost answer")
+    void aStopRecordedDuringARestoreWithALostAnswerIsNotDelayedByIt() {
+        World w = world();
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        reconcile(w);
+        assertThat(partner.held(w)).containsEntry("ext-A", false);
+
+        lift(w, stop);
+        markDirty(w);
+        // The restore for ext-A is on the wire when the dish is stopped again: another replica's
+        // sweep records the new desired value, then the restore's lost answer is written back. The
+        // partner did apply the restore, so it holds true and the platform must say false.
+        partner.script(Scenario.TIMEOUT_AFTER_APPLY);
+        partner.duringCall = () -> store.upsertDesired(
+                w.tenant(), w.binding(), "ext-A", w.variantA(), w.location(), false, clock.instant());
+        reconcile(w);
+        partner.duringCall = () -> {};
+
+        assertThat(partner.calls.stream().filter(call -> call.equals(new Call("ext-A", true))))
+                .as("the restore was sent once")
+                .hasSize(1);
+        assertThat(partner.held(w))
+                .as("the restore's backoff was earned by an instruction that is no longer current, so the stop"
+                        + " follows it in the same pass instead of waiting it out")
+                .containsEntry("ext-A", false);
+    }
+
+    @Test
+    @DisplayName("a restore on a row that is backing off still waits out its backoff: only a stop jumps the queue")
+    void aRestoreStillWaitsOutTheBackoff() {
+        World w = world();
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        partner.script(Scenario.CONNECTION_REFUSED, Scenario.CONNECTION_REFUSED);
+        reconcile(w);
+        assertThat(partner.calls).hasSize(2);
+
+        lift(w, stop);
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(partner.calls)
+                .as("the dish is back on sale on our side; telling an unreachable partner can wait")
+                .hasSize(2);
     }
 
     @Test
@@ -522,6 +617,123 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     // -----------------------------------------------------------------------
+    // A hanging partner is bounded: one pass costs a budget, not a batch
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a partner that hangs costs two calls, not the whole batch, and the rows never called are released")
+    void aHangingPartnerClosesTheDoorAfterTwoUnknownOutcomes() {
+        World w = world();
+        addItems(w, 6);
+        partner.script(
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG);
+        Instant start = clock.instant();
+
+        reconcile(w);
+
+        assertThat(partner.calls)
+                .as("eight items were pending; two timeouts in a row say the partner is hung, so the pass stops")
+                .hasSize(2);
+        assertThat(Duration.between(start, clock.instant()))
+                .as("one pass must end well inside the 2-minute lease, or another worker takes its rows")
+                .isLessThan(MarketplaceAvailabilityReconciler.LEASE);
+        assertThat(leased(w))
+                .as("rows claimed but never called are released, not left to lapse")
+                .isZero();
+        assertThat(rowStates(w).stream().filter("UNCERTAIN"::equals).count()).isEqualTo(2);
+        assertThat(rowStates(w).stream().filter("PENDING"::equals).count()).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("a slow partner is not called past the pass's time budget, even mid-batch")
+    void theBudgetIsCheckedBeforeEveryCallNotBeforeEveryBatch() {
+        World w = world();
+        addItems(w, 6);
+        partner.latency = Duration.ofSeconds(15);
+        Instant start = clock.instant();
+
+        reconcile(w);
+
+        assertThat(partner.calls)
+                .as("15 s a call against a 20 s budget: the third call is never started")
+                .hasSize(2);
+        assertThat(Duration.between(start, clock.instant())).isLessThan(MarketplaceAvailabilityReconciler.LEASE);
+        assertThat(leased(w)).isZero();
+
+        partner.latency = Duration.ZERO;
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("the rows that were left over go out on the next pass")
+                .hasSize(8);
+        assertThat(partner.held(w).values()).containsOnly(true);
+    }
+
+    @Test
+    @DisplayName("an isolated unknown outcome between successes does not close the door")
+    void anIsolatedUnknownOutcomeKeepsTheDoorOpen() {
+        World w = world();
+        addItems(w, 4);
+        partner.script(
+                Scenario.TIMEOUT_AFTER_APPLY,
+                Scenario.OK,
+                Scenario.TIMEOUT_AFTER_APPLY,
+                Scenario.OK,
+                Scenario.OK,
+                Scenario.OK);
+
+        reconcile(w);
+
+        assertThat(partner.calls).as("all six items were called").hasSize(6);
+    }
+
+    @Test
+    @DisplayName("a hung binding is not probed again at once, and is again when it has cooled and the partner is back")
+    void aHungBindingCoolsDown() {
+        World w = world();
+        addItems(w, 6);
+        partner.script(
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG);
+        reconcile(w);
+        int afterFirstPass = partner.calls.size();
+
+        reconcile(w);
+        assertThat(partner.calls.size())
+                .as("the next tick, seconds later, spends no more time on a partner that just hung")
+                .isEqualTo(afterFirstPass);
+
+        // The partner recovers; the cooldown and the rows' own backoffs run out.
+        partner.script();
+        clock.advance(Duration.ofMinutes(15));
+        reconcile(w);
+        reconcile(w);
+        assertThat(partner.held(w)).hasSize(8);
+        assertThat(partner.held(w).values()).containsOnly(true);
+
+        partner.script(Scenario.OK);
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("a confirmed push cleared the cooldown, so a later stop goes out at once")
+                .containsEntry("ext-A", false);
+        assertThat(stop).isNotNull();
+    }
+
+    // -----------------------------------------------------------------------
     // Suspension, resumption, overlap, honesty about what cannot be pushed
     // -----------------------------------------------------------------------
 
@@ -611,6 +823,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 .isZero();
         assertThat(propagation.at(w.tenant, w.location)).singleElement().satisfies(summary -> {
             assertThat(summary.mode()).isEqualTo(Mode.MANUAL);
+            assertThat(summary.reason()).isEqualTo(Reason.NO_ADAPTER);
             assertThat(summary.pending() + summary.uncertain() + summary.inSync())
                     .isZero();
         });
@@ -627,6 +840,7 @@ class MarketplaceAvailabilityReconcilerTests {
         MarketplacePropagationQuery.Binding view =
                 propagation.at(w.tenant, w.location).get(0);
         assertThat(view.mode()).isEqualTo(Mode.AUTOMATIC);
+        assertThat(view.reason()).as("acted on, so there is nothing to explain").isNull();
         assertThat(view.pending()).isEqualTo(2);
         assertThat(view.oldestUnconfirmedSince()).isEqualTo(clock.instant());
         assertThat(view.unconfirmedItems())
@@ -638,6 +852,74 @@ class MarketplaceAvailabilityReconcilerTests {
         assertThat(view.unconfirmedItems().toString())
                 .as("identifiers, counts and codes only (ADR 0029)")
                 .doesNotContain("Plov");
+    }
+
+    // -----------------------------------------------------------------------
+    // The propagation read does not say "in sync" for a binding nothing acts on
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a binding whose installation is no longer active reads MANUAL, not the in sync its old rows suggest")
+    void aBindingWithAnInactiveInstallationIsManual() {
+        World w = world();
+        reconcile(w);
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode())
+                .as("sanity: acted on and in sync")
+                .isEqualTo(Mode.AUTOMATIC);
+
+        jdbc.sql("UPDATE integration.installations SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", w.installation)
+                .update();
+
+        MarketplacePropagationQuery.Binding view =
+                propagation.at(w.tenant, w.location).get(0);
+        assertThat(view.mode())
+                .as("the worklist leaves the binding out, so nothing will be pushed and a recall must be made by hand")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(view.reason()).isEqualTo(Reason.INSTALLATION_INACTIVE);
+    }
+
+    @Test
+    @DisplayName("a binding with no single sales channel behind its installation reads MANUAL")
+    void aBindingWithoutAnUnambiguousChannelIsManual() {
+        World w = world();
+        reconcile(w);
+        jdbc.sql("UPDATE tenant.sales_channels SET provider_installation_id = NULL WHERE id = :id")
+                .param("id", w.channel)
+                .update();
+        markDirty(w);
+        reconcile(w);
+
+        MarketplacePropagationQuery.Binding view =
+                propagation.at(w.tenant, w.location).get(0);
+        assertThat(view.mode())
+                .as("the sweep resolves nothing without a channel, so no stop is ever pushed")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(view.reason()).isEqualTo(Reason.CHANNEL_UNRESOLVED);
+    }
+
+    @Test
+    @DisplayName("a binding with nothing mapped, or not yet swept, reads MANUAL rather than an empty in sync")
+    void aBindingTheReconcilerKeepsNoItemsForIsManual() {
+        World w = world();
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode())
+                .as("created, mapped, but the reconciler has not looked at it yet")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(propagation.at(w.tenant, w.location).get(0).reason()).isEqualTo(Reason.NO_ITEMS_TRACKED);
+
+        reconcile(w);
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode()).isEqualTo(Mode.AUTOMATIC);
+
+        jdbc.sql("DELETE FROM integration.provider_entity_mappings WHERE binding_id = :b")
+                .param("b", w.binding)
+                .update();
+        markDirty(w);
+        reconcile(w);
+
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode())
+                .as("every mapping is gone, the rows are gone, and nothing will be pushed")
+                .isEqualTo(Mode.MANUAL);
+        assertThat(propagation.at(w.tenant, w.location).get(0).reason()).isEqualTo(Reason.NO_ITEMS_TRACKED);
     }
 
     @Test
@@ -772,6 +1054,33 @@ class MarketplaceAvailabilityReconcilerTests {
         map(w, a, "ext-A");
         map(w, b, "ext-B");
         return w;
+    }
+
+    /** More mapped, offered, stocked items on the world's binding: "ext-X1" ... */
+    private void addItems(World w, int count) {
+        for (int i = 1; i <= count; i++) {
+            UUID variant = variant(w.tenant(), w.brand(), "X" + i);
+            jdbc.sql("""
+                    INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                    VALUES (:id, :t, :b, :l, :v, 'AVAILABLE')
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", w.tenant())
+                    .param("b", w.brand())
+                    .param("l", w.location())
+                    .param("v", variant)
+                    .update();
+            list(w, variant);
+            map(w, variant, "ext-X" + i);
+        }
+    }
+
+    private long leased(World w) {
+        return jdbc.sql("SELECT count(*) FROM integration.marketplace_item_availability "
+                        + "WHERE binding_id = :b AND lease_owner IS NOT NULL")
+                .param("b", w.binding())
+                .query(Long.class)
+                .single();
     }
 
     private UUID location(UUID tenant, UUID brand, String code) {
@@ -979,7 +1288,9 @@ class MarketplaceAvailabilityReconcilerTests {
         TIMEOUT_AFTER_APPLY,
         CONNECTION_REFUSED,
         RATE_LIMITED,
-        UNKNOWN_ITEM
+        UNKNOWN_ITEM,
+        /** Accepts the connection and never answers: the call runs to its 15 s timeout and nothing is applied. */
+        HANG
     }
 
     private record Call(String item, boolean available) {}
@@ -994,6 +1305,12 @@ class MarketplaceAvailabilityReconcilerTests {
         final Set<Call> applied = java.util.concurrent.ConcurrentHashMap.newKeySet();
         private final Deque<Scenario> script = new ArrayDeque<>();
         volatile Duration delay = Duration.ZERO;
+
+        /** How much of the test clock one call costs: a slow partner, without sleeping the test. */
+        volatile Duration latency = Duration.ZERO;
+
+        /** Runs while a call is in flight, before the partner answers: another replica's sweep landing. */
+        volatile Runnable duringCall = () -> {};
 
         void script(Scenario... scenarios) {
             synchronized (script) {
@@ -1038,6 +1355,10 @@ class MarketplaceAvailabilityReconcilerTests {
                 scenario = script.isEmpty() ? Scenario.OK : script.pollFirst();
             }
             calls.add(new Call(item, available));
+            duringCall.run();
+            if (!latency.isZero()) {
+                clock.advance(latency);
+            }
             return switch (scenario) {
                 case OK -> {
                     held.put(key, available);
@@ -1053,6 +1374,10 @@ class MarketplaceAvailabilityReconcilerTests {
                     ProviderOutcome.retryable("CONNECTION_FAILED", "Could not reach the provider", null);
                 case RATE_LIMITED -> ProviderOutcome.retryable("RATE_LIMITED", "slow down", Duration.ofSeconds(30));
                 case UNKNOWN_ITEM -> ProviderOutcome.rejected("PROVIDER_REJECTED", "item_not_found");
+                case HANG -> {
+                    clock.advance(Duration.ofSeconds(15));
+                    yield ProviderOutcome.uncertain("READ_TIMEOUT", "No response after the request was sent");
+                }
             };
         }
     }

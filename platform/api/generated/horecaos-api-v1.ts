@@ -4622,6 +4622,7 @@ export interface MarketplacePropagationControllerBindingResponse {
   oldestUnconfirmedSince?: string;
   pending?: number;
   providerType?: string;
+  reason?: string;
   rejectedUnmapped?: number;
   uncertain?: number;
   unconfirmed?: number;

@@ -236,6 +236,13 @@ public class JdbcMarketplaceAvailabilityStore {
      * confirmed value is known and now equals the new desired value is {@code IN_SYNC}; a row
      * that is {@code UNCERTAIN} or {@code REJECTED_UNMAPPED} stays so (an unknown never becomes
      * "in sync" because a desired value moved).
+     *
+     * <p>The retry time follows the instruction that earned it. A restore that is backing off
+     * keeps waiting, but a value that moves to {@code false} (a stop) is claimable at once on a
+     * row in any state: an {@code UNCERTAIN} row may well be holding {@code true} on the partner,
+     * and a never-confirmed row is waiting on a first push that is now the wrong instruction.
+     * "A stop is pushed before a restore" (ADR 0141 Decision 7) has to hold for the timer as
+     * well as for the claim order.
      */
     public void upsertDesired(
             UUID tenantId,
@@ -281,6 +288,14 @@ public class JdbcMarketplaceAvailabilityStore {
                         WHEN integration.marketplace_item_availability.state IN ('IN_SYNC')
                              AND integration.marketplace_item_availability.desired_available IS DISTINCT FROM EXCLUDED.desired_available
                             THEN EXCLUDED.desired_at
+                        -- A stop on a row that is not in sync is claimable now, whatever retry time the
+                        -- last attempt earned: that time was set for a different instruction (a restore,
+                        -- or a first push), and a stop is pushed before anything else. A NULL stays NULL
+                        -- (already claimable); a time already past is left alone.
+                        WHEN integration.marketplace_item_availability.desired_available IS DISTINCT FROM EXCLUDED.desired_available
+                             AND NOT EXCLUDED.desired_available
+                             AND integration.marketplace_item_availability.next_attempt_at IS NOT NULL
+                            THEN LEAST(integration.marketplace_item_availability.next_attempt_at, EXCLUDED.desired_at)
                         ELSE integration.marketplace_item_availability.next_attempt_at END,
                     updated_at = EXCLUDED.updated_at
                 """)
@@ -394,6 +409,12 @@ public class JdbcMarketplaceAvailabilityStore {
     /**
      * Writes what one attempt concluded, if the worker still holds the lease.
      *
+     * <p>A retry time earned by a failed attempt belongs to the instruction that was sent. If a
+     * stop was recorded while that call was in flight (the row's desired value is now {@code
+     * false} and differs from what was sent), the failed restore's backoff must not delay it:
+     * the row is claimable at once, exactly as {@link #upsertDesired} leaves it when no call was
+     * in flight.
+     *
      * @param sent the value that was sent, which is what {@code CONFIRMED} records — not the
      *     row's current desired value, which may have moved while the call was in flight
      * @return false when the lease was lost, in which case nothing was written
@@ -426,7 +447,9 @@ public class JdbcMarketplaceAvailabilityStore {
                                 state = CASE WHEN state = 'UNCERTAIN' THEN 'UNCERTAIN' ELSE 'PENDING' END,
                                 attempt_count = attempt_count + 1, last_failure_code = :failureCode,
                                 pending_since = COALESCE(pending_since, :now),
-                                next_attempt_at = :retryAt,
+                                next_attempt_at = CASE
+                                    WHEN NOT desired_available AND desired_available IS DISTINCT FROM :sent THEN :now
+                                    ELSE :retryAt END,
                                 lease_owner = NULL, lease_expires_at = NULL, updated_at = :now
                             WHERE tenant_id = :tenantId AND binding_id = :bindingId AND external_entity_id = :externalId
                               AND lease_owner = :owner
@@ -438,7 +461,9 @@ public class JdbcMarketplaceAvailabilityStore {
                                 state = 'UNCERTAIN',
                                 attempt_count = attempt_count + 1, last_failure_code = :failureCode,
                                 pending_since = COALESCE(pending_since, :now),
-                                next_attempt_at = :retryAt,
+                                next_attempt_at = CASE
+                                    WHEN NOT desired_available AND desired_available IS DISTINCT FROM :sent THEN :now
+                                    ELSE :retryAt END,
                                 lease_owner = NULL, lease_expires_at = NULL, updated_at = :now
                             WHERE tenant_id = :tenantId AND binding_id = :bindingId AND external_entity_id = :externalId
                               AND lease_owner = :owner
@@ -488,7 +513,8 @@ public class JdbcMarketplaceAvailabilityStore {
     /** Counts and the oldest pending moment for each binding at one location. */
     public List<BindingSummary> summariesAtLocation(UUID tenantId, UUID locationId) {
         return jdbc.sql("""
-                SELECT b.id AS binding_id, i.provider_type, i.display_name,
+                SELECT b.id AS binding_id, b.installation_id AS installation_id, i.status AS installation_status,
+                       i.provider_type, i.display_name,
                        count(a.*) FILTER (WHERE a.state = 'IN_SYNC') AS in_sync,
                        count(a.*) FILTER (WHERE a.state = 'PENDING') AS pending,
                        count(a.*) FILTER (WHERE a.state = 'UNCERTAIN') AS uncertain,
@@ -508,8 +534,8 @@ public class JdbcMarketplaceAvailabilityStore {
                        ON w.tenant_id = b.tenant_id AND w.binding_id = b.id AND w.direction = 'OUTBOUND'
                 WHERE b.tenant_id = :tenantId AND b.location_id = :locationId
                   AND i.provider_category = 'MARKETPLACE' AND b.status = 'ACTIVE'
-                GROUP BY b.id, i.provider_type, i.display_name, s.last_sweep_at, s.reconcile_was_enabled,
-                         w.last_success_at, w.last_failure_at, w.last_failure_code
+                GROUP BY b.id, b.installation_id, i.status, i.provider_type, i.display_name, s.last_sweep_at,
+                         s.reconcile_was_enabled, w.last_success_at, w.last_failure_at, w.last_failure_code
                 ORDER BY i.display_name, b.id
                 """)
                 .param("tenantId", tenantId)
@@ -527,7 +553,9 @@ public class JdbcMarketplaceAvailabilityStore {
                         row.getObject("reconcile_was_enabled") == null || row.getBoolean("reconcile_was_enabled"),
                         instant(row.getObject("last_success_at", OffsetDateTime.class)),
                         instant(row.getObject("last_failure_at", OffsetDateTime.class)),
-                        row.getString("last_failure_code")))
+                        row.getString("last_failure_code"),
+                        row.getObject("installation_id", UUID.class),
+                        "ACTIVE".equals(row.getString("installation_status"))))
                 .list();
     }
 
@@ -658,7 +686,9 @@ public class JdbcMarketplaceAvailabilityStore {
             boolean reconcileEnabled,
             @Nullable Instant lastSuccessAt,
             @Nullable Instant lastFailureAt,
-            @Nullable String lastFailureCode) {}
+            @Nullable String lastFailureCode,
+            UUID installationId,
+            boolean installationActive) {}
 
     public record Watermark(String alertState, @Nullable Instant lastSuccessAt, int staleAfterSeconds) {}
 

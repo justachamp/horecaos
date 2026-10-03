@@ -8,8 +8,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.catalog.api.ChannelOfferingLookup;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.ProductCreated;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
@@ -26,8 +30,11 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.RecommendationRow;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.infrastructure.catalog.InventoryStopOverlayLookup;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
@@ -84,8 +91,9 @@ class ProductRecommendationTests {
         jdbc.sql("TRUNCATE TABLE catalog.product_recommendations, catalog.location_offerings, "
                         + "catalog.translations, catalog.variants, catalog.products, catalog.catalogs CASCADE")
                 .update();
-        jdbc.sql("TRUNCATE TABLE inventory.reservation_lines, inventory.reservations, "
-                        + "inventory.movements, inventory.positions, inventory.stock_items CASCADE")
+        jdbc.sql("TRUNCATE TABLE inventory.availability_stops, inventory.reservation_lines, "
+                        + "inventory.reservations, inventory.movements, inventory.positions, "
+                        + "inventory.stock_items CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         insertTenancy(TENANT, BRAND, LOCATION, "product-recommendation-tenant", "MAIN");
@@ -388,6 +396,168 @@ class ProductRecommendationTests {
 
         assertThat(authoring.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
                 .isEmpty();
+    }
+
+    // ----------------------------------------- ADR 0141: a stop record is also "stopped" (fix17-f-stops)
+
+    @Test
+    @DisplayName(
+            "a POS stop on a target is excluded although its position boolean is still true, and reappears when lifted")
+    void aStopRecordExcludesTheTargetWhileThePositionBooleanStaysTrue() {
+        CatalogAuthoringService withStops = authoringWithStopOverlay();
+        ProductCreated burger = createProduct("BURGER", "Burger");
+        ProductCreated fries = createProduct("FRIES", "Fries");
+        withStops.attachRecommendation(TENANT, BRAND, burger.productId(), fries.defaultVariantId(), 0, ACTOR_SUBJECT);
+        withStops.setOffering(
+                TENANT, BRAND, LOCATION, fries.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, fries.defaultVariantId(), TrackingMode.BINARY);
+        assertThat(withStops.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
+                .as("sanity check: sellable before the till reports it out")
+                .hasSize(1);
+
+        // The till reports the dish out of stock: ADR 0141 writes a POS stop and leaves the position alone.
+        UUID stopId = insertStop(fries.defaultVariantId(), "LOCATION", LOCATION, null, null);
+
+        assertThat(withStops.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
+                .as("the cart refuses a stopped dish with ON_STOP, so the cross-sell preview must not offer it")
+                .isEmpty();
+
+        liftStop(stopId);
+        assertThat(withStops.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
+                .as("lifted: it reappears on its own")
+                .extracting(RecommendationRow::targetVariantId)
+                .containsExactly(fries.defaultVariantId());
+    }
+
+    @Test
+    @DisplayName("a brand-wide stop excludes the target; a stop at another branch or past its end does not")
+    void aBrandStopExcludesButAnotherBranchOrAnExpiredStopDoesNot() {
+        CatalogAuthoringService withStops = authoringWithStopOverlay();
+        ProductCreated burger = createProduct("BURGER", "Burger");
+        ProductCreated fries = createProduct("FRIES", "Fries");
+        withStops.attachRecommendation(TENANT, BRAND, burger.productId(), fries.defaultVariantId(), 0, ACTOR_SUBJECT);
+        withStops.setOffering(
+                TENANT, BRAND, LOCATION, fries.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        UUID otherBranch = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (
+                    id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'SECOND', 'second', 'Second', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", otherBranch)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+        insertStop(fries.defaultVariantId(), "LOCATION", otherBranch, null, null);
+        insertStop(fries.defaultVariantId(), "BRAND", null, null, Instant.parse("2020-01-01T00:00:00Z"));
+        assertThat(withStops.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
+                .as("a stop at another branch and a brand stop that has already ended cover nothing here")
+                .hasSize(1);
+
+        insertStop(fries.defaultVariantId(), "BRAND", null, null, null);
+        assertThat(withStops.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
+                .as("a brand-wide stop in force covers this branch")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a stop on one channel only keeps the target: the preview is location-wide and it still sells elsewhere")
+    void aChannelOnlyStopKeepsTheTarget() {
+        CatalogAuthoringService withStops = authoringWithStopOverlay();
+        ProductCreated burger = createProduct("BURGER", "Burger");
+        ProductCreated fries = createProduct("FRIES", "Fries");
+        withStops.attachRecommendation(TENANT, BRAND, burger.productId(), fries.defaultVariantId(), 0, ACTOR_SUBJECT);
+        withStops.setOffering(
+                TENANT, BRAND, LOCATION, fries.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        UUID web = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name)
+                VALUES (:id, :t, 'WEB1', 'WEB', 'Web')
+                """).param("id", web).param("t", TENANT).update();
+        insertStop(fries.defaultVariantId(), "CHANNEL", null, web, null);
+
+        assertThat(withStops.resolvedRecommendations(TENANT, BRAND, burger.productId(), LOCATION, LOCALE))
+                .extracting(RecommendationRow::targetVariantId)
+                .containsExactly(fries.defaultVariantId());
+    }
+
+    /** The service the application wires: catalog's SQL read with inventory's stops laid over it. */
+    private CatalogAuthoringService authoringWithStopOverlay() {
+        CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
+        ChannelOfferingLookup noMenus = new ChannelOfferingLookup() {
+            @Override
+            public Optional<UUID> menuBoundTo(UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID channelId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Set<UUID> menusBoundAt(UUID tenantId, UUID brandId, UUID locationId) {
+                return Set.of();
+            }
+
+            @Override
+            public Set<UUID> offeredVariants(
+                    UUID tenantId, UUID brandId, UUID locationId, UUID channelId, Set<UUID> variantIds, Instant at) {
+                return variantIds;
+            }
+
+            @Override
+            public List<UUID> variantIdsOfProduct(UUID tenantId, UUID brandId, UUID productId) {
+                return List.of();
+            }
+        };
+        TenantRlsSession noRls = new TenantRlsSession() {
+            @Override
+            public void bindTenant(UUID tenantId) {}
+
+            @Override
+            public void bindPlatform() {}
+        };
+        return new CatalogAuthoringService(
+                store,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
+                        jdbc, JsonMapper.builder().build()),
+                commercial.entitlements(),
+                commercial.usage(),
+                Clock.systemUTC(),
+                (tenantId, locationId) -> Optional.empty(),
+                event -> {},
+                new InventoryStopOverlayLookup(new JdbcAvailabilityStopStore(jdbc), noMenus, noRls, Clock.systemUTC()));
+    }
+
+    private UUID insertStop(
+            UUID variantId,
+            String scope,
+            @Nullable UUID locationId,
+            @Nullable UUID channelId,
+            @Nullable Instant endsAt) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO inventory.availability_stops (
+                    id, tenant_id, brand_id, variant_id, scope_type, location_id, channel_id,
+                    source, source_ref, reason_code, ends_at, created_by)
+                VALUES (:id, :t, :b, :v, :scope, :location, :channel, 'POS', :ref, 'SOLD_OUT', :endsAt, 'pos-poll')
+                """)
+                .param("id", id)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("v", variantId)
+                .param("scope", scope)
+                .param("location", locationId)
+                .param("channel", channelId)
+                .param("ref", "binding-" + id)
+                .param("endsAt", endsAt == null ? null : java.time.OffsetDateTime.ofInstant(endsAt, ZoneOffset.UTC))
+                .update();
+        return id;
+    }
+
+    private void liftStop(UUID stopId) {
+        jdbc.sql("""
+                UPDATE inventory.availability_stops
+                SET status = 'LIFTED', lifted_by = 'pos-poll', lifted_at = now()
+                WHERE id = :id
+                """).param("id", stopId).update();
     }
 
     private ProductCreated createProduct(String code, String name) {

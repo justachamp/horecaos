@@ -1750,10 +1750,36 @@ public class CatalogAuthoringService {
      * IA 4.2's own filter, resolved fresh on every call rather than pruned
      * from the stored set: active + in-menu + not-stopped, at one location. A
      * target stopped today and un-stopped tomorrow reappears here on its own.
+     *
+     * <p>"Not-stopped" is both kinds of stop (ADR 0141): the SQL read leaves out a target whose
+     * {@code BINARY} position is 86'd, and the stops in force are laid over what it returns, the
+     * same overlay the stop list and the New order picker use. A stop on every channel here
+     * ({@code LOCATION} or {@code BRAND} scope, which is what a POS stop is) removes the target,
+     * because the cart refuses it with {@code ON_STOP} on every channel; a stop on some channels
+     * only ({@code CHANNEL}, {@code MENU}) keeps it, because this read names no channel and the
+     * dish still sells on the others.
      */
     public List<JdbcCatalogStore.RecommendationRow> resolvedRecommendations(
             UUID tenantId, UUID brandId, UUID sourceProductId, UUID locationId, String locale) {
-        return store.listResolvedRecommendations(tenantId, brandId, sourceProductId, locationId, locale);
+        List<JdbcCatalogStore.RecommendationRow> rows =
+                store.listResolvedRecommendations(tenantId, brandId, sourceProductId, locationId, locale);
+        if (stopOverlay == null || rows.isEmpty()) {
+            return rows;
+        }
+        Map<UUID, List<StopOverlayLookup.StopFact>> stopsByVariant = stopOverlay.stopsAtLocation(
+                tenantId,
+                brandId,
+                locationId,
+                rows.stream()
+                        .map(JdbcCatalogStore.RecommendationRow::targetVariantId)
+                        .collect(java.util.stream.Collectors.toSet()));
+        if (stopsByVariant.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .filter(row -> stopsByVariant.getOrDefault(row.targetVariantId(), List.of()).stream()
+                        .noneMatch(StopOverlayLookup.StopFact::everyChannel))
+                .toList();
     }
 
     /** A product was asked to recommend one of its own variants — cross-sell, never a self-reference. */

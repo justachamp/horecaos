@@ -46,17 +46,19 @@ public class StorefrontInventoryController {
     @GetMapping("/variants/{variantId}/availability")
     @Operation(
             summary = "Whether a variant is orderable here, and its remaining quantity if tracked",
-            description = "The same channel-aware check the operations console uses (GET "
-                    + ".../availability?channel=...), scoped to one variant. The channel is "
-                    + "required (tenant.sales_channels.system_type, e.g. WEB) so a per-channel-type "
-                    + "stop threshold (gap map row 4.4c) applies to the channel actually asking.")
+            description = "The same channel-aware check the storefront menu and the cart make, "
+                    + "scoped to one variant. The channel is required and is the tenant's own "
+                    + "channel code, as on the menu read (ADR 0141): the stops that cover that "
+                    + "channel apply, and so does its channel type's stop threshold (gap map row "
+                    + "4.4c). A value that names no registered channel is read as a bare channel "
+                    + "type (e.g. WEB), for which only the stops covering every channel apply.")
     public ResponseEntity<StorefrontAvailabilityResponse> availability(
             @PathVariable UUID tenantId,
             @PathVariable UUID locationId,
             @PathVariable UUID variantId,
             @RequestParam String channel) {
         AvailabilityDecision decision =
-                inventory.checkAvailabilityForChannel(tenantId, locationId, Set.of(variantId), channel);
+                inventory.checkAvailabilityOnChannelCode(tenantId, locationId, Set.of(variantId), channel);
         BigDecimal own = decision.available()
                 ? inventory
                         .findStockPosition(tenantId, locationId, variantId)
