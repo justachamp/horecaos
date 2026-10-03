@@ -35,6 +35,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -132,6 +133,42 @@ class JdbcPolicyAuthorVersionCheckTests {
         assertThat(author.currentVersion(PROBE, tenant)).isEqualTo(2);
         assertThat(resolver.resolve(PROBE, tenant).orElseThrow().document().seconds())
                 .isEqualTo(300);
+    }
+
+    @Test
+    void provenanceNamesTheLatestVersionItsApproverAndWhenItTookEffectAtExactlyThatScope() {
+        ResourceScope tenant = ResourceScope.tenant(TENANT);
+        author.author(PROBE, tenant, new Probe(600), 0, ActorRef.user("first-approver", null), "first");
+        author.author(PROBE, tenant, new Probe(300), 1, ActorRef.user("second-approver", null), "second");
+
+        assertThat(author.provenance(PROBE, tenant))
+                .hasValue(new ResolutionTrace.Provenance(2, "second-approver", Instant.parse("2026-09-30T10:00:00Z")));
+    }
+
+    @Test
+    void provenanceIsEmptyWhereNothingWasAuthoredEvenWhenAnAncestorAuthoredOne() {
+        author.author(PROBE, ResourceScope.tenant(TENANT), new Probe(600), 0, OPERATOR, "first");
+
+        assertThat(author.provenance(PROBE, ResourceScope.brand(TENANT, BRAND)))
+                .as("the brand only inherits; the tenant's version is the tenant rung's to report")
+                .isEmpty();
+        assertThat(author.provenance(PROBE, ResourceScope.tenant(OTHER_TENANT)))
+                .as("another tenant's scope is its own")
+                .isEmpty();
+    }
+
+    @Test
+    void provenanceFallsBackToTheAuthorForARowThatRecordsNoApprover() {
+        ResourceScope tenant = ResourceScope.tenant(TENANT);
+        author.author(PROBE, tenant, new Probe(600), 0, OPERATOR, "first");
+        jdbc.sql("UPDATE tenant.policies SET approved_by = NULL WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .update();
+
+        assertThat(author.provenance(PROBE, tenant))
+                .get()
+                .extracting(ResolutionTrace.Provenance::principal)
+                .isEqualTo("op-1");
     }
 
     @Test

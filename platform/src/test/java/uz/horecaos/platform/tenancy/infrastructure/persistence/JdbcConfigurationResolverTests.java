@@ -18,6 +18,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 
 /**
  * ADR 0030 at the SQL boundary: precedence over real rows, and the ancestry and
@@ -90,6 +91,55 @@ class JdbcConfigurationResolverTests {
 
         assertThat(resolver.resolve(TIMEOUT, locationScope()).value()).isEqualTo(200);
         assertThat(resolver.explain(TIMEOUT, locationScope()).winningScope()).isEqualTo(ScopeType.TENANT);
+    }
+
+    @Test
+    void theTraceNamesWhoSetEachStoredLevelItsVersionAndWhenFromTheRowsThemselves() {
+        insertInteger(ScopeType.PLATFORM, null, null, null, 100);
+        insertIntegerBy(ScopeType.TENANT, TENANT, null, null, 200, "subject-tenant-admin", 4, "2026-09-01T10:00:00Z");
+        insertIntegerBy(
+                ScopeType.LOCATION, TENANT, BRAND, LOCATION, 400, "subject-branch-manager", 0, "2026-09-20T07:30:00Z");
+
+        ResolutionTrace trace = resolver.explain(TIMEOUT, locationScope());
+
+        assertThat(trace.inspectedLevels())
+                .extracting(ResolutionTrace.Level::scopeType)
+                .containsExactly(ScopeType.LOCATION);
+        assertThat(trace.inspectedLevels().get(0).provenance())
+                .isEqualTo(new ResolutionTrace.Provenance(
+                        0, "subject-branch-manager", java.time.Instant.parse("2026-09-20T07:30:00Z")));
+
+        ResolutionTrace brandTrace = resolver.explain(TIMEOUT, ResourceScope.brand(TENANT, BRAND));
+        assertThat(brandTrace.inspectedLevels())
+                .extracting(ResolutionTrace.Level::scopeType, ResolutionTrace.Level::outcome)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(ScopeType.BRAND, ResolutionTrace.Outcome.NOT_SET),
+                        org.assertj.core.groups.Tuple.tuple(ScopeType.TENANT, ResolutionTrace.Outcome.VALUE));
+        assertThat(brandTrace.inspectedLevels().get(0).provenance())
+                .as("nothing stored at the brand")
+                .isNull();
+        assertThat(brandTrace.inspectedLevels().get(1).provenance())
+                .isEqualTo(new ResolutionTrace.Provenance(
+                        4, "subject-tenant-admin", java.time.Instant.parse("2026-09-01T10:00:00Z")));
+    }
+
+    @Test
+    void anotherTenantsRowNeverAppearsInThisTenantsTraceProvenance() {
+        insertIntegerBy(
+                ScopeType.TENANT,
+                OTHER_TENANT,
+                null,
+                null,
+                999,
+                "subject-of-the-other-tenant",
+                0,
+                "2026-09-01T10:00:00Z");
+
+        ResolutionTrace trace = resolver.explain(TIMEOUT, ResourceScope.tenant(TENANT));
+
+        assertThat(trace.inspectedLevels())
+                .extracting(ResolutionTrace.Level::provenance)
+                .containsOnlyNulls();
     }
 
     @Test
@@ -188,6 +238,35 @@ class JdbcConfigurationResolverTests {
                 .param("brandId", brandId)
                 .param("locationId", locationId)
                 .param("value", value)
+                .update();
+    }
+
+    private void insertIntegerBy(
+            ScopeType scopeType,
+            @Nullable UUID tenantId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            int value,
+            String setBy,
+            long version,
+            String updatedAt) {
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values
+                    (id, key_code, scope_type, tenant_id, brand_id, location_id,
+                     value_type, integer_value, set_by, version, updated_at)
+                VALUES (:id, :keyCode, :scopeType, :tenantId, :brandId, :locationId,
+                        'INTEGER', :value, :setBy, :version, CAST(:updatedAt AS timestamptz))
+                """)
+                .param("id", UUID.randomUUID())
+                .param("keyCode", TIMEOUT.code())
+                .param("scopeType", scopeType.name())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("value", value)
+                .param("setBy", setBy)
+                .param("version", version)
+                .param("updatedAt", updatedAt)
                 .update();
     }
 

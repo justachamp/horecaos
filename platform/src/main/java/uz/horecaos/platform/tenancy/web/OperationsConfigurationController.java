@@ -7,8 +7,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +27,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.tenancy.api.AuthoredConfigurationValue;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
@@ -81,12 +85,17 @@ public class OperationsConfigurationController {
     private final ConfigurationResolver resolver;
     private final ConfigurationValueAuthor values;
     private final CurrentActor currentActor;
+    private final StaffDirectory staff;
 
     public OperationsConfigurationController(
-            ConfigurationResolver resolver, ConfigurationValueAuthor values, CurrentActor currentActor) {
+            ConfigurationResolver resolver,
+            ConfigurationValueAuthor values,
+            CurrentActor currentActor,
+            StaffDirectory staff) {
         this.resolver = resolver;
         this.values = values;
         this.currentActor = currentActor;
+        this.staff = staff;
     }
 
     @GetMapping("/keys")
@@ -123,7 +132,7 @@ public class OperationsConfigurationController {
 
         ConfigurationKey<?> key = tenantVisibleKey(code);
         ResourceScope scope = scopeOf(tenantId, scopeType, brandId, locationId);
-        return resolveAndExplain(key, scope);
+        return resolveAndExplain(tenantId, key, scope);
     }
 
     @PostMapping("/keys/{code}/values")
@@ -234,11 +243,29 @@ public class OperationsConfigurationController {
 
     /** Captures the wildcard from {@link ConfigurationKey#find} so the resolver's generic methods apply. */
     private <T> OperationsConfigurationResolutionResponse resolveAndExplain(
-            ConfigurationKey<T> key, ResourceScope scope) {
+            UUID tenantId, ConfigurationKey<T> key, ResourceScope scope) {
         Resolved<T> resolved = resolver.resolve(key, scope);
         ResolutionTrace trace = resolver.explain(key, scope);
         Long currentVersionAtScope = values.currentVersion(key, scope).orElse(null);
-        return OperationsConfigurationResolutionResponse.of(key, resolved, trace, currentVersionAtScope);
+        return OperationsConfigurationResolutionResponse.of(
+                key, resolved, trace, currentVersionAtScope, namesOfChangers(tenantId, trace));
+    }
+
+    /**
+     * The people behind the trace's rungs, named. The trace holds subjects (ids) and nothing else
+     * (ADR 0029); the names are looked up here, for the tenant the path names, in one read, and go
+     * into this response only. A subject with no member row in this tenant (a support session, a
+     * device, an account the tenant never recorded) is absent from the map and the console says so.
+     */
+    private Map<String, String> namesOfChangers(UUID tenantId, ResolutionTrace trace) {
+        List<String> principals = trace.inspectedLevels().stream()
+                .map(ResolutionTrace.Level::provenance)
+                .filter(Objects::nonNull)
+                .map(ResolutionTrace.Provenance::principal)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return principals.isEmpty() ? Map.of() : staff.namesOf(tenantId, principals);
     }
 
     /**
@@ -321,7 +348,8 @@ public class OperationsConfigurationController {
                 ConfigurationKey<T> key,
                 Resolved<T> resolved,
                 ResolutionTrace trace,
-                @Nullable Long currentVersionAtScope) {
+                @Nullable Long currentVersionAtScope,
+                Map<String, String> names) {
             return new OperationsConfigurationResolutionResponse(
                     key.code(),
                     resolved.value(),
@@ -329,16 +357,37 @@ public class OperationsConfigurationController {
                     trace.source().name(),
                     trace.winningScope(),
                     trace.inspectedLevels().stream()
-                            .map(OperationsTraceLevel::of)
+                            .map(level -> OperationsTraceLevel.of(level, names))
                             .toList(),
                     trace.describe(),
                     currentVersionAtScope);
         }
     }
 
-    public record OperationsTraceLevel(ScopeType scopeType, String outcome) {
-        static OperationsTraceLevel of(ResolutionTrace.Level level) {
-            return new OperationsTraceLevel(level.scopeType(), level.outcome().name());
+    /**
+     * One rung of the ladder. The last three fields are the facts about the row stored at this level
+     * (settings.md §1.2: who set it, and when) and are absent for a level where nothing is stored.
+     *
+     * @param version       the stored row's version
+     * @param changedByName who set it, by the name this tenant knows them by; absent when they have no
+     *                      member record here
+     * @param changedAt     when it was last changed
+     */
+    public record OperationsTraceLevel(
+            ScopeType scopeType,
+            String outcome,
+            @Nullable Long version,
+            @Nullable String changedByName,
+            @Nullable Instant changedAt) {
+
+        static OperationsTraceLevel of(ResolutionTrace.Level level, Map<String, String> names) {
+            ResolutionTrace.Provenance provenance = level.provenance();
+            return new OperationsTraceLevel(
+                    level.scopeType(),
+                    level.outcome().name(),
+                    provenance == null ? null : provenance.version(),
+                    provenance == null || provenance.principal() == null ? null : names.get(provenance.principal()),
+                    provenance == null ? null : provenance.since());
         }
     }
 
