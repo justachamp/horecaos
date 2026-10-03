@@ -248,6 +248,45 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Reads the two ciphertexts it needs and no others: the address document, and the
+     * customer's delivery instructions. The name and the telephone number stay sealed, so a
+     * courier who is allowed to see the door is not thereby allowed to see the person.
+     */
+    @Override
+    public Optional<CustomerLocation> customerLocation(UUID tenantId, UUID orderId, String purpose) {
+        return jdbc.sql("""
+                SELECT s.address_encrypted, s.delivery_instructions_encrypted
+                FROM ordering.orders o
+                JOIN ordering.order_customer_snapshots s
+                  ON s.order_id = o.id AND s.tenant_id = o.tenant_id
+                WHERE o.tenant_id = :tenantId
+                  AND o.id = :orderId
+                  AND o.fulfillment_mode = 'DELIVERY'
+                  AND s.address_encrypted IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new String[] {
+                    row.getString(ADDRESS_COLUMN), row.getString(INSTRUCTIONS_COLUMN)
+                })
+                .optional()
+                .map(columns -> {
+                    DeliveryDestination destination = objectMapper.readValue(
+                            reveal(tenantId, orderId, ADDRESS_COLUMN, columns[0], purpose), DeliveryDestination.class);
+                    return new CustomerLocation(
+                            destination.latitude(),
+                            destination.longitude(),
+                            destination.addressLine(),
+                            destination.entrance(),
+                            destination.floor(),
+                            destination.apartment(),
+                            reveal(tenantId, orderId, INSTRUCTIONS_COLUMN, columns[1], purpose));
+                });
+    }
+
+    /**
      * Prepaid means HorecaOS has the money. NOT_REQUIRED is the cash order -- the courier collects
      * at the door -- and PENDING is money that has not arrived. Getting this wrong charges the
      * customer twice or lets them pay nobody.
@@ -270,6 +309,11 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
     }
 
     private @Nullable String reveal(UUID tenantId, UUID orderId, String column, @Nullable String ciphertext) {
+        return reveal(tenantId, orderId, column, ciphertext, PURPOSE);
+    }
+
+    private @Nullable String reveal(
+            UUID tenantId, UUID orderId, String column, @Nullable String ciphertext, String purpose) {
         if (ciphertext == null) {
             return null;
         }
@@ -277,7 +321,7 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                 tenantId,
                 ProtectedValue.deserialize(ciphertext),
                 new RecordRef(SNAPSHOT_TABLE, column, orderId),
-                PURPOSE);
+                purpose);
     }
 
     /** Four ciphertexts and the commercial facts around them. Never printed whole. */

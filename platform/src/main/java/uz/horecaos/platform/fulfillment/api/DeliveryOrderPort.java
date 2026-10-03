@@ -178,6 +178,51 @@ public interface DeliveryOrderPort {
         }
     }
 
+    /**
+     * Where the customer is, and nothing else about them, decrypted for one stated purpose
+     * (ADR 0029, courier policy {@code revealCustomerLocationTiming}).
+     *
+     * <p>Narrower than {@link #deliveryOrder} on purpose. That read assembles a name, a
+     * telephone number and a comment for a partner's booking; a courier's own screen needs the
+     * door and the way in, and a courier policy that decides <em>when</em> a courier may see
+     * where the customer lives must not hand them the customer's name and number in the same
+     * breath. The caller decides whether this read is allowed, and records the audit fact that
+     * names who asked and for which order; this answers the decrypt and records the purpose the
+     * envelope protection keeps against every reveal.
+     *
+     * <p>Not filtered on the order's status: an order that has since been cancelled still has a
+     * door, and refusing the read here would make a courier already standing at it unable to
+     * find out where. Whether they may still ask is the caller's rule, taken from the shipment
+     * they hold.
+     *
+     * @param purpose why the address is being read, recorded with the reveal
+     * @return empty when the order is not this tenant's, is not a delivery, or holds no address
+     */
+    default Optional<CustomerLocation> customerLocation(UUID tenantId, UUID orderId, String purpose) {
+        return Optional.empty();
+    }
+
+    /**
+     * The door a courier is sent to. Personal data throughout, so it prints as nothing.
+     *
+     * @param instructions the customer's own words about how to reach them ("ring twice",
+     *                     "the gate code is on the intercom"), or null when they left none
+     */
+    record CustomerLocation(
+            double latitude,
+            double longitude,
+            String addressLine,
+            @Nullable String entrance,
+            @Nullable String floor,
+            @Nullable String apartment,
+            @Nullable String instructions) {
+
+        @Override
+        public String toString() {
+            return "CustomerLocation[REDACTED]";
+        }
+    }
+
     /** Whether a real implementation is present. */
     default boolean isWired() {
         return true;
