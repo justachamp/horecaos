@@ -996,6 +996,37 @@ class CatchweightAndDecimalOrderHttpTests {
                 .isTrue();
     }
 
+    // ------------------------------- the payment a weighed basket can be sold with
+
+    @Test
+    @DisplayName("a basket with a line sold by weight cannot be checked out with a method that takes the money "
+            + "first, because the weighed total could never be taken from it")
+    void aWeighedBasketCannotBeSoldForAProviderPayment() {
+        enableProviderMethodOnTheStorefront("CLICK");
+        UUID weighed = openCart();
+        putLine(weighed, "cake", cakeVariant, "1");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, weighed, cartVersion(weighed)));
+
+        var refused = checkoutResult(weighed, "weighed-click", "CLICK");
+
+        assertThat(refused.rejectionCode()).as(refused.rejectionDetail()).isEqualTo("WEIGHED_LINES_PAY_AT_HANDOVER");
+        assertThat(refused.orderId()).isNull();
+
+        // The rule is about the basket, not the method: without a weighed line the very same checkout meets
+        // the next precondition instead (no merchant account is bound in this fixture).
+        UUID ordinary = openCart();
+        putLine(ordinary, "soda", sodaVariant, "1");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, ordinary, cartVersion(ordinary)));
+        assertThat(checkoutResult(ordinary, "soda-click", "CLICK").rejectionCode())
+                .isEqualTo("PAYMENT_METHOD_UNAVAILABLE");
+
+        // And the weighed basket is still sold, for the method that settles at the door.
+        var settledAtTheDoor = checkoutResult(weighed, "weighed-cash", "CASH");
+        assertThat(settledAtTheDoor.created())
+                .as("%s %s", settledAtTheDoor.rejectionCode(), settledAtTheDoor.rejectionDetail())
+                .isTrue();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private UUID placeOrder(Map<String, UUID> lines, String idempotencyKey) {
@@ -1040,8 +1071,13 @@ class CatchweightAndDecimalOrderHttpTests {
     }
 
     private UUID checkoutCart(UUID cart, String idempotencyKey) {
+        var result = checkoutResult(cart, idempotencyKey, "CASH");
+        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
+    }
+
+    private CheckoutService.CheckoutResult checkoutResult(UUID cart, String idempotencyKey, String paymentMethod) {
         var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
-        var result = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
                 TENANT,
                 BRAND,
                 cart,
@@ -1049,14 +1085,13 @@ class CatchweightAndDecimalOrderHttpTests {
                 Objects.requireNonNull(row.pricingQuoteId(), "the cart was priced first"),
                 Objects.requireNonNull(row.pricingContextHash(), "the cart was priced first"),
                 idempotencyKey,
-                "CASH",
+                paymentMethod,
                 0L,
                 "CUSTOMER",
                 CUSTOMER.toString(),
                 null,
                 null,
                 false)));
-        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
     }
 
     /** CASH orders confirm themselves under the default policy; this makes the premise explicit. */
@@ -1200,6 +1235,25 @@ class CatchweightAndDecimalOrderHttpTests {
                 .param("id", orderId)
                 .query(Boolean.class)
                 .single());
+    }
+
+    /** CLICK sold on the storefront channel; no merchant account is bound to it. */
+    private void enableProviderMethodOnTheStorefront(String code) {
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, :code, :code, 'OPERATOR', 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
+                SELECT :tenantId, id, :code, true FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND code = 'STOREFRONT'
+                ON CONFLICT DO NOTHING
+                """).param("tenantId", TENANT).param("code", code).update();
     }
 
     private long totalOf(UUID orderId) throws Exception {

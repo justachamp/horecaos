@@ -1077,6 +1077,35 @@ public class CartService {
     }
 
     /**
+     * Whether any line of this cart is sold by weight (ADR 0137), read from the published menu the
+     * lines were chosen from -- the same source the cart's portion rule reads, so a basket is
+     * judged on exactly what the customer was shown.
+     *
+     * <p>Asked by what offers a payment method ({@code CartPaymentOptions}) and by what refuses
+     * one ({@code CheckoutEligibilityGuard}), so the list a customer sees and the checkout that
+     * follows cannot disagree about a weighed basket. A combo's container carries no physical
+     * block, and its components are never weighed, so a combo line is never the answer.
+     */
+    @Transactional(readOnly = true)
+    public boolean holdsWeighedLine(UUID tenantId, UUID brandId, CartRow cart, List<CartLineRow> lines) {
+        String channelCode = channels.byId(tenantId, cart.channelId())
+                .map(SalesChannel::code)
+                .orElse(null);
+        if (channelCode == null) {
+            return false;
+        }
+        for (CartLineRow line : lines) {
+            boolean weighed = menu.forVariant(tenantId, brandId, channelCode, line.variantId())
+                    .map(rules -> rules.physicalOf(line.variantId()).catchweight())
+                    .orElse(false);
+            if (weighed) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * ADR 0140: selects the money method the customer means to pay by, or clears
      * the selection with a null code.
      *

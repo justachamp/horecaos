@@ -384,6 +384,22 @@ class CheckoutEligibilityGuard {
             return Result.rejected("PAYMENT_METHOD_UNAVAILABLE", "This channel does not offer " + paymentMethodCode);
         }
 
+        // ADR 0137: a line sold by weight is checked out at its nominal weight and corrected at
+        // the scale, and the correction refuses an order whose money a provider has already taken
+        // (PAYMENT_ALREADY_TAKEN) -- which left the food on the pass behind a handover blocker
+        // nobody could clear. Refused here, where the basket can still be paid for by a method
+        // that settles at the door, for the reason CartPaymentOptions stops offering the method:
+        // the list a customer is shown and this checkout must not disagree.
+        if (payments.takesMoneyBeforeHandover(command.tenantId(), paymentMethodCode)
+                && cartService.holdsWeighedLine(command.tenantId(), command.brandId(), cart, cartLines)) {
+            return Result.rejected(
+                    "WEIGHED_LINES_PAY_AT_HANDOVER",
+                    "This basket has an item sold by weight, whose final price is set at handover, so it "
+                            + "cannot be paid with "
+                            + paymentMethodCode
+                            + " in advance");
+        }
+
         // ADR 0140: the payment method is an input to the price whenever a promotion reads
         // it. The cart was priced with the method it had selected (none, until the
         // customer chose one), so a checkout that names a different method is paying for

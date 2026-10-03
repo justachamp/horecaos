@@ -107,6 +107,14 @@ public class PaymentIntentService implements PaymentIntentPort {
                 });
     }
 
+    /** Answered from the tender's capture timing, exactly as {@link #paymentRequiredBeforeConfirmation} is. */
+    @Override
+    public boolean takesMoneyBeforeHandover(UUID tenantId, String paymentMethodCode) {
+        return PaymentMethod.fromCode(paymentMethodCode)
+                .map(method -> method.captureTiming().requiredBeforeConfirmation())
+                .orElse(false);
+    }
+
     /**
      * Which of these orders have a payment the operations console can present
      * again (the order board's {@code ISSUE_INVOICE}). See {@link

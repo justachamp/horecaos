@@ -132,7 +132,8 @@ public class JdbcCartMenuRules implements CartMenuRules {
                     UUID.fromString(String.valueOf(variant.get("variantId"))),
                     new PhysicalRules(
                             Boolean.TRUE.equals(block.get("splittable")),
-                            portion instanceof Number number ? new BigDecimal(number.toString()) : null));
+                            portion instanceof Number number ? new BigDecimal(number.toString()) : null,
+                            Boolean.TRUE.equals(block.get("catchweight"))));
         }
         return byVariant;
     }
