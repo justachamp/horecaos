@@ -90,7 +90,10 @@ public class CatalogPublicationService {
         for (String code : store.channelsWithLivePublication(tenantId, brandId)) {
             channels.byCode(tenantId, code)
                     .ifPresent(channel -> byChannel.put(
-                            code, contentHashOf(snapshots.toPublicationItems(snapshot, tenantId, brandId, channel))));
+                            code,
+                            contentHashOf(snapshots
+                                    .toPublicationItems(snapshot, tenantId, brandId, channel)
+                                    .items())));
         }
         return new DraftPreview(contentHashOf(items), items.size(), byChannel);
     }
@@ -129,12 +132,20 @@ public class CatalogPublicationService {
         SalesChannel registered = requireRegisteredChannel(tenantId, channel);
 
         CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, catalogId);
-        ValidationFinding.Report report = validator.validate(snapshot);
 
-        // The channel's own items, not the draft's: an image that belongs to another
-        // channel is not published here (ADR 0138 step 4), and the channel preview
-        // draws the same list.
-        List<PublicationItem> items = snapshots.toPublicationItems(snapshot, tenantId, brandId, registered);
+        // The channel's own items, not the draft's: its images over the item's own and none
+        // that belong to another channel (ADR 0138 step 4), the very list the channel preview
+        // draws. An image the channel chose that is no longer showable stops the publication
+        // with the catalog's own blockers, rather than reaching a customer as a broken picture.
+        CatalogSnapshotLoader.ChannelItems channelItems =
+                snapshots.toPublicationItems(snapshot, tenantId, brandId, registered);
+        List<PublicationItem> items = channelItems.items();
+        ValidationFinding.Report catalogReport = validator.validate(snapshot);
+        ValidationFinding.Report report = channelItems.findings().isEmpty()
+                ? catalogReport
+                : new ValidationFinding.Report(java.util.stream.Stream.concat(
+                                catalogReport.findings().stream(), channelItems.findings().stream())
+                        .toList());
         String contentHash = hash(items);
         UUID publicationId = UUID.randomUUID();
         Instant now = clock.instant();

@@ -56,12 +56,27 @@ public class JdbcCatalogStore {
     private final ObjectMapper objectMapper;
     private final JdbcCompositeCatalogStore composite;
     private final JdbcPhysicalAttributesStore physicalAttributes;
+    private final JdbcChannelProjectionStore channelProjections;
 
     public JdbcCatalogStore(JdbcClient jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.composite = new JdbcCompositeCatalogStore(jdbc);
         this.physicalAttributes = new JdbcPhysicalAttributesStore(jdbc);
+        this.channelProjections = new JdbcChannelProjectionStore(jdbc);
+    }
+
+    /**
+     * Every channel image override the brand has written for one channel (ADR 0138), read with the
+     * rest of a channel's publication so {@code publish} and the preview see the same state.
+     *
+     * <p>Reached through the store the publication loader already holds, like {@link #composite()},
+     * so the loader's several callers -- and the tests that construct one by hand -- keep building
+     * it from the same four arguments.
+     */
+    public List<JdbcChannelProjectionStore.MediaOverrideRow> channelMediaOverrides(
+            UUID tenantId, UUID brandId, UUID channelId) {
+        return channelProjections.mediaOverrides(tenantId, brandId, channelId);
     }
 
     /**

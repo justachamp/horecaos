@@ -33,8 +33,15 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * row means the entity shows what it always showed, and replacing a set with an
  * empty one is how an override is removed. It rides the draft — a preview reads
  * it at once, and a live menu is untouched until something is published to the
- * channel — so, unlike an offering toggle, nothing here needs to take effect
- * mid-service.
+ * channel, which then serves it ({@link ChannelMediaLayers} is the one function
+ * both go through) — so, unlike an offering toggle, nothing here needs to take
+ * effect mid-service.
+ *
+ * <p><strong>Products only reach a live menu.</strong> A published menu carries a
+ * product's images and no variant's or category's ({@code MenuVariant} and {@code
+ * MenuCategory} have no image field), so a variant or category override is stored
+ * and drawn by the preview but served by nothing until ADR 0040's push gives a
+ * consumer for it.
  *
  * <p>Separate from {@link CatalogAuthoringService} because that class is
  * constructed directly, with five arguments, by dozens of tests that have no use

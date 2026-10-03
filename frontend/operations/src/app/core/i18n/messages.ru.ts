@@ -2828,7 +2828,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.preview.image.default': 'Обычное фото товара',
   'catalog.preview.override.title': 'Фото для канала',
   'catalog.preview.override.hint':
-    'Выберите, какие из собственных фото товара показывать в этом канале. Первое выбранное — главное. Цены это не меняет.',
+    'Выберите, какие из собственных фото товара показывать в этом канале. Первое выбранное — главное. Цены это не меняет. Живое меню канала изменится при следующей публикации в него.',
   'catalog.preview.override.empty': 'У товара нет собственных фото, из которых можно выбрать.',
   'catalog.preview.override.save': 'Сохранить',
   'catalog.preview.override.clear': 'Вернуть обычные фото товара',

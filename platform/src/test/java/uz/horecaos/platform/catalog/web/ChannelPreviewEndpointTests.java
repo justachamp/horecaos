@@ -540,6 +540,103 @@ class ChannelPreviewEndpointTests {
                 .isNotBlank();
     }
 
+    @Test
+    @DisplayName(
+            "a channel's image override is published with that channel and with no other, so a customer is served the picture its preview drew")
+    void anOverrideIsPublishedToItsChannel() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID universal = w.asset();
+        UUID override = w.asset();
+        w.attachDefaultImage(w.lagman.productId(), 0, universal);
+        w.attachDefaultImage(w.plov.productId(), 0, universal);
+
+        MvcResult written = mvc.perform(overridePut(w.uzum, "PRODUCT", w.lagman.productId(), """
+                        {"images":[{"mediaAssetId":"%s","role":"PRIMARY","sortOrder":0}]}
+                        """.formatted(override)))
+                .andReturn();
+        assertThat(written.getResponse().getStatus()).as(body(written)).isEqualTo(200);
+
+        JsonNode uzumPreview = previewAll(w.uzum, "locationId", w.l1.toString());
+        assertThat(imagesOf(uzumPreview, w.lagman)).containsExactly(override.toString());
+        for (String channel : List.of("UZUM", "STOREFRONT")) {
+            assertThat(publication
+                            .publish(w.tenant, w.brand, w.catalogId, channel, null)
+                            .status())
+                    .isEqualTo(PublicationStatus.PUBLISHED);
+        }
+
+        JsonNode uzumLive = liveMenu("UZUM");
+        JsonNode storefrontLive = liveMenu("STOREFRONT");
+        assertThat(imagesOf(uzumLive, w.lagman))
+                .as("Uzum's menu serves the photo the operator set for Uzum")
+                .containsExactly(override.toString())
+                .isEqualTo(imagesOf(uzumPreview, w.lagman));
+        assertThat(productOf(uzumLive, w.lagman).path("imageUrls").get(0).asText())
+                .as("and the URL a customer fetches is built from that asset")
+                .endsWith("/media/" + override);
+        assertThat(imagesOf(uzumLive, w.plov))
+                .as("a dish with no override keeps its own picture")
+                .containsExactly(universal.toString());
+        assertThat(imagesOf(storefrontLive, w.lagman))
+                .as("an override names its channel: the storefront still serves the dish's own picture")
+                .containsExactly(universal.toString());
+
+        // Removing the override and publishing again puts the dish's own picture back.
+        mvc.perform(overridePut(w.uzum, "PRODUCT", w.lagman.productId(), "{\"images\":[]}"))
+                .andReturn();
+        publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+        assertThat(imagesOf(liveMenu("UZUM"), w.lagman)).containsExactly(universal.toString());
+    }
+
+    @Test
+    @DisplayName(
+            "publishing refuses a channel whose image was withdrawn after it was chosen, rather than serving a broken picture")
+    void publishRefusesAWithdrawnChannelImage() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID pending = w.asset();
+        jdbc.sql("UPDATE media.assets SET status = 'UPLOADED' WHERE asset_id = :id")
+                .param("id", pending)
+                .update();
+        // Written past the service (which would refuse it) to model an asset withdrawn after it was attached.
+        jdbc.sql("""
+                INSERT INTO catalog.channel_media_overrides (
+                    tenant_id, brand_id, channel_id, entity_type, entity_id, role, media_asset_id, sort_order)
+                VALUES (:t, :b, :c, 'PRODUCT', :p, 'PRIMARY', :asset, 0)
+                """)
+                .param("t", w.tenant)
+                .param("b", w.brand)
+                .param("c", w.uzum)
+                .param("p", w.lagman.productId())
+                .param("asset", pending)
+                .update();
+
+        CatalogPublicationService.PublicationResult uzum =
+                publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+
+        assertThat(uzum.status()).isEqualTo(PublicationStatus.REJECTED);
+        assertThat(uzum.report().blockers())
+                .as("the refusal names the item whose channel image is gone")
+                .anySatisfy(finding -> {
+                    assertThat(finding.code()).isEqualTo(ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE);
+                    assertThat(finding.entityId()).isEqualTo(w.lagman.productId());
+                });
+        assertThat(publication
+                        .publish(w.tenant, w.brand, w.catalogId, "STOREFRONT", null)
+                        .status())
+                .as("the override names Uzum alone: the storefront is not held up by it")
+                .isEqualTo(PublicationStatus.PUBLISHED);
+
+        assertThat(previewAll(w.uzum, "locationId", w.l1.toString())
+                        .path("publishable")
+                        .asBoolean())
+                .as("the preview says what publish would decide")
+                .isFalse();
+        assertThat(previewAll(w.storefront, "locationId", w.l1.toString())
+                        .path("publishable")
+                        .asBoolean())
+                .isTrue();
+    }
+
     // -------------------------------------------------------------- findings
 
     @Test

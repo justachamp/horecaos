@@ -27,9 +27,6 @@ import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MarketplaceBindingRow;
-import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
-import uz.horecaos.platform.media.api.MediaAssetId;
-import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -86,7 +83,6 @@ public class ChannelPreviewService {
     private final StorefrontCatalogQuery storefront;
     private final SalesChannelLookup channels;
     private final MarketplaceRulesets rulesets;
-    private final MediaAvailability media;
 
     public ChannelPreviewService(
             JdbcCatalogStore store,
@@ -95,8 +91,7 @@ public class ChannelPreviewService {
             CatalogSnapshotLoader snapshots,
             StorefrontCatalogQuery storefront,
             SalesChannelLookup channels,
-            MarketplaceRulesets rulesets,
-            MediaAvailability media) {
+            MarketplaceRulesets rulesets) {
         this.store = store;
         this.projections = projections;
         this.validator = validator;
@@ -104,7 +99,6 @@ public class ChannelPreviewService {
         this.storefront = storefront;
         this.channels = channels;
         this.rulesets = rulesets;
-        this.media = media;
     }
 
     /**
@@ -134,12 +128,14 @@ public class ChannelPreviewService {
 
         CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, request.catalogId());
         ValidationFinding.Report universal = validator.validate(snapshot);
-        List<PublicationItem> drafted = snapshots.toPublicationItems(snapshot);
+
+        // The channel's own items: the call publish makes for this channel, so what is drawn
+        // below is what would be written, images and the blockers on them included.
+        CatalogSnapshotLoader.ChannelItems channelItems =
+                snapshots.toPublicationItems(snapshot, tenantId, brandId, channel);
 
         String locale = request.locale() == null ? snapshot.defaultLocale() : request.locale();
         PriceAuthority authority = channel.externallyPriced() ? PriceAuthority.EXTERNAL : PriceAuthority.HORECAOS;
-
-        ChannelMediaLayers.Plan mediaPlan = planMedia(tenantId, brandId, channel, snapshot, drafted);
 
         AssembledMenu menu;
         if (enabledHere) {
@@ -149,10 +145,10 @@ public class ChannelPreviewService {
                     target.locationId(),
                     locale,
                     channel.code(),
-                    itemsOf(mediaPlan.items(), EntityType.CATEGORY),
-                    itemsOf(mediaPlan.items(), EntityType.PRODUCT),
-                    itemsOf(mediaPlan.items(), EntityType.MODIFIER_GROUP),
-                    itemsOf(mediaPlan.items(), EntityType.COMBO_GROUP),
+                    itemsOf(channelItems.items(), EntityType.CATEGORY),
+                    itemsOf(channelItems.items(), EntityType.PRODUCT),
+                    itemsOf(channelItems.items(), EntityType.MODIFIER_GROUP),
+                    itemsOf(channelItems.items(), EntityType.COMBO_GROUP),
                     authority == PriceAuthority.EXTERNAL));
         } else {
             // The channel does not sell at this branch: it would receive nothing,
@@ -175,7 +171,7 @@ public class ChannelPreviewService {
                 menu.categories(),
                 products,
                 menu.modifierGroups(),
-                mediaPlan.resolved());
+                channelItems.media());
 
         List<PreviewFinding> findings = new ArrayList<>();
         Map<UUID, UUID> productOfVariant = new HashMap<>();
@@ -183,8 +179,8 @@ public class ChannelPreviewService {
         for (ValidationFinding finding : universal.findings()) {
             findings.add(new PreviewFinding(finding, FindingSource.CATALOG, ownerProduct(finding, productOfVariant)));
         }
-        List<ValidationFinding> projectionFindings =
-                projectionFindings(tenantId, channel, enabledHere, projection, snapshot, mediaPlan);
+        List<ValidationFinding> projectionFindings = new ArrayList<>(channelItems.findings());
+        projectionFindings.addAll(projectionFindings(channel, enabledHere, projection, snapshot));
         for (ValidationFinding finding : projectionFindings) {
             findings.add(
                     new PreviewFinding(finding, FindingSource.PROJECTION, ownerProduct(finding, productOfVariant)));
@@ -195,7 +191,11 @@ public class ChannelPreviewService {
                     new PreviewFinding(finding, FindingSource.MARKETPLACE, ownerProduct(finding, productOfVariant)));
         }
 
-        boolean channelReady = universal.publishable()
+        // What publish decides for this channel: the catalog's blockers and the blockers on the
+        // channel's own images, which publish adds to the catalog's report.
+        boolean publishable =
+                universal.publishable() && channelItems.findings().stream().noneMatch(ChannelPreviewService::isBlocker);
+        boolean channelReady = publishable
                 && projectionFindings.stream().noneMatch(ChannelPreviewService::isBlocker)
                 && marketplaceFindings.stream().noneMatch(ChannelPreviewService::isBlocker);
 
@@ -217,7 +217,7 @@ public class ChannelPreviewService {
                 locale,
                 authority,
                 menu.currency(),
-                universal.publishable(),
+                publishable,
                 channelReady,
                 findings,
                 menu.categories(),
@@ -225,7 +225,7 @@ public class ChannelPreviewService {
                 menu.comboGroups(),
                 List.copyOf(page),
                 hasMore,
-                mediaPlan.resolved());
+                channelItems.media());
     }
 
     /**
@@ -292,27 +292,6 @@ public class ChannelPreviewService {
 
     private record Target(UUID locationId, @Nullable MarketplaceBindingRow binding) {}
 
-    // ------------------------------------------------------------------ media
-
-    /**
-     * Applies ADR 0138 step 4 to the drafted items, through {@link ChannelMediaLayers} —
-     * the very function {@code publish} calls, so the images drawn here are the images
-     * a customer is served once the draft is published to this channel.
-     */
-    private ChannelMediaLayers.Plan planMedia(
-            UUID tenantId,
-            UUID brandId,
-            SalesChannel channel,
-            CatalogValidator.Snapshot snapshot,
-            List<PublicationItem> drafted) {
-        return ChannelMediaLayers.plan(
-                channel,
-                snapshot,
-                drafted,
-                store.mediaRelations(tenantId, brandId),
-                projections.mediaOverrides(tenantId, brandId, channel.id()));
-    }
-
     private static List<PublicationItem> itemsOf(List<PublicationItem> items, EntityType type) {
         return items.stream().filter(item -> item.entityType() == type).toList();
     }
@@ -325,12 +304,10 @@ public class ChannelPreviewService {
      * an aggregator's.
      */
     private List<ValidationFinding> projectionFindings(
-            UUID tenantId,
             SalesChannel channel,
             boolean enabledHere,
             ChannelProjection projection,
-            CatalogValidator.Snapshot snapshot,
-            ChannelMediaLayers.Plan mediaPlan) {
+            CatalogValidator.Snapshot snapshot) {
 
         List<ValidationFinding> findings = new ArrayList<>();
 
@@ -402,24 +379,6 @@ public class ChannelPreviewService {
             }
         }
 
-        // The universal validator checks the assets a product is attached to; an
-        // override row is not one of them, so a channel image that is still
-        // uploading or was withdrawn is caught here.
-        Map<UUID, Boolean> displayable = new HashMap<>();
-        for (List<MediaOverrideRow> rows : mediaPlan.overridesByEntity().values()) {
-            for (MediaOverrideRow row : rows) {
-                boolean shown = displayable.computeIfAbsent(
-                        row.mediaAssetId(), asset -> media.allDisplayable(tenantId, Set.of(new MediaAssetId(asset))));
-                if (!shown) {
-                    findings.add(ValidationFinding.blocker(
-                            ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE,
-                            row.entityType(),
-                            row.entityId(),
-                            null,
-                            "A channel image for this item is not verified and ready to show"));
-                }
-            }
-        }
         return findings;
     }
 
@@ -504,8 +463,8 @@ public class ChannelPreviewService {
     /**
      * One channel at one branch, as the dry run leaves it.
      *
-     * @param publishable what {@code GET .../validation} would say and what {@code publish} would
-     *     decide: no universal blocker
+     * @param publishable what {@code publish} would decide for this channel: no blocker in {@code GET
+     *     .../validation}'s report and none on the channel's own images
      * @param channelReady {@code publishable} <em>and</em> no blocker from the projection or the
      *     marketplace ruleset — the verdict a console shows for this channel
      * @param products one page, ordered by product id

@@ -9,7 +9,15 @@
   implementation; `GET …/catalogs/{id}/channels/{id}/preview` (cursor-paginated,
   `catalog.read`) and `GET …/channels/{id}/preview-targets` serve it;
   `catalog.channel_media_overrides` (V0451) with `PUT`/`GET …/media-overrides`
-  (`catalog.author`, audited) is the channel image layer; `marketplace_ruleset_code`
+  (`catalog.author`, audited) is the channel
+  image layer, and `ChannelMediaLayers` is the one function that applies it —
+  `publish` calls it for the channel it publishes to, as the preview does, so a
+  product's channel photo is what that channel's live menu serves once the draft
+  is published (the Rollout paragraph's "publish itself is unchanged" predates
+  this), and an image another channel owns is never published here. A variant's or
+  category's channel photo is stored and drawn by the preview but no published menu
+  carries it — `MenuVariant` and `MenuCategory` have no image field — so those two
+  stay preview-only until ADR 0040's push; `marketplace_ruleset_code`
   (V0452), the `MarketplaceRuleset` plug point and its empty registry exist; and
   the operations console draws the projection in the `PhoneFrame` family with
   findings and deep links. Not built: any per-marketplace ruleset (the open

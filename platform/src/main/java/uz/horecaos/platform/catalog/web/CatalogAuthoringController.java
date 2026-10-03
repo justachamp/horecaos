@@ -1116,7 +1116,11 @@ public class CatalogAuthoringController {
                     + "a verified asset of this tenant; at most one is PRIMARY. A channel override wins "
                     + "over the item's per-channel relation (IA 4.2f), which wins over its universal "
                     + "images; prices are an independent axis and are never affected. It edits the "
-                    + "draft: a preview reads it at once and a live menu changes when next published.")
+                    + "draft: a preview reads it at once, and the channel's live menu changes when the "
+                    + "draft is next published to that channel and to no other. Only a product's images "
+                    + "reach a published menu; a variant's or a category's are stored and drawn by the "
+                    + "preview but served by no menu yet. A publication is refused while an image the "
+                    + "channel chose is no longer verified.")
     public ChannelMediaOverridesResponse replaceChannelMediaOverrides(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
