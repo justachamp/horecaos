@@ -3,7 +3,6 @@ package uz.horecaos.platform.catalog.application;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,7 +11,6 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uz.horecaos.platform.catalog.application.ChannelProjection.MediaSource;
 import uz.horecaos.platform.catalog.application.ChannelProjection.PriceAuthority;
 import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssembledMenu;
@@ -22,15 +20,11 @@ import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuCombo
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroup;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuProduct;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
-import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
-import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
-import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.ChannelFindings;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
-import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MarketplaceBindingRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
@@ -62,9 +56,11 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  *       entity's own images.
  * </ol>
  *
- * <p>The first three live in {@code assemble}. The fourth is the one thing a
- * publication snapshot cannot carry — it is the same for every channel — so it is
- * applied here, to the items, before they are assembled.
+ * <p>The first three live in {@code assemble}. The fourth is per channel, which the
+ * draft's channel-agnostic items cannot say, so {@link ChannelMediaLayers} applies it
+ * to the items before they are assembled — and {@code publish} calls the same
+ * function for the channel it publishes to, so the images drawn here are the ones a
+ * customer is served once the draft is published.
  *
  * <p><strong>A read.</strong> Nothing is written, no content hash is minted, and
  * the result cannot be fetched by reference: every call recomputes from the
@@ -82,9 +78,6 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  */
 @Service
 public class ChannelPreviewService {
-
-    /** The sentinel {@code catalog.media_relations.channel_code} for an entity's own, every-channel image. */
-    private static final String UNIVERSAL = JdbcCatalogStore.ALL_CHANNELS;
 
     private final JdbcCatalogStore store;
     private final JdbcChannelProjectionStore projections;
@@ -146,7 +139,7 @@ public class ChannelPreviewService {
         String locale = request.locale() == null ? snapshot.defaultLocale() : request.locale();
         PriceAuthority authority = channel.externallyPriced() ? PriceAuthority.EXTERNAL : PriceAuthority.HORECAOS;
 
-        MediaPlan mediaPlan = planMedia(tenantId, brandId, channel, snapshot, drafted);
+        ChannelMediaLayers.Plan mediaPlan = planMedia(tenantId, brandId, channel, snapshot, drafted);
 
         AssembledMenu menu;
         if (enabledHere) {
@@ -302,161 +295,23 @@ public class ChannelPreviewService {
     // ------------------------------------------------------------------ media
 
     /**
-     * Applies ADR 0138 step 4 to the drafted items: each product, variant and
-     * category shows, on this channel, the first of
-     *
-     * <ol>
-     *   <li>its {@code channel_media_overrides} rows for this channel, else
-     *   <li>its {@code media_relations} rows naming this channel (V0223), else
-     *   <li>its own universal images.
-     * </ol>
-     *
-     * <p>An entity with nothing in the first two is left exactly as the snapshot
-     * published it — the same list, in the same order, which is what makes the
-     * no-override projection of a channel match the live menu by construction —
-     * unless it has relations naming <em>other</em> channels. The snapshot lists
-     * every relation of an entity whatever channel it names (V0223 added the
-     * column and the loader was never taught to filter on it), so a dish carrying
-     * Uzum Tezkor's own crop would otherwise show that crop on Wolt. Here it
-     * falls back to the universal images only, which is what "default" means.
+     * Applies ADR 0138 step 4 to the drafted items, through {@link ChannelMediaLayers} —
+     * the very function {@code publish} calls, so the images drawn here are the images
+     * a customer is served once the draft is published to this channel.
      */
-    private MediaPlan planMedia(
+    private ChannelMediaLayers.Plan planMedia(
             UUID tenantId,
             UUID brandId,
             SalesChannel channel,
             CatalogValidator.Snapshot snapshot,
             List<PublicationItem> drafted) {
-
-        Map<UUID, List<MediaRelationRow>> relationsByEntity = new HashMap<>();
-        for (MediaRelationRow relation : store.mediaRelations(tenantId, brandId)) {
-            relationsByEntity
-                    .computeIfAbsent(relation.entityId(), id -> new ArrayList<>())
-                    .add(relation);
-        }
-        Map<UUID, List<MediaOverrideRow>> overridesByEntity = new HashMap<>();
-        for (MediaOverrideRow row : projections.mediaOverrides(tenantId, brandId, channel.id())) {
-            overridesByEntity
-                    .computeIfAbsent(row.entityId(), id -> new ArrayList<>())
-                    .add(row);
-        }
-
-        // The universal sentinel is also a legal channel code ("ALL" matches the
-        // code pattern), and a channel by that name must not read the universal
-        // images as its own override.
-        boolean channelCanOwnRelations = !UNIVERSAL.equals(channel.code());
-
-        Map<UUID, ResolvedMedia> resolved = new LinkedHashMap<>();
-        Map<UUID, List<String>> publishedProductMedia = new HashMap<>();
-        for (PublicationItem item : drafted) {
-            if (item.entityType() == EntityType.PRODUCT && item.content().get("mediaAssetIds") instanceof List<?> ids) {
-                publishedProductMedia.put(
-                        item.entityId(), ids.stream().map(String::valueOf).toList());
-            }
-        }
-
-        for (Product product : snapshot.products()) {
-            resolved.put(
-                    product.id(),
-                    resolveMedia(
-                            product.id(),
-                            overridesByEntity,
-                            relationsByEntity,
-                            channel,
-                            channelCanOwnRelations,
-                            publishedProductMedia.get(product.id())));
-        }
-        for (Variant variant : snapshot.variants()) {
-            resolved.put(
-                    variant.id(),
-                    resolveMedia(
-                            variant.id(), overridesByEntity, relationsByEntity, channel, channelCanOwnRelations, null));
-        }
-        for (Category category : snapshot.categories()) {
-            resolved.put(
-                    category.id(),
-                    resolveMedia(
-                            category.id(),
-                            overridesByEntity,
-                            relationsByEntity,
-                            channel,
-                            channelCanOwnRelations,
-                            null));
-        }
-
-        List<PublicationItem> items = drafted.stream()
-                .map(item -> {
-                    if (item.entityType() != EntityType.PRODUCT) {
-                        return item;
-                    }
-                    ResolvedMedia productMedia = resolved.get(item.entityId());
-                    if (productMedia == null) {
-                        return item;
-                    }
-                    Map<String, Object> content = new LinkedHashMap<>(item.content());
-                    content.put("mediaAssetIds", productMedia.mediaAssetIds());
-                    return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
-                })
-                .toList();
-
-        return new MediaPlan(items, resolved, overridesByEntity);
+        return ChannelMediaLayers.plan(
+                channel,
+                snapshot,
+                drafted,
+                store.mediaRelations(tenantId, brandId),
+                projections.mediaOverrides(tenantId, brandId, channel.id()));
     }
-
-    private static ResolvedMedia resolveMedia(
-            UUID entityId,
-            Map<UUID, List<MediaOverrideRow>> overridesByEntity,
-            Map<UUID, List<MediaRelationRow>> relationsByEntity,
-            SalesChannel channel,
-            boolean channelCanOwnRelations,
-            @Nullable List<String> published) {
-
-        List<MediaOverrideRow> overrides = overridesByEntity.getOrDefault(entityId, List.of());
-        if (!overrides.isEmpty()) {
-            return new ResolvedMedia(
-                    overrides.stream()
-                            .sorted(Comparator.comparing((MediaOverrideRow row) -> !"PRIMARY".equals(row.role()))
-                                    .thenComparingInt(MediaOverrideRow::sortOrder)
-                                    .thenComparing(MediaOverrideRow::mediaAssetId))
-                            .map(row -> row.mediaAssetId().toString())
-                            .toList(),
-                    MediaSource.CHANNEL_OVERRIDE);
-        }
-
-        List<MediaRelationRow> relations = relationsByEntity.getOrDefault(entityId, List.of());
-        if (channelCanOwnRelations) {
-            List<MediaRelationRow> own = relations.stream()
-                    .filter(relation -> channel.code().equals(relation.channelCode()))
-                    .toList();
-            if (!own.isEmpty()) {
-                return new ResolvedMedia(orderedAssets(own), MediaSource.CHANNEL_RELATION);
-            }
-        }
-
-        boolean namesAnotherChannel =
-                relations.stream().anyMatch(relation -> !UNIVERSAL.equals(relation.channelCode()));
-        if (published != null && !namesAnotherChannel) {
-            return new ResolvedMedia(published, MediaSource.DEFAULT);
-        }
-        return new ResolvedMedia(
-                orderedAssets(relations.stream()
-                        .filter(relation -> UNIVERSAL.equals(relation.channelCode()))
-                        .toList()),
-                MediaSource.DEFAULT);
-    }
-
-    private static List<String> orderedAssets(List<MediaRelationRow> relations) {
-        return relations.stream()
-                .sorted(Comparator.comparingInt(MediaRelationRow::sortOrder)
-                        .thenComparing(MediaRelationRow::mediaAssetId))
-                .map(MediaRelationRow::mediaAssetId)
-                .map(UUID::toString)
-                .distinct()
-                .toList();
-    }
-
-    private record MediaPlan(
-            List<PublicationItem> items,
-            Map<UUID, ResolvedMedia> resolved,
-            Map<UUID, List<MediaOverrideRow>> overridesByEntity) {}
 
     private static List<PublicationItem> itemsOf(List<PublicationItem> items, EntityType type) {
         return items.stream().filter(item -> item.entityType() == type).toList();
@@ -475,7 +330,7 @@ public class ChannelPreviewService {
             boolean enabledHere,
             ChannelProjection projection,
             CatalogValidator.Snapshot snapshot,
-            MediaPlan mediaPlan) {
+            ChannelMediaLayers.Plan mediaPlan) {
 
         List<ValidationFinding> findings = new ArrayList<>();
 

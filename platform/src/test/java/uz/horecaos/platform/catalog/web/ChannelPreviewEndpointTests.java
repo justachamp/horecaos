@@ -455,6 +455,91 @@ class ChannelPreviewEndpointTests {
                 .containsExactly(universal.toString());
     }
 
+    @Test
+    @DisplayName(
+            "what publishing serves as a channel's images is what its preview showed: a relation naming another channel is never published here")
+    void publishedImagesAreThePreviewedImages() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID universal = w.asset();
+        UUID uzumCrop = w.asset();
+        UUID onlyUzum = w.asset();
+        // lagman: its own image and a crop that is Uzum's. plov: nothing of its own, only a crop that is
+        // Uzum's. samsa: its own image alone.
+        w.attachDefaultImage(w.lagman.productId(), 0, universal);
+        w.attachChannelRelation(w.lagman.productId(), 1, uzumCrop, "UZUM");
+        w.attachChannelRelation(w.plov.productId(), 0, onlyUzum, "UZUM");
+        w.attachDefaultImage(w.samsa.productId(), 0, universal);
+
+        Map<String, JsonNode> previews = new java.util.LinkedHashMap<>();
+        Map<String, JsonNode> lives = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, UUID> channel :
+                Map.of("STOREFRONT", w.storefront, "UZUM", w.uzum).entrySet()) {
+            previews.put(channel.getKey(), previewAll(channel.getValue(), "locationId", w.l1.toString()));
+            assertThat(publication
+                            .publish(w.tenant, w.brand, w.catalogId, channel.getKey(), null)
+                            .status())
+                    .isEqualTo(PublicationStatus.PUBLISHED);
+            lives.put(channel.getKey(), liveMenu(channel.getKey()));
+        }
+
+        for (String channel : previews.keySet()) {
+            for (ProductRef product : List.of(w.lagman, w.plov, w.samsa)) {
+                assertThat(imagesOf(at(lives, channel), product))
+                        .as("%s: the images a customer is served for %s are the ones its preview drew"
+                                .formatted(channel, product.productId()))
+                        .isEqualTo(imagesOf(at(previews, channel), product));
+            }
+        }
+
+        // Pinned, so the loop above is not satisfied by two lists that are wrong in the same way.
+        assertThat(imagesOf(at(lives, "STOREFRONT"), w.lagman))
+                .as("the storefront does not wear Uzum's crop")
+                .containsExactly(universal.toString());
+        assertThat(imagesOf(at(lives, "STOREFRONT"), w.plov))
+                .as("a dish whose only picture is Uzum's has none on the storefront")
+                .isEmpty();
+        assertThat(imagesOf(at(lives, "STOREFRONT"), w.samsa)).containsExactly(universal.toString());
+        assertThat(imagesOf(at(lives, "UZUM"), w.lagman))
+                .as("Uzum is served its own crop instead of the dish's picture")
+                .containsExactly(uzumCrop.toString());
+        assertThat(imagesOf(at(lives, "UZUM"), w.plov)).containsExactly(onlyUzum.toString());
+        assertThat(imagesOf(at(lives, "UZUM"), w.samsa)).containsExactly(universal.toString());
+    }
+
+    @Test
+    @DisplayName(
+            "the draft is compared with each channel's own live hash, because an image that belongs to a channel is published to that channel alone")
+    void draftIsComparedWithTheChannelsOwnHash() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.attachDefaultImage(w.lagman.productId(), 0, w.asset());
+        w.attachChannelRelation(w.lagman.productId(), 1, w.asset(), "UZUM");
+
+        String storefrontHash = publication
+                .publish(w.tenant, w.brand, w.catalogId, "STOREFRONT", null)
+                .contentHash();
+        String uzumHash = publication
+                .publish(w.tenant, w.brand, w.catalogId, "UZUM", null)
+                .contentHash();
+        assertThat(uzumHash)
+                .as("the fixture is not vacuous: the two channels publish different menus")
+                .isNotEqualTo(storefrontHash);
+
+        CatalogPublicationService.DraftPreview draft = publication.previewDraft(w.tenant, w.brand, w.catalogId);
+        assertThat(draft.contentHashFor("STOREFRONT"))
+                .as("nothing was edited since: each channel's card says the draft matches what is live")
+                .isEqualTo(storefrontHash);
+        assertThat(draft.contentHashFor("UZUM")).isEqualTo(uzumHash);
+
+        JsonNode wire = json(mvc.perform(
+                get(base() + "/catalogs/" + w.catalogId + "/draft-preview").with(owner())));
+        assertThat(wire.path("channelContentHashes").path("UZUM").asText()).isEqualTo(uzumHash);
+        assertThat(wire.path("channelContentHashes").path("STOREFRONT").asText())
+                .isEqualTo(storefrontHash);
+        assertThat(wire.path("contentHash").asText())
+                .as("the channel-agnostic draft is still there for a channel with no live menu")
+                .isNotBlank();
+    }
+
     // -------------------------------------------------------------- findings
 
     @Test
@@ -1047,6 +1132,25 @@ class ChannelPreviewEndpointTests {
             shaped.put(entry.path(key).asText(), node);
         }
         return shaped;
+    }
+
+    private static <T> T at(Map<String, T> map, String key) {
+        return java.util.Objects.requireNonNull(map.get(key), key);
+    }
+
+    /** The menu a customer is served on a channel at {@code l1} from its live publication. */
+    private JsonNode liveMenu(String channelCode) throws Exception {
+        return json(mvc.perform(
+                get("/api/v1/storefront/tenants/%s/brands/%s/locations/%s/menu".formatted(w.tenant, w.brand, w.l1))
+                        .queryParam("channel", channelCode)
+                        .queryParam("locale", LOCALE)));
+    }
+
+    /** A product's images in the order the menu lists them. */
+    private static List<String> imagesOf(JsonNode menu, ProductRef product) {
+        List<String> images = new ArrayList<>();
+        productOf(menu, product).path("mediaAssetIds").forEach(id -> images.add(id.asText()));
+        return images;
     }
 
     private static Set<String> ids(JsonNode entries, String key) {

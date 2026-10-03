@@ -7,7 +7,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -64,24 +66,53 @@ public class CatalogPublicationService {
      * The content hash the draft would publish as right now, without writing
      * anything (operations gap map row {@code 4.6}).
      *
-     * <p>Composes exactly the two pieces {@link #publish} already uses on its
-     * own draft — {@code snapshots.toPublicationItems} and {@link
-     * #contentHashOf} — and stops before the part that writes a row. A channel
-     * card compares this against the hash of its own last {@code PUBLISHED}
-     * history entry to answer "does the draft differ from what is live",
-     * which nothing before this method could answer without actually
-     * publishing to find out.
+     * <p>Composes exactly the pieces {@link #publish} already uses on its own draft
+     * -- {@code snapshots.toPublicationItems} and {@link #contentHashOf} -- and stops
+     * before the part that writes a row. A channel card compares this against the hash
+     * of its own last {@code PUBLISHED} history entry to answer "does the draft differ
+     * from what is live", which nothing before this method could answer without
+     * actually publishing to find out.
+     *
+     * <p>One hash per live channel, because the channels no longer publish the same
+     * items: an image that belongs to a channel is published to that channel alone
+     * (ADR 0138 step 4), so the draft hashes differently for each channel that has such
+     * an image. {@link DraftPreview#contentHash()} is the channel-agnostic draft;
+     * {@link DraftPreview#contentHashFor} is the one to compare a channel's live hash
+     * with.
      */
     @Transactional(readOnly = true)
     public DraftPreview previewDraft(UUID tenantId, UUID brandId, UUID catalogId) {
         requireOwnership(tenantId, brandId, catalogId);
         CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, catalogId);
         List<PublicationItem> items = snapshots.toPublicationItems(snapshot);
-        return new DraftPreview(contentHashOf(items), items.size());
+
+        Map<String, String> byChannel = new TreeMap<>();
+        for (String code : store.channelsWithLivePublication(tenantId, brandId)) {
+            channels.byCode(tenantId, code)
+                    .ifPresent(channel -> byChannel.put(
+                            code, contentHashOf(snapshots.toPublicationItems(snapshot, tenantId, brandId, channel))));
+        }
+        return new DraftPreview(contentHashOf(items), items.size(), byChannel);
     }
 
-    /** What the draft would hash and how many items it carries, as of right now. */
-    public record DraftPreview(String contentHash, int itemCount) {}
+    /**
+     * What the draft would hash and how many items it carries, as of right now.
+     *
+     * @param contentHash the channel-agnostic draft
+     * @param channelContentHashes the hash the draft would publish as on each channel that has a
+     *     live menu, by channel code
+     */
+    public record DraftPreview(String contentHash, int itemCount, Map<String, String> channelContentHashes) {
+
+        public DraftPreview {
+            channelContentHashes = Map.copyOf(channelContentHashes);
+        }
+
+        /** The hash to compare {@code channelCode}'s live publication with. */
+        public String contentHashFor(String channelCode) {
+            return channelContentHashes.getOrDefault(channelCode, contentHash);
+        }
+    }
 
     /**
      * Snapshots, validates, and — if clean — makes the result the live menu.
@@ -95,12 +126,15 @@ public class CatalogPublicationService {
             UUID tenantId, UUID brandId, UUID catalogId, String channel, @Nullable UUID actorId) {
 
         requireOwnership(tenantId, brandId, catalogId);
-        requireRegisteredChannel(tenantId, channel);
+        SalesChannel registered = requireRegisteredChannel(tenantId, channel);
 
         CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, catalogId);
         ValidationFinding.Report report = validator.validate(snapshot);
 
-        List<PublicationItem> items = snapshots.toPublicationItems(snapshot);
+        // The channel's own items, not the draft's: an image that belongs to another
+        // channel is not published here (ADR 0138 step 4), and the channel preview
+        // draws the same list.
+        List<PublicationItem> items = snapshots.toPublicationItems(snapshot, tenantId, brandId, registered);
         String contentHash = hash(items);
         UUID publicationId = UUID.randomUUID();
         Instant now = clock.instant();
@@ -202,7 +236,7 @@ public class CatalogPublicationService {
      * tenant stopped selling on it, and publishing a menu to an archived channel
      * produces a live publication no customer can ever reach.
      */
-    private void requireRegisteredChannel(UUID tenantId, String channel) {
+    private SalesChannel requireRegisteredChannel(UUID tenantId, String channel) {
         SalesChannel registered = channels.byCode(tenantId, channel)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No sales channel \"%s\" is registered for this tenant".formatted(channel)));
@@ -210,6 +244,7 @@ public class CatalogPublicationService {
             throw new IllegalArgumentException(
                     "Sales channel \"%s\" is archived and cannot receive a publication".formatted(channel));
         }
+        return registered;
     }
 
     /**

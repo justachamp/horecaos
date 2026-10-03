@@ -37,6 +37,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCata
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
 
 /**
  * Assembles a whole catalog in one read, then turns it into publication items
@@ -273,6 +274,27 @@ public class CatalogSnapshotLoader {
 
         return new CatalogValidator.FiscalContext(
                 byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes);
+    }
+
+    /**
+     * The items one channel is published, which are the draft's items with the images
+     * that channel shows (ADR 0138 step 4, {@link ChannelMediaLayers}).
+     *
+     * <p>This is what {@code publish} writes and what the channel preview draws, so
+     * the two cannot disagree about a picture. The channel-agnostic overload above is
+     * the draft as the snapshot lists it; a channel's items differ from it exactly
+     * where an image belongs to a channel -- a relation naming another channel is not
+     * this channel's to publish.
+     */
+    public List<PublicationItem> toPublicationItems(
+            CatalogValidator.Snapshot snapshot, UUID tenantId, UUID brandId, SalesChannel channel) {
+        return ChannelMediaLayers.plan(
+                        channel,
+                        snapshot,
+                        toPublicationItems(snapshot),
+                        store.mediaRelations(tenantId, brandId),
+                        List.of())
+                .items();
     }
 
     /**

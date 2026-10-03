@@ -2597,6 +2597,22 @@ public class JdbcCatalogStore {
                 .optional();
     }
 
+    /**
+     * The channels this brand has a live ({@code PUBLISHED}) menu on, by code -- the channels whose
+     * draft-versus-live comparison has a live side to compare with.
+     */
+    public List<String> channelsWithLivePublication(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT DISTINCT channel FROM catalog.publications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND status = 'PUBLISHED'
+                ORDER BY channel
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(String.class)
+                .list();
+    }
+
     public Optional<UUID> findActivePublicationId(UUID tenantId, UUID brandId, String channel) {
         return jdbc.sql("""
                 SELECT id FROM catalog.publications
