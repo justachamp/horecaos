@@ -1275,6 +1275,21 @@ class WalkInSeatingTests {
                 .query(UUID.class)
                 .list();
         assertThat(remaining).as("no session still names the account").isEmpty();
+        // The guest route stores 'guest:<accountId>' in opened_by too (it is NOT NULL, so it
+        // is neutralised rather than nulled): clearing only the dedicated column would leave
+        // the account id in the same row.
+        assertThat(jdbc.sql("SELECT opened_by FROM dinein.table_sessions "
+                                + "WHERE position(:account IN opened_by) > 0")
+                        .param("account", account.toString())
+                        .query(String.class)
+                        .list())
+                .as("no session's opened_by still carries the account id")
+                .isEmpty();
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.table_sessions WHERE opened_by = 'guest:erased'")
+                        .query(Integer.class)
+                        .single())
+                .as("both of the customer's sessions, the confirmed one and the lapsed one")
+                .isEqualTo(2);
         assertThat(store.findSession(TENANT, confirmed.session().id())
                         .orElseThrow()
                         .origin())

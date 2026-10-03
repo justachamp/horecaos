@@ -1409,9 +1409,11 @@ describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () =
       vi.restoreAllMocks();
     });
 
-    it('reads the bill once the window has passed, and offers to sit again when the table went back to the room', async () => {
-      // Capture the countdown's own timer (15 s) and drive it by hand, so the clock the
-      // component reads is a clock this test moves.
+    /**
+     * Captures the countdown's own timer (15 s) and drives it by hand, so the clock the
+     * component reads is a clock this test moves.
+     */
+    function claimClock() {
       const timers: Array<() => void> = [];
       const realSetInterval = globalThis.setInterval;
       vi.spyOn(globalThis, 'setInterval').mockImplementation(((
@@ -1424,6 +1426,22 @@ describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () =
         }
         return realSetInterval(handler, delay);
       }) as typeof setInterval);
+      return async (parts: { fixture: { detectChanges(): void } }) => {
+        timers.forEach((tick) => tick());
+        await flush();
+        parts.fixture.detectChanges();
+      };
+    }
+
+    /** The answer the real service's predicate gives: a 401 `UNAUTHENTICATED` is a dead guest token. */
+    function realGuestTokenCheck(parts: { dineIn: FakeDineInService }) {
+      parts.dineIn.isGuestSessionEnded.mockImplementation((failure: unknown) =>
+        DineInService.prototype.isGuestSessionEnded.call(undefined, failure),
+      );
+    }
+
+    it('reads the bill once the window has passed, and offers to sit again when the session is gone behind a live token', async () => {
+      const tick = claimClock();
 
       const parts = await render();
       const claim = seatingOf({ claimExpiresAt: new Date(Date.now() + 60_000).toISOString() });
@@ -1432,7 +1450,7 @@ describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () =
       expect(parts.host.querySelector('[data-testid="dine-in-claim-held"]')).not.toBeNull();
       expect(parts.dineIn.bill).not.toHaveBeenCalled();
 
-      // Two minutes later the window is behind us: the next tick reads the bill once.
+      // Two minutes later the window is behind us: the next tick reads the bill.
       const later = Date.now() + 2 * 60_000;
       vi.spyOn(Date, 'now').mockReturnValue(later);
       parts.dineIn.bill.mockRejectedValue(
@@ -1442,19 +1460,169 @@ describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () =
           detail: 'No open bill at this table',
         }),
       );
-      timers.forEach((tick) => tick());
-      await flush();
-      parts.fixture.detectChanges();
+      await tick(parts);
 
       expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
       expect(parts.dineIn.bill).toHaveBeenCalledWith('session-new');
       expect(parts.dineIn.sessionEnded).toHaveBeenCalled();
       expect(parts.host.querySelector('[data-testid="dine-in-sit"]')).not.toBeNull();
 
-      // And a further tick does not read it again.
-      timers.forEach((tick) => tick());
-      await flush();
+      // And a further tick does not read it again: there is no claim left to watch.
+      await tick(parts);
       expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
+    });
+
+    it('says the hold ended, and asks to scan again, when the lapse took the guest token with it (a 401, not a 404)', async () => {
+      // A lapse closes the session, and closing a session revokes every guest token minted
+      // at its table (TableSessionService.doMove): the claimant's next read is refused as
+      // a dead token -- 401 UNAUTHENTICATED -- never as a missing bill.
+      const tick = claimClock();
+
+      const parts = await render();
+      realGuestTokenCheck(parts);
+      platformSeats(
+        parts.dineIn,
+        seatingOf({ claimExpiresAt: new Date(Date.now() + 60_000).toISOString() }),
+      );
+      await press(parts, 'dine-in-sit-button');
+
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * 60_000);
+      parts.dineIn.bill.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 401,
+          code: 'UNAUTHENTICATED',
+          detail: 'This table session has ended. Scan the code again.',
+        }),
+      );
+      await tick(parts);
+
+      expect(parts.dineIn.clear).toHaveBeenCalled();
+      expect(parts.host.querySelector('[data-testid="dine-in-claim-lapsed"]')).not.toBeNull();
+      expect(
+        parts.host.querySelector('[data-testid="dine-in-no-admission"]')?.textContent,
+      ).toContain('"code":"T1"');
+      // The token is dead, so "Sit at this table" would only be refused again.
+      expect(parts.host.querySelector('[data-testid="dine-in-sit"]')).toBeNull();
+      expect(parts.host.querySelector('[data-testid="dine-in-table-code"]')).toBeNull();
+    });
+
+    it('does not mistake a dead token on a confirmed session for a lapsed claim', async () => {
+      const parts = await render({ openSessionId: 'session-1', walkInAvailable: false });
+      realGuestTokenCheck(parts);
+      parts.dineIn.bill.mockResolvedValueOnce(bill({ confirmed: true }));
+      await parts.fixture.componentInstance.refreshBill();
+
+      parts.dineIn.bill.mockRejectedValue(
+        new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }),
+      );
+      await parts.fixture.componentInstance.refreshBill();
+      parts.fixture.detectChanges();
+
+      expect(parts.dineIn.clear).toHaveBeenCalled();
+      expect(parts.host.querySelector('[data-testid="dine-in-claim-lapsed"]')).toBeNull();
+      expect(parts.host.querySelector('[data-testid="dine-in-no-admission"]')).not.toBeNull();
+    });
+
+    it('keeps reading while the platform has not decided: the sweeper may not have run when the window passes', async () => {
+      const tick = claimClock();
+
+      const parts = await render();
+      const claimExpiresAt = new Date(Date.now() + 60_000).toISOString();
+      platformSeats(parts.dineIn, seatingOf({ claimExpiresAt }));
+      await press(parts, 'dine-in-sit-button');
+
+      // The first read after the window lands before the sweeper has run (it runs every
+      // 30 s, the page ticks every 15): the claim is still undecided, its expiry behind us.
+      const windowPassed = Date.now() + 2 * 60_000;
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(windowPassed);
+      const undecided = bill({ sessionId: 'session-new', confirmed: false, claimExpiresAt });
+      parts.dineIn.bill.mockResolvedValue(undecided);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
+      expect(parts.host.querySelector('[data-testid="dine-in-claim-ending"]')).not.toBeNull();
+      expect(parts.host.querySelector('[data-testid="dine-in-request-bill"]')).toBeNull();
+
+      // The sweeper then confirms the claim. The page must find out without a reload.
+      clock.mockReturnValue(windowPassed + 15_000);
+      parts.dineIn.bill.mockResolvedValue(
+        bill({ sessionId: 'session-new', confirmed: true, claimExpiresAt: null, roundCount: 1 }),
+      );
+      await tick(parts);
+
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(2);
+      expect(parts.host.querySelector('[data-testid="dine-in-claim-ending"]')).toBeNull();
+      expect(parts.host.querySelector('[data-testid="dine-in-request-bill"]')).not.toBeNull();
+
+      // Decided: nothing left to watch, so the clock reads no more.
+      clock.mockReturnValue(windowPassed + 5 * 60_000);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(2);
+    });
+
+    it('finds the lapse on a later read when the first one still saw an undecided claim', async () => {
+      const tick = claimClock();
+
+      const parts = await render();
+      realGuestTokenCheck(parts);
+      const claimExpiresAt = new Date(Date.now() + 60_000).toISOString();
+      platformSeats(parts.dineIn, seatingOf({ claimExpiresAt }));
+      await press(parts, 'dine-in-sit-button');
+
+      const windowPassed = Date.now() + 2 * 60_000;
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(windowPassed);
+      parts.dineIn.bill.mockResolvedValueOnce(
+        bill({ sessionId: 'session-new', confirmed: false, claimExpiresAt }),
+      );
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
+
+      clock.mockReturnValue(windowPassed + 15_000);
+      parts.dineIn.bill.mockRejectedValue(
+        new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }),
+      );
+      await tick(parts);
+
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(2);
+      expect(parts.host.querySelector('[data-testid="dine-in-claim-lapsed"]')).not.toBeNull();
+    });
+
+    it('backs off while the claim stays undecided, rather than reading on every tick', async () => {
+      const tick = claimClock();
+
+      const parts = await render();
+      const claimExpiresAt = new Date(Date.now() + 60_000).toISOString();
+      platformSeats(parts.dineIn, seatingOf({ claimExpiresAt }));
+      await press(parts, 'dine-in-sit-button');
+
+      const t0 = Date.now() + 2 * 60_000;
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(t0);
+      parts.dineIn.bill.mockResolvedValue(
+        bill({ sessionId: 'session-new', confirmed: false, claimExpiresAt }),
+      );
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(1);
+
+      clock.mockReturnValue(t0 + 15_000);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(2);
+
+      // 15 s after the second read is too soon for the third (the gap has doubled to 30 s).
+      clock.mockReturnValue(t0 + 30_000);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(2);
+
+      clock.mockReturnValue(t0 + 45_000);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(3);
+
+      // The gap stops growing at a minute, so a claim held back by a slow payment is
+      // still found within a minute of the platform deciding.
+      clock.mockReturnValue(t0 + 45_000 + 60_000);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(4);
+      clock.mockReturnValue(t0 + 45_000 + 60_000 + 60_000);
+      await tick(parts);
+      expect(parts.dineIn.bill).toHaveBeenCalledTimes(5);
     });
   });
 });

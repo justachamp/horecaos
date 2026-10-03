@@ -242,7 +242,7 @@ public class QrEntryController {
         GuestContext guest = qr.resolve(guestToken);
         requireOrdering(guest);
 
-        SessionRow session = qr.requireSessionAtTable(guest, sessionId);
+        qr.requireSessionAtTable(guest, sessionId);
         CustomerAccountRef caller = requireOwnOrder(guest);
         try {
             sessions.addRound(
@@ -262,7 +262,12 @@ public class QrEntryController {
             }
         }
 
-        return ResponseEntity.ok(billResponse(guest, session));
+        // Read again, after the attach: a round the restaurant had already accepted confirms
+        // an unconfirmed claim inside addRound (ADR 0143, Decision 4), and the row read
+        // above would still say "unconfirmed, expires at ..." about a session that is by
+        // now an ordinary one. A retry that finds the round already attached reads the same
+        // way, so the answer is the session as it stands.
+        return ResponseEntity.ok(billResponse(guest, sessions.find(guest.tenantId(), sessionId)));
     }
 
     /**

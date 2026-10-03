@@ -1910,6 +1910,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.floorPlan.claim.defaultReason': 'Гость сел сам; обработано с плана зала',
   'reservations.notice.tableOccupiedNow':
     'Подтверждено. За одним из этих столов уже сидят гости — проверьте зал до прихода брони.',
+  'reservations.notice.tableOccupiedNowAmended':
+    'Изменено. За одним из этих столов уже сидят гости — проверьте зал до прихода брони.',
 
   'finance.scope.denied': 'Этому аккаунту не разрешён раздел «Финансы».',
 

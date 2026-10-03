@@ -780,6 +780,12 @@ export class ReservationsPage implements OnInit {
     this.applyUpdate(amended);
     this.showCreateForm.set(false);
     this.editTarget.set(null);
+    if (amended.tableOccupiedNow === true) {
+      // As for a confirmation: the amendment is not refused, because the host is the one
+      // who decides what to do about a party already sitting at a table the booking now
+      // holds -- and may be moving the booking onto it knowingly (ADR 0143).
+      this.actionNotice.set(this.i18n.t('reservations.notice.tableOccupiedNowAmended'));
+    }
   }
 
   /** `formFrom`/`formTo` are `HH:mm` from a plain `<input type="time">`, resolved in the branch's own zone for {@link selectedDate}. */

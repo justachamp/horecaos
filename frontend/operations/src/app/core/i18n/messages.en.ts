@@ -1947,6 +1947,8 @@ export const messagesEn = {
     'Guest seated themselves; handled from the floor plan',
   'reservations.notice.tableOccupiedNow':
     'Confirmed. A party is already sitting at one of these tables, so check the room before the booking arrives.',
+  'reservations.notice.tableOccupiedNowAmended':
+    'Amended. A party is already sitting at one of these tables, so check the room before the booking arrives.',
 
   'finance.scope.denied': 'This account is not permitted to see Finance.',
 

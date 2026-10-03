@@ -26,8 +26,11 @@ import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.Se
  *       claimant, because {@code ux_claim_account_branch} is what bounds an account to
  *       one).
  *   <li>The id is cleared from every guest-opened session of theirs that is confirmed
- *       or closed. The session, its bill and its audit trail stay: financial history
- *       survives and the person does not (ADR 0029).
+ *       or closed: the {@code opened_by_account_id} column, and the {@code
+ *       'guest:<accountId>'} the guest route also writes into {@code opened_by}, which
+ *       is neutralised because the column is NOT NULL. The session, its bill and its
+ *       audit trail stay: financial history survives and the person does not (ADR
+ *       0029).
  * </ol>
  *
  * <p>Idempotent under retry, as {@link CustomerErasureParticipant} requires: a second

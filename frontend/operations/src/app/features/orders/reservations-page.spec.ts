@@ -665,6 +665,74 @@ describe('ReservationsPage', () => {
     expect(body.guestPhone).toBeUndefined();
   });
 
+  it('tells the host when an amended booking now holds a table with a party already sitting at it (ADR 0143)', async () => {
+    // An amendment of a confirmed booking is not refused for an occupied table either: the
+    // platform answers with the fact, and the host is the only one who can act on it.
+    const amend = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: true })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation({ status: 'CONFIRMED' })]),
+      amend,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="reservations-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const reason = host.querySelector(
+      '[data-testid="reservations-form-reason"]',
+    ) as HTMLInputElement;
+    reason.value = 'Moved to the window table';
+    reason.dispatchEvent(new Event('input'));
+
+    (host.querySelector('[data-testid="reservations-form-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(amend).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="reservations-form"]')).toBeNull();
+    const notice = host.querySelector('[data-testid="reservations-notice"]')?.textContent ?? '';
+    expect(notice).toContain('already sitting');
+    // It was amended, not confirmed: the confirmation sentence would misreport what happened.
+    expect(notice).not.toContain('Confirmed.');
+  });
+
+  it('says nothing extra when the amended booking’s tables are free', async () => {
+    const amend = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: false })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation({ status: 'CONFIRMED' })]),
+      amend,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="reservations-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const reason = host.querySelector(
+      '[data-testid="reservations-form-reason"]',
+    ) as HTMLInputElement;
+    reason.value = 'Moved to the window table';
+    reason.dispatchEvent(new Event('input'));
+
+    (host.querySelector('[data-testid="reservations-form-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(amend).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="reservations-notice"]')).toBeNull();
+  });
+
   // ------------------------------------------------------------------ X.36 timeline
 
   it('defaults to the grid, and switches to the timeline on the toggle', async () => {
