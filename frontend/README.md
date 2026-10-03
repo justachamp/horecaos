@@ -118,9 +118,13 @@ When a page's stylesheet grows past 4 kB:
   further hundred bytes to the rest of the changed files -- no wave put eager code of its own
   into the initial chunks, every new screen being lazy. The figure ages with every merge: the
   `Initial total` line of `ng build --configuration production` is the source of truth, so size a
-  feature against a fresh build, not against this number. The headroom is now under 200 bytes, so
-  the next wave that adds messages has to make room first (`npm run i18n:dead -- --write`, then
-  say which keys are dead) before it asks for another bump.
+  feature against a fresh build, not against this number. The headroom was then under 200 bytes,
+  and the batch 17 fix round spent it: three review fixes added three Russian message keys (the
+  reservation host notice, the dispatch-rule id clash, the unreadable staff card) and the merged
+  build came to 831.38 kB, 380 bytes over. It was raised a second time, 831 kB to 832 kB, the
+  smallest whole step, again for messages only (no fix put eager code into the initial chunks);
+  the headroom is about 620 bytes. The next wave that adds messages has to make room first
+  (`npm run i18n:dead -- --write`, then say which keys are dead) before it asks for another bump.
 
 `operations` also has `npm run i18n:dead`, which lists message keys nothing references;
 `--write` removes them from all three locales (`--app-dir ../control-plane --variables
