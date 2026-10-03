@@ -616,6 +616,123 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     // -----------------------------------------------------------------------
+    // A hanging partner is bounded: one pass costs a budget, not a batch
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a partner that hangs costs two calls, not the whole batch, and the rows never called are released")
+    void aHangingPartnerClosesTheDoorAfterTwoUnknownOutcomes() {
+        World w = world();
+        addItems(w, 6);
+        partner.script(
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG);
+        Instant start = clock.instant();
+
+        reconcile(w);
+
+        assertThat(partner.calls)
+                .as("eight items were pending; two timeouts in a row say the partner is hung, so the pass stops")
+                .hasSize(2);
+        assertThat(Duration.between(start, clock.instant()))
+                .as("one pass must end well inside the 2-minute lease, or another worker takes its rows")
+                .isLessThan(MarketplaceAvailabilityReconciler.LEASE);
+        assertThat(leased(w))
+                .as("rows claimed but never called are released, not left to lapse")
+                .isZero();
+        assertThat(rowStates(w).stream().filter("UNCERTAIN"::equals).count()).isEqualTo(2);
+        assertThat(rowStates(w).stream().filter("PENDING"::equals).count()).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("a slow partner is not called past the pass's time budget, even mid-batch")
+    void theBudgetIsCheckedBeforeEveryCallNotBeforeEveryBatch() {
+        World w = world();
+        addItems(w, 6);
+        partner.latency = Duration.ofSeconds(15);
+        Instant start = clock.instant();
+
+        reconcile(w);
+
+        assertThat(partner.calls)
+                .as("15 s a call against a 20 s budget: the third call is never started")
+                .hasSize(2);
+        assertThat(Duration.between(start, clock.instant())).isLessThan(MarketplaceAvailabilityReconciler.LEASE);
+        assertThat(leased(w)).isZero();
+
+        partner.latency = Duration.ZERO;
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("the rows that were left over go out on the next pass")
+                .hasSize(8);
+        assertThat(partner.held(w).values()).containsOnly(true);
+    }
+
+    @Test
+    @DisplayName("an isolated unknown outcome between successes does not close the door")
+    void anIsolatedUnknownOutcomeKeepsTheDoorOpen() {
+        World w = world();
+        addItems(w, 4);
+        partner.script(
+                Scenario.TIMEOUT_AFTER_APPLY,
+                Scenario.OK,
+                Scenario.TIMEOUT_AFTER_APPLY,
+                Scenario.OK,
+                Scenario.OK,
+                Scenario.OK);
+
+        reconcile(w);
+
+        assertThat(partner.calls).as("all six items were called").hasSize(6);
+    }
+
+    @Test
+    @DisplayName("a hung binding is not probed again at once, and is again when it has cooled and the partner is back")
+    void aHungBindingCoolsDown() {
+        World w = world();
+        addItems(w, 6);
+        partner.script(
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG,
+                Scenario.HANG);
+        reconcile(w);
+        int afterFirstPass = partner.calls.size();
+
+        reconcile(w);
+        assertThat(partner.calls.size())
+                .as("the next tick, seconds later, spends no more time on a partner that just hung")
+                .isEqualTo(afterFirstPass);
+
+        // The partner recovers; the cooldown and the rows' own backoffs run out.
+        partner.script();
+        clock.advance(Duration.ofMinutes(15));
+        reconcile(w);
+        reconcile(w);
+        assertThat(partner.held(w)).hasSize(8);
+        assertThat(partner.held(w).values()).containsOnly(true);
+
+        partner.script(Scenario.OK);
+        StopRowRef stop = stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("a confirmed push cleared the cooldown, so a later stop goes out at once")
+                .containsEntry("ext-A", false);
+        assertThat(stop).isNotNull();
+    }
+
+    // -----------------------------------------------------------------------
     // Suspension, resumption, overlap, honesty about what cannot be pushed
     // -----------------------------------------------------------------------
 
@@ -868,6 +985,33 @@ class MarketplaceAvailabilityReconcilerTests {
         return w;
     }
 
+    /** More mapped, offered, stocked items on the world's binding: "ext-X1" ... */
+    private void addItems(World w, int count) {
+        for (int i = 1; i <= count; i++) {
+            UUID variant = variant(w.tenant(), w.brand(), "X" + i);
+            jdbc.sql("""
+                    INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                    VALUES (:id, :t, :b, :l, :v, 'AVAILABLE')
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", w.tenant())
+                    .param("b", w.brand())
+                    .param("l", w.location())
+                    .param("v", variant)
+                    .update();
+            list(w, variant);
+            map(w, variant, "ext-X" + i);
+        }
+    }
+
+    private long leased(World w) {
+        return jdbc.sql("SELECT count(*) FROM integration.marketplace_item_availability "
+                        + "WHERE binding_id = :b AND lease_owner IS NOT NULL")
+                .param("b", w.binding())
+                .query(Long.class)
+                .single();
+    }
+
     private UUID location(UUID tenant, UUID brand, String code) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -1073,7 +1217,9 @@ class MarketplaceAvailabilityReconcilerTests {
         TIMEOUT_AFTER_APPLY,
         CONNECTION_REFUSED,
         RATE_LIMITED,
-        UNKNOWN_ITEM
+        UNKNOWN_ITEM,
+        /** Accepts the connection and never answers: the call runs to its 15 s timeout and nothing is applied. */
+        HANG
     }
 
     private record Call(String item, boolean available) {}
@@ -1088,6 +1234,9 @@ class MarketplaceAvailabilityReconcilerTests {
         final Set<Call> applied = java.util.concurrent.ConcurrentHashMap.newKeySet();
         private final Deque<Scenario> script = new ArrayDeque<>();
         volatile Duration delay = Duration.ZERO;
+
+        /** How much of the test clock one call costs: a slow partner, without sleeping the test. */
+        volatile Duration latency = Duration.ZERO;
 
         /** Runs while a call is in flight, before the partner answers: another replica's sweep landing. */
         volatile Runnable duringCall = () -> {};
@@ -1136,6 +1285,9 @@ class MarketplaceAvailabilityReconcilerTests {
             }
             calls.add(new Call(item, available));
             duringCall.run();
+            if (!latency.isZero()) {
+                clock.advance(latency);
+            }
             return switch (scenario) {
                 case OK -> {
                     held.put(key, available);
@@ -1151,6 +1303,10 @@ class MarketplaceAvailabilityReconcilerTests {
                     ProviderOutcome.retryable("CONNECTION_FAILED", "Could not reach the provider", null);
                 case RATE_LIMITED -> ProviderOutcome.retryable("RATE_LIMITED", "slow down", Duration.ofSeconds(30));
                 case UNKNOWN_ITEM -> ProviderOutcome.rejected("PROVIDER_REJECTED", "item_not_found");
+                case HANG -> {
+                    clock.advance(Duration.ofSeconds(15));
+                    yield ProviderOutcome.uncertain("READ_TIMEOUT", "No response after the request was sent");
+                }
             };
         }
     }

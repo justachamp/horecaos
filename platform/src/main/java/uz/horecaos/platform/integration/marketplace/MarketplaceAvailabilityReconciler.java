@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -97,7 +98,28 @@ public class MarketplaceAvailabilityReconciler {
     /** A claimed batch must finish within this, or another worker may take the rows. */
     static final Duration LEASE = Duration.ofMinutes(2);
 
+    /**
+     * How long one pass may keep calling one binding's partner. It is checked before every call, not
+     * before every batch, so a pass lasts at most this plus the one call in flight (15 s by default,
+     * {@code MarketplaceGateway}) -- far inside {@link #LEASE}, which is what keeps a claimed row's
+     * desired value from being sent long after the kitchen changed its mind.
+     */
     private static final Duration TICK_BUDGET_PER_BINDING = Duration.ofSeconds(20);
+
+    /**
+     * Unknown outcomes in a row (a timeout after the request was written) that close the door for the
+     * rest of a pass. The breaker deliberately does not count an uncertain outcome as the partner
+     * being down, so a partner that accepts the connection and never answers would otherwise cost
+     * every claimed row its full timeout; two in a row is a hang, not bad luck.
+     */
+    static final int UNKNOWN_STREAK_LIMIT = 2;
+
+    /**
+     * The longest a binding whose partner just hung is left alone before it is probed again. The
+     * rows' own backoffs are per item, so without this a hung binding would be probed on every tick
+     * by whichever of its rows had come due.
+     */
+    static final Duration HANG_COOLDOWN_CAP = Duration.ofMinutes(2);
 
     private final JdbcMarketplaceAvailabilityStore store;
     private final MarketplaceAdapterRegistry adapters;
@@ -111,6 +133,11 @@ public class MarketplaceAvailabilityReconciler {
     private final TransactionTemplate transactions;
     private final JdbcClient jdbc;
     private final RetryBackoff backoff;
+
+    /** Bindings whose partner hung, until when they are not called and how many hangs in a row. In memory: a restart simply probes once. */
+    private final Map<UUID, HangCooldown> hangs = new ConcurrentHashMap<>();
+
+    private record HangCooldown(Instant until, int streak) {}
 
     private final AtomicLong pendingItems = new AtomicLong();
     private final AtomicLong oldestPendingSeconds = new AtomicLong();
@@ -327,10 +354,17 @@ public class MarketplaceAvailabilityReconciler {
     // ------------------------------------------------------------------ send
 
     private int push(BindingRow binding, MarketplaceAvailabilityAdapter adapter) {
+        HangCooldown cooling = hangs.get(binding.bindingId());
+        if (cooling != null && clock.instant().isBefore(cooling.until())) {
+            // The partner hung on the last pass. The sweep above still ran (it touches only our own
+            // database), so the desired values are current; the call waits for the cooldown.
+            return 0;
+        }
         String owner = UUID.randomUUID().toString();
         int pushed = 0;
         Instant deadline = clock.instant().plus(TICK_BUDGET_PER_BINDING);
         boolean doorClosed = false;
+        int unknownInARow = 0;
         while (!doorClosed && clock.instant().isBefore(deadline)) {
             List<ItemRow> claimed =
                     store.claimDue(binding.tenantId(), binding.bindingId(), owner, clock.instant(), LEASE, CLAIM_BATCH);
@@ -338,20 +372,61 @@ public class MarketplaceAvailabilityReconciler {
                 break;
             }
             for (ItemRow item : claimed) {
+                if (!doorClosed && !clock.instant().isBefore(deadline)) {
+                    // The budget ran out part-way through a batch: a slow partner must not hold
+                    // the tick, or the lease, for the rest of the batch.
+                    doorClosed = true;
+                    meters.counter("horecaos.marketplace.availability.door_closed", "reason", "BUDGET")
+                            .increment();
+                }
                 if (doorClosed) {
-                    // The partner is refusing us at the door (rate limit, open circuit): the rest
-                    // of the batch would be refused too. Leave them for the next tick -- an outage
-                    // costs probes, not a storm.
+                    // The partner is refusing us at the door (rate limit, open circuit), is hung, or
+                    // the budget is spent: the rest of the batch would fare no better. Leave the rows
+                    // for the next tick -- an outage costs probes, not a storm.
                     store.releaseLease(item, owner);
                     continue;
                 }
                 Sent result = send(binding, adapter, item, owner);
                 pushed++;
-                doorClosed = result.conclusion() == PushConclusion.NOT_APPLIED
+                unknownInARow = result.conclusion() == PushConclusion.UNKNOWN ? unknownInARow + 1 : 0;
+                if (result.conclusion() == PushConclusion.CONFIRMED) {
+                    hangs.remove(binding.bindingId());
+                }
+                boolean refused = result.conclusion() == PushConclusion.NOT_APPLIED
                         && ("CIRCUIT_OPEN".equals(result.code()) || "RATE_LIMITED".equals(result.code()));
+                boolean hung = unknownInARow >= UNKNOWN_STREAK_LIMIT;
+                if (hung) {
+                    coolDown(binding);
+                    meters.counter("horecaos.marketplace.availability.door_closed", "reason", "HUNG")
+                            .increment();
+                } else if (refused) {
+                    meters.counter("horecaos.marketplace.availability.door_closed", "reason", "REFUSED")
+                            .increment();
+                }
+                doorClosed = refused || hung;
             }
         }
         return pushed;
+    }
+
+    /** Leaves a binding whose partner just hung alone for a while, longer each time it happens in a row. */
+    private void coolDown(BindingRow binding) {
+        Instant now = clock.instant();
+        HangCooldown next = hangs.merge(
+                binding.bindingId(),
+                new HangCooldown(now.plus(cooldownAfter(1)), 1),
+                (previous, fresh) ->
+                        new HangCooldown(now.plus(cooldownAfter(previous.streak() + 1)), previous.streak() + 1));
+        log.warn(
+                "Marketplace availability push to a {} binding stopped after {} unknown outcomes in a row; not called again until {}",
+                binding.providerType(),
+                UNKNOWN_STREAK_LIMIT,
+                next.until());
+    }
+
+    private Duration cooldownAfter(int streak) {
+        Duration delay = backoff.delayAfter(streak);
+        return delay.compareTo(HANG_COOLDOWN_CAP) > 0 ? HANG_COOLDOWN_CAP : delay;
     }
 
     /** What one attempt concluded, and the stable code behind it. */
