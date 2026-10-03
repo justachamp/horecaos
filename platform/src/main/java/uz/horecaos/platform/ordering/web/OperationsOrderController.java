@@ -11,7 +11,6 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -22,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -797,6 +797,16 @@ public class OperationsOrderController {
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
         boolean presentablePayment = orderQuery.presentablePaymentFor(tenantId, detail.order());
+        // ADR 0137: the step a line may be amended in, asked only of an order that can still be
+        // amended -- a finished order has no use for it and the read costs a query on the menu.
+        Map<UUID, BigDecimal> portionSteps = detail.order().status().terminal()
+                ? Map.of()
+                : amendments.portionStepsOf(
+                        detail.order(),
+                        detail.lines().stream()
+                                .filter(line -> !line.line().isComboComponent())
+                                .map(line -> line.line().sourceVariantId())
+                                .collect(Collectors.toSet()));
         // Only a DINE_IN order can sit at a table; asking about a delivery or a pickup
         // would only spend a query on an answer that is always empty.
         OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
@@ -812,7 +822,8 @@ public class OperationsOrderController {
                         amendmentAwaitingOperator,
                         presentablePayment,
                         table,
-                        staffDirectory));
+                        staffDirectory,
+                        portionSteps));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -2038,7 +2049,11 @@ public class OperationsOrderController {
             @jakarta.validation.Valid DeliveryAddressRequest deliveryAddress,
             @jakarta.validation.Valid @Size(max = 10) List<@jakarta.validation.Valid AddLineRequest> lines,
             UUID orderLineId,
-            @Positive Integer quantity) {
+            // ADR 0137: a decimal, because the line it targets may be a dish sold by the portion.
+            // Whether this line takes a fraction is the amendment's decision against the published
+            // menu, exactly as the cart's is; here it is only a positive amount the column can hold.
+            @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity) {
 
         OrderAmendmentService.AmendmentCommand toCommand() {
             return switch (type) {
@@ -2158,13 +2173,22 @@ public class OperationsOrderController {
      */
     public record AddLineRequest(
             @NotNull UUID variantId,
-            @Positive int quantity,
+            // ADR 0137: a decimal for a dish sold by the portion. Not "required" in the published
+            // contract, which declared a primitive here: a missing value is still refused, by
+            // validation, and the contract gate forbids making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 10) List<UUID> modifierOptionIds,
             @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks) {
 
         /** Every request that predates ADR 0136's combos. */
         public AddLineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
-            this(variantId, quantity, modifierOptionIds, null);
+            this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, null);
         }
 
         OrderAmendmentService.AmendmentCommand.LineRequest toLineRequest() {
@@ -2809,7 +2833,8 @@ public class OperationsOrderController {
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
-                StaffDirectory staffDirectory) {
+                StaffDirectory staffDirectory,
+                Map<UUID, BigDecimal> portionSteps) {
             var order = detail.order();
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
@@ -2822,7 +2847,7 @@ public class OperationsOrderController {
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),
-                    lineResponses(detail),
+                    lineResponses(detail, portionSteps),
                     detail.warnings(),
                     order.currentRevision(),
                     order.createdByActorType(),
@@ -2875,7 +2900,8 @@ public class OperationsOrderController {
                     Objects.requireNonNull(line.comboQuantity()));
         }
 
-        private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {
+        private static List<LineResponse> lineResponses(
+                OrderQueryService.OrderDetail detail, Map<UUID, BigDecimal> portionSteps) {
             return detail.lines().stream()
                     .map(line -> new LineResponse(
                             line.line().lineNumber(),
@@ -2901,7 +2927,10 @@ public class OperationsOrderController {
                                     .map(m -> new AutoSelectedChargeResponse(
                                             m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
                                     .toList(),
-                            OrderLineCatchweightResponse.of(line.line())))
+                            OrderLineCatchweightResponse.of(line.line()),
+                            line.line().isComboComponent()
+                                    ? null
+                                    : portionSteps.get(line.line().sourceVariantId())))
                     .toList();
         }
     }
@@ -3148,7 +3177,11 @@ public class OperationsOrderController {
             // ADR 0137: present on a line sold by weight. provisional is true until the
             // kitchen has weighed it, and means finalAmountMinor was computed against
             // the nominal weight.
-            @Nullable OrderLineCatchweightResponse catchweight) {}
+            @Nullable OrderLineCatchweightResponse catchweight,
+            // ADR 0137: the step this line may be amended in, present only on a line of a splittable
+            // dish whose order can still be amended -- so a console offers 1,5 of a plov and never of
+            // a can. Absent means whole units; it is the published rule, not a property of the line.
+            @Nullable BigDecimal portionSize) {}
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}

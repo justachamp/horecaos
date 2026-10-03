@@ -113,13 +113,18 @@ final class AmendmentBasket {
     /**
      * The pricing request for every live unit, with the quantities an amendment asks to change.
      *
-     * @param changedQuantities new quantities by order line id. For a combo's component line the
-     *        quantity is that line's new units, which has to be a whole number of combos
+     * @param changedQuantities new quantities by order line id, decimals included (ADR 0137: half a
+     *        portion of a splittable dish). Whether a fraction is one the dish takes is the
+     *        service's decision against the published menu; here a plain line takes what it is
+     *        given. For a combo's component line the quantity is that line's new units, which has
+     *        to be a whole number of combos
      * @param modifiersByLine the stored selections by order line, including the ones the server
      *        applied and the second-level ones
      */
     static List<PricingCommand.Item> pricingItems(
-            List<Unit> units, Map<UUID, Integer> changedQuantities, Map<UUID, List<OrderModifierRow>> modifiersByLine) {
+            List<Unit> units,
+            Map<UUID, BigDecimal> changedQuantities,
+            Map<UUID, List<OrderModifierRow>> modifiersByLine) {
         return pricingItems(units, changedQuantities, modifiersByLine, Map.of());
     }
 
@@ -153,7 +158,7 @@ final class AmendmentBasket {
      */
     private static List<PricingCommand.Item> pricingItems(
             List<Unit> units,
-            Map<UUID, Integer> changedQuantities,
+            Map<UUID, BigDecimal> changedQuantities,
             Map<UUID, List<OrderModifierRow>> modifiersByLine,
             Map<UUID, Integer> capturedWeights) {
         List<PricingCommand.Item> items = new ArrayList<>();
@@ -168,13 +173,13 @@ final class AmendmentBasket {
 
     private static PricingCommand.Item plainItem(
             Unit unit,
-            Map<UUID, Integer> changedQuantities,
+            Map<UUID, BigDecimal> changedQuantities,
             Map<UUID, List<OrderModifierRow>> modifiersByLine,
             Map<UUID, Integer> capturedWeights) {
         OrderLineRow line = unit.first();
-        Integer changedTo = changedQuantities.get(line.lineId());
+        BigDecimal changedTo = changedQuantities.get(line.lineId());
         boolean changed = changedTo != null;
-        BigDecimal quantity = changedTo != null ? BigDecimal.valueOf(changedTo) : line.quantity();
+        BigDecimal quantity = changedTo != null ? Quantities.normalise(changedTo) : line.quantity();
         if (changed && quantity.compareTo(line.quantity()) <= 0) {
             throw decreaseRefused(line.lineId());
         }
@@ -206,14 +211,14 @@ final class AmendmentBasket {
                 line.lineId().toString(), line.sourceVariantId(), quantity, chosen, List.of(), nested, weight);
     }
 
-    private static PricingCommand.Item comboItem(Unit unit, Map<UUID, Integer> changedQuantities) {
+    private static PricingCommand.Item comboItem(Unit unit, Map<UUID, BigDecimal> changedQuantities) {
         OrderLineRow first = unit.first();
         int combos = requireInt(first.comboQuantity());
 
         Integer requested = null;
         for (OrderLineRow line : unit.lines()) {
-            Integer target = changedQuantities.get(line.lineId());
-            if (target == null) {
+            BigDecimal asked = changedQuantities.get(line.lineId());
+            if (asked == null) {
                 continue;
             }
             // The units one combo puts on the order for this component: the pairing's default
@@ -221,13 +226,16 @@ final class AmendmentBasket {
             // is the combo count times that.
             int lineUnits = wholeUnits(line.quantity());
             int perCombo = lineUnits / combos;
-            if (perCombo <= 0 || target % perCombo != 0) {
+            // A fraction of a combo is refused by the same code as a count that is not a
+            // multiple of the combo: either way what was asked for is not a whole number of combos.
+            if (perCombo <= 0 || !Quantities.isWhole(asked) || asked.intValueExact() % perCombo != 0) {
                 throw new AmendmentRefusedException(
                         "COMBO_QUANTITY_NOT_WHOLE",
                         ("Line %s is %d unit(s) of a combo that puts %d on the order for each one bought; "
                                         + "a combo changes by whole combos")
                                 .formatted(line.lineId(), lineUnits, perCombo));
             }
+            int target = asked.intValueExact();
             int wanted = target / perCombo;
             if (requested != null && requested != wanted) {
                 throw new AmendmentRefusedException(
@@ -283,7 +291,11 @@ final class AmendmentBasket {
                 continue;
             }
             OrderLineRow live = unit.replacedBy(quoted);
-            int delta = Quantities.wholeUnitsCeiling(quoted.quantity().subtract(live.quantity()));
+            // Stock is held in whole units per line (ADR 0137: checkout holds the ceiling of each
+            // line), so the units this change adds are the difference of the two ceilings and not
+            // the ceiling of the difference: going from 1 to 1.5 holds one more plate, going from
+            // 0.5 to 1 holds none, because the half plate already held the whole one.
+            int delta = Quantities.wholeUnitsCeiling(quoted.quantity()) - Quantities.wholeUnitsCeiling(live.quantity());
             if (delta > 0) {
                 increaseByVariant.merge(live.sourceVariantId(), delta, Integer::sum);
             }

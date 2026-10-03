@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -75,6 +76,7 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Amending an order without editing it (ADR 0039).
@@ -123,6 +125,9 @@ public class OrderAmendmentService {
      */
     private static final OrderStatus DEFAULT_CUT_POINT = OrderStatus.READY;
 
+    /** The most one line may hold, the cart's own limit (ADR 0137): an amendment is not a way round it. */
+    private static final int MAX_LINE_QUANTITY = 999;
+
     /** ADR 0039: the one cash-tender method code ordering itself ever names. */
     private static final String CASH_METHOD_CODE = "CASH";
 
@@ -146,6 +151,7 @@ public class OrderAmendmentService {
     private final PromotionRedemptionPort promotions;
     private final PromotionQueryPort promotionQuery;
     private final OrderDeliveryPoint deliveryPoint;
+    private final CartMenuRules menu;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -167,7 +173,8 @@ public class OrderAmendmentService {
             PromoCodeRedemptionPort promoCodes,
             OrderCatalogSnapshot catalog,
             PromotionRedemptionPort promotions,
-            PromotionQueryPort promotionQuery) {
+            PromotionQueryPort promotionQuery,
+            CartMenuRules menu) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -186,6 +193,7 @@ public class OrderAmendmentService {
         this.catalog = catalog;
         this.promotions = promotions;
         this.promotionQuery = promotionQuery;
+        this.menu = menu;
         this.deliveryPoint = new OrderDeliveryPoint(orders, protection, objectMapper);
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
@@ -257,6 +265,7 @@ public class OrderAmendmentService {
         // applies simply expires on the ordinary ADR 0018 TTL; it is never a
         // second charge or a second reservation.
         DecodedAmendment decoded = decode(typedPayloadsOfIssued(command.commands()));
+        requireOrderableQuantities(order, decoded.basket());
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
         UUID quoteId = null;
@@ -970,7 +979,10 @@ public class OrderAmendmentService {
 
     /** One line {@link AmendmentCommandType#ADD_LINES} adds, matched back to its priced quote by key. */
     private record NewLine(
-            String lineKey, UUID variantId, int quantity, List<CartPricingPort.PricingCommand.ComboPick> comboPicks) {}
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            List<CartPricingPort.PricingCommand.ComboPick> comboPicks) {}
 
     /**
      * What a batch of commands asks for in the quote and the basket — decoded
@@ -980,7 +992,7 @@ public class OrderAmendmentService {
      */
     private record FinancialIntent(
             List<NewLine> addedLines,
-            Map<UUID, Integer> changedQuantities,
+            Map<UUID, BigDecimal> changedQuantities,
             @Nullable DeliveryDestination address) {
 
         boolean needsReprice() {
@@ -1026,7 +1038,7 @@ public class OrderAmendmentService {
         String deliveryInstructions = null;
         String paymentMethodCode = null;
         List<NewLine> addedLines = new ArrayList<>();
-        Map<UUID, Integer> changedQuantities = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> changedQuantities = new LinkedHashMap<>();
         int newLineSequence = 0;
 
         for (TypedPayload command : commands) {
@@ -1091,7 +1103,7 @@ public class OrderAmendmentService {
                         addedLines.add(new NewLine(
                                 "amend-new:" + newLineSequence++,
                                 asUuid(Objects.requireNonNull(line.get("variantId"), "A new line needs a variant")),
-                                asInt(Objects.requireNonNull(line.get("quantity"), "A new line needs a quantity")),
+                                asQuantity(Objects.requireNonNull(line.get("quantity"), "A new line needs a quantity")),
                                 asComboPicks(line.get("comboPicks"))));
                     }
                 }
@@ -1099,7 +1111,7 @@ public class OrderAmendmentService {
                     changedQuantities.put(
                             asUuid(Objects.requireNonNull(
                                     payload.get("orderLineId"), "CHANGE_LINE_QUANTITY command has no orderLineId")),
-                            asInt(Objects.requireNonNull(
+                            asQuantity(Objects.requireNonNull(
                                     payload.get("quantity"), "CHANGE_LINE_QUANTITY command has no quantity")));
                 default -> throw new IllegalStateException("No built handler for " + command.type());
             }
@@ -1123,6 +1135,17 @@ public class OrderAmendmentService {
 
     private static int asInt(Object value) {
         return ((Number) value).intValue();
+    }
+
+    /**
+     * A quantity read back from a stored command (ADR 0137): a whole number is written and read
+     * as {@code 2}, a portion as {@code 0.5}, and an amendment proposed before quantities were
+     * decimal holds the integer it always did. Read through the number's text rather than
+     * {@code doubleValue()}, so what was stored is what is priced, not its nearest binary
+     * approximation.
+     */
+    private static BigDecimal asQuantity(Object value) {
+        return Quantities.normalise(new BigDecimal(String.valueOf(value)));
     }
 
     private static double asDouble(Object value) {
@@ -1210,12 +1233,7 @@ public class OrderAmendmentService {
         }
         for (NewLine added : intent.addedLines()) {
             items.add(new CartPricingPort.PricingCommand.Item(
-                    added.lineKey(),
-                    added.variantId(),
-                    BigDecimal.valueOf(added.quantity()),
-                    List.of(),
-                    added.comboPicks(),
-                    List.of()));
+                    added.lineKey(), added.variantId(), added.quantity(), List.of(), added.comboPicks(), List.of()));
         }
 
         if (intent.address() != null && order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
@@ -1267,6 +1285,89 @@ public class OrderAmendmentService {
             throw new AmendmentRefusedException(
                     refused.code(), Objects.requireNonNullElse(refused.getMessage(), refused.code()));
         }
+    }
+
+    /**
+     * The step each of these variants can be added to in an amendment (ADR 0137): the published
+     * portion size of a splittable dish, and nothing for a dish sold in whole units.
+     *
+     * <p>What the console needs to offer {@code 1,5} of a plov and never {@code 1,5} of a can: the
+     * same answer {@link #requireOrderableQuantities} will give when the quantity arrives, from the
+     * same publication of the order's own channel. A variant absent from the result takes whole units.
+     */
+    public Map<UUID, BigDecimal> portionStepsOf(OrderRow order, Collection<UUID> variantIds) {
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, BigDecimal> steps = new LinkedHashMap<>();
+        menu.physicalOf(order.tenantId(), order.brandId(), order.channelCode(), variantIds)
+                .forEach((variantId, rules) -> {
+                    if (rules.allowsFraction()) {
+                        steps.put(variantId, Quantities.normalise(Objects.requireNonNull(rules.portionSize())));
+                    }
+                });
+        return steps;
+    }
+
+    /**
+     * Refuses a quantity the dish cannot be ordered in, before anything is priced (ADR 0137).
+     *
+     * <p>The same rule the cart enforces and from the same source, the published menu of the
+     * order's channel: a splittable dish with a portion step takes a whole number of portions, a
+     * fraction of anything else is refused by name, and a quantity outside the column is refused
+     * rather than rounded by the database. An amendment is the one other way a quantity reaches
+     * an order, and one that skipped the rule would put half a can of soda on a ticket the cart
+     * would never have let through. The refusal carries the cart's own codes ({@code
+     * QUANTITY_NOT_A_PORTION}, {@code FRACTIONAL_QUANTITY_NOT_ALLOWED}, {@code
+     * QUANTITY_OUT_OF_RANGE}) so a console that already words them for the basket words them here.
+     *
+     * <p>A combo's component line is not asked: its quantity is the combo count times what one
+     * combo puts on the order, and only a whole number of combos is a quantity at all (see {@link
+     * AmendmentBasket}). A combo that is added counts combos, and its container carries no
+     * physical block, so the same rule keeps it whole.
+     */
+    private void requireOrderableQuantities(OrderRow order, FinancialIntent intent) {
+        if (intent.changedQuantities().isEmpty() && intent.addedLines().isEmpty()) {
+            return;
+        }
+        Map<UUID, OrderLineRow> liveById = orders.lines(order.tenantId(), order.orderId()).stream()
+                .collect(Collectors.toMap(OrderLineRow::lineId, line -> line, (first, second) -> first));
+        Set<UUID> variantIds = new HashSet<>();
+        intent.addedLines().forEach(added -> variantIds.add(added.variantId()));
+        for (UUID targeted : intent.changedQuantities().keySet()) {
+            OrderLineRow line = liveById.get(targeted);
+            if (line == null) {
+                throw new AmendmentRefusedException(
+                        "ORDER_LINE_NOT_FOUND", "Line " + targeted + " is not a live line on this order");
+            }
+            if (!line.isComboComponent()) {
+                variantIds.add(line.sourceVariantId());
+            }
+        }
+        Map<UUID, CartMenuRules.PhysicalRules> physical =
+                menu.physicalOf(order.tenantId(), order.brandId(), order.channelCode(), variantIds);
+        BigDecimal maximum = BigDecimal.valueOf(MAX_LINE_QUANTITY);
+        intent.changedQuantities().forEach((targeted, quantity) -> {
+            OrderLineRow line = Objects.requireNonNull(liveById.get(targeted), "checked above");
+            if (!line.isComboComponent()) {
+                requireOrderable(
+                        physical.getOrDefault(line.sourceVariantId(), CartMenuRules.PhysicalRules.WHOLE_UNITS),
+                        quantity,
+                        maximum);
+            }
+        });
+        for (NewLine added : intent.addedLines()) {
+            requireOrderable(
+                    physical.getOrDefault(added.variantId(), CartMenuRules.PhysicalRules.WHOLE_UNITS),
+                    added.quantity(),
+                    maximum);
+        }
+    }
+
+    private static void requireOrderable(CartMenuRules.PhysicalRules rules, BigDecimal quantity, BigDecimal maximum) {
+        rules.refusalOf(quantity, maximum).ifPresent(refusal -> {
+            throw new AmendmentRefusedException(refusal.code(), refusal.message());
+        });
     }
 
     /**
@@ -1976,12 +2077,20 @@ public class OrderAmendmentService {
          * own doc) and is refused by name with {@code
          * QUANTITY_DECREASE_NOT_SUPPORTED}.
          */
-        public static AmendmentCommand changeLineQuantity(UUID orderLineId, int quantity) {
+        public static AmendmentCommand changeLineQuantity(UUID orderLineId, BigDecimal quantity) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put(
                     "orderLineId", Objects.requireNonNull(orderLineId, "A quantity change needs the line it targets"));
-            payload.put("quantity", quantity);
+            // ADR 0137: a decimal for a splittable dish. Normalised, so a whole quantity is stored as
+            // 3 and not 3.000, and a stored command reads the same as it did when the quantity was
+            // an integer.
+            payload.put("quantity", Quantities.normalise(Objects.requireNonNull(quantity, "A quantity is required")));
             return new AmendmentCommand(AmendmentCommandType.CHANGE_LINE_QUANTITY, payload);
+        }
+
+        /** A whole number of units, which is every line but a splittable dish. */
+        public static AmendmentCommand changeLineQuantity(UUID orderLineId, int quantity) {
+            return changeLineQuantity(orderLineId, BigDecimal.valueOf(quantity));
         }
 
         /**
@@ -1991,16 +2100,30 @@ public class OrderAmendmentService {
          *                   combo's container and {@code quantity} counts combos
          */
         public record LineRequest(
-                UUID variantId, int quantity, List<UUID> modifierOptionIds, List<CartService.ComboPick> comboPicks) {
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<CartService.ComboPick> comboPicks) {
 
             public LineRequest {
+                quantity = Quantities.normalise(Objects.requireNonNull(quantity, "A new line needs a quantity"));
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
                 comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
             }
 
             /** Every line that is not a combo, which is every line before ADR 0136. */
-            public LineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+            public LineRequest(UUID variantId, BigDecimal quantity, List<UUID> modifierOptionIds) {
                 this(variantId, quantity, modifierOptionIds, List.of());
+            }
+
+            /** A whole number of units, which is every line but a splittable dish. */
+            public LineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+                this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, List.of());
+            }
+
+            public LineRequest(
+                    UUID variantId, int quantity, List<UUID> modifierOptionIds, List<CartService.ComboPick> picks) {
+                this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, picks);
             }
         }
     }

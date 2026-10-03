@@ -46,7 +46,6 @@ import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.tenancy.api.Serviceability;
 import uz.horecaos.platform.tenancy.api.ServiceabilityResolver;
-import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The server-side cart (ADR 0019).
@@ -1601,22 +1600,9 @@ public class CartService {
      * dish is ordered in steps of 0.5" tells them what to type.
      */
     private static void requireQuantityAllowed(CartMenuRules.PhysicalRules physical, BigDecimal quantity) {
-        if (!Quantities.fitsColumn(quantity) || quantity.compareTo(MAX_CART_QUANTITY) > 0) {
-            throw new CartRefusedException(
-                    "QUANTITY_OUT_OF_RANGE",
-                    "A quantity is more than zero and at most %s, with at most %d fraction digits"
-                            .formatted(MAX_CART_QUANTITY.toPlainString(), Quantities.SCALE));
-        }
-        if (physical.accepts(quantity)) {
-            return;
-        }
-        if (physical.allowsFraction()) {
-            throw new CartRefusedException(
-                    "QUANTITY_NOT_A_PORTION",
-                    "This item is ordered in steps of %s"
-                            .formatted(Quantities.plain(Objects.requireNonNull(physical.portionSize()))));
-        }
-        throw new CartRefusedException("FRACTIONAL_QUANTITY_NOT_ALLOWED", "This item is only sold in whole units");
+        physical.refusalOf(quantity, MAX_CART_QUANTITY).ifPresent(refusal -> {
+            throw new CartRefusedException(refusal.code(), refusal.message());
+        });
     }
 
     private String modifiersJson(List<UUID> modifierOptionIds) {

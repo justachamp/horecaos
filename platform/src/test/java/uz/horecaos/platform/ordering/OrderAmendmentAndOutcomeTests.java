@@ -381,7 +381,8 @@ class OrderAmendmentAndOutcomeTests {
                                 jdbc, objectMapper)),
                 new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
                         new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
-                                jdbc, objectMapper)));
+                                jdbc, objectMapper)),
+                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper));
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 

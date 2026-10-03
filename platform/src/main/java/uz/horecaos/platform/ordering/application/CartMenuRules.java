@@ -1,8 +1,11 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -33,6 +36,30 @@ public interface CartMenuRules {
      * than here.
      */
     Optional<ProductRules> forVariant(UUID tenantId, UUID brandId, String channelCode, UUID variantId);
+
+    /**
+     * How each of these variants may be quantified, as published (ADR 0137): the one question an
+     * amendment and an order read ask about many variants at once, without the modifier groups
+     * {@link #forVariant} also resolves.
+     *
+     * <p>A variant the live publication does not describe, or one that publishes no physical block,
+     * is {@link PhysicalRules#WHOLE_UNITS}, exactly as {@link ProductRules#physicalOf} answers for
+     * it; it is always present in the result so a caller never has to tell "absent" from "whole".
+     * The default asks {@link #forVariant} once per variant; an implementation that can answer in
+     * one read overrides it.
+     */
+    default Map<UUID, PhysicalRules> physicalOf(
+            UUID tenantId, UUID brandId, String channelCode, Collection<UUID> variantIds) {
+        Map<UUID, PhysicalRules> byVariant = new LinkedHashMap<>();
+        for (UUID variantId : variantIds) {
+            byVariant.put(
+                    variantId,
+                    forVariant(tenantId, brandId, channelCode, variantId)
+                            .map(rules -> rules.physicalOf(variantId))
+                            .orElse(PhysicalRules.WHOLE_UNITS));
+        }
+        return byVariant;
+    }
 
     /**
      * A product's selection rules as published.
@@ -100,7 +127,42 @@ public interface CartMenuRules {
             }
             return allowsFraction() && quantity.remainder(portionSize).signum() == 0;
         }
+
+        /**
+         * Why this quantity is not one the variant may be ordered in, or empty when it is
+         * (ADR 0137). The one place the cart and an amendment ask the question, so a quantity
+         * the basket took is a quantity an amendment takes, and the refusal reads the same
+         * wherever it is raised.
+         *
+         * <p>Positive and within the column first, so a client cannot send a quantity the database
+         * would round or refuse; then the published rule. The messages name the portion step,
+         * because "0.5 is not allowed" tells a customer nothing and "this dish is ordered in
+         * steps of 0.5" tells them what to type.
+         *
+         * @param maximum the largest quantity one line may hold
+         */
+        public Optional<Refusal> refusalOf(BigDecimal quantity, BigDecimal maximum) {
+            if (!Quantities.fitsColumn(quantity) || quantity.compareTo(maximum) > 0) {
+                return Optional.of(new Refusal(
+                        "QUANTITY_OUT_OF_RANGE",
+                        "A quantity is more than zero and at most %s, with at most %d fraction digits"
+                                .formatted(maximum.toPlainString(), Quantities.SCALE)));
+            }
+            if (accepts(quantity)) {
+                return Optional.empty();
+            }
+            if (allowsFraction()) {
+                return Optional.of(new Refusal(
+                        "QUANTITY_NOT_A_PORTION",
+                        "This item is ordered in steps of %s"
+                                .formatted(Quantities.plain(Objects.requireNonNull(portionSize)))));
+            }
+            return Optional.of(new Refusal("FRACTIONAL_QUANTITY_NOT_ALLOWED", "This item is only sold in whole units"));
+        }
     }
+
+    /** A quantity a variant cannot be ordered in, with the stable code a client branches on. */
+    record Refusal(String code, String message) {}
 
     /**
      * What one product's attachment says about a group it offers, already resolved against the
