@@ -340,7 +340,8 @@ class DispatchRulesSourcingTests {
     }
 
     @Test
-    @DisplayName("a LADDER rule asks no quote and books the first named partner, even when another would be cheaper")
+    @DisplayName(
+            "a LADDER rule asks no quote to choose: it books the first named partner even when another would be cheaper, then prices only that partner for the record")
     void aLadderAsksNoQuote() {
         policies.publish(document(rule(
                 "ladder",
@@ -358,12 +359,20 @@ class DispatchRulesSourcingTests {
 
         runner.run(claim(CONFIRMED));
 
-        assertThat(bookings.quoteCalls)
-                .as("the order the operator gave is the answer")
-                .isZero();
         assertThat(bookings.booked)
+                .as("the order the operator gave is the answer")
                 .singleElement()
                 .satisfies(booked -> assertThat(booked.bindingId()).isEqualTo(noorBinding));
+        assertThat(bookings.quotedBindings)
+                .as("nobody is asked a price to choose with; the one that won is asked once, afterwards")
+                .containsExactly(noorBinding);
+
+        // The customer paid 12,000 and Noor costs 28,000: the 16,000 the platform absorbs is on record,
+        // which a ladder that never priced its winner would have left out of the bearer reconciliation.
+        assertThat(count("fulfillment.delivery_cost_subsidies")).isEqualTo(1);
+        assertThat(jdbc.sql("""
+                        SELECT subsidy_amount_minor FROM fulfillment.delivery_cost_subsidies
+                        """).query(Long.class).single()).isEqualTo(16_000L);
     }
 
     @Test
@@ -1128,6 +1137,7 @@ class DispatchRulesSourcingTests {
         private final Map<UUID, QuoteOutcome> quotes = new HashMap<>();
         private final Map<UUID, BookingStatus> statuses = new HashMap<>();
         private int quoteCalls;
+        private final List<UUID> quotedBindings = new ArrayList<>();
         private int references;
 
         @Override
@@ -1140,6 +1150,7 @@ class DispatchRulesSourcingTests {
         @Override
         public QuoteOutcome quote(BookingCommand command) {
             quoteCalls++;
+            quotedBindings.add(command.bindingId());
             return quotes.getOrDefault(
                     command.bindingId(), QuoteOutcome.unavailable(ShipmentBookingPort.QUOTE_NOT_WIRED));
         }

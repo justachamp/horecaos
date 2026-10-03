@@ -163,7 +163,8 @@ public class DeliverySourcingService {
             // an API call and a partner's patience; spending both on every tick of an order one of
             // our own couriers takes thirty seconds later buys nothing, and asking a single
             // configured partner what it costs cannot change who is booked. A LADDER rule asks no
-            // quote at all: the order the operator gave is the answer.
+            // quote to choose with: the order the operator gave is the answer. The partner that wins
+            // is priced once, after it has won, only so the cost it leaves the platform is on record.
             scored = quoteAndScore(request, partners, progress, now);
             decision = SourcingPlanner.decide(
                     request.plan(),
@@ -258,7 +259,12 @@ public class DeliverySourcingService {
         boolean won = journal.settlePartnerAttempt(request.tenantId(), attempt.attemptId(), receipt, now);
 
         if (won) {
-            recordSubsidyIfAny(request, decision.partner(), quote, now);
+            // A quote taken to choose the winner is the price its subsidy rests on. Under a LADDER
+            // there was none, so the winner is priced now -- after the booking, never before it, and
+            // never able to change who was booked (ADR 0142 Decision 5).
+            DeliveryQuote priced =
+                    quote != null ? quote : priceLadderWinner(request, decision.partner(), progress, now);
+            recordSubsidyIfAny(request, decision.partner(), priced, now);
             recordCourierEtaIfAny(request, quote, now);
         }
 
@@ -382,27 +388,78 @@ public class DeliverySourcingService {
             if (!outcome.hasPrice() && ShipmentBookingPort.QUOTE_NOT_WIRED.equals(outcome.failureCode())) {
                 continue;
             }
-            quotes.add(new DeliveryQuote(
-                    UUID.randomUUID(),
-                    partner.bindingId(),
-                    partner.providerType(),
-                    requestId,
-                    outcome.priceMinor(),
-                    outcome.currency(),
-                    outcome.pickupEtaSeconds(),
-                    outcome.deliveryEtaSeconds(),
-                    outcome.distanceMeters(),
-                    outcome.deadHeadMeters(),
-                    outcome.expiresAt() != null ? outcome.expiresAt() : now.plusSeconds(QUOTE_TTL_SECONDS),
-                    outcome.partnerSuppliedExpiry(),
-                    outcome.failureCode(),
-                    now));
+            quotes.add(quoteOf(partner, requestId, outcome, now));
         }
 
         if (!quotes.isEmpty()) {
             journal.recordQuotes(request.tenantId(), request.planId(), quotes);
         }
         return QuoteScoring.rank(partners, quotes, request.plan(), now);
+    }
+
+    /**
+     * The price of a partner that has just won a booking chosen without one.
+     *
+     * <p>A LADDER decision is made from the order the operator gave, so nobody was asked what the
+     * journey costs, and without that the platform could absorb any amount over the customer's fee
+     * with no {@code DELIVERY_COST_SUBSIDY} on record. This asks the one partner that won, after the
+     * booking has settled, so it can neither delay the booking nor change who is booked.
+     *
+     * <p>Best-effort, like the subsidy it serves: the booking is already made, so a partner that cannot
+     * price the journey, or an adapter that throws, leaves the order booked and the fact unrecorded
+     * rather than failing the tick. Only a priced answer is kept -- a refusal row written after the
+     * partner accepted the order would read as if it had declined it.
+     */
+    private @Nullable DeliveryQuote priceLadderWinner(
+            SourcingRequest request, PartnerOption partner, SourcingProgress progress, Instant now) {
+
+        if (request.dispatch().partners().selection() != DispatchRulesDocument.PartnerSelection.LADDER) {
+            return null;
+        }
+        try {
+            UUID requestId = quoteId(
+                    request.planId(),
+                    partner.bindingId(),
+                    progress.attemptedPartners().size());
+            QuoteOutcome outcome = bookings.quote(quoteCommand(request, partner, requestId));
+            if (!outcome.hasPrice()) {
+                log.info(
+                        "Plan {} won its booking with {} but the partner gave no price ({}); no "
+                                + "DELIVERY_COST_SUBSIDY can be computed",
+                        request.planId(),
+                        partner.providerType(),
+                        outcome.failureCode());
+                return null;
+            }
+            DeliveryQuote priced = quoteOf(partner, requestId, outcome, now);
+            journal.recordQuotes(request.tenantId(), request.planId(), List.of(priced));
+            return priced;
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Plan {} won its booking with {} but pricing it failed ({}); no DELIVERY_COST_SUBSIDY recorded",
+                    request.planId(),
+                    partner.providerType(),
+                    failure.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private static DeliveryQuote quoteOf(PartnerOption partner, UUID requestId, QuoteOutcome outcome, Instant now) {
+        return new DeliveryQuote(
+                UUID.randomUUID(),
+                partner.bindingId(),
+                partner.providerType(),
+                requestId,
+                outcome.priceMinor(),
+                outcome.currency(),
+                outcome.pickupEtaSeconds(),
+                outcome.deliveryEtaSeconds(),
+                outcome.distanceMeters(),
+                outcome.deadHeadMeters(),
+                outcome.expiresAt() != null ? outcome.expiresAt() : now.plusSeconds(QUOTE_TTL_SECONDS),
+                outcome.partnerSuppliedExpiry(),
+                outcome.failureCode(),
+                now);
     }
 
     private static BookingCommand quoteCommand(SourcingRequest request, PartnerOption partner, UUID requestId) {
@@ -524,7 +581,8 @@ public class DeliverySourcingService {
      * this method only ever reads it.
      *
      * <p>Silently a no-op whenever the gap cannot honestly be computed: no quote
-     * was scored (a single configured partner is never quoted, so nothing here
+     * was scored (a single configured partner is never quoted under CHEAPEST, and a
+     * LADDER winner whose partner would not price it has none either, so nothing here
      * assumes a price it does not have), the quote carries no price, or the
      * currencies disagree. Money is never estimated by falling back to a
      * conversion or a default — an unpriced booking is not a zero-cost one, it is
