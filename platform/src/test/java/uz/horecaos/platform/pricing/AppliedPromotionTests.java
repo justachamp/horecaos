@@ -72,7 +72,12 @@ class AppliedPromotionTests {
     @BeforeEach
     void setUp() {
         fixture = new PromotionDbFixture(db, TASHKENT_LUNCH);
-        codes = new PromoCodeAuthoringService(fixture.promoCodeStore, fixture.clock);
+        codes = new PromoCodeAuthoringService(
+                fixture.promoCodeStore,
+                fixture.clock,
+                fixture.audits::add,
+                () -> new uz.horecaos.platform.iam.api.AuthenticatedActor(
+                        java.util.Objects.requireNonNull(fixture.actor.get()), java.util.Set.of(), java.util.Map.of()));
         applied = new AppliedPromotionService(
                 fixture.pricingStore,
                 fixture.promoCodeStore,

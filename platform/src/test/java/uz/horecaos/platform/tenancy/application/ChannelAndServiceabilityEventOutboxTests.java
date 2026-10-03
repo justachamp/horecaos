@@ -458,8 +458,12 @@ class ChannelAndServiceabilityEventOutboxTests {
 
         @Bean
         SalesChannelService salesChannelService(
-                JdbcSalesChannelStore store, Clock clock, ApplicationEventPublisher events) {
-            return new SalesChannelService(store, clock, events);
+                JdbcSalesChannelStore store,
+                Clock clock,
+                AuditRecorder audit,
+                CurrentActor currentActor,
+                ApplicationEventPublisher events) {
+            return new SalesChannelService(store, clock, audit, currentActor, events);
         }
 
         @Bean

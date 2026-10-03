@@ -126,9 +126,13 @@ class SalesChannelAndServiceabilityTests {
         clock = Clock.fixed(FRIDAY_NOON_LOCAL, ZoneOffset.UTC);
         channelStore = new JdbcSalesChannelStore(jdbc);
         serviceabilityStore = new JdbcServiceabilityStore(jdbc);
-        channels = new SalesChannelService(channelStore, clock);
         CurrentActor actor =
                 () -> new AuthenticatedActor(UUID.randomUUID().toString(), java.util.Set.of("tenant-admin"), Map.of());
+        channels = new SalesChannelService(
+                channelStore,
+                clock,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                actor);
         schedules = new ServiceScheduleService(
                 serviceabilityStore,
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),

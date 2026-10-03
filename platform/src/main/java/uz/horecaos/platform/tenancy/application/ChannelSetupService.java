@@ -2,7 +2,9 @@ package uz.horecaos.platform.tenancy.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -11,6 +13,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelHostname;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPresentation;
 import uz.horecaos.platform.tenancy.domain.channel.HostnameChallenge;
@@ -44,6 +54,14 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * old proof no longer matches what the console now shows. The kiosk device
  * registry is the one thing left on row 10.5 needing an owner decision —
  * re-deciding it is out of scope here.
+ *
+ * <p><strong>Every write leaves an audit fact</strong> (ADR 0027, staff row
+ * {@code 9.3a}) in the transaction that made it: {@code channel.hostname.claimed},
+ * {@code .verified}, {@code .challenge_rotated}, {@code .cleared} and {@code
+ * channel.presentation.updated}. A hostname decides which public address answers for
+ * a channel, so «who pointed the shop at that domain» belongs in the history. The DNS
+ * challenge token is a proof-of-control secret and never leaves this class: the
+ * rotation fact records that a new challenge was issued and when, not what it says.
  */
 @Service
 public class ChannelSetupService {
@@ -54,6 +72,8 @@ public class ChannelSetupService {
     private final JdbcChannelSetupStore store;
     private final SalesChannelService channels;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
     private final DnsTxtResolver dnsResolver;
     private final String baseDomain;
 
@@ -61,11 +81,15 @@ public class ChannelSetupService {
             JdbcChannelSetupStore store,
             SalesChannelService channels,
             Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
             DnsTxtResolver dnsResolver,
             @Value("${horecaos.storefront.base-domain:stores.horecaos.uz}") String baseDomain) {
         this.store = store;
         this.channels = channels;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
         this.dnsResolver = dnsResolver;
         this.baseDomain = baseDomain;
     }
@@ -103,10 +127,10 @@ public class ChannelSetupService {
      */
     @Transactional
     public ChannelHostname setSubdomain(UUID tenantId, UUID channelId, String slug, int expectedVersion) {
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
         String normalizedSlug = requireValidSlug(slug);
         String hostname = normalizedSlug + "." + baseDomain;
-        return write(tenantId, channelId, hostname, true, expectedVersion);
+        return write(channel, hostname, true, expectedVersion);
     }
 
     /**
@@ -115,9 +139,9 @@ public class ChannelSetupService {
      */
     @Transactional
     public ChannelHostname setCustomHostname(UUID tenantId, UUID channelId, String hostname, int expectedVersion) {
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
         String normalized = requireValidHostname(hostname);
-        return write(tenantId, channelId, normalized, false, expectedVersion);
+        return write(channel, normalized, false, expectedVersion);
     }
 
     /**
@@ -137,7 +161,7 @@ public class ChannelSetupService {
      */
     @Transactional
     public ChannelHostname verifyCustomHostname(UUID tenantId, UUID channelId, int expectedVersion) {
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
         HostnameChallenge challenge = store.challengeFor(tenantId, channelId)
                 .orElseThrow(() -> new TenantResourceNotFoundException(
                         "This channel has no active DNS challenge to verify — claim a custom hostname first"));
@@ -151,8 +175,16 @@ public class ChannelSetupService {
         if (!store.markVerified(tenantId, channelId, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
-        return store.hostnameFor(tenantId, channelId)
+        ChannelHostname verified = store.hostnameFor(tenantId, channelId)
                 .orElseThrow(() -> new TenantResourceNotFoundException("This channel has no hostname"));
+        recordAudit(
+                AuditFact.of("channel.hostname.verified", AuditClass.BUSINESS),
+                channel,
+                expectedVersion + 1,
+                "Channel hostname verified",
+                hostnameSnapshot(channel, challenge.hostname(), false),
+                hostnameSnapshot(channel, verified.hostname(), verified.verified()));
+        return verified;
     }
 
     /**
@@ -177,7 +209,7 @@ public class ChannelSetupService {
      */
     @Transactional
     public HostnameChallenge rotateChallenge(UUID tenantId, UUID channelId, int expectedVersion) {
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
         ChannelHostname current = store.hostnameFor(tenantId, channelId)
                 .orElseThrow(() -> new TenantResourceNotFoundException("This channel has no hostname"));
         if (isPlatformIssued(current.hostname())) {
@@ -186,9 +218,25 @@ public class ChannelSetupService {
         }
         String token = HostnameChallenges.generateToken();
         Instant now = clock.instant();
+        Instant previousIssuedAt = store.challengeFor(tenantId, channelId)
+                .map(HostnameChallenge::issuedAt)
+                .orElse(null);
         if (!store.rotateChallenge(tenantId, channelId, token, expectedVersion, now)) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
+        // The token is the proof of control: a fact that carried it would let anyone who can
+        // read the history claim the domain. Only that a new one was issued, and when.
+        Map<String, Object> before = hostnameSnapshot(channel, current.hostname(), current.verified());
+        before.put("challengeIssuedAt", previousIssuedAt == null ? null : previousIssuedAt.toString());
+        Map<String, Object> after = hostnameSnapshot(channel, current.hostname(), false);
+        after.put("challengeIssuedAt", now.toString());
+        recordAudit(
+                AuditFact.of("channel.hostname.challenge_rotated", AuditClass.BUSINESS),
+                channel,
+                expectedVersion + 1,
+                "Channel hostname challenge rotated",
+                before,
+                after);
         return HostnameChallenge.of(tenantId, channelId, current.hostname(), token, now);
     }
 
@@ -200,14 +248,27 @@ public class ChannelSetupService {
 
     @Transactional
     public void clearHostname(UUID tenantId, UUID channelId, int expectedVersion) {
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
+        Optional<ChannelHostname> previous = store.hostnameFor(tenantId, channelId);
         if (!store.clearHostname(tenantId, channelId, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
+        recordAudit(
+                AuditFact.of("channel.hostname.cleared", AuditClass.BUSINESS),
+                channel,
+                expectedVersion + 1,
+                "Channel hostname cleared",
+                hostnameSnapshot(
+                        channel,
+                        previous.map(ChannelHostname::hostname).orElse(null),
+                        previous.map(ChannelHostname::verified).orElse(false)),
+                hostnameSnapshot(channel, null, false));
     }
 
-    private ChannelHostname write(
-            UUID tenantId, UUID channelId, String hostname, boolean verified, int expectedVersion) {
+    private ChannelHostname write(SalesChannel channel, String hostname, boolean verified, int expectedVersion) {
+        UUID tenantId = channel.tenantId();
+        UUID channelId = channel.id();
+        Optional<ChannelHostname> previous = store.hostnameFor(tenantId, channelId);
         Instant now = clock.instant();
         // A platform-issued subdomain (verified=true) needs no challenge --
         // HorecaOS's own DNS already answers for it. A custom hostname
@@ -224,6 +285,16 @@ public class ChannelSetupService {
         } catch (DataIntegrityViolationException violation) {
             throw explainHostnameViolation(violation);
         }
+        recordAudit(
+                AuditFact.of("channel.hostname.claimed", AuditClass.BUSINESS),
+                channel,
+                expectedVersion + 1,
+                verified ? "Channel subdomain claimed" : "Channel custom hostname claimed",
+                hostnameSnapshot(
+                        channel,
+                        previous.map(ChannelHostname::hostname).orElse(null),
+                        previous.map(ChannelHostname::verified).orElse(false)),
+                hostnameSnapshot(channel, hostname, verified));
         return new ChannelHostname(tenantId, channelId, hostname, verified, now);
     }
 
@@ -257,7 +328,8 @@ public class ChannelSetupService {
             @Nullable UUID ogImageAssetId,
             int expectedVersion) {
 
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
+        ChannelPresentation previous = store.presentationFor(tenantId, channelId);
         String normalizedTitle = trimmedOrNull(seoTitle);
         String normalizedDescription = trimmedOrNull(seoDescription);
         if (normalizedTitle != null && normalizedTitle.length() > MAX_SEO_TITLE) {
@@ -276,7 +348,63 @@ public class ChannelSetupService {
                 clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
-        return new ChannelPresentation(tenantId, channelId, normalizedTitle, normalizedDescription, ogImageAssetId);
+        ChannelPresentation presentation =
+                new ChannelPresentation(tenantId, channelId, normalizedTitle, normalizedDescription, ogImageAssetId);
+        recordAudit(
+                AuditFact.of("channel.presentation.updated", AuditClass.BUSINESS),
+                channel,
+                expectedVersion + 1,
+                "Channel search presentation edited",
+                presentationSnapshot(channel, previous),
+                presentationSnapshot(channel, presentation));
+        return presentation;
+    }
+
+    // --------------------------------------------------------------- audit
+
+    /**
+     * One fact per write, in the caller's transaction. The reason is a plain statement of the
+     * action: the console has no field for one, and ADR 0027 refuses a user-initiated fact
+     * without it.
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            SalesChannel channel,
+            int version,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.tenant(channel.tenantId()))
+                .target("tenancy.sales-channel", channel.id())
+                .targetVersion((long) version)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(channel.id().toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    private static Map<String, Object> hostnameSnapshot(
+            SalesChannel channel, @Nullable String hostname, boolean verified) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("hostname", hostname);
+        snapshot.put("hostnameVerified", hostname != null && verified);
+        return snapshot;
+    }
+
+    private static Map<String, Object> presentationSnapshot(SalesChannel channel, ChannelPresentation presentation) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("seoTitle", presentation.seoTitle());
+        snapshot.put("seoDescription", presentation.seoDescription());
+        snapshot.put(
+                "ogImageAssetId",
+                presentation.ogImageAssetId() == null
+                        ? null
+                        : presentation.ogImageAssetId().toString());
+        return snapshot;
     }
 
     // -------------------------------------------------------------- shared
