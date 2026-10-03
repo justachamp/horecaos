@@ -125,6 +125,9 @@ export class CartConfirmationComponent implements OnInit {
         if (!options.some((option) => option.id === this.selectedPaymentId)) {
           this.selectedPaymentId = options[0]?.id ?? '';
         }
+        // A method taken without a tap is still the method the order will be paid with, and a
+        // promotion can read it (ADR 0140).
+        return this.syncPaymentMethod(this.selectedPaymentId);
       })
       .catch(() => this.paymentOptions.set([]))
       .finally(() => this.paymentMethodsLoaded.set(true));
@@ -310,6 +313,22 @@ export class CartConfirmationComponent implements OnInit {
 
   selectPayment(id: string): void {
     this.selectedPaymentId = id;
+    void this.syncPaymentMethod(id);
+  }
+
+  /**
+   * Puts the chosen method on the cart, which re-prices it (ADR 0140): "5% off when paying by
+   * Click" is in the total the customer is shown, and in the quote checkout accepts, only once the
+   * platform has been told the method. A failure here is not final -- {@link submitOrder} writes
+   * the method again before it prices and reports the refusal then.
+   */
+  private async syncPaymentMethod(id: string): Promise<void> {
+    if (!id) return;
+    try {
+      await this.cart.selectPaymentMethod(id);
+    } catch {
+      // Retried, and reported, by submitOrder().
+    }
   }
 
   get orderSubtotal(): string {
@@ -398,6 +417,10 @@ export class CartConfirmationComponent implements OnInit {
         );
         return;
       }
+      // How it will be paid, before it is priced: a promotion can read the method (ADR 0140), and
+      // checkout refuses a method the quote was not priced under. Writing it clears the quote, so
+      // like the destination it comes first.
+      await this.cart.selectPaymentMethod(this.selectedPaymentId);
       const priced = await this.cart.priceCart();
       if (!priced) {
         this.orderError.set(this.translate.get('cart.orderError'));

@@ -96,6 +96,14 @@ class FakeCartService {
   checkout = vi.fn();
   discard = vi.fn();
   bindTable = vi.fn().mockResolvedValue(null);
+  /** ADR 0140: the platform keeps the method on the cart, as the real service adopts it. */
+  selectPaymentMethod = vi.fn(async (code: string | null) => {
+    const held = this.cart();
+    if (held) {
+      this.cart.set({ ...held, paymentMethodCode: code });
+    }
+    return this.cart();
+  });
 }
 
 class FakeMenuService {
@@ -476,6 +484,115 @@ describe('DineInTableComponent', () => {
       expect(dineIn.queueRound).toHaveBeenCalledWith('session-1', 'order-1');
       expect(dineIn.attachRound).toHaveBeenCalledWith('session-1', 'order-1');
       expect(cartService.discard).toHaveBeenCalledWith('location-1');
+    });
+  });
+
+  describe('the payment method is part of the price (ADR 0140)', () => {
+    /** A seated guest with one dish in the basket and two ways to pay; card pays 5% less. */
+    async function seatedWithTwoMethods() {
+      const rig = setUp();
+      const { dineIn, menuService, cartService } = rig;
+      dineIn.seed(admission());
+      dineIn.bill.mockResolvedValue(bill());
+      menuService.menu.mockResolvedValue(menu());
+      const cart: PlatformCart = {
+        cartId: 'cart-1',
+        locationId: 'location-1',
+        status: 'OPEN',
+        currency: 'UZS',
+        fulfillmentMode: 'DINE_IN',
+        version: 2,
+        quoteId: null,
+        contextHash: null,
+        expiresAt: null,
+        lines: [
+          {
+            lineKey: 'variant-1',
+            variantId: 'variant-1',
+            quantity: 1,
+            commentPresetCodes: [],
+            hasCustomerNote: false,
+          },
+        ],
+      };
+      cartService.ensure.mockResolvedValue(cart);
+      cartService.putLine.mockImplementation(async () => {
+        cartService.cart.set(cart);
+        return cart;
+      });
+      cartService.price.mockImplementation(async () => {
+        const total = cartService.cart()?.paymentMethodCode === 'CLICK' ? 42750 : 45000;
+        return {
+          cartId: 'cart-1',
+          cartVersion: 2,
+          quoteId: `quote-${total}`,
+          contextHash: 'hash',
+          currency: 'UZS',
+          subtotalMinor: 45000,
+          taxMinor: 0,
+          discountMinor: 45000 - total,
+          feeMinor: 0,
+          totalMinor: total,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          delivery: null,
+        };
+      });
+      cartService.paymentMethods.mockResolvedValue({
+        cartId: 'cart-1',
+        currency: 'UZS',
+        methodCodes: ['CASH', 'CLICK'],
+        warnings: [],
+      });
+      cartService.checkout.mockResolvedValue({
+        orderId: 'order-1',
+        publicOrderNumber: '0001',
+        status: 'CONFIRMED',
+        version: 1,
+        outcome: 'CREATED',
+        warnings: [],
+      });
+      dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 42750, roundCount: 1 }));
+
+      rig.fixture.detectChanges();
+      await flush();
+      rig.fixture.detectChanges();
+      const host = rig.fixture.nativeElement as HTMLElement;
+      host.querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')?.click();
+      await flush();
+      rig.fixture.detectChanges();
+      await flush();
+      rig.fixture.detectChanges();
+      return { ...rig, host };
+    }
+
+    it('writes the method the guest picks to the cart and prices it again, so checkout spends a quote priced under it', async () => {
+      const { fixture, cartService, host } = await seatedWithTwoMethods();
+
+      const options = host.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="dine-in-payment-options"] button',
+      );
+      options[1].click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(cartService.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+
+      host.querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]')?.click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(cartService.checkout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paymentMethodCode: 'CLICK',
+          priced: expect.objectContaining({ totalMinor: 42750 }),
+        }),
+      );
+    });
+
+    it('writes the first method on offer too, so a default the guest never tapped is priced under it', async () => {
+      const { cartService } = await seatedWithTwoMethods();
+
+      expect(cartService.selectPaymentMethod).toHaveBeenCalledWith('CASH');
     });
   });
 

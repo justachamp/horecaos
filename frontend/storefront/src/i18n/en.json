@@ -327,6 +327,7 @@
     "roundCount": "{{count}} rounds ordered",
     "askForBill": "Ask for the bill",
     "orderPlaced": "Order sent to the kitchen",
+    "priceRefreshed": "The price was updated and your order has not been sent. Check the total and press Order again.",
     "billRequested": "The bill has been requested",
     "roundAttachRetry": "Order sent to the kitchen, but it is not on the table bill yet. Tap Try again.",
     "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
@@ -401,7 +402,8 @@
       "itemOutOfSaleWindow": "This item is not on sale right now.",
       "presetNotOffered": "That comment is no longer offered for this item.",
       "itemUnavailable": "This item just sold out.",
-      "holdExpired": "Your basket hold expired. Please review your order and try again."
+      "holdExpired": "Your basket hold expired. Please review your order and try again.",
+      "paymentMethodUnavailable": "This payment method is not available right now. Choose a different one."
     }
   },
   "money": {

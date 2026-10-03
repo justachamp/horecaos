@@ -105,6 +105,7 @@ class FakeUiCartService {
 
   load = vi.fn(async () => {});
   paymentMethods = vi.fn(async (): Promise<readonly string[]> => ['CASH']);
+  selectPaymentMethod = vi.fn(async (_code: string): Promise<void> => {});
   applyPromoCode = vi.fn(async () => true);
   removePromoCode = vi.fn(async () => {});
   applyDestination = vi.fn(async () => true);
@@ -310,6 +311,65 @@ describe('CheckoutComponent.confirm -- guards that must hold before the platform
 
     expect(fixture.nativeElement.textContent).toContain('cart.paymentSessionError');
     expect(navigateSpy).toHaveBeenCalledWith(['/orders']);
+  });
+});
+
+describe('CheckoutComponent -- the payment method is part of the price (ADR 0140)', () => {
+  it('writes the chosen method to the cart when the customer picks one, so the shown total is priced with it', async () => {
+    const { fixture, cart } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['CASH', 'CLICK']);
+    });
+    expect(cart.selectPaymentMethod).not.toHaveBeenCalled();
+
+    const rows = fixture.nativeElement.querySelectorAll(
+      '.pay-row',
+    ) as NodeListOf<HTMLButtonElement>;
+    rows[1].click();
+    await fixture.whenStable();
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('writes the one method on offer without a tap, because a promotion can read it', async () => {
+    const { cart } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['CLICK']);
+    });
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+  });
+
+  it('puts the method on the cart before it prices, so checkout is not refused for a method the quote was not priced with', async () => {
+    const { fixture, cart } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['CLICK']);
+    });
+    cart.selectPaymentMethod.mockClear();
+
+    (fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(cart.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+    const select = cart.selectPaymentMethod.mock.invocationCallOrder[0];
+    expect(select).toBeGreaterThan(cart.applyDestination.mock.invocationCallOrder[0]);
+    expect(select).toBeLessThan(cart.priceCart.mock.invocationCallOrder[0]);
+    expect(cart.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentMethodCode: 'CLICK' }),
+    );
+  });
+
+  it('names the reason when the platform refuses the method, and never reaches checkout', async () => {
+    const { fixture, cart } = await setUp();
+    cart.selectPaymentMethod = vi.fn(async () => {
+      throw refusal('PAYMENT_METHOD_UNAVAILABLE');
+    });
+
+    (fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.paymentMethodUnavailable');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.priceCart).not.toHaveBeenCalled();
+    expect(cart.checkout).not.toHaveBeenCalled();
   });
 });
 

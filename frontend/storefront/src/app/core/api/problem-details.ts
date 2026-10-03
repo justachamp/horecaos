@@ -254,6 +254,8 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   ON_STOP: 'errors.reason.itemUnavailable',
   NOT_STOCKED_AT_LOCATION: 'errors.reason.itemUnavailable',
   RESERVATION_NO_LONGER_HELD: 'errors.reason.holdExpired',
+  // ADR 0140: the cart's channel does not sell the method the customer chose (CartService.setPaymentMethod).
+  PAYMENT_METHOD_UNAVAILABLE: 'errors.reason.paymentMethodUnavailable',
   NOT_SERVICEABLE: 'errors.reason.notServiceable',
   CHANNEL_NOT_SELLABLE: 'errors.reason.notServiceable',
   GUEST_ORDERS_NOT_ALLOWED: 'errors.reason.signInRequired',

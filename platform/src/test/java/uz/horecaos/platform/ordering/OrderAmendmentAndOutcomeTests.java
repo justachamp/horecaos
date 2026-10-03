@@ -4455,6 +4455,85 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName(
+            "ADR 0140: a checkout paying by a method no promotion reads is not refused because another method has one")
+    void aMethodNoPromotionReadsIsNotRefusedPriceChanged() {
+        activateAutomatic(automatic(
+                "TERMINAL5",
+                "pay",
+                null,
+                null,
+                List.of(condition(
+                        uz.horecaos.platform.pricing.domain.Promotion.Condition.Type.PAYMENT_METHOD,
+                        Map.of("paymentMethodCodes", List.of("TERMINAL")))),
+                500L));
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(cartStore.find(TENANT, BRAND, cart).orElseThrow().paymentMethodCode())
+                .as("a storefront cart that never selected a method carries none")
+                .isNull();
+
+        var placed = checkoutPaying(cart, "idem-cash-beside-promo", "CASH");
+
+        assertThat(placed.created())
+                .as(
+                        "cash is not read by any promotion, so the quoted total is exactly what cash pays: %s",
+                        placed.rejectionCode())
+                .isTrue();
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().discountMinor())
+                .as("and the customer who never asked for the card promotion does not get it")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0140: leaving the method a cart was priced under for another is refused when either one is read by a promotion")
+    void leavingAPromotedMethodIsRefusedPriceChanged() {
+        activateAutomatic(automatic(
+                "TERMINAL5",
+                "pay",
+                null,
+                null,
+                List.of(condition(
+                        uz.horecaos.platform.pricing.domain.Promotion.Condition.Type.PAYMENT_METHOD,
+                        Map.of("paymentMethodCodes", List.of("TERMINAL")))),
+                500L));
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        tx(() -> carts.setPaymentMethod(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "TERMINAL"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var refused = checkoutPaying(cart, "idem-leave-promoted", "CASH");
+
+        assertThat(refused.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(refused.rejectionCode())
+                .as("the quote carries the card discount; paying cash would charge a total nobody quoted")
+                .isEqualTo("PRICE_CHANGED");
+    }
+
+    private CheckoutService.CheckoutResult checkoutPaying(UUID cart, String idempotencyKey, String method) {
+        var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                row.version(),
+                Objects.requireNonNull(row.pricingQuoteId()),
+                Objects.requireNonNull(row.pricingContextHash()),
+                idempotencyKey,
+                method,
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+    }
+
+    @Test
     @DisplayName("ADR 0140: a cart refuses a payment method its channel does not offer, and remembers one it does")
     void aCartRemembersOnlyAMethodItsChannelOffers() {
         UUID cart = openCart();

@@ -385,6 +385,7 @@
       "presetNotOffered": "That comment is no longer offered for this item.",
       "itemUnavailable": "This item just sold out.",
       "holdExpired": "Your basket hold expired. Please review your order and try again.",
+      "paymentMethodUnavailable": "This payment method is not available right now. Choose a different one.",
       "tableNotAtBranch": "This table is at another branch. Scan the code on your own table.",
       "quoteExpired": "The price has expired. Please review your order and try again.",
       "modifierMinimum": "Choose the required options for this dish.",

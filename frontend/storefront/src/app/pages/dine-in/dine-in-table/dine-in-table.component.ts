@@ -683,11 +683,33 @@ export class DineInTableComponent implements OnInit {
     } catch {
       this.priced.set(null);
       this.paymentOptions.set([]);
+      return;
     }
+    await this.priceUnderSelectedMethod();
   }
 
   selectPayment(code: string): void {
     this.selectedPaymentCode.set(code);
+    void this.priceUnderSelectedMethod();
+  }
+
+  /**
+   * Puts the chosen method on the cart and prices it again (ADR 0140): "5% off when paying by Click"
+   * is in the total the guest sees, and in the quote checkout accepts, only once the platform has
+   * been told the method. Nothing is written when the cart already carries it. A refusal is left for
+   * {@link checkout}, which writes the method again and says why.
+   */
+  private async priceUnderSelectedMethod(): Promise<void> {
+    const code = this.selectedPaymentCode();
+    if (!code || this.carts.cart()?.paymentMethodCode === code) {
+      return;
+    }
+    try {
+      await this.carts.selectPaymentMethod(code);
+      this.priced.set(await this.carts.price());
+    } catch {
+      // Retried, and reported, by checkout().
+    }
   }
 
   /**
@@ -712,8 +734,22 @@ export class DineInTableComponent implements OnInit {
     this.checkoutError.set(null);
     this.roundLost.set(false);
     try {
+      let quote = priced;
+      if (this.carts.cart()?.paymentMethodCode !== paymentMethodCode) {
+        // The method never reached the cart, and checkout refuses a method the quote was not priced
+        // under (ADR 0140). Write it and price again; a guest who agreed to another total sees the
+        // new one and presses Order again.
+        await this.carts.selectPaymentMethod(paymentMethodCode);
+        quote = await this.carts.price();
+        this.priced.set(quote);
+        if (quote.totalMinor !== priced.totalMinor || quote.currency !== priced.currency) {
+          this.pendingCheckoutKey = null;
+          this.checkoutError.set(this.translate.get('dineIn.priceRefreshed'));
+          return;
+        }
+      }
       const result = await this.carts.checkout({
-        priced,
+        priced: quote,
         paymentMethodCode,
         idempotencyKey: this.checkoutKey(),
         // The binding is remembered state; this is what proves the guest is still

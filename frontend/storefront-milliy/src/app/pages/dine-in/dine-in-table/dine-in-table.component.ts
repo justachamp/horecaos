@@ -783,11 +783,33 @@ export class DineInTableComponent implements OnInit {
     } catch {
       this.paymentOptions.set([]);
       this.selectedPayment.set(null);
+      return;
     }
+    await this.priceUnderSelectedMethod();
   }
 
-  protected selectPayment(code: string): void {
+  protected async selectPayment(code: string): Promise<void> {
     this.selectedPayment.set(code);
+    await this.priceUnderSelectedMethod();
+  }
+
+  /**
+   * Puts the chosen method on the cart and prices it again (ADR 0140): "5% off when paying by Click"
+   * is in the total the guest sees, and in the quote checkout accepts, only once the platform has
+   * been told the method. Nothing is written when the cart already carries it. A refusal is left for
+   * {@link checkout}, which writes the method again and says why.
+   */
+  private async priceUnderSelectedMethod(): Promise<void> {
+    const code = this.selectedPayment();
+    if (!code || this.carts.cart()?.paymentMethodCode === code) {
+      return;
+    }
+    try {
+      await this.carts.selectPaymentMethod(code);
+      this.priced.set(await this.carts.price());
+    } catch {
+      // Retried, and reported, by checkout().
+    }
   }
 
   /**
@@ -825,9 +847,14 @@ export class DineInTableComponent implements OnInit {
     this.orderPlaced.set(false);
     try {
       let quote = priced;
-      if (this.quoteHasExpired(quote)) {
-        // The party sat over the menu past the quote's life. Price again first: a
+      const methodMissing = this.carts.cart()?.paymentMethodCode !== paymentMethodCode;
+      if (methodMissing || this.quoteHasExpired(quote)) {
+        // The party sat over the menu past the quote's life, or the method never reached the cart
+        // (ADR 0140: checkout refuses a method the quote was not priced under). Price again first: a
         // request the platform is certain to refuse tells the guest nothing.
+        if (methodMissing) {
+          await this.carts.selectPaymentMethod(paymentMethodCode);
+        }
         const fresh = await this.requote();
         if (!fresh) {
           return; // Why it cannot be priced is on the screen (priceRefusalKey).

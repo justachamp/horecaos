@@ -548,6 +548,32 @@ public class JdbcPromotionStore {
     }
 
     /**
+     * Whether a live promotion's {@code PAYMENT_METHOD} condition names any of the given
+     * codes -- the methods a price could differ between. A condition whose operand is not
+     * an array of codes (which the validator never lets leave DRAFT) reads nothing.
+     */
+    public boolean hasActivePaymentMethodPromotionReading(UUID tenantId, UUID brandId, List<String> methodCodes) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pricing.promotions p
+                    JOIN pricing.promotion_conditions c
+                      ON c.promotion_id = p.id AND c.tenant_id = p.tenant_id AND c.condition_type = 'PAYMENT_METHOD'
+                    WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND p.status = 'ACTIVE'
+                      AND jsonb_typeof(c.attributes_json -> 'paymentMethodCodes') = 'array'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(c.attributes_json -> 'paymentMethodCodes') AS read(code)
+                          WHERE read.code IN (:methodCodes)))
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("methodCodes", methodCodes)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
      * Whether a promotion the order holds, at the definition version it holds it
      * under, reads the payment method. Judged on the recorded version rather than the
      * current conditions, because that is the rule the order is repriced under.

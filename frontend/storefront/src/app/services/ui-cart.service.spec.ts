@@ -15,6 +15,7 @@ import { LangService } from './lang.service';
 import { ApiClient } from '../core/api/api-client';
 import { CustomerApi } from '../core/api/customer-api';
 import { APP_CONFIG, type AppConfig } from '../core/config/app-config';
+import { HorecaOSApiError } from '../core/api/problem-details';
 import type { CartResponseItem } from '../types/cart.types';
 
 const CONFIG: AppConfig = {
@@ -39,6 +40,7 @@ class FakeCartService {
   paymentMethods = vi.fn();
   checkout = vi.fn();
   discard = vi.fn();
+  selectPaymentMethod = vi.fn();
 }
 
 class FakeMenuService {
@@ -718,6 +720,69 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
     expect(service.deliveryFee()).toBe('—');
     expect(service.deliveryUnresolvedMessage()).toBeNull();
     expect(service.canPlaceOrder()).toBe(true);
+  });
+});
+
+describe('UiCartService.selectPaymentMethod (ADR 0140)', () => {
+  function cartPayingBy(code: string | null): PlatformCart {
+    return baseCart({
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+      paymentMethodCode: code,
+    });
+  }
+
+  it("writes the method to the cart and re-prices, so the total is the platform's answer for that method", async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(cartPayingBy(null));
+    const selected = cartPayingBy('CLICK');
+    carts.selectPaymentMethod.mockResolvedValue(selected);
+    carts.price.mockResolvedValue(pricedFor(selected));
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(carts.selectPaymentMethod).toHaveBeenCalledWith('CLICK');
+    expect(carts.price).toHaveBeenCalled();
+  });
+
+  it('writes nothing when the cart already carries the method, so it is free to repeat before every checkout', async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(cartPayingBy('CLICK'));
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(carts.selectPaymentMethod).not.toHaveBeenCalled();
+    expect(carts.price).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when there is no cart yet', async () => {
+    const { service, carts } = setUp();
+
+    await service.selectPaymentMethod('CLICK');
+
+    expect(carts.selectPaymentMethod).not.toHaveBeenCalled();
+  });
+
+  it("throws the platform's refusal to the caller, which owns the screen's error", async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(cartPayingBy(null));
+    carts.selectPaymentMethod.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'refused',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'PAYMENT_METHOD_UNAVAILABLE' },
+      }),
+    );
+
+    await expect(service.selectPaymentMethod('CLICK')).rejects.toBeInstanceOf(HorecaOSApiError);
   });
 });
 

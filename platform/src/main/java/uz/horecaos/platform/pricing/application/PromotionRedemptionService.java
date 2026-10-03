@@ -268,4 +268,13 @@ public class PromotionRedemptionService
         return store.hasActivePaymentMethodPromotion(tenantId, brandId)
                 || (orderId != null && store.orderHoldsPaymentMethodPromotion(tenantId, orderId));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean paymentMethodMovesTheTotal(
+            UUID tenantId, UUID brandId, @Nullable String pricedMethodCode, String chosenMethodCode) {
+        List<String> codes =
+                pricedMethodCode == null ? List.of(chosenMethodCode) : List.of(pricedMethodCode, chosenMethodCode);
+        return store.hasActivePaymentMethodPromotionReading(tenantId, brandId, codes);
+    }
 }
