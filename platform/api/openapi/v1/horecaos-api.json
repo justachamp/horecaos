@@ -4880,6 +4880,10 @@
               "$ref" : "#/components/schemas/ChannelMediaOverrideView"
             },
             "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -10329,6 +10333,12 @@
       },
       "DraftPreviewResponse" : {
         "properties" : {
+          "channelContentHashes" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
           "contentHash" : {
             "type" : "string"
           },
@@ -21028,6 +21038,9 @@
           },
           "locationId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
             "type" : "string"
           }
         },
@@ -35884,7 +35897,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides" : {
       "get" : {
-        "description" : "Every override this brand has written for the channel, or only one item's when entityType and entityId are both given. Empty means every item shows its own images on that channel.",
+        "description" : "Every override this brand has written for the channel, or only one item's when entityType and entityId are both given. Empty means every item shows its own images on that channel. An item's set carries its version, which is also the ETag (0 when it has none): the value to quote in If-Match when replacing it.",
         "operationId" : "channelMediaOverrides",
         "parameters" : [ {
           "in" : "path",
@@ -35945,7 +35958,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides/{entityType}/{entityId}" : {
       "put" : {
-        "description" : "The whole set every time, matching the photo editor's own whole-set save: what the screen shows is what is stored. An empty list removes every override and the item goes back to showing its own images on that channel. Every image must be a verified asset of this tenant; at most one is PRIMARY. A channel override wins over the item's per-channel relation (IA 4.2f), which wins over its universal images; prices are an independent axis and are never affected. It edits the draft: a preview reads it at once and a live menu changes when next published.",
+        "description" : "The whole set every time, matching the photo editor's own whole-set save: what the screen shows is what is stored. An empty list removes every override and the item goes back to showing its own images on that channel. Every image must be a verified asset of this tenant; at most one is PRIMARY. A channel override wins over the item's per-channel relation (IA 4.2f), which wins over its universal images; prices are an independent axis and are never affected. It edits the draft: a preview reads it at once, and the channel's live menu changes when the draft is next published to that channel and to no other. Only a product's images reach a published menu; a variant's or a category's are stored and drawn by the preview but served by no menu yet. A publication is refused while an image the channel chose is no longer verified. Under If-Match, the set's version the editor read (0 when the item has no override on the channel): another editor's save in between answers 409 STALE_VERSION, and saving the set already stored changes nothing and keeps its version. The response's ETag is the new version.",
         "operationId" : "replaceChannelMediaOverrides",
         "parameters" : [ {
           "in" : "path",
@@ -36016,7 +36029,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/preview-targets" : {
       "get" : {
-        "description" : "What a console offers to preview: one entry per branch the channel is active at, carrying the binding that covers it (and the ruleset it names) when the channel is backed by a marketplace installation.",
+        "description" : "What a console offers to preview: one entry per branch the channel is active at, carrying the branch's own name and the binding that covers it (and the ruleset it names) when the channel is backed by a marketplace installation. The binding's name is the installation's, which a brand-wide binding gives to every branch alike; the branch's name is what tells the entries apart.",
         "operationId" : "previewTargets",
         "parameters" : [ {
           "in" : "path",
