@@ -35,6 +35,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.R
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.CartPricingPort.PricingCommand;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
@@ -81,6 +82,7 @@ class CatchweightReconciliationServiceTests {
     private final CartPricingPort pricing = mock(CartPricingPort.class);
     private final QuoteAcceptancePort quoteAcceptance = mock(QuoteAcceptancePort.class);
     private final PromoCodeRedemptionPort promoCodes = mock(PromoCodeRedemptionPort.class);
+    private final PromotionRedemptionPort promotions = mock(PromotionRedemptionPort.class);
     private final OrderSettlementPort settlement = mock(OrderSettlementPort.class);
     private final OrderDeliveryPoint deliveryPoint = mock(OrderDeliveryPoint.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
@@ -219,6 +221,22 @@ class CatchweightReconciliationServiceTests {
     }
 
     @Test
+    @DisplayName("the promotion ledger and the loyalty flags are restated against the quote the revision carries")
+    void theLedgersAreRestatedAgainstTheNewQuote() {
+        orderIs(FulfillmentMode.PICKUP, cake, soda);
+        when(pricing.priceCart(any())).thenAnswer(invocation -> {
+            priced.set(invocation.getArgument(0));
+            return withLoyalty(repriced(), false, true);
+        });
+
+        weigh(1_340);
+
+        verify(promotions).restateForOrder(TENANT, BRAND, ORDER, REPRICE_QUOTE, 2, CUSTOMER, WEIGHED_AT);
+        verify(orders).setLoyaltyFlags(TENANT, ORDER, false, true);
+        verify(promoCodes).restateForOrder(TENANT, ORDER, REPRICE_QUOTE);
+    }
+
+    @Test
     @DisplayName("a weight that is not the target line's is carried unchanged for the lines already weighed")
     void aLineAlreadyWeighedKeepsItsWeight() {
         OrderLineRow weighedCake = catchweightLine(1, CAKE_VARIANT, 150_000L, 1_000);
@@ -271,7 +289,7 @@ class CatchweightReconciliationServiceTests {
 
     private CatchweightReconciliationService service() {
         return new CatchweightReconciliationService(
-                orders, pricing, quoteAcceptance, promoCodes, settlement, deliveryPoint, audit, clock);
+                orders, pricing, quoteAcceptance, promoCodes, promotions, settlement, deliveryPoint, audit, clock);
     }
 
     private void orderIs(FulfillmentMode mode, OrderLineRow... lines) {
@@ -363,6 +381,33 @@ class CatchweightReconciliationServiceTests {
                 null,
                 null,
                 null);
+    }
+
+    private static QuoteSnapshot withLoyalty(QuoteSnapshot quote, boolean accrual, boolean redemption) {
+        return new QuoteSnapshot(
+                quote.quoteId(),
+                quote.tenantId(),
+                quote.brandId(),
+                quote.locationId(),
+                quote.customerAccountId(),
+                quote.currency(),
+                quote.status(),
+                quote.catalogPublicationId(),
+                quote.contextHash(),
+                quote.subtotalMinor(),
+                quote.taxMinor(),
+                quote.feeMinor(),
+                quote.discountMinor(),
+                quote.totalMinor(),
+                quote.expiresAt(),
+                quote.lines(),
+                quote.adjustments(),
+                quote.deliveryOutcome(),
+                quote.deliveryShortfallMinor(),
+                quote.deliveryMinBasketMinor(),
+                quote.deliveryFreeFromMinor(),
+                accrual,
+                redemption);
     }
 
     private List<OrderLineRow> currentLines() {

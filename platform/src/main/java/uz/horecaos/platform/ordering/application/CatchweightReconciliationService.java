@@ -32,6 +32,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.R
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionTotals;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
@@ -82,6 +83,16 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  * the total they pay"), and it needs no second signature -- an operator reading a scale is
  * not choosing a discount.
  *
+ * <h2>What a revision carries with it</h2>
+ *
+ * <p>The re-priced quote becomes the order's current quote, so everything that is recorded
+ * against "the quote behind the current revision" is restated with it, as an amendment restates
+ * it: the promo code's redemption, the automatic promotions' ledger rows (ADR 0140, report 7.9)
+ * and the loyalty flags those promotions set. A discount that grows with the weight would
+ * otherwise be recorded at its nominal-weight amount for ever, and a promotion that stopped (or
+ * began) applying at the scale would keep (or lack) the ledger row and the points rule the
+ * order's totals no longer agree with.
+ *
  * <h2>Money that has already moved</h2>
  *
  * <p>The correction is made only where the order's money is not yet taken. A cash order's
@@ -112,6 +123,7 @@ public class CatchweightReconciliationService {
     private final CartPricingPort pricing;
     private final QuoteAcceptancePort quoteAcceptance;
     private final PromoCodeRedemptionPort promoCodes;
+    private final PromotionRedemptionPort promotions;
     private final OrderSettlementPort settlement;
     private final OrderDeliveryPoint deliveryPoint;
     private final AuditRecorder audit;
@@ -123,6 +135,7 @@ public class CatchweightReconciliationService {
             CartPricingPort pricing,
             QuoteAcceptancePort quoteAcceptance,
             PromoCodeRedemptionPort promoCodes,
+            PromotionRedemptionPort promotions,
             OrderSettlementPort settlement,
             OrderDeliveryPoint deliveryPoint,
             AuditRecorder audit,
@@ -131,6 +144,7 @@ public class CatchweightReconciliationService {
         this.pricing = pricing;
         this.quoteAcceptance = quoteAcceptance;
         this.promoCodes = promoCodes;
+        this.promotions = promotions;
         this.settlement = settlement;
         this.deliveryPoint = deliveryPoint;
         this.audit = audit;
@@ -318,6 +332,14 @@ public class CatchweightReconciliationService {
 
         // The coupon this order holds keeps its slot; only the amount it stands for moves.
         promoCodes.restateForOrder(tenantId, orderId, quote.quoteId());
+        // ADR 0140: the same for the automatic promotions, and for what they decide about points.
+        // The order keeps one ledger row per promotion and it moves in place to the quote behind
+        // this revision, so a discount that grows with the weight is recorded at the amount given;
+        // a promotion that stopped applying is released (its counter stays consumed) and one that
+        // newly applies gets a row. A weight never claims a slot, as an amendment never does.
+        promotions.restateForOrder(
+                tenantId, order.brandId(), orderId, quote.quoteId(), newRevision, order.customerAccountId(), now);
+        orders.setLoyaltyFlags(tenantId, orderId, quote.loyaltyAccrualAllowed(), quote.loyaltyRedemptionAllowed());
 
         audit.record(AuditFact.of("ordering.order.catchweight-reconciled", AuditClass.BUSINESS)
                 .by(actorOf(actorType, actorId))

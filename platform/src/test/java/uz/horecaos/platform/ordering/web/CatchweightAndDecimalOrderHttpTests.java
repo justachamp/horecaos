@@ -928,6 +928,74 @@ class CatchweightAndDecimalOrderHttpTests {
                 .isEqualTo(25_000L);
     }
 
+    // ------------------------------------- the ledgers a weight capture restates
+
+    @Test
+    @DisplayName("the promotion ledger follows the weight: the same row, the new quote, the new amount")
+    void theWeighedDiscountIsWhatThePromotionLedgerHolds() throws Exception {
+        activate(welcomeDiscount());
+        UUID orderId = placeOrder(Map.of("cake", cakeVariant), "ledger-1");
+        Map<String, Object> placed = redemptionOf(orderId);
+        assertThat(placed.get("status")).isEqualTo("REDEEMED");
+        assertThat(money(placed, "discount_minor")).as("10% of 180,000").isEqualTo(18_000L);
+        assertThat(placed.get("current_quote_id")).isEqualTo(placed.get("claimed_quote_id"));
+        advanceToReady(orderId);
+
+        assertThat(weigh(orderId, lineIdOf(orderId, cakeVariant), 1_340, version(orderId))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        Map<String, Object> weighed = redemptionOf(orderId);
+        assertThat(weighed.get("id"))
+                .as("one row per order and promotion, moved in place")
+                .isEqualTo(placed.get("id"));
+        assertThat(weighed.get("status")).isEqualTo("REDEEMED");
+        assertThat(money(weighed, "discount_minor"))
+                .as("what was given is 10% of 201,000, as the order's total says")
+                .isEqualTo(20_100L);
+        assertThat(weighed.get("claimed_quote_id"))
+                .as("the checkout quote is never rewritten")
+                .isEqualTo(placed.get("claimed_quote_id"));
+        assertThat(weighed.get("current_quote_id"))
+                .as("the quote behind the order's current revision")
+                .isEqualTo(jdbc.sql("SELECT pricing_quote_id FROM ordering.order_revisions "
+                                + "WHERE order_id = :id AND revision = 2")
+                        .param("id", orderId)
+                        .query(UUID.class)
+                        .single());
+        assertThat(weighed.get("last_revision")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a promotion that stops applying at the scale is released, and the loyalty flags it set go with it")
+    void aPromotionThatStopsApplyingIsReleased() throws Exception {
+        activate(bulkDiscountThatSuppressesPoints());
+        UUID orderId = placeOrder(Map.of("cake", cakeVariant), "bulk-1");
+        assertThat(totalOf(orderId))
+                .as("10% off 180,000, which clears the 170,000 threshold")
+                .isEqualTo(162_000L);
+        assertThat(loyaltyAccrualAllowed(orderId))
+                .as("the promotion suppresses points while it applies")
+                .isFalse();
+        advanceToReady(orderId);
+
+        MvcResult weighed = weigh(orderId, lineIdOf(orderId, cakeVariant), 1_000, version(orderId));
+
+        assertThat(weighed.getResponse().getStatus())
+                .as(weighed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(totalOf(orderId))
+                .as("150,000 is under the threshold: no discount")
+                .isEqualTo(150_000L);
+        Map<String, Object> ledger = redemptionOf(orderId);
+        assertThat(ledger.get("status")).isEqualTo("RELEASED");
+        assertThat(ledger.get("released_at")).isNotNull();
+        assertThat(loyaltyAccrualAllowed(orderId))
+                .as("nothing suppresses points any more")
+                .isTrue();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private UUID placeOrder(Map<String, UUID> lines, String idempotencyKey) {
@@ -1086,6 +1154,52 @@ class CatchweightAndDecimalOrderHttpTests {
                 .as(result.getResponse().getContentAsString())
                 .isEqualTo(200);
         return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** 10% off the goods from 170,000 up, which also keeps the order from earning points. */
+    private static PromotionDefinition bulkDiscountThatSuppressesPoints() {
+        var base = PromotionDbFixture.definition(
+                "BULK",
+                Promotion.Scope.ORDER,
+                "bulk",
+                List.of(PromotionDbFixture.condition(
+                        1, Promotion.Condition.Type.SUBTOTAL_AT_LEAST, "amountMinor", 170_000L)),
+                List.of(PromotionDbFixture.action(
+                        1, Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT, "basisPoints", 1_000L)));
+        return new PromotionDefinition(
+                base.code(),
+                base.name(),
+                base.kind(),
+                base.scope(),
+                base.stackingGroup(),
+                base.exclusive(),
+                base.priority(),
+                base.requiresCoupon(),
+                base.maximumDiscountMinor(),
+                base.currency(),
+                base.validFrom(),
+                base.validUntil(),
+                base.maximumRedemptions(),
+                base.maximumPerCustomer(),
+                Promotion.LoyaltyAccrual.SUPPRESS,
+                base.loyaltyRedemption(),
+                base.conditions(),
+                base.actions());
+    }
+
+    /** The order's one promotion ledger row (ADR 0140). */
+    private Map<String, Object> redemptionOf(UUID orderId) {
+        return jdbc.sql("""
+                SELECT id, status, discount_minor, claimed_quote_id, current_quote_id, last_revision, released_at
+                FROM pricing.promotion_redemptions WHERE order_id = :id
+                """).param("id", orderId).query().singleRow();
+    }
+
+    private boolean loyaltyAccrualAllowed(UUID orderId) {
+        return Boolean.TRUE.equals(jdbc.sql("SELECT loyalty_accrual_allowed FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(Boolean.class)
+                .single());
     }
 
     private long totalOf(UUID orderId) throws Exception {
