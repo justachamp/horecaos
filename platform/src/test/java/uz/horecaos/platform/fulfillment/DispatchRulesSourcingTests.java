@@ -744,6 +744,58 @@ class DispatchRulesSourcingTests {
                 .isEmpty();
     }
 
+    @Test
+    @DisplayName(
+            "a brand's or branch's editor offers that brand's delivery zones only, and a sibling brand's cannot be named there")
+    void zonesAreBrandOwned() {
+        UUID siblingBrand = UUID.randomUUID();
+        UUID siblingZone = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SIBLING', 'sibling', 'Sibling brand', 'ACTIVE', 0)
+                """).param("id", siblingBrand).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code,
+                    display_name_ru, display_name_uz, display_name_en, status)
+                VALUES (:id, :tenantId, :brandId, 'DELIVERY', 'SIBLING-ZONE', 'Sib', 'Sib',
+                        'Sibling zone', 'ACTIVE')
+                """)
+                .param("id", siblingZone)
+                .param("tenantId", TENANT)
+                .param("brandId", siblingBrand)
+                .update();
+        DispatchRulesAuthoringService authoring = new DispatchRulesAuthoringService(
+                policies, policies.author(), new JdbcDispatchRuleStore(jdbc), fact -> {}, clock, false);
+        ResourceScope brandScope = ResourceScope.brand(TENANT, BRAND);
+        ResourceScope branchScope = ResourceScope.location(TENANT, BRAND, branch);
+
+        assertThat(authoring.options(brandScope).zones())
+                .extracting(JdbcDispatchRuleStore.ZoneRow::id)
+                .as("ADR 0025: a brand grant never reaches a sibling brand, and that includes a read")
+                .containsExactlyInAnyOrder(FAR_ZONE, NEAR_ZONE);
+        assertThat(authoring.options(branchScope).zones())
+                .extracting(JdbcDispatchRuleStore.ZoneRow::id)
+                .containsExactlyInAnyOrder(FAR_ZONE, NEAR_ZONE);
+        assertThat(authoring.options(ResourceScope.tenant(TENANT)).zones())
+                .extracting(JdbcDispatchRuleStore.ZoneRow::id)
+                .as("the company-wide editor sees every brand's zones")
+                .containsExactlyInAnyOrder(FAR_ZONE, NEAR_ZONE, siblingZone);
+
+        assertThat(authoring.contextFor(brandScope).zones()).containsExactlyInAnyOrder(FAR_ZONE, NEAR_ZONE);
+        assertThat(authoring.contextFor(ResourceScope.tenant(TENANT)).zones())
+                .containsExactlyInAnyOrder(FAR_ZONE, NEAR_ZONE, siblingZone);
+
+        DispatchRulesDocument namesSiblingZone = document(rule(
+                "sibling-zone",
+                new Conditions(List.of(), List.of(), List.of(siblingZone), List.of(), null, null, null, null),
+                Action.builtInDefault()));
+        assertThat(authoring.violations(brandScope, namesSiblingZone))
+                .as("a brand's rule that names a sibling brand's zone would simply never match")
+                .isNotEmpty();
+        assertThat(authoring.violations(ResourceScope.tenant(TENANT), namesSiblingZone))
+                .isEmpty();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private DeliveryPlan plan() {

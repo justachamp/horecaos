@@ -55,15 +55,24 @@ public class JdbcDispatchRuleStore {
                 .list();
     }
 
-    /** This tenant's delivery-role zones, archived ones included -- an order priced before the archive still names one. */
-    public List<ZoneRow> deliveryZones(UUID tenantId) {
+    /**
+     * This tenant's delivery-role zones, archived ones included -- an order priced before the archive still
+     * names one.
+     *
+     * <p>A zone belongs to one brand, so a document at brand or branch scope reaches only that brand's
+     * zones ({@code brandId} set); the company-wide document ({@code brandId} null) reaches them all. A
+     * brand's manager is never shown, or allowed to name, a sibling brand's zone (ADR 0025).
+     */
+    public List<ZoneRow> deliveryZones(UUID tenantId, @Nullable UUID brandId) {
         return jdbc.sql("""
                 SELECT id, brand_id, code, display_name_en, display_name_ru, display_name_uz, status
                 FROM fulfillment.service_zones
                 WHERE tenant_id = :tenantId AND zone_role = 'DELIVERY'
+                  AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
                 ORDER BY code, id
                 """)
                 .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query((row, number) -> new ZoneRow(
                         row.getObject("id", UUID.class),
                         row.getObject("brand_id", UUID.class),
