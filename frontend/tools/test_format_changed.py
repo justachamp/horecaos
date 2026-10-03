@@ -484,14 +484,20 @@ class RealPrettierTests(unittest.TestCase):
 
 OTHER_APPS = ("control-plane", "storefront", "storefront-milliy")
 OTHER_LINT_STEP = "Lint (control-plane, storefront, storefront-milliy)"
-OTHER_FORMAT_STEP = "Format check on changed files (control-plane, storefront, storefront-milliy)"
+# Apps whose whole src/ tree is prettier-clean: CI runs their own `npm run format:check`.
+WHOLE_TREE_APPS = ("operations", "storefront", "storefront-milliy")
+WHOLE_TREE_FORMAT_STEP = "Format check (operations, storefront, storefront-milliy)"
+# Apps still on the changed-files ratchet, until they are reformatted in one commit.
+RATCHET_APPS = ("control-plane",)
+RATCHET_FORMAT_STEP = "Format check on changed files (control-plane)"
 
 
 class WorkflowWiringTests(unittest.TestCase):
     """The steps that make lint and the format checks real must stay in ci.yml.
 
-    operations: lint plus the whole-tree `npm run format:check`. The other three apps: lint
-    plus the changed-files check (their trees are not prettier-clean yet, see format_changed.py).
+    operations, storefront and storefront-milliy: lint plus the whole-tree
+    `npm run format:check`. control-plane: lint plus the changed-files check (its tree is not
+    prettier-clean yet, see format_changed.py).
     """
 
     @classmethod
@@ -512,6 +518,12 @@ class WorkflowWiringTests(unittest.TestCase):
 
     def assert_only_for_the_other_apps(self, step: str) -> None:
         self.assertRegex(code(step), r"(?m)^        if: matrix\.app != 'operations'$")
+
+    def assert_only_for_the_whole_tree_apps(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app != 'control-plane'$")
+
+    def assert_only_for_the_ratchet_apps(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app == 'control-plane'$")
 
     def scripts(self, app: str) -> dict[str, str]:
         return json.loads((REPO / "frontend" / app / "package.json").read_text(encoding="utf-8"))["scripts"]
@@ -537,19 +549,35 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_the_format_check_covers_the_whole_tree(self) -> None:
         # A changed-files-only check misses a file whose push was cancelled by a later one and
         # a `before` commit missing from the clone; the whole-tree check cannot.
-        step = self.step("Format check (operations)")
-        self.assert_only_for_operations(step)
+        step = self.step(WHOLE_TREE_FORMAT_STEP)
+        self.assert_only_for_the_whole_tree_apps(step)
         self.assert_runs_in_the_app_directory(step)
         self.assertEqual(["npm run format:check"], run_lines(step))
         self.assertNotIn("format_changed", code(step))
         self.assertNotIn("github.event.before", code(step))
         self.assertNotIn("github.base_ref", code(step))
 
+    def test_every_whole_tree_app_checks_all_of_src(self) -> None:
+        # The step runs each app's own script, so the script is what decides what "the whole
+        # tree" is: it must be prettier --check over src/**, and the matching `format` script
+        # must write the same set, so the fix for a failure is exactly `npm run format`.
+        for app in WHOLE_TREE_APPS:
+            with self.subTest(app=app):
+                scripts = self.scripts(app)
+                check = re.fullmatch(r'prettier --check "(src/\*\*/\*\.\{[a-z,]+\})"', scripts["format:check"])
+                self.assertIsNotNone(check, scripts["format:check"])
+                assert check is not None
+                self.assertEqual(f'prettier --write "{check.group(1)}"', scripts["format"])
+
+    def test_the_ratchet_and_the_whole_tree_apps_are_disjoint_and_cover_the_matrix(self) -> None:
+        self.assertEqual(set(APPS), set(WHOLE_TREE_APPS) | set(RATCHET_APPS))
+        self.assertEqual(set(), set(WHOLE_TREE_APPS) & set(RATCHET_APPS))
+
     def test_lint_and_format_run_after_install_and_before_the_slow_tests(self) -> None:
         names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
         order = {name: index for index, name in enumerate(names)}
         install = order["Install"]
-        for gate in ("Lint (operations)", "Format check (operations)", OTHER_LINT_STEP, OTHER_FORMAT_STEP):
+        for gate in ("Lint (operations)", WHOLE_TREE_FORMAT_STEP, OTHER_LINT_STEP, RATCHET_FORMAT_STEP):
             self.assertGreater(order[gate], install)
             self.assertLess(order[gate], order["Test and build"])
 
@@ -567,9 +595,9 @@ class WorkflowWiringTests(unittest.TestCase):
                 self.assertEqual("node ../tools/lint-config.test.mjs", scripts["lint:rules"])
                 self.assertTrue((REPO / "frontend" / app / "eslint.config.mjs").is_file())
 
-    def test_every_other_app_is_format_checked_on_the_files_a_change_touched(self) -> None:
-        step = self.step(OTHER_FORMAT_STEP)
-        self.assert_only_for_the_other_apps(step)
+    def test_control_plane_is_format_checked_on_the_files_a_change_touched(self) -> None:
+        step = self.step(RATCHET_FORMAT_STEP)
+        self.assert_only_for_the_ratchet_apps(step)
         self.assertEqual(
             ['python3 frontend/tools/format_changed.py --app ${{ matrix.app }} --base "$FORMAT_BASE"'],
             run_lines(step),
@@ -577,7 +605,7 @@ class WorkflowWiringTests(unittest.TestCase):
         # The base is the PR's base branch, or on a push the tip the push replaced.
         self.assertIn("github.base_ref", code(step))
         self.assertIn("github.event.before", code(step))
-        for app in OTHER_APPS:
+        for app in RATCHET_APPS:
             with self.subTest(app=app):
                 scripts = self.scripts(app)
                 self.assertTrue(scripts["format"].startswith("prettier --write "), scripts["format"])
