@@ -1807,9 +1807,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.contacts.colleague': 'Hamkasb',
   'settings.locations.contacts.colleague.pick': 'Hamkasbni tanlang…',
   'settings.locations.contacts.colleague.required': 'Hamkasbni tanlang',
-  'settings.locations.contacts.colleague.former':
-    'Bu xodim endi ishlamaydi. Qatorni olib tashlang.',
-  'settings.locations.contacts.former': 'Endi ishlamaydi',
   'settings.locations.contacts.addColleague': 'Hamkasb qoʻshish',
   'settings.locations.contacts.addOutside': 'Begona odam qoʻshish',
   'settings.locations.contacts.max': 'Koʻpi bilan oʻnta aloqa shaxsi.',
@@ -4537,9 +4534,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.profile.dates.invalid': 'Tugash sanasi boshlanish sanasidan oldin',
   'staff.profile.field.reason': 'Sabab (ixtiyoriy)',
   'staff.profile.edit': 'Tahrirlash',
-  'staff.profile.detailFailed':
-    'Toʻliq yozuvni oʻqib boʻlmadi: telefon va xodim raqami koʻrsatilmagan, yuklanmaguncha tahrirlash oʻchirilgan.',
-  'staff.profile.detailRetry': 'Qayta urinish',
+  'staff.profile.detailFailed': 'Karta toʻliq yuklanmadi, tahrirlash oʻchirilgan.',
   'staff.profile.save': 'Saqlash',
   'staff.profile.saved': 'Saqlandi',
   'staff.end.done': 'Ish tugatildi. Olib tashlangan lavozimlar: {count}.',

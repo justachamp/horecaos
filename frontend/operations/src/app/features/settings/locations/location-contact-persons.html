@@ -37,7 +37,7 @@
                 <span class="q-body-sm item__name">{{ labelOf(contact) }}</span>
                 @if (contact.formerColleague) {
                   <span class="q-caption hint" data-testid="location-contacts-former">{{
-                    'settings.locations.contacts.former' | t
+                    'staff.status.ended' | t
                   }}</span>
                 } @else if (contact.phone; as phone) {
                   <a class="q-body-sm q-tnum item__phone" [href]="'tel:' + phone">{{ phone }}</a>

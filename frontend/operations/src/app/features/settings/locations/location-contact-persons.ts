@@ -237,7 +237,7 @@ export class LocationContactPersons {
       case 'colleague':
         return 'settings.locations.contacts.colleague.required';
       case 'former':
-        return 'settings.locations.contacts.colleague.former';
+        return 'staff.status.ended';
       case 'name':
         return 'staff.emergency.name.required';
       case 'phone':
@@ -258,7 +258,13 @@ export class LocationContactPersons {
 
   protected listedColleagueLabel(row: ContactDraft): string {
     const listed = this.contacts().find((contact) => contact.staffMemberId === row.staffMemberId);
-    return listed ? this.labelOf(listed) : row.staffMemberId;
+    if (!listed) {
+      return row.staffMemberId;
+    }
+    // A leaver reads «S-0142 · Не работает», so the problem under the row has its context.
+    return row.former
+      ? `${this.labelOf(listed)} · ${this.i18n.t('staff.status.ended')}`
+      : this.labelOf(listed);
   }
 
   protected async save(): Promise<void> {

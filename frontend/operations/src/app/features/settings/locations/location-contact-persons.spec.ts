@@ -141,7 +141,7 @@ describe('LocationContactPersons (row 9.2b)', () => {
 
     const item = all(fixture, 'location-contacts-item')[0];
     expect(item.textContent).toContain('S-0001');
-    expect(item.textContent).toContain('No longer works here');
+    expect(item.textContent).toContain('Left');
     expect(all(fixture, 'location-contacts-former')).toHaveLength(1);
     expect(item.querySelector('a')).toBeNull();
   });
@@ -149,6 +149,16 @@ describe('LocationContactPersons (row 9.2b)', () => {
   it('will not save while a colleague who left is still on a row, until they are removed or replaced', async () => {
     const { fixture, api } = await setUp({
       contacts: [LEFT],
+      // The branch's people no longer include the leaver, as the platform's picker would have it.
+      people: [
+        staffMember({
+          memberId: 'm2',
+          principalSubject: 'p2',
+          firstName: 'Bobur',
+          lastName: 'Aliyev',
+          displayName: 'Bobur Aliyev',
+        }),
+      ],
       api: { replace: vi.fn().mockResolvedValue({ contacts: [COLLEAGUE], version: 6 }) },
     });
     click(fixture, 'location-contacts-edit');
@@ -157,7 +167,7 @@ describe('LocationContactPersons (row 9.2b)', () => {
     click(fixture, 'location-contacts-save');
     await settle(fixture);
     expect(api.replace).not.toHaveBeenCalled();
-    expect(fixture.nativeElement.textContent).toContain('no longer works here');
+    expect(fixture.nativeElement.textContent).toContain('S-0001 · Left');
 
     // Choosing another person clears the problem; the platform is then asked.
     type(fixture, 'location-contacts-colleague', 'm2');

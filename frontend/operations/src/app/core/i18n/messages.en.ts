@@ -1819,9 +1819,6 @@ export const messagesEn = {
   'settings.locations.contacts.colleague': 'Colleague',
   'settings.locations.contacts.colleague.pick': 'Choose a colleague…',
   'settings.locations.contacts.colleague.required': 'Choose a colleague',
-  'settings.locations.contacts.colleague.former':
-    'This person no longer works here. Remove the row.',
-  'settings.locations.contacts.former': 'No longer works here',
   'settings.locations.contacts.addColleague': 'Add a colleague',
   'settings.locations.contacts.addOutside': 'Add an outside person',
   'settings.locations.contacts.max': 'Ten contact persons at most.',
@@ -4532,9 +4529,7 @@ export const messagesEn = {
   'staff.profile.dates.invalid': 'The end date is before the start date',
   'staff.profile.field.reason': 'Reason (optional)',
   'staff.profile.edit': 'Edit',
-  'staff.profile.detailFailed':
-    'The full record could not be read, so the phone and employee number are not shown and editing is switched off until it loads.',
-  'staff.profile.detailRetry': 'Try again',
+  'staff.profile.detailFailed': 'The card did not load in full, so editing is off.',
   'staff.profile.save': 'Save',
   'staff.profile.saved': 'Saved',
   'staff.end.done': 'Employment ended. Jobs removed: {count}.',

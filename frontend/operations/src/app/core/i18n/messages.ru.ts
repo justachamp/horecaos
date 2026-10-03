@@ -1783,9 +1783,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.contacts.colleague': 'Коллега',
   'settings.locations.contacts.colleague.pick': 'Выберите коллегу…',
   'settings.locations.contacts.colleague.required': 'Выберите коллегу',
-  'settings.locations.contacts.colleague.former':
-    'Этот сотрудник больше не работает. Уберите строку.',
-  'settings.locations.contacts.former': 'Больше не работает',
   'settings.locations.contacts.addColleague': 'Добавить коллегу',
   'settings.locations.contacts.addOutside': 'Добавить постороннего',
   'settings.locations.contacts.max': 'Не больше десяти контактных лиц.',
@@ -4491,9 +4488,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.profile.dates.invalid': 'Дата окончания раньше даты начала',
   'staff.profile.field.reason': 'Причина (необязательно)',
   'staff.profile.edit': 'Изменить',
-  'staff.profile.detailFailed':
-    'Полную карточку прочитать не удалось: телефон и табельный номер не показаны, а редактирование выключено, пока она не загрузится.',
-  'staff.profile.detailRetry': 'Повторить',
+  'staff.profile.detailFailed': 'Карточка загружена не полностью — правка отключена.',
   'staff.profile.save': 'Сохранить',
   'staff.profile.saved': 'Сохранено',
   'staff.end.done': 'Работа завершена. Снято должностей: {count}.',
