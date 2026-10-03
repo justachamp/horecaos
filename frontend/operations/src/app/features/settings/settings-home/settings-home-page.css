@@ -54,6 +54,38 @@
   color: var(--q-warning-text);
 }
 
+/* Expiring findings (settings.md §10.0): fine today, blocking on a known date. */
+.readiness__row--expiring a,
+.readiness__row--expiring span {
+  color: var(--q-warning-text);
+}
+
+.readiness__row .readiness__expiring {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: var(--q-radius);
+  border: 1px solid var(--q-warning-text);
+  color: var(--q-warning-text);
+}
+
+.readiness__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 6px;
+  padding: 0 14px;
+}
+
+.readiness__count--blocking {
+  color: var(--q-error-text);
+  font-weight: 600;
+}
+
+.readiness__count--expiring,
+.readiness__count--advisory {
+  color: var(--q-warning-text);
+}
+
 /* Which brand, channel, connection or legal entity the row is about. */
 .readiness__row .readiness__scope {
   display: block;
@@ -117,6 +149,24 @@
 
 .tile__description {
   color: var(--q-ink-muted);
+}
+
+/* The live numbers under a tile: the same findings the readiness panel lists. */
+.tile__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 2px;
+}
+
+.tile__number--blocking {
+  color: var(--q-error-text);
+  font-weight: 600;
+}
+
+.tile__number--expiring,
+.tile__number--advisory {
+  color: var(--q-warning-text);
 }
 
 .tile__badge {

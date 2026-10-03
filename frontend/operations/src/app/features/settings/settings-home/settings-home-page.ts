@@ -22,6 +22,7 @@ import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationResult } from './readiness-api';
+import { TierCounts, countByTier, orderFindings, tierOf } from './readiness-order';
 import { SettingsNavGroup, visibleSettings } from '../settings-nav';
 import { CONFIGURATION_KEY_ROUTES, REFERENCE_LISTS } from '../settings-search-index';
 
@@ -72,6 +73,12 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
   LOCATION_NO_SERVICE_SCHEDULE: 'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE',
   INSTALLATION_SECRET_ROTATION_DUE: 'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE',
   MERCHANT_SECRET_ROTATION_DUE: 'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE',
+  // Batch 18: the forced-closed row the spec calls its most valuable, the branch no channel
+  // reaches, and the first member of the expiring tier.
+  LOCATION_FORCED_CLOSED_NO_EXPIRY: 'settings.home.readiness.code.LOCATION_FORCED_CLOSED_NO_EXPIRY',
+  LOCATION_NO_SALES_CHANNEL: 'settings.home.readiness.code.LOCATION_NO_SALES_CHANNEL',
+  LOCATION_FISCAL_ASSIGNMENT_ENDING:
+    'settings.home.readiness.code.LOCATION_FISCAL_ASSIGNMENT_ENDING',
 };
 
 /**
@@ -82,6 +89,12 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
  * offending brand instead of stopping at the first (gap map row 10.0).
  */
 function readinessLink(finding: ValidationResult): readonly string[] | null {
+  // A branch no channel reaches is named by its location, but it is mended on the channel's list
+  // of locations, not in the branch's own hours (settings.md §10.2a: «Каналы … links to 10.4»), so
+  // this code wins over the generic location rule below.
+  if (finding.errorCode === 'LOCATION_NO_SALES_CHANNEL') {
+    return ['/settings/sales-channels'];
+  }
   if (finding.locationId) {
     return ['/settings/locations', finding.locationId];
   }
@@ -161,12 +174,16 @@ function withUniqueKeys(findings: readonly ValidationResult[]): readonly Readine
 }
 
 /**
- * Blocking findings first, advisory ones after, each group keeping the order
- * the server named them in (settings.md §10.0: blocking → expiring → advisory).
- * `Array.prototype.sort` is stable, so equal severities never reshuffle.
+ * The settings tile a finding's link lands on, so the index can carry the same numbers the panel
+ * does (settings.md §10.0: «Numbers here and in the readiness panel come from the same query»). A
+ * nav item's `path` is relative to `/settings/` except the one that points out of Settings.
  */
-function bySeverity(a: ValidationResult, b: ValidationResult): number {
-  return Number(a.advisory === true) - Number(b.advisory === true);
+function tilePathOf(link: readonly string[] | null): string | null {
+  const target = link?.[0];
+  if (!target) {
+    return null;
+  }
+  return target.startsWith('/settings/') ? target.slice('/settings/'.length) : target;
 }
 
 /**
@@ -183,9 +200,12 @@ function bySeverity(a: ValidationResult, b: ValidationResult): number {
  * and location service-binding coverage. A finding that names one channel
  * carries a `subject` (it tells two like-worded rows apart), but its row links
  * by error code: the fix lives on the sales-channels screen, not in the
- * channel's setup hub. A finding the server marks `advisory` sorts after
- * the blocking ones and carries a muted tag rather than reading as a
- * stop-the-line error. The empty state ("Всё настроено") is the same one
+ * channel's setup hub. Findings sort by tier (blocking → expiring → advisory, the
+ * server names it in `severity`) and then by how many items offend the same
+ * condition, largest first (`readiness-order.ts`); an expiring or advisory one
+ * carries a muted tag rather than reading as a stop-the-line error. The index
+ * tiles carry the same findings as live numbers («2 blocking»), counted from
+ * the list the panel shows so the two cannot disagree. The empty state ("Всё настроено") is the same one
  * settings.md asks for.
  *
  * **Find a setting**, added in wave P31 and widened this wave into a real
@@ -280,6 +300,25 @@ export class SettingsHomePage {
   protected readonly readinessErrorText = signal<string | null>(null);
   protected readonly findings = signal<readonly ValidationResult[]>([]);
   protected readonly rows = computed(() => withUniqueKeys(this.findings()));
+
+  /** «2 blocking · 1 expiring · 3 advisory» above the list — the same numbers the tiles show. */
+  protected readonly summary = computed<TierCounts>(() => countByTier(this.findings()));
+
+  /**
+   * Per screen, how many findings link to it (settings.md §10.0 index: «where cheap, a live number»).
+   * Built from the findings the panel lists, never from a second read, so a tile and the panel cannot
+   * disagree. A finding that links outside Settings (the catalogue's publication screen) has no tile.
+   */
+  protected readonly tileCounts = computed<ReadonlyMap<string, TierCounts>>(() => {
+    const byTile = new Map<string, ValidationResult[]>();
+    for (const finding of this.findings()) {
+      const tile = tilePathOf(readinessLink(finding));
+      if (tile) {
+        byTile.set(tile, [...(byTile.get(tile) ?? []), finding]);
+      }
+    }
+    return new Map([...byTile].map(([tile, findings]) => [tile, countByTier(findings)]));
+  });
 
   constructor() {
     void this.flags.ensureLoaded();
@@ -378,7 +417,16 @@ export class SettingsHomePage {
   }
 
   protected isAdvisory(finding: ValidationResult): boolean {
-    return finding.advisory === true;
+    return tierOf(finding) === 'ADVISORY';
+  }
+
+  protected isExpiring(finding: ValidationResult): boolean {
+    return tierOf(finding) === 'EXPIRING';
+  }
+
+  /** The numbers under a tile; absent (not zero) for a screen nothing links to. */
+  protected countsFor(path: string): TierCounts | null {
+    return this.tileCounts().get(path) ?? null;
   }
 
   private async loadReadiness(): Promise<void> {
@@ -390,7 +438,7 @@ export class SettingsHomePage {
     }
     try {
       const outcome = await this.readinessApi.validate(tenantId);
-      this.findings.set(outcome.checks.filter((check) => !check.passed).sort(bySeverity));
+      this.findings.set(orderFindings(outcome.checks.filter((check) => !check.passed)));
       this.readinessState.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
