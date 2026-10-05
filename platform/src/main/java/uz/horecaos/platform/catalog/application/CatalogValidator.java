@@ -581,11 +581,14 @@ public class CatalogValidator {
             }
 
             if (attachment.hidden() && attachment.ownerType() == AttachmentOwnerType.VARIANT) {
-                // Pricing lays the variant's attachment over its product's; the menu and the cart
-                // read the product's alone. A group the product offers as a choice and a variant
-                // applies by itself is asked of the customer and charged again: authoring refuses
-                // to write the pairing, and a row that predates the refusal, or came in through
-                // the product's own attach, is caught here.
+                // Pricing lays the variant's attachment over its product's, and a hidden one takes
+                // the group out of the choices. The publication says what a variant adds to its
+                // product's groups and the rules it states for them; it does not say that a variant
+                // withdraws one, so the menu and the cart still offer the product's group. A group
+                // the product offers as a choice and a variant applies by itself is asked of the
+                // customer and charged again: authoring refuses to write the pairing, and a row
+                // that predates the refusal, or came in through the product's own attach, is caught
+                // here.
                 UUID productId = composite.productIdByVariant().get(attachment.ownerId());
                 composite.attachments().stream()
                         .filter(other -> other.ownerType() == AttachmentOwnerType.PRODUCT
@@ -1175,6 +1178,13 @@ public class CatalogValidator {
          * from, its product's groups.
          */
         public List<ModifierAttachment> ownVisibleAttachmentsOf(UUID variantId) {
+            if (containerVariantIds().contains(variantId)) {
+                // A combo line takes no modifiers of its own (COMBO_MODIFIERS_NOT_SUPPORTED): its
+                // components are priced one by one. A group attached to the container would be
+                // offered to a customer whose choice of it the quote then refuses, so it is not
+                // offered at all.
+                return List.of();
+            }
             return variantLevelAttachmentsOf(variantId).stream()
                     .filter(attachment -> !attachment.hidden())
                     .filter(attachment -> {

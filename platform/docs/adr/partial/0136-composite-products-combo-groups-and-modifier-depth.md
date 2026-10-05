@@ -3,21 +3,33 @@
 - Decision status: Accepted
 - Implementation status: Partial — an operator can author a combo (groups, member variants, a
   price per component, min/max, nested level, hidden auto-select modifiers by fulfilment mode and
-  per-product required/min/max overrides; V0443–V0447), publish it to the menu (COMBO_GROUP items,
-  product comboGroupIds, option names, live component prices), sell it from the New Order composer,
-  both storefronts and the cart/order API as one ordinary order line per picked component sharing
-  `combo_selection_id`, and read it as its components on the order detail, the kitchen board and
-  the expo screen; a hidden charge is itemised on the priced cart and the order. Not built: the
-  console's add-lines amendment dialog cannot choose a combo's picks (the server accepts them); the
-  fiscal receipt-line builder per component, reporting by `combo_selection_id` and the Clopos wire
-  fields; storefront modifier groups below the first level, modifiers on a combo container and
-  variant-level overrides are not published or enforced, which is why a variant may not apply by
-  itself (`HIDDEN_AUTO_SELECT`) a group its product offers as a choice -- pricing reads the variant
-  level and the menu and cart do not, so the customer would be asked for it and charged for it
-  again; authoring refuses the pairing and publication blocks it; the guest dine-in bill carries no lines;
-  duplicating a product does not copy its combo groups; the cart and quote read combo structure
-  from the live authoring rows, not the publication; the customer-facing wording that discloses a
-  hidden charge is a neutral placeholder pending product and legal.
+  per-product and per-variant required/min/max overrides; V0443–V0447), publish it to the menu
+  (COMBO_GROUP items, product comboGroupIds, option names, live component prices; a group only a
+  variant carries is a MODIFIER_GROUP item and listed on the variant with the rules that variant
+  holds the customer to; the choices an option opens, one level down, are published under the
+  option), sell it from the New Order composer, both storefronts and the cart/order API as one
+  ordinary order line per picked component sharing `combo_selection_id`, and read it as its
+  components on the order detail, the kitchen board and the expo screen; a hidden charge is
+  itemised on the priced cart and the order. The cart and the quote read the combo's structure,
+  the options of a group and the choices an option opens from the live publication, not from the
+  authoring rows, so a combo edited and not republished sells what was published (a publication
+  written before the nested level carried no choices under any option and quotes an option as
+  opening nothing until the menu is published again; no existing publication is rewritten). The
+  cart holds the customer to a variant's own override of a shared group. A line
+  added to an order after its ticket opened, and a line an amendment replaced, reach their stations
+  through `KitchenAmendmentListener` (V0477); sales by combo container is
+  `GET /reporting/combo-sales` over `reporting.fact_order_line`, which carries the grouping since
+  V0478; duplicating a product copies its combo groups, headings and components (not their
+  prices). Not built: the console's add-lines amendment dialog cannot choose a combo's picks (the
+  server accepts them) and no console or storefront screen draws the second-level chooser or a
+  variant's own groups yet; the fiscal receipt-line builder per component and the Clopos wire
+  fields; modifiers on a combo container are not offered (a combo line takes none, by decision);
+  a variant may not apply by itself (`HIDDEN_AUTO_SELECT`) a group its product offers as a
+  choice, because the publication says what a variant adds and overrides and not that it
+  withdraws a product's group, so the customer would be asked for it and charged for it again
+  (authoring refuses the pairing and publication blocks it); the guest dine-in bill carries no
+  lines; the customer-facing wording that discloses a hidden charge is a neutral placeholder
+  pending product and legal.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from

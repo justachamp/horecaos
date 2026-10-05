@@ -27,6 +27,7 @@ import uz.horecaos.platform.catalog.application.CatalogSnapshotLoader;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.AttachmentPolicy;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.NewComboGroup;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
@@ -759,6 +760,45 @@ class CompositeQuoteTests {
     }
 
     @Test
+    @DisplayName("a menu published before nested choices were carried quotes an option as opening nothing; "
+            + "publishing again is what brings the choices")
+    void aMenuFromBeforeNestedChoicesOpensNothingUntilItIsPublishedAgain() {
+        UUID sideMeal = variant("SIDE-MEAL");
+        UUID dips = group("DIPS", false, 0, 1);
+        UUID ketchup = option(dips, "KETCHUP", null, 500L);
+        UUID spicyGroup = group("SPICE", true, 1, 1);
+        option(spicyGroup, "HOT", null, 0L);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, sideMeal, dips, 0, "tester");
+        composites.attachModifierGroupToVariant(TENANT, BRAND, sideMeal, spicyGroup, 1, "tester");
+        UUID sides = group("SIDES", false, 0, 1);
+        UUID addSide = option(sides, "ADD-SIDE", sideMeal, 10_000L);
+        attachToProduct(burgerProduct, sides);
+
+        republishAsBeforeNestedChoices();
+        var legacy = quotes.quote(request(new QuoteRequest.Line("b", burger, 1, List.of(addSide))));
+        String legacyNested = cartRefusalCode(new CartPricingPort.PricingCommand.Item(
+                "b",
+                burger,
+                1,
+                List.of(addSide),
+                List.of(),
+                List.of(new CartPricingPort.PricingCommand.NestedModifier(addSide, ketchup))));
+        republish();
+        String current = cartRefusalCode(
+                new CartPricingPort.PricingCommand.Item("b", burger, 1, List.of(addSide), List.of(), List.of()));
+
+        assertThat(legacy.total().minor())
+                .as("the old menu never said the side asks for a heat, so nothing asks for it: burger and side")
+                .isEqualTo(40_000L);
+        assertThat(legacyNested)
+                .as("a choice the old menu did not offer is refused by name, never priced as if it had been")
+                .isEqualTo("MODIFIER_NESTED_OPTION_NOT_OFFERED");
+        assertThat(current)
+                .as("the menu published now says the side requires a heat, and the quote holds the customer to it")
+                .isEqualTo("MODIFIER_GROUP_MINIMUM_NOT_MET");
+    }
+
+    @Test
     @DisplayName("a third level is refused instead of being priced as if it were the second")
     void aThirdLevelIsRefused() {
         UUID sideMeal = variant("SIDE-MEAL");
@@ -796,8 +836,56 @@ class CompositeQuoteTests {
      * state the validator would refuse, to prove what the quote does with it.
      */
     private void republish() {
+        publish(items -> items);
+    }
+
+    /**
+     * The publication an earlier build wrote: no variant-level groups and no choices under an option,
+     * which are the two things the loader did not yet say. What a quote does with such a menu is what
+     * an existing deployment sees until its menu is published again.
+     */
+    private void republishAsBeforeNestedChoices() {
+        publish(CompositeQuoteTests::withoutNestedChoices);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<PublicationItem> withoutNestedChoices(List<PublicationItem> items) {
+        return items.stream()
+                .map(item -> {
+                    Map<String, Object> content = new java.util.LinkedHashMap<>(item.content());
+                    if (content.get("options") instanceof List<?> options) {
+                        content.put(
+                                "options",
+                                options.stream()
+                                        .map(option -> {
+                                            Map<String, Object> copy =
+                                                    new java.util.LinkedHashMap<>((Map<String, Object>) option);
+                                            copy.remove("nestedGroups");
+                                            return copy;
+                                        })
+                                        .toList());
+                    }
+                    if (content.get("variants") instanceof List<?> variants) {
+                        content.put(
+                                "variants",
+                                variants.stream()
+                                        .map(variant -> {
+                                            Map<String, Object> copy =
+                                                    new java.util.LinkedHashMap<>((Map<String, Object>) variant);
+                                            copy.remove("modifierGroupIds");
+                                            copy.remove("modifierGroupPolicies");
+                                            return copy;
+                                        })
+                                        .toList());
+                    }
+                    return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
+                })
+                .toList();
+    }
+
+    private void publish(java.util.function.UnaryOperator<List<PublicationItem>> shape) {
         var loader = new CatalogSnapshotLoader(catalogStore, (tenantId, assets) -> true, new EverythingPriced(), "uz");
-        var items = loader.toPublicationItems(loader.load(TENANT, BRAND, catalogId));
+        var items = shape.apply(loader.toPublicationItems(loader.load(TENANT, BRAND, catalogId)));
         UUID publicationId = UUID.randomUUID();
         catalogStore.retireActivePublication(TENANT, BRAND, "STOREFRONT", clock.instant());
         catalogStore.insertPublication(

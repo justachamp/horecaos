@@ -525,7 +525,9 @@ public class CatalogSnapshotLoader {
                                 // ADR 0136: the choices this option opens, one level down. Published
                                 // with the option, its parent, so a client asks for them when the
                                 // option is taken and the cart and quote hold the customer to the
-                                // same rules -- the linked variant's product need not be on the menu.
+                                // same rules. The groups themselves are published as items of their
+                                // own even though the linked variant lists them as its own, because
+                                // a client draws the chooser from the option and not from a product.
                                 putNestedGroups(entry, snapshot, option);
                                 return entry;
                             })

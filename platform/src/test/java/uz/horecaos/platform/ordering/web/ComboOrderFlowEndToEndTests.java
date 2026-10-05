@@ -979,6 +979,11 @@ class ComboOrderFlowEndToEndTests {
                 TENANT, BRAND, dips, "MAYO", "Mayo", LOCALE, null, 1, 1, UNCLASSIFIED, ACTOR);
         // Every size of the fries offers the dips, optionally and up to two...
         authoring.attachModifierGroup(TENANT, BRAND, fries.productId(), dips, 0);
+        // A group only the large size has (a variant-level attachment and nothing at the product).
+        UUID extras = authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Extras", LOCALE, false, 0, 1, false);
+        UUID cheese = authoring.addModifierOption(
+                TENANT, BRAND, extras, "CHEESE", "Cheese", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, largeFries, extras, 1, TESTER);
         // ...and the large one says its own rule for the same group: one dip, required.
         composites.attachModifierGroupToVariant(TENANT, BRAND, largeFries, dips, 0, TESTER);
         composites.setAttachmentPolicy(
@@ -994,6 +999,7 @@ class ComboOrderFlowEndToEndTests {
         price("VARIANT", largeFries, 18_000L);
         price("MODIFIER_OPTION", ketchup, 500L);
         price("MODIFIER_OPTION", mayo, 700L);
+        price("MODIFIER_OPTION", cheese, 1_500L);
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, smallFries, TrackingMode.BINARY);
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, largeFries, TrackingMode.BINARY);
         publishTheMenu();
@@ -1013,6 +1019,40 @@ class ComboOrderFlowEndToEndTests {
         assertThat(refusalOf(cart, "large-two", largeFries, List.of(), List.of(ketchup, mayo)))
                 .as("the large size allows one dip: its maximum replaced the product's two")
                 .isEqualTo("MODIFIER_GROUP_MAXIMUM_EXCEEDED");
+        assertThat(refusalOf(cart, "small-cheese", smallFries, List.of(), List.of(cheese)))
+                .as("the extras are the large size's own group; the small size is not offered them")
+                .isNotNull();
+        assertThat(refusalOf(cart, "large-cheese", largeFries, List.of(), List.of(ketchup, cheese)))
+                .as("a group only the variant carries is offered, and an option of it is accepted")
+                .isNull();
+
+        // What the customer bought is what a repeat offers again: the options of the variant's own
+        // groups are on the menu the reorder is checked against.
+        UUID second = openCart(FulfillmentMode.PICKUP);
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                second,
+                cartVersion(second),
+                "fries",
+                largeFries,
+                1,
+                List.of(ketchup, cheese),
+                null,
+                List.of(),
+                List.of(),
+                null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, second, cartVersion(second)));
+        UUID orderId = checkOut(second);
+        offer(largeFries);
+
+        var plan = reorderPlans.planFor(TENANT, orderId, CUSTOMER).orElseThrow();
+
+        assertThat(plan.lines()).singleElement().satisfies(line -> {
+            assertThat(line.status()).isEqualTo(ReorderPlanService.LineStatus.AVAILABLE);
+            assertThat(line.modifierOptionIds()).containsExactlyInAnyOrder(ketchup, cheese);
+        });
     }
 
     @Test
