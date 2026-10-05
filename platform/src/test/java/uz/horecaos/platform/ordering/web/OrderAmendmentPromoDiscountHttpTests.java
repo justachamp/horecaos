@@ -49,6 +49,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft;
+import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
@@ -251,25 +252,28 @@ class OrderAmendmentPromoDiscountHttpTests {
 
     private uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow
             authorPromoCode(String code) {
-        var drafted = promoAuthoring.draft(
-                TENANT,
-                BRAND,
-                new PromoCodeDraft(
-                        "Promo " + code,
-                        code,
-                        DiscountShape.PERCENTAGE_OFF_ORDER,
-                        1_000,
-                        null,
-                        "UZS",
-                        0,
-                        List.of(),
-                        List.of(),
-                        1,
-                        1,
-                        null,
-                        null));
-        promoAuthoring.activate(TENANT, BRAND, drafted.couponId());
-        return drafted;
+        // As the marketer who would draft it: the authoring service records who did it.
+        return SignedInStaff.call("amendment-test-marketer", () -> {
+            var drafted = promoAuthoring.draft(
+                    TENANT,
+                    BRAND,
+                    new PromoCodeDraft(
+                            "Promo " + code,
+                            code,
+                            DiscountShape.PERCENTAGE_OFF_ORDER,
+                            1_000,
+                            null,
+                            "UZS",
+                            0,
+                            List.of(),
+                            List.of(),
+                            1,
+                            1,
+                            null,
+                            null));
+            promoAuthoring.activate(TENANT, BRAND, drafted.couponId());
+            return drafted;
+        });
     }
 
     /** Two burgers at 50,000 with 10% off, checked out through the customer's own path. */

@@ -261,7 +261,11 @@ class ChannelAndServiceabilityEventOutboxTests {
                 new ServiceScheduleService.ChangeServiceStateCommand(
                         ServiceMode.FORCE_CLOSED, "FRYER_DOWN", "The fryer failed", null));
 
-        assertThat(jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE tenant_id = :t")
+        // The service-state fact specifically: this tenant's channels are created through
+        // SalesChannelService in setUp, and since row 9.3a each of those writes leaves a fact of its
+        // own, so a count of every fact would measure the fixture and not the change under test.
+        assertThat(jdbc.sql("SELECT count(*) FROM audit.audit_events "
+                                + "WHERE tenant_id = :t AND action_code = 'location.service_state.changed'")
                         .param("t", TENANT)
                         .query(Long.class)
                         .single())
