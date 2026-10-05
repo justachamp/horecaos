@@ -343,7 +343,8 @@ export const marketingEn = {
   'marketing.promoCodes.redemptions.loading': 'Loading redemptions…',
   'marketing.promoCodes.redemptions.empty': 'Nobody has redeemed this code yet.',
   'marketing.promoCodes.redemptions.close': 'Close',
-  'marketing.promoCodes.redemptions.column.customer': 'Customer account',
+  'marketing.promoCodes.redemptions.whoNote':
+    'This list does not name the customer. To see who redeemed a code, open Marketing reports › Promotions › Redemption log and choose “Show customer”: that needs the customer permission and is recorded in the audit log.',
   'marketing.promoCodes.redemptions.column.order': 'Order',
   'marketing.promoCodes.redemptions.column.amount': 'Discount',
   'marketing.promoCodes.redemptions.column.status': 'Status',

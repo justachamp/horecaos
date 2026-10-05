@@ -523,6 +523,80 @@ class PromotionEvaluatorRuleEngineTests {
     }
 
     @Test
+    @DisplayName("an automatic gift is not offered while an exclusive promotion takes the cart: the cola would be"
+            + " charged")
+    void anAutomaticGiftIsNotOfferedWhileAnExclusivePromotionWins() {
+        Promotion gift = freeCola(1, 1, "ONCE");
+        Promotion exclusive = rule(
+                "THIRTY",
+                Promotion.Scope.ORDER,
+                "storewide",
+                true,
+                0,
+                new Action(1, Action.Type.ORDER_PERCENTAGE_DISCOUNT, bp(3_000)));
+
+        Outcome without = evaluator.evaluate(List.of(gift, exclusive), pizzaAndColas(1), clickContext(Set.of()), NOW);
+
+        assertThat(without.applied()).extracting(AppliedPromotion::code).containsExactly("THIRTY");
+        assertThat(without.giftOffers())
+                .as("the exclusive promotion sets the automatic rules aside, so the gift would not be free")
+                .isEmpty();
+
+        // What would have happened had the customer taken the offer: 30% of the larger basket beats a 12 000 cola.
+        Outcome with = evaluator.evaluate(List.of(gift, exclusive), pizzaAndColas(1, 1), clickContext(Set.of()), NOW);
+
+        assertThat(with.applied()).extracting(AppliedPromotion::code).containsExactly("THIRTY");
+        assertThat(traceOf(with, gift.promotionId()).verdict()).isEqualTo(Verdict.SUPPRESSED_BY_EXCLUSIVE);
+    }
+
+    @Test
+    @DisplayName("an exclusive gift is not offered while an automatic discount is worth something: the cola would be"
+            + " charged")
+    void anExclusiveGiftIsNotOfferedWhileAnAutomaticDiscountWins() {
+        Promotion gift = asCoupon(freeCola(1, 1, "ONCE"));
+        Promotion automatic = rule(
+                "HALF",
+                Promotion.Scope.ORDER,
+                "storewide",
+                false,
+                0,
+                new Action(1, Action.Type.ORDER_PERCENTAGE_DISCOUNT, bp(5_000)));
+        PromotionContext presented = clickContext(Set.of(gift.promotionId()));
+
+        Outcome without = evaluator.evaluate(List.of(gift, automatic), pizzaAndColas(1), presented, NOW);
+
+        assertThat(without.applied()).extracting(AppliedPromotion::code).containsExactly("HALF");
+        assertThat(without.giftOffers())
+                .as("the automatic discount outweighs the code once the cola is in, so the gift would not be free")
+                .isEmpty();
+
+        Outcome with = evaluator.evaluate(List.of(gift, automatic), pizzaAndColas(1, 1), presented, NOW);
+
+        assertThat(with.applied()).extracting(AppliedPromotion::code).containsExactly("HALF");
+        assertThat(traceOf(with, gift.promotionId()).verdict()).isEqualTo(Verdict.LOST_TO);
+    }
+
+    @Test
+    @DisplayName("an automatic gift beside another automatic discount is still offered: it joins the combination")
+    void anAutomaticGiftBesideAnAutomaticDiscountIsOffered() {
+        Promotion gift = freeCola(1, 1, "ONCE");
+        Promotion tenPercent = rule(
+                "TEN",
+                Promotion.Scope.ORDER,
+                "storewide",
+                false,
+                0,
+                new Action(1, Action.Type.ORDER_PERCENTAGE_DISCOUNT, bp(1_000)));
+
+        Outcome outcome = evaluator.evaluate(List.of(gift, tenPercent), pizzaAndColas(1), clickContext(Set.of()), NOW);
+
+        assertThat(outcome.applied()).extracting(AppliedPromotion::code).containsExactly("TEN");
+        assertThat(outcome.giftOffers())
+                .extracting(PromotionEvaluator.GiftOffer::promotionId)
+                .containsExactly(gift.promotionId());
+    }
+
+    @Test
     @DisplayName("a rule naming several gift variants offers each, and one taken fills the allowance of all")
     void severalGiftVariantsShareOneAllowance() {
         UUID fanta = UUID.randomUUID();

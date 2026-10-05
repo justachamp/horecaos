@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pricing.web;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -120,9 +121,11 @@ public class PromoCodeController {
     @Operation(
             summary = "Every redemption recorded against one promo code",
             description = "Reservation, redemption and release rows, newest first — the "
-                    + "drill-down a bare redeemedCount cannot answer: which customer "
-                    + "redeemed it, on which order, when. Account and order ids only; no "
-                    + "contact value crosses this endpoint and none can.")
+                    + "drill-down a bare redeemedCount cannot answer: on which order, for how "
+                    + "much, when. It names no customer (customerAccountId is deprecated and "
+                    + "always null) and no contact value: it is open to anyone who may read "
+                    + "pricing, and which customer redeemed a code is answered only by the "
+                    + "audited customer-reveal (customer.read, a purpose, a security fact).")
     public ResponseEntity<List<PromoCodeRedemptionResponse>> redemptions(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID couponId) {
         return ResponseEntity.ok(promoCodes.redemptions(tenantId, brandId, couponId).stream()
@@ -228,13 +231,20 @@ public class PromoCodeController {
     }
 
     /**
-     * @param customerAccountId null for a coupon spent by a caller with no account
+     * @param customerAccountId always null. The list is read under {@code pricing.read}, and the account
+     *                          behind a redemption is the linkage ADR 0029 withholds: only the audited
+     *                          customer-reveal answers it. The property stays in the v1 contract because
+     *                          ADR 0031 allows no field to be removed within a major version.
      * @param orderId           null until the reservation redeems; a released
      *                          reservation never gets one at all
      */
     public record PromoCodeRedemptionResponse(
             UUID redemptionId,
-            @Nullable UUID customerAccountId,
+
+            @Schema(deprecated = true, description = "Always null: who redeemed it is answered only by customer-reveal")
+            @Nullable
+            UUID customerAccountId,
+
             @Nullable UUID orderId,
             String status,
             long amountMinor,
@@ -246,7 +256,7 @@ public class PromoCodeController {
         static PromoCodeRedemptionResponse of(JdbcPromoCodeStore.CouponRedemptionRow row) {
             return new PromoCodeRedemptionResponse(
                     row.redemptionId(),
-                    row.customerAccountId(),
+                    null,
                     row.orderId(),
                     row.status(),
                     row.amountMinor(),

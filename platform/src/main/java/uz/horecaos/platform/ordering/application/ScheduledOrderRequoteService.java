@@ -168,7 +168,8 @@ public class ScheduledOrderRequoteService {
      * <p>A pricing refusal (a dish no longer priced, a menu unpublished) is a finding, not a failure:
      * "this order cannot be priced as it stands" is the most useful thing the checkpoint can say
      * about it. Anything else that goes wrong is left to the caller, which records a finding of its
-     * own so the order is not retried for ever.
+     * own so the order is not retried for ever, unless the failure is only the database being
+     * briefly unavailable, in which case it records nothing and the order stays due.
      *
      * @return the finding written, or empty when the order is gone, is no longer waiting for its
      *     kitchen, or already has its checkpoint finding (a second node got there first)
@@ -190,8 +191,9 @@ public class ScheduledOrderRequoteService {
 
     /**
      * The finding for an order the checkpoint could not even attempt to price: written in its own
-     * transaction by the sweep after an unexpected failure, so the next sweep does not pick the same
-     * order up again for ever.
+     * transaction by the sweep after an unexpected failure that is about the order, so the next sweep
+     * does not pick the same order up again for ever. Never written for a transient failure of the
+     * database: that says nothing about the order, and this is its one checkpoint finding.
      */
     @Transactional
     public void recordFailure(UUID tenantId, UUID orderId, Instant at) {

@@ -378,7 +378,6 @@ describe('PromoCodesPage', () => {
   describe('the redemption ledger — 6.2', () => {
     const REDEMPTION: PromoCodeRedemption = {
       redemptionId: 'redemption-1',
-      customerAccountId: 'account-1',
       orderId: 'order-1',
       status: 'REDEEMED',
       amountMinor: 5_000,
@@ -388,7 +387,7 @@ describe('PromoCodesPage', () => {
       releasedAt: null,
     };
 
-    it('opens the ledger for a code and renders who redeemed it, on which order, and when', async () => {
+    it('opens the ledger for a code and renders the order, the amount and when, never the customer', async () => {
       const listRedemptions = vi.fn().mockResolvedValue([REDEMPTION]);
       await render(fakeApi({ list: vi.fn().mockResolvedValue([ACTIVE_CODE]), listRedemptions }));
       const host = fixture.nativeElement as HTMLElement;
@@ -402,8 +401,10 @@ describe('PromoCodesPage', () => {
       expect(listRedemptions).toHaveBeenCalledWith(BRAND_SCOPE, 'coupon-2');
       const dialog = host.querySelector('[data-testid="promo-codes-redemptions"]');
       expect(dialog).not.toBeNull();
-      expect(dialog?.textContent).toContain('account-1');
       expect(dialog?.textContent).toContain('order-1');
+      // The list names no customer: who redeemed a code is the audited reveal on the 7.9 report.
+      expect(dialog?.textContent).not.toContain('account-1');
+      expect(host.querySelector('[data-testid="promo-codes-redemptions-who-note"]')).not.toBeNull();
     });
 
     it('shows an honest empty state rather than a blank table when nobody has redeemed a code yet', async () => {
