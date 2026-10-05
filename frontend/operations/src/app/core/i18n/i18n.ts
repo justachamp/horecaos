@@ -220,10 +220,25 @@ function ensureArea(locale: Locale, area: MessageArea): Promise<Messages> {
   return inFlight;
 }
 
-function ensureAreas(locale: Locale, areas: Iterable<MessageArea>): Promise<void> {
-  return Promise.all(
+/**
+ * Starts every one of `areas` (and `core`) and resolves once *each* has settled, with the reasons of the
+ * ones that could not be fetched. A bare `Promise.all` would report the first failure at once and leave
+ * the others still downloading, out of sight of whoever is waiting: they would land in the shared cache
+ * after the caller had moved on, and nothing would ever merge them into what the screen reads.
+ */
+async function settleAreas(locale: Locale, areas: Iterable<MessageArea>): Promise<unknown[]> {
+  const results = await Promise.allSettled(
     [...new Set<MessageArea>([CORE_AREA, ...areas])].map((area) => ensureArea(locale, area)),
-  ).then(() => undefined);
+  );
+  return results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
+}
+
+/** Loads `areas`; rejects with the first failure, but only after every area has settled. */
+async function ensureAreas(locale: Locale, areas: Iterable<MessageArea>): Promise<void> {
+  const failures = await settleAreas(locale, areas);
+  if (failures.length > 0) {
+    throw failures[0];
+  }
 }
 
 /** Every area of `locale` that is in memory, as one lookup table; `undefined` until its `core` is. */
@@ -362,8 +377,8 @@ function persistLocale(locale: Locale): void {
  *
  *  - {@link require} is how a screen asks for its areas. The promise resolves once they are in memory
  *    for the active locale, and the screen renders with every string present. It never rejects: a chunk
- *    that cannot be fetched is logged and the screen opens on what it has (raw keys for the missing
- *    area), because a broken chunk must not make a route unreachable.
+ *    that cannot be fetched is logged and the screen opens on what it has -- every area that did arrive,
+ *    raw keys for the one that did not -- because a broken chunk must not make a route unreachable.
  *  - {@link setLocale} is a *request*, not a guarantee. If everything the session has used so far is
  *    already cached for the target locale, the switch is synchronous. If it is not, the request kicks
  *    off the imports in the background and -- this is the part that keeps `t()` honest -- `locale()`
@@ -432,7 +447,8 @@ export class I18n {
 
   /**
    * Makes `areas` available in the active locale. Resolves when they are in memory (or, if a chunk
-   * could not be fetched, when that has been reported); never rejects.
+   * could not be fetched, once every other requested area has arrived, been merged into what {@link t}
+   * reads, and the failure has been reported); never rejects.
    */
   async require(areas: Iterable<MessageArea>): Promise<void> {
     const asked = [...areas];
@@ -450,15 +466,19 @@ export class I18n {
       }
       return;
     }
-    try {
-      await ensureAreas(locale, asked);
-    } catch (err) {
-      // Both of the callers that matter (a route guard, the on-demand path in `t`) discard the
-      // failure, so report it here and leave the screen on whatever it already has.
-      console.error(err);
+    // Waits for every area to settle, so the ones that did arrive are merged below even when a
+    // sibling chunk could not be fetched.
+    const failures = await settleAreas(locale, asked);
+    // Both of the callers that matter (a route guard, the on-demand path in `t`) discard the
+    // failure, so report each one here; the screen opens on what was fetched.
+    for (const failure of failures) {
+      console.error(failure);
+    }
+    if (this.current() !== locale) {
       return;
     }
-    if (this.current() === locale) {
+    // After a failure, only rebuild if something did arrive: a new value re-renders every string.
+    if (failures.length === 0 || loadedAreas(locale).size !== this.mergedAreas) {
       this.refresh(locale);
     }
   }
