@@ -403,6 +403,11 @@
                       <p class="q-caption muted">
                         {{ 'report.log.intro' | pt }}
                       </p>
+                      @if (canRevealCustomer()) {
+                        <p class="q-caption muted" data-testid="redemption-reveal-note">
+                          {{ 'report.log.revealNote' | pt }}
+                        </p>
+                      }
                       <table class="table" data-testid="promotion-log">
                         <thead>
                           <tr>
@@ -430,6 +435,11 @@
                             <th class="q-caption">
                               {{ 'report.log.channel' | pt }}
                             </th>
+                            @if (canRevealCustomer()) {
+                              <th class="q-caption">
+                                {{ 'report.log.who' | pt }}
+                              </th>
+                            }
                           </tr>
                         </thead>
                         <tbody>
@@ -448,6 +458,56 @@
                               <td class="q-body-sm q-tnum num">{{ som(row.markupSom) }}</td>
                               <td class="q-body-sm">{{ orderStatus(row.orderStatus) }}</td>
                               <td class="q-body-sm">{{ row.channelCode ?? '—' }}</td>
+                              @if (canRevealCustomer()) {
+                                <td class="q-body-sm" data-testid="redemption-customer">
+                                  @switch (revealOf(row)?.kind) {
+                                    @case ('loading') {
+                                      <span class="muted">{{ 'report.loading' | pt }}</span>
+                                    }
+                                    @case ('account') {
+                                      <a
+                                        class="reveal-link"
+                                        data-testid="redemption-customer-link"
+                                        [routerLink]="['/customers', accountIdOf(row)]"
+                                        >{{ 'report.log.openCustomer' | pt }}</a
+                                      >
+                                    }
+                                    @case ('guest') {
+                                      <span class="muted" data-testid="redemption-customer-guest">{{
+                                        'report.log.guestOrder' | pt
+                                      }}</span>
+                                    }
+                                    @default {
+                                      @if (revealOf(row)?.kind === 'denied') {
+                                        <span
+                                          data-testid="redemption-customer-denied"
+                                          role="alert"
+                                          >{{ 'report.log.revealDenied' | pt }}</span
+                                        >
+                                      } @else if (revealOf(row)?.kind === 'error') {
+                                        <span
+                                          data-testid="redemption-customer-error"
+                                          role="alert"
+                                          >{{ 'report.log.revealFailed' | pt }}</span
+                                        >
+                                      }
+                                      <button
+                                        type="button"
+                                        class="secondary"
+                                        data-testid="redemption-show-customer"
+                                        (click)="showCustomer(row)"
+                                      >
+                                        {{
+                                          (revealOf(row)
+                                            ? 'report.log.revealRetry'
+                                            : 'report.log.showCustomer'
+                                          ) | pt
+                                        }}
+                                      </button>
+                                    }
+                                  }
+                                </td>
+                              }
                             </tr>
                           }
                         </tbody>
