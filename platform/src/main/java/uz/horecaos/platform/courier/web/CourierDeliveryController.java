@@ -114,12 +114,17 @@ public class CourierDeliveryController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID offerId,
-            @Valid @RequestBody(required = false) @Nullable PositionBody body,
+            @Valid @RequestBody(required = false) @Nullable AcceptRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
         AcceptOutcome outcome = deliveries.accept(
-                new Where(tenantId, brandId, locationId), me(tenantId), offerId, expected, position(body), actor());
+                new Where(tenantId, brandId, locationId),
+                me(tenantId),
+                offerId,
+                expected,
+                position(body == null ? null : body.position()),
+                actor());
         return ResponseEntity.ok(AcceptResponse.of(outcome));
     }
 
@@ -320,6 +325,8 @@ public class CourierDeliveryController {
             return "PositionBody[REDACTED]";
         }
     }
+
+    record AcceptRequest(@Valid @Nullable PositionBody position) {}
 
     record AdvanceRequest(
             @NotNull Step step, @Valid @Nullable PositionBody position) {}

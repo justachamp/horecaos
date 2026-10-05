@@ -4084,6 +4084,17 @@ export const messagesEn = {
   'delivery.policy.gpsVerificationEnabled': 'Check courier actions by GPS radius',
   'delivery.policy.gpsSummary':
     'On — accept within {acceptKm} km, status change within {statusChangeM} m',
+  'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km)',
+  'delivery.policy.gpsStatusChangeRadiusMeters': 'Step radius (m)',
+  'delivery.policy.gpsRadiusInvalid': 'Both radii must be greater than zero.',
+  'delivery.policy.consequence.kitchenReadyOnly':
+    'On: a courier sees, and can take, only orders the kitchen has finished. An order still being cooked is left out of their list and refused if they try to take it. Off: they can take an order while it is still cooking.',
+  'delivery.policy.consequence.revealCustomerLocationTiming':
+    'Before accept: the customer’s address can be opened while the courier is still deciding. After accept: only once they have taken the order. Every time an address is opened it is written to the audit log.',
+  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
+    'On: a courier cannot mark a cash order delivered until they have entered the cash they collected and it matches what is due. Orders already paid online are not affected.',
+  'delivery.policy.consequence.gpsVerificationEnabled':
+    'On: taking an offer is refused when the courier is farther from the branch than the accept radius; arriving, collecting and handing over are refused when they are farther from the branch or the customer’s door than the step radius. Off: positions are not checked, and not even read.',
   'delivery.policy.billingMode': 'Courier billing (personal balance)',
   'delivery.policy.billingMode.refused': 'Refused by ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -4092,15 +4103,6 @@ export const messagesEn = {
   'delivery.policy.telemetryGate.platformOnly': 'Platform-only',
   'delivery.policy.telemetryGate.reason':
     'Registered (ADR 0045) but writable only from the platform administration surface — a tenant cannot set this here.',
-  'delivery.policy.notEnforced': 'Not yet enforced',
-  'delivery.policy.notEnforced.gps.reason':
-    'Stored, but nothing checks it yet: no courier-app endpoint exists that accepts an offer or advances a delivery’s status carrying the courier’s own position. Wiring this switch means shipping that endpoint first, which is beyond this document.',
-  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
-    'Stored, but nothing checks it yet: the console has no courier-facing assignment feed for this switch to filter — couriers see offers only through dispatch, staff-driven, not a self-service list of their own.',
-  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
-    'Stored, but nothing checks it yet: no endpoint exists that shows a courier the customer’s exact address at all, so there is nothing for a timing switch to gate.',
-  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
-    'Stored, but nothing checks it yet: an order’s completion is deliberately decided independently of courier bookkeeping (ADR 0125) — making it conditional on this switch is a design decision this screen cannot make on its own.',
   'delivery.policy.edit': 'Edit',
   'delivery.policy.cancel': 'Cancel',
   'delivery.policy.publish': 'Publish',

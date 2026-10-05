@@ -4088,6 +4088,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.gpsVerificationEnabled': 'Kuryer harakatlarini GPS radiusi boʻyicha tekshirish',
   'delivery.policy.gpsSummary':
     'Yoqilgan — qabul {acceptKm} km ichida, holat oʻzgarishi {statusChangeM} m ichida',
+  'delivery.policy.gpsAcceptRadiusKm': 'Qabul qilish radiusi (km)',
+  'delivery.policy.gpsStatusChangeRadiusMeters': 'Holat oʻzgartirish radiusi (m)',
+  'delivery.policy.gpsRadiusInvalid': 'Ikkala radius ham noldan katta boʻlishi kerak.',
+  'delivery.policy.consequence.kitchenReadyOnly':
+    'Yoqilgan: kuryer faqat oshxona tayyorlab boʻlgan buyurtmalarni koʻradi va ola oladi. Hali tayyorlanayotgan buyurtma uning roʻyxatiga kirmaydi, uni olishga urinish esa rad etiladi. Oʻchirilgan: buyurtma hali tayyorlanayotgan paytda ham olinishi mumkin.',
+  'delivery.policy.consequence.revealCustomerLocationTiming':
+    'Qabul qilishdan oldin: kuryer hali qaror qilayotgan paytda mijoz manzilini ochish mumkin. Qabul qilgandan keyin: faqat kuryer buyurtmani olgandan soʻng. Manzil har safar ochilganda audit jurnaliga yoziladi.',
+  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
+    'Yoqilgan: kuryer naqd pulli buyurtmani, olingan pulni kiritmaguncha va u toʻlanishi kerak boʻlgan summaga mos kelmaguncha, yetkazilgan deb belgilay olmaydi. Onlayn toʻlangan buyurtmalarga bu taʼsir qilmaydi.',
+  'delivery.policy.consequence.gpsVerificationEnabled':
+    'Yoqilgan: kuryer filialdan qabul radiusidan uzoqroq boʻlsa, taklifni qabul qilish rad etiladi; yetib borish, olish va topshirish kuryer filialdan yoki mijoz eshigidan holat radiusidan uzoqroq boʻlsa rad etiladi. Oʻchirilgan: joylashuv tekshirilmaydi va oʻqilmaydi ham.',
   'delivery.policy.billingMode': 'Kuryerlar billingi (shaxsiy balans)',
   'delivery.policy.billingMode.refused': 'ADR 0042 tomonidan rad etilgan',
   'delivery.policy.billingMode.reason':
@@ -4096,15 +4107,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.telemetryGate.platformOnly': 'Faqat platforma',
   'delivery.policy.telemetryGate.reason':
     'Roʻyxatdan oʻtgan (ADR 0045), lekin faqat platforma boshqaruvi sirtidan yozish mumkin — ijarachi buni bu yerda oʻrnata olmaydi.',
-  'delivery.policy.notEnforced': 'Hali kuchga kirmagan',
-  'delivery.policy.notEnforced.gps.reason':
-    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: kuryer ilovasida taklifni qabul qiladigan yoki yetkazib berish holatini kuryerning oʻz joylashuvi bilan ilgari suradigan endpoint yoʻq. Bu tugmani ulash avval shu endpointni chiqarishni talab qiladi, bu esa ushbu hujjat doirasidan tashqarida.',
-  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
-    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: konsolda bu tugma filtrlaydigan kuryerga moʻljallangan topshiriqlar lentasi yoʻq — kuryerlar buyurtmalarni faqat dispetcherlik orqali koʻradi, oʻzlari uchun alohida roʻyxat orqali emas.',
-  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
-    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: kuryerga mijozning aniq manzilini umuman koʻrsatadigan endpoint yoʻq, shuning uchun vaqt tugmasi uchun tekshiradigan narsa yoʻq.',
-  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
-    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: buyurtmaning yakunlanishi ataylab kuryer hisob-kitobidan mustaqil hal qilinadi (ADR 0125) — buni shu tugmaga bogʻliq qilish ushbu ekran oʻzi qabul qila olmaydigan dizayn qarori.',
   'delivery.policy.edit': 'Tahrirlash',
   'delivery.policy.cancel': 'Bekor qilish',
   'delivery.policy.publish': 'Eʻlon qilish',

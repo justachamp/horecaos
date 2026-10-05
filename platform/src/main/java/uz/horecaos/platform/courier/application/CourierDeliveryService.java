@@ -338,9 +338,8 @@ public class CourierDeliveryService {
                                 ? jobs.metresFromDoor(where.tenantId(), courierId, shipmentId, point)
                                 : jobs.metresFromBranch(where.tenantId(), job.brandId(), job.locationId(), point))));
 
-        long due = cashDueMinor(where, job);
         if (step == Step.DELIVERED) {
-            refuse(DeliveryGate.paymentCheck(policy, due, job.paymentConfirmedAt() != null));
+            refuse(DeliveryGate.paymentCheck(policy, cashDueMinor(where, job), job.paymentConfirmedAt() != null));
         }
 
         Instant now = clock.instant();
