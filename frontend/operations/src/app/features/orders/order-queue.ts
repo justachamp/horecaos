@@ -26,7 +26,8 @@ import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { RealtimeClient } from '../../core/realtime/realtime-client';
+import { BrandOrderStream } from '../../core/realtime/brand-order-stream';
+import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
@@ -297,6 +298,7 @@ export class OrderQueue implements OnInit {
   private readonly crmLogApi = inject(OrderCrmLogApi);
   private readonly serviceStatus = inject(ServiceStatus);
   protected readonly realtime = inject(RealtimeClient);
+  private readonly brandStream = inject(BrandOrderStream);
   private readonly toasts = inject(Toasts);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
@@ -386,7 +388,7 @@ export class OrderQueue implements OnInit {
     if (!this.allBranchesActive()) {
       return;
     }
-    onCleanup(this.realtime.watchBrand());
+    onCleanup(this.brandStream.watch());
   });
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
   /** «Фискализация» (wave 16, gap map `1.1c`): `ATTENTION` first, then `fiscal.fiscal_documents`' own statuses. */
@@ -575,7 +577,7 @@ export class OrderQueue implements OnInit {
     // alike, so taking both would fetch twice for every change there. A
     // `resync` carries no scope and means "everything may have changed",
     // so it always counts.
-    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+    const onFrame = (frame: RealtimeFrame): void => {
       if (frame.kind === 'resync') {
         void this.refresh();
         return;
@@ -585,7 +587,7 @@ export class OrderQueue implements OnInit {
       // stream's are still better than nothing -- they are what the mode heard before the brand
       // stream existed -- so they count.
       const fromBrandStream = frame.scope.startsWith('BRAND:');
-      const wantsBrandStream = this.allBranchesActive() && this.realtime.brandState() === 'open';
+      const wantsBrandStream = this.allBranchesActive() && this.brandStream.state() === 'open';
       if (fromBrandStream !== wantsBrandStream) {
         return;
       }
@@ -595,11 +597,14 @@ export class OrderQueue implements OnInit {
       ) {
         void this.refresh();
       }
-    });
+    };
+    const unsubscribeRealtime = this.realtime.onFrame(onFrame);
+    const unsubscribeBrand = this.brandStream.onFrame(onFrame);
 
     this.destroyRef.onDestroy(() => {
       querySub.unsubscribe();
       unsubscribeRealtime();
+      unsubscribeBrand();
       if (this.searchDebounceHandle !== null) {
         clearTimeout(this.searchDebounceHandle);
       }
@@ -724,7 +729,7 @@ export class OrderQueue implements OnInit {
   private brandStreamIsCurrent(): boolean {
     return (
       this.allBranchesActive() &&
-      this.realtime.brandState() === 'open' &&
+      this.brandStream.state() === 'open' &&
       Date.now() - this.lastRefreshAt < BRAND_STREAM_SAFETY_POLL_MS
     );
   }

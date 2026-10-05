@@ -2,13 +2,12 @@ import { ChangeDetectionStrategy, Component, inject, input, output, signal } fro
 import { firstValueFrom } from 'rxjs';
 
 import { LocationScope } from '../../core/api/operations-paths';
-import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
+import { ApiError } from '../../core/api/problem-details';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
-import { Toasts } from '../../shared/ui/toast';
 import { describeApiError } from './order-errors';
 import {
   SessionDetailView,
@@ -59,7 +58,6 @@ type CloseKind = 'EMPTY' | 'PAID' | 'WALKOUT';
 export class PartyClose {
   private readonly sessionsApi = inject(TableSessionsApi);
   private readonly capabilities = inject(SessionCapabilities);
-  private readonly toasts = inject(Toasts);
   protected readonly i18n = inject(I18n);
 
   readonly scope = input.required<LocationScope>();
@@ -127,7 +125,7 @@ export class PartyClose {
       }
     } catch {
       // Never guess the table is empty: without the bill there is nothing honest to offer.
-      this.error.set(this.i18n.t('orders.party.readError'));
+      this.error.set(this.i18n.t('error.unknown.noReference'));
     } finally {
       this.reading.set(false);
     }
@@ -146,35 +144,29 @@ export class PartyClose {
     this.owing.set(null);
   }
 
-  protected confirmTitle(kind: CloseKind): string {
-    return this.i18n.t(
-      kind === 'EMPTY'
-        ? 'orders.party.confirm.empty.title'
-        : kind === 'PAID'
-          ? 'orders.party.confirm.paid.title'
-          : 'orders.party.confirm.walkout.title',
-      { tables: this.tables() },
-    );
+  protected confirmTitle(): string {
+    return this.i18n.t('orders.party.confirm.title', { tables: this.tables() });
   }
 
-  protected confirmBody(kind: CloseKind, detail: SessionDetailView): string {
+  /** Nothing is owed on an empty party, so there is nothing for a body to say: the title and the two buttons are the whole question. */
+  protected confirmBody(kind: CloseKind, detail: SessionDetailView): string | null {
+    if (kind === 'EMPTY') {
+      return null;
+    }
     return this.i18n.t(
-      kind === 'EMPTY'
-        ? 'orders.party.confirm.empty.body'
-        : kind === 'PAID'
-          ? 'orders.party.confirm.paid.body'
-          : 'orders.party.confirm.walkout.body',
+      kind === 'PAID' ? 'orders.party.confirm.paid.body' : 'orders.party.confirm.walkout.body',
       { amount: this.amount(detail) },
     );
   }
 
+  /** The button names what is being asserted, in the words the operator chose it by. */
   protected confirmLabel(kind: CloseKind): string {
     return this.i18n.t(
       kind === 'EMPTY'
-        ? 'orders.party.confirm.empty.action'
+        ? 'settings.locations.floorPlan.claim.release'
         : kind === 'PAID'
-          ? 'orders.party.confirm.paid.action'
-          : 'orders.party.confirm.walkout.action',
+          ? 'orders.party.choose.paid'
+          : 'orders.party.choose.walkout',
     );
   }
 
@@ -196,7 +188,7 @@ export class PartyClose {
             this.scope(),
             sessionId,
             WALKOUT_REASON_CODE,
-            this.i18n.t('orders.party.reason.walkout'),
+            this.i18n.t('orders.party.choose.walkout'),
             version,
           ),
         );
@@ -206,7 +198,9 @@ export class PartyClose {
             this.scope(),
             sessionId,
             this.i18n.t(
-              pending.kind === 'EMPTY' ? 'orders.party.reason.empty' : 'orders.party.reason.paid',
+              pending.kind === 'EMPTY'
+                ? 'settings.locations.floorPlan.claim.release'
+                : 'orders.party.choose.paid',
             ),
             version,
           ),
@@ -214,18 +208,13 @@ export class PartyClose {
       }
       this.confirming.set(null);
       this.owing.set(null);
-      this.toasts.show({
-        message: this.i18n.t('orders.party.closedToast', { tables: this.tables() }),
-        tone: 'success',
-      });
       this.closed.emit(sessionId);
     } catch (error) {
       this.confirming.set(null);
       this.owing.set(null);
-      if (error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION) {
-        this.error.set(this.i18n.t('orders.party.stale'));
-        this.stale.emit();
-      } else if (error instanceof ApiError) {
+      if (error instanceof ApiError) {
+        // A stale version says "someone changed it first"; any other refusal is worded by the
+        // shared mapping. Either way the list the operator is looking at is behind.
         this.error.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
         this.stale.emit();
       } else {

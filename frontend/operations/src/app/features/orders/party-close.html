@@ -3,7 +3,7 @@
     @if (owing(); as bill) {
       <div class="party-close__choose" role="group" data-testid="party-close-choose">
         <p class="q-caption party-close__bill" data-testid="party-close-bill">
-          {{ 'orders.party.owing' | t: { amount: amount(bill) } }}
+          {{ 'orders.newOrder.order.total' | t }}: {{ amount(bill) }}
         </p>
         <button
           type="button"
@@ -29,7 +29,7 @@
           (click)="dismiss()"
           data-testid="party-close-back"
         >
-          {{ 'orders.party.choose.back' | t }}
+          {{ 'orders.dialog.dismiss' | t }}
         </button>
       </div>
     } @else {
@@ -40,7 +40,7 @@
         (click)="start()"
         data-testid="party-close-open"
       >
-        {{ reading() ? ('orders.party.reading' | t) : ('orders.party.close' | t) }}
+        {{ 'settings.locations.floorPlan.claim.release' | t }}
       </button>
     }
 
@@ -52,10 +52,10 @@
 
     @if (confirming(); as pending) {
       <q-confirm-dialog
-        [title]="confirmTitle(pending.kind)"
+        [title]="confirmTitle()"
         [body]="confirmBody(pending.kind, pending.detail)"
         [confirmLabel]="confirmLabel(pending.kind)"
-        [cancelLabel]="'orders.party.confirm.keep' | t"
+        [cancelLabel]="'orders.dialog.dismiss' | t"
         [tone]="pending.kind === 'EMPTY' ? 'default' : 'destructive'"
         [busy]="busy()"
         (confirm)="confirm()"

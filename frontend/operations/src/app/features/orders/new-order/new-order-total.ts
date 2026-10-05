@@ -10,21 +10,20 @@ import type { MenuPhysicalFacts } from './new-order-api';
  * The running total (orders.md §5.6's Итого), and the one guarantee it makes:
  * **never silently show a total that treats an unpriced component as free.**
  *
- * §1.3's money rule for the order detail screen is "never display a computed
- * total that disagrees with `total_minor`; if they disagree the panel renders
- * an error, because that is data corruption and hiding it is worse than an
- * ugly screen" (`order-money.ts`). This screen has no `total_minor` to check
- * against before submit — `OperatorOrderingService.place` prices and checks
- * out in one atomic call (create the cart, add every line, price it, check
- * out), and there is no separate preview endpoint this screen's principal can
- * reach: `QuoteController`'s live quote needs `PRICING_READ` at `BRAND` scope,
- * which neither `LOCATION_STAFF` nor `LOCATION_MANAGER` holds at that scope
- * (`PlatformRole.java`) — a `LOCATION_MANAGER` grant covers only its own
- * location, `JdbcAuthorizationService#hasGrant`'s `scope().covers(scope)`
- * never lets a narrower grant answer a broader one. So the running total here
- * is computed from the published menu's own prices (`StorefrontMenu`,
- * server data, just not a quote), reconciled against nothing until the
- * operator actually presses Создать and the server prices the real cart.
+ * This is the **menu arithmetic**: it is computed from the published menu's own
+ * prices (`StorefrontMenu`) and knows nothing of a promo discount or a delivery
+ * fee. Since row `1.3e` it is not what the operator is shown beside «Создать»
+ * whenever the server can price the basket: `OperationsOrderController.quoteOrder`
+ * (`POST .../orders/quote`, `ORDER_PLACE` at the branch) runs the same request
+ * through the same cart and `PricingEngine` path as `place` and undoes it, and
+ * `new-order-page.ts` shows that figure. (`QuoteController`'s live quote, which
+ * needs `PRICING_READ` at `BRAND` scope, is not reachable by `LOCATION_STAFF` or
+ * `LOCATION_MANAGER`: a `LOCATION_MANAGER` grant covers only its own location,
+ * `JdbcAuthorizationService#hasGrant`'s `scope().covers(scope)` never lets a
+ * narrower grant answer a broader one -- which is why the operator path has its
+ * own quote.) This sum remains the fallback, labelled an estimate, for the moment
+ * before the server's answer arrives and for a read that failed; it is also what
+ * the per-line amounts and the pending/unavailable flags are computed from.
  *
  * The reduction this module applies, in `order-money.ts`'s own terms: a line
  * or a selected modifier with `amountMinor: null` never contributes zero to

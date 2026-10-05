@@ -1,4 +1,4 @@
-import { ConnectionState, RealtimeFrame } from './realtime-frames';
+import type { ConnectionState, RealtimeFrame } from './realtime-client';
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
@@ -20,9 +20,15 @@ export interface SseConnectionOptions {
 /**
  * One fetch-based `text/event-stream` connection with the reconnect discipline ADR 0045 asks
  * of a client: `Last-Event-Id` resync, a jittered exponential backoff, and the server's own
- * `closing` request for a delay respected. Extracted from `RealtimeClient` when a second
- * stream appeared (the brand-wide board's, gap map row `1.1`): the machinery is the same, and
- * only the URL and the owner differ.
+ * `closing` request for a delay respected.
+ *
+ * **This is a second copy of the transport `RealtimeClient` carries, and that is deliberate for
+ * now.** It was written for the brand-wide board stream (gap map row `1.1`, `BrandOrderStream`), a
+ * screen-scoped, lazy-loaded consumer. `RealtimeClient` is in the initial bundle, whose budget
+ * (`angular.json`, 832 kB) had 0.6 kB of headroom when this was written; folding the client onto
+ * this class cost 0.4 kB of it. When the budget has room, `RealtimeClient` should be reduced to
+ * this class plus its channel list, and the duplication goes. Until then a change to one's
+ * reconnect rules is a change to both.
  *
  * Nothing here decides *which* stream is wanted; the owner calls {@link open} to (re)start it
  * and {@link close} to end it. A superseded attempt is recognised by its generation, so a slow

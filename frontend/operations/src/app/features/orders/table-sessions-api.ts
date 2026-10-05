@@ -110,6 +110,17 @@ export interface RoundView {
 }
 
 /**
+ * One session, and its sub-resources (`TableSessionController`): `GET` reads it with its running
+ * bill (`DINEIN_SESSION_READ`), `POST .../force-closures` is the walkout (`DINEIN_SESSION_FORCE_CLOSE`,
+ * a reason code, a reason and `If-Match`). Built here, from the shared list path, and not in
+ * `operations-paths.ts`: that object is in the initial bundle, which has no room to spare, and these
+ * two callers are lazy.
+ */
+function sessionPath(scope: LocationScope, sessionId: string): string {
+  return `${operationsPaths.dineInSessions(scope)}/${encodeURIComponent(sessionId)}`;
+}
+
+/**
  * `TableSessionController` (ADR 0047) — the staff side of a table visit.
  *
  * Callers: the reservations screen seats a booking (`open` with a
@@ -195,7 +206,7 @@ export class TableSessionsApi {
    */
   detail(scope: LocationScope, sessionId: string): Observable<SessionDetailView> {
     return this.api
-      .get<SessionDetailView>(operationsPaths.dineInSession(scope, sessionId))
+      .get<SessionDetailView>(sessionPath(scope, sessionId))
       .pipe(map((result) => result.value));
   }
 
@@ -248,7 +259,7 @@ export class TableSessionsApi {
     expectedVersion: number,
   ): Observable<SessionView> {
     return this.api.post<{ reasonCode: string; reason: string }, SessionView>(
-      operationsPaths.dineInSessionForceClosures(scope, sessionId),
+      `${sessionPath(scope, sessionId)}/force-closures`,
       command({ reasonCode, reason }),
       { expectedVersion },
     );

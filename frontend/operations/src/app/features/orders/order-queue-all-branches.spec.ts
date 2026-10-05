@@ -11,6 +11,7 @@ import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
+import { BrandOrderStream } from '../../core/realtime/brand-order-stream';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
@@ -70,45 +71,54 @@ function page(items: readonly OrderSummaryResponse[]): Observable<unknown> {
   return of({ value: { items, nextCursor: null }, version: null });
 }
 
-/**
- * A `RealtimeClient` that opens nothing: a test says when the brand stream is open and delivers
- * frames by hand, and can read how many screens are watching it.
- */
-interface FakeRealtime {
-  readonly state: ReturnType<typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>>;
-  readonly brandState: ReturnType<
-    typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable' | null>
-  >;
-  readonly onFrame: (listener: (frame: RealtimeFrame) => void) => () => void;
-  readonly watchBrand: () => () => void;
-  /** Hands a frame to every listener, as the stream would. */
-  readonly deliver: (frame: RealtimeFrame) => void;
-  /** How many `watchBrand()` calls are currently held. */
-  readonly brandWatchers: () => number;
-}
+type StreamState = 'connecting' | 'open' | 'reconnecting' | 'unavailable';
 
-function fakeRealtime(): FakeRealtime {
+/** One stream that opens nothing: a test says what state it is in and delivers frames by hand. */
+function fakeStream<State extends StreamState | null>(initial: State) {
   const listeners = new Set<(frame: RealtimeFrame) => void>();
-  let watchers = 0;
   return {
-    state: signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>('open'),
-    brandState: signal<'connecting' | 'open' | 'reconnecting' | 'unavailable' | null>(null),
-    onFrame: (listener) => {
+    state: signal<State | StreamState>(initial),
+    onFrame: (listener: (frame: RealtimeFrame) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    watchBrand: () => {
-      watchers += 1;
-      let released = false;
-      return () => {
-        if (!released) {
-          released = true;
-          watchers -= 1;
-        }
-      };
+    /** Hands a frame to every listener, as the stream would. */
+    deliver: (frame: RealtimeFrame) => listeners.forEach((listener) => listener(frame)),
+  };
+}
+
+/**
+ * The two streams the board listens on, replaced by fakes that open nothing: the branch stream
+ * (`RealtimeClient`) and the brand stream (`BrandOrderStream`), which a test can count the
+ * watchers of.
+ */
+interface FakeRealtime {
+  readonly branch: ReturnType<typeof fakeStream<StreamState>>;
+  readonly brand: ReturnType<typeof fakeStream<StreamState | null>> & {
+    readonly watch: () => () => void;
+    /** How many `watch()` calls are currently held. */
+    readonly watchers: () => number;
+  };
+}
+
+function fakeRealtime(): FakeRealtime {
+  let watchers = 0;
+  return {
+    branch: fakeStream<StreamState>('open'),
+    brand: {
+      ...fakeStream<StreamState | null>(null),
+      watch: () => {
+        watchers += 1;
+        let released = false;
+        return () => {
+          if (!released) {
+            released = true;
+            watchers -= 1;
+          }
+        };
+      },
+      watchers: () => watchers,
     },
-    deliver: (frame) => listeners.forEach((listener) => listener(frame)),
-    brandWatchers: () => watchers,
   };
 }
 
@@ -136,7 +146,7 @@ function configure(options: {
   readonly bulk?: boolean;
   readonly actions?: Partial<OrderActionsApi>;
   readonly policyFor?: (locationId: string) => LatenessPolicy | null;
-  /** Replaces the real `RealtimeClient`, which would try to open a stream. */
+  /** Replaces the real streams, which would try to open connections. */
   readonly realtime?: FakeRealtime;
 }): Harnessing {
   const calls: GetCall[] = [];
@@ -196,7 +206,12 @@ function configure(options: {
         },
       },
       { provide: OrderActionsApi, useValue: options.actions ?? {} },
-      ...(options.realtime ? [{ provide: RealtimeClient, useValue: options.realtime }] : []),
+      ...(options.realtime
+        ? [
+            { provide: RealtimeClient, useValue: options.realtime.branch },
+            { provide: BrandOrderStream, useValue: options.realtime.brand },
+          ]
+        : []),
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -871,15 +886,15 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     configure({ respond: () => page([]), realtime });
     const harness = await RouterTestingHarness.create('/orders?tab=all');
     await settle();
-    expect(realtime.brandWatchers(), 'one branch: nothing to listen to at the brand').toBe(0);
+    expect(realtime.brand.watchers(), 'one branch: nothing to listen to at the brand').toBe(0);
 
     choose(harness.routeNativeElement!, 'order-queue-filter-branchMode', 'ALL');
     await settle();
-    expect(realtime.brandWatchers()).toBe(1);
+    expect(realtime.brand.watchers()).toBe(1);
 
     choose(harness.routeNativeElement!, 'order-queue-filter-branchMode', 'ONE');
     await settle();
-    expect(realtime.brandWatchers(), 'back on one branch, the stream is released').toBe(0);
+    expect(realtime.brand.watchers(), 'back on one branch, the stream is released').toBe(0);
   });
 
   it('lets go of the brand stream when the screen is left', async () => {
@@ -887,11 +902,11 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     configure({ respond: () => page([]), realtime });
     const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
     await settle();
-    expect(realtime.brandWatchers()).toBe(1);
+    expect(realtime.brand.watchers()).toBe(1);
 
     harness.fixture.destroy();
 
-    expect(realtime.brandWatchers()).toBe(0);
+    expect(realtime.brand.watchers()).toBe(0);
   });
 
   it('re-reads the brand board when the brand stream says an order changed, without waiting for the poll', async () => {
@@ -899,10 +914,10 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     const h = configure({ respond: () => page([]), realtime });
     await RouterTestingHarness.create('/orders?tab=all&branches=all');
     await settle();
-    realtime.brandState.set('open');
+    realtime.brand.state.set('open');
     const before = boardCalls(h).length;
 
-    realtime.deliver(signalFrame(BRAND_SCOPE));
+    realtime.brand.deliver(signalFrame(BRAND_SCOPE));
     await settle();
 
     expect(boardCalls(h)).toHaveLength(before + 1);
@@ -914,12 +929,12 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     const h = configure({ respond: () => page([]), realtime });
     await RouterTestingHarness.create('/orders?tab=all&branches=all');
     await settle();
-    realtime.brandState.set('open');
+    realtime.brand.state.set('open');
     const before = boardCalls(h).length;
 
     // The same change, as the two streams deliver it.
-    realtime.deliver(signalFrame(BRANCH_SCOPE));
-    realtime.deliver(signalFrame(BRAND_SCOPE));
+    realtime.branch.deliver(signalFrame(BRANCH_SCOPE));
+    realtime.brand.deliver(signalFrame(BRAND_SCOPE));
     await settle();
 
     expect(boardCalls(h)).toHaveLength(before + 1);
@@ -930,10 +945,10 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     const h = configure({ respond: () => page([]), realtime });
     await RouterTestingHarness.create('/orders?tab=all&branches=all');
     await settle();
-    realtime.brandState.set('unavailable');
+    realtime.brand.state.set('unavailable');
     const before = boardCalls(h).length;
 
-    realtime.deliver(signalFrame(BRANCH_SCOPE));
+    realtime.branch.deliver(signalFrame(BRANCH_SCOPE));
     await settle();
 
     expect(boardCalls(h)).toHaveLength(before + 1);
@@ -946,11 +961,11 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     await settle();
     const before = boardCalls(h).length;
 
-    realtime.deliver(signalFrame(BRAND_SCOPE));
+    realtime.brand.deliver(signalFrame(BRAND_SCOPE));
     await settle();
     expect(boardCalls(h)).toHaveLength(before);
 
-    realtime.deliver(signalFrame(BRANCH_SCOPE));
+    realtime.branch.deliver(signalFrame(BRANCH_SCOPE));
     await settle();
     expect(boardCalls(h)).toHaveLength(before + 1);
   });
@@ -960,10 +975,10 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
     const h = configure({ respond: () => page([]), realtime });
     await RouterTestingHarness.create('/orders?tab=all&branches=all');
     await settle();
-    realtime.brandState.set('open');
+    realtime.brand.state.set('open');
     const before = boardCalls(h).length;
 
-    realtime.deliver({ kind: 'resync' });
+    realtime.brand.deliver({ kind: 'resync' });
     await settle();
 
     expect(boardCalls(h)).toHaveLength(before + 1);
@@ -974,7 +989,7 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
       vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
       try {
         const realtime = fakeRealtime();
-        realtime.brandState.set('reconnecting');
+        realtime.brand.state.set('reconnecting');
         const h = configure({ respond: () => page([]), realtime });
         await RouterTestingHarness.create('/orders?tab=all&branches=all');
         await settle();
@@ -996,7 +1011,7 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
         const h = configure({ respond: () => page([]), realtime });
         await RouterTestingHarness.create('/orders?tab=all&branches=all');
         await settle();
-        realtime.brandState.set('open');
+        realtime.brand.state.set('open');
         const before = boardCalls(h).length;
 
         vi.advanceTimersByTime(30_000);
@@ -1018,7 +1033,7 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
       vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
       try {
         const realtime = fakeRealtime();
-        realtime.brandState.set('open');
+        realtime.brand.state.set('open');
         const h = configure({ respond: () => page([]), realtime });
         await RouterTestingHarness.create('/orders?tab=all');
         await settle();

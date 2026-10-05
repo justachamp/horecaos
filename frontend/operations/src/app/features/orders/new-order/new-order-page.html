@@ -726,18 +726,13 @@
               />
             </label>
             @if (formattedChangeDue(); as change) {
-              <p class="q-caption new-order__order-row" data-testid="new-order-change-due">
+              <p
+                class="q-caption new-order__order-row"
+                [class.new-order__error]="tenderIsShort()"
+                data-testid="new-order-change-due"
+              >
                 <span>{{ 'orders.newOrder.order.changeDue' | t }}</span>
                 <span>{{ change }}</span>
-              </p>
-            }
-            @if (formattedTenderShortfall(); as shortfall) {
-              <p
-                class="q-caption new-order__error"
-                role="status"
-                data-testid="new-order-tender-short"
-              >
-                {{ 'orders.newOrder.order.tenderShort' | t: { amount: shortfall } }}
               </p>
             }
           }
@@ -753,7 +748,7 @@
         @if (serverQuote(); as quote) {
           @if (quote.discountMinor > 0) {
             <p class="q-caption new-order__order-row" data-testid="new-order-quote-discount">
-              <span>{{ 'orders.newOrder.order.quote.discount' | t }}</span>
+              <span>{{ 'orders.detail.money.discount' | t }}</span>
               <span>−{{ formattedQuoteAmount(quote.discountMinor) }}</span>
             </p>
           }
@@ -781,11 +776,7 @@
         }
         @if (serverQuote() === null && basket().length > 0) {
           <p class="q-caption new-order__hint" data-testid="new-order-total-estimate">
-            {{
-              quoteLoading()
-                ? ('orders.newOrder.order.quote.pricing' | t)
-                : ('orders.newOrder.order.quote.estimate' | t)
-            }}
+            {{ 'reports.provenance.provisional.short' | t }}
           </p>
         }
         @if (!total().fullyPriced) {

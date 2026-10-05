@@ -2482,7 +2482,7 @@ describe('NewOrderPage', () => {
       const quote = vi.fn().mockResolvedValue(quoteOf());
       await render({ quote });
       await startBasket();
-      expect(text('new-order-total-estimate')).toMatch(/Estimate/);
+      expect(text('new-order-total-estimate')).toMatch(/Provisional/);
       await afterTheDebounce();
       expect(text('new-order-total')).toMatch(/25[\s,.\u00a0\u202f]?000/);
 
@@ -2494,7 +2494,7 @@ describe('NewOrderPage', () => {
         text('new-order-total'),
         'the old quote is for one burger; it must not stand beside two',
       ).toMatch(/60[\s,.\u00a0\u202f]?000/);
-      expect(text('new-order-total-estimate')).toMatch(/Estimate/);
+      expect(text('new-order-total-estimate')).toMatch(/Provisional/);
     });
 
     it('asks once for a burst of edits, not once per edit', async () => {
@@ -2547,7 +2547,7 @@ describe('NewOrderPage', () => {
       await afterTheDebounce();
 
       expect(text('new-order-total')).toMatch(/30[\s,.\u00a0\u202f]?000/);
-      expect(text('new-order-total-estimate')).toMatch(/Estimate/);
+      expect(text('new-order-total-estimate')).toMatch(/Provisional/);
       expect(
         (fixture.nativeElement as HTMLElement).querySelector(
           '[data-testid="new-order-quote-refusal"]',
@@ -2576,7 +2576,7 @@ describe('NewOrderPage', () => {
       expect(text('new-order-total')).toMatch(/30[\s,.\u00a0\u202f]?000/);
     });
 
-    it('«Сдача» is what the customer hands over minus the server’s total, and a short tender is said out loud', async () => {
+    it('«Сдача» is what the customer hands over minus the server’s total, negative when the tender is short', async () => {
       await render({ quote: vi.fn().mockResolvedValue(quoteOf()) });
       await startBasket();
       await afterTheDebounce();
@@ -2587,12 +2587,13 @@ describe('NewOrderPage', () => {
 
       fixture.componentInstance['cashTenderedMinor'].set(20_000);
       fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector(
-          '[data-testid="new-order-change-due"]',
-        ),
-      ).toBeNull();
-      expect(text('new-order-tender-short')).toMatch(/5[\s,.\u00a0\u202f]?000/);
+      const short = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="new-order-change-due"]',
+      )!;
+      expect(short.textContent, 'a short tender reads as a negative «Сдача»').toMatch(
+        /[-−–]\s*5[\s,.\u00a0\u202f]?000/,
+      );
+      expect(short.classList.contains('new-order__error')).toBe(true);
     });
 
     it('sends the cash tendered with the order, only for a cash order and only when one was entered', async () => {
@@ -2622,31 +2623,6 @@ describe('NewOrderPage', () => {
         placeOrder.mock.calls[2][1].cashTenderedMinor,
         'a tender means nothing to an order paid another way, and the server refuses it',
       ).toBeNull();
-    });
-
-    it('tells the operator when the cash tendered was short of the price, once the order exists', async () => {
-      const result: PlaceOrderResult = {
-        orderId: 'order-1',
-        publicOrderNumber: '#0001',
-        status: 'CONFIRMED',
-        version: 1,
-        outcome: 'PLACED',
-        warnings: ['CASH_TENDERED_INSUFFICIENT'],
-      };
-      await render({ placeOrder: vi.fn().mockResolvedValue(result) });
-      vi.spyOn(router, 'navigate').mockResolvedValue(true);
-      await startBasket();
-      fixture.componentInstance['cashTenderedMinor'].set(10_000);
-
-      await fixture.componentInstance['submit']();
-
-      expect(toastShow).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tone: 'info',
-          message: expect.stringContaining('less than the total'),
-        }),
-      );
-      expect(toastShow).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));
     });
 
     it('prices a delivery with the server’s fee in the fee row, and does not count the fee twice in the total', async () => {
@@ -2685,6 +2661,38 @@ describe('NewOrderPage', () => {
       ).toBeNull();
     });
 
+    it('says the zone’s minimum when the basket is below it, even though the fee resolved', async () => {
+      const addressWithPoint = address({ latitude: 41.31, longitude: 69.24 });
+      const quote = vi.fn().mockResolvedValue(
+        quoteOf({
+          discountMinor: 0,
+          feeMinor: 8_000,
+          totalMinor: 38_000,
+          deliveryOutcome: 'RESOLVED',
+          deliveryMinBasketMinor: 50_000,
+          deliveryShortfallMinor: 20_000,
+          discounts: [],
+        }),
+      );
+      await render({ quote }, { revealAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
+      await startBasket();
+      fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.componentInstance['recipientName'].set('Aziz');
+      fixture.componentInstance['recipientPhone'].set('+998901112233');
+      fixture.detectChanges();
+      await afterTheDebounce();
+
+      expect(
+        text('new-order-quote-delivery-notice'),
+        'a checkout precondition the fee resolver does not enforce',
+      ).toMatch(/Minimum basket.*50[\s,.\u00a0\u202f]?000/);
+      expect(text('new-order-delivery-fee'), 'the fee itself resolved').toMatch(
+        /8[\s,.\u00a0\u202f]?000/,
+      );
+    });
+
     it('says plainly when the zone will not take a delivery, instead of showing a fee', async () => {
       const addressWithPoint = address({ latitude: 41.31, longitude: 69.24 });
       const quote = vi.fn().mockResolvedValue(
@@ -2706,7 +2714,7 @@ describe('NewOrderPage', () => {
       fixture.detectChanges();
       await afterTheDebounce();
 
-      expect(text('new-order-quote-delivery-notice')).toMatch(/Delivery is not available/);
+      expect(text('new-order-quote-delivery-notice')).toMatch(/Not available/);
     });
   });
 });

@@ -6,7 +6,6 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { Capability, SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
-import { Toasts } from '../../../shared/ui/toast';
 import { ReservationsApi, TableAvailability } from '../reservations-api';
 import { SessionDetailView, SessionView, TableSessionsApi } from '../table-sessions-api';
 import { DineInTablePicker, TablePick } from './dine-in-table-picker';
@@ -86,7 +85,6 @@ describe('DineInTablePicker', () => {
           provide: SessionCapabilities,
           useValue: { has: (capability: Capability) => capabilities.includes(capability) },
         },
-        { provide: Toasts, useValue: { show: () => 0 } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');

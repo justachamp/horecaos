@@ -1207,25 +1207,35 @@ export class NewOrderPage implements OnInit {
     () => this.serverQuote()?.totalMinor ?? this.total().subtotalMinor,
   );
 
-  /** A delivery the zone refuses or prices below its minimum: checkout would refuse it, so the operator hears it now. */
+  /** The zone will not price this delivery at all (outside every zone, no tariff, past its reach). */
+  private static deliveryRefused(quote: OrderQuote): boolean {
+    return (
+      quote.deliveryOutcome !== null &&
+      quote.deliveryOutcome !== 'RESOLVED' &&
+      quote.deliveryOutcome !== 'EXTERNALLY_PRICED'
+    );
+  }
+
+  /**
+   * What would stop checkout on a delivery, said now rather than after «Создать»: a zone that
+   * refuses the address, or a basket below the zone's minimum. The minimum is reported even when
+   * the fee resolved -- it is a checkout precondition the fee resolver does not enforce.
+   */
   protected quoteDeliveryNotice(): string | null {
     const quote = this.serverQuote();
-    if (quote?.deliveryOutcome == null) {
+    if (quote === null || quote.deliveryOutcome === null) {
       return null;
     }
-    if (quote.deliveryOutcome === 'RESOLVED' || quote.deliveryOutcome === 'EXTERNALLY_PRICED') {
-      return null;
-    }
+    const minimum = quote.deliveryMinBasketMinor;
     const shortfall = quote.deliveryShortfallMinor;
-    if (shortfall !== null && shortfall > 0) {
-      return this.i18n.t('orders.newOrder.order.quote.belowMinimum', {
-        amount: formatMoney(
-          { amountMinor: shortfall, currency: quote.currency },
-          this.i18n.locale(),
-        ),
+    if (minimum !== null && shortfall !== null && shortfall > 0) {
+      return this.i18n.t('delivery.zones.detail.minBasket', {
+        amount: formatMoney({ amountMinor: minimum, currency: quote.currency }, this.i18n.locale()),
       });
     }
-    return this.i18n.t('orders.newOrder.order.quote.deliveryRefused');
+    return NewOrderPage.deliveryRefused(quote)
+      ? this.i18n.t('orders.newOrder.order.deliveryFeeUnavailable')
+      : null;
   }
 
   protected formattedQuoteAmount(amountMinor: number): string {
@@ -1299,23 +1309,20 @@ export class NewOrderPage implements OnInit {
     return tendered - this.changeBaseMinor();
   });
 
+  /** Signed: a tender short of the price reads as a negative «Сдача», so the shortfall needs no words of its own. */
   protected formattedChangeDue(): string | null {
     const changeMinor = this.changeDueMinor();
     const currency = this.serverQuote()?.currency ?? this.total().currency;
-    if (changeMinor === null || currency === null || changeMinor < 0) {
+    if (changeMinor === null || currency === null) {
       return null;
     }
     return formatMoney({ amountMinor: changeMinor, currency }, this.i18n.locale());
   }
 
-  /** The tender is less than the price: the order is still created (the customer can hand over more), but the operator is told. */
-  protected formattedTenderShortfall(): string | null {
+  /** The tender is less than the price: the order is still created (the customer can hand over more), but the operator sees it. */
+  protected tenderIsShort(): boolean {
     const changeMinor = this.changeDueMinor();
-    const currency = this.serverQuote()?.currency ?? this.total().currency;
-    if (changeMinor === null || currency === null || changeMinor >= 0) {
-      return null;
-    }
-    return formatMoney({ amountMinor: -changeMinor, currency }, this.i18n.locale());
+    return changeMinor !== null && changeMinor < 0;
   }
 
   // ------------------------------------------------------ §5.4/§5.6 delivery fee preview
@@ -1497,15 +1504,15 @@ export class NewOrderPage implements OnInit {
 
   private async refreshQuote(sequence: number): Promise<void> {
     const scope = this.location.scope();
-    const customer = untracked(() => this.selectedCustomer());
+    const customer = this.selectedCustomer();
     if (!scope || customer === null || sequence !== this.quoteSequence) {
       return;
     }
-    const request = untracked(() => this.placeRequest(customer, scope, 'quote'));
+    const request = this.placeRequest(customer, scope, 'quote');
     if (request === null) {
       return;
     }
-    const placeAtScope = untracked(() => ({ ...scope, locationId: this.placeAtLocationId(scope) }));
+    const placeAtScope = { ...scope, locationId: this.placeAtLocationId(scope) };
     this.quoteLoading.set(true);
     try {
       const quote = await this.api.quote(placeAtScope, request);
@@ -1540,7 +1547,7 @@ export class NewOrderPage implements OnInit {
     const priced = this.serverQuote();
     if (priced !== null && priced.deliveryOutcome !== null) {
       // The server's own fee, from the same pricing the order is booked with (row 1.3e).
-      return this.quoteDeliveryNotice() !== null
+      return NewOrderPage.deliveryRefused(priced)
         ? this.i18n.t('orders.newOrder.order.deliveryFeeUnavailable')
         : formatMoney(
             { amountMinor: priced.feeMinor, currency: priced.currency },
@@ -1930,14 +1937,6 @@ export class NewOrderPage implements OnInit {
         message: this.i18n.t('orders.newOrder.order.created', { number: result.publicOrderNumber }),
         tone: 'success',
       });
-      if (result.warnings.includes('CASH_TENDERED_INSUFFICIENT')) {
-        // The order is created either way -- the customer can hand over more -- but the
-        // operator is told the figure they entered was short of the price.
-        this.toasts.show({
-          message: this.i18n.t('orders.newOrder.order.tenderInsufficient'),
-          tone: 'info',
-        });
-      }
       void this.router.navigate(['/orders', result.orderId]);
     } catch (error) {
       if (error instanceof ApiError) {
