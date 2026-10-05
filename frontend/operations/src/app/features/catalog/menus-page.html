@@ -150,6 +150,11 @@
               </td>
               <td class="menus__num-col q-mono q-tnum">
                 <span data-testid="menus-price">{{ priceLabel(row.variantId) }}</span>
+                @if (priceUnitLabel(row.variantId); as unit) {
+                  <span class="q-caption menus__price-unit" data-testid="menus-price-unit">{{
+                    unit
+                  }}</span>
+                }
                 @if (selectedChannelId()) {
                   @if (canEditChannelPrice()) {
                     <input
