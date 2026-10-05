@@ -1145,7 +1145,7 @@ public class OrderAmendmentService {
      * approximation.
      */
     private static BigDecimal asQuantity(Object value) {
-        return Quantities.normalise(new BigDecimal(String.valueOf(value)));
+        return Quantities.normalise(Quantities.requireBoundedMagnitude(new BigDecimal(String.valueOf(value))));
     }
 
     private static double asDouble(Object value) {
@@ -2084,7 +2084,11 @@ public class OrderAmendmentService {
             // ADR 0137: a decimal for a splittable dish. Normalised, so a whole quantity is stored as
             // 3 and not 3.000, and a stored command reads the same as it did when the quantity was
             // an integer.
-            payload.put("quantity", Quantities.normalise(Objects.requireNonNull(quantity, "A quantity is required")));
+            // Bounded before it is normalised: normalising 1e600000000 writes out every one of its digits.
+            payload.put(
+                    "quantity",
+                    Quantities.normalise(Quantities.requireBoundedMagnitude(
+                            Objects.requireNonNull(quantity, "A quantity is required"))));
             return new AmendmentCommand(AmendmentCommandType.CHANGE_LINE_QUANTITY, payload);
         }
 
@@ -2106,7 +2110,9 @@ public class OrderAmendmentService {
                 List<CartService.ComboPick> comboPicks) {
 
             public LineRequest {
-                quantity = Quantities.normalise(Objects.requireNonNull(quantity, "A new line needs a quantity"));
+                // Bounded before it is normalised: normalising 1e600000000 writes out every one of its digits.
+                quantity = Quantities.normalise(Quantities.requireBoundedMagnitude(
+                        Objects.requireNonNull(quantity, "A new line needs a quantity")));
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
                 comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
             }

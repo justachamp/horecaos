@@ -2172,7 +2172,7 @@ public class OperationsOrderController {
      *                         agreement
      */
     public record AmendRequest(
-            @NotEmpty @Size(max = 10) List<AmendmentCommandRequest> commands,
+            @NotEmpty @Size(max = 10) List<@Valid AmendmentCommandRequest> commands,
             boolean applyImmediately,
             @NotBlank @Size(max = 64) String reasonCode) {}
 
@@ -2343,6 +2343,11 @@ public class OperationsOrderController {
         }
 
         OrderAmendmentService.AmendmentCommand.LineRequest toLineRequest() {
+            if (quantity == null) {
+                // Bean Validation refuses this first; the check keeps a caller that skips validation from
+                // meeting a NullPointerException, which no handler turns into anything but a 500.
+                throw new IllegalArgumentException("Each ADD_LINES line carries its quantity");
+            }
             return new OrderAmendmentService.AmendmentCommand.LineRequest(
                     variantId,
                     quantity,
