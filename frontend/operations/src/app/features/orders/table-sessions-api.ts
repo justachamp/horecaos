@@ -129,9 +129,10 @@ function sessionPath(scope: LocationScope, sessionId: string): string {
  * in the placement itself, so an operator-keyed order shows its table at once.
  * `close` and `forceClose` end a party -- the New Order screen's picker and the floor
  * plan close the party they seat through `q-party-close` -- and `release` is the same
- * close, named for a guest's unconfirmed claim (ADR 0143). The rest of state-actions
- * (asking for the bill, settling) stays uncalled: the running bill and settlement
- * screen is a different, unbuilt surface with no IA row of its own yet.
+ * close, named for a guest's unconfirmed claim (ADR 0143). `startSettling` is the step a
+ * party whose guests asked for the bill takes on the way to `close`. The rest of
+ * state-actions (asking for the bill, returning to open) stays uncalled: the running bill
+ * and settlement screen is a different, unbuilt surface with no IA row of its own yet.
  */
 @Injectable({ providedIn: 'root' })
 export class TableSessionsApi {
@@ -208,6 +209,26 @@ export class TableSessionsApi {
     return this.api
       .get<SessionDetailView>(sessionPath(scope, sessionId))
       .pipe(map((result) => result.value));
+  }
+
+  /**
+   * Starts settling a party whose guests asked for the bill: `state-actions` to `SETTLING`
+   * (`DINEIN_SESSION_MANAGE`). ADR 0047's machine has no `BILL_REQUESTED -> CLOSED` edge -- the
+   * server answers 400 to it -- so a party in that state reaches {@link close} through this one,
+   * on the version this answers with. Conditional on the session's version, like every other
+   * write to one.
+   */
+  startSettling(
+    scope: LocationScope,
+    sessionId: string,
+    reason: string,
+    expectedVersion: number,
+  ): Observable<SessionView> {
+    return this.api.post<{ targetStatus: string; reason: string }, SessionView>(
+      operationsPaths.dineInSessionStateActions(scope, sessionId),
+      command({ targetStatus: 'SETTLING', reason }),
+      { expectedVersion },
+    );
   }
 
   /**

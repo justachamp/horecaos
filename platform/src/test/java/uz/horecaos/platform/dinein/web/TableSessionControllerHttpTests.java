@@ -487,6 +487,82 @@ class TableSessionControllerHttpTests {
     }
 
     @Test
+    @DisplayName(
+            "a party that asked for the bill cannot be closed in one step (ADR 0047 has no BILL_REQUESTED -> CLOSED "
+                    + "edge); through SETTLING it closes and settles the bill, each step on the version the step before left")
+    void aPartyThatAskedForTheBillIsClosedThroughSettling() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3005", "DINE_IN", 45_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        int opened = readSession(a1, STAFF_A1, sessionId)
+                .path("session")
+                .path("version")
+                .asInt();
+
+        MvcResult asked = stateAction(a1, STAFF_A1, sessionId, opened, "BILL_REQUESTED");
+        assertThat(asked.getResponse().getStatus()).isEqualTo(200);
+        int askedVersion = json(asked).path("version").asInt();
+
+        MvcResult direct = stateAction(a1, STAFF_A1, sessionId, askedVersion, "CLOSED");
+
+        assertThat(direct.getResponse().getStatus())
+                .as("the console must not offer a one-step close for this state")
+                .isEqualTo(400);
+        assertThat(json(direct).path("code").asText()).isEqualTo("INVALID_REQUEST");
+        assertThat(count("SELECT count(*) FROM dinein.table_sessions WHERE status = 'BILL_REQUESTED'"))
+                .as("the party is where it was")
+                .isEqualTo(1);
+
+        MvcResult settling = stateAction(a1, STAFF_A1, sessionId, askedVersion, "SETTLING");
+        assertThat(settling.getResponse().getStatus()).isEqualTo(200);
+        MvcResult closed = stateAction(
+                a1, STAFF_A1, sessionId, json(settling).path("version").asInt(), "CLOSED");
+
+        assertThat(closed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(closed).path("status").asText()).isEqualTo("CLOSED");
+        assertThat(json(closed).path("settledTotalMinor").asLong())
+                .as("settled at the bill that stood")
+                .isEqualTo(45_000L);
+        assertThat(count("SELECT count(*) FROM dinein.session_tables WHERE session_id = '" + sessionId
+                        + "' AND left_at IS NULL"))
+                .as("the table is free again")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a round attached while a party is settling answers the close a stale version: the second step is "
+            + "guarded like the first")
+    void aRoundAttachedWhileSettlingMakesTheCloseStale() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        int opened = readSession(a1, STAFF_A1, sessionId)
+                .path("session")
+                .path("version")
+                .asInt();
+        int askedVersion = json(stateAction(a1, STAFF_A1, sessionId, opened, "BILL_REQUESTED"))
+                .path("version")
+                .asInt();
+        int settlingVersion = json(stateAction(a1, STAFF_A1, sessionId, askedVersion, "SETTLING"))
+                .path("version")
+                .asInt();
+
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3006", "DINE_IN", 30_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult stale = stateAction(a1, STAFF_A1, sessionId, settlingVersion, "CLOSED");
+
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(stale).path("code").asText()).isEqualTo("STALE_VERSION");
+        assertThat(count("SELECT count(*) FROM dinein.table_sessions WHERE status = 'SETTLING'"))
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("attaching the same order again moves nothing: a retry does not stale a read that was just made")
     void aRetriedRoundLeavesTheVersionAlone() throws Exception {
         TableRow t7 = createTable(a1, "T7", "Table 7");

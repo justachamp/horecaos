@@ -56,6 +56,7 @@ describe('PartyClose', () => {
   let fixture: ComponentFixture<PartyClose>;
   let api: {
     detail: ReturnType<typeof vi.fn>;
+    startSettling: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
     forceClose: ReturnType<typeof vi.fn>;
   };
@@ -73,6 +74,7 @@ describe('PartyClose', () => {
   ): Promise<HTMLElement> {
     api = {
       detail: vi.fn().mockReturnValue(of(bill(0))),
+      startSettling: vi.fn().mockReturnValue(of(party({ status: 'SETTLING', version: 10 }))),
       close: vi.fn().mockReturnValue(of(party({ status: 'CLOSED' }))),
       forceClose: vi.fn().mockReturnValue(of(party({ status: 'FORCE_CLOSED' }))),
       ...answers,
@@ -245,6 +247,117 @@ describe('PartyClose', () => {
 
       expect(byId(host, 'party-close-open')).not.toBeNull();
       expect(api.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a party whose guests asked for the bill', () => {
+    // ADR 0047's machine has no BILL_REQUESTED -> CLOSED edge: the server answers 400 to it. The
+    // way out is through SETTLING, so the console takes both steps, each on the version the one
+    // before left.
+    it('settles first and then closes, each step on the version the step before left, when the guests paid', async () => {
+      const host = await render(['DINEIN_SESSION_MANAGE'], {
+        detail: vi.fn().mockReturnValue(of(bill(87_000, { status: 'BILL_REQUESTED' }))),
+      });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.startSettling).toHaveBeenCalledTimes(1);
+      const [scope, sessionId, reason, settlingVersion] = api.startSettling.mock.calls[0];
+      expect(scope).toEqual(SCOPE);
+      expect(sessionId).toBe('ses-1');
+      expect(reason).toContain('guests paid');
+      expect(settlingVersion, 'the version read with the bill').toBe(9);
+      expect(api.close).toHaveBeenCalledTimes(1);
+      expect(api.close.mock.calls[0][3], 'the version settling left').toBe(10);
+      expect(api.startSettling.mock.invocationCallOrder[0], 'settling comes first').toBeLessThan(
+        api.close.mock.invocationCallOrder[0],
+      );
+      expect(api.forceClose).not.toHaveBeenCalled();
+      expect(closed).toEqual(['ses-1']);
+    });
+
+    it('takes the same way out for a bill of nothing', async () => {
+      const host = await render(['DINEIN_SESSION_MANAGE'], {
+        detail: vi.fn().mockReturnValue(of(bill(0, { status: 'BILL_REQUESTED' }))),
+      });
+
+      await click(host, 'party-close-open');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.startSettling).toHaveBeenCalledTimes(1);
+      expect(api.close.mock.calls[0][3]).toBe(10);
+      expect(closed).toEqual(['ses-1']);
+    });
+
+    it('does not settle a walkout: the force-closure leaves the bill-requested state itself', async () => {
+      const host = await render(['DINEIN_SESSION_MANAGE', 'DINEIN_SESSION_FORCE_CLOSE'], {
+        detail: vi.fn().mockReturnValue(of(bill(87_000, { status: 'BILL_REQUESTED' }))),
+      });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-walkout');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.startSettling).not.toHaveBeenCalled();
+      expect(api.forceClose).toHaveBeenCalledTimes(1);
+      expect(api.close).not.toHaveBeenCalled();
+      expect(closed).toEqual(['ses-1']);
+    });
+
+    it('closes an open party and a settling one in the one step they always had', async () => {
+      for (const status of ['OPEN', 'SETTLING']) {
+        TestBed.resetTestingModule();
+        closed.length = 0;
+        const host = await render(['DINEIN_SESSION_MANAGE'], {
+          detail: vi.fn().mockReturnValue(of(bill(87_000, { status }))),
+        });
+
+        await click(host, 'party-close-open');
+        await click(host, 'party-close-paid');
+        await click(host, 'q-confirm-confirm');
+
+        expect(api.startSettling, status).not.toHaveBeenCalled();
+        expect(api.close, status).toHaveBeenCalledTimes(1);
+        expect(closed, status).toEqual(['ses-1']);
+      }
+    });
+
+    it('closes nothing and tells the screen its list is behind when settling is refused', async () => {
+      const host = await render(['DINEIN_SESSION_MANAGE'], {
+        detail: vi.fn().mockReturnValue(of(bill(87_000, { status: 'BILL_REQUESTED' }))),
+        startSettling: vi
+          .fn()
+          .mockReturnValue(
+            throwError(() => new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null)),
+          ),
+      });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.close).not.toHaveBeenCalled();
+      expect(closed).toEqual([]);
+      expect(staleCount).toBe(1);
+      expect(byId(host, 'party-close-error')!.textContent).toContain('Somebody else changed this');
+    });
+
+    it('reports a close that failed after settling as not done, and asks the screen to read the room again so it shows a settling party', async () => {
+      const host = await render(['DINEIN_SESSION_MANAGE'], {
+        detail: vi.fn().mockReturnValue(of(bill(87_000, { status: 'BILL_REQUESTED' }))),
+        close: vi.fn().mockReturnValue(throwError(() => new Error('offline'))),
+      });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.startSettling).toHaveBeenCalledTimes(1);
+      expect(closed).toEqual([]);
+      expect(staleCount, 'the party is no longer the one the list shows').toBe(1);
+      expect(byId(host, 'party-close-error')).not.toBeNull();
     });
   });
 

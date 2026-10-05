@@ -58,6 +58,14 @@ function billChanged(shown: SessionDetailView, current: SessionDetailView): bool
  *   that a party paid -- payment is not recorded against a session yet -- so it asks, and the
  *   confirmation says what is being asserted.
  *
+ * **A party whose guests asked for the bill** (a QR guest's «request bill» puts it in
+ * `BILL_REQUESTED`) cannot be closed in one step: ADR 0047's machine has no
+ * `BILL_REQUESTED -> CLOSED` edge, and the server answers 400 to it. «Гости оплатили» and the
+ * nothing-owed close therefore take the two edges the machine does have -- `SETTLING`, then
+ * `CLOSED`, each on the version the step before left -- while the walkout needs neither, because
+ * `FORCE_CLOSED` is reachable from every live state. If the second step fails the party is left
+ * settling, which is a state a retry closes in one step.
+ *
  * **A close settles the bill the operator saw, and only that one.** The confirmation names an
  * amount, and the audit record carries the amount the server then settles, so the two must be the
  * same figure. Two things hold them together. At the moment of the second yes the bill is read
@@ -206,6 +214,7 @@ export class PartyClose {
     this.busy.set(true);
     this.error.set(null);
     const sessionId = this.session().sessionId;
+    let movedOn = false;
     try {
       // The bill again, now: the figure on the dialog was true when it was read, and a waiter or
       // a phone operator may have put a round on the table while the operator was deciding.
@@ -225,7 +234,7 @@ export class PartyClose {
       }
       // The version of this read, not the one the list or the first read carried: the figure is
       // the same, and the close is conditional on the party being exactly as it was just seen.
-      const version = current.session.version;
+      let version = current.session.version;
       if (pending.kind === 'WALKOUT') {
         await firstValueFrom(
           this.sessionsApi.forceClose(
@@ -237,18 +246,20 @@ export class PartyClose {
           ),
         );
       } else {
-        await firstValueFrom(
-          this.sessionsApi.close(
-            this.scope(),
-            sessionId,
-            this.i18n.t(
-              pending.kind === 'EMPTY'
-                ? 'settings.locations.floorPlan.claim.release'
-                : 'orders.party.choose.paid',
-            ),
-            version,
-          ),
+        const reason = this.i18n.t(
+          pending.kind === 'EMPTY'
+            ? 'settings.locations.floorPlan.claim.release'
+            : 'orders.party.choose.paid',
         );
+        if (current.session.status === 'BILL_REQUESTED') {
+          const settling = await firstValueFrom(
+            this.sessionsApi.startSettling(this.scope(), sessionId, reason, version),
+          );
+          // The party is no longer what the list shows, whatever the close below answers.
+          movedOn = true;
+          version = settling.version;
+        }
+        await firstValueFrom(this.sessionsApi.close(this.scope(), sessionId, reason, version));
       }
       this.confirming.set(null);
       this.owing.set(null);
@@ -263,6 +274,9 @@ export class PartyClose {
         this.stale.emit();
       } else {
         this.error.set(this.i18n.t('error.unknown.noReference'));
+        if (movedOn) {
+          this.stale.emit();
+        }
       }
     } finally {
       this.busy.set(false);
