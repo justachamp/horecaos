@@ -60,7 +60,9 @@ npm run format     # Prettier (writes the whole tree)
 npm run lint       # eslint: no raw px font-size (the closed type scale owns sizes)
 npm run lint:rules # the lint rule's own fixtures
 npm run i18n:dead  # message keys no template or TypeScript file references (--write removes them)
-npm run i18n:dead:test # the tool's own tests
+npm run i18n:areas # every route: the message areas it declares against the ones its code needs
+npm run i18n:split # lay the catalogues out as one module per area (see Localisation)
+npm run i18n:dead:test # the i18n tools' own tests, and the check that every route declares its areas
 ```
 
 CI runs `lint`, `lint:rules`, `i18n:dead:test` and `format:check` (Prettier over the whole tree)
@@ -166,11 +168,41 @@ day the controller moves, exactly one file changes.
 `ru`, `uz-Latn`, `en`, switchable at runtime from the top bar. Russian is the
 default because that is what the staff read.
 
-**A missing translation fails the build.** `messages.en.ts` defines the key set;
-`MessageKey` is derived from it; the other catalogues are typed
-`Record<MessageKey, string>`. Adding an English key without translating it is a
+**A missing translation fails the build.** The English area modules define the key set;
+`MessageKey` is derived from them (`messages.en.ts` puts them back together); the other
+locales' modules are typed against them. Adding an English key without translating it is a
 `tsc` error naming the key, once per untranslated locale, and `ng build` and
 `ng test` both stop. Verified by adding a key and watching the build fail.
+
+**The catalogue is split by feature area, and only `core` is in the initial bundle.** The
+~5,900 keys used to be three modules, and the default locale's alone cost the initial bundle
+about 460 kB. Now every key belongs to an area (`core/i18n/message-areas.ts`: `core`, `orders`,
+`settings`, `catalog`, ...), decided by its leading segment (`orders.queue.title` is the `orders`
+area) with a handful of exceptions for words several areas share (`orders.status.*` is `core`);
+each area of each locale is `core/i18n/messages/<area>.<locale>.ts` and its own lazy chunk. `ru`'s
+`core` ships in the initial bundle; everything else is fetched when something asks:
+
+- a **route** declares what it shows, `canActivate: [messagesGuard('orders', 'customers')]` in
+  `app.routes.ts`; the router waits for those chunks, so the screen draws with every string. A
+  declaration covers the route's children; `core` is never declared;
+- a **language switch** loads the areas the session has used, in the new language, before it
+  swaps, so the screen does not lose strings halfway;
+- a key read before its area was asked for shows its raw key for a moment and loads the area
+  (with a console warning in development): a safety net, not a strategy.
+
+`npm run i18n:areas` prints, per route, what it declares against what its code needs (every
+file reachable from the route's component by import, `templateUrl` templates included, comments
+ignored). The same check runs in `npm run i18n:dead:test`, so CI fails a route that names a key
+of an area nothing on its way declares, and code that runs before any route opening on anything
+but `core`. When a screen needs two keys from another area, move them into `core` with a line in
+`AREA_BY_PREFIX` rather than declaring a 100 kB area for them; when the analysis overstates
+because a file imports a module for a type, use `import type`.
+
+**Adding a key** is as before, into the area module its prefix names (`messages/orders.en.ts`
+and the two translations). A **new namespace** needs one line in `message-areas.ts`. Moving a key
+between areas is the same edit and `npm run i18n:split`. A branch cut before the split that
+still adds keys to the old `messages.{en,ru,uz-latn}.ts` is folded in by keeping its version of
+those three files and running `npm run i18n:split`, which rewrites every area module from them.
 
 Angular's own `$localize` was the obvious choice and is the wrong one here: it
 compiles one bundle per locale, so switching languages means loading a different
@@ -291,7 +323,7 @@ src/
     core/
       api/                   ADR 0031 conventions and the one HTTP seam
       auth/                  the sign-in exchange, the guard, token storage
-      i18n/                  catalogues, runtime switching, the `t` pipe
+      i18n/                  catalogues (one module per area and locale), runtime switching, the `t` pipe
       format/                money and time
     shared/
       styles/                q- rules pages opt into, loaded by styles.css (see below)

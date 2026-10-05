@@ -121,3 +121,60 @@ test('refuses to cut an entry that shares its line with other text', () => {
 
   assert.throws(() => removeKeys(catalogues, ['never.used']), /shares a line/);
 });
+
+/** The split layout: one object literal per area and locale under core/i18n/messages/. */
+function splitFixture() {
+  const appDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dead-keys-split-'));
+  const write = (relative, text) => {
+    const file = path.join(appDir, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+  };
+  const i18n = 'src/app/core/i18n';
+  const area = (name, locale, constant, entries) => {
+    const body = entries.map(([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)},`).join('\n');
+    write(
+      `${i18n}/messages/${name}.${locale}.ts`,
+      `// Header.\nexport const ${name}${constant} = {\n${body}\n}${locale === 'en' ? ' as const' : ''};\n`,
+    );
+  };
+  for (const [locale, constant] of [['en', 'En'], ['ru', 'Ru'], ['uz-latn', 'UzLatn']]) {
+    area('core', locale, constant, [['shell.used', 'Used'], ['shell.dead', 'Dead']]);
+    area('orders', locale, constant, [['orders.used', 'Used'], ['orders.dead', 'Dead'], ['orders.dead2', 'Dead too']]);
+    area('kitchen', locale, constant, [['kitchen.dead', 'Dead']]);
+  }
+  // The aggregates name every key in a spread, and the table names prefixes: neither is a reference.
+  for (const [locale, constant] of [['en', 'messagesEn'], ['ru', 'messagesRu'], ['uz-latn', 'messagesUzLatn']]) {
+    write(`${i18n}/messages.${locale}.ts`, `export const ${constant} = { ...coreEn, ...ordersEn, ...kitchenEn };\n`);
+  }
+  write(`${i18n}/message-areas.ts`, `export const x = { 'shell.dead': 'core', 'orders.dead': 'orders' };\n`);
+  write('src/app/page.html', `<p>{{ 'shell.used' | t }}{{ 'orders.used' | t }}</p>`);
+  return appDir;
+}
+
+test('reads every area module of the split layout, and ignores the aggregates and the area table', () => {
+  const { keys, dead, catalogues } = findDeadKeys(splitFixture());
+
+  assert.equal(catalogues.length, 9);
+  assert.deepEqual(keys.sort(), ['kitchen.dead', 'orders.dead', 'orders.dead2', 'orders.used', 'shell.dead', 'shell.used']);
+  assert.deepEqual(dead.sort(), ['kitchen.dead', 'orders.dead', 'orders.dead2', 'shell.dead']);
+});
+
+test('removes dead keys from the area modules of every locale and leaves an emptied area readable', () => {
+  const appDir = splitFixture();
+  const { dead, catalogues } = findDeadKeys(appDir);
+
+  const results = removeKeys(catalogues, dead);
+
+  assert.equal(results.reduce((sum, result) => sum + result.removed, 0), dead.length * 3);
+  for (const file of catalogues) {
+    const text = fs.readFileSync(file, 'utf8');
+    assert.ok(text.startsWith('// Header.\n'));
+    assert.doesNotMatch(text, /dead/);
+  }
+  const kitchen = path.join(appDir, 'src/app/core/i18n/messages/kitchen.en.ts');
+  assert.deepEqual(readEntries(kitchen).entries, []);
+  const after = findDeadKeys(appDir);
+  assert.deepEqual(after.dead, []);
+  assert.deepEqual(after.keys.sort(), ['orders.used', 'shell.used']);
+});

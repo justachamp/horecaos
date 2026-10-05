@@ -7,9 +7,14 @@
  *   node tools/i18n/dead-keys.mjs --write    delete them from all three catalogues
  *   node tools/i18n/dead-keys.mjs --check    exit 1 when any key is dead (for a gate)
  *
- * Another app with the same three-catalogue layout (`src/app/core/i18n/messages.{en,ru,uz-latn}.ts`,
- * each exporting one object literal) can be scanned with `--app-dir <path>`; add
- * `--variables '<regex>'` when its constants are not named `messages*`
+ * Two catalogue layouts are understood:
+ *
+ *   split   `src/app/core/i18n/messages/<area>.{en,ru,uz-latn}.ts`, one object literal per
+ *           file (operations since batch 18; `message-areas.ts` says which key lives where);
+ *   single  `src/app/core/i18n/messages.{en,ru,uz-latn}.ts`, one object literal per locale.
+ *
+ * Another app with the single layout can be scanned with `--app-dir <path>`; add
+ * `--variables '<regex>'` when its constants are not named `messages*` or `<area>En|Ru|UzLatn`
  * (control-plane: `--variables '^(en|ru|uzLatn)$'`).
  *
  * A key is LIVE when any non-catalogue, non-spec source file under src/
@@ -43,6 +48,37 @@ const ts = require('typescript');
 
 const CATALOGUE_NAMES = ['messages.en.ts', 'messages.ru.ts', 'messages.uz-latn.ts'];
 
+/** The catalogue constants: `messagesEn`, `messagesRu`, ... or an area's `ordersEn`, `ordersUzLatn`, ... */
+const DEFAULT_VARIABLES = /^(?:messages\w*|\w+(?:En|Ru|UzLatn))$/;
+
+/**
+ * Where an app's catalogues live. `layout` is 'split' when `core/i18n/messages/` exists (one file
+ * per area and locale), else 'single'. `english` is the files that define the key set, `all`
+ * every catalogue file in all three locales, `aggregates` the files that only re-export them
+ * (the split layout's `messages.{en,ru,uz-latn}.ts`) and `ignored` every file the reference
+ * scan must not read: a catalogue holds the key names it defines, which would keep them alive.
+ */
+export function catalogueFiles(appDir) {
+  const i18nDir = path.join(appDir, 'src/app/core/i18n');
+  const areaDir = path.join(i18nDir, 'messages');
+  const named = CATALOGUE_NAMES.map((name) => path.join(i18nDir, name));
+  if (fs.existsSync(areaDir) && fs.statSync(areaDir).isDirectory()) {
+    const files = fs
+      .readdirSync(areaDir)
+      .filter((name) => /\.(?:en|ru|uz-latn)\.ts$/.test(name))
+      .sort()
+      .map((name) => path.join(areaDir, name));
+    return {
+      layout: 'split',
+      english: files.filter((file) => file.endsWith('.en.ts')),
+      all: files,
+      aggregates: named,
+      ignored: [...files, ...named, path.join(i18nDir, 'message-areas.ts')],
+    };
+  }
+  return { layout: 'single', english: [named[0]], all: named, aggregates: [], ignored: named };
+}
+
 const LITERAL = /(['"`])([A-Za-z0-9_][A-Za-z0-9_.\-]*)\1/g;
 const TEMPLATE = /`([^`]*\$\{[^`]*)`/g;
 const PREFIX_LITERAL = /(['"`])([A-Za-z0-9_][A-Za-z0-9_.\-]*\.)\1/g;
@@ -73,10 +109,11 @@ function unwrap(expression) {
 }
 
 /** Every property of a catalogue's object literal (a constant matching `variables`): its key and source range. */
-export function readEntries(file, variables = /^messages/) {
+export function readEntries(file, variables = DEFAULT_VARIABLES) {
   const text = fs.readFileSync(file, 'utf8');
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const entries = [];
+  let found = false;
   const visit = (node) => {
     const literal =
       ts.isVariableDeclaration(node) &&
@@ -86,6 +123,7 @@ export function readEntries(file, variables = /^messages/) {
         ? unwrap(node.initializer)
         : null;
     if (literal && ts.isObjectLiteralExpression(literal)) {
+      found = true;
       for (const property of literal.properties) {
         if (!ts.isPropertyAssignment(property)) {
           throw new Error(`${file}: a catalogue entry that is not 'key: value'`);
@@ -101,18 +139,22 @@ export function readEntries(file, variables = /^messages/) {
     ts.forEachChild(node, visit);
   };
   visit(source);
-  if (entries.length === 0) {
+  // An area whose every key was removed is an empty literal, which is still a catalogue.
+  if (!found) {
     throw new Error(`${file}: no catalogue object literal found`);
   }
   return { text, entries };
 }
 
 function scan(files) {
+  return scanTexts(files.map((file) => fs.readFileSync(file, 'utf8')));
+}
+
+function scanTexts(texts) {
   const exact = new Set();
   const patterns = [];
   const prefixes = new Set();
-  for (const file of files) {
-    const text = fs.readFileSync(file, 'utf8');
+  for (const text of texts) {
     for (const match of text.matchAll(LITERAL)) {
       exact.add(match[2]);
     }
@@ -134,6 +176,16 @@ function scan(files) {
   return { exact, patterns, prefixes };
 }
 
+/**
+ * The catalogue keys one source text refers to, by the same three rules `scan` applies to the whole
+ * tree: a whole string literal, a `${}` template, a literal ending in `.` that something is
+ * concatenated onto. `areas.mjs` uses it to find out which message areas a screen needs.
+ */
+export function referencedKeys(text, keys) {
+  const { exact, patterns, prefixes } = scanTexts([text]);
+  return keys.filter((key) => isLive(key, { exact, patterns, prefixes }));
+}
+
 function isLive(key, refs) {
   if (refs.exact.has(key)) {
     return true;
@@ -147,16 +199,18 @@ function isLive(key, refs) {
 }
 
 /** @returns {{ keys: string[], dead: string[], specOnly: string[], catalogues: string[] }} */
-export function findDeadKeys(appDir, variables = /^messages/) {
+export function findDeadKeys(appDir, variables = DEFAULT_VARIABLES) {
   const srcDir = path.join(appDir, 'src');
-  const catalogues = CATALOGUE_NAMES.map((name) => path.join(srcDir, 'app/core/i18n', name));
-  const sourceFiles = walk(srcDir).filter((file) => !catalogues.includes(file));
+  const files = catalogueFiles(appDir);
+  const sourceFiles = walk(srcDir).filter((file) => !files.ignored.includes(file));
   const isSpec = (file) =>
     /\.spec\.ts$/.test(file) || file.includes(`${path.sep}testing${path.sep}`);
   const live = scan(sourceFiles.filter((file) => !isSpec(file)));
   const inSpecs = scan(sourceFiles.filter(isSpec));
 
-  const keys = readEntries(catalogues[0], variables).entries.map((entry) => entry.key);
+  const keys = files.english.flatMap((file) =>
+    readEntries(file, variables).entries.map((entry) => entry.key),
+  );
   const dead = [];
   const specOnly = [];
   for (const key of keys) {
@@ -165,11 +219,11 @@ export function findDeadKeys(appDir, variables = /^messages/) {
     }
     (inSpecs.exact.has(key) ? specOnly : dead).push(key);
   }
-  return { keys, dead, specOnly, catalogues, variables };
+  return { keys, dead, specOnly, catalogues: files.all, variables };
 }
 
 /** Deletes `dead` from every catalogue, whole lines at a time. Returns how many entries each lost. */
-export function removeKeys(catalogues, dead, variables = /^messages/) {
+export function removeKeys(catalogues, dead, variables = DEFAULT_VARIABLES) {
   const doomed = new Set(dead);
   return catalogues.map((file) => {
     const { text, entries } = readEntries(file, variables);

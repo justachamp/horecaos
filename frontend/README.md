@@ -100,9 +100,9 @@ and the lint and prettier ignores for the vendored sheet rest on it.
 
 ## Component styles and bundle budgets
 
-Each app warns at 4 kB per component stylesheet (`anyComponentStyle`) and 500 kB for the initial
-bundle; the numbers are what the build prints (`ng build`), measured on minified output.
-When a page's stylesheet grows past 4 kB:
+Each app warns at 4 kB per component stylesheet (`anyComponentStyle`) and, by default, 500 kB for
+the initial bundle (`operations` is tighter, see below); the numbers are what the build prints
+(`ng build`), measured on minified output. When a page's stylesheet grows past 4 kB:
 
 - **Rules several pages carry byte for byte** belong in a shared sheet, under a `q-` name the page
   opts into by using it in its template. `operations/src/app/shared/styles/` holds three
@@ -112,26 +112,21 @@ When a page's stylesheet grows past 4 kB:
   raises what the user asks for (`host: display contents` keeps the box tree unchanged). The page keeps
   every read, write and decision; the order queue's toolbar, the detail pane's money section and
   the product editor's Photos tab are examples.
-- Do not raise the budget for code. It was raised once, from 825 kB to 831 kB, by the batch 17
-  integration (2026-10-02), and only for message growth: eight waves merged into one build, and
-  the initial total went from 783.46 kB on main to 830.92 kB (830.82 kB once the one dead key
-  `i18n:dead` listed was removed). A comparison of the two production
-  bundles' stats files attributes 39.0 kB of the 47.5 kB to the Russian catalogue (the default
-  locale, eager by ADR 0035's loading model; 593 new lines across the batch's waves) and a
-  further hundred bytes to the rest of the changed files -- no wave put eager code of its own
-  into the initial chunks, every new screen being lazy. The figure ages with every merge: the
-  `Initial total` line of `ng build --configuration production` is the source of truth, so size a
-  feature against a fresh build, not against this number. The headroom was then under 200 bytes,
-  and the batch 17 fix round spent it: three review fixes added three Russian message keys (the
-  reservation host notice, the dispatch-rule id clash, the unreadable staff card) and the merged
-  build came to 831.38 kB, 380 bytes over. It was raised a second time, 831 kB to 832 kB, the
-  smallest whole step, again for messages only (no fix put eager code into the initial chunks);
-  the headroom is about 620 bytes. The next wave that adds messages has to make room first
-  (`npm run i18n:dead -- --write`, then say which keys are dead) before it asks for another bump.
+- Do not raise the budget for code. `operations`' initial bundle was 831.38 kB against an 832 kB
+  error budget (batch 17), almost all of it the Russian message catalogue, which the default
+  locale ships eagerly: every wave that added messages was raising the budget by a kilobyte.
+  The catalogue is now split by feature area and only its `core` area is eager (batch 18; the
+  layout is in [`operations/README.md`](operations/README.md#localisation)), which took the
+  initial total to 373.82 kB (-457.56 kB). The budget was reset to that plus 60 kB: **error at
+  434 kB, warning at 400 kB**. Messages no longer count against it unless they go into `core`
+  (a few hundred keys; `message-areas.ts` is where that is decided), so a feature that grows the
+  initial bundle has put eager code there, and the answer is to lazy-load it. The figure ages with
+  every merge: the `Initial total` line of `ng build --configuration production` is the source of
+  truth, so size a feature against a fresh build, not against this number.
 
 `operations` also has `npm run i18n:dead`, which lists message keys nothing references;
-`--write` removes them from all three locales (`--app-dir ../control-plane --variables
-'^(en|ru|uzLatn)$'` scans control-plane).
+`--write` removes them from every locale's area modules (`--app-dir ../control-plane --variables
+'^(en|ru|uzLatn)$'` scans control-plane, which still has the three single-file catalogues).
 
 ## Known debts
 
