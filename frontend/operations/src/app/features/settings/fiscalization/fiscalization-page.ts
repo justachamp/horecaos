@@ -1,10 +1,22 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { TaxProfile } from '../../catalog/catalog-domain';
+import { MxikPicker } from '../../catalog/mxik-picker';
+import { PricingApi } from '../../catalog/pricing-api';
 import { describeApiError } from '../../orders/order-errors';
+import {
+  PAYMENT_METHOD_RESPONSIBILITIES,
+  PaymentMethodResponsibility,
+  PaymentMethodView,
+  PaymentMethodsApi,
+} from '../payment-methods/payment-methods-api';
 import { FiscalBackfillEditor, isMissingCodes } from './fiscal-backfill-editor';
 import {
   ClassifyDeliveryFeeRequest,
@@ -23,6 +35,23 @@ import {
 } from './fiscalization-api';
 
 type FiscalizationTab = 'entities' | 'terminals' | 'classification';
+
+/** How one of the read-only reference reads on Tab 3 went: they are independent of the coverage and of each other. */
+type ReferenceState = 'loading' | 'ready' | 'denied' | 'failed';
+
+/** One tax profile as Tab 3 draws it: the rate in force, and the legal entities that point at it. */
+export interface VatDefaultRow {
+  readonly profile: TaxProfile;
+  /** Whole percent as ADR 0038 requires of a rate that reaches a receipt; basis points kept for the odd one. */
+  readonly ratePercent: number;
+  readonly legalEntities: readonly string[];
+}
+
+/** The payment methods the registry records under one fiscal responsibility (ADR 0038). */
+export interface ResponsibilityGroup {
+  readonly responsibility: PaymentMethodResponsibility;
+  readonly methods: readonly PaymentMethodView[];
+}
 
 const TERMINAL_KINDS: readonly FiscalTerminalKind[] = [
   'POS',
@@ -52,13 +81,15 @@ const TERMINAL_KINDS: readonly FiscalTerminalKind[] = [
  */
 @Component({
   selector: 'q-fiscalization-page',
-  imports: [TPipe, FiscalBackfillEditor],
+  imports: [TPipe, RouterLink, FiscalBackfillEditor, MxikPicker],
   templateUrl: './fiscalization-page.html',
   styleUrl: './fiscalization-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FiscalizationPage {
   private readonly api = inject(FiscalizationApi);
+  private readonly pricing = inject(PricingApi);
+  private readonly paymentMethodsApi = inject(PaymentMethodsApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
@@ -121,10 +152,41 @@ export class FiscalizationPage {
   protected readonly coverage = signal<FiscalCoverageSummary | null>(null);
   protected readonly coverageError = signal<string | null>(null);
 
+  // Read-only references on Tab 3 (settings.md §10.7): VAT defaults and who issues the receipt.
+  protected readonly taxProfiles = signal<readonly TaxProfile[]>([]);
+  protected readonly taxProfilesState = signal<ReferenceState>('loading');
+  protected readonly paymentMethods = signal<readonly PaymentMethodView[]>([]);
+  protected readonly paymentMethodsState = signal<ReferenceState>('loading');
+
+  /** Each tax profile with the legal entities (Tab 1) whose VAT treatment it is. */
+  protected readonly vatDefaults = computed<readonly VatDefaultRow[]>(() =>
+    this.taxProfiles().map((profile) => ({
+      profile,
+      ratePercent: profile.rateBasisPoints / 100,
+      legalEntities: this.entities()
+        .filter((entity) => entity.taxProfileId === profile.taxProfileId)
+        .map((entity) => entity.shortName ?? entity.legalName),
+    })),
+  );
+
+  /**
+   * The registry of payment methods (10.6) grouped by the responsibility each was registered
+   * under, in ADR 0038's order. Every responsibility is drawn, an empty one included: «no method
+   * fiscalizes through a terminal» is a fact an owner reads here, not a gap in the list.
+   */
+  protected readonly responsibilityGroups = computed<readonly ResponsibilityGroup[]>(() =>
+    PAYMENT_METHOD_RESPONSIBILITIES.map((responsibility) => ({
+      responsibility,
+      methods: this.paymentMethods().filter((method) => method.responsibility === responsibility),
+    })),
+  );
+
   protected readonly showDeliveryFeeForm = signal(false);
   protected readonly deliveryFeeSubmitting = signal(false);
   protected readonly deliveryFeeError = signal<string | null>(null);
   protected readonly deliveryFeeMxik = signal('');
+  /** The brand the ИКПУ reference is searched for: the location scope carries it. */
+  protected readonly searchScope = computed(() => this.location.scope());
   protected readonly deliveryFeeMarkingRequired = signal(false);
 
   constructor() {
@@ -138,6 +200,7 @@ export class FiscalizationPage {
     }
     if (tab === 'classification' && !this.coverageLoaded()) {
       void this.loadCoverage();
+      void this.loadReferences();
     }
   }
 
@@ -527,6 +590,60 @@ export class FiscalizationPage {
       this.deliveryFeeError.set(this.describe(error));
     } finally {
       this.deliveryFeeSubmitting.set(false);
+    }
+  }
+
+  protected vatModeLabel(mode: TaxProfile['mode']): string {
+    return this.i18n.t(`settings.fiscalization.classification.vat.mode.${mode}` as MessageKey);
+  }
+
+  protected responsibilityLabel(responsibility: PaymentMethodResponsibility): string {
+    return this.i18n.t(`settings.paymentMethods.responsibility.${responsibility}` as MessageKey);
+  }
+
+  protected responsibilityHint(responsibility: PaymentMethodResponsibility): string {
+    return this.i18n.t(
+      `settings.fiscalization.classification.responsibility.${responsibility}` as MessageKey,
+    );
+  }
+
+  /**
+   * The two reads Tab 3 only draws: the brand's VAT rates (Catalog → Prices) and the tenant's
+   * payment-method registry (10.6). Neither is edited here, and neither is a reason to hold up the
+   * coverage report, so each answers on its own and a role without the capability for one sees a
+   * sentence about that one and nothing else.
+   */
+  private async loadReferences(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.taxProfilesState.set('loading');
+    this.paymentMethodsState.set('loading');
+    await Promise.all([
+      this.readReference(
+        () => firstValueFrom(this.pricing.taxProfiles(scope)),
+        (profiles) => this.taxProfiles.set(profiles),
+        (state) => this.taxProfilesState.set(state),
+      ),
+      this.readReference(
+        () => this.paymentMethodsApi.list(scope),
+        (methods) => this.paymentMethods.set(methods),
+        (state) => this.paymentMethodsState.set(state),
+      ),
+    ]);
+  }
+
+  private async readReference<T>(
+    read: () => Promise<T>,
+    keep: (value: T) => void,
+    report: (state: ReferenceState) => void,
+  ): Promise<void> {
+    try {
+      keep(await read());
+      report('ready');
+    } catch (error) {
+      report(error instanceof ApiError && error.status === 403 ? 'denied' : 'failed');
     }
   }
 

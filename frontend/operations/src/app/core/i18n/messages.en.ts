@@ -1505,14 +1505,51 @@ export const messagesEn = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Requires marking',
   'settings.fiscalization.classification.deliveryFee.submit': 'Save',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saving…',
+  'settings.fiscalization.classification.vat.title': 'VAT defaults per tax profile',
+  'settings.fiscalization.classification.vat.lead':
+    'Read-only. The rate each tax profile applies to prices and receipts. A legal entity (tab 1) takes its VAT treatment from the profile it points to.',
+  'settings.fiscalization.classification.vat.field.jurisdiction': 'Jurisdiction',
+  'settings.fiscalization.classification.vat.field.rate': 'Rate',
+  'settings.fiscalization.classification.vat.field.mode': 'Prices',
+  'settings.fiscalization.classification.vat.field.validFrom': 'In force from',
+  'settings.fiscalization.classification.vat.field.entities': 'Legal entities',
+  'settings.fiscalization.classification.vat.mode.INCLUSIVE': 'Tax included in the price',
+  'settings.fiscalization.classification.vat.mode.EXCLUSIVE': 'Tax added on top',
+  'settings.fiscalization.classification.vat.empty':
+    'No tax profile is set for this brand yet; without one every cart is refused.',
+  'settings.fiscalization.classification.vat.denied': 'Your role cannot read tax profiles.',
+  'settings.fiscalization.classification.vat.failed': 'The tax profiles could not be loaded.',
+  'settings.fiscalization.classification.vat.edit': 'Edit in Catalog → Prices → Tax profile',
+  'settings.fiscalization.classification.responsibility.title':
+    'Who issues the receipt, by payment method',
+  'settings.fiscalization.classification.responsibility.lead':
+    'Read-only projection of Settings → Payment methods. Each method is registered under one responsibility, fixed at registration, which decides who answers for the fiscal receipt of the money it takes.',
+  'settings.fiscalization.classification.responsibility.PARTNER':
+    'The payment provider’s merchant account issues the receipt.',
+  'settings.fiscalization.classification.responsibility.TERMINAL':
+    'The restaurant’s fiscal-capable terminal issues it (tab 2).',
+  'settings.fiscalization.classification.responsibility.MARKETPLACE':
+    'The aggregator issues it as fiscal agent; the platform keeps the contract reference.',
+  'settings.fiscalization.classification.responsibility.OPERATOR':
+    'No external party issues the receipt for this method; the restaurant answers for it.',
+  'settings.fiscalization.classification.responsibility.none': 'No payment method',
+  'settings.fiscalization.classification.responsibility.disabled': 'disabled',
+  'settings.fiscalization.classification.responsibility.denied':
+    'Your role cannot read the payment-method registry.',
+  'settings.fiscalization.classification.responsibility.failed':
+    'The payment methods could not be loaded.',
+  'settings.fiscalization.classification.responsibility.edit': 'Edit in Settings → Payment methods',
   'settings.fiscalization.backfill.title': 'Fill in ИКПУ and package codes',
   'settings.fiscalization.backfill.lead':
-    '{count} dishes still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code a dish already holds is shown as it is and cannot be changed here; change it in the product editor.',
+    '{count} items (dishes and modifier options) still lack an ИКПУ or a package code. Look a code up by name or number, type it, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code an item already holds is shown as it is and cannot be changed here; change it in the product editor.',
   'settings.fiscalization.backfill.referenceNote':
-    'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
-  'settings.fiscalization.backfill.empty': 'Every dish has an ИКПУ and a package code.',
+    'The official ИКПУ list is not imported yet, so a search finds nothing: a code is checked by format only (17 digits) and package codes are typed. Once the list is loaded, a code picked from it brings the package codes the list gives for it. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
+  'settings.fiscalization.backfill.empty':
+    'Every dish and modifier option has an ИКПУ and a package code.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 digits)',
   'settings.fiscalization.backfill.column.packageCode': 'Package code',
+  'settings.fiscalization.backfill.packageSuggestions': 'Package codes in the list:',
+  'settings.fiscalization.backfill.mxikPlaceholder': 'Search or type a code',
   'settings.fiscalization.backfill.copyDefault': 'Copy category default',
   'settings.fiscalization.backfill.copyDefault.title':
     'Fill the empty cells with what {agreeing} of {sample} classified dishes in “{category}” use: {mxik}, package {package}',
@@ -1526,14 +1563,14 @@ export const messagesEn = {
   'settings.fiscalization.backfill.error.mxik': 'An ИКПУ is exactly 17 digits.',
   'settings.fiscalization.backfill.error.packageCode': 'A package code is digits only, up to 10.',
   'settings.fiscalization.backfill.pasteSkipped':
-    'Pasted codes left out: {count}. Those dishes already hold a code in that cell; change a stored code in the product editor.',
+    'Pasted codes left out: {count}. Those items already hold a code in that cell; change a stored code in the product editor.',
   'settings.fiscalization.backfill.invalidSkipped':
     '{count} rows have a code in the wrong format and were not sent. Fix the highlighted cells.',
   'settings.fiscalization.backfill.summary':
     'Saved {saved}, already set {unchanged}, not saved {failed}.',
-  'settings.fiscalization.backfill.status.notFound': 'This dish no longer exists.',
+  'settings.fiscalization.backfill.status.notFound': 'This item no longer exists.',
   'settings.fiscalization.backfill.status.conflict':
-    'This dish already holds a code that differs from yours; it was not changed. The list has been refreshed.',
+    'This item already holds a code that differs from yours; it was not changed. The list has been refreshed.',
   'settings.fiscalization.backfill.status.failed': 'Not saved. Try again.',
 
   // 10.9 Notifications

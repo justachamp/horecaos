@@ -42,6 +42,19 @@ describe('Combobox', () => {
     expect(emitted).toBe('Alisher');
   });
 
+  it('marks its text field aria-invalid only when the caller says the typed value is wrong', () => {
+    const fixture = render();
+    expect(input(fixture).hasAttribute('aria-invalid')).toBe(false);
+
+    fixture.componentRef.setInput('invalid', true);
+    fixture.detectChanges();
+    expect(input(fixture).getAttribute('aria-invalid')).toBe('true');
+
+    fixture.componentRef.setInput('invalid', false);
+    fixture.detectChanges();
+    expect(input(fixture).hasAttribute('aria-invalid')).toBe(false);
+  });
+
   it('debounces the search event until typing settles', () => {
     const fixture = render();
     let searchCount = 0;
