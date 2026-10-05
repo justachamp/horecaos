@@ -137,7 +137,13 @@
     },
     "offerDiscount": "Aksiya",
     "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
-    "surchargeNote": "Ustama {{amount}} hisobga olingan"
+    "surchargeNote": "Ustama {{amount}} hisobga olingan",
+    "giftOffer": {
+      "title": "Sizni sovg'a kutmoqda",
+      "choose": "Sovg'angizni tanlang",
+      "add": "Sovg'ani qo'shish: {{name}}",
+      "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
+    }
   },
   "checkout": {
     "title": "To'lov",

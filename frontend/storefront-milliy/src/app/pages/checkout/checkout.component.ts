@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 
 import { AddressBookService, addressLine } from '../../services/address-book.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
+import { GiftOffersComponent } from '../../shared/gift-offers/gift-offers.component';
 import { IconComponent } from '../../shared/icon/icon.component';
 import { OrderSummaryComponent } from './order-summary/order-summary.component';
 import { PaymentListComponent, type PaymentChoice } from './payment-list/payment-list.component';
@@ -70,7 +71,13 @@ const KNOWN_METHODS: Readonly<Record<string, PaymentOption>> = {
 @Component({
   selector: 'app-checkout',
   standalone: true,
-  imports: [IconComponent, OrderSummaryComponent, PaymentListComponent, TranslatePipe],
+  imports: [
+    GiftOffersComponent,
+    IconComponent,
+    OrderSummaryComponent,
+    PaymentListComponent,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './checkout.component.html',
   styleUrl: './checkout.component.scss',

@@ -290,19 +290,22 @@ export class UiCartService {
     this.appliedPromoCode() ? promoOutcomeKeyOf(this.priced()?.promoCodeOutcome) : null,
   );
 
-  /** Variant id to what the customer reads on it, read off the menu as the basket was last projected. */
-  private readonly menuVariants = signal<
+  /**
+   * Variant id to what the customer reads on it, for the variants the menu says can be ordered
+   * right now, as the basket was last projected.
+   */
+  private readonly offerableVariants = signal<
     ReadonlyMap<string, { readonly name: string; readonly image: string | null }>
   >(new Map());
 
   /**
    * The free gifts the cart could take up (ADR 0140): offers, never lines. Each is named from the
-   * menu, and a gift the menu does not carry is not offered. Nothing here has been added to the
+   * menu, and a gift the menu does not carry or cannot sell right now is not offered. Nothing here has been added to the
    * basket or discounted; {@link addGift} adds one through the ordinary cart call and the platform
    * prices it free on the next price.
    */
   readonly giftOffers = computed<readonly GiftOfferGroup[]>(() =>
-    giftOfferGroups(this.priced()?.giftOffers, this.menuVariants()),
+    giftOfferGroups(this.priced()?.giftOffers, this.offerableVariants()),
   );
 
   /** Option id to what the customer reads on it (its name, else its code), read off the menu as the basket was last projected. */
@@ -907,6 +910,7 @@ export class UiCartService {
         physical: PhysicalFacts | null;
       }
     >();
+    const offerable = new Map<string, { name: string; image: string | null }>();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
@@ -916,16 +920,17 @@ export class UiCartService {
           commentPresets: product.commentPresets,
           physical: variant.physical ?? null,
         });
+        // A gift that cannot be ordered right now (sold out, stopped, outside its sale window)
+        // is not offered: adding it would only be refused.
+        if (variant.orderable !== false && variant.onSaleNow !== false) {
+          offerable.set(variant.variantId, {
+            name: product.name,
+            image: product.imageUrls[0] ?? null,
+          });
+        }
       }
     }
-    this.menuVariants.set(
-      new Map(
-        [...byVariant].map(([variantId, known]) => [
-          variantId,
-          { name: known.name, image: known.image },
-        ]),
-      ),
-    );
+    this.offerableVariants.set(offerable);
     const modifierOptionsById = new Map<
       string,
       { groupName: string; label: string; amountMinor: number | null }

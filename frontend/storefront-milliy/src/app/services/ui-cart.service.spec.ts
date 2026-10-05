@@ -732,6 +732,169 @@ function offline(): HorecaOSApiError {
   });
 }
 
+/** A cart line for `variantId`, as the platform reports it. */
+function lineOf(variantId: string, quantity = 1, extra: Record<string, unknown> = {}) {
+  return { lineKey: variantId, variantId, quantity, hasCustomerNote: false, ...extra };
+}
+
+/** A published product with one variant. */
+function productOf(
+  variantId: string,
+  name: string,
+  availability: { orderable?: boolean; onSaleNow?: boolean } = {},
+) {
+  return {
+    productId: `p-${variantId}`,
+    code: null,
+    name,
+    description: null,
+    mediaAssetIds: [],
+    imageUrls: [`/${variantId}.png`],
+    variants: [
+      {
+        variantId,
+        sku: null,
+        unitCode: null,
+        isDefault: true,
+        orderable: availability.orderable ?? true,
+        onSaleNow: availability.onSaleNow ?? true,
+        amountMinor: 10_000,
+        remainingQuantity: null,
+      },
+    ],
+    modifierGroupIds: [],
+  };
+}
+
+describe('UiCartService gift offers (ADR 0140: an offer, never a line)', () => {
+  const GIFT = {
+    ruleId: 'rule-1',
+    variantId: 'v-cola',
+    quantity: 1,
+    inCart: false,
+    toAdd: 1,
+  };
+
+  async function offered(
+    giftOffers: PricedCart['giftOffers'],
+    lines = [lineOf('v-known')],
+    products = [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola')],
+  ) {
+    const fakes = setUp();
+    const cart = baseCart({ lines });
+    fakes.carts.ensure.mockResolvedValue(cart);
+    fakes.carts.price.mockResolvedValue({ ...pricedFor(cart), giftOffers });
+    fakes.menu.menu.mockResolvedValue(emptyMenu({ products }));
+    await fakes.service.load();
+    return { ...fakes, cart };
+  }
+
+  it('offers the free gift by the name the menu gives it, and puts nothing in the basket', async () => {
+    const { service, carts } = await offered([GIFT]);
+
+    expect(service.giftOffers()).toEqual([
+      {
+        ruleId: 'rule-1',
+        toAdd: 1,
+        choices: [{ variantId: 'v-cola', name: 'Cola', image: '/v-cola.png', inCart: false }],
+      },
+    ]);
+    expect(service.items().map((item) => item.variant_id)).toEqual(['v-known']);
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing when the priced cart carries no offer', async () => {
+    const { service } = await offered(undefined);
+
+    expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('does not offer a gift the menu no longer carries', async () => {
+    const { service } = await offered([{ ...GIFT, variantId: 'v-gone' }]);
+
+    expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('does not offer a gift that cannot be ordered right now, which adding would only get refused', async () => {
+    const soldOut = await offered(
+      [GIFT],
+      [lineOf('v-known')],
+      [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola', { orderable: false })],
+    );
+    expect(soldOut.service.giftOffers()).toEqual([]);
+    TestBed.resetTestingModule();
+
+    const outOfWindow = await offered(
+      [GIFT],
+      [lineOf('v-known')],
+      [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola', { onSaleNow: false })],
+    );
+    expect(outOfWindow.service.giftOffers()).toEqual([]);
+  });
+
+  it('adds the gift through the normal cart call, then prices the cart again', async () => {
+    const { service, carts } = await offered([GIFT]);
+    const withGift = baseCart({ lines: [lineOf('v-known'), lineOf('v-cola')], version: 2 });
+    carts.putLine.mockResolvedValue(withGift);
+    carts.price.mockClear();
+    carts.price.mockResolvedValue({
+      ...pricedFor(withGift),
+      discountMinor: 10_000,
+      appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 10_000 }],
+      giftOffers: [{ ...GIFT, inCart: true, toAdd: 0 }],
+    });
+
+    const added = await service.addGift('v-cola');
+
+    expect(added).toBe(true);
+    expect(carts.putLine).toHaveBeenCalledTimes(1);
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({ variantId: 'v-cola', quantity: 1 });
+    expect(carts.price).toHaveBeenCalled();
+    // The platform priced it free; the offer is gone and the discount is its own figure.
+    expect(service.giftOffers()).toEqual([]);
+    expect(service.discountMinor()).toBe(10_000);
+  });
+
+  it('adds only what is still missing when the cart already holds part of the allowance', async () => {
+    const { service, carts } = await offered(
+      [{ ...GIFT, quantity: 3, inCart: true, toAdd: 2 }],
+      [lineOf('v-known'), lineOf('v-cola', 1)],
+    );
+    carts.putLine.mockResolvedValue(baseCart({ lines: [lineOf('v-cola', 3)] }));
+
+    await service.addGift('v-cola');
+
+    // One already there plus the two missing: the line is replaced by its new quantity.
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({ variantId: 'v-cola', quantity: 3 });
+  });
+
+  it('adds nothing for a variant that is not on offer', async () => {
+    const { service, carts } = await offered([GIFT]);
+
+    const added = await service.addGift('v-known');
+
+    expect(added).toBe(false);
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('says so, with the specific sentence, when the platform refuses the gift', async () => {
+    const { service, carts } = await offered([GIFT]);
+    carts.putLine.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'sold out',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'SOLD_OUT' },
+      }),
+    );
+
+    const added = await service.addGift('v-cola');
+
+    expect(added).toBe(false);
+    expect(service.errorKey()).toBe('errors.reason.itemUnavailable');
+  });
+});
+
 describe('UiCartService: every cart failure reaches the customer as the specific sentence', () => {
   it('add: a sale-window refusal returns false and names the sale window, not "something went wrong"', async () => {
     const { service, carts } = setUp();

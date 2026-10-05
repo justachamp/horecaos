@@ -137,7 +137,13 @@
     },
     "offerDiscount": "Special offer",
     "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
-    "surchargeNote": "Includes a surcharge of {{amount}}"
+    "surchargeNote": "Includes a surcharge of {{amount}}",
+    "giftOffer": {
+      "title": "A free gift is waiting for you",
+      "choose": "Choose your free gift",
+      "add": "Add your free {{name}}",
+      "addMany": "Add your free {{name}} ×{{count}}"
+    }
   },
   "checkout": {
     "title": "Checkout",

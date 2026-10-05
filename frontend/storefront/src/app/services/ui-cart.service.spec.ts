@@ -865,7 +865,12 @@ function lineOf(variantId: string, quantity = 1, extra: Record<string, unknown> 
 }
 
 /** A published product with one orderable variant. */
-function productOf(variantId: string, name: string, amountMinor = 10_000) {
+function productOf(
+  variantId: string,
+  name: string,
+  amountMinor = 10_000,
+  availability: { orderable?: boolean; onSaleNow?: boolean } = {},
+) {
   return {
     productId: `p-${variantId}`,
     code: null,
@@ -879,9 +884,9 @@ function productOf(variantId: string, name: string, amountMinor = 10_000) {
         sku: null,
         unitCode: null,
         isDefault: true,
-        orderable: true,
+        orderable: availability.orderable ?? true,
         amountMinor,
-        onSaleNow: true,
+        onSaleNow: availability.onSaleNow ?? true,
         remainingQuantity: null,
       },
     ],
@@ -1129,6 +1134,23 @@ describe('UiCartService gift offers (ADR 0140: an offer, never a line)', () => {
     const { service } = await offered([{ ...GIFT, variantId: 'v-gone' }]);
 
     expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('does not offer a gift that cannot be ordered right now, which adding would only get refused', async () => {
+    const soldOut = await offered(
+      [GIFT],
+      [lineOf('v-known')],
+      [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola', 10_000, { orderable: false })],
+    );
+    expect(soldOut.service.giftOffers()).toEqual([]);
+    TestBed.resetTestingModule();
+
+    const outOfWindow = await offered(
+      [GIFT],
+      [lineOf('v-known')],
+      [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola', 10_000, { onSaleNow: false })],
+    );
+    expect(outOfWindow.service.giftOffers()).toEqual([]);
   });
 
   it('adds the gift through the normal cart call, then prices the cart again', async () => {
