@@ -1924,6 +1924,165 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-1', 1, 'PHONE');
   });
 
+  describe('ADD_LINES of a combo (ADR 0136)', () => {
+    const LUNCH_MENU = {
+      publicationId: 'pub-1',
+      locale: 'en',
+      currency: 'UZS',
+      categories: [],
+      products: [],
+      modifierGroups: [],
+      comboGroups: [
+        {
+          comboGroupId: 'g-main',
+          containerVariantId: 'lunch-v',
+          code: 'MAIN',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          sortOrder: 0,
+          components: [
+            {
+              componentId: 'burger',
+              variantId: 'burger-v',
+              productId: null,
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              sortOrder: 0,
+              orderable: true,
+              amountMinor: 25_000,
+            },
+          ],
+        },
+      ],
+    };
+
+    const lunchSearch = () =>
+      vi.fn().mockResolvedValue({
+        items: [
+          {
+            variantId: 'lunch-v',
+            productName: 'Lunch box',
+            category: 'Combos',
+            available: true,
+            trackingMode: null,
+          },
+        ],
+        nextCursor: null,
+      });
+
+    async function openAndSearch(host: HTMLElement, fixture: Awaited<ReturnType<typeof render>>) {
+      (
+        host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+      )?.click();
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]') as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      const searchField = host.querySelector(
+        '[data-testid="q-combobox-input"]',
+      ) as HTMLInputElement;
+      vi.useFakeTimers();
+      searchField.value = 'Lunch';
+      searchField.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(250);
+      vi.useRealTimers();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      searchField.dispatchEvent(new Event('focus'));
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="q-combobox-option"]') as HTMLLIElement).click();
+      fixture.detectChanges();
+    }
+
+    it('reads the order channel menu, offers the combo picker, and sends the picks with the line', async () => {
+      const addLines = vi.fn().mockReturnValue(
+        of(
+          amendmentResult({
+            status: 'PRICED',
+            deltaTotalMinor: 25_000,
+            requiresApproval: false,
+            amendmentVersion: 1,
+          }),
+        ),
+      );
+      const menu = vi.fn().mockResolvedValue(LUNCH_MENU);
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: {
+              ...detail().summary,
+              status: 'CONFIRMED',
+              channelCode: 'CALL_CENTRE',
+              actions: [{ action: 'AMEND' }],
+            },
+          }),
+          version: 3,
+        }),
+        amendmentsApi: { addLines },
+        newOrderApi: { searchItems: lunchSearch(), menu },
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+
+      await openAndSearch(host, fixture);
+
+      // The menu the order was placed through, not the composer's channel.
+      expect(menu).toHaveBeenCalledWith(FAKE_SCOPE, 'CALL_CENTRE', 'en');
+      expect(host.querySelector('[data-testid="combo-picker-dialog"]')).not.toBeNull();
+
+      (host.querySelector('[data-testid="combo-dialog-radio"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="combo-dialog-confirm"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(addLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, [
+        {
+          variantId: 'lunch-v',
+          quantity: 1,
+          modifierOptionIds: [],
+          comboPicks: [{ componentId: 'burger', quantity: 1 }],
+        },
+      ]);
+    });
+
+    it('says combos cannot be offered when the menu cannot be read', async () => {
+      const menu = vi.fn().mockRejectedValue(new Error('offline'));
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: {
+              ...detail().summary,
+              status: 'CONFIRMED',
+              channelCode: 'CALL_CENTRE',
+              actions: [{ action: 'AMEND' }],
+            },
+          }),
+          version: 3,
+        }),
+        amendmentsApi: {},
+        newOrderApi: { searchItems: lunchSearch(), menu },
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+
+      await openAndSearch(host, fixture);
+
+      expect(
+        host.querySelector('[data-testid="order-add-lines-dialog-combos-unavailable"]'),
+      ).not.toBeNull();
+    });
+  });
+
   it('wires CHANGE_FULFILLMENT_TIME as a direct apply, no confirmation step', async () => {
     const changeFulfillmentTime = vi.fn().mockReturnValue(of(amendmentResult()));
     configure({

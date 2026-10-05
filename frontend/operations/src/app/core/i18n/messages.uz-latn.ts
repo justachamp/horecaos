@@ -282,6 +282,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.addLines.searchPlaceholder': 'Menyudan qidirish…',
   'orders.dialog.addLines.empty': 'Hali hech narsa tanlanmagan.',
   'orders.dialog.addLines.remove': 'Olib tashlash',
+  'orders.dialog.addLines.combosUnavailable':
+    'Menyuni oʻqib boʻlmadi, shuning uchun bu yerda kombo qoʻshib boʻlmaydi. Qayta urinib koʻring.',
 
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',

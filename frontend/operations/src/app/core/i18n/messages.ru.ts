@@ -280,6 +280,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.addLines.searchPlaceholder': 'Поиск по меню…',
   'orders.dialog.addLines.empty': 'Позиции ещё не выбраны.',
   'orders.dialog.addLines.remove': 'Убрать',
+  'orders.dialog.addLines.combosUnavailable':
+    'Меню не удалось прочитать, поэтому комбо здесь добавить нельзя. Повторите попытку.',
 
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',

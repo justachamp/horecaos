@@ -294,6 +294,8 @@ export const messagesEn = {
   'orders.dialog.addLines.searchPlaceholder': 'Search the menu…',
   'orders.dialog.addLines.empty': 'No items selected yet.',
   'orders.dialog.addLines.remove': 'Remove',
+  'orders.dialog.addLines.combosUnavailable':
+    'The menu could not be read, so a combo cannot be added here. Try again.',
 
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
