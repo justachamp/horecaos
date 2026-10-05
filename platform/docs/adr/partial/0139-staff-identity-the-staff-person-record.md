@@ -33,10 +33,20 @@
   and the presence view, which still print the Keycloak subject; a branch manager
   (`LOCATION_MANAGER`) holds no `location.write`, so branch contacts are read-only for
   that job; and another member's photo cannot be set from the console. (The
-  `@Idempotent` list responses of other modules were not audited for personal data while
+  `@Idempotent` responses of other modules were not audited for personal data while
   `ClassificationScanner` did not descend into lists; batch 18 made it descend and ran it
-  over every `@Idempotent` handler. It found no response carrying personal data in a list,
-  and three false positives of the name heuristic, now declared.)
+  over every `@Idempotent` handler. That scan is only as strong as its name heuristic, and
+  the heuristic has no word for a staff member's name (`PROTECTED_TERMS` holds `firstname`,
+  `lastname`, `fullname` and `personname`, not `name`). The run found three false positives,
+  now declared, and missed one true positive: `OrderLatenessPolicyEditorController
+  .LevelResponse.approvedByName`, filled from `StaffDirectory#namesOf` in the reply to the
+  idempotent `POST .../order-lateness-policy` and stored in clear in
+  `platform.idempotency_records` for the retention day. It is declared
+  `@Classified(PERSONAL)` now, and `IdempotentResponseClassificationTests` fails for any
+  component named like `approvedByName`, `createdByDisplayName` or `operatorName` that an
+  `@Idempotent` response reaches without a declaration. A staff name under a component name
+  that pattern does not cover is still unseen, so the rule for the next author is to declare
+  every staff-name field where it is added.)
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform

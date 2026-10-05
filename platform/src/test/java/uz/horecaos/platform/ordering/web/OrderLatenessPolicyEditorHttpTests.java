@@ -99,6 +99,9 @@ class OrderLatenessPolicyEditorHttpTests {
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The publish reply names its approvers, which is PERSONAL (ADR 0139), so the idempotency record
+        // keeps it encrypted under the tenant's key: the tests need a key to encrypt it with.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -687,6 +690,64 @@ class OrderLatenessPolicyEditorHttpTests {
 
         assertThat(result.getResponse().getContentAsString())
                 .doesNotContain(OWNER)
+                .contains(OWNER_NAME);
+    }
+
+    @Test
+    @DisplayName(
+            "the reply to a publish is stored encrypted: the approver's name is in no clear column, and a retry returns it")
+    void theStoredReplyDoesNotHoldTheApproversName() throws Exception {
+        // The reply names who approved each rung, from StaffDirectory. The idempotency record keeps
+        // that reply for a day, and an unclassified one is kept as plain text (ADR 0029 over ADR 0031).
+        String key = "lateness-named-" + UUID.randomUUID();
+        String request =
+                body("TENANT", null, null, mode(300, 0, 2700), mode(300, 0, 2700), mode(300, 0, 2700), null, "named");
+
+        MvcResult first = mvc.perform(post(EDITOR)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andReturn();
+        assertThat(first.getResponse().getStatus())
+                .as(first.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(first.getResponse().getContentAsString())
+                .as("the caller is entitled to the name")
+                .contains(OWNER_NAME);
+
+        List<String> stored =
+                jdbc.sql("""
+                SELECT coalesce(response_body, '')
+                  FROM platform.idempotency_records
+                 WHERE tenant_id = :t
+                """).param("t", TENANT).query(String.class).list();
+        assertThat(stored)
+                .as("the publish is @Idempotent, so a record was written and there is something to inspect")
+                .isNotEmpty();
+        assertThat(stored)
+                .as("a staff member's name exists nowhere in clear (ADR 0029, ADR 0139)")
+                .noneSatisfy(body -> assertThat(body).contains(OWNER_NAME));
+        assertThat(jdbc.sql("""
+                SELECT response_body_protected
+                  FROM platform.idempotency_records
+                 WHERE tenant_id = :t AND response_body IS NOT NULL
+                """).param("t", TENANT).query(Boolean.class).list())
+                .as("the record says it holds an envelope, so a body merely dropped would not pass")
+                .isNotEmpty()
+                .containsOnly(true);
+
+        MvcResult replay = mvc.perform(post(EDITOR)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andReturn();
+        assertThat(replay.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
+                .as("the retry is answered from the record, not by a second publication")
+                .isNotNull();
+        assertThat(replay.getResponse().getContentAsString())
+                .as("and the encrypted reply still decrypts to what the first call returned")
                 .contains(OWNER_NAME);
     }
 

@@ -3,7 +3,12 @@ package uz.horecaos.platform.web.idempotency;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -242,6 +247,95 @@ class IdempotentResponseClassificationTests {
                         contact phone are the fields ADR 0029 classifies wherever they sit --
                         both were being stored in clear for the same reason the address was.""")
                 .contains("FloorPlanController#rotate", "TenantControlPlaneController#describeLocation");
+        assertThat(classified).as("""
+                        And the one a staff member's name reached: the lateness editor names who
+                        approved each rung of its ladder, from StaffDirectory, in the reply to the
+                        POST that publishes a version. The name heuristic does not know the word,
+                        so only the declaration on LevelResponse.approvedByName keeps it encrypted.""").contains("OrderLatenessPolicyEditorController#authorLatenessPolicy");
+    }
+
+    // ------------------------------------------------- a staff member's name (ADR 0029, ADR 0139)
+
+    /**
+     * A record component that names the person who did something -- {@code approvedByName},
+     * {@code changedByName}, {@code createdByDisplayName}, {@code operatorName}. The name heuristic
+     * of {@link uz.horecaos.platform.iam.api.protection.ClassificationScanner} is a list of fields
+     * about <em>customers</em> ({@code phone}, {@code firstName}, ...) and does not contain the bare
+     * word {@code name}, because a product, a table and a brand all have one. A staff member's name
+     * reaches a response under a role-and-name component the list never anticipated, which is how
+     * {@code approvedByName} was stored in clear for a day. It is found by the shape of its name
+     * and then <em>declared</em>, because a declaration is what survives the next rename.
+     */
+    private static final java.util.regex.Pattern PERSON_BEHIND_AN_ACTION = java.util.regex.Pattern.compile(
+            "(?i)(by|approver|operator|actor|author|assignee|staff|employee|member)(display)?name$");
+
+    @Test
+    @DisplayName(
+            "a component named for the person behind an action is classified wherever an idempotent reply holds it")
+    void aPersonBehindAnActionIsDeclaredNotGuessed() {
+        List<String> undeclared = new ArrayList<>();
+
+        for (Method handler : idempotentHandlers()) {
+            Type scanType = ResponseBodyProtection.scanTypeOf(handler.getGenericReturnType());
+            if (scanType == null) {
+                continue;
+            }
+            Set<String> found = new LinkedHashSet<>();
+            undeclaredPersonComponents(scanType, found, new HashSet<>());
+            found.forEach(component -> undeclared.add(nameOf(handler) + " -> " + component));
+        }
+
+        assertThat(undeclared).as("""
+                        A response component named like approvedByName holds a person's name whoever
+                        fills it. Annotate it @Classified(DataClass.PERSONAL, reason = ...) -- the
+                        name heuristic does not know the word, and the reply is stored in clear
+                        until it is declared.""").isEmpty();
+    }
+
+    @Test
+    @DisplayName("the staff-name checks can fail: an undeclared approver name is found, a declared one is not")
+    void theStaffNameChecksCanFailAndCanPass() {
+        Set<String> found = new LinkedHashSet<>();
+        undeclaredPersonComponents(SampleApproval.class, found, new HashSet<>());
+        assertThat(found).containsExactly("approvedByName(SampleApproval)");
+
+        Set<String> declared = new LinkedHashSet<>();
+        undeclaredPersonComponents(SampleDeclaredApproval.class, declared, new HashSet<>());
+        assertThat(declared).isEmpty();
+    }
+
+    /** Record components reachable from {@code type} that name a person behind an action and are not declared. */
+    private static void undeclaredPersonComponents(Type type, Set<String> found, Set<Type> ancestors) {
+        Class<?> raw = type instanceof ParameterizedType parameterized
+                ? (Class<?>) parameterized.getRawType()
+                : type instanceof Class<?> candidate ? candidate : null;
+        if (raw == null) {
+            return;
+        }
+        if (raw.isArray()) {
+            undeclaredPersonComponents(raw.getComponentType(), found, ancestors);
+            return;
+        }
+        if (type instanceof ParameterizedType parameterized && !raw.isRecord()) {
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                undeclaredPersonComponents(argument, found, ancestors);
+            }
+            return;
+        }
+        if (!raw.isRecord() || !ancestors.add(type)) {
+            return;
+        }
+        for (RecordComponent component : raw.getRecordComponents()) {
+            Classified declared = component.getAnnotation(Classified.class);
+            if (declared == null
+                    && PERSON_BEHIND_AN_ACTION.matcher(component.getName()).find()) {
+                found.add(component.getName() + "(" + raw.getSimpleName() + ")");
+            }
+            if (declared == null) {
+                undeclaredPersonComponents(component.getGenericType(), found, ancestors);
+            }
+        }
+        ancestors.remove(type);
     }
 
     // ------------------------------------------------------- the classifier itself
@@ -413,6 +507,14 @@ class IdempotentResponseClassificationTests {
     private record SampleTally(UUID batchId, List<SampleOrder> orders) {}
 
     private record SamplePage<T>(List<T> items, @Nullable String cursor) {}
+
+    private record SampleApproval(UUID approvalId, String approvedByName) {}
+
+    private record SampleDeclaredApproval(
+            UUID approvalId,
+
+            @Classified(value = DataClass.PERSONAL, reason = "a staff member's name")
+            String approvedByName) {}
 
     private static Method signature(String name) {
         for (Method method : Samples.class.getDeclaredMethods()) {
