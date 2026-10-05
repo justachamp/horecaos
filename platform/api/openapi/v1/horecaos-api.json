@@ -628,8 +628,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
-            "type" : "integer"
+            "maximum" : 999,
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -1086,8 +1086,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
-            "type" : "integer"
+            "maximum" : 999,
+            "type" : "number"
           },
           "recipientName" : {
             "maxLength" : 255,
@@ -16823,6 +16823,9 @@
             },
             "type" : "array"
           },
+          "portionSize" : {
+            "type" : "number"
+          },
           "productName" : {
             "type" : "string"
           },
@@ -21066,6 +21069,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "catchweightQuantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "categoryId" : {
             "format" : "uuid",
             "type" : "string"
@@ -24789,6 +24796,13 @@
           "amountsMinor" : {
             "additionalProperties" : {
               "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "catchweightQuantumGrams" : {
+            "additionalProperties" : {
+              "format" : "int32",
               "type" : "integer"
             },
             "type" : "object"

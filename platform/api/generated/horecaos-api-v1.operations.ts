@@ -3425,6 +3425,7 @@ export interface OperationsOrderControllerLineResponse {
   lineId?: string;
   lineNumber?: number;
   modifiers?: Array<string>;
+  portionSize?: number;
   productName?: string;
   quantity?: number;
   sku?: string;
