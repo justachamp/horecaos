@@ -108,7 +108,10 @@ export class ShortcutRegistry {
     const typing = target !== null && isTextEntry(target);
     const selfActivating =
       (event.key === ' ' || event.key === 'Enter') && target !== null && activatesItself(target);
-    const dialogOpen = hasOpenOverlay();
+    // `OverlayBehaviour` knows the dialogs built on `q-modal` and friends; the DOM check is the net under
+    // any dialog that is not (a hand-written one still marked `aria-modal`, which promises assistive
+    // technology the page behind it is inert -- the keyboard should agree).
+    const dialogOpen = hasOpenOverlay() || document.querySelector('[aria-modal="true"]') !== null;
 
     for (const scope of this.registered()) {
       for (const shortcut of scope.shortcuts) {

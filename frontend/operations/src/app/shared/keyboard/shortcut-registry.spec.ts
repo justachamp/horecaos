@@ -145,7 +145,26 @@ describe('ShortcutRegistry', () => {
     expect(global).toHaveBeenCalledOnce();
 
     fixture.destroy();
+    // A destroyed test fixture leaves its host element behind until the test ends.
+    (fixture.nativeElement as HTMLElement).remove();
     expect(registry.dispatch(key('x'))).toBe(true);
+  });
+
+  it('also stands down for a dialog that only marks itself aria-modal, which OverlayBehaviour does not know', () => {
+    const run = vi.fn();
+    registry.register(scope('board', shortcut(['x'], run)));
+    const stray = document.createElement('div');
+    stray.setAttribute('role', 'dialog');
+    stray.setAttribute('aria-modal', 'true');
+    document.body.appendChild(stray);
+    try {
+      expect(registry.dispatch(key('x'))).toBe(false);
+    } finally {
+      stray.remove();
+    }
+
+    expect(registry.dispatch(key('x'))).toBe(true);
+    expect(run).toHaveBeenCalledOnce();
   });
 
   it('asks the newest scope first, and falls through when its shortcut cannot act', () => {

@@ -307,6 +307,36 @@ describe('OrderQueue: the board’s keys (orders.md §2.12)', () => {
       expect(TestBed.inject(Location).path()).toContain('/orders/order-b');
     });
 
+    it('does not act on the board behind a hand-written reject dialog: r, n and the tab digits are not "refresh", "new order" and "switch tab" while a reason is being chosen', async () => {
+      const rejectReasons = vi.fn().mockResolvedValue([
+        {
+          code: 'ITEM_UNAVAILABLE',
+          displayOrder: 1,
+          requiresNote: false,
+          labels: { ru: 'Нет', 'uz-Latn': 'Yoʻq', en: 'Item unavailable' },
+        },
+      ]);
+      const getOrders = configure({ rejectReasons });
+      const host = await open('/orders?tab=attention');
+      focusRow(host, 0);
+      press('x');
+      await flush();
+      const option = host.querySelector<HTMLInputElement>(
+        '[data-testid="order-reject-reason-option-ITEM_UNAVAILABLE"]',
+      )!;
+      option.focus();
+      const readsBefore = getOrders.mock.calls.length;
+
+      // The dialog is not built on q-modal, so it is the aria-modal marker that tells the keyboard.
+      expect(press('r', option)).toBe(false);
+      expect(press('n', option)).toBe(false);
+      expect(press('3', option)).toBe(false);
+      await flush();
+
+      expect(getOrders.mock.calls.length).toBe(readsBefore);
+      expect(TestBed.inject(Location).path()).toContain('tab=attention');
+    });
+
     it('stands down for a key pressed while a dialog is open, so x cannot stack a second dialog', async () => {
       configure();
       const host = await open();
