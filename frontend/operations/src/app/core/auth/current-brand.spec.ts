@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../environments/environment';
 import { ApiClient } from '../api/api-client';
+import { BrandChoice } from './brand-choice';
 import { CurrentBrand } from './current-brand';
 import { SessionContext } from './session-context';
 
@@ -110,6 +111,54 @@ describe('CurrentBrand', () => {
 
     expect(brand.scope()).toEqual({ tenantId: 't1', brandId: 'b1' });
     expect(brand.denied()).toBe(false);
+  });
+
+  it('on the TENANT path follows the brand picked in the shell, with no reload and no second read (row X.1)', async () => {
+    localStorage.removeItem('horecaos.operations.brandId');
+    const choice = TestBed.inject(BrandChoice);
+    const promise = brand.ensureLoaded();
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+          roleCode: 'OWNER',
+        },
+      ]),
+    );
+    await tick();
+    http.expectOne(url('/api/v1/operations/tenants/t1/brands')).flush([
+      { id: 'b1', tenantId: 't1', code: 'A', slug: 'a', displayName: 'Rayhon', status: 'ACTIVE' },
+      { id: 'b2', tenantId: 't1', code: 'B', slug: 'b', displayName: 'Evos', status: 'ACTIVE' },
+    ]);
+    await promise;
+
+    expect(brand.scope()).toEqual({ tenantId: 't1', brandId: 'b1' });
+    expect(choice.options().map((option) => option.displayName)).toEqual(['Rayhon', 'Evos']);
+
+    choice.select('b2');
+
+    expect(brand.scope()).toEqual({ tenantId: 't1', brandId: 'b2' });
+  });
+
+  it('ignores the shell’s pick for an operator whose own grant names the brand', async () => {
+    const choice = TestBed.inject(BrandChoice);
+    choice.offer([
+      { id: 'b-other', displayName: 'Other' },
+      { id: 'b-brand', displayName: 'Mine' },
+    ]);
+    choice.select('b-other');
+    const promise = brand.ensureLoaded();
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b-brand', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
+    await promise;
+
+    expect(brand.scope()).toEqual({ tenantId: 't1', brandId: 'b-brand' });
   });
 
   it('is denied when a TENANT grant resolves to a tenant with zero brands', async () => {

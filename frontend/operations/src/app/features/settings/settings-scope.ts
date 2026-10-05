@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { settingsPaths } from '../../core/api/settings-paths';
+import { BrandChoice } from '../../core/auth/brand-choice';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { BrandView } from './brand-profile/brand-profile-api';
 import { LocationView } from './locations/locations-api';
@@ -49,6 +50,7 @@ export class SettingsScope {
   private readonly router = inject(Router);
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(ApiClient);
+  private readonly shellBrand = inject(BrandChoice);
 
   private readonly queryBrandId = signal<string | null>(null);
   private readonly queryLocationId = signal<string | null>(null);
@@ -66,14 +68,22 @@ export class SettingsScope {
   /** Hidden entirely when the tenant has exactly one brand — a picker with one option is noise. */
   readonly showBrandPicker: Signal<boolean> = computed(() => this.brandsSig().length > 1);
 
-  /** The brand in effect: the query param when it names a brand this tenant has, else the first one. */
+  /**
+   * The brand in effect: the query param when it names a brand this tenant has; else the one picked
+   * in the shell's header (`BrandChoice`, row `X.1`), so opening Settings does not silently switch
+   * an operator to another brand than the one they have been working in; else the first one.
+   */
   readonly brandId: Signal<string | null> = computed(() => {
     const brands = this.brandsSig();
     if (brands.length === 0) {
       return null;
     }
     const requested = this.queryBrandId();
-    return requested && brands.some((brand) => brand.id === requested) ? requested : brands[0].id;
+    if (requested && brands.some((brand) => brand.id === requested)) {
+      return requested;
+    }
+    const shellPick = this.shellBrand.brandId();
+    return shellPick && brands.some((brand) => brand.id === shellPick) ? shellPick : brands[0].id;
   });
 
   /** `null` means "Все филиалы" — editing at BRAND level. A location outside the current brand is dropped. */

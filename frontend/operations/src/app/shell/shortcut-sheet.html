@@ -1,0 +1,32 @@
+@if (registry.sheetOpen()) {
+  <q-modal [title]="text('keys.title')" (dismiss)="registry.closeSheet()">
+    @for (scope of scopes(); track scope.id) {
+      <section class="sheet__scope" [attr.data-testid]="'shortcut-scope-' + scope.id">
+        <h3 class="sheet__heading q-caption">{{ scope.title() }}</h3>
+        <dl class="sheet__rows">
+          @for (shortcut of scope.shortcuts; track $index) {
+            <div class="sheet__row">
+              <dt class="sheet__caps">
+                @for (cap of shortcut.caps; track $index) {
+                  <kbd class="sheet__cap q-mono q-caption">{{ cap }}</kbd>
+                }
+              </dt>
+              <dd class="sheet__label q-body-sm">{{ shortcut.label() }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+    }
+
+    <ng-container qModalActions>
+      <button
+        type="button"
+        class="sheet__close q-body-sm"
+        (click)="registry.closeSheet()"
+        data-testid="shortcut-sheet-close"
+      >
+        {{ text('keys.close') }}
+      </button>
+    </ng-container>
+  </q-modal>
+}

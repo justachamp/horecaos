@@ -1,0 +1,59 @@
+.sheet__scope + .sheet__scope {
+  margin-top: 4px;
+}
+
+.sheet__heading {
+  margin: 0 0 4px;
+  color: var(--q-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sheet__rows {
+  margin: 0;
+}
+
+.sheet__row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.sheet__caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sheet__label {
+  margin: 0;
+  color: var(--q-ink);
+}
+
+.sheet__cap {
+  min-width: 22px;
+  padding: 1px 6px;
+  text-align: center;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink);
+}
+
+.sheet__close {
+  height: 32px;
+  padding: 0 16px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.sheet__close:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 2px;
+}

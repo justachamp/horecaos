@@ -2,17 +2,19 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 
 import { Shell } from './shell';
 import { ServiceStatus } from './service-status';
 import { Auth } from '../core/auth/auth';
+import { BrandChoice } from '../core/auth/brand-choice';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { CurrentTenant } from '../core/auth/current-tenant';
 import { OwnProfile } from '../core/auth/own-profile';
 import { ScopeGrant } from '../core/auth/session-context';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
+import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
 import { Toasts } from '../shared/ui/toast';
 import { NAV_ITEMS } from './navigation';
 
@@ -393,5 +395,212 @@ describe('Shell: the toast host', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelectorAll('[data-testid="q-toast"]').length).toBe(0);
+  });
+});
+
+/**
+ * Row `X.1`: the keyboard scheme (one dispatcher, a cheat-sheet over whatever is registered) and the
+ * brand picker for a multi-brand tenant.
+ */
+describe('Shell: the keyboard and the brand picker', () => {
+  let fixture: ComponentFixture<Shell>;
+  let registry: ShortcutRegistry;
+  let choice: BrandChoice;
+  let probeCreated: number;
+
+  @Component({ selector: 'q-probe', template: '<p>screen</p>' })
+  class Probe {
+    constructor() {
+      probeCreated += 1;
+    }
+  }
+
+  beforeEach(async () => {
+    probeCreated = 0;
+    localStorage.removeItem('horecaos.operations.brandId');
+    await TestBed.configureTestingModule({
+      imports: [Shell],
+      providers: [
+        provideRouter([{ path: '', component: Probe }]),
+        { provide: Auth, useValue: new FakeAuth() },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    registry = TestBed.inject(ShortcutRegistry);
+    choice = TestBed.inject(BrandChoice);
+    fixture = TestBed.createComponent(Shell);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    registry.closeSheet();
+    fixture.destroy();
+  });
+
+  const sheet = (): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector('[data-testid="q-modal"]');
+
+  function press(key: string, target: EventTarget = document): void {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+  }
+
+  describe('the cheat-sheet', () => {
+    it('is closed until asked for', () => {
+      expect(sheet()).toBeNull();
+    });
+
+    it('opens on ? and lists the shell’s own keys', () => {
+      press('?');
+
+      const dialog = sheet();
+      expect(dialog?.textContent).toContain('Keyboard shortcuts');
+      const scope = dialog?.querySelector('[data-testid="shortcut-scope-shell"]');
+      expect(scope?.textContent).toContain('F2');
+      expect(scope?.textContent).toContain('New order');
+      expect(scope?.textContent).toContain('Esc');
+    });
+
+    it('opens from the header button, for a mouse', () => {
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="shell-shortcuts-button"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+
+      expect(sheet()).not.toBeNull();
+    });
+
+    it('lists the keys of the screen that is open, ahead of the shell’s, and drops them when it goes', () => {
+      const unregister = registry.register({
+        id: 'board',
+        title: () => 'Order board',
+        shortcuts: [{ keys: ['r'], caps: ['r'], label: () => 'Refresh the board', run: () => {} }],
+      });
+      press('?');
+
+      const scopes = [...(sheet()?.querySelectorAll('[data-testid^="shortcut-scope-"]') ?? [])];
+      expect(scopes.map((s) => s.getAttribute('data-testid'))).toEqual([
+        'shortcut-scope-board',
+        'shortcut-scope-shell',
+      ]);
+      expect(scopes[0].textContent).toContain('Refresh the board');
+
+      unregister();
+      fixture.detectChanges();
+      expect(sheet()?.querySelector('[data-testid="shortcut-scope-board"]')).toBeNull();
+    });
+
+    it('closes on Escape and on its Close button', () => {
+      press('?');
+      expect(sheet()).not.toBeNull();
+
+      press('Escape');
+      expect(sheet()).toBeNull();
+
+      press('?');
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="shortcut-sheet-close"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      expect(sheet()).toBeNull();
+    });
+
+    it('does not open while the operator is typing a question mark into a field', () => {
+      const field = document.createElement('input');
+      document.body.appendChild(field);
+      try {
+        press('?', field);
+        expect(sheet()).toBeNull();
+      } finally {
+        field.remove();
+      }
+    });
+
+    it('says what a key does in the language the operator chose', () => {
+      TestBed.inject(I18n).setLocale('ru');
+      press('?');
+
+      expect(sheet()?.textContent).toContain('Горячие клавиши');
+      expect(sheet()?.textContent).toContain('Новый заказ');
+    });
+  });
+
+  describe('the brand picker', () => {
+    const picker = (): HTMLSelectElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="shell-brand-picker"]');
+
+    it('is not drawn for a tenant with one brand, or before the brands are known', () => {
+      expect(picker()).toBeNull();
+
+      choice.offer([{ id: 'b1', displayName: 'Rayhon' }]);
+      fixture.detectChanges();
+
+      expect(picker()).toBeNull();
+    });
+
+    it('is drawn, captioned, for a tenant with several brands, showing the brand in effect', () => {
+      choice.offer([
+        { id: 'b1', displayName: 'Rayhon' },
+        { id: 'b2', displayName: 'Evos' },
+      ]);
+      fixture.detectChanges();
+
+      const select = picker()!;
+      expect([...select.options].map((option) => option.textContent?.trim())).toEqual([
+        'Rayhon',
+        'Evos',
+      ]);
+      expect(select.value).toBe('b1');
+      expect((fixture.nativeElement as HTMLElement).querySelector('.brand')?.textContent).toContain(
+        'Brand',
+      );
+    });
+
+    it('re-points the console at the brand picked, remembers it, and builds the open screen afresh', async () => {
+      TestBed.inject(Router).initialNavigation();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(probeCreated).toBe(1);
+
+      choice.offer([
+        { id: 'b1', displayName: 'Rayhon' },
+        { id: 'b2', displayName: 'Evos' },
+      ]);
+      fixture.detectChanges();
+      // The brand list arriving is not a switch: the screen is not rebuilt for it.
+      expect(probeCreated).toBe(1);
+
+      const select = picker()!;
+      select.value = 'b2';
+      select.dispatchEvent(new Event('change'));
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(choice.brandId()).toBe('b2');
+      expect(localStorage.getItem('horecaos.operations.brandId')).toBe('b2');
+      expect(probeCreated).toBe(2);
+    });
+
+    it('does nothing when the brand already in effect is picked again', async () => {
+      TestBed.inject(Router).initialNavigation();
+      await fixture.whenStable();
+      choice.offer([
+        { id: 'b1', displayName: 'Rayhon' },
+        { id: 'b2', displayName: 'Evos' },
+      ]);
+      fixture.detectChanges();
+
+      const select = picker()!;
+      select.value = 'b1';
+      select.dispatchEvent(new Event('change'));
+      await fixture.whenStable();
+
+      expect(probeCreated).toBe(1);
+    });
   });
 });
