@@ -251,6 +251,15 @@ public class MarketplaceAvailabilityReconciler {
                 log.warn("Marketplace availability reconcile failed for a {} binding", binding.providerType(), failure);
             }
         }
+        try {
+            // A binding that left the worklist is never evaluated, so its stale mark is ended here.
+            int ended = store.clearStaleReportedOfInactiveBindings(clock.instant());
+            if (ended > 0) {
+                log.info("Ended the stale episode of {} marketplace bindings no longer worked", ended);
+            }
+        } catch (RuntimeException failure) {
+            log.warn("Could not end the stale episodes of marketplace bindings no longer worked", failure);
+        }
         refreshGauges();
         return new TickReport(bindings, sweeps, pushes);
     }
@@ -268,7 +277,9 @@ public class MarketplaceAvailabilityReconciler {
         }
         Optional<MarketplaceAvailabilityAdapter> adapter = adapters.forProvider(binding.providerType());
         if (adapter.isEmpty()) {
-            // MANUAL: this provider has no availability write API this build can call.
+            // MANUAL: this provider has no availability write API this build can call. Nothing is
+            // pushing for the binding, so an episode it was reported stale in has ended.
+            store.clearStaleReported(binding.tenantId(), binding.bindingId(), now);
             return new BindingReport(false, 0, false, true);
         }
 
@@ -613,10 +624,7 @@ public class MarketplaceAvailabilityReconciler {
                 .optional()
                 .map(java.time.OffsetDateTime::toInstant)
                 .orElse(null);
-        staleChannels.set(jdbc.sql("""
-                SELECT count(*) FROM integration.marketplace_availability_sync_state
-                WHERE stale_alerted_at IS NOT NULL
-                """).query(Long.class).single());
+        staleChannels.set(store.countStaleReportedActive());
         pendingItems.set(pending);
         oldestPendingSeconds.set(
                 oldest == null ? 0 : Math.max(0, Duration.between(oldest, now).toSeconds()));

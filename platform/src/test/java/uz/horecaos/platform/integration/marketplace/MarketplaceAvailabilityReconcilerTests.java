@@ -1472,6 +1472,90 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
+    @DisplayName(
+            "a reconciler switched off ends the stale episode it was in: no mark, no gauge, and a report of its own when it resumes")
+    void aSuspendedReconcilerEndsTheStaleEpisode() {
+        World w = world();
+        goStale(w);
+        assertThat(staleMark(w)).as("sanity: reported").isNotNull();
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+        String firstAlertKey = alerts.calls().get(0).idempotencyKeyBase();
+
+        configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
+        reconciler.tick();
+
+        assertThat(staleMark(w))
+                .as("nothing is being attempted, so no episode is open")
+                .isNull();
+        assertThat(staleChannelsGauge())
+                .as("an alert on stale_channels > 0 must not page for a binding nobody is pushing for")
+                .isZero();
+
+        configuration.put("marketplace.availability.reconcile_enabled", true);
+        build();
+        clock.advance(Duration.ofMinutes(1));
+        reconciler.tick();
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("it resumed into a partner that still refuses: a new outage, reported as one")
+                .hasSize(2);
+        assertThat(alerts.calls())
+                .as("and the manager is told again, under a key of its own (the recorder is new since the rebuild)")
+                .singleElement()
+                .satisfies(call -> assertThat(call.idempotencyKeyBase()).isNotEqualTo(firstAlertKey));
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "a binding whose installation or whose own record is suspended ends the stale episode, and a reactivation starts a new one")
+    void aBindingThatLeavesTheActiveSetEndsTheStaleEpisode() {
+        World w = world();
+        goStale(w);
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+
+        jdbc.sql("UPDATE integration.installations SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", w.installation)
+                .update();
+        reconciler.tick();
+
+        assertThat(staleMark(w)).isNull();
+        assertThat(staleChannelsGauge()).isZero();
+
+        jdbc.sql("UPDATE integration.installations SET status = 'ACTIVE' WHERE id = :id")
+                .param("id", w.installation)
+                .update();
+        clock.advance(Duration.ofMinutes(1));
+        reconciler.tick();
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("months later the old rows are still overdue and the partner still refuses: a new report")
+                .hasSize(2);
+
+        jdbc.sql("UPDATE integration.bindings SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", w.binding)
+                .update();
+        reconciler.tick();
+        assertThat(staleMark(w)).isNull();
+        assertThat(staleChannelsGauge()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a provider whose adapter is gone ends the stale episode too: nothing is pushing, so nothing is overdue")
+    void aProviderThatLostItsAdapterEndsTheStaleEpisode() {
+        World w = world();
+        goStale(w);
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+
+        registerAdapter = false;
+        build();
+        reconciler.tick();
+
+        assertThat(staleMark(w)).isNull();
+        assertThat(staleChannelsGauge()).isZero();
+    }
+
+    @Test
     @DisplayName("the stale alert's variables carry no protected field and are exactly the documented four")
     void theAlertVariablesAreClean() {
         Map<String, String> variables = MarketplaceStaleChannelMonitor.alertVariables(
@@ -1502,6 +1586,31 @@ class MarketplaceAvailabilityReconcilerTests {
     // -----------------------------------------------------------------------
 
     /** {@code count} connection-refused answers: the partner is unreachable for that many calls. */
+    /** The partner refuses every push for longer than the bound: the binding is inside a reported stale episode. */
+    private void goStale(World w) {
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(400));
+        reconciler.tick();
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+    }
+
+    private @Nullable Object staleMark(World w) {
+        return jdbc.sql("SELECT stale_alerted_at FROM integration.marketplace_availability_sync_state "
+                        + "WHERE binding_id = :b")
+                .param("b", w.binding())
+                .query((row, number) -> row.getObject(1))
+                .list()
+                .get(0);
+    }
+
+    private double staleChannelsGauge() {
+        return meters.get("horecaos.marketplace.availability.stale_channels")
+                .gauge()
+                .value();
+    }
+
     private static Scenario[] refused(int count) {
         Scenario[] scenarios = new Scenario[count];
         java.util.Arrays.fill(scenarios, Scenario.CONNECTION_REFUSED);
