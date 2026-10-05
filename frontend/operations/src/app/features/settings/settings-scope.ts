@@ -8,6 +8,7 @@ import { BrandChoice } from '../../core/auth/brand-choice';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { BrandView } from './brand-profile/brand-profile-api';
 import { LocationView } from './locations/locations-api';
+import { SavedTarget } from './settings-saved';
 
 /** The level a settings screen is currently writing to (settings.md §1.1's "Уровень редактирования"). */
 export type SettingsEditingLevel = 'TENANT' | 'BRAND' | 'LOCATION';
@@ -105,6 +106,11 @@ export class SettingsScope {
     return this.locationId() ? 'LOCATION' : 'BRAND';
   });
 
+  /** What the bar is set to write to, named, for the «задано для филиала …» confirmation (settings.md §1.3). */
+  readonly target: Signal<SavedTarget> = computed(() =>
+    this.targetFor(this.level(), this.brandId(), this.locationId()),
+  );
+
   readonly loading: Signal<boolean> = this.loadingBrands.asReadonly();
   readonly denied: Signal<boolean> = this.deniedSig.asReadonly();
 
@@ -129,6 +135,31 @@ export class SettingsScope {
         void this.loadLocations(tenantId, brandId);
       }
     });
+  }
+
+  /**
+   * The level a write went to and the name of the brand or branch it names, for a confirmation that
+   * must say where the change landed. A name the lists have not resolved is absent, never invented.
+   */
+  targetFor(
+    level: SettingsEditingLevel,
+    brandId: string | null,
+    locationId: string | null,
+  ): SavedTarget {
+    if (level === 'TENANT') {
+      return { level, name: null };
+    }
+    if (level === 'LOCATION') {
+      return {
+        level,
+        name:
+          this.locationsSig().find((location) => location.id === locationId)?.displayName ?? null,
+      };
+    }
+    return {
+      level: 'BRAND',
+      name: this.brandsSig().find((brand) => brand.id === brandId)?.displayName ?? null,
+    };
   }
 
   /**

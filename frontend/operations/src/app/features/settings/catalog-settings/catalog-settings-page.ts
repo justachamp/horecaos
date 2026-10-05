@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ApiError } from '../../../core/api/problem-details';
 import { InheritedField } from '../../../shared/ui/inherited-field/inherited-field';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi, ConfigurationResolutionView } from '../configuration-api';
+import { SavedKind, SavedTarget, SettingsSaved } from '../settings-saved';
 
 const USE_STOCK_LOGIC_CODE = 'catalog.use_stock_logic';
 const QR_KIOSK_PRICE_PLANE_CODE = 'catalog.qr_kiosk_price_plane';
@@ -40,6 +42,7 @@ export class CatalogSettingsPage {
   private readonly api = inject(ConfigurationApi);
   private readonly tenant = inject(CurrentTenant);
   protected readonly i18n = inject(I18n);
+  private readonly saved = inject(SettingsSaved);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -76,6 +79,17 @@ export class CatalogSettingsPage {
   /** Bound once so `[formatValue]` gets a stable reference rather than a new closure every change-detection pass. */
   protected readonly formatYesNo = (value: unknown): string => this.yesNo(value);
 
+  /** Both switches are tenant-wide, so the confirmation always names the whole company (settings.md §1.3). */
+  private announce(kind: SavedKind, labelKey: MessageKey, value?: unknown): void {
+    const target: SavedTarget = { level: 'TENANT', name: null };
+    this.saved.announce(
+      kind,
+      this.i18n.t(labelKey),
+      target,
+      value === undefined ? undefined : this.yesNo(value),
+    );
+  }
+
   protected startEditingUseStockLogic(): void {
     const current = this.useStockLogic();
     this.draftUseStockLogic.set(Boolean(current?.value));
@@ -109,6 +123,7 @@ export class CatalogSettingsPage {
       });
       await this.reloadUseStockLogic(tenantId);
       this.editingUseStockLogic.set(false);
+      this.announce('set', 'settings.catalog.useStockLogic.field', this.useStockLogic()?.value);
     } catch (error) {
       this.saveUseStockLogicError.set(this.describe(error));
     } finally {
@@ -132,6 +147,7 @@ export class CatalogSettingsPage {
         reason: this.i18n.t('settings.catalog.revertReason'),
       });
       await this.reloadUseStockLogic(tenantId);
+      this.announce('reverted', 'settings.catalog.useStockLogic.field');
     } catch (error) {
       this.saveUseStockLogicError.set(this.describe(error));
     } finally {
@@ -176,6 +192,11 @@ export class CatalogSettingsPage {
       });
       await this.reloadQrKiosk(tenantId);
       this.editingQrKiosk.set(false);
+      this.announce(
+        'set',
+        'settings.catalog.qrKioskPricePlane.field',
+        this.qrKioskPricePlane()?.value,
+      );
     } catch (error) {
       this.saveError.set(this.describe(error));
     } finally {
@@ -199,6 +220,7 @@ export class CatalogSettingsPage {
         reason: this.i18n.t('settings.catalog.revertReason'),
       });
       await this.reloadQrKiosk(tenantId);
+      this.announce('reverted', 'settings.catalog.qrKioskPricePlane.field');
     } catch (error) {
       this.saveError.set(this.describe(error));
     } finally {

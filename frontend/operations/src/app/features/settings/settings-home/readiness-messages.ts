@@ -1,13 +1,16 @@
 import { localMessages } from '../../../core/i18n/local-messages';
 
 /**
- * The Settings home's batch-18 readiness sentences (row `10.0`): the expiring tier, the counts
- * under a tile and the three new conditions. They ship with this lazy page rather than in the
+ * The Settings home's batch-18 sentences: the readiness panel's expiring tier, the counts under a
+ * tile and the three new conditions (row `10.0`), and the page's one key on the cheat-sheet
+ * (settings.md §1.6, row `X.1`). They ship with this lazy page rather than in the
  * shared catalogues -- see `LocalMessages` for why the initial bundle cannot take more Russian
  * keys.
  */
 export const readinessMessages = localMessages({
   ru: {
+    keysTitle: 'Настройки',
+    keysFind: 'Найти настройку',
     expiring: 'Скоро истекает',
     'count.blocking': 'Блокирует: {count}',
     'count.expiring': 'Скоро истекает: {count}',
@@ -20,6 +23,8 @@ export const readinessMessages = localMessages({
       'Фискальное назначение заведения скоро заканчивается, а следующего нет.',
   },
   'uz-Latn': {
+    keysTitle: 'Sozlamalar',
+    keysFind: 'Sozlamani topish',
     expiring: 'Tez orada tugaydi',
     'count.blocking': 'Toʻsiq: {count}',
     'count.expiring': 'Tez orada tugaydi: {count}',
@@ -32,6 +37,8 @@ export const readinessMessages = localMessages({
       'Filialning fiskal biriktiruvi tez orada tugaydi, undan keyingisi yoʻq.',
   },
   en: {
+    keysTitle: 'Settings',
+    keysFind: 'Find a setting',
     expiring: 'Expiring',
     'count.blocking': '{count} blocking',
     'count.expiring': '{count} expiring',

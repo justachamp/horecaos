@@ -1,8 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
-  HostListener,
   computed,
   inject,
   signal,
@@ -18,6 +18,7 @@ import { FeatureFlags } from '../../../core/feature-flags';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { ShortcutRegistry } from '../../../shared/keyboard/shortcut-registry';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
@@ -331,6 +332,7 @@ export class SettingsHomePage {
   });
 
   constructor() {
+    this.registerShortcuts();
     void this.flags.ensureLoaded();
     void this.loadReadiness();
     void this.loadSearchIndex();
@@ -383,23 +385,29 @@ export class SettingsHomePage {
   }
 
   /**
-   * `/` focuses the search box from anywhere on this page — settings.md
-   * §1.6. `q-combobox` is fully controlled and exposes no imperative focus
-   * method of its own, so the plain `<input>` its own template renders is
-   * reached through the host element's light DOM instead — nothing is read
-   * or written on that node beyond calling `.focus()`.
+   * `/` focuses the search box -- settings.md §1.6: «Find a setting». Registered with the console's
+   * keyboard dispatcher for as long as this page is open, so it stands down for a text field and for a
+   * dialog like every other key, and the `?` sheet lists it. `q-combobox` is fully controlled and
+   * exposes no imperative focus method of its own, so the plain `<input>` its own template renders is
+   * reached through the host element's light DOM instead -- nothing is read or written on that node
+   * beyond calling `.focus()`.
    */
-  @HostListener('document:keydown', ['$event'])
-  protected onKeydown(event: KeyboardEvent): void {
-    if (event.key !== '/' || event.defaultPrevented) {
-      return;
-    }
-    const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-      return;
-    }
-    event.preventDefault();
-    this.searchHost()?.nativeElement.querySelector('input')?.focus();
+  private registerShortcuts(): void {
+    inject(ShortcutRegistry).register(
+      {
+        id: 'settings-home',
+        title: () => this.text('keysTitle'),
+        shortcuts: [
+          {
+            keys: ['/'],
+            caps: ['/'],
+            label: () => this.text('keysFind'),
+            run: () => this.searchHost()?.nativeElement.querySelector('input')?.focus(),
+          },
+        ],
+      },
+      inject(DestroyRef),
+    );
   }
 
   protected readinessMessage(finding: ValidationResult): string {

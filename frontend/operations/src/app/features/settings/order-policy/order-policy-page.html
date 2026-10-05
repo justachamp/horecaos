@@ -197,6 +197,7 @@
     [brandId]="scope.brandId()"
     [locationId]="scope.locationId()"
     [reloadToken]="latenessReloadToken()"
+    (published)="onLatenessPublished($event)"
   />
 
   <section class="card">

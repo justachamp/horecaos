@@ -348,6 +348,40 @@ describe('LatenessPolicyCard', () => {
     expect(api.publish.mock.calls[0][1].expectedVersion).toBeNull();
   });
 
+  it('says a publication landed, at the scope the form was opened at, so the page can confirm it (row X.1)', async () => {
+    await render(SET_AT_BRAND);
+    const landed: unknown[] = [];
+    fixture.componentInstance.published.subscribe((where) => landed.push(where));
+    button('Edit').click();
+    fixture.detectChanges();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 3, policyVersion: 3 });
+    type('lateness-reason', 'a brand edit');
+
+    // The bar moves on while the request is in flight.
+    const publishing = button('Publish');
+    publishing.click();
+    fixture.componentRef.setInput('scopeType', 'LOCATION');
+    fixture.componentRef.setInput('locationId', LOCATION_ID);
+    await flush();
+
+    expect(landed).toEqual([{ scopeType: 'BRAND', brandId: BRAND_ID, locationId: null }]);
+  });
+
+  it('says nothing when the publication is refused', async () => {
+    await render(SET_AT_BRAND);
+    const landed: unknown[] = [];
+    fixture.componentInstance.published.subscribe((where) => landed.push(where));
+    button('Edit').click();
+    fixture.detectChanges();
+    api.publish.mockRejectedValue(new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, null));
+    type('lateness-reason', 'a brand edit');
+
+    button('Publish').click();
+    await flush();
+
+    expect(landed).toEqual([]);
+  });
+
   it('keeps an open draft when only the scalar it defaults to changes, and still publishes against the version it was opened at', async () => {
     await render(SET_AT_BRAND);
     button('Edit').click();

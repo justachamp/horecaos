@@ -6,6 +6,7 @@ import { ConfigurationKeyView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { ShortcutRegistry } from '../../../shared/keyboard/shortcut-registry';
 import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationOutcome } from './readiness-api';
 import { SettingsHomePage } from './settings-home-page';
@@ -81,6 +82,12 @@ const PASSING: ValidationOutcome = {
     },
   ],
 };
+
+function slashKey(target: HTMLElement): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'target', { value: target });
+  return event;
+}
 
 describe('SettingsHomePage', () => {
   it('renders every P-tier screen and the moved Integrations screen as a tile', async () => {
@@ -824,11 +831,39 @@ describe('SettingsHomePage', () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
     document.body.appendChild(fixture.nativeElement);
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    // The shell's one keydown listener hands the key to the registry; this drives that hand-off.
+    const handled = TestBed.inject(ShortcutRegistry).dispatch(
+      slashKey(fixture.nativeElement as HTMLElement),
+    );
 
+    expect(handled).toBe(true);
     expect(document.activeElement).toBe(searchInput(fixture));
 
     fixture.nativeElement.remove();
+  });
+
+  it('leaves "/" to a text field the operator is typing in', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+    document.body.appendChild(fixture.nativeElement);
+    const box = document.createElement('input');
+    document.body.appendChild(box);
+
+    expect(TestBed.inject(ShortcutRegistry).dispatch(slashKey(box))).toBe(false);
+
+    box.remove();
+    fixture.nativeElement.remove();
+  });
+
+  it('lists "/" on the cheat-sheet while the page is open, and not after', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+    const registry = TestBed.inject(ShortcutRegistry);
+
+    const scope = registry.scopes().find((candidate) => candidate.id === 'settings-home');
+    expect(scope?.title()).toBe('Settings');
+    expect(scope?.shortcuts.map((shortcut) => shortcut.label())).toEqual(['Find a setting']);
+
+    fixture.destroy();
+    expect(registry.scopes().some((candidate) => candidate.id === 'settings-home')).toBe(false);
   });
 
   // -------------------------------------------------- 10.0: the combobox half
