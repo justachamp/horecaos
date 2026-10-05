@@ -311,6 +311,41 @@ describe('I18n — message areas', () => {
     consoleError.mockRestore();
   });
 
+  it('require() with one failing and one slow area still shows the area that did load, and reports each failure', async () => {
+    const i18n = TestBed.inject(I18n);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // `customers` fails at once; `orders` is still downloading when it does -- the order a
+    // deploy that dropped one chunk produces on a slow connection.
+    const restoreCustomers = setLoaderForTesting(
+      'ru',
+      () => Promise.reject(new Error('chunk 404')),
+      'customers',
+    );
+    const restoreOrders = setLoaderForTesting(
+      'ru',
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return (await import('./messages/orders.ru')).ordersRu;
+      },
+      'orders',
+    );
+
+    try {
+      await expect(i18n.require(['customers', 'orders'])).resolves.toBeUndefined();
+
+      // The area that fetched fine is drawn, not left as raw keys because its sibling failed.
+      expect(areasLoadedForTesting('ru').has('orders')).toBe(true);
+      expect(i18n.t(ORDERS_KEY)).toBe('Заказы');
+      // The area that failed is reported, and shows its raw key.
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(i18n.t('customers.nav.label')).toBe('customers.nav.label');
+    } finally {
+      restoreCustomers();
+      restoreOrders();
+      consoleError.mockRestore();
+    }
+  });
+
   it('carries the areas in use into the new language, keeps the old one until they are all there, and fetches nothing else', async () => {
     const i18n = TestBed.inject(I18n);
     await i18n.require(['orders']);
