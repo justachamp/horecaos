@@ -2616,10 +2616,12 @@ public class JdbcReportingStore {
      * share of the price, so the combo's revenue is the sum over its lines, once the lines are
      * collected under their selection.
      *
-     * <p>Completed orders only, the filter every sales read in this class applies: a combo on an order
-     * that was cancelled, rejected or never paid was not sold. Narrowed by location and fulfilment type
-     * exactly as {@link #readVariantSales} is, and ordered by net revenue so the combo that earns the
-     * most is first; the container id is the tiebreak, so a page is stable.
+     * <p>Completed orders only, the filter {@link #readVariantSales} applies too: a combo on an order
+     * that was cancelled, rejected or never paid was not sold, and the dishes of that order are not in
+     * the per-product sales either, so the two reads reconcile over one period. Narrowed by location and
+     * fulfilment type exactly as {@link #readVariantSales} is, and ordered by net revenue so the combo
+     * that earns the most is first; the container id is the tiebreak, so a page is stable. A combo is
+     * named by the latest of its purchases in the range.
      *
      * <p>Bounded, not cursor-paged: a brand sells tens of combos, and a read that comes back full says
      * so through {@code ReportQueryService#comboSales}.
@@ -2655,6 +2657,7 @@ public class JdbcReportingStore {
                            l.combo_selection_id AS selection_id,
                            l.order_id,
                            max(l.combo_name_snapshot) AS combo_name,
+                           max(l.occurred_at) AS occurred_at,
                            max(l.combo_quantity) AS combos,
                            sum(l.gross_som) AS gross_som,
                            sum(l.discount_som) AS discount_som,
@@ -2671,7 +2674,10 @@ public class JdbcReportingStore {
                      GROUP BY l.combo_container_variant_id, l.combo_selection_id, l.order_id
                 )
                 SELECT container_id,
-                       max(combo_name) AS combo_name,
+                       -- The name on the latest purchase, not the alphabetical last: a combo renamed
+                       -- inside the range reads as what it is called now. The name is the tiebreak so
+                       -- two purchases at one instant still give one answer.
+                       (array_agg(combo_name ORDER BY occurred_at DESC, combo_name DESC))[1] AS combo_name,
                        sum(combos) AS combos_sold,
                        count(*) AS purchases,
                        count(DISTINCT order_id) AS orders,

@@ -170,6 +170,41 @@ class ComboSalesReportingTests {
     }
 
     @Test
+    @DisplayName("a combo renamed inside the range reads as the name on its latest line, not the alphabetical last")
+    void aRenamedComboReadsAsItsLatestName() {
+        // "Lunch" sorts after "Business lunch", so a maximum over the names would keep the old one.
+        UUID before = insertOrder(TENANT, "BEFORE", LOCATION_A, "DELIVERY", "COMPLETED");
+        insertLine(
+                TENANT,
+                before,
+                LOCATION_A,
+                BURGER,
+                1,
+                25_000L,
+                25_000L,
+                comboOf(LUNCH, selection("before"), 1, "Lunch"),
+                OffsetDateTime.of(DAY.atTime(5, 0), ZoneOffset.UTC));
+        UUID after = insertOrder(TENANT, "AFTER", LOCATION_A, "DELIVERY", "COMPLETED");
+        insertLine(
+                TENANT,
+                after,
+                LOCATION_A,
+                BURGER,
+                1,
+                25_000L,
+                25_000L,
+                comboOf(LUNCH, selection("after"), 1, "Business lunch"),
+                OffsetDateTime.of(DAY.atTime(11, 0), ZoneOffset.UTC));
+
+        assertThat(store.readComboSales(TENANT, DAY, DAY, List.of(), List.of(), 100))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.combosSold()).isEqualTo(2L);
+                    assertThat(row.comboName()).isEqualTo("Business lunch");
+                });
+    }
+
+    @Test
     @DisplayName("the location, the fulfilment type and the date range narrow what is counted")
     void theFiltersNarrowTheRead() {
         UUID atA = insertOrder(TENANT, "A", LOCATION_A, "DELIVERY", "COMPLETED");
@@ -331,6 +366,28 @@ class ComboSalesReportingTests {
             long grossSom,
             long netSom,
             @Nullable Combo combo) {
+        insertLine(
+                tenantId,
+                orderId,
+                locationId,
+                variantId,
+                quantity,
+                grossSom,
+                netSom,
+                combo,
+                OffsetDateTime.of(DAY.atTime(4, 0), ZoneOffset.UTC));
+    }
+
+    private void insertLine(
+            UUID tenantId,
+            UUID orderId,
+            UUID locationId,
+            UUID variantId,
+            int quantity,
+            long grossSom,
+            long netSom,
+            @Nullable Combo combo,
+            OffsetDateTime occurredAt) {
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
@@ -352,7 +409,7 @@ class ComboSalesReportingTests {
                 .param("gross", grossSom)
                 .param("discount", grossSom - netSom)
                 .param("net", netSom)
-                .param("occurredAt", OffsetDateTime.of(DAY.atTime(4, 0), ZoneOffset.UTC))
+                .param("occurredAt", occurredAt)
                 .param("selectionId", combo == null ? null : combo.selectionId())
                 .param("containerId", combo == null ? null : combo.containerVariantId())
                 .param("comboQuantity", combo == null ? null : combo.quantity())
