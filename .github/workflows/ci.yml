@@ -391,7 +391,11 @@ jobs:
         # scale in tokens.css owns every size). The tree was clean when this step
         # was added; before it, three violations landed unnoticed because
         # nothing ran `npm run lint`. `lint:rules` proves the rule itself still
-        # fails on a violation. The other three apps have their own step below.
+        # fails on a violation. `i18n:dead:test` runs every test under
+        # tools/i18n: the dead-key tool, the catalogue split, and the check that
+        # every route declares the message areas its screens need (so a screen
+        # cannot open on raw keys) and that nothing but `core` is eager. The
+        # other three apps have their own step below.
         if: matrix.app == 'operations'
         working-directory: frontend/${{ matrix.app }}
         run: |
