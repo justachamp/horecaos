@@ -349,6 +349,50 @@ describe('CourierPolicyPage', () => {
     );
   });
 
+  // The backend validates both radii as positive whether or not the gate is on, and the radius
+  // inputs are only drawn while it is. A zero typed while the gate was on and then hidden by
+  // switching it off must therefore never reach the wire, or the PUT answers 400 about a field the
+  // operator cannot see.
+  it('switches the GPS gate off after a radius was cleared without sending that zero', async () => {
+    const writePolicy = vi.fn().mockResolvedValue(ENFORCED_POLICY);
+    const host = await render({ policy: () => Promise.resolve(ENFORCED_POLICY), writePolicy });
+    await openEditor(host);
+
+    const accept = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsAcceptRadiusKm"]',
+    )!;
+    accept.value = '0';
+    accept.dispatchEvent(new Event('input'));
+    const status = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsStatusChangeRadiusMeters"]',
+    )!;
+    status.value = '0';
+    status.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.disabled).toBe(
+      true,
+    );
+
+    const gps = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsVerificationEnabled"]',
+    )!;
+    gps.checked = false;
+    gps.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(
+      host.querySelector('[data-testid="policy-input-gpsStatusChangeRadiusMeters"]'),
+    ).toBeNull();
+
+    await publishWithReason(host);
+
+    expect(writePolicy).toHaveBeenCalledTimes(1);
+    const input = writePolicy.mock.calls[0][1];
+    expect(input.gpsVerificationEnabled).toBe(false);
+    // The policy's own stored distances stay; the cleared boxes are not sent.
+    expect(input.gpsAcceptRadiusMeters).toBe(ENFORCED_POLICY.gpsAcceptRadiusMeters);
+    expect(input.gpsStatusChangeRadiusMeters).toBe(ENFORCED_POLICY.gpsStatusChangeRadiusMeters);
+  });
+
   // couriers.md §16 / settings.md §10.13: courier billing mode is refused by
   // ADR 0042, not missing — it must render disabled with its reason, never
   // silently absent.
