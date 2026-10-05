@@ -132,7 +132,8 @@ public class JdbcMarketplaceAvailabilityStore {
 
     public Optional<SyncState> syncState(UUID bindingId) {
         return jdbc.sql("""
-                SELECT binding_id, next_sweep_at, sweep_requested_at, reconcile_was_enabled, was_stale
+                SELECT binding_id, next_sweep_at, sweep_requested_at, reconcile_was_enabled, was_stale,
+                       xmin::text AS row_version
                 FROM integration.marketplace_availability_sync_state WHERE binding_id = :bindingId
                 """)
                 .param("bindingId", bindingId)
@@ -141,7 +142,8 @@ public class JdbcMarketplaceAvailabilityStore {
                         instant(row.getObject("next_sweep_at", OffsetDateTime.class)),
                         instant(row.getObject("sweep_requested_at", OffsetDateTime.class)),
                         row.getBoolean("reconcile_was_enabled"),
-                        row.getBoolean("was_stale")))
+                        row.getBoolean("was_stale"),
+                        row.getString("row_version")))
                 .optional();
     }
 
@@ -164,7 +166,21 @@ public class JdbcMarketplaceAvailabilityStore {
         }
     }
 
-    /** Records that a full sweep ran and when the next one is due; clears the marker it honoured. */
+    /**
+     * Records that a full sweep ran and when the next one is due; clears the marker it honoured, and
+     * only that one.
+     *
+     * <p>A marker is a promise that the next sweep will read an input that has just changed. A
+     * marker written <em>after</em> this sweep looked -- a stop committed between its resolver read
+     * and this statement -- has not been honoured, and wiping it would leave that change to wait for
+     * the resync interval. So the marker is cleared only if the row is still the version the sweep
+     * read before it began ({@code observedRowVersion}, {@link SyncState#rowVersion}): any writer of
+     * the row since -- the listener, the mapping trigger (which coalesces into an older marker and so
+     * leaves its value alone), another replica -- makes the sweep leave the marker for the next pass.
+     * The worst a spurious difference costs is one more sweep.
+     *
+     * @param observedRowVersion the row version read before the sweep began, or null when there was no row
+     */
     public void recordSweep(
             UUID tenantId,
             UUID bindingId,
@@ -172,7 +188,8 @@ public class JdbcMarketplaceAvailabilityStore {
             Instant nextSweepAt,
             int itemCount,
             boolean reconcileEnabled,
-            boolean stale) {
+            boolean stale,
+            @Nullable String observedRowVersion) {
         jdbc.sql("""
                 INSERT INTO integration.marketplace_availability_sync_state
                     (tenant_id, binding_id, next_sweep_at, last_sweep_at, last_sweep_item_count,
@@ -182,7 +199,10 @@ public class JdbcMarketplaceAvailabilityStore {
                 SET next_sweep_at = EXCLUDED.next_sweep_at,
                     last_sweep_at = EXCLUDED.last_sweep_at,
                     last_sweep_item_count = EXCLUDED.last_sweep_item_count,
-                    sweep_requested_at = NULL,
+                    sweep_requested_at = CASE
+                        WHEN integration.marketplace_availability_sync_state.xmin::text = CAST(:observedRowVersion AS text)
+                        THEN NULL
+                        ELSE integration.marketplace_availability_sync_state.sweep_requested_at END,
                     reconcile_was_enabled = EXCLUDED.reconcile_was_enabled,
                     was_stale = EXCLUDED.was_stale,
                     updated_at = EXCLUDED.updated_at
@@ -194,6 +214,7 @@ public class JdbcMarketplaceAvailabilityStore {
                 .param("count", itemCount)
                 .param("enabled", reconcileEnabled)
                 .param("stale", stale)
+                .param("observedRowVersion", observedRowVersion)
                 .update();
     }
 
@@ -216,14 +237,19 @@ public class JdbcMarketplaceAvailabilityStore {
                 .update();
     }
 
-    /** Remembers the switch state without a sweep: a suspended tick still has to note that it was suspended. */
+    /**
+     * Remembers the switch state without a sweep: a suspended tick still has to note that it was suspended.
+     * A suspended binding is not being pushed for, so nothing is overdue by its own fault: the stale
+     * episode it was in ends here (see {@link #clearStaleReported}), and a resumption into a partner
+     * that still refuses is reported as the new outage it is.
+     */
     public void recordSuspended(UUID tenantId, UUID bindingId, Instant now) {
         jdbc.sql("""
                 INSERT INTO integration.marketplace_availability_sync_state
                     (tenant_id, binding_id, reconcile_was_enabled, updated_at)
                 VALUES (:tenantId, :bindingId, false, :now)
                 ON CONFLICT (binding_id) DO UPDATE
-                SET reconcile_was_enabled = false, updated_at = EXCLUDED.updated_at
+                SET reconcile_was_enabled = false, stale_alerted_at = NULL, updated_at = EXCLUDED.updated_at
                 """)
                 .param("tenantId", tenantId)
                 .param("bindingId", bindingId)
@@ -591,6 +617,48 @@ public class JdbcMarketplaceAvailabilityStore {
                 .update();
     }
 
+    /**
+     * Ends the stale episode of every binding the reconciler no longer works: an installation or a
+     * binding suspended, a binding with no location, anything {@link #activeMarketplaceBindings} leaves
+     * out. {@code evaluate} clears a mark only for a binding it is asked about, and a binding that left
+     * the worklist is never asked, so without this the mark -- and the gauge an operator alerts on --
+     * would outlive the outage, and a reactivation would find the old episode "already reported".
+     *
+     * @return how many marks were cleared
+     */
+    public int clearStaleReportedOfInactiveBindings(Instant now) {
+        return jdbc.sql("""
+                UPDATE integration.marketplace_availability_sync_state s
+                SET stale_alerted_at = NULL, updated_at = :now
+                WHERE s.stale_alerted_at IS NOT NULL
+                  AND NOT %s
+                """.formatted(ACTIVE_BINDING_OF_STATE))
+                .param("now", timestamp(now))
+                .update();
+    }
+
+    /**
+     * How many bindings are inside a reported stale episode and are still ones the reconciler works.
+     * Never a count of marks alone: a mark on a binding that is no longer pushed for is not an outage.
+     */
+    public long countStaleReportedActive() {
+        return jdbc.sql("""
+                SELECT count(*) FROM integration.marketplace_availability_sync_state s
+                WHERE s.stale_alerted_at IS NOT NULL AND %s
+                """.formatted(ACTIVE_BINDING_OF_STATE))
+                .query(Long.class)
+                .single();
+    }
+
+    /** The worklist's own predicate ({@link #activeMarketplaceBindings}), as a test on a sync-state row {@code s}. */
+    private static final String ACTIVE_BINDING_OF_STATE = """
+            EXISTS (SELECT 1 FROM integration.bindings b
+                    JOIN integration.installations i ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                    WHERE b.id = s.binding_id AND b.tenant_id = s.tenant_id
+                      AND i.provider_category = 'MARKETPLACE'
+                      AND i.status = 'ACTIVE' AND b.status = 'ACTIVE'
+                      AND b.location_id IS NOT NULL)""";
+
     // ------------------------------------------------------------------ the propagation read
 
     /** Counts and the oldest pending moment for each binding at one location. */
@@ -730,12 +798,17 @@ public class JdbcMarketplaceAvailabilityStore {
             String providerType,
             String displayName) {}
 
+    /**
+     * @param rowVersion the row's PostgreSQL {@code xmin}: changes with every write to the row, by anyone.
+     *     What a sweep hands back to {@link #recordSweep} to prove nobody has written a marker since it looked.
+     */
     public record SyncState(
             UUID bindingId,
             @Nullable Instant nextSweepAt,
             @Nullable Instant sweepRequestedAt,
             boolean reconcileWasEnabled,
-            boolean wasStale) {}
+            boolean wasStale,
+            String rowVersion) {}
 
     public record ItemRow(
             UUID tenantId,

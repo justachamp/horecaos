@@ -59,7 +59,10 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * <p><strong>Markers</strong> ({@link MarketplaceDirtyMarkerListener}) ask for an early sweep when
  * an input the resolver reads changes, so a stop reaches the partner in seconds. They are an
  * accelerator: the list of inputs cannot be the correctness argument, because an input the
- * resolver gains next year has no marker on the day it ships. <strong>The resync sweep</strong>
+ * resolver gains next year has no marker on the day it ships. A sweep clears only the marker it
+ * read before it began: one written while it ran (a stop committed after its resolver read) stays
+ * for the next pass, so that stop reaches the partner in seconds too and not a resync interval later
+ * ({@link JdbcMarketplaceAvailabilityStore#recordSweep}). <strong>The resync sweep</strong>
  * recomputes every mapped item of every active binding through the resolver at least every
  * {@code resync_interval}, at <em>its own</em> {@code now}, so a branch rebound to a menu that
  * carries a {@code MENU} stop, an offering switched off, or a stop whose end passed while the
@@ -251,6 +254,15 @@ public class MarketplaceAvailabilityReconciler {
                 log.warn("Marketplace availability reconcile failed for a {} binding", binding.providerType(), failure);
             }
         }
+        try {
+            // A binding that left the worklist is never evaluated, so its stale mark is ended here.
+            int ended = store.clearStaleReportedOfInactiveBindings(clock.instant());
+            if (ended > 0) {
+                log.info("Ended the stale episode of {} marketplace bindings no longer worked", ended);
+            }
+        } catch (RuntimeException failure) {
+            log.warn("Could not end the stale episodes of marketplace bindings no longer worked", failure);
+        }
         refreshGauges();
         return new TickReport(bindings, sweeps, pushes);
     }
@@ -268,7 +280,9 @@ public class MarketplaceAvailabilityReconciler {
         }
         Optional<MarketplaceAvailabilityAdapter> adapter = adapters.forProvider(binding.providerType());
         if (adapter.isEmpty()) {
-            // MANUAL: this provider has no availability write API this build can call.
+            // MANUAL: this provider has no availability write API this build can call. Nothing is
+            // pushing for the binding, so an episode it was reported stale in has ended.
+            store.clearStaleReported(binding.tenantId(), binding.bindingId(), now);
             return new BindingReport(false, 0, false, true);
         }
 
@@ -294,7 +308,7 @@ public class MarketplaceAvailabilityReconciler {
                 || !sync.get().nextSweepAt().isAfter(now);
         boolean swept = false;
         if (due) {
-            swept = sweep(binding, now, stale);
+            swept = sweep(binding, now, stale, sync.map(SyncState::rowVersion).orElse(null));
         } else if (stale != sync.map(SyncState::wasStale).orElse(false)) {
             store.recordSweepState(binding.tenantId(), binding.bindingId(), true, stale, now);
         }
@@ -313,9 +327,11 @@ public class MarketplaceAvailabilityReconciler {
      * values. Under a transaction-scoped advisory lock so a second replica skips rather than
      * racing it with a staler answer.
      *
+     * @param observedRowVersion the sync-state row as this pass read it before anything below did; a
+     *     marker written since is not the one this sweep honours and survives it
      * @return whether this call did the sweep (false when another run held the lock)
      */
-    private boolean sweep(BindingRow binding, Instant now, boolean stale) {
+    private boolean sweep(BindingRow binding, Instant now, boolean stale, @Nullable String observedRowVersion) {
         Boolean done = transactions.execute(status -> {
             Boolean locked = jdbc.sql("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))")
                     .param("key", "marketplace-availability:" + binding.bindingId())
@@ -330,7 +346,14 @@ public class MarketplaceAvailabilityReconciler {
                 // No unambiguous channel backs this installation (none, or several): nothing can
                 // be resolved, and a push that guessed would tell the partner about the wrong one.
                 store.recordSweep(
-                        binding.tenantId(), binding.bindingId(), now, nextSweepAt(binding, now), 0, true, stale);
+                        binding.tenantId(),
+                        binding.bindingId(),
+                        now,
+                        nextSweepAt(binding, now),
+                        0,
+                        true,
+                        stale,
+                        observedRowVersion);
                 return true;
             }
             Map<UUID, String> mapped = store.mappedItems(binding.tenantId(), binding.bindingId());
@@ -364,7 +387,8 @@ public class MarketplaceAvailabilityReconciler {
                     nextSweepAt(binding, now),
                     mapped.size(),
                     true,
-                    stale);
+                    stale,
+                    observedRowVersion);
             meters.counter("horecaos.marketplace.availability.sweep").increment();
             return true;
         });
@@ -613,10 +637,7 @@ public class MarketplaceAvailabilityReconciler {
                 .optional()
                 .map(java.time.OffsetDateTime::toInstant)
                 .orElse(null);
-        staleChannels.set(jdbc.sql("""
-                SELECT count(*) FROM integration.marketplace_availability_sync_state
-                WHERE stale_alerted_at IS NOT NULL
-                """).query(Long.class).single());
+        staleChannels.set(store.countStaleReportedActive());
         pendingItems.set(pending);
         oldestPendingSeconds.set(
                 oldest == null ? 0 : Math.max(0, Duration.between(oldest, now).toSeconds()));

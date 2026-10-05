@@ -66,7 +66,16 @@
   its time budget before every call, closes the door after two unknown outcomes in a row and
   leaves a hung binding alone for a while; and the propagation read gives a `reason` and reads
   `MANUAL` when the reconciler cannot act on a binding (installation not active, no single
-  channel behind it, nothing swept) instead of "in sync".
+  channel behind it, nothing swept) instead of "in sync". Corrected after the batch-18 review
+  (`fix18-h-marketplace`): a position the materialisation run wrote is given back when its stop is
+  lifted, expires or the POS reports the dish back in stock (`MaterialisedPositionRestorer`, in the
+  transaction that ends the stop), unless another stop in force still holds the position or a later
+  movement on it is somebody else's; the stale-channel mark (and so the `stale_channels` gauge) ends
+  with a binding that stops being worked (reconciler switched off, installation or binding
+  suspended, no adapter), so a binding switched back on into a partner that still refuses is
+  reported, and alerted, as the new outage it is; and a sweep clears only the marker it read before it
+  began (the sync-state row's `xmin`, compared in `recordSweep`), so a stop that commits while a sweep
+  is running is swept on the next pass and not left for the resync interval.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)

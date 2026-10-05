@@ -41,6 +41,7 @@ import uz.horecaos.platform.inventory.application.AvailabilityStopService;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.CreateStop;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.StopsFrozenException;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.application.MaterialisedPositionRestorer;
 import uz.horecaos.platform.inventory.application.StopMaterialisationService;
 import uz.horecaos.platform.inventory.application.StopMaterialisationService.StaleRunException;
 import uz.horecaos.platform.inventory.application.StopMaterialisationStep;
@@ -131,13 +132,20 @@ class StopMaterialisationTests {
         JdbcInventoryStore inventoryStore = new JdbcInventoryStore(jdbc);
         stopStore = new JdbcAvailabilityStopStore(jdbc);
         materialisation = new JdbcStopMaterialisationStore(jdbc);
-        stopService = new AvailabilityStopService(stopStore, event -> {}, clock, fact -> {}, NO_OP_RLS, config);
         JdbcSalesChannelStore channels = new JdbcSalesChannelStore(jdbc);
         ChannelOfferingLookupAdapter real = new ChannelOfferingLookupAdapter(
                 new JdbcCatalogStore(jdbc, JsonMapper.builder().build()),
                 new JdbcMenuStore(jdbc),
                 (tenantId, locationId) -> Optional.of(ZoneId.of("Asia/Tashkent")));
         catalog = new FailingCatalog(real);
+        stopService = new AvailabilityStopService(
+                stopStore,
+                event -> {},
+                clock,
+                fact -> {},
+                NO_OP_RLS,
+                config,
+                new MaterialisedPositionRestorer(stopStore, inventoryStore, real));
         inventory = new InventoryService(
                 inventoryStore,
                 event -> {},
@@ -349,6 +357,181 @@ class StopMaterialisationTests {
         assertThat(runs.run(w.tenant, w.brand, "owner-1").status())
                 .as("the first was abandoned by a process that died")
                 .isEqualTo("COMPLETED");
+    }
+
+    // -----------------------------------------------------------------------
+    // When the stop that was written ends
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a stop lifted by hand after the run gives the dish back: the position it wrote is not permanent")
+    void aLiftedStopGivesThePositionBack() {
+        World w = world();
+        StopRow recall = stop(w, w.binary, StopScopeType.LOCATION, w.l1, null, null);
+        runs.run(w.tenant, w.brand, "owner-1");
+        assertThat(available(w, w.binary, w.l1)).as("written by the run").isFalse();
+        assertThat(desired(w, w.binary, w.l1)).as("and pushed as stopped").isFalse();
+
+        stopService.lift(w.tenant, w.brand, recall.id(), recall.version(), "op-1", null, null);
+
+        assertThat(available(w, w.binary, w.l1))
+                .as("the stop is gone, so nothing holds the dish off")
+                .isTrue();
+        assertThat(desired(w, w.binary, w.l1))
+                .as("and the reconciler's desired value is on sale again")
+                .isTrue();
+        assertThat(movement(w, w.binary, w.l1))
+                .containsEntry("reason_code", "EMBARGO_ENDED")
+                .containsEntry("source_type", "OPERATOR");
+    }
+
+    @Test
+    @DisplayName("a timed stop that was in force at the run lapses on its own: the dish is not stopped for good")
+    void aTimedStopThatExpiresGivesThePositionBack() {
+        World w = world();
+        stop(
+                w,
+                w.binary,
+                StopScopeType.LOCATION,
+                w.l1,
+                null,
+                null,
+                clock.instant().plus(Duration.ofHours(4)));
+        runs.run(w.tenant, w.brand, "owner-1");
+        assertThat(available(w, w.binary, w.l1)).isFalse();
+
+        clock.advance(Duration.ofHours(5));
+        assertThat(stopService.expireDue()).isEqualTo(1);
+
+        assertThat(available(w, w.binary, w.l1)).isTrue();
+        assertThat(desired(w, w.binary, w.l1)).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "the POS reporting a materialised dish back in stock puts it back on sale, with stops still being read")
+    void aPosBackInStockGivesThePositionBack() {
+        World w = world();
+        UUID binding = UUID.randomUUID();
+        posPort.placePosStop(w.tenant, w.brand, w.l1, w.binary, binding);
+        runs.run(w.tenant, w.brand, "owner-1");
+        assertThat(available(w, w.binary, w.l1)).isFalse();
+
+        boolean lifted = posPort.liftPosStop(w.tenant, w.l1, w.binary, binding);
+
+        assertThat(lifted).isTrue();
+        assertThat(available(w, w.binary, w.l1))
+                .as("the poll acts on the transition and will not say it again")
+                .isTrue();
+        assertThat(desired(w, w.binary, w.l1)).isTrue();
+        assertThat(movement(w, w.binary, w.l1)).containsEntry("source_type", "POS");
+    }
+
+    @Test
+    @DisplayName("a brand stop gives back every branch it was written onto, once the last thing holding the dish ends")
+    void aBrandStopGivesBackEveryBranch() {
+        World w = world();
+        StopRow recall = stop(w, w.binary, StopScopeType.BRAND, null, null, null);
+        runs.run(w.tenant, w.brand, "owner-1");
+        assertThat(List.of(available(w, w.binary, w.l1), available(w, w.binary, w.l2), available(w, w.binary, w.l3)))
+                .containsOnly(false);
+
+        stopService.lift(w.tenant, w.brand, recall.id(), recall.version(), "op-1", null, null);
+
+        assertThat(List.of(available(w, w.binary, w.l1), available(w, w.binary, w.l2), available(w, w.binary, w.l3)))
+                .containsOnly(true);
+    }
+
+    @Test
+    @DisplayName(
+            "while another stop still covers the dish the position stays off, and it comes back when that one ends")
+    void aPositionHeldByTwoStopsComesBackWithTheLast() {
+        World w = world();
+        StopRow brandWide = stop(w, w.binary, StopScopeType.BRAND, null, null, null);
+        stop(
+                w,
+                w.binary,
+                StopScopeType.LOCATION,
+                w.l1,
+                null,
+                null,
+                clock.instant().plus(Duration.ofHours(4)));
+        runs.run(w.tenant, w.brand, "owner-1");
+
+        clock.advance(Duration.ofHours(5));
+        stopService.expireDue();
+        assertThat(available(w, w.binary, w.l1))
+                .as("the brand-wide stop is still in force: a recall does not lapse with a shorter stop")
+                .isFalse();
+
+        stopService.lift(w.tenant, w.brand, brandWide.id(), brandWide.version(), "op-1", null, null);
+
+        assertThat(available(w, w.binary, w.l1))
+                .as("nothing is left, and the stop that ended last is not the one that wrote the position")
+                .isTrue();
+        assertThat(available(w, w.binary, w.l2)).isTrue();
+        assertThat(available(w, w.binary, w.l3)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a menu stop that holds a branch keeps the position off while it is in force")
+    void aMenuStopThatHoldsABranchKeepsThePositionOff() {
+        World w = world();
+        UUID lunch = menu(w, "Lunch");
+        bind(w, w.l1, null, lunch);
+        StopRow menuStop = stop(w, w.binary, StopScopeType.MENU, null, lunch, null);
+        stop(
+                w,
+                w.binary,
+                StopScopeType.LOCATION,
+                w.l1,
+                null,
+                null,
+                clock.instant().plus(Duration.ofHours(4)));
+        runs.run(w.tenant, w.brand, "owner-1");
+
+        clock.advance(Duration.ofHours(5));
+        stopService.expireDue();
+        assertThat(available(w, w.binary, w.l1)).isFalse();
+
+        stopService.lift(w.tenant, w.brand, menuStop.id(), menuStop.version(), "op-1", null, null);
+        assertThat(available(w, w.binary, w.l1)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a kitchen that 86'd the dish after the run keeps it 86'd when the stop ends")
+    void aLaterEightySixIsNotUndone() {
+        World w = world();
+        StopRow recall = stop(w, w.binary, StopScopeType.LOCATION, w.l1, null, null);
+        runs.run(w.tenant, w.brand, "owner-1");
+        inventory.setAvailability(w.tenant, w.l1, w.binary, true, "BACK_IN_STOCK", null);
+        inventory.setAvailability(w.tenant, w.l1, w.binary, false, "OUT_OF_STOCK", null);
+
+        stopService.lift(w.tenant, w.brand, recall.id(), recall.version(), "op-1", null, null);
+
+        assertThat(available(w, w.binary, w.l1))
+                .as("the last word on this position was the kitchen's, not the run's")
+                .isFalse();
+        assertThat(movement(w, w.binary, w.l1)).containsEntry("reason_code", "OUT_OF_STOCK");
+    }
+
+    @Test
+    @DisplayName("a stop that was never written onto a position gives nothing back, and an UNTRACKED dish is untouched")
+    void aStopThatWroteNothingRestoresNothing() {
+        World w = world();
+        inventory.setAvailability(w.tenant, w.l1, w.binary, false, "OUT_OF_STOCK", null);
+        StopRow recall = stop(w, w.binary, StopScopeType.LOCATION, w.l1, null, null);
+        StopRow untracked = stop(w, w.untracked, StopScopeType.LOCATION, w.l1, null, null);
+        runs.run(w.tenant, w.brand, "owner-1");
+        long movementsBefore = movements(w, w.binary, w.l1);
+
+        stopService.lift(w.tenant, w.brand, recall.id(), recall.version(), "op-1", null, null);
+        stopService.lift(w.tenant, w.brand, untracked.id(), untracked.version(), "op-1", null, null);
+
+        assertThat(available(w, w.binary, w.l1))
+                .as("the kitchen's own 86 was already there when the run came: it is not the run's to undo")
+                .isFalse();
+        assertThat(movements(w, w.binary, w.l1)).isEqualTo(movementsBefore);
     }
 
     // -----------------------------------------------------------------------
@@ -849,6 +1032,14 @@ class StopMaterialisationTests {
                         "op-1",
                         null))
                 .stop();
+    }
+
+    /** What the marketplace reconciler would push for the dish at the aggregator channel, now. */
+    private boolean desired(World w, UUID variant, UUID location) {
+        return Objects.requireNonNull(inventory
+                        .resolve(w.tenant, w.brand, location, w.aggregator, Set.of(variant), clock.instant())
+                        .get(variant))
+                .sellable();
     }
 
     private boolean available(World w, UUID variant, UUID location) {

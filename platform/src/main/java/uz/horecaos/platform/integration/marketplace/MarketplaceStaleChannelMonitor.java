@@ -35,9 +35,12 @@ import uz.horecaos.platform.notifications.api.OperationsAlertPort;
  * <p>The report is three things in one transaction: the {@code stale_alerted_at} mark, the
  * {@code MarketplaceChannelWentStale} fact on the outbox, and the ADR 0058 operations alert. The
  * mark is a conditional write, so two replicas ticking one binding cannot both report it, and a
- * transaction that rolls back reports nothing and is tried again on the next tick. When the binding
- * has nothing unconfirmed past its bound the mark is cleared, so the next staleness is a new
- * report with its own alert.
+ * transaction that rolls back reports nothing and is tried again on the next tick. The mark is cleared
+ * when the binding has nothing unconfirmed past its bound, and also when the binding stops being
+ * worked at all -- the reconciler switched off, the installation or the binding suspended, the
+ * provider's adapter gone ({@code MarketplaceAvailabilityReconciler} does that part): the platform
+ * is no longer failing to push, and a binding switched back on into a partner that still refuses
+ * is a new episode with its own report and alert. The next staleness is always a new report.
  *
  * <h2>What the alert says</h2>
  *
@@ -125,10 +128,13 @@ public class MarketplaceStaleChannelMonitor {
                     SUBJECT_TYPE,
                     binding.bindingId(),
                     null,
-                    // One alert per binding per episode: the episode is named by the instant its
-                    // longest-waiting dish has been unconfirmed since, which does not move
-                    // while the episode lasts.
-                    episodeKey(binding.bindingId(), since),
+                    // One alert per binding per episode: the episode is named by the instant it was
+                    // reported -- the mark just written, which only one transaction can write and
+                    // which a suspension, a deactivation or a recovery clears. Not by the instant the
+                    // longest-waiting dish has waited since: that does not move across a pause, so a
+                    // binding switched back on into the same overdue rows would be a new outage the
+                    // alert's own de-duplication swallowed.
+                    episodeKey(binding.bindingId(), now),
                     alertVariables(binding.providerType(), summary.itemCount(), since, staleAfterSeconds),
                     alertExpiry);
             return true;
@@ -155,8 +161,8 @@ public class MarketplaceStaleChannelMonitor {
         return variables;
     }
 
-    /** For callers that only need to know the episode's identity. */
-    static String episodeKey(UUID bindingId, Instant since) {
-        return "%s:%s:%s:%d".formatted(MARKETPLACE_CHANNEL_STALE, SUBJECT_TYPE, bindingId, since.getEpochSecond());
+    /** The identity of one episode: the binding and the instant it was reported. */
+    static String episodeKey(UUID bindingId, Instant reportedAt) {
+        return "%s:%s:%s:%d".formatted(MARKETPLACE_CHANNEL_STALE, SUBJECT_TYPE, bindingId, reportedAt.toEpochMilli());
     }
 }

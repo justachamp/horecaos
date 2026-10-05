@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -43,6 +42,15 @@ import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcStopMateria
  *   <li>{@code CHANNEL}: never; the same over-stop ({@code CHANNEL_SCOPE}).
  *   <li>An {@code UNTRACKED} or {@code QUANTITY} item has no boolean to set, whatever the scope.
  * </ul>
+ *
+ * <h2>A written position is not for good</h2>
+ *
+ * <p>A position has no end time and no author but the run, so a stop that is lifted, that the POS
+ * reports back in stock, or whose own {@code ends_at} passes would leave the dish off sale for ever.
+ * That is why a timed stop is written like any other: the stop's end gives its positions back
+ * ({@link MaterialisedPositionRestorer}, called by the lift and the expiry in their own
+ * transaction), unless another stop in force still holds the position or somebody else has set it
+ * since.
  */
 @Service
 public class StopMaterialisationStep {
@@ -77,7 +85,10 @@ public class StopMaterialisationStep {
     @Transactional
     public StopResult carry(UUID runId, StopRow listed, Instant at, @Nullable UUID actorId) {
         rls.bindTenant(listed.tenantId());
-        Optional<StopRow> current = stops.findById(listed.tenantId(), listed.id());
+        // Share-locked: a lift or an expiry of this stop waits for the write below, and so gives
+        // the position back (MaterialisedPositionRestorer) rather than racing a run that read the
+        // stop as in force a moment before it ended.
+        Optional<StopRow> current = stops.findByIdForShare(listed.tenantId(), listed.id());
         if (current.isEmpty() || !current.get().inForceAt(at)) {
             return new StopResult(true, 0, 0, 0);
         }
@@ -107,23 +118,12 @@ public class StopMaterialisationStep {
             }
             case MENU -> {
                 UUID menu = Objects.requireNonNull(stop.menuId());
-                List<UUID> exact = new ArrayList<>();
-                for (UUID location : stops.locationsStocking(stop.tenantId(), stop.brandId(), stop.variantId())) {
-                    Set<UUID> menusHere = catalog.menusBoundAt(stop.tenantId(), stop.brandId(), location);
-                    if (!menusHere.contains(menu)) {
-                        continue; // The stop does not reach this branch at all.
-                    }
-                    boolean onlyThisMenu = menusHere.size() == 1
-                            && catalog.menuBoundTo(stop.tenantId(), stop.brandId(), location, null)
-                                    .filter(menu::equals)
-                                    .isPresent();
-                    if (onlyThisMenu) {
-                        exact.add(location);
-                    } else {
-                        lines.add(new Line(location, "MENU_NOT_EVERY_CHANNEL"));
-                    }
+                StopPositionReach.MenuReach reach = StopPositionReach.ofMenu(
+                        stops, catalog, stop.tenantId(), stop.brandId(), stop.variantId(), menu);
+                for (UUID location : reach.split()) {
+                    lines.add(new Line(location, "MENU_NOT_EVERY_CHANNEL"));
                 }
-                Counts counts = write(stop, exact, actorId, lines);
+                Counts counts = write(stop, reach.exact(), actorId, lines);
                 written = counts.written();
                 already = counts.already();
             }

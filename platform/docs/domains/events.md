@@ -395,7 +395,9 @@ authorized catalog API with `variantId`.
 unconfirmed for longer than `marketplace.availability.stale_after_seconds` (ADR 0030, thirty
 minutes by default), together with an operations alert (ADR 0058, event class
 `MARKETPLACE_CHANNEL_STALE`). The binding is not reported again until it has had nothing
-unconfirmed past its bound and then goes stale again. Counts and instants only. Both events
+unconfirmed past its bound, or has stopped being worked (the reconciler switched off, the
+installation or the binding suspended, no adapter), and then goes stale again. Counts and
+instants only. Both events
 are keyed by binding, so one venue's facts keep their order and one venue's poison record
 holds back that venue alone.
 

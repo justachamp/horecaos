@@ -72,7 +72,9 @@ minutes). It is reported once per episode: `MarketplaceChannelWentStale` on `int
 `MARKETPLACE_CHANNEL_STALE`. The partner is still selling what the kitchen stopped. Read the
 propagation view for the branch for the dishes and `lastFailureCode`; update the partner portal by
 hand from the stop list while it is fixed. The report clears when nothing is unconfirmed past the
-bound, so the next outage alerts again. A dish the partner refused as unknown is a mapping to fix
+bound, or when the binding stops being worked (the reconciler switched off, the installation or the
+binding suspended, no adapter) -- the `stale_channels` gauge counts only bindings still worked --
+so the next outage alerts again, including one a switched-off binding resumes into. A dish the partner refused as unknown is a mapping to fix
 (`REJECTED_UNMAPPED`) and never counts as a channel gone quiet.
 
 **An aggregator that polls instead.** `GET /api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability`

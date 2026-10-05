@@ -50,12 +50,14 @@ import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MarketplaceOutbox;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
 import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.inventory.api.StopSource;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.CreateStop;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.application.MaterialisedPositionRestorer;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
@@ -110,6 +112,9 @@ class MarketplaceAvailabilityReconcilerTests {
     private MarketplacePropagationQuery propagation;
     private boolean registerAdapter;
 
+    /** Runs once, inside a sweep, right after the resolver has answered: a change landing mid-sweep. */
+    private volatile @Nullable Runnable afterResolve;
+
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(
@@ -157,14 +162,22 @@ class MarketplaceAvailabilityReconcilerTests {
         FakeConfigurationResolver resolver = new FakeConfigurationResolver(configuration);
         store = new JdbcMarketplaceAvailabilityStore(jdbc);
         stopStore = new JdbcAvailabilityStopStore(jdbc);
-        stopService = new AvailabilityStopService(stopStore, event -> {}, clock, fact -> {}, NO_OP_RLS, resolver);
         JdbcSalesChannelStore channels = new JdbcSalesChannelStore(jdbc);
         ChannelOfferingLookupAdapter catalog = new ChannelOfferingLookupAdapter(
                 new JdbcCatalogStore(jdbc, JsonMapper.builder().build()),
                 new JdbcMenuStore(jdbc),
                 (tenantId, locationId) -> Optional.of(ZoneId.of("Asia/Tashkent")));
+        JdbcInventoryStore inventoryStore = new JdbcInventoryStore(jdbc);
+        stopService = new AvailabilityStopService(
+                stopStore,
+                event -> {},
+                clock,
+                fact -> {},
+                NO_OP_RLS,
+                resolver,
+                new MaterialisedPositionRestorer(stopStore, inventoryStore, catalog));
         inventory = new InventoryService(
-                new JdbcInventoryStore(jdbc),
+                inventoryStore,
                 event -> {},
                 clock,
                 fact -> {},
@@ -184,11 +197,21 @@ class MarketplaceAvailabilityReconcilerTests {
                 store, outbox, alerts, meters, transactionManager, Duration.ofDays(1));
         MarketplaceAdapterRegistry registry =
                 new MarketplaceAdapterRegistry(registerAdapter ? List.of(new FakeAdapter()) : List.of());
+        ChannelAvailabilityPort resolving = (tenantId, brandId, locationId, channelId, variantIds, at) -> {
+            Map<UUID, ChannelAvailabilityPort.ChannelAvailability> answer =
+                    inventory.resolve(tenantId, brandId, locationId, channelId, variantIds, at);
+            Runnable hook = afterResolve;
+            afterResolve = null;
+            if (hook != null) {
+                hook.run();
+            }
+            return answer;
+        };
         reconciler = new MarketplaceAvailabilityReconciler(
                 store,
                 registry,
                 partner,
-                inventory,
+                resolving,
                 channels,
                 resolver,
                 activity,
@@ -889,6 +912,70 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
+    @DisplayName(
+            "a marker that lands while a sweep is running is not erased by it: the stop is swept at once, not a resync interval later")
+    void aMarkerThatLandsDuringASweepSurvivesIt() {
+        World w = world();
+        reconcile(w);
+        markDirty(w); // the first stop's marker: the reason this sweep runs
+        afterResolve = () -> {
+            // The manager's second stop, committed after the resolver has read and before the
+            // sweep's last statement.
+            stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+            markDirty(w);
+        };
+
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("this sweep read the resolver before the stop, so the partner has not heard of it")
+                .containsEntry("ext-A", true);
+        assertThat(requested())
+                .as("the marker the stop wrote is still there for the next pass")
+                .containsExactly(w.binding);
+
+        reconcile(w); // no time has passed: the resync interval is minutes away
+
+        assertThat(partner.held(w))
+                .as("the partner is told within seconds, not after the resync interval")
+                .containsEntry("ext-A", false);
+        assertThat(requested())
+                .as("and that sweep, which saw the stop, honoured its marker")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a mapping marker that lands during a sweep while an older marker is pending is not erased by it either")
+    void aMappingMarkerThatLandsDuringASweepSurvivesIt() {
+        World w = world();
+        reconcile(w);
+        UUID variantC = variant(w.tenant(), w.brand(), "C");
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                VALUES (:id, :t, :b, :l, :v, 'AVAILABLE')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant)
+                .param("b", w.brand)
+                .param("l", w.location)
+                .param("v", variantC)
+                .update();
+        list(w, variantC);
+        markDirty(w); // an older marker is pending, so the mapping trigger's own write coalesces into it
+        afterResolve = () -> map(w, variantC, "ext-C");
+
+        reconcile(w);
+        assertThat(partner.held(w)).doesNotContainKey("ext-C");
+        assertThat(requested()).containsExactly(w.binding);
+
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("the new dish reaches the partner on the next pass, not after the resync interval")
+                .containsEntry("ext-C", true);
+    }
+
+    @Test
     @DisplayName("two overlapping runs send disjoint rows: the partner is told each change exactly once")
     void overlappingRunsDoNotDoubleSend() throws Exception {
         World w = world();
@@ -1463,6 +1550,90 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
+    @DisplayName(
+            "a reconciler switched off ends the stale episode it was in: no mark, no gauge, and a report of its own when it resumes")
+    void aSuspendedReconcilerEndsTheStaleEpisode() {
+        World w = world();
+        goStale(w);
+        assertThat(staleMark(w)).as("sanity: reported").isNotNull();
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+        String firstAlertKey = alerts.calls().get(0).idempotencyKeyBase();
+
+        configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
+        reconciler.tick();
+
+        assertThat(staleMark(w))
+                .as("nothing is being attempted, so no episode is open")
+                .isNull();
+        assertThat(staleChannelsGauge())
+                .as("an alert on stale_channels > 0 must not page for a binding nobody is pushing for")
+                .isZero();
+
+        configuration.put("marketplace.availability.reconcile_enabled", true);
+        build();
+        clock.advance(Duration.ofMinutes(1));
+        reconciler.tick();
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("it resumed into a partner that still refuses: a new outage, reported as one")
+                .hasSize(2);
+        assertThat(alerts.calls())
+                .as("and the manager is told again, under a key of its own (the recorder is new since the rebuild)")
+                .singleElement()
+                .satisfies(call -> assertThat(call.idempotencyKeyBase()).isNotEqualTo(firstAlertKey));
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "a binding whose installation or whose own record is suspended ends the stale episode, and a reactivation starts a new one")
+    void aBindingThatLeavesTheActiveSetEndsTheStaleEpisode() {
+        World w = world();
+        goStale(w);
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+
+        jdbc.sql("UPDATE integration.installations SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", w.installation)
+                .update();
+        reconciler.tick();
+
+        assertThat(staleMark(w)).isNull();
+        assertThat(staleChannelsGauge()).isZero();
+
+        jdbc.sql("UPDATE integration.installations SET status = 'ACTIVE' WHERE id = :id")
+                .param("id", w.installation)
+                .update();
+        clock.advance(Duration.ofMinutes(1));
+        reconciler.tick();
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("months later the old rows are still overdue and the partner still refuses: a new report")
+                .hasSize(2);
+
+        jdbc.sql("UPDATE integration.bindings SET status = 'SUSPENDED' WHERE id = :id")
+                .param("id", w.binding)
+                .update();
+        reconciler.tick();
+        assertThat(staleMark(w)).isNull();
+        assertThat(staleChannelsGauge()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a provider whose adapter is gone ends the stale episode too: nothing is pushing, so nothing is overdue")
+    void aProviderThatLostItsAdapterEndsTheStaleEpisode() {
+        World w = world();
+        goStale(w);
+        assertThat(staleChannelsGauge()).isEqualTo(1.0);
+
+        registerAdapter = false;
+        build();
+        reconciler.tick();
+
+        assertThat(staleMark(w)).isNull();
+        assertThat(staleChannelsGauge()).isZero();
+    }
+
+    @Test
     @DisplayName("the stale alert's variables carry no protected field and are exactly the documented four")
     void theAlertVariablesAreClean() {
         Map<String, String> variables = MarketplaceStaleChannelMonitor.alertVariables(
@@ -1493,6 +1664,31 @@ class MarketplaceAvailabilityReconcilerTests {
     // -----------------------------------------------------------------------
 
     /** {@code count} connection-refused answers: the partner is unreachable for that many calls. */
+    /** The partner refuses every push for longer than the bound: the binding is inside a reported stale episode. */
+    private void goStale(World w) {
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(400));
+        reconciler.tick();
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+    }
+
+    private @Nullable Object staleMark(World w) {
+        return jdbc.sql("SELECT stale_alerted_at FROM integration.marketplace_availability_sync_state "
+                        + "WHERE binding_id = :b")
+                .param("b", w.binding())
+                .query((row, number) -> row.getObject(1))
+                .list()
+                .get(0);
+    }
+
+    private double staleChannelsGauge() {
+        return meters.get("horecaos.marketplace.availability.stale_channels")
+                .gauge()
+                .value();
+    }
+
     private static Scenario[] refused(int count) {
         Scenario[] scenarios = new Scenario[count];
         java.util.Arrays.fill(scenarios, Scenario.CONNECTION_REFUSED);
