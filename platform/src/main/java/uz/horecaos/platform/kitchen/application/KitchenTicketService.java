@@ -533,9 +533,11 @@ public class KitchenTicketService {
      * </ul>
      *
      * <p>Nothing is done for an order with no ticket (it is built from the live lines when it is
-     * opened) or whose ticket has been handed over or voided (the food has gone). A ticket that
-     * was ready goes back into production, the same edge a recall uses, and the order stays where
-     * it is: ADR 0019 does not move an order backwards.
+     * opened) or whose ticket has been handed over or voided (the food has gone). ADR 0039 does not
+     * amend an order at READY or later, so a ticket that is ready when an amendment arrives is the
+     * rare case of an order the kitchen has finished and ordering has not yet moved; it goes back
+     * into production, the same edge a recall uses, and the order stays where it is: ADR 0019 does
+     * not move an order backwards.
      *
      * <p>The station's throughput ceiling is not recomputed. It shifts a ticket's release time,
      * and an amendment that arrives after the ticket was released has nothing left to shift.
