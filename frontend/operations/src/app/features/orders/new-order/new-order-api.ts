@@ -588,7 +588,10 @@ export class NewOrderApi {
    */
   quote(scope: LocationScope, request: PlaceOrderRequest): Promise<OrderQuote> {
     return firstValueFrom(
-      this.api.post<PlaceOrderRequest, OrderQuote>(operationsPaths.orderQuote(scope), command(request)),
+      this.api.post<PlaceOrderRequest, OrderQuote>(
+        operationsPaths.orderQuote(scope),
+        command(request),
+      ),
     );
   }
 
