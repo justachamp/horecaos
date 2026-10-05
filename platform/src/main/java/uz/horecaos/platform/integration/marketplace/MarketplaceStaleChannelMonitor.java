@@ -94,8 +94,8 @@ public class MarketplaceStaleChannelMonitor {
      * @param now the reconciler's own instant, so the bound is judged at the instant the pass ran
      */
     public Verdict evaluate(BindingRow binding, int staleAfterSeconds, Instant now) {
-        Optional<OverdueSummary> overdue = store.overdueUnconfirmed(
-                binding.tenantId(), binding.bindingId(), now.minusSeconds(staleAfterSeconds));
+        Optional<OverdueSummary> overdue =
+                store.overdueUnconfirmed(binding.tenantId(), binding.bindingId(), now.minusSeconds(staleAfterSeconds));
         if (overdue.isEmpty()) {
             store.clearStaleReported(binding.tenantId(), binding.bindingId(), now);
             return Verdict.HEALTHY;
@@ -145,7 +145,8 @@ public class MarketplaceStaleChannelMonitor {
      * and the bound -- nothing about a dish, a guest or the partner's own words. Package-visible so
      * the classification test asserts against the call fixed here.
      */
-    static Map<String, String> alertVariables(String providerType, int itemCount, Instant since, int staleAfterSeconds) {
+    static Map<String, String> alertVariables(
+            String providerType, int itemCount, Instant since, int staleAfterSeconds) {
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("provider", providerType);
         variables.put("itemCount", Integer.toString(itemCount));

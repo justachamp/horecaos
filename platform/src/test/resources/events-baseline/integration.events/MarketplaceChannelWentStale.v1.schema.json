@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/integration.events/MarketplaceChannelWentStale.v1.schema.json",
+  "title": "MarketplaceChannelWentStale v1 payload",
+  "description": "A marketplace binding has had at least one dish unconfirmed for longer than its bound (marketplace.availability.stale_after_seconds, ADR 0030): the platform believes one thing about the stop list and has not been able to make the partner agree (ADR 0040, ADR 0141). Published once per episode; the binding is not reported again until it has had nothing unconfirmed past its bound and then goes stale again. Counts, identifiers and instants only: no dish name, no partner error text, no personal data (ADR 0029).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bindingId", "locationId", "providerType", "staleAfterSeconds", "unconfirmedItemCount", "oldestUnconfirmedSince"],
+  "properties": {
+    "bindingId": { "type": "string", "format": "uuid" },
+    "locationId": { "type": "string", "format": "uuid" },
+    "providerType": { "type": "string", "maxLength": 64 },
+    "staleAfterSeconds": { "type": "integer", "minimum": 1 },
+    "unconfirmedItemCount": { "type": "integer", "minimum": 1 },
+    "oldestUnconfirmedSince": { "type": "string", "format": "date-time" }
+  }
+}
