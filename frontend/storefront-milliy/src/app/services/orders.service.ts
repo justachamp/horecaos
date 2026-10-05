@@ -345,6 +345,14 @@ export interface ReorderLineResponse {
    * `unitAmountMinor` is null.
    */
   readonly comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
+  /**
+   * ADR 0136: the second-level answers, each under the first-level option that asked for them.
+   * Sent back as the cart line's `nestedModifiers`.
+   */
+  readonly nestedModifiers?: readonly {
+    readonly parentOptionId: string;
+    readonly optionId: string;
+  }[];
 }
 
 export interface OrderResponse {

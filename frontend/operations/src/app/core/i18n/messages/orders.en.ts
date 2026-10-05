@@ -801,4 +801,5 @@ export const ordersEn = {
     'The bill of {amount} is recorded as paid. This cannot be undone.',
   'orders.party.confirm.walkout.body':
     '{amount} is recorded as unpaid and goes to the audit trail.',
+  'orders.dialog.addLines.combosUnavailable': 'Menu unavailable — no combos here.',
 } as const;

@@ -674,7 +674,9 @@ public class CatalogAuthoringController {
             summary = "Duplicate a product",
             description = "Copies every variant with its own fiscal classification and every "
                     + "locale's translation, its catalog and category placements, its attached "
-                    + "modifier groups, and its media. catalog.md §4.1's row action.")
+                    + "modifier groups, its media and, for a combo, its combo groups with their "
+                    + "headings and components (not their prices: each component is priced "
+                    + "again for the copy). catalog.md §4.1's row action.")
     public ResponseEntity<ProductResponse> duplicateProduct(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
         try {

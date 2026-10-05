@@ -14,11 +14,7 @@ import { HorecaOSApiError, isNotFound, messageKeyFor } from '../../../core/api/p
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { formatMoney, money } from '../../../core/money/money';
-import {
-  lineKeyFor,
-  modifierOptionIdsFromLineKey,
-  type PricedCart,
-} from '../../../services/cart.service';
+import { lineKeyFor, optionIdsOfLine, type PricedCart } from '../../../services/cart.service';
 import { DineInCartService } from '../../../services/dine-in-cart.service';
 import {
   DineInService,
@@ -48,7 +44,11 @@ import type {
 } from '../../../types/home.types';
 import { variantAvailability } from '../../../utils/item-availability';
 import { type ComboPicks, comboValid } from '../../../utils/combo-selection';
-import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
+import {
+  groupsForVariant,
+  unsatisfiedGroupsFor,
+  unsatisfiedNestedFor,
+} from '../../../utils/modifier-selection';
 import { portionStep } from '../../../utils/physical';
 import { DineInOrderBarComponent } from './order-bar/dine-in-order-bar.component';
 
@@ -331,11 +331,25 @@ export class DineInTableComponent implements OnInit {
           available: false,
         };
       }
-      const chosen = new Set(modifierOptionIdsFromLineKey(line.lineKey, line.variantId));
-      const modifierNames = found.item.modifierGroups
+      const chosen = new Set(optionIdsOfLine(line));
+      // The groups this portion is offered (ADR 0136): its own list when the menu published one.
+      const groups = groupsForVariant(found.item, line.variantId);
+      const modifierNames = groups
         .flatMap((group) => group.options)
         .filter((option) => chosen.has(option.id))
         .map((option) => option.label || this.translate.get('dineIn.pickerOptionUnnamed'));
+      // ... and the answers given under them, named from the groups those options opened.
+      const nestedLabels = new Map(
+        groups
+          .flatMap((group) => group.options)
+          .flatMap((option) => option.nestedGroups ?? [])
+          .flatMap((group) => group.options)
+          .map((option) => [option.id, option.label] as const),
+      );
+      const nestedNames = (line.nestedModifiers ?? []).map(
+        (pair) =>
+          nestedLabels.get(pair.optionId) || this.translate.get('dineIn.pickerOptionUnnamed'),
+      );
       // ADR 0136: a combo line is read back as the components it will become on the order, named
       // from the menu this screen already holds, with the units a combo puts on the order.
       const componentsById = new Map(
@@ -353,7 +367,7 @@ export class DineInTableComponent implements OnInit {
         const units = pick.quantity * (component?.defaultQuantity ?? 1);
         return units > 1 ? `${label} ×${units}` : label;
       });
-      const options = [...comboNames, ...modifierNames];
+      const options = [...comboNames, ...modifierNames, ...nestedNames];
       return {
         lineKey: line.lineKey,
         name: found.item.name,
@@ -655,19 +669,27 @@ export class DineInTableComponent implements OnInit {
     // ADR 0136: a combo's own choices are its components, and the container's modifier groups are
     // never asked about; the rule is applied again here before any request, like the modifiers'.
     const comboPicks = selection.comboPicks ?? [];
+    const nested = selection.nestedModifiers ?? [];
     const comboGroups = request.item.comboGroups ?? [];
+    const groups = groupsForVariant(request.item, selection.variantId);
     const pickRecord: ComboPicks = Object.fromEntries(
       comboPicks.map((pick) => [pick.componentId, pick.quantity]),
     );
     if (
       comboGroups.length > 0
         ? !comboValid(comboGroups, pickRecord)
-        : unsatisfiedGroupsFor(request.item.modifierGroups, selection.modifierOptionIds).length > 0
+        : unsatisfiedGroupsFor(groups, selection.modifierOptionIds).length > 0 ||
+          unsatisfiedNestedFor(groups, selection.modifierOptionIds, nested).length > 0
     ) {
       this.basketErrorKey.set('dineIn.chooseRequired');
       return;
     }
-    const lineKey = lineKeyFor(selection.variantId, selection.modifierOptionIds, comboPicks);
+    const lineKey = lineKeyFor(
+      selection.variantId,
+      selection.modifierOptionIds,
+      comboPicks,
+      nested,
+    );
     const written = await this.writeBasket(async () => {
       await this.carts.ensure(
         admission.locationId,
@@ -687,6 +709,7 @@ export class DineInTableComponent implements OnInit {
         quantity: (held?.quantity ?? 0) + selection.quantity,
         modifierOptionIds: selection.modifierOptionIds,
         ...(comboPicks.length > 0 ? { comboPicks } : {}),
+        ...(nested.length > 0 ? { nestedModifiers: nested } : {}),
       });
     });
     if (written) {
@@ -711,9 +734,13 @@ export class DineInTableComponent implements OnInit {
         await this.carts.putLine({
           variantId: held.variantId,
           quantity: change.quantity,
-          modifierOptionIds: modifierOptionIdsFromLineKey(held.lineKey, held.variantId),
+          modifierOptionIds: optionIdsOfLine(held),
           // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
           ...(held.comboPicks && held.comboPicks.length > 0 ? { comboPicks: held.comboPicks } : {}),
+          // ... and the second-level answers, or the options that asked for them would be refused.
+          ...(held.nestedModifiers && held.nestedModifiers.length > 0
+            ? { nestedModifiers: held.nestedModifiers }
+            : {}),
         });
       }
     });

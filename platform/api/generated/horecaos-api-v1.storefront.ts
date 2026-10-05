@@ -91,6 +91,7 @@ export interface CartLineResponse {
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
+  modifierOptionIds?: Array<string>;
   nestedModifiers?: Array<NestedModifierResponse>;
   quantity?: number;
   variantId?: string;
@@ -389,6 +390,7 @@ export interface MenuModifierOption {
   code?: string;
   maximumQuantity?: number;
   name?: string;
+  nestedGroups?: Array<MenuModifierGroupPolicy>;
   optionId?: string;
 }
 
@@ -409,6 +411,8 @@ export interface MenuProduct {
 export interface MenuVariant {
   amountMinor?: number;
   isDefault?: boolean;
+  modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;

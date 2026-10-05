@@ -1,0 +1,43 @@
+@for (entry of opened(); track entry.parent.id) {
+  <section class="parent" data-testid="nested-parent-section">
+    <h3 class="parent__name" data-testid="nested-parent">
+      {{ 'nested.for' | t: { option: entry.parent.label } }}
+    </h3>
+    @for (group of entry.groups; track group.id) {
+      <section
+        class="group"
+        data-testid="nested-group"
+        [class.is-missing]="isMissing(entry.parent.id, group)"
+      >
+        <h4 class="group__name">
+          {{ group.name }}
+          @if (isMandatory(group)) {
+            <span class="group__req" data-testid="nested-group-required">{{
+              'details.required' | t
+            }}</span>
+          }
+        </h4>
+        @if (rule(group); as hint) {
+          <p class="group__rule" data-testid="nested-group-rule">{{ hint.key | t: hint.params }}</p>
+        }
+        <div class="group__options">
+          @for (option of group.options; track option.id) {
+            <button
+              type="button"
+              class="option"
+              data-testid="nested-option"
+              [class.is-active]="isChosen(entry.parent.id, group.id, option.id)"
+              [attr.aria-pressed]="isChosen(entry.parent.id, group.id, option.id)"
+              (click)="toggle(entry.parent.id, group, option.id)"
+            >
+              <span class="option__name">{{ option.label }}</span>
+              @if (surcharge(option.amountMinor); as extra) {
+                <span class="option__extra">{{ extra }}</span>
+              }
+            </button>
+          }
+        </div>
+      </section>
+    }
+  </section>
+}

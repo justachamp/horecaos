@@ -84,7 +84,7 @@ import { OrderDetailMoney } from './order-detail-money';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
-import { NewOrderApi } from './new-order/new-order-api';
+import { MenuComboGroup, NewOrderApi } from './new-order/new-order-api';
 import { OrderNoteDialog } from './order-note-dialog';
 import { ExternalBookingSubmission, ExternalCourierDialog } from './external-courier-dialog';
 import {
@@ -458,6 +458,11 @@ export class OrderDetailPane {
   /** `q-order-add-lines-dialog`'s own search results and loading flag — fully controlled, see that component's own doc. */
   protected readonly addLinesOptions = signal<readonly ComboboxOption[]>([]);
   protected readonly addLinesSearching = signal(false);
+  /** ADR 0136: the combo groups of the menu this order was placed through, and its currency; read when the dialog opens. */
+  protected readonly addLinesComboGroups = signal<readonly MenuComboGroup[]>([]);
+  protected readonly addLinesCurrency = signal<string | null>(null);
+  /** The menu could not be read, so the dialog says a combo cannot be added from it. */
+  protected readonly addLinesCombosUnavailable = signal(false);
 
   /** The operator channel's enabled payment methods, read fresh each time `CHANGE_PAYMENT_METHOD` opens — `new-order-page.ts`'s own `paymentMethods` reads the identical matrix the identical way. */
   protected readonly paymentMethods = signal<readonly string[]>(['CASH']);
@@ -532,6 +537,9 @@ export class OrderDetailPane {
     this.amendmentHistoryError.set(false);
     this.addLinesOptions.set([]);
     this.addLinesSearching.set(false);
+    this.addLinesComboGroups.set([]);
+    this.addLinesCurrency.set(null);
+    this.addLinesCombosUnavailable.set(false);
     this.paymentMethods.set(['CASH']);
     this.pendingAmendment.set(null);
 
@@ -1252,7 +1260,31 @@ export class OrderDetailPane {
 
   protected openAddLinesDialog(): void {
     this.addLinesOptions.set([]);
+    this.addLinesCombosUnavailable.set(false);
     this.dialog.set('addLines');
+    void this.loadAddLinesCombos();
+  }
+
+  /**
+   * ADR 0136: the combo groups an operator picks from when adding a combo to a placed order. Read
+   * from the published menu of the channel the order was placed through (`NewOrderApi.menu`, the
+   * composer's own read) — the groups and their component prices as the order's own channel sells
+   * them. Best effort: when it cannot be read the dialog still adds ordinary items and says a
+   * combo cannot be added, rather than sending a combo container with nothing picked.
+   */
+  private async loadAddLinesCombos(): Promise<void> {
+    const scope = this.location.scope();
+    const channelCode = this.order()?.value.summary.channelCode;
+    if (!scope || !channelCode) {
+      return;
+    }
+    try {
+      const menu = await this.newOrderApi.menu(scope, channelCode, this.menuLocale());
+      this.addLinesComboGroups.set(menu.comboGroups ?? []);
+      this.addLinesCurrency.set(menu.currency);
+    } catch {
+      this.addLinesCombosUnavailable.set(true);
+    }
   }
 
   /**
@@ -1302,6 +1334,8 @@ export class OrderDetailPane {
       variantId: selection.variantId,
       quantity: selection.quantity,
       modifierOptionIds: [],
+      // ADR 0136: set exactly when the line is a combo's container; quantity then counts combos.
+      ...(selection.comboPicks ? { comboPicks: selection.comboPicks } : {}),
     }));
     void this.submitRepricingAmendment(
       this.amendmentsApi.addLines(

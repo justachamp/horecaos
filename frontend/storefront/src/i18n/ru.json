@@ -303,6 +303,10 @@
     "comboSoldOut": "Нет в наличии",
     "comboIncomplete": "Сделайте выбор в каждой обязательной группе выше, прежде чем добавить в корзину.",
     "comboUnavailable": "Это комбо сейчас нельзя заказать.",
+    "nestedFor": "Для «{{option}}»",
+    "pickAtLeast": "Выберите не меньше {{min}}",
+    "pickAny": "Выберите любые",
+    "variantGroupsTitle": "Выбор для «{{variant}}»",
     "fromPrice": "от {{price}}"
   },
   "terms": {

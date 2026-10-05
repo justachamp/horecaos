@@ -596,4 +596,7 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.geography.drillDown.empty': 'Нет подходящих заказов в выбранных датах.',
   'reports.geography.drillDown.truncated':
     'Хотя бы одна из выбранных дат достигла своего лимита чтения — в этот день заказов может быть больше.',
+  'reports.products.combos.column.sold': 'Продано',
+  'reports.products.combos.note':
+    'Только завершённые заказы. Блюдо, проданное отдельно, — не комбо.',
 };

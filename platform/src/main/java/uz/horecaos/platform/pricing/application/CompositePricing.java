@@ -175,7 +175,8 @@ public final class CompositePricing {
                 throw new CompositeSelectionException(
                         "COMBO_NOT_CONFIGURED",
                         line.variantId(),
-                        "Variant %s is not a combo but the line carries combo picks".formatted(line.variantId()));
+                        "Variant %s is not a combo on the live menu (one that was authored or changed since the last publication is not sold until it is published) but the line carries combo picks"
+                                .formatted(line.variantId()));
             }
             return null;
         }

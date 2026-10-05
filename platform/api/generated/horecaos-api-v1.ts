@@ -1349,6 +1349,7 @@ export interface CartLineResponse {
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
+  modifierOptionIds?: Array<string>;
   nestedModifiers?: Array<NestedModifierResponse>;
   quantity?: number;
   variantId?: string;
@@ -1774,6 +1775,25 @@ export interface ComboResponse {
   name?: string;
   quantity?: number;
   selectionId?: string;
+}
+
+export interface ComboSalesListResponse {
+  maybeMore?: boolean;
+  provenance?: ProvenanceResponse;
+  rows?: Array<ComboSalesRowResponse>;
+}
+
+export interface ComboSalesRowResponse {
+  comboContainerVariantId?: string;
+  comboName?: string;
+  combosSold?: number;
+  deliveryCombos?: number;
+  orders?: number;
+  pickupCombos?: number;
+  purchases?: number;
+  totalDiscountSom?: number;
+  totalGrossSom?: number;
+  totalNetSom?: number;
 }
 
 export interface CommentPresetChip {
@@ -4740,6 +4760,7 @@ export interface MenuModifierOption {
   code?: string;
   maximumQuantity?: number;
   name?: string;
+  nestedGroups?: Array<MenuModifierGroupPolicy>;
   optionId?: string;
 }
 
@@ -4767,6 +4788,8 @@ export interface MenuResponse {
 export interface MenuVariant {
   amountMinor?: number;
   isDefault?: boolean;
+  modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;
@@ -11289,6 +11312,7 @@ export interface Operations {
   "cancellationReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CancellationReasonResponse> } };
   "run": { method: "POST"; path: "/api/v1/tenants/{tenantId}/reporting/classification-runs"; request: { parameters: { path: { tenantId: string } }; body: ClassificationRunRequest }; responses: { "200": ClassificationRunResponse } };
   "latest": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/classification-runs/latest"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": ClassificationRunResponse } };
+  "comboSales": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/combo-sales"; request: { parameters: { path: { tenantId: string }; query: { from: string; fulfilmentType?: Array<string>; limit?: number; locationId?: Array<string>; to: string } } }; responses: { "200": ComboSalesListResponse } };
   "externalDeliveryCost": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/external-delivery-cost"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": ExternalDeliveryCostResponse } };
   "leaderboard": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/leaderboard"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": LeaderboardResponse } };
   "slaBuckets_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/couriers/sla-buckets"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": CourierSlaResponse } };

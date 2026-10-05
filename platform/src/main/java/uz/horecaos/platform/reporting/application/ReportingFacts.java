@@ -220,6 +220,14 @@ public final class ReportingFacts {
      *                       back to {@code fact_order}. Null means no fiscal
      *                       identity was recorded on the order, its own group,
      *                       never folded into a real entity
+     * @param comboSelectionId ADR 0136 (V0478): the purchase this line is a component of, copied
+     *                       from the order line. Null on every line that is no combo's
+     * @param comboContainerVariantId the combo it was bought as part of; set exactly when
+     *                       {@code comboSelectionId} is
+     * @param comboQuantity  how many combos the purchase was, the same on every component line of
+     *                       one selection; set exactly when {@code comboSelectionId} is
+     * @param comboNameSnapshot the combo's name as it was sold; set exactly when
+     *                       {@code comboSelectionId} is
      */
     public record OrderLineFact(
             UUID tenantId,
@@ -235,7 +243,11 @@ public final class ReportingFacts {
             long discountSom,
             long netSom,
             Instant occurredAt,
-            @Nullable UUID legalEntityId) {}
+            @Nullable UUID legalEntityId,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId,
+            @Nullable Integer comboQuantity,
+            @Nullable String comboNameSnapshot) {}
 
     /**
      * The slice a branch-day aggregate is keyed by.

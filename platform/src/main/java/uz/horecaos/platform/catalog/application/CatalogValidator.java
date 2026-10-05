@@ -534,17 +534,33 @@ public class CatalogValidator {
      * catalog sells.
      *
      * <p>Attachments elsewhere in the brand are somebody else's catalog: they are
-     * loaded because a nested option may reach them, not because this publication
-     * answers for them.
+     * loaded because a nested option may reach them. Those a published option does
+     * reach are answered for here all the same, since the publication carries their
+     * rules to the customer (ADR 0136): a nested group's override that contradicts its
+     * group would otherwise be published, and the customer held to it.
      */
     private void validateAttachments(Snapshot snapshot, CompositeContext composite, List<ValidationFinding> findings) {
         Set<UUID> productIds = snapshot.products().stream().map(Product::id).collect(Collectors.toSet());
         Set<UUID> variantIds = snapshot.variants().stream().map(Variant::id).collect(Collectors.toSet());
+        Set<UUID> nestedVariantIds = new HashSet<>();
+        Set<UUID> nestedProductIds = new HashSet<>();
+        for (ModifierGroup published : snapshot.modifierGroups()) {
+            for (ModifierOption option : composite.activeOptionsOf(published.id())) {
+                UUID linked = option.linkedVariantId();
+                if (linked != null) {
+                    nestedVariantIds.add(linked);
+                    UUID linkedProduct = composite.productIdByVariant().get(linked);
+                    if (linkedProduct != null) {
+                        nestedProductIds.add(linkedProduct);
+                    }
+                }
+            }
+        }
 
         for (ModifierAttachment attachment : composite.attachments()) {
             boolean ownedHere = attachment.ownerType() == AttachmentOwnerType.PRODUCT
-                    ? productIds.contains(attachment.ownerId())
-                    : variantIds.contains(attachment.ownerId());
+                    ? productIds.contains(attachment.ownerId()) || nestedProductIds.contains(attachment.ownerId())
+                    : variantIds.contains(attachment.ownerId()) || nestedVariantIds.contains(attachment.ownerId());
             ModifierGroup group = composite.modifierGroupsById().get(attachment.modifierGroupId());
             if (!ownedHere || group == null || group.status() != Status.ACTIVE) {
                 continue;
@@ -565,11 +581,14 @@ public class CatalogValidator {
             }
 
             if (attachment.hidden() && attachment.ownerType() == AttachmentOwnerType.VARIANT) {
-                // Pricing lays the variant's attachment over its product's; the menu and the cart
-                // read the product's alone. A group the product offers as a choice and a variant
-                // applies by itself is asked of the customer and charged again: authoring refuses
-                // to write the pairing, and a row that predates the refusal, or came in through
-                // the product's own attach, is caught here.
+                // Pricing lays the variant's attachment over its product's, and a hidden one takes
+                // the group out of the choices. The publication says what a variant adds to its
+                // product's groups and the rules it states for them; it does not say that a variant
+                // withdraws one, so the menu and the cart still offer the product's group. A group
+                // the product offers as a choice and a variant applies by itself is asked of the
+                // customer and charged again: authoring refuses to write the pairing, and a row
+                // that predates the refusal, or came in through the product's own attach, is caught
+                // here.
                 UUID productId = composite.productIdByVariant().get(attachment.ownerId());
                 composite.attachments().stream()
                         .filter(other -> other.ownerType() == AttachmentOwnerType.PRODUCT
@@ -1121,6 +1140,21 @@ public class CatalogValidator {
          * of the same group wins).
          */
         public List<ModifierGroup> visibleGroupsOf(UUID variantId) {
+            return visibleAttachmentsOf(variantId).stream()
+                    .map(attachment -> modifierGroupsById.get(attachment.modifierGroupId()))
+                    .toList();
+        }
+
+        /**
+         * The attachments behind {@link #visibleGroupsOf}: a variant's product-level attachments
+         * with its own laid over them, keeping the customer-facing ones whose shared group is
+         * active, in the author's order.
+         *
+         * <p>The attachment is returned and not only the group because the rules a customer is
+         * held to are the attachment's laid over the group's ({@link
+         * ModifierAttachment#effectiveRequired}), and a publication has to say which.
+         */
+        public List<ModifierAttachment> visibleAttachmentsOf(UUID variantId) {
             UUID productId = productIdByVariant.get(variantId);
             List<ModifierAttachment> productLevel = productId == null
                     ? List.of()
@@ -1128,14 +1162,44 @@ public class CatalogValidator {
                             .filter(attachment -> attachment.ownerType() == AttachmentOwnerType.PRODUCT
                                     && attachment.ownerId().equals(productId))
                             .toList();
-            List<ModifierAttachment> variantLevel = attachments.stream()
-                    .filter(attachment -> attachment.ownerType() == AttachmentOwnerType.VARIANT
-                            && attachment.ownerId().equals(variantId))
-                    .toList();
+            List<ModifierAttachment> variantLevel = variantLevelAttachmentsOf(variantId);
             return CompositeProducts.effectiveAttachments(productLevel, variantLevel).stream()
                     .filter(attachment -> !attachment.hidden())
-                    .map(attachment -> modifierGroupsById.get(attachment.modifierGroupId()))
-                    .filter(group -> group != null && group.status() == Status.ACTIVE)
+                    .filter(attachment -> {
+                        ModifierGroup group = modifierGroupsById.get(attachment.modifierGroupId());
+                        return group != null && group.status() == Status.ACTIVE;
+                    })
+                    .toList();
+        }
+
+        /**
+         * The customer-facing attachments a variant carries of its own, in the author's order,
+         * whose shared group is active (ADR 0136). What a variant adds to, or says differently
+         * from, its product's groups.
+         */
+        public List<ModifierAttachment> ownVisibleAttachmentsOf(UUID variantId) {
+            if (containerVariantIds().contains(variantId)) {
+                // A combo line takes no modifiers of its own (COMBO_MODIFIERS_NOT_SUPPORTED): its
+                // components are priced one by one. A group attached to the container would be
+                // offered to a customer whose choice of it the quote then refuses, so it is not
+                // offered at all.
+                return List.of();
+            }
+            return variantLevelAttachmentsOf(variantId).stream()
+                    .filter(attachment -> !attachment.hidden())
+                    .filter(attachment -> {
+                        ModifierGroup group = modifierGroupsById.get(attachment.modifierGroupId());
+                        return group != null && group.status() == Status.ACTIVE;
+                    })
+                    .sorted(java.util.Comparator.comparingInt(ModifierAttachment::sortOrder)
+                            .thenComparing(ModifierAttachment::modifierGroupId))
+                    .toList();
+        }
+
+        private List<ModifierAttachment> variantLevelAttachmentsOf(UUID variantId) {
+            return attachments.stream()
+                    .filter(attachment -> attachment.ownerType() == AttachmentOwnerType.VARIANT
+                            && attachment.ownerId().equals(variantId))
                     .toList();
         }
     }

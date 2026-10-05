@@ -3,9 +3,11 @@ package uz.horecaos.platform.ordering.infrastructure.catalog;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -79,12 +81,19 @@ public class JdbcCartMenuRules implements CartMenuRules {
         }
 
         Map<UUID, PhysicalRules> physical = physicalRules(product.get().content());
-        List<UUID> groupIds = idList(product.get().content(), "modifierGroupIds");
-        if (groupIds.isEmpty()) {
+        // ADR 0136: the groups this variant is offered with are its product's and the ones it
+        // carries of its own, and where a variant states its own rules for a group it replaces the
+        // product's. The cart holds the customer to what the menu showed for the variant they
+        // chose, not for the product's other sizes.
+        Map<String, Object> variantEntry = variantEntry(product.get().content(), variantId);
+        Set<UUID> offered = new LinkedHashSet<>(idList(product.get().content(), "modifierGroupIds"));
+        offered.addAll(idList(variantEntry, "modifierGroupIds"));
+        if (offered.isEmpty()) {
             return Optional.of(new ProductRules(product.get().entityId(), List.of(), physical));
         }
-        Map<UUID, Policy> policies = policies(product.get().content());
-        List<GroupRules> rules = groups(publicationId.get(), groupIds).stream()
+        Map<UUID, Policy> policies = new LinkedHashMap<>(policies(product.get().content()));
+        policies.putAll(policies(variantEntry));
+        List<GroupRules> rules = groups(publicationId.get(), List.copyOf(offered)).stream()
                 .map(group ->
                         policies.containsKey(group.groupId()) ? group.withPolicy(policies.get(group.groupId())) : group)
                 .toList();
@@ -111,6 +120,21 @@ public class JdbcCartMenuRules implements CartMenuRules {
             }
         }
         return byGroup;
+    }
+
+    /** The published entry of one variant of the product, or an empty map when the product does not list it. */
+    private static Map<String, Object> variantEntry(Map<String, Object> content, UUID variantId) {
+        if (content.get("variants") instanceof List<?> variants) {
+            for (Object element : variants) {
+                if (element instanceof Map<?, ?> variant
+                        && variantId.toString().equals(String.valueOf(variant.get("variantId")))) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> typed = (Map<String, Object>) variant;
+                    return typed;
+                }
+            }
+        }
+        return Map.of();
     }
 
     /**

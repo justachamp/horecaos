@@ -12,7 +12,7 @@ import type {
 } from '../types/cart.types';
 import {
   CartService,
-  modifierOptionIdsFromLineKey,
+  optionIdsOfLine,
   type CheckoutResult,
   type FulfillmentMode,
   type PlatformCart,
@@ -30,6 +30,7 @@ import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import type { ComboPickWire } from '../utils/combo-selection';
+import type { NestedModifierWire } from '../utils/modifier-selection';
 import { variantAvailability } from '../utils/item-availability';
 import { lineAmountMinor, portionStep, type PhysicalFacts } from '../utils/physical';
 
@@ -435,9 +436,13 @@ export class UiCartService {
       existing?.lines.map((line) => ({
         variantId: line.variantId,
         quantity: line.quantity,
-        modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+        modifierOptionIds: optionIdsOfLine(line),
         // ADR 0136: and a combo's picks, or its container would be put back with nothing chosen.
         ...(line.comboPicks && line.comboPicks.length > 0 ? { comboPicks: line.comboPicks } : {}),
+        // ... and the second-level answers, or the options that asked for them would be refused.
+        ...(line.nestedModifiers && line.nestedModifiers.length > 0
+          ? { nestedModifiers: line.nestedModifiers }
+          : {}),
       })) ?? [];
 
     this.fulfillmentMode.set(mode);
@@ -457,6 +462,7 @@ export class UiCartService {
           quantity: line.quantity,
           modifierOptionIds: line.modifierOptionIds,
           ...('comboPicks' in line ? { comboPicks: line.comboPicks } : {}),
+          ...('nestedModifiers' in line ? { nestedModifiers: line.nestedModifiers } : {}),
         });
       }
       await this.project(this.carts.cart());
@@ -498,6 +504,8 @@ export class UiCartService {
    * @param comboPicks ADR 0136: what the customer picked inside a combo, set exactly when
    *        `variantId` is a combo's container. Part of the line's identity, like the modifiers: the
    *        same combo with other picks is another line.
+   * @param nestedModifiers ADR 0136: the second-level answers, each under the first-level option
+   *        that opened it. Part of the line's identity as well.
    * @returns whether the platform took the line. On false, {@link errorKey}
    *          names why -- a sale-window or sold-out refusal, an expired basket,
    *          a dropped connection -- so the caller can say so instead of
@@ -509,6 +517,7 @@ export class UiCartService {
     note?: string,
     modifierOptionIds?: readonly string[],
     comboPicks?: readonly ComboPickWire[],
+    nestedModifiers?: readonly NestedModifierWire[],
   ): Promise<boolean> {
     this.updating.set(true);
     this.errorKey.set(null);
@@ -520,6 +529,7 @@ export class UiCartService {
         customerNote: note,
         modifierOptionIds,
         comboPicks,
+        nestedModifiers,
       });
       await this.project(cart);
       return true;
@@ -590,8 +600,10 @@ export class UiCartService {
               variantId: item.variant_id,
               quantity,
               modifierOptionIds: item.modifierOptionIds,
-              // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+              // ADR 0136: resent whole, or a quantity change would strip a combo's picks
+              // and the second-level answers under the options.
               comboPicks: item.comboPicks,
+              nestedModifiers: item.nestedModifiers,
             });
       await this.project(cart);
     } catch (failure) {
@@ -907,9 +919,14 @@ export class UiCartService {
         if (!known) {
           return null;
         }
-        const modifierOptionIds = modifierOptionIdsFromLineKey(line.lineKey, line.variantId);
-        const modifiers: CartResponseModifierSelection[] = modifierOptionIds
-          .map((optionId) => {
+        const modifierOptionIds = optionIdsOfLine(line);
+        const nestedModifiers = line.nestedModifiers ?? [];
+        // The first-level choices, then the answers under them (each marked with its parent).
+        const modifiers: CartResponseModifierSelection[] = [
+          ...modifierOptionIds.map((optionId) => ({ optionId, parentOptionId: null })),
+          ...nestedModifiers,
+        ]
+          .map(({ optionId, parentOptionId }) => {
             const resolved = modifierOptionsById.get(optionId);
             return resolved
               ? {
@@ -917,6 +934,7 @@ export class UiCartService {
                   groupName: resolved.groupName,
                   label: resolved.label,
                   amountMinor: resolved.amountMinor,
+                  ...(parentOptionId ? { parentOptionId } : {}),
                 }
               : null;
           })
@@ -965,6 +983,7 @@ export class UiCartService {
           modifiers,
           comboPicks,
           comboComponents,
+          nestedModifiers,
         };
         return projected;
       })

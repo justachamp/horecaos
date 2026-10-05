@@ -63,6 +63,50 @@
     </fieldset>
   }
 
+  @for (entry of opened(); track entry.parent.optionId) {
+    <fieldset class="modifier-dialog__group" data-testid="item-modifier-nested">
+      <legend class="q-body-sm modifier-dialog__legend">
+        {{ 'orders.newOrder.modifiers.title' | t: { product: optionLabel(entry.parent) } }}
+      </legend>
+      @for (group of entry.groups; track group.modifierGroupId) {
+        <p class="q-body-sm modifier-dialog__nested-group">
+          {{ group.name }}
+          @if (groupMinimum(group) > 0) {
+            <span class="q-caption modifier-dialog__required">{{
+              'orders.newOrder.modifiers.required' | t
+            }}</span>
+          }
+        </p>
+        @for (option of group.options; track option.optionId) {
+          <div class="modifier-dialog__option">
+            <label class="modifier-dialog__option-label">
+              <input
+                [type]="isSingleChoice(group) ? 'radio' : 'checkbox'"
+                [attr.name]="'nested-' + entry.parent.optionId + '-' + group.modifierGroupId"
+                [checked]="isNestedPicked(entry.parent, option)"
+                (change)="toggleNested(entry.parent, group, option)"
+                [attr.data-testid]="
+                  isSingleChoice(group)
+                    ? 'item-modifier-nested-radio'
+                    : 'item-modifier-nested-checkbox'
+                "
+              />
+              <span class="q-body-sm">{{ optionLabel(option) }}</span>
+            </label>
+            @if (formattedPrice(option.amountMinor); as price) {
+              <span class="q-caption modifier-dialog__price">{{ price }}</span>
+            }
+          </div>
+        }
+        @if (isNestedUnmet(entry.parent, group)) {
+          <p class="q-caption modifier-dialog__error" data-testid="item-modifier-nested-error">
+            {{ 'orders.newOrder.modifiers.selectAtLeast' | t: { min: groupMinimum(group) } }}
+          </p>
+        }
+      }
+    </fieldset>
+  }
+
   @if (presets().length > 0) {
     <fieldset class="modifier-dialog__group">
       <legend class="q-body-sm modifier-dialog__legend">

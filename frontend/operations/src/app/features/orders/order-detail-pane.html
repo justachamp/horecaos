@@ -983,6 +983,9 @@
     <q-order-add-lines-dialog
       [options]="addLinesOptions()"
       [searching]="addLinesSearching()"
+      [comboGroups]="addLinesComboGroups()"
+      [currency]="addLinesCurrency()"
+      [combosUnavailable]="addLinesCombosUnavailable()"
       [busy]="busy()"
       (search)="onAddLinesSearch($event)"
       (confirm)="onAddLinesConfirm($event)"

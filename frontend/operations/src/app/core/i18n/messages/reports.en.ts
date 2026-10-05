@@ -590,4 +590,7 @@ export const reportsEn = {
   'reports.geography.drillDown.empty': 'No matching orders in the sampled dates.',
   'reports.geography.drillDown.truncated':
     'At least one sampled date hit its own read cap — there may be more orders that day.',
+  'reports.products.combos.column.sold': 'Sold',
+  'reports.products.combos.note':
+    'Completed orders only. A dish sold on its own is not a combo — see Sales.',
 } as const;

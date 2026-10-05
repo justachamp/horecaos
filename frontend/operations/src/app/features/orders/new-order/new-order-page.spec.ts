@@ -2140,6 +2140,157 @@ describe('NewOrderPage', () => {
     expect(dialog?.textContent).not.toContain('MAYO');
   });
 
+  // ------------------------------------------------ ADR 0136: a portion's own groups and the second level
+
+  describe('a portion’s own groups and the choices an option opens (ADR 0136)', () => {
+    const sizedMenu = (): StorefrontMenu => ({
+      ...MENU,
+      products: [
+        {
+          ...MENU.products[0],
+          modifierGroupIds: ['g-sauce'],
+          variants: [
+            { ...MENU.products[0].variants[0], variantId: 'v-small' },
+            {
+              ...MENU.products[0].variants[0],
+              variantId: 'v-large',
+              isDefault: false,
+              modifierGroupIds: ['g-dip'],
+              modifierGroupPolicies: [
+                {
+                  modifierGroupId: 'g-sauce',
+                  required: true,
+                  minimumSelections: 1,
+                  maximumSelections: 1,
+                },
+                {
+                  modifierGroupId: 'g-dip',
+                  required: true,
+                  minimumSelections: 1,
+                  maximumSelections: 1,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-sauce',
+          code: 'SAUCE',
+          name: 'Sauce',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 3,
+          allowSameOptionMultipleTimes: false,
+          options: [
+            {
+              optionId: 'o-chili',
+              code: 'CHILI',
+              maximumQuantity: 1,
+              amountMinor: 2_000,
+              nestedGroups: [
+                {
+                  modifierGroupId: 'g-heat',
+                  required: true,
+                  minimumSelections: 1,
+                  maximumSelections: 1,
+                },
+              ],
+            },
+            { optionId: 'o-garlic', code: 'GARLIC', maximumQuantity: 1, amountMinor: 0 },
+          ],
+        },
+        {
+          modifierGroupId: 'g-dip',
+          code: 'DIP',
+          name: 'Dip',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 3,
+          allowSameOptionMultipleTimes: false,
+          options: [{ optionId: 'o-ketchup', code: 'KETCHUP', maximumQuantity: 1, amountMinor: 0 }],
+        },
+        {
+          modifierGroupId: 'g-heat',
+          code: 'HEAT',
+          name: 'Heat',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 3,
+          allowSameOptionMultipleTimes: false,
+          options: [
+            { optionId: 'o-hot', code: 'HOT', maximumQuantity: 1, amountMinor: 1_000 },
+            { optionId: 'o-mild', code: 'MILD', maximumQuantity: 1, amountMinor: 0 },
+          ],
+        },
+      ],
+    });
+
+    it('opens the dialog with the groups of the portion chosen: its own, under its own rules, and not another portion’s', async () => {
+      await render({ menu: vi.fn().mockResolvedValue(sizedMenu()) });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-small', label: 'Cheeseburger' });
+      expect(
+        fixture.componentInstance['pendingModifiers']()!.groups.map((g) => g.modifierGroupId),
+      ).toEqual(['g-sauce']);
+      expect(fixture.componentInstance['pendingModifiers']()!.groups[0]).toMatchObject({
+        required: false,
+      });
+      fixture.componentInstance['onModifierDismiss']();
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-large', label: 'Cheeseburger' });
+      const groups = fixture.componentInstance['pendingModifiers']()!.groups;
+      expect(groups.map((g) => g.modifierGroupId)).toEqual(['g-sauce', 'g-dip']);
+      expect(groups[0]).toMatchObject({ required: true, maximumSelections: 1 });
+      expect(groups[1]).toMatchObject({ required: true });
+    });
+
+    it('sends the second-level answers under their parent, keeps them out of the first-level list, and prices them', async () => {
+      const placeOrder = vi.fn().mockResolvedValue({
+        orderId: 'order-n',
+        publicOrderNumber: '#0011',
+        status: 'CONFIRMED',
+        version: 1,
+        outcome: 'PLACED',
+        warnings: [],
+      });
+      await render({ placeOrder, menu: vi.fn().mockResolvedValue(sizedMenu()) });
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      fixture.componentInstance['selectCandidate'](candidate());
+      fixture.componentInstance['onItemSelected']({ id: 'v-small', label: 'Cheeseburger' });
+      fixture.componentInstance['onModifierConfirm']({
+        selections: [
+          { optionId: 'o-chili', code: 'CHILI', quantity: 1, amountMinor: 2_000 },
+          {
+            optionId: 'o-hot',
+            code: 'HOT',
+            quantity: 1,
+            amountMinor: 1_000,
+            parentOptionId: 'o-chili',
+          },
+        ],
+        commentPresetCodes: [],
+      });
+      fixture.detectChanges();
+
+      // 30 000 + chili 2 000 + hot 1 000
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(33_000);
+      await fixture.componentInstance['submit']();
+
+      expect(placeOrder.mock.calls[0][1].lines).toEqual([
+        {
+          variantId: 'v-small',
+          quantity: 1,
+          modifierOptionIds: ['o-chili'],
+          nestedModifiers: [{ parentOptionId: 'o-chili', optionId: 'o-hot' }],
+          commentPresetCodes: [],
+          customerNote: null,
+        },
+      ]);
+    });
+  });
+
   // ------------------------------------------------ portions and weighed items (ADR 0137)
 
   describe('portions and weighed items (ADR 0137)', () => {

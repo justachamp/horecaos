@@ -519,6 +519,9 @@
     "unavailable": "Это комбо сейчас нельзя заказать.",
     "total": "Цена комбо: {{price}}"
   },
+  "nested": {
+    "for": "Для «{{option}}»"
+  },
   "physical": {
     "nutritionTitle": "Пищевая ценность",
     "nutritionPer100g": "на 100 г",

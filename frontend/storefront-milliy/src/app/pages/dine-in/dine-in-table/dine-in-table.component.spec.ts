@@ -149,9 +149,15 @@ class FakeCartService {
       quantity: number;
       modifierOptionIds?: readonly string[];
       comboPicks?: readonly { componentId: string; quantity: number }[];
+      nestedModifiers?: readonly { parentOptionId: string; optionId: string }[];
     }) => {
       // Keyed as the real service keys it: the variant and its exact selection.
-      const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? [], input.comboPicks);
+      const lineKey = lineKeyFor(
+        input.variantId,
+        input.modifierOptionIds ?? [],
+        input.comboPicks,
+        input.nestedModifiers,
+      );
       const held = this.cart()?.lines ?? [];
       const line: PlatformCartLine = {
         lineKey,
@@ -159,6 +165,9 @@ class FakeCartService {
         quantity: input.quantity,
         hasCustomerNote: false,
         ...(input.comboPicks ? { comboPicks: input.comboPicks } : {}),
+        // As the platform answers: what a line holds, since its key is a hash that cannot say.
+        modifierOptionIds: input.modifierOptionIds ?? [],
+        ...(input.nestedModifiers ? { nestedModifiers: input.nestedModifiers } : {}),
       };
       this.version++;
       return this.open(
@@ -257,13 +266,22 @@ function line(variantId: string, quantity: number): PlatformCartLine {
   return { lineKey: variantId, variantId, quantity, hasCustomerNote: false };
 }
 
-/** A line ordered with options: the platform keys it by the variant and the exact selection. */
+/**
+ * A line ordered with options: keyed by the variant and a hash of the exact selection, and the
+ * platform says which options it holds (the key spells none of them out).
+ */
 function chosenLine(
   variantId: string,
   optionIds: readonly string[],
   quantity: number,
 ): PlatformCartLine {
-  return { lineKey: lineKeyFor(variantId, optionIds), variantId, quantity, hasCustomerNote: false };
+  return {
+    lineKey: lineKeyFor(variantId, optionIds),
+    variantId,
+    quantity,
+    hasCustomerNote: false,
+    modifierOptionIds: optionIds,
+  };
 }
 
 class FakeMenuService {
@@ -900,7 +918,7 @@ describe('DineInTableComponent', () => {
           modifierOptionIds: ['opt-large'],
         });
         expect(view.carts.cart()?.lines.map((entry) => entry.lineKey)).toEqual([
-          'variant-1+opt-large',
+          lineKeyFor('variant-1', ['opt-large']),
         ]);
         expect(view.carts.price).toHaveBeenCalled();
         // The picker is done; the order is offered; the dish is listed with what was chosen.
@@ -1141,7 +1159,9 @@ describe('DineInTableComponent', () => {
           });
 
           await view.click('dine-in-custom-decrease');
-          expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1+opt-large');
+          expect(view.carts.removeLine).toHaveBeenCalledWith(
+            lineKeyFor('variant-1', ['opt-large']),
+          );
           expect(view.q('dine-in-custom-lines')).toBeNull();
           expect(view.q('dine-in-order')).toBeNull();
         });
@@ -1213,7 +1233,9 @@ describe('DineInTableComponent', () => {
 
           await view.click('dine-in-custom-decrease');
 
-          expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1+opt-large');
+          expect(view.carts.removeLine).toHaveBeenCalledWith(
+            lineKeyFor('variant-1', ['opt-large']),
+          );
         });
 
         it('for a dish the menu no longer has are still listed, so they can be taken out', async () => {
@@ -1227,7 +1249,7 @@ describe('DineInTableComponent', () => {
 
           await view.click('dine-in-custom-decrease');
 
-          expect(view.carts.removeLine).toHaveBeenCalledWith('gone-variant+x');
+          expect(view.carts.removeLine).toHaveBeenCalledWith(lineKeyFor('gone-variant', ['x']));
         });
 
         it('say why when a change could not be made, and keep the list', async () => {
@@ -2568,6 +2590,8 @@ describe('DineInTableComponent -- a dish with options against the real DineInCar
                 variantId: String(options?.body?.['variantId']),
                 quantity: Number(options?.body?.['quantity']),
                 hasCustomerNote: false,
+                // As the platform answers: what the line holds, since its key is a hash.
+                modifierOptionIds: (options?.body?.['modifierOptionIds'] ?? []) as string[],
               },
             ];
             return cart();
@@ -2636,7 +2660,7 @@ describe('DineInTableComponent -- a dish with options against the real DineInCar
       (call) => call[0] === 'PUT' && String(call[1]).includes('/lines/'),
     ) as [string, string, { body: Record<string, unknown>; expectedVersion: number }];
     expect(path).toBe(
-      `${BRAND_PATH}/carts/cart-1/lines/${encodeURIComponent('variant-1+opt-large')}`,
+      `${BRAND_PATH}/carts/cart-1/lines/${encodeURIComponent(lineKeyFor('variant-1', ['opt-large']))}`,
     );
     expect(options.body).toMatchObject({
       variantId: 'variant-1',
@@ -3139,5 +3163,105 @@ describe('DineInTableComponent -- checkout re-proves the table (ADR 0047)', () =
     expect(view.carts.bindTable).toHaveBeenCalledTimes(2);
     expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.tableChanged');
     expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+  });
+});
+
+describe('DineInTableComponent -- a portion’s own groups and second-level choices at the table (ADR 0136)', () => {
+  const heat: MenuItemModifierGroup = {
+    id: 'heat',
+    name: 'Heat',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameOptionMultipleTimes: false,
+    options: [
+      { id: 'opt-hot', label: 'Hot', amountMinor: null, maximumQuantity: 1 },
+      { id: 'opt-mild', label: 'Mild', amountMinor: null, maximumQuantity: 1 },
+    ],
+  };
+  const sauces: MenuItemModifierGroup = {
+    id: 'sauces',
+    name: 'Sauces',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameOptionMultipleTimes: false,
+    options: [
+      {
+        id: 'opt-chili',
+        label: 'Chili',
+        amountMinor: null,
+        maximumQuantity: 1,
+        nestedGroups: [heat],
+      },
+      { id: 'opt-garlic', label: 'Garlic', amountMinor: null, maximumQuantity: 1 },
+    ],
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  async function seated(item: MenuItem = dish('p1', 'Osh', [variant()], [sauces])) {
+    const view = setUp();
+    view.dineIn.seed(admission());
+    view.menuService.home.mockResolvedValue(menu([item]));
+    await settle(view.fixture);
+    return view;
+  }
+
+  it('writes the line with the answers under their parent, keyed by a hash, and lists them with the dish', async () => {
+    const view = await seated();
+    await view.click('dine-in-choose');
+
+    pick(view, 'Chili');
+    expect((view.q('modifier-picker-add') as HTMLButtonElement).disabled).toBe(true);
+    const hot = view.all('nested-option').find((entry) => entry.textContent?.includes('Hot'));
+    hot!.click();
+    view.fixture.detectChanges();
+    await view.click('modifier-picker-add');
+
+    expect(view.carts.putLine).toHaveBeenCalledWith({
+      variantId: 'variant-1',
+      quantity: 1,
+      modifierOptionIds: ['opt-chili'],
+      nestedModifiers: [{ parentOptionId: 'opt-chili', optionId: 'opt-hot' }],
+    });
+    expect(view.q('modifier-picker')).toBeNull();
+    expect(view.q('dine-in-custom-line-options')?.textContent).toContain('Chili');
+    expect(view.q('dine-in-custom-line-options')?.textContent).toContain('Hot');
+  });
+
+  it('keeps the options of a line whose key is a hash when its quantity is changed from the order', async () => {
+    const view = await seated();
+    await view.click('dine-in-choose');
+    pick(view, 'Chili');
+    view.all('nested-option')[0].click();
+    view.fixture.detectChanges();
+    await view.click('modifier-picker-add');
+
+    await view.click('dine-in-custom-increase');
+
+    expect(view.carts.putLine).toHaveBeenLastCalledWith({
+      variantId: 'variant-1',
+      quantity: 2,
+      modifierOptionIds: ['opt-chili'],
+      nestedModifiers: [{ parentOptionId: 'opt-chili', optionId: 'opt-hot' }],
+    });
+  });
+
+  it('opens the picker for a portion whose own group is mandatory, and for no other portion of the dish', async () => {
+    const dips = { ...heat, id: 'dips', name: 'Dips' };
+    const item = dish(
+      'p1',
+      'Fries',
+      [variant({ id: 'small' }), variant({ id: 'large', modifierGroups: [dips] })],
+      [],
+    );
+    const view = await seated(item);
+
+    expect(view.all('dine-in-choose')).toHaveLength(1);
+    expect(view.all('dine-in-add')).toHaveLength(1);
   });
 });

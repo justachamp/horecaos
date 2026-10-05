@@ -766,7 +766,8 @@ public class CatalogAuthoringService {
     /**
      * Duplicates a product: every variant (its own fiscal classification and
      * every locale's translation), its catalog and category placements, its
-     * attached modifier groups, and its media — everything a 600-item
+     * attached modifier groups, the combo groups and components of a combo
+     * (ADR 0136), and its media — everything a 600-item
      * onboarding operator would otherwise retype variant by variant and
      * locale by locale for "the same dish, slightly different." catalog.md
      * §4.1's row action; no endpoint answered it before this.
@@ -845,6 +846,14 @@ public class CatalogAuthoringService {
         store.copyProductModifierAttachments(tenantId, brandId, productId, newProductId);
         variantIdMap.forEach((sourceVariantId, copiedVariantId) ->
                 store.copyVariantModifierAttachments(tenantId, brandId, sourceVariantId, copiedVariantId));
+        // ADR 0136: a combo's container is the variant it is sold as, so a copy of a combo that
+        // left its groups behind would be a variant with nothing to choose and no way to be sold.
+        // The components keep offering the same dishes; their prices are not copied, as no
+        // variant's are, and publication blocks each until it is priced.
+        variantIdMap.forEach((sourceVariantId, copiedVariantId) -> store.composite()
+                .copyComboStructure(tenantId, brandId, sourceVariantId, copiedVariantId)
+                .forEach((sourceGroupId, copiedGroupId) -> copyTranslations(
+                        tenantId, brandId, allTranslations, EntityType.COMBO_GROUP, sourceGroupId, copiedGroupId)));
 
         Set<UUID> sourceEntityIds = new HashSet<>(variantIdMap.keySet());
         sourceEntityIds.add(productId);

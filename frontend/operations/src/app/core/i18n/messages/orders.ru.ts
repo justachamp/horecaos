@@ -785,4 +785,5 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.party.confirm.paid.body': 'Счёт {amount} будет записан как оплаченный. Отменить нельзя.',
   'orders.party.confirm.walkout.body':
     '{amount} будут записаны как неоплаченные и попадут в журнал аудита.',
+  'orders.dialog.addLines.combosUnavailable': 'Меню недоступно — комбо не добавить.',
 };

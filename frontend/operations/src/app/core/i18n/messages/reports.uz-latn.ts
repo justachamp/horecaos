@@ -598,4 +598,7 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.geography.drillDown.empty': 'Tanlangan sanalarda mos buyurtmalar yoʻq.',
   'reports.geography.drillDown.truncated':
     'Kamida bitta tanlangan sana oʻz oʻqish chegarasiga yetdi — oʻsha kuni yana buyurtmalar boʻlishi mumkin.',
+  'reports.products.combos.column.sold': 'Sotilgan',
+  'reports.products.combos.note':
+    'Faqat yakunlangan buyurtmalar. Alohida sotilgan taom kombo emas.',
 };

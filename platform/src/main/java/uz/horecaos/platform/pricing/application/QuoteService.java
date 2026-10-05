@@ -303,8 +303,10 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
 
         // ADR 0136. Everything composite is resolved here, before the engine runs, for
         // the reason the price book is: the engine stays a function of its inputs.
+        // The structure is the publication's, the one this quote is stamped with: a combo edited
+        // and not republished prices what the customer was shown.
         CompositeProductsLookup.ComboCatalog combos =
-                composites.comboCatalog(request.tenantId(), request.brandId(), lineVariantIds);
+                composites.comboCatalog(request.tenantId(), request.brandId(), publication, lineVariantIds);
 
         Set<UUID> pickedComponentIds = request.lines().stream()
                 .flatMap(line -> line.comboPicks().stream())
@@ -339,7 +341,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Set<UUID> selectedOptionIds = new HashSet<>(firstLevelOptionIds);
         selectedOptionIds.addAll(nestedOptionIds);
         CompositeProductsLookup.NestedCatalog nestedCatalog =
-                composites.nestedCatalog(request.tenantId(), request.brandId(), selectedOptionIds);
+                composites.nestedCatalog(request.tenantId(), request.brandId(), publication, selectedOptionIds);
 
         Set<UUID> modifierIds = new HashSet<>(selectedOptionIds);
         hiddenCharges.values().forEach(charges -> charges.forEach(charge -> modifierIds.add(charge.optionId())));
@@ -638,17 +640,24 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      */
     @Override
     @Transactional(readOnly = true)
-    public SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item) {
+    public SelectionCheck checkSelection(UUID tenantId, UUID brandId, String channelCode, PricingCommand.Item item) {
         QuoteRequest.Line line = lineOf(item);
-        CompositeProductsLookup.ComboCatalog combos =
-                composites.comboCatalog(tenantId, brandId, Set.of(item.variantId()));
+        // The channel's live menu, the one pricing will stamp the quote with. A channel with none
+        // sells no combo and offers no nested choice, so the facts are empty and any selection on
+        // a combo is refused by name; the missing menu itself is pricing's to report.
+        Optional<UUID> publication = catalog.activePublicationId(tenantId, brandId, channelCode);
+        CompositeProductsLookup.ComboCatalog combos = publication
+                .map(id -> composites.comboCatalog(tenantId, brandId, id, Set.of(item.variantId())))
+                .orElseGet(CompositeProductsLookup.ComboCatalog::empty);
 
         Set<UUID> optionIds = new HashSet<>(item.modifierOptionIds());
         item.nestedModifiers().forEach(nested -> {
             optionIds.add(nested.parentOptionId());
             optionIds.add(nested.optionId());
         });
-        CompositeProductsLookup.NestedCatalog nested = composites.nestedCatalog(tenantId, brandId, optionIds);
+        CompositeProductsLookup.NestedCatalog nested = publication
+                .map(id -> composites.nestedCatalog(tenantId, brandId, id, optionIds))
+                .orElseGet(CompositeProductsLookup.NestedCatalog::empty);
 
         var facts = new CompositePricing.CompositeInputs(
                 combos.groups(),

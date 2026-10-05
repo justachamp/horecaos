@@ -1249,6 +1249,163 @@ describe('UiCartService project(): a refused pricing never renders as a zero tot
   });
 });
 
+describe('UiCartService: second-level choices (ADR 0136)', () => {
+  const nested = [{ parentOptionId: 'o-chili', optionId: 'o-hot' }];
+  const hashedKey = 'v-1n0123456789abcd';
+
+  function sauceMenu(): PublishedMenu {
+    const option = (optionId: string, name: string, amountMinor: number) => ({
+      optionId,
+      code: name.toUpperCase(),
+      maximumQuantity: 1,
+      amountMinor,
+      name,
+    });
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p-1',
+          code: null,
+          name: 'Salad',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v-1',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              amountMinor: 20_000,
+              onSaleNow: true,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: ['g-sauce'],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-sauce',
+          code: 'SAUCE',
+          name: 'Sauce',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 2,
+          allowSameOptionMultipleTimes: false,
+          options: [option('o-chili', 'Chili', 1_000), option('o-garlic', 'Garlic', 0)],
+        },
+        {
+          modifierGroupId: 'g-heat',
+          code: 'HEAT',
+          name: 'Heat',
+          required: true,
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameOptionMultipleTimes: false,
+          options: [option('o-hot', 'Hot', 500), option('o-mild', 'Mild', 0)],
+        },
+      ],
+    });
+  }
+
+  function lineWithAnswers() {
+    return {
+      lineKey: hashedKey,
+      variantId: 'v-1',
+      quantity: 1,
+      hasCustomerNote: false,
+      modifierOptionIds: ['o-chili', 'o-garlic'],
+      nestedModifiers: nested,
+    };
+  }
+
+  it('shows the options a line holds from the cart’s echo of it, and the answers under them, named from the menu', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({ lines: [lineWithAnswers()] });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(sauceMenu());
+
+    await service.load();
+
+    const [item] = service.cartData()?.items ?? [];
+    // The key is a hash and spells nothing out: the options come from the echo.
+    expect(item.modifierOptionIds).toEqual(['o-chili', 'o-garlic']);
+    expect(item.nestedModifiers).toEqual(nested);
+    expect(item.modifiers.map((m) => [m.label, m.groupName, m.parentOptionId])).toEqual([
+      ['Chili', 'Sauce', undefined],
+      ['Garlic', 'Sauce', undefined],
+      ['Hot', 'Heat', 'o-chili'],
+    ]);
+  });
+
+  it('puts a line with its answers into the cart', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockResolvedValue(baseCart());
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.add('v-1', 1, undefined, ['o-chili'], undefined, nested);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variantId: 'v-1',
+        modifierOptionIds: ['o-chili'],
+        nestedModifiers: nested,
+      }),
+    );
+  });
+
+  it('resends the answers on a quantity change, or the change would strip them', async () => {
+    const { service, carts } = setUp();
+    carts.putLine.mockResolvedValue(baseCart());
+    const item: CartResponseItem = {
+      variant_id: 'v-1',
+      price: 20_000,
+      item_id: hashedKey,
+      name: 'Salad',
+      active: true,
+      image: null,
+      quantity: 1,
+      note: null,
+      modifierOptionIds: ['o-chili'],
+      modifiers: [],
+      nestedModifiers: nested,
+    };
+
+    await service.setQuantity(item, 3);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variantId: 'v-1',
+        quantity: 3,
+        modifierOptionIds: ['o-chili'],
+        nestedModifiers: nested,
+      }),
+    );
+  });
+
+  it('carries the options and the answers across a change of fulfilment mode', async () => {
+    const { service, carts, menu } = setUp();
+    carts.cart.set(baseCart({ lines: [lineWithAnswers()] }));
+    carts.create.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    carts.putLine.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.switchFulfillmentMode('PICKUP');
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variantId: 'v-1',
+        modifierOptionIds: ['o-chili', 'o-garlic'],
+        nestedModifiers: nested,
+      }),
+    );
+  });
+});
+
 describe('UiCartService: combos and what the server added (ADR 0136)', () => {
   const picks = [
     { componentId: 'c-burger', quantity: 1 },

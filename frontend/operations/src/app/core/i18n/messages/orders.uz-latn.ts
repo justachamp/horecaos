@@ -796,4 +796,5 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.party.confirm.paid.body': '{amount} hisob toʻlangan deb yoziladi. Bekor qilib boʻlmaydi.',
   'orders.party.confirm.walkout.body':
     '{amount} toʻlanmagan deb yoziladi va audit jurnaliga tushadi.',
+  'orders.dialog.addLines.combosUnavailable': 'Menyu mavjud emas — kombo qoʻshib boʻlmaydi.',
 };

@@ -16,6 +16,7 @@ import { ComboChoicesComponent } from '../../shared/combo-choices/combo-choices.
 import { IconComponent } from '../../shared/icon/icon.component';
 import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
+import { NestedChoicesComponent } from '../../shared/nested-choices/nested-choices.component';
 import { PhysicalFactsComponent } from '../../shared/physical-facts/physical-facts.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
@@ -35,10 +36,19 @@ import {
   type ItemAvailability,
 } from '../../utils/item-availability';
 import {
+  type ModifierChoices,
+  type NestedChoices,
+  chosenOptionIds,
+  groupsForVariant,
   isMandatory,
+  keepOffered,
+  nestedOnTheWire,
+  pruneNested,
   selectionRule,
+  toggleNested,
   toggleOption,
   unsatisfiedGroups,
+  unsatisfiedNested,
 } from '../../utils/modifier-selection';
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
@@ -51,7 +61,13 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 @Component({
   selector: 'app-details',
   standalone: true,
-  imports: [ComboChoicesComponent, IconComponent, PhysicalFactsComponent, TranslatePipe],
+  imports: [
+    ComboChoicesComponent,
+    IconComponent,
+    NestedChoicesComponent,
+    PhysicalFactsComponent,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './details.component.html',
   styleUrl: './details.component.scss',
@@ -76,7 +92,13 @@ export class DetailsComponent implements OnInit {
   protected readonly addError = signal<string | null>(null);
 
   /** Chosen option ids per group. A group may legitimately hold several. */
-  protected readonly chosen = signal<Readonly<Record<string, readonly string[]>>>({});
+  protected readonly chosen = signal<ModifierChoices>({});
+
+  /** ADR 0136, second level: what is chosen under the options that open choices of their own. */
+  protected readonly nestedChosen = signal<NestedChoices>({});
+
+  /** Whether the guest has started on the second level, so the groups still short are named rather than greeting them with errors. */
+  protected readonly nestedTouched = signal(false);
 
   /**
    * ADR 0136: the choices this product's combo asks for, empty when it is no combo. A combo's own
@@ -121,10 +143,14 @@ export class DetailsComponent implements OnInit {
     return total === null ? '' : formatMoney(money(total, this.currency() ?? 'UZS'), unit);
   });
 
-  /** The modifier groups a screen asks about: none on a combo, whose choices are its components. */
-  protected readonly modifierGroups = computed(() =>
-    this.isCombo() ? [] : (this.item()?.modifierGroups ?? []),
-  );
+  /**
+   * The modifier groups a screen asks about: the chosen portion's own list when the menu published
+   * one, otherwise the product's; none on a combo, whose choices are its components.
+   */
+  protected readonly modifierGroups = computed<readonly MenuItemModifierGroup[]>(() => {
+    const item = this.item();
+    return this.isCombo() || !item ? [] : groupsForVariant(item, this.variantId());
+  });
 
   /**
    * Loads on init, not in the constructor.
@@ -172,7 +198,28 @@ export class DetailsComponent implements OnInit {
 
   /** The rules are `utils/modifier-selection`'s: one implementation, shared with the table's picker. */
   protected toggleOption(group: MenuItemModifierGroup, optionId: string): void {
-    this.chosen.update((all) => toggleOption(all, group, optionId));
+    const next = toggleOption(this.chosen(), group, optionId);
+    this.chosen.set(next);
+    // An option taken back takes its answers with it, so nothing stale is sent.
+    this.nestedChosen.update((all) => pruneNested(this.modifierGroups(), next, all));
+  }
+
+  protected nestedChosenIn(parentOptionId: string, groupId: string): readonly string[] {
+    return this.nestedChosen()[parentOptionId]?.[groupId] ?? [];
+  }
+
+  /** A tap on an option of a group an option opened; the same rules as the first level. */
+  protected toggleNested(
+    parentOptionId: string,
+    group: MenuItemModifierGroup,
+    optionId: string,
+  ): void {
+    this.setNestedChosen(toggleNested(this.nestedChosen(), parentOptionId, group, optionId));
+  }
+
+  protected setNestedChosen(next: NestedChoices): void {
+    this.nestedChosen.set(next);
+    this.nestedTouched.set(true);
   }
 
   /** Every group short of its minimum (or over its maximum) must be put right before the basket will take this. */
@@ -180,11 +227,17 @@ export class DetailsComponent implements OnInit {
     unsatisfiedGroups(this.modifierGroups(), this.chosen()),
   );
 
+  /** The second-level groups still to be answered, under the options that asked. */
+  protected readonly unsatisfiedSecondLevel = computed(() =>
+    unsatisfiedNested(this.modifierGroups(), this.chosen(), this.nestedChosen()),
+  );
+
   /** The names of the groups still short, for the hint that says which ones. */
   protected readonly unsatisfiedNames = computed(() =>
-    this.unsatisfied()
-      .map((group) => group.name)
-      .join(', '),
+    [
+      ...this.unsatisfied().map((group) => group.name),
+      ...this.unsatisfiedSecondLevel().map((entry) => `${entry.parent.label}: ${entry.group.name}`),
+    ].join(', '),
   );
 
   protected isMandatory(group: MenuItemModifierGroup): boolean {
@@ -227,6 +280,7 @@ export class DetailsComponent implements OnInit {
       this.state() === 'ready' &&
       this.availability() === 'AVAILABLE' &&
       this.unsatisfied().length === 0 &&
+      this.unsatisfiedSecondLevel().length === 0 &&
       this.comboComplete() &&
       !this.comboUnavailable() &&
       !this.adding(),
@@ -255,6 +309,12 @@ export class DetailsComponent implements OnInit {
    */
   protected selectVariant(variantId: string): void {
     this.variantId.set(variantId);
+    // A portion is offered its own groups (ADR 0136): what was chosen in a group this one does not
+    // offer would be sent and refused, so it goes.
+    const offered = this.modifierGroups();
+    const kept = keepOffered(offered, this.chosen());
+    this.chosen.set(kept);
+    this.nestedChosen.update((all) => pruneNested(offered, kept, all));
     const size = this.stepSize();
     const multiples = this.quantity() / size;
     if (Math.abs(multiples - Math.round(multiples)) > 1e-6) {
@@ -281,13 +341,17 @@ export class DetailsComponent implements OnInit {
     this.adding.set(true);
     this.addError.set(null);
     try {
-      const options = Object.values(this.chosen()).flat();
+      const options = chosenOptionIds(this.modifierGroups(), this.chosen());
       // ADR 0136: a combo goes in as its container with the picks made; `quantity` counts combos.
       const picks = picksOnTheWire(this.comboGroups(), this.comboPicks());
+      // ... and a second-level answer goes under the first-level option that asked for it.
+      const nested = nestedOnTheWire(this.modifierGroups(), this.chosen(), this.nestedChosen());
       const added =
         picks.length > 0
           ? await this.cart.add(variantId, this.quantity(), undefined, options, picks)
-          : await this.cart.add(variantId, this.quantity(), undefined, options);
+          : nested.length > 0
+            ? await this.cart.add(variantId, this.quantity(), undefined, options, undefined, nested)
+            : await this.cart.add(variantId, this.quantity(), undefined, options);
       if (!added) {
         // The platform refused the line -- most usefully with `ITEM_OUT_OF_SALE_WINDOW`
         // (the menu was read a moment before the window closed) or a sold-out

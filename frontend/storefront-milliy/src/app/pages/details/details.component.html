@@ -126,6 +126,18 @@
           </div>
         }
 
+        @if (modifierGroups().length > 0) {
+          <app-nested-choices
+            data-testid="details-nested"
+            [groups]="modifierGroups()"
+            [choices]="chosen()"
+            [nested]="nestedChosen()"
+            [currency]="currency()"
+            [showUnmet]="nestedTouched()"
+            (nestedChange)="setNestedChosen($event)"
+          />
+        }
+
         <h2 class="section">{{ 'details.quantity' | t }}</h2>
         <div class="qty">
           <button type="button" (click)="step(-1)" [attr.aria-label]="'details.decrease' | t">
@@ -137,7 +149,7 @@
           </button>
         </div>
 
-        @if (unsatisfied().length > 0) {
+        @if (unsatisfied().length > 0 || unsatisfiedSecondLevel().length > 0) {
           <p class="hint" role="status" data-testid="details-missing">
             {{ 'dineIn.pickerMissing' | t: { groups: unsatisfiedNames() } }}
           </p>

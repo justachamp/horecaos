@@ -104,7 +104,12 @@ public class CatalogSnapshotLoader {
         List<Product> products = store.productsInCatalog(tenantId, brandId, catalogId);
         List<Variant> variants = store.variantsInCatalog(tenantId, brandId, catalogId);
         List<Category> categories = store.categoriesInCatalog(tenantId, brandId, catalogId);
-        List<ModifierGroup> groups = store.modifierGroupsInCatalog(tenantId, brandId, catalogId);
+        // The composite inputs are read first: which groups this menu publishes depends on them
+        // (a group attached only to a variant, or only reached through an option's linked variant,
+        // is no product's group and is published all the same -- ADR 0136).
+        CatalogValidator.CompositeContext composite = loadCompositeContext(tenantId, brandId, catalogId);
+        List<ModifierGroup> groups = withVariantLevelAndNestedGroups(
+                store.modifierGroupsInCatalog(tenantId, brandId, catalogId), variants, composite);
         List<ModifierOption> options = store.optionsForGroups(
                 tenantId, brandId, groups.stream().map(ModifierGroup::id).toList());
         // Membership, read in the same transaction as the entities it joins.
@@ -175,8 +180,58 @@ public class CatalogSnapshotLoader {
                 offered,
                 loadFiscalContext(tenantId, brandId, offerings),
                 pricingWired,
-                loadCompositeContext(tenantId, brandId, catalogId),
+                composite,
                 store.physicalAttributesForBrand(tenantId, brandId));
+    }
+
+    /**
+     * The groups this menu publishes: those its products attach, and (ADR 0136) the customer-facing
+     * groups a variant of one of them attaches itself, and the groups one level below an option that
+     * links a variant (the "nested" choice).
+     *
+     * <p>Without the widening a group attached to a variant alone is in no publication at all, and
+     * the customer cannot be asked for it. Only active groups are added: a withdrawn group is not a
+     * choice. The result is in the order the product-level read already used, so a brand that has
+     * authored neither publishes exactly the items it always has.
+     *
+     * <p>One level below, and no more: the validator refuses a third (MODIFIER_NESTING_DEPTH_EXCEEDED),
+     * and a group published for the sake of a second level does not pull its own options' groups in.
+     */
+    static List<ModifierGroup> withVariantLevelAndNestedGroups(
+            List<ModifierGroup> productLevel, List<Variant> variants, CatalogValidator.CompositeContext composite) {
+        if (composite.attachments().isEmpty()) {
+            return productLevel;
+        }
+        Map<UUID, ModifierGroup> byId = new LinkedHashMap<>();
+        productLevel.forEach(group -> byId.put(group.id(), group));
+
+        for (Variant variant : variants) {
+            composite.ownVisibleAttachmentsOf(variant.id()).forEach(attachment -> {
+                ModifierGroup group = java.util.Objects.requireNonNull(
+                        composite.modifierGroupsById().get(attachment.modifierGroupId()));
+                byId.putIfAbsent(group.id(), group);
+            });
+        }
+
+        // The options that can open a second level: those of the groups published so far, in the
+        // order they are listed, so the result does not depend on a hash iteration order.
+        for (ModifierGroup published : List.copyOf(byId.values())) {
+            for (ModifierOption option : composite.activeOptionsOf(published.id())) {
+                if (option.linkedVariantId() == null) {
+                    continue;
+                }
+                composite
+                        .visibleGroupsOf(option.linkedVariantId())
+                        .forEach(nested -> byId.putIfAbsent(nested.id(), nested));
+            }
+        }
+        if (byId.size() == productLevel.size()) {
+            return productLevel;
+        }
+        return byId.values().stream()
+                .sorted(java.util.Comparator.comparingInt(ModifierGroup::sortOrder)
+                        .thenComparing(ModifierGroup::code))
+                .toList();
     }
 
     /**
@@ -406,6 +461,10 @@ public class CatalogSnapshotLoader {
                                 // mutable and may have moved on.
                                 putClassification(entry, snapshot.effectiveClassification(variant));
                                 putPhysical(entry, snapshot.physicalByVariant().get(variant.id()));
+                                // ADR 0136. What this variant adds to its product's groups, or says
+                                // differently about them; absent on every variant that does neither,
+                                // so a menu without variant-level groups keeps the content it had.
+                                putVariantGroups(entry, snapshot, variant.id());
                                 entry.put("isDefault", variant.isDefault());
                                 entry.put("sortOrder", variant.sortOrder());
                                 entry.put("status", variant.status().name());
@@ -463,6 +522,13 @@ public class CatalogSnapshotLoader {
                                 entry.put("maximumQuantity", option.maximumQuantity());
                                 entry.put("sortOrder", option.sortOrder());
                                 entry.put("status", option.status().name());
+                                // ADR 0136: the choices this option opens, one level down. Published
+                                // with the option, its parent, so a client asks for them when the
+                                // option is taken and the cart and quote hold the customer to the
+                                // same rules. The groups themselves are published as items of their
+                                // own even though the linked variant lists them as its own, because
+                                // a client draws the chooser from the option and not from a product.
+                                putNestedGroups(entry, snapshot, option);
                                 return entry;
                             })
                             .toList();
@@ -591,14 +657,70 @@ public class CatalogSnapshotLoader {
             if (group == null) {
                 continue;
             }
-            Map<String, Object> policy = new LinkedHashMap<>();
-            policy.put("groupId", group.id().toString());
-            policy.put("required", attachment.effectiveRequired(group));
-            policy.put("minimumSelections", attachment.effectiveMinimum(group));
-            policy.put("maximumSelections", attachment.effectiveMaximum(group));
-            policies.add(policy);
+            policies.add(policyOf(attachment, group));
         }
         return List.copyOf(policies);
+    }
+
+    /** The rules one attachment holds a customer to for a group: its overrides laid over the group's own. */
+    private static Map<String, Object> policyOf(ModifierAttachment attachment, ModifierGroup group) {
+        Map<String, Object> policy = new LinkedHashMap<>();
+        policy.put("groupId", group.id().toString());
+        policy.put("required", attachment.effectiveRequired(group));
+        policy.put("minimumSelections", attachment.effectiveMinimum(group));
+        policy.put("maximumSelections", attachment.effectiveMaximum(group));
+        return policy;
+    }
+
+    /**
+     * The groups a variant carries of its own (ADR 0136): their ids in the author's order, and for
+     * each the rules in force for this variant.
+     *
+     * <p>The policy is written for every one of them and not only those with an override. A
+     * variant's attachment of a group its product also attaches replaces the product's row whole
+     * (the same rule pricing applies), so a variant that overrides nothing still has to say so, or
+     * a client would lay the product's override over a variant that was meant to be back at the
+     * group's own values.
+     */
+    private static void putVariantGroups(
+            Map<String, Object> entry, CatalogValidator.Snapshot snapshot, UUID variantId) {
+        List<ModifierAttachment> own = snapshot.composite().ownVisibleAttachmentsOf(variantId);
+        if (own.isEmpty()) {
+            return;
+        }
+        Map<UUID, ModifierGroup> groups = snapshot.composite().modifierGroupsById();
+        entry.put(
+                "modifierGroupIds",
+                idStrings(own.stream().map(ModifierAttachment::modifierGroupId).toList()));
+        entry.put(
+                "modifierGroupPolicies",
+                own.stream()
+                        .map(attachment -> policyOf(
+                                attachment, java.util.Objects.requireNonNull(groups.get(attachment.modifierGroupId()))))
+                        .toList());
+    }
+
+    /**
+     * The groups an option opens when it links a variant that carries groups of its own, each with
+     * the rules in force for that variant (ADR 0136). Absent when the option links nothing or the
+     * variant offers nothing.
+     */
+    private static void putNestedGroups(
+            Map<String, Object> entry, CatalogValidator.Snapshot snapshot, ModifierOption option) {
+        if (option.linkedVariantId() == null || option.status() != Status.ACTIVE) {
+            return;
+        }
+        List<ModifierAttachment> offered = snapshot.composite().visibleAttachmentsOf(option.linkedVariantId());
+        if (offered.isEmpty()) {
+            return;
+        }
+        Map<UUID, ModifierGroup> groups = snapshot.composite().modifierGroupsById();
+        entry.put(
+                "nestedGroups",
+                offered.stream()
+                        .map(attachment -> policyOf(
+                                attachment, java.util.Objects.requireNonNull(groups.get(attachment.modifierGroupId()))))
+                        .toList());
     }
 
     /**

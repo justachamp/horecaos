@@ -519,6 +519,9 @@
     "unavailable": "This combo cannot be ordered right now.",
     "total": "Combo price: {{price}}"
   },
+  "nested": {
+    "for": "For {{option}}"
+  },
   "physical": {
     "nutritionTitle": "Nutrition",
     "nutritionPer100g": "per 100 g",

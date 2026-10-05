@@ -818,6 +818,7 @@
     <q-item-modifier-dialog
       [productName]="pending.product.name"
       [groups]="pending.groups"
+      [groupIndex]="modifierGroupIndex()"
       [presets]="pending.product.commentPresets"
       [currency]="menu()?.currency ?? null"
       (confirm)="onModifierConfirm($event)"

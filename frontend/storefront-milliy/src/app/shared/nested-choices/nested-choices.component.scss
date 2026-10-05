@@ -1,0 +1,83 @@
+:host {
+  display: block;
+}
+
+.parent {
+  margin: 0 0 20px;
+  padding-left: 14px;
+  border-left: 3px solid var(--surface-accent-wash);
+}
+
+.parent__name {
+  margin: 0 0 10px;
+  font: 700 15px/1.2 var(--font-display);
+  color: var(--text-secondary);
+}
+
+.group {
+  margin: 0 0 14px;
+}
+
+.group__name {
+  margin: 0 0 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 700 15px/1.2 var(--font-display);
+}
+
+.group__req {
+  color: var(--text-muted);
+  font: 500 12px/1 var(--font-ui);
+}
+
+/* What the group asks ("Choose 1"), under its name; red once the guest has started and it is short. */
+.group__rule {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font: 400 12px/1.4 var(--font-ui);
+}
+
+.group.is-missing .group__rule {
+  color: var(--status-error);
+  font-weight: 600;
+}
+
+.group__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1.5px solid var(--line-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-base);
+  padding: 10px 14px;
+  cursor: pointer;
+  color: var(--text-primary);
+  text-align: left;
+
+  &.is-active {
+    border-color: var(--brand-accent-deep);
+    background: var(--surface-accent-wash);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--brand-accent-deep);
+    outline-offset: 2px;
+  }
+}
+
+.option__name {
+  font: 700 14px/1.2 var(--font-display);
+}
+
+.option__extra {
+  color: var(--text-muted);
+  font: 500 12px/1 var(--font-ui);
+}

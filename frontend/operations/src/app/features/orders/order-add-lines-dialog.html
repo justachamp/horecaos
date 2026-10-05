@@ -5,6 +5,11 @@
   data-testid="order-add-lines-dialog"
 >
   <p class="q-caption">{{ 'orders.dialog.addLines.noModifiers' | t }}</p>
+  @if (combosUnavailable()) {
+    <p class="q-caption" role="status" data-testid="order-add-lines-dialog-combos-unavailable">
+      {{ 'orders.dialog.addLines.combosUnavailable' | t }}
+    </p>
+  }
 
   <q-combobox
     [query]="query()"
@@ -23,25 +28,30 @@
     </p>
   } @else {
     <ul class="add-lines-dialog__list">
-      @for (line of selectedLines(); track line.variantId) {
+      @for (line of selectedLines(); track line.key) {
         <li
           class="add-lines-dialog__row"
-          [attr.data-testid]="'order-add-lines-dialog-row-' + line.variantId"
+          [attr.data-testid]="'order-add-lines-dialog-row-' + line.key"
         >
-          <span class="add-lines-dialog__label q-body-sm">{{ line.label }}</span>
+          <span class="add-lines-dialog__label q-body-sm">
+            {{ line.label }}
+            @if (line.picks) {
+              <span class="q-caption add-lines-dialog__picks">{{ comboSummary(line) }}</span>
+            }
+          </span>
           <input
             type="number"
             min="1"
             class="add-lines-dialog__quantity"
             [value]="line.quantity"
-            (input)="setQuantity(line.variantId, $any($event.target).value)"
-            [attr.data-testid]="'order-add-lines-dialog-quantity-' + line.variantId"
+            (input)="setQuantity(line.key, $any($event.target).value)"
+            [attr.data-testid]="'order-add-lines-dialog-quantity-' + line.key"
           />
           <button
             type="button"
             class="add-lines-dialog__remove"
-            (click)="removeLine(line.variantId)"
-            [attr.data-testid]="'order-add-lines-dialog-remove-' + line.variantId"
+            (click)="removeLine(line.key)"
+            [attr.data-testid]="'order-add-lines-dialog-remove-' + line.key"
           >
             {{ 'orders.dialog.addLines.remove' | t }}
           </button>
@@ -70,3 +80,13 @@
     </button>
   </ng-container>
 </q-modal>
+
+@if (pendingCombo(); as combo) {
+  <q-combo-picker-dialog
+    [productName]="combo.label"
+    [groups]="combo.groups"
+    [currency]="currency()"
+    (confirm)="onComboConfirm($event)"
+    (dismiss)="onComboDismiss()"
+  />
+}

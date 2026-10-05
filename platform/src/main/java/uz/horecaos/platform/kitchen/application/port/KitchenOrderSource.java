@@ -32,6 +32,16 @@ public interface KitchenOrderSource {
     Optional<OrderForKitchen> find(UUID tenantId, UUID orderId);
 
     /**
+     * The lines of this order that an amendment has closed (ADR 0039), which {@link #find} does
+     * not return: a line is never edited, it is closed and its replacement appended.
+     *
+     * <p>Asked for when an amendment reaches a ticket that is already open, to tell a line that
+     * was replaced from one that was added, and to know what the replaced one had already put on
+     * the pass.
+     */
+    List<OrderLineForKitchen> closedLines(UUID tenantId, UUID orderId);
+
+    /**
      * The provider-assigned identifier a courier or customer would quote for
      * each of these orders — never {@code sequenceLabel}, which is HorecaOS's
      * own number (gap map row 2.4, IA 2.4's "provider-assigned external

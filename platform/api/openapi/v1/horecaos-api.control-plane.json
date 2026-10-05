@@ -5780,6 +5780,12 @@
           "name" : {
             "type" : "string"
           },
+          "nestedGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
+            },
+            "type" : "array"
+          },
           "optionId" : {
             "format" : "uuid",
             "type" : "string"
@@ -17582,7 +17588,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/duplicate" : {
       "post" : {
-        "description" : "Copies every variant with its own fiscal classification and every locale's translation, its catalog and category placements, its attached modifier groups, and its media. catalog.md §4.1's row action.",
+        "description" : "Copies every variant with its own fiscal classification and every locale's translation, its catalog and category placements, its attached modifier groups, its media and, for a combo, its combo groups with their headings and components (not their prices: each component is priced again for the copy). catalog.md §4.1's row action.",
         "operationId" : "duplicateProduct",
         "parameters" : [ {
           "in" : "path",

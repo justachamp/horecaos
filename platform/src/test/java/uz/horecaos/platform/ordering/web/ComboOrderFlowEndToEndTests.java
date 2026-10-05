@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.HashSet;
@@ -91,13 +92,17 @@ import uz.horecaos.platform.kitchen.application.KitchenStationService.NewStation
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.StationRole;
+import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.CustomerBotOrderingAdapter;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
+import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
+import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.pos.FakePosAdapter;
@@ -109,6 +114,8 @@ import uz.horecaos.platform.pos.application.port.PosOrderSource;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
+import uz.horecaos.platform.reporting.application.DayCloseService;
+import uz.horecaos.platform.reporting.application.ReportQueryService;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.StubJwtIssuer;
@@ -258,6 +265,15 @@ class ComboOrderFlowEndToEndTests {
 
     @Autowired
     private PosOrderSource posOrderSource;
+
+    @Autowired
+    private OrderStateService orderStates;
+
+    @Autowired
+    private DayCloseService dayClose;
+
+    @Autowired
+    private ReportQueryService reportQueries;
 
     @Autowired
     private PackageCodeLookup packageCodes;
@@ -949,6 +965,141 @@ class ComboOrderFlowEndToEndTests {
     }
 
     @Test
+    @DisplayName("a cart line reads back the options it holds, so a line keyed by a hash can be edited from any device")
+    void aCartLineEchoesItsOptions() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        // A storefront keys a line that carries a second-level choice by a short hash of it: the
+        // key no longer spells the first-level options out, so the cart has to say what they are.
+        String hashedKey = saladVariant + "n0123456789abcd";
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                hashedKey,
+                saladVariant,
+                1,
+                List.of(chiliOption),
+                null,
+                List.of(),
+                List.of(new CartService.NestedModifier(chiliOption, hotOption)),
+                null));
+        put(cart, "plain", saladVariant, 1, List.of());
+
+        linkCustomerPrincipal();
+        MvcResult read = mvc.perform(get("/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND + "/carts/" + cart)
+                        .with(customerToken()))
+                .andReturn();
+        assertThat(read.getResponse().getStatus())
+                .as(read.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode lines = JSON.readTree(read.getResponse().getContentAsString()).get("lines");
+        JsonNode nested = lineWithKey(lines, hashedKey);
+        JsonNode plain = lineWithKey(lines, "plain");
+        assertThat(nested.get("modifierOptionIds")).hasSize(1);
+        assertThat(nested.get("modifierOptionIds").get(0).asText()).isEqualTo(chiliOption.toString());
+        assertThat(nested.get("nestedModifiers").get(0).get("optionId").asText())
+                .isEqualTo(hotOption.toString());
+        assertThat(plain.get("modifierOptionIds"))
+                .as("a line without options says so with an empty list, not by omission")
+                .isNotNull();
+        assertThat(plain.get("modifierOptionIds")).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a variant's own override of a shared group is published, and the cart holds the customer to it for that size only")
+    void aVariantLevelOverrideIsEnforcedByTheCart() throws Exception {
+        var fries = authoring.createProduct(
+                TENANT, BRAND, catalogId, "FRIES", "Fries", null, LOCALE, "SKU-FRIES", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID smallFries = fries.defaultVariantId();
+        UUID largeFries = authoring.addVariant(
+                TENANT, BRAND, fries.productId(), "SKU-FRIES-L", "PIECE", "Large", LOCALE, 1, UNCLASSIFIED, ACTOR);
+        UUID dips = authoring.createModifierGroup(TENANT, BRAND, "DIPS", "Dips", LOCALE, false, 0, 2, false);
+        UUID ketchup = authoring.addModifierOption(
+                TENANT, BRAND, dips, "KETCHUP", "Ketchup", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        UUID mayo = authoring.addModifierOption(
+                TENANT, BRAND, dips, "MAYO", "Mayo", LOCALE, null, 1, 1, UNCLASSIFIED, ACTOR);
+        // Every size of the fries offers the dips, optionally and up to two...
+        authoring.attachModifierGroup(TENANT, BRAND, fries.productId(), dips, 0);
+        // A group only the large size has (a variant-level attachment and nothing at the product).
+        UUID extras = authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Extras", LOCALE, false, 0, 1, false);
+        UUID cheese = authoring.addModifierOption(
+                TENANT, BRAND, extras, "CHEESE", "Cheese", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, largeFries, extras, 1, TESTER);
+        // ...and the large one says its own rule for the same group: one dip, required.
+        composites.attachModifierGroupToVariant(TENANT, BRAND, largeFries, dips, 0, TESTER);
+        composites.setAttachmentPolicy(
+                TENANT,
+                BRAND,
+                AttachmentOwnerType.VARIANT,
+                largeFries,
+                dips,
+                1,
+                new AttachmentPolicy(Visibility.VISIBLE, null, true, 1, 1),
+                TESTER);
+        price("VARIANT", smallFries, 12_000L);
+        price("VARIANT", largeFries, 18_000L);
+        price("MODIFIER_OPTION", ketchup, 500L);
+        price("MODIFIER_OPTION", mayo, 700L);
+        price("MODIFIER_OPTION", cheese, 1_500L);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, smallFries, TrackingMode.BINARY);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, largeFries, TrackingMode.BINARY);
+        publishTheMenu();
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+
+        assertThat(refusalOf(cart, "small-plain", smallFries, List.of(), List.of()))
+                .as("the product's own rule is optional, and the small size has no rule of its own")
+                .isNull();
+        assertThat(refusalOf(cart, "small-two", smallFries, List.of(), List.of(ketchup, mayo)))
+                .as("two different dips are within the product's range for the small size")
+                .isNull();
+        assertThat(refusalOf(cart, "large-plain", largeFries, List.of(), List.of()))
+                .as("the large size requires a dip, and the cart was told so by the publication")
+                .isEqualTo("MODIFIER_GROUP_MINIMUM_NOT_MET");
+        assertThat(refusalOf(cart, "large-dip", largeFries, List.of(), List.of(ketchup)))
+                .isNull();
+        assertThat(refusalOf(cart, "large-two", largeFries, List.of(), List.of(ketchup, mayo)))
+                .as("the large size allows one dip: its maximum replaced the product's two")
+                .isEqualTo("MODIFIER_GROUP_MAXIMUM_EXCEEDED");
+        assertThat(refusalOf(cart, "small-cheese", smallFries, List.of(), List.of(cheese)))
+                .as("the extras are the large size's own group; the small size is not offered them")
+                .isNotNull();
+        assertThat(refusalOf(cart, "large-cheese", largeFries, List.of(), List.of(ketchup, cheese)))
+                .as("a group only the variant carries is offered, and an option of it is accepted")
+                .isNull();
+
+        // What the customer bought is what a repeat offers again: the options of the variant's own
+        // groups are on the menu the reorder is checked against.
+        UUID second = openCart(FulfillmentMode.PICKUP);
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                second,
+                cartVersion(second),
+                "fries",
+                largeFries,
+                1,
+                List.of(ketchup, cheese),
+                null,
+                List.of(),
+                List.of(),
+                null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, second, cartVersion(second)));
+        UUID orderId = checkOut(second);
+        offer(largeFries);
+
+        var plan = reorderPlans.planFor(TENANT, orderId, CUSTOMER).orElseThrow();
+
+        assertThat(plan.lines()).singleElement().satisfies(line -> {
+            assertThat(line.status()).isEqualTo(ReorderPlanService.LineStatus.AVAILABLE);
+            assertThat(line.modifierOptionIds()).containsExactlyInAnyOrder(ketchup, cheese);
+        });
+    }
+
+    @Test
     @DisplayName("the schema refuses an order, cart or ticket row that half-describes a combo or a nested choice")
     void theSchemaRefusesIncoherentComboRows() {
         UUID cart = openCart(FulfillmentMode.PICKUP);
@@ -1061,6 +1212,120 @@ class ComboOrderFlowEndToEndTests {
                 .containsEntry(colaVariant, 2)
                 .doesNotContainKey(lunchVariant);
         assertThat(reconciles(orderId)).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a combo added to an order whose ticket is already open reaches its stations, each component by its own variant")
+    void aComboAddedAfterTheTicketOpenedReachesItsStations() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "salad", saladVariant, 1, List.of());
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        assertThat(tickets.items(TENANT, ticket.id()))
+                .as("the ticket was built from the one salad the order held when it was confirmed")
+                .hasSize(1);
+
+        amend(orderId, "amend-add-combo-to-open-ticket", """
+                {"type":"ADD_LINES","lines":[{"variantId":"%s","quantity":2,"comboPicks":[
+                  {"componentId":"%s","quantity":1},{"componentId":"%s","quantity":1}]}]}""".formatted(
+                        lunchVariant, burgerInLunch.id(), colaInLunch.id()));
+
+        List<OrderLine> combo = orderLines(orderId).stream()
+                .filter(line -> line.selectionId() != null)
+                .toList();
+        List<TicketItemRow> items = tickets.items(TENANT, ticket.id());
+        assertThat(items)
+                .as("the salad's item and one item per added component")
+                .hasSize(3);
+        TicketItemRow burgerItem = itemFor(items, combo.get(0));
+        TicketItemRow colaItem = itemFor(items, combo.get(1));
+        assertThat(burgerItem.stationId())
+                .as("the added burger goes to the grill")
+                .isEqualTo(grill);
+        assertThat(colaItem.stationId()).as("the added cola goes to the bar").isEqualTo(bar);
+        assertThat(burgerItem.quantity()).isEqualByComparingTo("2");
+        assertThat(colaItem.quantity()).isEqualByComparingTo("2");
+        assertThat(items.stream()
+                        .filter(item -> item.comboSelectionId() != null)
+                        .map(TicketItemRow::comboSelectionId)
+                        .distinct())
+                .as("they are one combo on the board, under the heading the order carries")
+                .containsExactly(combo.get(0).selectionId());
+        assertThat(items).extracting(TicketItemRow::status).containsOnly(TicketItemStatus.QUEUED);
+        assertThat(tickets.events(TENANT, ticket.id()))
+                .as("the board can say why these two appeared: the amendment, on the ticket's own timeline")
+                .filteredOn(event -> event.trigger().equals("ORDER_AMENDED"))
+                .extracting(JdbcKitchenStore.TicketEventRow::ticketItemId)
+                .containsExactlyInAnyOrder(burgerItem.id(), colaItem.id());
+    }
+
+    @Test
+    @DisplayName("growing a combo strikes what the kitchen has not made and credits what is already on the pass")
+    void growingAComboAfterTheTicketOpenedReplacesItsItems() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        List<OrderLine> before = orderLines(orderId);
+        TicketItemRow burgerBefore = itemFor(tickets.items(TENANT, ticket.id()), before.get(0));
+        TicketItemRow colaBefore = itemFor(tickets.items(TENANT, ticket.id()), before.get(1));
+        // The grill has already made the one burger the order held; the cola has not been started.
+        tickets.start(TENANT, burgerBefore.id(), "cook", null);
+        tickets.ready(TENANT, burgerBefore.id(), "cook", null);
+
+        amend(orderId, "amend-grow-combo-on-open-ticket", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":3}""".formatted(
+                        before.get(0).lineId()));
+
+        List<OrderLine> after = orderLines(orderId);
+        List<TicketItemRow> items = tickets.items(TENANT, ticket.id());
+        TicketItemRow burgerKept = items.stream()
+                .filter(item -> item.id().equals(burgerBefore.id()))
+                .findFirst()
+                .orElseThrow();
+        TicketItemRow colaStruck = items.stream()
+                .filter(item -> item.id().equals(colaBefore.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(burgerKept.status())
+                .as("a burger already on the pass is not unmade because the order grew")
+                .isEqualTo(TicketItemStatus.READY);
+        assertThat(colaStruck.status())
+                .as("the cola nobody started is replaced by the larger one")
+                .isEqualTo(TicketItemStatus.CANCELLED);
+        TicketItemRow burgerMore = itemFor(items, after.get(0));
+        TicketItemRow colaNew = itemFor(items, after.get(1));
+        assertThat(burgerMore.quantity())
+                .as("three burgers asked for, one already made: two more to cook")
+                .isEqualByComparingTo("2");
+        assertThat(burgerMore.stationId()).isEqualTo(grill);
+        assertThat(burgerMore.status()).isEqualTo(TicketItemStatus.QUEUED);
+        assertThat(colaNew.quantity()).isEqualByComparingTo("3");
+        assertThat(colaNew.stationId()).isEqualTo(bar);
+        assertThat(tickets.require(TENANT, ticket.id()).status())
+                .as("the ticket that was waiting only on the cola is not ready any more")
+                .isNotEqualTo(uz.horecaos.platform.kitchen.domain.TicketStatus.READY);
+    }
+
+    @Test
+    @DisplayName("an amendment that touches no line leaves the ticket as it was, and a replay adds nothing")
+    void anAmendmentThatChangesNoLineLeavesTheTicketAlone() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        int itemsBefore = tickets.items(TENANT, ticket.id()).size();
+        int eventsBefore = tickets.events(TENANT, ticket.id()).size();
+
+        tx(() -> tickets.syncAmendedLines(TENANT, orderId));
+        tx(() -> tickets.syncAmendedLines(TENANT, orderId));
+
+        assertThat(tickets.items(TENANT, ticket.id())).hasSize(itemsBefore);
+        assertThat(tickets.events(TENANT, ticket.id())).hasSize(eventsBefore);
     }
 
     @Test
@@ -1410,6 +1675,74 @@ class ComboOrderFlowEndToEndTests {
                 .containsExactly(3, 3);
     }
 
+    @Test
+    @DisplayName(
+            "the day close reports an amended combo once: the live lines carry the combo, the rows the amendment closed are not facts")
+    void anAmendedComboIsReportedOnceByTheDayClose() throws Exception {
+        jdbc.sql("TRUNCATE TABLE reporting.fact_order_line, reporting.fact_order")
+                .update();
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        amend(orderId, "amend-grow-combo-before-report", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":3}""".formatted(
+                        orderLines(orderId).get(0).lineId()));
+        List<OrderLine> live = orderLines(orderId);
+        UUID selection = Objects.requireNonNull(live.get(0).selectionId());
+        for (OrderStatus target : List.of(OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.COMPLETED)) {
+            int version = jdbc.sql("SELECT version FROM ordering.orders WHERE id = :id")
+                    .param("id", orderId)
+                    .query(Integer.class)
+                    .single();
+            tx(() -> orderStates.advance(TENANT, orderId, target, version, "TEST", "USER", OPERATOR, null));
+        }
+        LocalDate day = jdbc.sql(
+                        "SELECT (created_at AT TIME ZONE 'Asia/Tashkent')::date FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(LocalDate.class)
+                .single();
+
+        dayClose.close(TENANT, day);
+
+        List<Map<String, Object>> facts =
+                jdbc.sql("""
+                        SELECT variant_id, quantity, net_som, combo_selection_id, combo_container_variant_id,
+                               combo_quantity, combo_name_snapshot
+                        FROM reporting.fact_order_line WHERE order_id = :id ORDER BY variant_id
+                        """).param("id", orderId).query().listOfRows();
+        assertThat(facts)
+                .as("two components; the two rows the amendment closed (four in all on the order) are history")
+                .hasSize(2);
+        assertThat(facts).allSatisfy(fact -> {
+            assertThat(fact.get("combo_selection_id")).isEqualTo(selection);
+            assertThat(fact.get("combo_container_variant_id")).isEqualTo(lunchVariant);
+            assertThat(fact.get("combo_quantity")).isEqualTo(3);
+            assertThat(fact.get("combo_name_snapshot")).isEqualTo("Lunch box");
+            assertThat(Objects.requireNonNull((Number) fact.get("quantity")).intValue())
+                    .isEqualTo(3);
+        });
+        assertThat(jdbc.sql("SELECT line_count FROM reporting.fact_order WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(Integer.class)
+                        .single())
+                .as("the order has two lines, not four")
+                .isEqualTo(2);
+
+        var report = reportQueries.comboSales(TENANT, day, day, List.of(), List.of(), 100);
+
+        assertThat(report.rows()).singleElement().satisfies(row -> {
+            assertThat(row.comboContainerVariantId()).isEqualTo(lunchVariant);
+            assertThat(row.comboName()).isEqualTo("Lunch box");
+            assertThat(row.combosSold())
+                    .as("three combos, once, not once per line or per revision")
+                    .isEqualTo(3L);
+            assertThat(row.purchases()).isEqualTo(1L);
+            assertThat(row.orders()).isEqualTo(1L);
+            assertThat(row.totalNetSom()).isEqualTo(3 * (BURGER_IN_LUNCH + COLA_IN_LUNCH));
+        });
+    }
+
     // ============================================================ weighing at the pass (ADR 0137)
 
     @Test
@@ -1552,6 +1885,15 @@ class ComboOrderFlowEndToEndTests {
     private UUID openCart(FulfillmentMode mode) {
         return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", mode, CUSTOMER, null))
                 .cartId();
+    }
+
+    private static JsonNode lineWithKey(JsonNode lines, String key) {
+        for (JsonNode line : lines) {
+            if (line.get("lineKey").asText().equals(key)) {
+                return line;
+            }
+        }
+        throw new AssertionError("no cart line keyed " + key + " in " + lines);
     }
 
     private void put(UUID cart, String key, UUID variant, int quantity, List<CartService.ComboPick> picks) {
