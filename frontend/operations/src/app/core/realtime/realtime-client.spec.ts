@@ -312,4 +312,177 @@ describe('RealtimeClient', () => {
     const secondUrl = fetchMock.mock.calls[1][0] as string;
     expect(secondUrl).toContain('/locations/l2/');
   });
+
+  // ------------------------------------------------ the brand-wide stream (gap map row 1.1)
+
+  describe('watchBrand', () => {
+    const BRAND_SIGNAL =
+      'event: signal\n' +
+      'id: evt-b1\n' +
+      'data: {"channel":"order_queue","scope":"BRAND:b1","resourceType":"Order","resourceId":"o7","version":5,"occurredAt":"2026-10-05T09:00:00Z"}\n\n';
+
+    it('opens nothing at the brand until a screen asks', async () => {
+      fetchMock.mockResolvedValue(openResponse());
+      const client = setUp();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(client.brandState()).toBeNull();
+    });
+
+    it('opens a second connection at the brand for order_queue alone, from the operator’s own branch', async () => {
+      fetchMock.mockResolvedValue(openResponse());
+      const client = setUp();
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.watchBrand();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+      expect(
+        url,
+        'the path still names a branch: that is where location.read is checked',
+      ).toContain('/tenants/t1/brands/b1/locations/l1/operations/streams');
+      const query = new URL(url, 'http://console.test').searchParams;
+      expect(query.get('scope')).toBe('BRAND:b1');
+      expect(query.getAll('channels'), 'the one channel carried at the brand').toEqual([
+        'order_queue',
+      ]);
+      expect((init.headers as Record<string, string>)['Authorization']).toBe(
+        'Bearer access-token-1',
+      );
+      expect(client.brandState()).toBe('open');
+      expect(client.state(), 'the branch stream is a separate connection with its own state').toBe(
+        'open',
+      );
+    });
+
+    it('delivers the brand stream’s frames through onFrame, scope intact, beside the branch stream’s', async () => {
+      fetchMock.mockResolvedValueOnce(openResponse());
+      fetchMock.mockResolvedValueOnce(openResponse([BRAND_SIGNAL]));
+      const client = setUp();
+      const frames: unknown[] = [];
+      client.onFrame((frame) => frames.push(frame));
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.watchBrand();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(frames).toEqual([
+        {
+          kind: 'signal',
+          channel: 'order_queue',
+          scope: 'BRAND:b1',
+          resourceType: 'Order',
+          resourceId: 'o7',
+          version: 5,
+          occurredAt: '2026-10-05T09:00:00Z',
+        },
+      ]);
+    });
+
+    it('is one connection however many screens ask, and closes with the last release', async () => {
+      fetchMock.mockResolvedValue(openResponse());
+      const client = setUp();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const releaseFirst = client.watchBrand();
+      const releaseSecond = client.watchBrand();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock, 'branch stream + one brand stream').toHaveBeenCalledTimes(2);
+      const brandSignal = (fetchMock.mock.calls[1][1] as RequestInit).signal as AbortSignal;
+
+      releaseFirst();
+      expect(client.brandState()).toBe('open');
+      expect(brandSignal.aborted).toBe(false);
+
+      releaseSecond();
+      expect(client.brandState()).toBeNull();
+      expect(brandSignal.aborted).toBe(true);
+    });
+
+    it('a release that is called twice releases once', async () => {
+      fetchMock.mockResolvedValue(openResponse());
+      const client = setUp();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const release = client.watchBrand();
+      const stillWatching = client.watchBrand();
+      release();
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.brandState(), 'the other screen is still watching').toBe('open');
+      stillWatching();
+      expect(client.brandState()).toBeNull();
+    });
+
+    it('can be asked for again after it was closed', async () => {
+      fetchMock.mockResolvedValue(openResponse());
+      const client = setUp();
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.watchBrand()();
+      client.watchBrand();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.brandState()).toBe('open');
+    });
+
+    it('follows the operator to another branch while watched, and not otherwise', async () => {
+      fetchMock.mockResolvedValue(openResponse());
+      const scope = signal<LocationScope | null>(SCOPE);
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: CurrentLocation, useValue: { scope } },
+          { provide: StaffTokenStore, useValue: { accessToken: () => 'access-token-1' } },
+          {
+            provide: SessionCapabilities,
+            useValue: { has: () => true },
+          },
+        ],
+      });
+      const client = TestBed.inject(RealtimeClient);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Not watched: a branch switch reconnects the branch stream only.
+      scope.set({ tenantId: 't1', brandId: 'b1', locationId: 'l2' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(client.brandState()).toBeNull();
+
+      const release = client.watchBrand();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[2][0] as string).toContain('/locations/l2/');
+
+      scope.set({ tenantId: 't1', brandId: 'b1', locationId: 'l3' });
+      await vi.advanceTimersByTimeAsync(0);
+      // The branch stream and the brand stream both moved.
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+      const urls = fetchMock.mock.calls.slice(3).map((call) => call[0] as string);
+      expect(urls.every((url) => url.includes('/locations/l3/'))).toBe(true);
+      expect(urls.filter((url) => url.includes('scope=BRAND'))).toHaveLength(1);
+
+      release();
+    });
+
+    it('a refused brand stream degrades to unavailable on its own, leaving the branch stream open', async () => {
+      fetchMock.mockResolvedValueOnce(openResponse());
+      fetchMock.mockResolvedValue(failedResponse(403));
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+      const client = setUp();
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.watchBrand();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.brandState()).toBe('reconnecting');
+      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(client.brandState()).toBe('unavailable');
+      expect(client.state(), 'the board’s own branch stream is untouched').toBe('open');
+    });
+  });
 });

@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+
+.party-close {
+  margin-top: 6px;
+}
+
+.party-close__choose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.party-close__bill {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.party-close__button {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.party-close__button--danger {
+  border-color: var(--q-error-text);
+  color: var(--q-error-text);
+}
+
+.party-close__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.party-close__link {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--q-ink-subtle);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.party-close__error {
+  color: var(--q-error-text);
+  margin: 4px 0 0;
+}

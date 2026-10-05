@@ -14,6 +14,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { accessRefusal, describeApiError } from '../order-errors';
+import { PartyClose } from '../party-close';
 import { ReservationsApi, TableAvailability } from '../reservations-api';
 import { SESSION_CURRENCY, SessionView, TableSessionsApi } from '../table-sessions-api';
 
@@ -54,7 +55,7 @@ export interface TablePick {
  */
 @Component({
   selector: 'q-dine-in-table-picker',
-  imports: [TPipe],
+  imports: [TPipe, PartyClose],
   templateUrl: './dine-in-table-picker.html',
   styleUrl: './dine-in-table-picker.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -160,8 +161,29 @@ export class DineInTablePicker {
     }
   }
 
-  private async load(scope: LocationScope): Promise<void> {
-    this.loading.set(true);
+  /**
+   * A party this screen's operator closed: it leaves the list at once, the pick is cleared if it
+   * was the one chosen (an order for a party that has left would be refused), and the room is read
+   * again quietly so the tables it freed are offered for seating without the list flashing away.
+   */
+  protected async onPartyClosed(sessionId: string): Promise<void> {
+    this.sessions.set(this.sessions().filter((session) => session.sessionId !== sessionId));
+    if (this.selectedSessionId() === sessionId) {
+      this.selectedSessionId.set(null);
+      this.picked.emit(null);
+    }
+    await this.load(this.scope(), true);
+  }
+
+  /** Someone moved a party first, or it could not be closed: what the list says is out of date. */
+  protected async onPartyStale(): Promise<void> {
+    await this.load(this.scope(), true);
+  }
+
+  private async load(scope: LocationScope, quiet = false): Promise<void> {
+    if (!quiet) {
+      this.loading.set(true);
+    }
     this.denied.set(false);
     this.loadError.set(null);
     const now = new Date();

@@ -7,6 +7,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -55,6 +56,7 @@ import {
   MenuProduct,
   MenuVariant,
   NewOrderApi,
+  OrderQuote,
   PlaceOrderLine,
   PlaceOrderRequest,
   StorefrontMenu,
@@ -185,10 +187,13 @@ interface PendingComboSelection {
  * `LANDMARK_ONLY` — the pin, the suggest and the geocoder stay deferred
  * behind `X.4`. Payment now reads the operator channel's own matrix instead
  * of a hard-coded CASH (row `1.3e`; see `OperatorOrderingService`'s own
- * doc), promo code is threaded to `CartService.applyPromoCode` (ADR 0072),
- * and change-due is a live client-side computation only — `cash_tendered_expected_minor`
- * is still written after creation through an amendment (`SET_CASH_TENDERED`,
- * deferred), not at creation, so nothing here persists it. «Повторить»
+ * doc), promo code is threaded to `CartService.applyPromoCode` (ADR 0072).
+ * The total beside «Создать» is the server's own price (row `1.3e`): the same
+ * request, run through the same cart and pricing path and undone
+ * (`NewOrderApi.quote`), so a promo discount and a delivery fee are in the figure
+ * the operator reads out, and «Сдача» is the tender minus that total. The cash
+ * tendered is sent with the order (`cashTenderedMinor`) and lands in the
+ * transaction that creates it. «Повторить»
  * (row `1.3f`) calls the staff reorder-plan wrapper and adds every
  * `AVAILABLE` line straight to the basket. A «Заказ агрегатора»
  * toggle (row `1.3g`) records an aggregator's own phoned-through order under
@@ -1158,6 +1163,14 @@ export class NewOrderPage implements OnInit {
   );
 
   protected formattedTotal(): string {
+    const quote = this.serverQuote();
+    if (quote !== null) {
+      // The server's own figure: what the order is booked at, discount and fee in.
+      return formatMoney(
+        { amountMinor: quote.totalMinor, currency: quote.currency },
+        this.i18n.locale(),
+      );
+    }
     const total = this.total();
     if (total.currency === null) {
       return '—';
@@ -1166,6 +1179,58 @@ export class NewOrderPage implements OnInit {
       { amountMinor: total.subtotalMinor, currency: total.currency },
       this.i18n.locale(),
     );
+  }
+
+  // ------------------------------------------------ row 1.3e: the server's price before Создать
+
+  /**
+   * The price the server would book for this basket, from `POST .../orders/quote`: the same request
+   * as «Создать», run through the same cart and pricing path and undone, so the promo discount and
+   * the delivery fee are in it. Null while there is nothing to price, while the answer is on its way
+   * (the figure beside it would be stale the moment an input changed) and when the read failed --
+   * the screen then falls back to the menu arithmetic it always had, honestly labelled an estimate.
+   */
+  protected readonly serverQuote = signal<OrderQuote | null>(null);
+  protected readonly quoteLoading = signal(false);
+  /** Why the server will not price this basket as it stands (a promo code that does not apply, an item out of stock), in words. */
+  protected readonly quoteRefusal = signal<string | null>(null);
+
+  private quoteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Bumped on every change and every answer, so a slow response for an old basket is dropped. */
+  private quoteSequence = 0;
+
+  /** Waits this long after the last edit before asking, so a quantity stepper held down is one request. */
+  private static readonly QUOTE_DEBOUNCE_MS = 400;
+
+  /** What the order would cost the customer, for «Сдача»: the server's figure, the menu sum until it arrives. */
+  private readonly changeBaseMinor = computed(
+    () => this.serverQuote()?.totalMinor ?? this.total().subtotalMinor,
+  );
+
+  /** A delivery the zone refuses or prices below its minimum: checkout would refuse it, so the operator hears it now. */
+  protected quoteDeliveryNotice(): string | null {
+    const quote = this.serverQuote();
+    if (quote?.deliveryOutcome == null) {
+      return null;
+    }
+    if (quote.deliveryOutcome === 'RESOLVED' || quote.deliveryOutcome === 'EXTERNALLY_PRICED') {
+      return null;
+    }
+    const shortfall = quote.deliveryShortfallMinor;
+    if (shortfall !== null && shortfall > 0) {
+      return this.i18n.t('orders.newOrder.order.quote.belowMinimum', {
+        amount: formatMoney(
+          { amountMinor: shortfall, currency: quote.currency },
+          this.i18n.locale(),
+        ),
+      });
+    }
+    return this.i18n.t('orders.newOrder.order.quote.deliveryRefused');
+  }
+
+  protected formattedQuoteAmount(amountMinor: number): string {
+    const currency = this.serverQuote()?.currency ?? this.total().currency;
+    return currency === null ? '—' : formatMoney({ amountMinor, currency }, this.i18n.locale());
   }
 
   // -------------------------------------------------------- §5.6 payment, promo
@@ -1220,10 +1285,10 @@ export class NewOrderPage implements OnInit {
   }
 
   /**
-   * The order pane's live «Сдача» (orders.md §5.6) — a client-side
-   * convenience only. `cash_tendered_expected_minor` is still captured after
-   * creation through `SET_CASH_TENDERED` (ADR 0039), not at creation, so
-   * nothing here is sent to the server; see this class's own doc for why.
+   * The order pane's live «Сдача» (orders.md §5.6): what the customer hands over minus what the
+   * order costs -- the server's price (row 1.3e), so a promo code and a delivery fee are in it. It
+   * is also sent with the order (`cashTenderedMinor`), which writes it to the order in the
+   * transaction that creates it; a later change is the `SET_CASH_TENDERED` amendment (ADR 0039).
    */
   protected readonly changeDueMinor = computed(() => {
     const tendered = this.cashTenderedMinor();
@@ -1231,16 +1296,26 @@ export class NewOrderPage implements OnInit {
     if (tendered <= 0 || total.currency === null) {
       return null;
     }
-    return tendered - total.subtotalMinor;
+    return tendered - this.changeBaseMinor();
   });
 
   protected formattedChangeDue(): string | null {
     const changeMinor = this.changeDueMinor();
-    const currency = this.total().currency;
-    if (changeMinor === null || currency === null) {
+    const currency = this.serverQuote()?.currency ?? this.total().currency;
+    if (changeMinor === null || currency === null || changeMinor < 0) {
       return null;
     }
-    return formatMoney({ amountMinor: Math.max(changeMinor, 0), currency }, this.i18n.locale());
+    return formatMoney({ amountMinor: changeMinor, currency }, this.i18n.locale());
+  }
+
+  /** The tender is less than the price: the order is still created (the customer can hand over more), but the operator is told. */
+  protected formattedTenderShortfall(): string | null {
+    const changeMinor = this.changeDueMinor();
+    const currency = this.serverQuote()?.currency ?? this.total().currency;
+    if (changeMinor === null || currency === null || changeMinor >= 0) {
+      return null;
+    }
+    return formatMoney({ amountMinor: -changeMinor, currency }, this.i18n.locale());
   }
 
   // ------------------------------------------------------ §5.4/§5.6 delivery fee preview
@@ -1290,6 +1365,56 @@ export class NewOrderPage implements OnInit {
       this.deliveryFeeTimer = setTimeout(() => {
         void this.refreshDeliveryFee(lat, lon, currency, subtotalMinor);
       }, 400);
+    });
+
+    // Row 1.3e: the server's price for the basket as it stands. Any input the price depends
+    // on retires the figure on screen at once (it would be stale) and, after the operator
+    // stops editing, asks again. Debounced like the delivery-fee preview above, and a
+    // slow answer for an old basket is dropped by `quoteSequence`.
+    effect((onCleanup) => {
+      const scope = this.location.scope();
+      const customer = this.selectedCustomer();
+      const mode = this.fulfillmentMode();
+      const addressId = this.selectedAddressId();
+      const placeAt = this.selectedLocationId();
+      const basketTotal = this.total();
+      // Not read for their value: each one is something the price depends on.
+      this.promoCode();
+      this.paymentMethodCode();
+      this.channelCode();
+
+      this.quoteSequence += 1;
+      const sequence = this.quoteSequence;
+      untracked(() => {
+        this.serverQuote.set(null);
+        this.quoteRefusal.set(null);
+        this.quoteLoading.set(false);
+      });
+      if (this.quoteTimer !== null) {
+        clearTimeout(this.quoteTimer);
+        this.quoteTimer = null;
+      }
+      if (
+        !scope ||
+        customer === null ||
+        placeAt === null ||
+        basketTotal.currency === null ||
+        this.basket().length === 0 ||
+        !basketTotal.allAvailable ||
+        (mode === 'DELIVERY' && addressId === null)
+      ) {
+        return;
+      }
+      this.quoteTimer = setTimeout(() => {
+        this.quoteTimer = null;
+        void this.refreshQuote(sequence);
+      }, NewOrderPage.QUOTE_DEBOUNCE_MS);
+      onCleanup(() => {
+        if (this.quoteTimer !== null) {
+          clearTimeout(this.quoteTimer);
+          this.quoteTimer = null;
+        }
+      });
     });
 
     // Row 1.3's cross-branch resolver. Re-resolves on every fulfilment-mode
@@ -1370,8 +1495,58 @@ export class NewOrderPage implements OnInit {
     }
   }
 
+  private async refreshQuote(sequence: number): Promise<void> {
+    const scope = this.location.scope();
+    const customer = untracked(() => this.selectedCustomer());
+    if (!scope || customer === null || sequence !== this.quoteSequence) {
+      return;
+    }
+    const request = untracked(() => this.placeRequest(customer, scope, 'quote'));
+    if (request === null) {
+      return;
+    }
+    const placeAtScope = untracked(() => ({ ...scope, locationId: this.placeAtLocationId(scope) }));
+    this.quoteLoading.set(true);
+    try {
+      const quote = await this.api.quote(placeAtScope, request);
+      if (sequence === this.quoteSequence) {
+        this.serverQuote.set(quote);
+      }
+    } catch (error) {
+      if (sequence !== this.quoteSequence) {
+        return;
+      }
+      // A business refusal (a promo code that does not apply, an item out of stock, an address
+      // outside every zone) is worth a sentence now rather than after «Создать». Anything else --
+      // no network, a server fault, a missing grant -- leaves the menu estimate standing: the
+      // quote is a convenience on top of placing the order, never a gate in front of it.
+      if (
+        error instanceof ApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        accessRefusal(error)?.kind !== 'denied'
+      ) {
+        this.quoteRefusal.set(this.describeDeliveryRefusal(error));
+      }
+    } finally {
+      if (sequence === this.quoteSequence) {
+        this.quoteLoading.set(false);
+      }
+    }
+  }
+
   /** `—` while unlocated or unresolved, a translated refusal when the resolver refuses, the formatted fee otherwise. */
   protected formattedDeliveryFee(): string {
+    const priced = this.serverQuote();
+    if (priced !== null && priced.deliveryOutcome !== null) {
+      // The server's own fee, from the same pricing the order is booked with (row 1.3e).
+      return this.quoteDeliveryNotice() !== null
+        ? this.i18n.t('orders.newOrder.order.deliveryFeeUnavailable')
+        : formatMoney(
+            { amountMinor: priced.feeMinor, currency: priced.currency },
+            this.i18n.locale(),
+          );
+    }
     if (this.deliveryFeeLoading()) {
       return this.i18n.t('orders.newOrder.order.deliveryFeeCalculating');
     }
@@ -1388,6 +1563,10 @@ export class NewOrderPage implements OnInit {
 
   /** The goods total plus the previewed delivery fee — shown only once both are actually known. */
   protected formattedTotalWithDelivery(): string | null {
+    if (this.serverQuote() !== null) {
+      // The server's total above already carries the fee; adding the preview again would count it twice.
+      return null;
+    }
     const total = this.total();
     const quote = this.deliveryFeeQuote();
     if (total.currency === null || quote === null || !quote.available || quote.feeMinor === null) {
@@ -1605,6 +1784,97 @@ export class NewOrderPage implements OnInit {
       !this.submitting(),
   );
 
+  /**
+   * The branch an order is placed -- and priced -- at: a table is a room in the operator's own
+   * branch, so a DINE_IN order is placed here whatever a pickup earlier in the session had
+   * resolved elsewhere; any other order goes to the resolved (or overridden) branch.
+   */
+  private placeAtLocationId(scope: LocationScope): string {
+    return this.fulfillmentMode() === 'DINE_IN'
+      ? scope.locationId
+      : (this.selectedLocationId() ?? scope.locationId);
+  }
+
+  /**
+   * The body of `POST .../orders` -- and, minus what only matters to placing, of `POST
+   * .../orders/quote`. One builder, so the price the operator is shown is asked for with exactly the
+   * basket, destination, promo code and payment method the order is then placed with. A quote
+   * leaves out what decides where, when and for whom the order lands rather than what it costs:
+   * the pre-order time, the branch override, the party's bill, and the cash tendered.
+   *
+   * Null when the request cannot be made yet (a delivery with no address; for a quote, no one to
+   * deliver to).
+   */
+  private placeRequest(
+    customer: { accountId: string; label: string },
+    scope: LocationScope,
+    kind: 'place' | 'quote',
+    confirmingOutOfHours = false,
+  ): PlaceOrderRequest | null {
+    const place = kind === 'place';
+    const delivery = this.fulfillmentMode() === 'DELIVERY';
+    const addressId = this.selectedAddressId();
+    const dineIn = this.fulfillmentMode() === 'DINE_IN';
+    let destination: PlaceOrderRequest['destination'] = null;
+    if (delivery) {
+      if (addressId === null) {
+        return null;
+      }
+      const recipientName = this.recipientName().trim() || customer.label;
+      const recipientPhone = this.recipientPhone().trim() || this.phone().trim();
+      if (!place && (recipientName === '' || recipientPhone === '')) {
+        // The server refuses a destination with no one to deliver to; a price does not
+        // depend on who it is, so there is nothing to ask until there is a name.
+        return null;
+      }
+      destination = {
+        customerAddressId: addressId,
+        recipientName,
+        recipientPhone,
+        deliveryNote: this.deliveryNote().trim() || null,
+      };
+    }
+    const lines: PlaceOrderLine[] = this.basket().map((line) => ({
+      variantId: line.variantId,
+      quantity: line.quantity,
+      modifierOptionIds: flattenModifiers(line),
+      commentPresetCodes: line.commentPresetCodes,
+      customerNote: line.customerNote,
+      // ADR 0136: a combo goes as its container with the components picked; `quantity` counts combos.
+      ...(line.combo
+        ? {
+            comboPicks: line.combo.picks.map((pick) => ({
+              componentId: pick.componentId,
+              quantity: pick.pickQuantity,
+            })),
+          }
+        : {}),
+    }));
+    const override = place && this.isBranchOverride();
+    const requestedForDate = place ? this.requestedForDate() : null;
+    const tendered = this.cashTenderedMinor();
+    return {
+      customerAccountId: customer.accountId,
+      channelCode: this.channelCode(),
+      fulfillmentMode: this.fulfillmentMode(),
+      lines,
+      destination,
+      paymentMethodCode: this.paymentMethodCode(),
+      promoCode: this.promoCode().trim() || null,
+      requestedFor: requestedForDate ? requestedForDate.toISOString() : null,
+      overrideOutOfHours: place && confirmingOutOfHours,
+      proposedLocationId: this.proposedLocationId(),
+      overrideReasonCode: override ? this.overrideReasonCode() : null,
+      overrideNote: override ? this.overrideNote().trim() || null : null,
+      // The party's bill is part of the placement, not a call after it (ADR 0047).
+      dineInSessionId: place && dineIn ? (this.tablePick()?.sessionId ?? null) : null,
+      // Row 1.3e: what the customer says they will hand over, written to the order in the
+      // transaction that creates it. Only a cash order has one, and only an entered figure.
+      cashTenderedMinor:
+        place && this.paymentMethodCode() === 'CASH' && tendered > 0 ? tendered : null,
+    };
+  }
+
   protected async submit(): Promise<void> {
     const scope = this.location.scope();
     const customer = this.selectedCustomer();
@@ -1612,20 +1882,14 @@ export class NewOrderPage implements OnInit {
       return;
     }
     const delivery = this.fulfillmentMode() === 'DELIVERY';
-    const addressId = this.selectedAddressId();
-    if (delivery && addressId === null) {
+    if (delivery && this.selectedAddressId() === null) {
       return;
     }
-    const dineIn = this.fulfillmentMode() === 'DINE_IN';
-    // A table is a room in the operator's own branch: a DINE_IN order is placed
-    // here, whatever a pickup order earlier in this session had resolved elsewhere.
-    const placeAtLocationId = dineIn
-      ? scope.locationId
-      : (this.selectedLocationId() ?? scope.locationId);
     // Row 1.3: POST .../orders at the resolved (or overridden) branch, not
-    // always the operator's own logged-in one.
-    const placeAtScope = { ...scope, locationId: placeAtLocationId };
-    const override = this.isBranchOverride();
+    // always the operator's own logged-in one. A table is a room in the
+    // operator's own branch, so a DINE_IN order is placed here whatever a
+    // pickup order earlier in this session had resolved elsewhere.
+    const placeAtScope = { ...scope, locationId: this.placeAtLocationId(scope) };
     const requestedForDate = this.requestedForDate();
     if (this.preOrderEnabled()) {
       if (requestedForDate === null) {
@@ -1644,46 +1908,10 @@ export class NewOrderPage implements OnInit {
     this.submitError.set(null);
     this.unavailableItemIds.set([]);
     try {
-      const lines: PlaceOrderLine[] = this.basket().map((line) => ({
-        variantId: line.variantId,
-        quantity: line.quantity,
-        modifierOptionIds: flattenModifiers(line),
-        commentPresetCodes: line.commentPresetCodes,
-        customerNote: line.customerNote,
-        // ADR 0136: a combo goes as its container with the components picked; `quantity` counts combos.
-        ...(line.combo
-          ? {
-              comboPicks: line.combo.picks.map((pick) => ({
-                componentId: pick.componentId,
-                quantity: pick.pickQuantity,
-              })),
-            }
-          : {}),
-      }));
-      const request: PlaceOrderRequest = {
-        customerAccountId: customer.accountId,
-        channelCode: this.channelCode(),
-        fulfillmentMode: this.fulfillmentMode(),
-        lines,
-        destination:
-          delivery && addressId !== null
-            ? {
-                customerAddressId: addressId,
-                recipientName: this.recipientName().trim() || customer.label,
-                recipientPhone: this.recipientPhone().trim() || this.phone().trim(),
-                deliveryNote: this.deliveryNote().trim() || null,
-              }
-            : null,
-        paymentMethodCode: this.paymentMethodCode(),
-        promoCode: this.promoCode().trim() || null,
-        requestedFor: requestedForDate ? requestedForDate.toISOString() : null,
-        overrideOutOfHours: confirmingOutOfHours,
-        proposedLocationId: this.proposedLocationId(),
-        overrideReasonCode: override ? this.overrideReasonCode() : null,
-        overrideNote: override ? this.overrideNote().trim() || null : null,
-        // The party's bill is part of the placement, not a call after it (ADR 0047).
-        dineInSessionId: dineIn ? (this.tablePick()?.sessionId ?? null) : null,
-      };
+      const request = this.placeRequest(customer, scope, 'place', confirmingOutOfHours);
+      if (request === null) {
+        return;
+      }
       const result = await this.api.placeOrder(placeAtScope, request);
       this.outOfHoursConfirmReason.set(null);
       // The order exists from here on, and everything below is about not losing it.
@@ -1702,6 +1930,14 @@ export class NewOrderPage implements OnInit {
         message: this.i18n.t('orders.newOrder.order.created', { number: result.publicOrderNumber }),
         tone: 'success',
       });
+      if (result.warnings.includes('CASH_TENDERED_INSUFFICIENT')) {
+        // The order is created either way -- the customer can hand over more -- but the
+        // operator is told the figure they entered was short of the price.
+        this.toasts.show({
+          message: this.i18n.t('orders.newOrder.order.tenderInsufficient'),
+          tone: 'info',
+        });
+      }
       void this.router.navigate(['/orders', result.orderId]);
     } catch (error) {
       if (error instanceof ApiError) {

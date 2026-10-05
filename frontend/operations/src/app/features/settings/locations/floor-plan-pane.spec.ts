@@ -711,4 +711,87 @@ describe('FloorPlanPane', () => {
     expect(live).toHaveBeenCalledTimes(2);
     expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
   });
+
+  // ----------------------------------------------- closing a party from the plan (row 10.2d)
+
+  describe('closing the party at a table', () => {
+    const emptyBill = {
+      session: session({ version: 8 }),
+      orderIds: [],
+      currency: 'UZS',
+      totalMinor: 0,
+      roundCount: 0,
+      openRoundCount: 0,
+    };
+
+    async function confirmClose(host: HTMLElement): Promise<void> {
+      host.querySelector<HTMLButtonElement>('[data-testid="party-close-open"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="q-confirm-confirm"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    it('closes a party a host seated, and the table is free to seat again', async () => {
+      const close = vi.fn().mockReturnValue(of(session({ status: 'CLOSED', version: 9 })));
+      const live = vi
+        .fn()
+        .mockReturnValueOnce(of([session()]))
+        .mockReturnValue(of([]));
+      const host = await render(
+        {},
+        {
+          held: MANAGES_SESSIONS,
+          sessions: { live, detail: vi.fn().mockReturnValue(of(emptyBill)), close },
+        },
+      );
+
+      selectTable(host);
+      expect(host.querySelector('[data-testid="floorplan-seat-occupied"]')).not.toBeNull();
+      await confirmClose(host);
+
+      expect(close).toHaveBeenCalledWith(SCOPE, 'ses1', expect.any(String), 8);
+      expect(live, 'the room is read again after a close').toHaveBeenCalledTimes(2);
+      expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
+      expect(host.querySelector('[data-testid="floorplan-seat-button"]')).not.toBeNull();
+    });
+
+    it('offers it for a guest’s confirmed claim, and leaves an unconfirmed one to its keep-or-release', async () => {
+      const host = await render(
+        {},
+        { held: MANAGES_SESSIONS, sessions: { live: () => of([claim()]) } },
+      );
+      selectTable(host);
+      expect(host.querySelector('[data-testid="floorplan-claim-release"]')).not.toBeNull();
+      expect(
+        host.querySelector('[data-testid="party-close-open"]'),
+        'an unconfirmed claim already has «release»',
+      ).toBeNull();
+
+      TestBed.resetTestingModule();
+      const confirmed = await render(
+        {},
+        {
+          held: MANAGES_SESSIONS,
+          sessions: {
+            live: () => of([claim({ confirmedAt: '2026-09-29T14:05:00Z', claimExpiresAt: null })]),
+          },
+        },
+      );
+      selectTable(confirmed);
+      expect(confirmed.querySelector('[data-testid="party-close-open"]')).not.toBeNull();
+    });
+
+    it('offers it to nobody who cannot manage sessions, and for no table nobody sits at', async () => {
+      const readOnly = await render({}, { held: [], sessions: { live: () => of([session()]) } });
+      selectTable(readOnly);
+      expect(readOnly.querySelector('[data-testid="party-close-open"]')).toBeNull();
+
+      TestBed.resetTestingModule();
+      const empty = await render({}, { held: MANAGES_SESSIONS });
+      selectTable(empty);
+      expect(empty.querySelector('[data-testid="party-close-open"]')).toBeNull();
+    });
+  });
 });

@@ -6377,6 +6377,42 @@ export const messagesEn = {
   'orders.newOrder.order.promoCode': 'Promo code',
   'orders.newOrder.order.cashTendered': 'Cash tendered',
   'orders.newOrder.order.changeDue': 'Change due',
+  'orders.newOrder.order.tenderShort':
+    'Short by {amount} — the customer is handing over less than the total',
+  'orders.newOrder.order.tenderInsufficient':
+    'Order created, but the cash tendered is less than the total',
+  'orders.newOrder.order.quote.discount': 'Discount',
+  'orders.newOrder.order.quote.pricing': 'Pricing…',
+  'orders.newOrder.order.quote.estimate':
+    'Estimate — the server prices the order when you create it',
+  'orders.newOrder.order.quote.belowMinimum': 'Short of the delivery minimum by {amount}',
+  'orders.newOrder.order.quote.deliveryRefused': 'Delivery is not available to this address',
+  'orders.party.close': 'Close the table',
+  'orders.party.reading': 'Reading the bill…',
+  'orders.party.readError':
+    "Could not read the table's bill, so it cannot be closed from here right now.",
+  'orders.party.owing': 'The bill is {amount}. How does the table close?',
+  'orders.party.choose.paid': 'The guests paid',
+  'orders.party.choose.walkout': 'The guests left without paying',
+  'orders.party.choose.back': 'Back',
+  'orders.party.confirm.keep': 'Keep the table',
+  'orders.party.confirm.empty.title': 'Close table {tables}?',
+  'orders.party.confirm.empty.body':
+    'Nothing is on the bill. The table is freed and can be seated again.',
+  'orders.party.confirm.empty.action': 'Close the table',
+  'orders.party.confirm.paid.title': 'Close table {tables} as paid?',
+  'orders.party.confirm.paid.body':
+    'The bill of {amount} is recorded as paid by the guests. This cannot be undone.',
+  'orders.party.confirm.paid.action': 'Close as paid',
+  'orders.party.confirm.walkout.title': 'Close table {tables} without payment?',
+  'orders.party.confirm.walkout.body':
+    '{amount} is recorded as unpaid because the guests left. The audit trail carries it with your name.',
+  'orders.party.confirm.walkout.action': 'Close without payment',
+  'orders.party.reason.empty': 'Closed from the console: nothing was on the bill',
+  'orders.party.reason.paid': 'Closed from the console: the guests paid the bill',
+  'orders.party.reason.walkout': 'The guests left without paying; closed from the console',
+  'orders.party.closedToast': 'Table {tables} is closed',
+  'orders.party.stale': 'Someone changed the table first. The list was refreshed; try again.',
   'orders.newOrder.order.deliveryFee': 'Delivery fee',
   'orders.newOrder.order.deliveryFeeCalculating': 'Calculating…',
   'orders.newOrder.order.deliveryFeeUnavailable': 'Not available for this address',

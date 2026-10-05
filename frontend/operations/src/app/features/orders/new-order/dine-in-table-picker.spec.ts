@@ -4,9 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { Capability, SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
+import { Toasts } from '../../../shared/ui/toast';
 import { ReservationsApi, TableAvailability } from '../reservations-api';
-import { SessionView, TableSessionsApi } from '../table-sessions-api';
+import { SessionDetailView, SessionView, TableSessionsApi } from '../table-sessions-api';
 import { DineInTablePicker, TablePick } from './dine-in-table-picker';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -52,21 +54,39 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('DineInTablePicker', () => {
   let fixture: ComponentFixture<DineInTablePicker>;
-  let sessionsApi: { live: ReturnType<typeof vi.fn>; open: ReturnType<typeof vi.fn> };
+  let sessionsApi: {
+    live: ReturnType<typeof vi.fn>;
+    open: ReturnType<typeof vi.fn>;
+    detail: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+    forceClose: ReturnType<typeof vi.fn>;
+  };
   let reservationsApi: { availability: ReturnType<typeof vi.fn> };
   let picks: (TablePick | null)[];
 
   async function render(
     live: readonly SessionView[] = [party()],
     availability: readonly TableAvailability[] = [table()],
+    capabilities: readonly Capability[] = [],
   ): Promise<HTMLElement> {
-    sessionsApi = { live: vi.fn().mockReturnValue(of(live)), open: vi.fn() };
+    sessionsApi = {
+      live: vi.fn().mockReturnValue(of(live)),
+      open: vi.fn(),
+      detail: vi.fn(),
+      close: vi.fn(),
+      forceClose: vi.fn(),
+    };
     reservationsApi = { availability: vi.fn().mockResolvedValue(availability) };
     await TestBed.configureTestingModule({
       imports: [DineInTablePicker],
       providers: [
         { provide: TableSessionsApi, useValue: sessionsApi },
         { provide: ReservationsApi, useValue: reservationsApi },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (capability: Capability) => capabilities.includes(capability) },
+        },
+        { provide: Toasts, useValue: { show: () => 0 } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -253,6 +273,9 @@ describe('DineInTablePicker', () => {
           throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
         ),
       open: vi.fn(),
+      detail: vi.fn(),
+      close: vi.fn(),
+      forceClose: vi.fn(),
     };
     reservationsApi = { availability: vi.fn().mockResolvedValue([]) };
     await TestBed.configureTestingModule({
@@ -292,5 +315,104 @@ describe('DineInTablePicker', () => {
 
     expect(picks[picks.length - 1]).toBeNull();
     expect(rows(host)).toEqual([]);
+  });
+
+  // ------------------------------------------------------- closing the party (gap map row 1.3)
+
+  describe('closing a party from here', () => {
+    function emptyBill(sessionId: string): SessionDetailView {
+      return {
+        session: party({ sessionId, version: 5 }),
+        orderIds: [],
+        currency: 'UZS',
+        totalMinor: 0,
+        roundCount: 0,
+        openRoundCount: 0,
+      };
+    }
+
+    async function closeFirstParty(host: HTMLElement): Promise<void> {
+      (host.querySelector('[data-testid="party-close-open"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    it('offers «Close the table» beside each seated party to a principal who can manage sessions, and to nobody else', async () => {
+      let host = await render(
+        [party(), party({ sessionId: 'ses-2' })],
+        [table()],
+        ['DINEIN_SESSION_MANAGE'],
+      );
+      expect(host.querySelectorAll('[data-testid="party-close-open"]')).toHaveLength(2);
+
+      TestBed.resetTestingModule();
+      host = await render([party()], [table()], []);
+      expect(host.querySelector('[data-testid="party-close-open"]')).toBeNull();
+    });
+
+    it('drops the party that was closed, clears the pick if it was the chosen one, and reads the room again so its tables are offered', async () => {
+      const host = await render([party()], [table()], ['DINEIN_SESSION_MANAGE']);
+      sessionsApi.detail.mockReturnValue(of(emptyBill('ses-1')));
+      sessionsApi.close.mockReturnValue(of(party({ status: 'CLOSED', version: 6 })));
+      (host.querySelector('[data-testid="new-order-table-session"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(picks.at(-1)).toEqual({ sessionId: 'ses-1', tables: 'T7' });
+      // After the close the room is read again, and the party is gone from it.
+      sessionsApi.live.mockReturnValue(of([]));
+      reservationsApi.availability.mockResolvedValue([
+        table(),
+        table({ tableId: 'tb-7', code: 'T7' }),
+      ]);
+
+      await closeFirstParty(host);
+
+      expect(sessionsApi.close).toHaveBeenCalledTimes(1);
+      expect(rows(host)).toEqual([]);
+      expect(picks.at(-1), 'an order for a party that has left would be refused').toBeNull();
+      expect(sessionsApi.live).toHaveBeenCalledTimes(2);
+      expect(
+        host.querySelector('[data-testid="new-order-table-free-select"]')?.textContent,
+        'the table the party freed is now one to seat',
+      ).toContain('T7');
+    });
+
+    it('closing a party that was not chosen leaves the chosen one chosen', async () => {
+      const host = await render(
+        [
+          party({ sessionId: 'ses-1' }),
+          party({
+            sessionId: 'ses-2',
+            tables: [{ tableId: 'tb-9', code: 'T9', displayName: 'Table 9' }],
+          }),
+        ],
+        [table()],
+        ['DINEIN_SESSION_MANAGE'],
+      );
+      sessionsApi.detail.mockReturnValue(of(emptyBill('ses-1')));
+      sessionsApi.close.mockReturnValue(of(party({ status: 'CLOSED', version: 6 })));
+      // Choose the second party, then close the first.
+      (
+        host.querySelectorAll('[data-testid="new-order-table-session"]')[1] as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      sessionsApi.live.mockReturnValue(
+        of([
+          party({
+            sessionId: 'ses-2',
+            tables: [{ tableId: 'tb-9', code: 'T9', displayName: 'Table 9' }],
+          }),
+        ]),
+      );
+
+      await closeFirstParty(host);
+
+      expect(picks.at(-1)).toEqual({ sessionId: 'ses-2', tables: 'T9' });
+      expect(rows(host)).toEqual(['T9 · 3 guests']);
+    });
   });
 });

@@ -11,6 +11,7 @@ import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
+import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { RejectReasonsApi } from './order-reject-reasons-api';
@@ -70,6 +71,60 @@ function page(items: readonly OrderSummaryResponse[]): Observable<unknown> {
 }
 
 /**
+ * A `RealtimeClient` that opens nothing: a test says when the brand stream is open and delivers
+ * frames by hand, and can read how many screens are watching it.
+ */
+interface FakeRealtime {
+  readonly state: ReturnType<typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>>;
+  readonly brandState: ReturnType<
+    typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable' | null>
+  >;
+  readonly onFrame: (listener: (frame: RealtimeFrame) => void) => () => void;
+  readonly watchBrand: () => () => void;
+  /** Hands a frame to every listener, as the stream would. */
+  readonly deliver: (frame: RealtimeFrame) => void;
+  /** How many `watchBrand()` calls are currently held. */
+  readonly brandWatchers: () => number;
+}
+
+function fakeRealtime(): FakeRealtime {
+  const listeners = new Set<(frame: RealtimeFrame) => void>();
+  let watchers = 0;
+  return {
+    state: signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>('open'),
+    brandState: signal<'connecting' | 'open' | 'reconnecting' | 'unavailable' | null>(null),
+    onFrame: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    watchBrand: () => {
+      watchers += 1;
+      let released = false;
+      return () => {
+        if (!released) {
+          released = true;
+          watchers -= 1;
+        }
+      };
+    },
+    deliver: (frame) => listeners.forEach((listener) => listener(frame)),
+    brandWatchers: () => watchers,
+  };
+}
+
+function signalFrame(scope: string, channel = 'order_queue'): RealtimeFrame {
+  return {
+    kind: 'signal',
+    channel,
+    scope,
+    resourceType: 'Order',
+    resourceId: 'order-1',
+    version: 2,
+    occurredAt: '2026-10-05T09:00:00Z',
+  };
+}
+
+/**
  * Configures the queue for an operator who reads the whole brand (unless
  * `branches` says otherwise). `respond` answers each `ApiClient.get` by path —
  * the one shared stub of the sibling spec answers every path alike, which
@@ -81,6 +136,8 @@ function configure(options: {
   readonly bulk?: boolean;
   readonly actions?: Partial<OrderActionsApi>;
   readonly policyFor?: (locationId: string) => LatenessPolicy | null;
+  /** Replaces the real `RealtimeClient`, which would try to open a stream. */
+  readonly realtime?: FakeRealtime;
 }): Harnessing {
   const calls: GetCall[] = [];
   const policyReads: string[] = [];
@@ -139,6 +196,7 @@ function configure(options: {
         },
       },
       { provide: OrderActionsApi, useValue: options.actions ?? {} },
+      ...(options.realtime ? [{ provide: RealtimeClient, useValue: options.realtime }] : []),
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -801,5 +859,178 @@ describe('OrderQueue: «Выставить счёт» (gap map row 1.1e, wave 16
     await settle();
 
     expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=new');
+  });
+});
+
+describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
+  const BRAND_SCOPE = 'BRAND:b1';
+  const BRANCH_SCOPE = 'LOCATION:l1';
+
+  it('listens on the brand stream only while «Все филиалы» is on, and lets go when the operator leaves it', async () => {
+    const realtime = fakeRealtime();
+    configure({ respond: () => page([]), realtime });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    expect(realtime.brandWatchers(), 'one branch: nothing to listen to at the brand').toBe(0);
+
+    choose(harness.routeNativeElement!, 'order-queue-filter-branchMode', 'ALL');
+    await settle();
+    expect(realtime.brandWatchers()).toBe(1);
+
+    choose(harness.routeNativeElement!, 'order-queue-filter-branchMode', 'ONE');
+    await settle();
+    expect(realtime.brandWatchers(), 'back on one branch, the stream is released').toBe(0);
+  });
+
+  it('lets go of the brand stream when the screen is left', async () => {
+    const realtime = fakeRealtime();
+    configure({ respond: () => page([]), realtime });
+    const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+    await settle();
+    expect(realtime.brandWatchers()).toBe(1);
+
+    harness.fixture.destroy();
+
+    expect(realtime.brandWatchers()).toBe(0);
+  });
+
+  it('re-reads the brand board when the brand stream says an order changed, without waiting for the poll', async () => {
+    const realtime = fakeRealtime();
+    const h = configure({ respond: () => page([]), realtime });
+    await RouterTestingHarness.create('/orders?tab=all&branches=all');
+    await settle();
+    realtime.brandState.set('open');
+    const before = boardCalls(h).length;
+
+    realtime.deliver(signalFrame(BRAND_SCOPE));
+    await settle();
+
+    expect(boardCalls(h)).toHaveLength(before + 1);
+    expect(boardCalls(h).at(-1)!.path).toBe(BRAND_BOARD);
+  });
+
+  it('with the brand stream open, ignores the branch stream: the operator’s own branch is in both, and one change is one read', async () => {
+    const realtime = fakeRealtime();
+    const h = configure({ respond: () => page([]), realtime });
+    await RouterTestingHarness.create('/orders?tab=all&branches=all');
+    await settle();
+    realtime.brandState.set('open');
+    const before = boardCalls(h).length;
+
+    // The same change, as the two streams deliver it.
+    realtime.deliver(signalFrame(BRANCH_SCOPE));
+    realtime.deliver(signalFrame(BRAND_SCOPE));
+    await settle();
+
+    expect(boardCalls(h)).toHaveLength(before + 1);
+  });
+
+  it('with the brand stream down, still takes the branch stream’s frames, as the mode did before the brand stream existed', async () => {
+    const realtime = fakeRealtime();
+    const h = configure({ respond: () => page([]), realtime });
+    await RouterTestingHarness.create('/orders?tab=all&branches=all');
+    await settle();
+    realtime.brandState.set('unavailable');
+    const before = boardCalls(h).length;
+
+    realtime.deliver(signalFrame(BRANCH_SCOPE));
+    await settle();
+
+    expect(boardCalls(h)).toHaveLength(before + 1);
+  });
+
+  it('on one branch, a brand frame is not this board’s business', async () => {
+    const realtime = fakeRealtime();
+    const h = configure({ respond: () => page([]), realtime });
+    await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const before = boardCalls(h).length;
+
+    realtime.deliver(signalFrame(BRAND_SCOPE));
+    await settle();
+    expect(boardCalls(h)).toHaveLength(before);
+
+    realtime.deliver(signalFrame(BRANCH_SCOPE));
+    await settle();
+    expect(boardCalls(h)).toHaveLength(before + 1);
+  });
+
+  it('a resync re-reads whichever stream sent it', async () => {
+    const realtime = fakeRealtime();
+    const h = configure({ respond: () => page([]), realtime });
+    await RouterTestingHarness.create('/orders?tab=all&branches=all');
+    await settle();
+    realtime.brandState.set('open');
+    const before = boardCalls(h).length;
+
+    realtime.deliver({ kind: 'resync' });
+    await settle();
+
+    expect(boardCalls(h)).toHaveLength(before + 1);
+  });
+
+  describe('the poll, which is the fallback', () => {
+    it('keeps polling every ten seconds while the brand stream is not open', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        const realtime = fakeRealtime();
+        realtime.brandState.set('reconnecting');
+        const h = configure({ respond: () => page([]), realtime });
+        await RouterTestingHarness.create('/orders?tab=all&branches=all');
+        await settle();
+        const before = boardCalls(h).length;
+
+        vi.advanceTimersByTime(10_000);
+        await settle();
+
+        expect(boardCalls(h)).toHaveLength(before + 1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('sits out the ten-second poll while the brand stream is open, and polls again once a minute has passed', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        const realtime = fakeRealtime();
+        const h = configure({ respond: () => page([]), realtime });
+        await RouterTestingHarness.create('/orders?tab=all&branches=all');
+        await settle();
+        realtime.brandState.set('open');
+        const before = boardCalls(h).length;
+
+        vi.advanceTimersByTime(30_000);
+        await settle();
+        expect(
+          boardCalls(h),
+          'the stream is the notification; the poll has nothing to add',
+        ).toHaveLength(before);
+
+        vi.advanceTimersByTime(40_000);
+        await settle();
+        expect(boardCalls(h).length, 'the net under a lost signal').toBeGreaterThan(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('polls every ten seconds on one branch even with the brand stream open: the stream is not this board’s', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        const realtime = fakeRealtime();
+        realtime.brandState.set('open');
+        const h = configure({ respond: () => page([]), realtime });
+        await RouterTestingHarness.create('/orders?tab=all');
+        await settle();
+        const before = boardCalls(h).length;
+
+        vi.advanceTimersByTime(10_000);
+        await settle();
+
+        expect(boardCalls(h)).toHaveLength(before + 1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

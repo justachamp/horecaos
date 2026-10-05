@@ -705,6 +705,15 @@
               data-testid="new-order-promo-code"
             />
           </label>
+          @if (quoteRefusal(); as refusal) {
+            <p
+              class="q-caption new-order__error"
+              role="status"
+              data-testid="new-order-quote-refusal"
+            >
+              {{ refusal }}
+            </p>
+          }
 
           @if (paymentMethodCode() === 'CASH') {
             <label class="new-order__field">
@@ -722,6 +731,15 @@
                 <span>{{ change }}</span>
               </p>
             }
+            @if (formattedTenderShortfall(); as shortfall) {
+              <p
+                class="q-caption new-order__error"
+                role="status"
+                data-testid="new-order-tender-short"
+              >
+                {{ 'orders.newOrder.order.tenderShort' | t: { amount: shortfall } }}
+              </p>
+            }
           }
 
           @if (fulfillmentMode() === 'DELIVERY' && selectedAddressId()) {
@@ -732,6 +750,23 @@
           }
         }
 
+        @if (serverQuote(); as quote) {
+          @if (quote.discountMinor > 0) {
+            <p class="q-caption new-order__order-row" data-testid="new-order-quote-discount">
+              <span>{{ 'orders.newOrder.order.quote.discount' | t }}</span>
+              <span>−{{ formattedQuoteAmount(quote.discountMinor) }}</span>
+            </p>
+          }
+          @if (quoteDeliveryNotice(); as notice) {
+            <p
+              class="q-caption new-order__error"
+              role="status"
+              data-testid="new-order-quote-delivery-notice"
+            >
+              {{ notice }}
+            </p>
+          }
+        }
         <div class="new-order__total-row">
           <span class="q-body-sm">{{ 'orders.newOrder.order.total' | t }}</span>
           <span class="q-body new-order__total-amount" data-testid="new-order-total">{{
@@ -744,10 +779,19 @@
             <span>{{ totalWithDelivery }}</span>
           </p>
         }
+        @if (serverQuote() === null && basket().length > 0) {
+          <p class="q-caption new-order__hint" data-testid="new-order-total-estimate">
+            {{
+              quoteLoading()
+                ? ('orders.newOrder.order.quote.pricing' | t)
+                : ('orders.newOrder.order.quote.estimate' | t)
+            }}
+          </p>
+        }
         @if (!total().fullyPriced) {
           <p class="q-caption new-order__hint">{{ 'orders.newOrder.order.totalPending' | t }}</p>
         }
-        @if (total().provisional) {
+        @if (total().provisional || serverQuote()?.provisional) {
           <p class="q-caption new-order__hint" data-testid="new-order-total-provisional">
             {{ 'orders.newOrder.order.totalProvisional' | t }}
           </p>
