@@ -1191,7 +1191,6 @@ export class NewOrderPage implements OnInit {
    * the screen then falls back to the menu arithmetic it always had, honestly labelled an estimate.
    */
   protected readonly serverQuote = signal<OrderQuote | null>(null);
-  protected readonly quoteLoading = signal(false);
   /** Why the server will not price this basket as it stands (a promo code that does not apply, an item out of stock), in words. */
   protected readonly quoteRefusal = signal<string | null>(null);
 
@@ -1395,7 +1394,6 @@ export class NewOrderPage implements OnInit {
       untracked(() => {
         this.serverQuote.set(null);
         this.quoteRefusal.set(null);
-        this.quoteLoading.set(false);
       });
       if (this.quoteTimer !== null) {
         clearTimeout(this.quoteTimer);
@@ -1513,7 +1511,6 @@ export class NewOrderPage implements OnInit {
       return;
     }
     const placeAtScope = { ...scope, locationId: this.placeAtLocationId(scope) };
-    this.quoteLoading.set(true);
     try {
       const quote = await this.api.quote(placeAtScope, request);
       if (sequence === this.quoteSequence) {
@@ -1534,10 +1531,6 @@ export class NewOrderPage implements OnInit {
         accessRefusal(error)?.kind !== 'denied'
       ) {
         this.quoteRefusal.set(this.describeDeliveryRefusal(error));
-      }
-    } finally {
-      if (sequence === this.quoteSequence) {
-        this.quoteLoading.set(false);
       }
     }
   }
