@@ -11,6 +11,13 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPageLocale;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPageSlug;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPageVersion;
@@ -24,6 +31,13 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcChannelPageSt
  * superseded: a customer may be reading a page at the moment it is
  * republished, and rewriting the words under a URL already shown to them
  * would make that render evidence of nothing.
+ *
+ * <p>Every publication leaves a {@code channel.page.published} audit fact (ADR 0027, staff
+ * row {@code 9.3a}) in its transaction: which page, which version, which languages and how
+ * long each text is. The text itself stays out of the history -- a page is up to fifty
+ * thousand characters of customer-facing copy that its own version table already keeps,
+ * addressable by the version number the fact carries, and an audit row is the wrong place
+ * for a second copy of it.
  */
 @Service
 public class ChannelPageService {
@@ -33,11 +47,14 @@ public class ChannelPageService {
 
     private final JdbcChannelPageStore store;
     private final SalesChannelService channels;
+    private final AuditRecorder audit;
     private final Clock clock;
 
-    public ChannelPageService(JdbcChannelPageStore store, SalesChannelService channels, Clock clock) {
+    public ChannelPageService(
+            JdbcChannelPageStore store, SalesChannelService channels, AuditRecorder audit, Clock clock) {
         this.store = store;
         this.channels = channels;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -75,8 +92,9 @@ public class ChannelPageService {
             Map<String, String> contentsByLocale,
             String publishedBy) {
 
-        channels.require(tenantId, channelId);
+        SalesChannel channel = channels.require(tenantId, channelId);
         Map<String, String> normalized = normalize(contentsByLocale);
+        Optional<ChannelPageVersion> previous = store.current(tenantId, channelId, slug);
         Instant now = clock.instant();
         int version = store.nextVersion(tenantId, channelId, slug);
         UUID id = UUID.randomUUID();
@@ -90,7 +108,38 @@ public class ChannelPageService {
             throw new TenantResourceConflictException(
                     "Another version of this page was published concurrently; re-read and retry");
         }
+        audit.record(AuditFact.of("channel.page.published", AuditClass.BUSINESS)
+                .by(ActorRef.user(publishedBy, null))
+                .at(ResourceScope.tenant(tenantId))
+                .target("tenancy.channel-page", id)
+                .targetVersion((long) version)
+                .because("Channel page published")
+                .changed(ChangeDocuments.diff(
+                        snapshotOf(
+                                channel,
+                                slug,
+                                previous.map(ChannelPageVersion::version).orElse(0),
+                                previous.map(ChannelPageVersion::contentsByLocale)
+                                        .orElse(Map.of())),
+                        snapshotOf(channel, slug, version, normalized)))
+                .correlatedBy(id.toString())
+                .occurredAt(now)
+                .build());
         return new ChannelPageVersion(id, tenantId, channelId, slug, version, normalized, publishedBy, now);
+    }
+
+    /** Which page, which version, and how many characters each language carries; never the text. */
+    private static Map<String, Object> snapshotOf(
+            SalesChannel channel, ChannelPageSlug slug, int version, Map<String, String> contentsByLocale) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("page", slug.slug());
+        snapshot.put("version", version);
+        contentsByLocale.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> snapshot.put(
+                        "characters." + entry.getKey(), entry.getValue().length()));
+        return snapshot;
     }
 
     /** Trims, drops blanks, rejects an unknown locale or an oversized body, and requires at least one entry. */

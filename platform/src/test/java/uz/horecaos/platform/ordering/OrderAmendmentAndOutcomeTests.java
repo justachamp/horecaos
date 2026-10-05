@@ -1826,7 +1826,10 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = orderIdOf(placePromoOrder("idem-promo-retired-1", "retired10"));
 
         var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
-                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()), clock);
+                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()),
+                clock,
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                uz.horecaos.platform.support.AuditTrail.actor("promo-author"));
         authoring.retire(TENANT, BRAND, coupon.couponId());
 
         var proposed = proposeOnly(
@@ -1845,7 +1848,10 @@ class OrderAmendmentAndOutcomeTests {
     private uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow
             authorPromoCode(String code, long basisPoints, @Nullable Integer totalLimit, int perCustomerLimit) {
         var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
-                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()), clock);
+                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()),
+                clock,
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                uz.horecaos.platform.support.AuditTrail.actor("promo-author"));
         var drafted = authoring.draft(
                 TENANT,
                 BRAND,

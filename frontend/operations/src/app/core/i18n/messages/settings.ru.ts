@@ -1313,4 +1313,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.integrations.failures.replay': 'Повторить',
   'settings.integrations.failures.replay.reasonPrompt': 'Причина повтора этого сообщения:',
   'settings.integrations.failures.empty': 'Сбойных сообщений сейчас нет.',
+  'settings.home.description.approvals':
+    'Пороги, выше которых акция или крупная выгрузка клиентов ждёт второй подписи.',
 };

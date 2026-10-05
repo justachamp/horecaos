@@ -31,6 +31,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.ordering.application.OrderCatalogSnapshot;
 import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
@@ -290,7 +291,12 @@ class BrandDefaultNameReadersTests {
         CatalogSnapshotLoader loader = new CatalogSnapshotLoader(
                 store, (tenantId, assets) -> true, (t, b, ids) -> ids, brandLocales, SERVER_LOCALE);
         CatalogPublicationService publications = new CatalogPublicationService(
-                store, new CatalogValidator(), loader, new JdbcSalesChannelStore(jdbc), Clock.systemUTC());
+                store,
+                new CatalogValidator(),
+                loader,
+                new JdbcSalesChannelStore(jdbc),
+                Clock.systemUTC(),
+                AuditTrail.discarding());
         return new SampleMenuService(store, authoring, publications, brandLocales, SERVER_LOCALE);
     }
 

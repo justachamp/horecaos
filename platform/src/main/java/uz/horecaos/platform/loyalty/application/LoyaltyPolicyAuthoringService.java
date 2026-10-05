@@ -3,12 +3,21 @@ package uz.horecaos.platform.loyalty.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.AccrualRuleAuthoringRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.RedemptionPolicyAuthoringRow;
@@ -40,16 +49,28 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * resolvable set never holds two {@code ACTIVE} rows for one scope, the
  * property {@link LoyaltyPolicyService#accrualRule} and
  * {@link LoyaltyPolicyService#redemptionPolicy} are read against.
+ *
+ * <p><strong>Every write leaves an audit fact</strong> (ADR 0027, staff row {@code 9.3a}) in the
+ * transaction that made it: {@code loyalty.accrual_rule.drafted/activated/retired} and {@code
+ * loyalty.redemption_policy.drafted/activated/retired}. An activation records the rule it
+ * replaced beside the one it promoted, because «the accrual rate went from 3% to 5%, and
+ * who did it» is the question finance asks, and the draft that was typed three days earlier
+ * does not answer it.
  */
 @Service
 public class LoyaltyPolicyAuthoringService {
 
     private final JdbcLoyaltyStore store;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public LoyaltyPolicyAuthoringService(JdbcLoyaltyStore store, Clock clock) {
+    public LoyaltyPolicyAuthoringService(
+            JdbcLoyaltyStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
         this.store = store;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     // ------------------------------------------------------------- accrual
@@ -102,7 +123,7 @@ public class LoyaltyPolicyAuthoringService {
         // Built from the inputs just validated and inserted, rather than a
         // second SELECT: every field on this row is one this method itself
         // just decided, so there is nothing a re-read could disagree about.
-        return new AccrualRuleAuthoringRow(
+        AccrualRuleAuthoringRow drafted = new AccrualRuleAuthoringRow(
                 id,
                 draft.scopeType(),
                 draft.scopeId(),
@@ -115,6 +136,18 @@ public class LoyaltyPolicyAuthoringService {
                 1,
                 validFrom,
                 draft.validUntil());
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                AuditFact.of("loyalty.accrual_rule.drafted", AuditClass.BUSINESS),
+                "loyalty.accrual-rule",
+                tenantId,
+                brandId,
+                id,
+                1,
+                "Loyalty accrual rule drafted",
+                Map.of(),
+                accrualSnapshot(drafted));
+        return drafted;
     }
 
     /** Retires whichever rule currently lives at this scope, then promotes the draft. */
@@ -127,17 +160,49 @@ public class LoyaltyPolicyAuthoringService {
                     ErrorCode.VALIDATION_FAILED, "Only a DRAFT rule can be activated; this one is " + rule.status());
         }
         Instant now = clock.instant();
+        // The rule this one replaces, read before the store retires it: the economics that
+        // stood until this moment are the "before" of the change a finance reviewer asks about.
+        Map<String, Object> replaced = store.listAccrualRules(tenantId, brandId).stream()
+                .filter(other -> "ACTIVE".equals(other.status())
+                        && other.scopeType().equals(rule.scopeType())
+                        && Objects.equals(other.scopeId(), rule.scopeId())
+                        && !other.id().equals(ruleId))
+                .findFirst()
+                .map(other -> accrualSnapshot(other))
+                .orElse(Map.of());
         if (store.activateAccrualRule(tenantId, brandId, ruleId, rule.scopeType(), rule.scopeId(), now) != 1) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This rule was activated or retired by someone else");
         }
+        recordAudit(
+                AuditFact.of("loyalty.accrual_rule.activated", AuditClass.BUSINESS),
+                "loyalty.accrual-rule",
+                tenantId,
+                brandId,
+                ruleId,
+                rule.version(),
+                "Loyalty accrual rule activated",
+                replaced,
+                accrualSnapshot(rule, "ACTIVE"));
     }
 
     /** Withdraws a live rule, or discards a draft nobody activated. */
     @Transactional
     public void retireAccrualRule(UUID tenantId, UUID brandId, UUID ruleId) {
+        AccrualRuleAuthoringRow rule = store.findAccrualRuleById(tenantId, brandId, ruleId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such rule to retire"));
         if (store.retireAccrualRule(tenantId, brandId, ruleId, clock.instant()) != 1) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such rule to retire");
         }
+        recordAudit(
+                AuditFact.of("loyalty.accrual_rule.retired", AuditClass.BUSINESS),
+                "loyalty.accrual-rule",
+                tenantId,
+                brandId,
+                ruleId,
+                rule.version(),
+                "Loyalty accrual rule retired",
+                accrualSnapshot(rule),
+                accrualSnapshot(rule, "RETIRED"));
     }
 
     private void validateAccrualDraft(AccrualRuleDraft draft) {
@@ -258,7 +323,7 @@ public class LoyaltyPolicyAuthoringService {
                 validFrom,
                 draft.validUntil(),
                 now);
-        return new RedemptionPolicyAuthoringRow(
+        RedemptionPolicyAuthoringRow drafted = new RedemptionPolicyAuthoringRow(
                 id,
                 draft.maxShareBasisPoints(),
                 draft.minOrderMinor(),
@@ -268,6 +333,17 @@ public class LoyaltyPolicyAuthoringService {
                 1,
                 validFrom,
                 draft.validUntil());
+        recordAudit(
+                AuditFact.of("loyalty.redemption_policy.drafted", AuditClass.BUSINESS),
+                "loyalty.redemption-policy",
+                tenantId,
+                brandId,
+                id,
+                1,
+                "Loyalty redemption policy drafted",
+                Map.of(),
+                policySnapshot(drafted));
+        return drafted;
     }
 
     @Transactional
@@ -280,16 +356,43 @@ public class LoyaltyPolicyAuthoringService {
                     "Only a DRAFT policy can be activated; this one is " + policy.status());
         }
         Instant now = clock.instant();
+        Map<String, Object> replaced = store.listRedemptionPolicies(tenantId, brandId).stream()
+                .filter(other -> "ACTIVE".equals(other.status()) && !other.id().equals(policyId))
+                .findFirst()
+                .map(other -> policySnapshot(other))
+                .orElse(Map.of());
         if (store.activateRedemptionPolicy(tenantId, brandId, policyId, now) != 1) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This policy was activated or retired by someone else");
         }
+        recordAudit(
+                AuditFact.of("loyalty.redemption_policy.activated", AuditClass.BUSINESS),
+                "loyalty.redemption-policy",
+                tenantId,
+                brandId,
+                policyId,
+                policy.version(),
+                "Loyalty redemption policy activated",
+                replaced,
+                policySnapshot(policy, "ACTIVE"));
     }
 
     @Transactional
     public void retireRedemptionPolicy(UUID tenantId, UUID brandId, UUID policyId) {
+        RedemptionPolicyAuthoringRow policy = store.findRedemptionPolicyById(tenantId, brandId, policyId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such policy to retire"));
         if (store.retireRedemptionPolicy(tenantId, brandId, policyId, clock.instant()) != 1) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such policy to retire");
         }
+        recordAudit(
+                AuditFact.of("loyalty.redemption_policy.retired", AuditClass.BUSINESS),
+                "loyalty.redemption-policy",
+                tenantId,
+                brandId,
+                policyId,
+                policy.version(),
+                "Loyalty redemption policy retired",
+                policySnapshot(policy),
+                policySnapshot(policy, "RETIRED"));
     }
 
     private void validateRedemptionDraft(RedemptionPolicyDraft draft) {
@@ -311,5 +414,76 @@ public class LoyaltyPolicyAuthoringService {
         if (!problems.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, String.join("; ", problems));
         }
+    }
+
+    // ------------------------------------------------------------------ audit
+
+    /**
+     * One fact per write, in the caller's transaction. The reason is a plain statement of the
+     * action: the console has no field for one, and ADR 0027 refuses a user-initiated fact
+     * without it.
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            String targetType,
+            UUID tenantId,
+            UUID brandId,
+            UUID targetId,
+            int version,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target(targetType, targetId)
+                .targetVersion((long) version)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(targetId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    private static Map<String, Object> accrualSnapshot(AccrualRuleAuthoringRow rule) {
+        return accrualSnapshot(rule, rule.status());
+    }
+
+    /** The numbers an accrual rule sets, with the status it holds on this side of the change. */
+    private static Map<String, Object> accrualSnapshot(AccrualRuleAuthoringRow rule, String status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("ruleId", rule.id().toString());
+        snapshot.put("scopeType", rule.scopeType());
+        snapshot.put("scopeId", rule.scopeId() == null ? null : rule.scopeId().toString());
+        snapshot.put("rateBasisPoints", rule.rateBasisPoints());
+        snapshot.put("maxAccrualMinor", rule.maxAccrualMinor());
+        snapshot.put("earnDelayHours", rule.earnDelayHours());
+        snapshot.put("lotLifetimeDays", rule.lotLifetimeDays());
+        snapshot.put("expiryWarningDays", rule.expiryWarningDays());
+        snapshot.put("validFrom", rule.validFrom().toString());
+        snapshot.put(
+                "validUntil",
+                rule.validUntil() == null ? null : rule.validUntil().toString());
+        snapshot.put("status", status);
+        return snapshot;
+    }
+
+    private static Map<String, Object> policySnapshot(RedemptionPolicyAuthoringRow policy) {
+        return policySnapshot(policy, policy.status());
+    }
+
+    private static Map<String, Object> policySnapshot(RedemptionPolicyAuthoringRow policy, String status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("policyId", policy.id().toString());
+        snapshot.put("maxShareBasisPoints", policy.maxShareBasisPoints());
+        snapshot.put("minOrderMinor", policy.minOrderMinor());
+        snapshot.put("excludesDeliveryFee", policy.excludesDeliveryFee());
+        snapshot.put(
+                "allowedChannels", policy.allowedChannels().stream().sorted().toList());
+        snapshot.put("validFrom", policy.validFrom().toString());
+        snapshot.put(
+                "validUntil",
+                policy.validUntil() == null ? null : policy.validUntil().toString());
+        snapshot.put("status", status);
+        return snapshot;
     }
 }

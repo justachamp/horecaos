@@ -39,6 +39,7 @@ import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -117,7 +118,8 @@ class CompositePublicationTests {
                 new CatalogValidator(),
                 new CatalogSnapshotLoader(store, (tenantId, assets) -> true, pricing, LOCALE),
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.discarding());
         catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
     }
 

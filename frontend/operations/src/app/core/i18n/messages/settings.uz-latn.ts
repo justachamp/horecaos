@@ -1330,4 +1330,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.integrations.failures.replay': 'Qayta urinish',
   'settings.integrations.failures.replay.reasonPrompt': 'Ushbu xabarni qayta yuborish sababi:',
   'settings.integrations.failures.empty': 'Hozircha xato xabarlar yoʻq.',
+  'settings.home.description.approvals':
+    'Aksiya yoki yirik mijozlar eksporti ikkinchi imzoni kutadigan chegaralar.',
 };

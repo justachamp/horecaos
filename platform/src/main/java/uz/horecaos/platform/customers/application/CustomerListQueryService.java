@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.api.BusinessDayWindows;
+import uz.horecaos.platform.customers.api.CustomerConfigurationKeys;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.customers.api.CustomerOrderActivityPort;
 import uz.horecaos.platform.customers.domain.PhoneNumber;
@@ -29,6 +30,8 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.Resolved;
 
 /**
  * The CRM grid: list, search, and the header counters (frontend information
@@ -72,12 +75,16 @@ public class CustomerListQueryService {
      * export ADR 0027 gates, the same "the call site decides whether to even
      * ask, the tenant's own policy decides how many signatures once asked"
      * split {@code OrderRemedyService}'s own {@code approvalThresholdMinor}
-     * uses for a refund — see {@link #approvalFor}. Configurable per
-     * deployment rather than hard-coded, the same reason the refund threshold
-     * is a property and not a constant: a pilot tenant and a chain with a
-     * data-protection officer do not want the same number.
+     * uses for a refund — see {@link #approvalFor}. A pilot tenant and a chain
+     * with a data-protection officer do not want the same number, so the tenant
+     * sets its own ({@link CustomerConfigurationKeys#PII_EXPORT_APPROVAL_THRESHOLD_ROWS},
+     * ADR 0030, row 9.4) on the Settings screen. This property is the
+     * <em>deployment default</em>: what the service uses while a tenant has set
+     * nothing, so a platform that configured it keeps its behaviour.
      */
     private final int approvalThresholdRows;
+
+    private final ConfigurationResolver configuration;
 
     private final JdbcCustomerStore store;
     private final FieldProtection protection;
@@ -95,6 +102,7 @@ public class CustomerListQueryService {
             CustomerOrderActivityPort orderActivity,
             BusinessDayWindows businessDays,
             ApprovalService approvals,
+            ConfigurationResolver configuration,
             @Value("${horecaos.customers.pii-export-approval-threshold-rows:500}") int approvalThresholdRows) {
         this.store = store;
         this.protection = protection;
@@ -103,6 +111,7 @@ public class CustomerListQueryService {
         this.orderActivity = orderActivity;
         this.businessDays = businessDays;
         this.approvals = approvals;
+        this.configuration = configuration;
         this.approvalThresholdRows = approvalThresholdRows;
     }
 
@@ -292,7 +301,7 @@ public class CustomerListQueryService {
             String purpose,
             ActorRef actor,
             int revealedCount) {
-        if (revealedCount <= approvalThresholdRows) {
+        if (revealedCount <= thresholdRows(tenantId)) {
             return new ApprovalOutcome.NotRequired();
         }
         String parametersHash = ApprovalParameters.of(new PiiExportApprovalParameters(tenantId, status, query, purpose))
@@ -305,6 +314,19 @@ public class CustomerListQueryService {
                 actor,
                 purpose,
                 ApprovalRequestCommand.DEFAULT_VALIDITY));
+    }
+
+    /**
+     * The row count above which this tenant's exports ask for a signature: the tenant's own
+     * ADR 0030 value when it has set one at tenant or platform scope, else the deployment
+     * default. Resolved on every export rather than at construction, because the tenant changes
+     * it while the service runs.
+     */
+    private int thresholdRows(UUID tenantId) {
+        Resolved<Integer> resolved = configuration.resolve(
+                CustomerConfigurationKeys.PII_EXPORT_APPROVAL_THRESHOLD_ROWS, ResourceScope.tenant(tenantId));
+        Integer value = resolved.value();
+        return resolved.cameFromDefault() || value == null ? approvalThresholdRows : value;
     }
 
     /** What {@link #approvalFor}'s signature is bound to — see that method's own doc. */

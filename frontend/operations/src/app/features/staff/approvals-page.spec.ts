@@ -96,6 +96,14 @@ describe('ApprovalsPage', () => {
     expect(text).toContain('operator-1');
   });
 
+  it('points at the settings screen where the limits behind these requests are set (row 9.4)', async () => {
+    const { fixture } = await setUp([approval()]);
+    const link = fixture.nativeElement.querySelector(
+      '[data-testid="approvals-thresholds-link"]',
+    ) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/settings/approvals');
+  });
+
   it('never shows a decide button for a row the caller raised themselves', async () => {
     const { fixture } = await setUp([approval({ mayDecide: false })]);
     expect(fixture.nativeElement.querySelector('.approve')).toBeNull();

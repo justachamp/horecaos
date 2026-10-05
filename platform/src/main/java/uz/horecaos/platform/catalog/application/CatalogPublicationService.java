@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,10 +17,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -30,6 +37,14 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * is a copy rather than a reference, which is the mechanism that stops a later
  * draft edit from changing what customers are already seeing — not a convention
  * anyone has to remember.
+ *
+ * <p><strong>Going live and rolling back leave an audit fact</strong> (ADR 0027, staff row
+ * {@code 9.3a}) in the transaction that did it: {@code catalog.published} and {@code
+ * catalog.publication.rolled_back}, each with the publication that was live before and the one
+ * that is live now. A rejected publication changes nothing a customer sees and is already its own
+ * row with the report that refused it, so it writes no fact. The publication row names who
+ * published; it never named who rolled back, and a rollback is the action an incident review asks
+ * about first.
  */
 @Service
 public class CatalogPublicationService {
@@ -40,6 +55,7 @@ public class CatalogPublicationService {
     private final CatalogValidator validator;
     private final CatalogSnapshotLoader snapshots;
     private final SalesChannelLookup channels;
+    private final AuditRecorder audit;
     private final Clock clock;
 
     public CatalogPublicationService(
@@ -47,11 +63,13 @@ public class CatalogPublicationService {
             CatalogValidator validator,
             CatalogSnapshotLoader snapshots,
             SalesChannelLookup channels,
-            Clock clock) {
+            Clock clock,
+            AuditRecorder audit) {
         this.store = store;
         this.validator = validator;
         this.snapshots = snapshots;
         this.channels = channels;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -188,8 +206,26 @@ public class CatalogPublicationService {
         // unique index permits only one PUBLISHED row per brand and channel, so
         // doing it the other way round would fail on the index — which is the
         // protection working, and the reason the order here is not arbitrary.
+        // Read before the outgoing publication is retired: it is the "before" of this change.
+        Map<String, Object> outgoing = liveSnapshot(tenantId, brandId, channel);
         store.retireActivePublication(tenantId, brandId, channel, now);
         store.activatePublication(publicationId, now);
+
+        Map<String, Object> incoming = new LinkedHashMap<>();
+        incoming.put("channel", channel);
+        incoming.put("publicationId", publicationId.toString());
+        incoming.put("catalogId", catalogId.toString());
+        incoming.put("contentHash", contentHash);
+        incoming.put("itemCount", items.size());
+        recordAudit(
+                AuditFact.of("catalog.published", AuditClass.BUSINESS),
+                actorId,
+                tenantId,
+                brandId,
+                publicationId,
+                "Catalog published",
+                outgoing,
+                incoming);
 
         log.info("Catalog {} published as {} ({} items)", catalogId, publicationId, items.size());
         return new PublicationResult(publicationId, PublicationStatus.PUBLISHED, contentHash, report);
@@ -203,7 +239,7 @@ public class CatalogPublicationService {
      * the sequence rather than as a menu that silently changed.
      */
     @Transactional
-    public PublicationResult rollbackTo(UUID tenantId, UUID brandId, UUID publicationId) {
+    public PublicationResult rollbackTo(UUID tenantId, UUID brandId, UUID publicationId, @Nullable UUID actorId) {
         var target = store.findPublication(tenantId, brandId, publicationId)
                 .orElseThrow(() -> new IllegalArgumentException("No such publication"));
 
@@ -220,8 +256,24 @@ public class CatalogPublicationService {
         String channel = target.channel();
 
         Instant now = clock.instant();
+        Map<String, Object> outgoing = liveSnapshot(tenantId, brandId, channel);
         store.retireActivePublication(tenantId, brandId, channel, now);
         store.activatePublication(publicationId, now);
+
+        Map<String, Object> incoming = new LinkedHashMap<>();
+        incoming.put("channel", channel);
+        incoming.put("publicationId", publicationId.toString());
+        incoming.put("catalogId", target.catalogId().toString());
+        incoming.put("contentHash", target.contentHash());
+        recordAudit(
+                AuditFact.of("catalog.publication.rolled_back", AuditClass.BUSINESS),
+                actorId,
+                tenantId,
+                brandId,
+                publicationId,
+                "Catalog rolled back to an earlier publication",
+                outgoing,
+                incoming);
 
         log.info("Rolled brand {} back to publication {}", brandId, publicationId);
         return new PublicationResult(
@@ -229,6 +281,47 @@ public class CatalogPublicationService {
                 PublicationStatus.PUBLISHED,
                 target.contentHash(),
                 new ValidationFinding.Report(List.of()));
+    }
+
+    /** The publication live on this channel right now, or nothing for the first one. */
+    private Map<String, Object> liveSnapshot(UUID tenantId, UUID brandId, String channel) {
+        Map<String, Object> live = new LinkedHashMap<>();
+        store.findActivePublicationId(tenantId, brandId, channel)
+                .flatMap(id -> store.findPublication(tenantId, brandId, id))
+                .ifPresent(row -> {
+                    live.put("channel", channel);
+                    live.put("publicationId", row.id().toString());
+                    live.put("catalogId", row.catalogId().toString());
+                    live.put("contentHash", row.contentHash());
+                });
+        return live;
+    }
+
+    /**
+     * One fact per write, in the caller's transaction. A publication made by no signed-in person
+     * (the onboarding sample menu) is recorded as the job it is; a person's needs a reason, and
+     * the console has no field for one, so it is a plain statement of the action.
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            @Nullable UUID actorId,
+            UUID tenantId,
+            UUID brandId,
+            UUID publicationId,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(
+                        actorId == null
+                                ? ActorRef.systemJob("catalog-publication")
+                                : ActorRef.user(actorId.toString(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("catalog.publication", publicationId)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(publicationId.toString())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     @Transactional(readOnly = true)

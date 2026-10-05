@@ -137,5 +137,40 @@ public final class CustomerConfigurationKeys {
                     + "first is unconfigured or does not accept the message.")
             .build();
 
+    /** The code both declarations share (gap map row {@code 9.4}). */
+    public static final String PII_EXPORT_APPROVAL_THRESHOLD_ROWS_CODE = "customers.pii_export_approval_threshold_rows";
+
+    /**
+     * The row count above which a filtered customer export is a PII export that needs a second
+     * signature (ADR 0027, staff row {@code 9.4}), read by {@code
+     * CustomerListQueryService#exportFiltered}.
+     *
+     * <p>It was a deployment property until now ({@code
+     * horecaos.customers.pii-export-approval-threshold-rows}), which meant the only person who
+     * could change it was whoever deployed the platform, and a pilot tenant and a chain with a
+     * data-protection officer shared one number. As an ADR 0030 key the tenant owner sets it on the
+     * Settings screen; the property stays as the <em>deployment default</em> the service falls
+     * back to while the tenant has set nothing, so a platform that configured the property keeps
+     * its behaviour exactly.
+     *
+     * <p>Whether a signature is actually asked for above the threshold is the tenant's published
+     * {@code customer.pii.export} approval policy (ADR 0050: absent one, the export proceeds on
+     * one signature). The threshold only decides whether to ask at all.
+     *
+     * <p>Tenant-wide: an export is a tenant-level act with no brand or branch of its own, so the
+     * key is settable at the platform and per tenant and nowhere narrower. <strong>Declared
+     * twice</strong>, like the others here; {@code CustomerConfigurationKeysTests} keeps the two
+     * identical.
+     */
+    public static final ConfigurationKey<Integer> PII_EXPORT_APPROVAL_THRESHOLD_ROWS = ConfigurationKey.of(
+                    PII_EXPORT_APPROVAL_THRESHOLD_ROWS_CODE, Integer.class)
+            .defaultValue(500)
+            .ownedBy("customers")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("A filtered customer export of more rows than this needs a second signature "
+                    + "when the tenant has published a customer.pii.export approval policy (ADR 0027).")
+            .build();
+
     private CustomerConfigurationKeys() {}
 }

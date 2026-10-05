@@ -76,6 +76,7 @@ import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -169,7 +170,8 @@ class NotificationDeliveryTests {
 
         notifications = new JdbcNotificationStore(jdbc);
         templateStore = new JdbcTemplateStore(jdbc);
-        templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
 
         seedTenantAndCustomer();
         seedProviderInstallation();

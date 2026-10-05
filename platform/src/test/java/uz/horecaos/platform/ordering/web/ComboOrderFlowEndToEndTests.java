@@ -110,6 +110,7 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfigu
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
+import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -2444,16 +2445,33 @@ class ComboOrderFlowEndToEndTests {
     }
 
     private void seedKitchen() {
-        grill = stations.create(new NewStation(
-                        TENANT, BRAND, LOCATION, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill", 0, false))
-                .id();
-        bar = stations.create(
-                        new NewStation(TENANT, BRAND, LOCATION, "BAR", StationRole.BAR, "Бар", "Bar", "Bar", 1, false))
-                .id();
-        stations.create(new NewStation(
-                TENANT, BRAND, LOCATION, "PASS", StationRole.EXPO, "Раздача", "Tarqatish", "Pass", 2, true));
-        stations.route(new NewRoutingRule(TENANT, BRAND, LOCATION, burgerVariant, null, null, null, grill));
-        stations.route(new NewRoutingRule(TENANT, BRAND, LOCATION, colaVariant, null, null, null, bar));
+        // As the branch manager who would type these in: the station service records who did it.
+        String author = "combo-test-kitchen-author";
+        grill = SignedInStaff.call(
+                author,
+                () -> stations.create(new NewStation(
+                                TENANT,
+                                BRAND,
+                                LOCATION,
+                                "GRILL",
+                                StationRole.GRILL,
+                                "Гриль",
+                                "Gril",
+                                "Grill",
+                                0,
+                                false))
+                        .id());
+        bar = SignedInStaff.call(
+                author,
+                () -> stations.create(new NewStation(
+                                TENANT, BRAND, LOCATION, "BAR", StationRole.BAR, "Бар", "Bar", "Bar", 1, false))
+                        .id());
+        SignedInStaff.run(author, () -> {
+            stations.create(new NewStation(
+                    TENANT, BRAND, LOCATION, "PASS", StationRole.EXPO, "Раздача", "Tarqatish", "Pass", 2, true));
+            stations.route(new NewRoutingRule(TENANT, BRAND, LOCATION, burgerVariant, null, null, null, grill));
+            stations.route(new NewRoutingRule(TENANT, BRAND, LOCATION, colaVariant, null, null, null, bar));
+        });
     }
 
     // ================================================================= plumbing

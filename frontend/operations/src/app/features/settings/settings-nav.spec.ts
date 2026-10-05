@@ -18,4 +18,12 @@ describe('settings navigation behind a feature flag (ADR 0082)', () => {
   it('lists the preset-product-comments screen (row 2.1b) unconditionally, next to the catalog settings', () => {
     expect(paths(() => false)).toContain('comment-presets');
   });
+
+  it('lists the approval thresholds screen (row 9.4) unconditionally, under Selling', () => {
+    expect(paths(() => false)).toContain('approvals');
+    const group = visibleSettings(() => false).find((candidate) =>
+      candidate.items.some((item) => item.path === 'approvals'),
+    );
+    expect(group?.label).toBe('settings.nav.group.selling');
+  });
 });

@@ -114,6 +114,7 @@ import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 import uz.horecaos.platform.payments.notifications.FiscalCustomerReceiptTrigger;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
@@ -292,7 +293,8 @@ class TelegramInteractiveBotIntegrationTest {
 
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         // NotificationEligibilityService.evaluate best-effort resolves
         // OrderDirectory.summary for an OPERATIONS_ALERT-class intent too — its
         // own comment explains why it is no longer required to succeed for one —
@@ -445,7 +447,8 @@ class TelegramInteractiveBotIntegrationTest {
 
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         StubOrderDirectory orderSummaries = new StubOrderDirectory();
         orderSummaries.publish(new OrderDirectory.OrderSummary(
                 orderId, tenant, brand, location, "A-2", null, "guest", "AWAITING_APPROVAL", "UZS", 40_000L, 1));
@@ -694,7 +697,8 @@ class TelegramInteractiveBotIntegrationTest {
 
         JdbcNotificationStore notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
 
         StubOrderDirectory orderSummaries = new StubOrderDirectory();
         orderSummaries.publish(new OrderDirectory.OrderSummary(
@@ -1052,7 +1056,8 @@ class TelegramInteractiveBotIntegrationTest {
 
     private void activateAwaitingApprovalTemplate(UUID tenantId, UUID brandId) {
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         UUID templateId = templates.createTemplate(
                 tenantId,
                 brandId,
@@ -1076,7 +1081,8 @@ class TelegramInteractiveBotIntegrationTest {
             String body,
             Map<String, String> declaredVariables) {
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         UUID templateId = templates.createTemplate(tenantId, brandId, templateKey, notificationClass, channel, null);
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, body)));

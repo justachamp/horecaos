@@ -41,6 +41,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcPhysicalAttributesStore;
 import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -142,7 +143,8 @@ class PhysicalAttributesPublicationTests {
                 new CatalogValidator(),
                 new CatalogSnapshotLoader(store, media, (tenantId, brandId, variantIds) -> variantIds, LOCALE),
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.discarding());
         storefront = new StorefrontCatalogQuery(
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),

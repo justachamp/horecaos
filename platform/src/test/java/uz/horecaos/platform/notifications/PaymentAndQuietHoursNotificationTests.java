@@ -48,6 +48,7 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.PaymentRefunded;
 import uz.horecaos.platform.payments.api.PaymentAttemptFailed;
 import uz.horecaos.platform.payments.notifications.PaymentFailureCustomerTrigger;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -126,7 +127,8 @@ class PaymentAndQuietHoursNotificationTests {
 
         notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         preferences = new NotificationPreferenceService(notifications, clock);
 
         orders = new StubOrderDirectory();

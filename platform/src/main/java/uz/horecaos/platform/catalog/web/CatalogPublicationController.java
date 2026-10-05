@@ -244,7 +244,7 @@ public class CatalogPublicationController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID publicationId) {
 
         try {
-            var result = publication.rollbackTo(tenantId, brandId, publicationId);
+            var result = publication.rollbackTo(tenantId, brandId, publicationId, actorId());
             return ResponseEntity.ok(new PublicationResponse(
                     result.publicationId(),
                     result.status(),

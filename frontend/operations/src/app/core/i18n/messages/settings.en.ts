@@ -1317,4 +1317,6 @@ export const settingsEn = {
   'settings.integrations.failures.replay': 'Replay',
   'settings.integrations.failures.replay.reasonPrompt': 'Reason for replaying this message:',
   'settings.integrations.failures.empty': 'No failed messages right now.',
+  'settings.home.description.approvals':
+    'The limits above which a promotion or a large customer export waits for a second signature.',
 } as const;

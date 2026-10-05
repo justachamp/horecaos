@@ -35,8 +35,13 @@
   border-bottom-color: var(--q-primary);
 }
 
-.access-check-link {
+.thresholds-link {
   margin-top: 24px;
+  color: var(--q-ink-subtle);
+}
+
+.access-check-link {
+  margin-top: 8px;
   color: var(--q-ink-subtle);
 }
 

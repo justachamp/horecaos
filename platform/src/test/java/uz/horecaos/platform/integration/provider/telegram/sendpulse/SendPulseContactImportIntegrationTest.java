@@ -77,6 +77,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -200,7 +201,8 @@ class SendPulseContactImportIntegrationTest {
                 camel.createProducerTemplate(), gateway, new RecordingProviderActivityRecorder(), clock);
 
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         orderSummaries = new StubOrderDirectory();
         // This import path exercises no campaigns; the feedback port always
         // answers "sending" and the block monitor never has anything to count.

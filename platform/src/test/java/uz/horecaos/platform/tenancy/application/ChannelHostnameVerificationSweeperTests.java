@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.FakeDnsTxtResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelHostname;
@@ -68,10 +69,18 @@ class ChannelHostnameVerificationSweeperTests {
 
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         JdbcSalesChannelStore channelStore = new JdbcSalesChannelStore(jdbc);
-        SalesChannelService channels = new SalesChannelService(channelStore, clock);
+        SalesChannelService channels = new SalesChannelService(
+                channelStore, clock, AuditTrail.recorder(jdbc), AuditTrail.actor("channel-author"));
         setupStore = new JdbcChannelSetupStore(jdbc);
         dns = new FakeDnsTxtResolver();
-        setup = new ChannelSetupService(setupStore, channels, clock, dns, BASE_DOMAIN);
+        setup = new ChannelSetupService(
+                setupStore,
+                channels,
+                clock,
+                AuditTrail.recorder(jdbc),
+                AuditTrail.actor("channel-author"),
+                dns,
+                BASE_DOMAIN);
         sweeper = new ChannelHostnameVerificationSweeper(setupStore, dns, clock);
 
         tenantId = UUID.randomUUID();

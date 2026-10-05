@@ -2,7 +2,9 @@ package uz.horecaos.platform.payments.application;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -10,6 +12,14 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretIngressGateway;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
@@ -38,6 +48,14 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * operator can act on — which tenant the id belongs to, and whether it is
  * currently active — and the constraint is what still holds when two operators
  * register a binding for the same entity in the same second.
+ *
+ * <p><strong>Registering and every status change leave an audit fact</strong> (ADR 0027, staff
+ * row {@code 9.3a}) in the transaction that made it: {@code payment.merchant_binding.registered},
+ * {@code .activated}, {@code .suspended} and {@code .archived}. Only the secret's rotation was
+ * audited before, by the controller; activating a binding is the act that lets it take a
+ * customer's money, and nothing recorded who did it. The facts carry the provider, the seller
+ * and the dates; never the merchant account, user or id references, and never the credential
+ * reference.
  */
 @Service
 public class MerchantBindingService {
@@ -46,16 +64,22 @@ public class MerchantBindingService {
     private final MerchantLegalEntityGate legalEntities;
     private final Clock clock;
     private final SecretIngressGateway door;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
     public MerchantBindingService(
             JdbcMerchantBindingStore store,
             MerchantLegalEntityGate legalEntities,
             Clock clock,
-            SecretIngressGateway door) {
+            SecretIngressGateway door,
+            AuditRecorder audit,
+            CurrentActor currentActor) {
         this.store = store;
         this.legalEntities = legalEntities;
         this.clock = clock;
         this.door = door;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     @Transactional
@@ -85,22 +109,48 @@ public class MerchantBindingService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcMerchantBindingStore.explain(violation);
         }
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                AuditFact.of("payment.merchant_binding.registered", AuditClass.SECURITY),
+                binding,
+                binding.version(),
+                "Merchant binding registered",
+                Map.of(),
+                snapshotOf(binding, binding.status().name()));
         return binding;
     }
 
     @Transactional
     public MerchantBinding activate(UUID tenantId, UUID bindingId, int expectedVersion) {
-        return transition(tenantId, bindingId, expectedVersion, MerchantBinding::activate);
+        return transition(
+                tenantId,
+                bindingId,
+                expectedVersion,
+                MerchantBinding::activate,
+                AuditFact.of("payment.merchant_binding.activated", AuditClass.SECURITY),
+                "Merchant binding activated");
     }
 
     @Transactional
     public MerchantBinding suspend(UUID tenantId, UUID bindingId, int expectedVersion) {
-        return transition(tenantId, bindingId, expectedVersion, MerchantBinding::suspend);
+        return transition(
+                tenantId,
+                bindingId,
+                expectedVersion,
+                MerchantBinding::suspend,
+                AuditFact.of("payment.merchant_binding.suspended", AuditClass.SECURITY),
+                "Merchant binding suspended");
     }
 
     @Transactional
     public MerchantBinding archive(UUID tenantId, UUID bindingId, int expectedVersion) {
-        return transition(tenantId, bindingId, expectedVersion, MerchantBinding::archive);
+        return transition(
+                tenantId,
+                bindingId,
+                expectedVersion,
+                MerchantBinding::archive,
+                AuditFact.of("payment.merchant_binding.archived", AuditClass.SECURITY),
+                "Merchant binding archived");
     }
 
     /**
@@ -153,8 +203,14 @@ public class MerchantBindingService {
     }
 
     private MerchantBinding transition(
-            UUID tenantId, UUID bindingId, int expectedVersion, Consumer<MerchantBinding> change) {
+            UUID tenantId,
+            UUID bindingId,
+            int expectedVersion,
+            Consumer<MerchantBinding> change,
+            AuditFact.Builder fact,
+            String reason) {
         MerchantBinding binding = require(tenantId, bindingId);
+        String statusBefore = binding.status().name();
         change.accept(binding);
         try {
             if (!store.update(binding, expectedVersion, clock.instant())) {
@@ -165,7 +221,61 @@ public class MerchantBindingService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcMerchantBindingStore.explain(violation);
         }
+        recordAudit(
+                fact,
+                binding,
+                expectedVersion + 1,
+                reason,
+                snapshotOf(binding, statusBefore),
+                snapshotOf(binding, binding.status().name()));
         return binding;
+    }
+
+    /**
+     * One fact per write, in the caller's transaction. SECURITY class, like the rotation beside
+     * it: a binding is a route for money, and the ADR 0027 retention for that class is the longer.
+     * The reason is a plain statement of the action: the console has no field for one, and ADR
+     * 0027 refuses a user-initiated fact without it.
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            MerchantBinding binding,
+            int version,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.tenant(binding.tenantId()))
+                .target("MerchantBinding", binding.id())
+                .targetVersion((long) version)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .usingCapability(Capability.PAYMENT_MERCHANT_BINDING_MANAGE.code())
+                .correlatedBy(binding.id().toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * Which seller, under which provider, from when to when, in which state. The account, user and
+     * id references and the credential reference are left out on purpose: they name the account,
+     * and the history of who changed a binding is not the place a merchant account is listed. (A
+     * key spelled with the word «credential» would also be redacted by {@code ChangeDocuments}.)
+     */
+    private static Map<String, Object> snapshotOf(MerchantBinding binding, String status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("providerType", binding.providerType().name());
+        snapshot.put("legalEntityId", binding.legalEntityId().toString());
+        snapshot.put("status", status);
+        snapshot.put("effectiveFrom", binding.effectiveFrom().toString());
+        snapshot.put(
+                "effectiveUntil",
+                binding.effectiveUntil() == null
+                        ? null
+                        : binding.effectiveUntil().toString());
+        snapshot.put("supportsReversal", binding.supportsReversal());
+        snapshot.put("supportsPartnerFiscalization", binding.supportsPartnerFiscalization());
+        return snapshot;
     }
 
     /**

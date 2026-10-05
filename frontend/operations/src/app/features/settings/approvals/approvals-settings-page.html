@@ -1,0 +1,134 @@
+<h1 class="q-title">{{ 'title' | at }}</h1>
+<p class="q-body-sm lead">{{ 'lead' | at }}</p>
+<p class="q-caption worklist-link">
+  <a routerLink="/staff/approvals" data-testid="approvals-worklist-link">{{
+    'worklistLink' | at
+  }}</a>
+</p>
+
+@if (loading() && resolutions().size === 0) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <section class="card" data-testid="approvals-promotions">
+    <h2 class="q-subhead">{{ 'promotions.title' | at }}</h2>
+    <p class="q-body-sm">{{ 'promotions.body' | at }}</p>
+    @if (showsBrandForBranch()) {
+      <p class="q-caption level-note" data-testid="approvals-branch-note">
+        {{ 'promotions.branchNote' | at }}
+      </p>
+    }
+    @for (field of promotionFields; track field.code) {
+      <ng-container
+        [ngTemplateOutlet]="fieldRow"
+        [ngTemplateOutletContext]="{ $implicit: field }"
+      />
+    }
+  </section>
+
+  <section class="card" data-testid="approvals-export">
+    <h2 class="q-subhead">{{ 'export.title' | at }}</h2>
+    <p class="q-body-sm">{{ 'export.body' | at }}</p>
+    <p class="q-caption level-note">{{ 'export.tenantWideNote' | at }}</p>
+    @for (field of exportFields; track field.code) {
+      <ng-container
+        [ngTemplateOutlet]="fieldRow"
+        [ngTemplateOutletContext]="{ $implicit: field }"
+      />
+    }
+  </section>
+
+  <p class="q-caption policy-note" data-testid="approvals-policy-note">
+    {{ 'policyNote' | at }}
+  </p>
+}
+
+<ng-template #fieldRow let-field>
+  <div class="row" [attr.data-testid]="'approval-field-' + field.code">
+    @if (editingCode() !== field.code) {
+      <q-inherited-field
+        [label]="field.labelKey | at"
+        [resolution]="resolutionFor(field)"
+        [currentScopeType]="levelFor(field)"
+        [settableScopes]="settableFor(field)"
+        [formatValue]="formatter(field)"
+        (override)="startEditing(field)"
+        (setValueRequested)="startEditing(field)"
+        (revertToInherit)="revert(field)"
+      />
+      <p class="q-caption hint">{{ field.hintKey | at }}</p>
+      @if (errorFor(field); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+    } @else {
+      <div class="form">
+        @if (field.kind === 'boolean') {
+          <label class="checkbox q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="draftBoolean()"
+              (change)="draftBoolean.set($any($event.target).checked)"
+            />
+            {{ field.labelKey | at }}
+          </label>
+        } @else {
+          <label class="q-caption" [for]="'value-' + field.code">{{ field.labelKey | at }}</label>
+          <input
+            [id]="'value-' + field.code"
+            class="q-body field"
+            type="text"
+            inputmode="numeric"
+            [value]="draftText()"
+            [attr.aria-invalid]="draftIsValid(field) ? null : 'true'"
+            (input)="draftText.set($any($event.target).value)"
+          />
+          @if (!draftIsValid(field)) {
+            <p class="q-caption invalid">{{ 'valueInvalid' | at }}</p>
+          }
+        }
+
+        <label class="q-caption" [for]="'reason-' + field.code">{{
+          'settings.orderPolicy.field.reason' | t
+        }}</label>
+        <input
+          [id]="'reason-' + field.code"
+          class="q-body field"
+          type="text"
+          [value]="draftReason()"
+          (input)="draftReason.set($any($event.target).value)"
+        />
+
+        @if (errorFor(field); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditing()"
+            [disabled]="saving()"
+          >
+            {{ 'settings.orderPolicy.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            data-testid="approval-publish"
+            (click)="save(field)"
+            [disabled]="!canSave(field)"
+          >
+            {{
+              saving()
+                ? ('settings.orderPolicy.publishing' | t)
+                : ('settings.orderPolicy.publish' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+</ng-template>

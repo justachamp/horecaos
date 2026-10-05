@@ -26,6 +26,7 @@ import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.AccrualRuleRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.RedemptionPolicyAuthoringRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.RedemptionPolicyRow;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -87,7 +88,8 @@ class LoyaltyPolicyAuthoringTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         JdbcLoyaltyStore store = new JdbcLoyaltyStore(jdbc);
-        authoring = new LoyaltyPolicyAuthoringService(store, CLOCK);
+        authoring = new LoyaltyPolicyAuthoringService(
+                store, CLOCK, AuditTrail.recorder(jdbc), AuditTrail.actor("loyalty-author"));
         resolver = new LoyaltyPolicyService(store);
 
         seedTenancy();

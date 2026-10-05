@@ -38,6 +38,7 @@ import uz.horecaos.platform.referral.infrastructure.persistence.JdbcReferralStor
 import uz.horecaos.platform.referral.infrastructure.persistence.JdbcReferralStore.CodeRow;
 import uz.horecaos.platform.referral.infrastructure.persistence.JdbcReferralStore.ProgramAuthoringRow;
 import uz.horecaos.platform.referral.infrastructure.persistence.JdbcReferralStore.RedemptionRow;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -117,7 +118,8 @@ class ReferralProgramTests {
         referralStore = new JdbcReferralStore(jdbc);
         loyaltyStore = new JdbcLoyaltyStore(jdbc);
 
-        authoring = new ReferralProgramAuthoringService(referralStore, CLOCK);
+        authoring = new ReferralProgramAuthoringService(
+                referralStore, CLOCK, AuditTrail.recorder(jdbc), AuditTrail.actor("referral-author"));
         codes = new ReferralCodeService(referralStore, CLOCK);
         redemptions = new ReferralRedemptionService(referralStore, CLOCK, orderDirectory());
         qualification = new ReferralQualificationService(referralStore, new ReferralGrantService(loyaltyStore));

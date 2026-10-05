@@ -38,6 +38,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -369,6 +370,100 @@ class MerchantBindingControllerEndpointTests {
         MvcResult get = mvc.perform(get(BINDINGS + "/" + bindingId).with(tokenFor(OWNER)))
                 .andReturn();
         assertThat(get.getResponse().getContentAsString()).contains("\"secretReference\":\"" + SECRET_REFERENCE + "\"");
+    }
+
+    /**
+     * Staff row 9.3a: activating a binding is the act that lets it take a customer's money, and
+     * only the credential's rotation was audited before. Each step of the lifecycle now leaves a
+     * SECURITY-class fact, written by the signed-in owner, that names the provider, the seller and
+     * the state on each side -- and never the merchant account, user or id references.
+     */
+    @Test
+    void everyStepOfTheLifecycleLeavesAFactThatCarriesNoMerchantReference() throws Exception {
+        mvc.perform(post(BINDINGS)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-audit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody(LEGAL_ENTITY, "svc-audit-account", "seg-audit1")))
+                .andReturn();
+        UUID bindingId = bindingId("svc-audit-account");
+        int version = 1;
+        for (String step : List.of("activate", "suspend", "activate", "suspend", "archive")) {
+            MvcResult result = mvc.perform(post(BINDINGS + "/" + bindingId + "/" + step)
+                            .with(tokenFor(OWNER))
+                            .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, step + "-audit-" + version)
+                            .queryParam("expectedVersion", Integer.toString(version)))
+                    .andReturn();
+            assertThat(result.getResponse().getStatus()).as(step).isEqualTo(200);
+            version++;
+        }
+
+        AuditTrail.Fact registered = AuditTrail.only(jdbc, "payment.merchant_binding.registered");
+        assertThat(registered.actorType()).isEqualTo("USER");
+        assertThat(registered.actorSubject()).isEqualTo(OWNER);
+        assertThat(registered.scopeType()).isEqualTo("TENANT");
+        assertThat(registered.scopeId()).isEqualTo(TENANT);
+        assertThat(registered.targetType()).isEqualTo("MerchantBinding");
+        assertThat(registered.targetId()).isEqualTo(bindingId);
+        assertThat(registered.reason()).isNotBlank();
+        assertThat(registered.before("status").isNull()).isTrue();
+        assertThat(registered.after("status").asText()).isEqualTo("DRAFT");
+        assertThat(registered.after("providerType").asText()).isEqualTo("CLICK");
+        assertThat(registered.after("legalEntityId").asText()).isEqualTo(LEGAL_ENTITY.toString());
+        assertThat(registered.after("supportsReversal").asBoolean()).isTrue();
+
+        List<AuditTrail.Fact> activations = AuditTrail.facts(jdbc, "payment.merchant_binding.activated");
+        assertThat(activations).hasSize(2);
+        assertThat(activations.get(0).before("status").asText()).isEqualTo("DRAFT");
+        assertThat(activations.get(0).after("status").asText()).isEqualTo("ACTIVE");
+        assertThat(activations.get(1).before("status").asText()).isEqualTo("SUSPENDED");
+        assertThat(activations.get(1).after("status").asText()).isEqualTo("ACTIVE");
+
+        List<AuditTrail.Fact> suspensions = AuditTrail.facts(jdbc, "payment.merchant_binding.suspended");
+        assertThat(suspensions).hasSize(2);
+        assertThat(suspensions).allSatisfy(fact -> {
+            assertThat(fact.before("status").asText()).isEqualTo("ACTIVE");
+            assertThat(fact.after("status").asText()).isEqualTo("SUSPENDED");
+        });
+
+        AuditTrail.Fact archived = AuditTrail.only(jdbc, "payment.merchant_binding.archived");
+        assertThat(archived.before("status").asText()).isEqualTo("SUSPENDED");
+        assertThat(archived.after("status").asText()).isEqualTo("RETIRED");
+
+        List<String> documents = jdbc.sql("SELECT change_document::text FROM audit.audit_events")
+                .query(String.class)
+                .list();
+        assertThat(documents).hasSize(6);
+        assertThat(documents)
+                .allSatisfy(document -> assertThat(document)
+                        .as("the merchant account, user and id references and the credential reference stay out")
+                        .doesNotContain("svc-audit-account")
+                        .doesNotContain("3333")
+                        .doesNotContain("9999")
+                        .doesNotContain(SECRET_REFERENCE)
+                        .doesNotContain("[redacted]"));
+    }
+
+    @Test
+    void aStaleTransitionLeavesNoFact() throws Exception {
+        mvc.perform(post(BINDINGS)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-stale")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody(LEGAL_ENTITY, "svc-stale", "seg-stale1")))
+                .andReturn();
+        UUID bindingId = bindingId("svc-stale");
+        long before = AuditTrail.count(jdbc);
+
+        MvcResult stale = mvc.perform(post(BINDINGS + "/" + bindingId + "/activate")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "activate-stale")
+                        .queryParam("expectedVersion", "7"))
+                .andReturn();
+
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(AuditTrail.facts(jdbc, "payment.merchant_binding.activated")).isEmpty();
+        assertThat(AuditTrail.count(jdbc)).isEqualTo(before);
     }
 
     // ------------------------------------------------------------------ fixtures

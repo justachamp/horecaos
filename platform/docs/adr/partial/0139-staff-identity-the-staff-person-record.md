@@ -32,9 +32,11 @@
   report export (`ReportExportService`); the CRM log's «Оператор» column, the call log
   and the presence view, which still print the Keycloak subject; a branch manager
   (`LOCATION_MANAGER`) holds no `location.write`, so branch contacts are read-only for
-  that job; another member's photo cannot be set from the console; and the
-  `@Idempotent` list responses of other modules, which `ClassificationScanner` does not
-  descend into, were not audited for personal data.
+  that job; and another member's photo cannot be set from the console. (The
+  `@Idempotent` list responses of other modules were not audited for personal data while
+  `ClassificationScanner` did not descend into lists; batch 18 made it descend and ran it
+  over every `@Idempotent` handler. It found no response carrying personal data in a list,
+  and three false positives of the name heuristic, now declared.)
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform
