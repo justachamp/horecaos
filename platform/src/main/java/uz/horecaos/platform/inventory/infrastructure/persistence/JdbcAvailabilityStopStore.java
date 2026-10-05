@@ -145,6 +145,25 @@ public class JdbcAvailabilityStopStore {
     }
 
     /**
+     * Every stop of the brand in force at {@code at}, whatever its scope or source: what a
+     * materialisation run (ADR 0141, rollback switch three) has to account for. Oldest first, so a
+     * run is deterministic and a re-run walks the stops in the same order.
+     */
+    public List<StopRow> activeForBrand(UUID tenantId, UUID brandId, Instant at) {
+        return jdbc.sql("""
+                SELECT %s FROM inventory.availability_stops
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND status = 'ACTIVE' AND (ends_at IS NULL OR ends_at > :at)
+                ORDER BY created_at, id
+                """.formatted(COLUMNS))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("at", timestamp(at))
+                .query(JdbcAvailabilityStopStore::mapStop)
+                .list();
+    }
+
+    /**
      * The stops in force at {@code at} that apply to a whole location without
      * naming a channel: every {@code LOCATION} stop there and every {@code
      * BRAND} stop of its brand. What the stop list reads to say a dish is

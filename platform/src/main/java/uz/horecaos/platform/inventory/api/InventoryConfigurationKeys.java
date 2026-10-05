@@ -119,5 +119,34 @@ public final class InventoryConfigurationKeys {
                     + "stops (STOPS_FROZEN); stops already in force, lifts, expiry and POS stops continue.")
             .build();
 
+    /** The code both declarations share (ADR 0141, rollback switch 3). */
+    public static final String STOPS_READ_ENABLED_CODE = "inventory.stops.read_enabled";
+
+    /**
+     * ADR 0141, rollback switch three: <em>stop consulting stops</em> -- a decommission and not a
+     * rollback.
+     *
+     * <p>Off, the resolver, the stop list's overlay and every other reader ignore the stops of the
+     * brand, so a stopped dish sells again unless a position says otherwise. That is why the write
+     * is refused (409 {@code MATERIALISATION_REQUIRED}) until a materialisation run has written
+     * every stop it can onto positions and the report of what it could not carry was acknowledged
+     * by a holder of {@code inventory.stop.manage} at brand scope; a stop created after the run
+     * re-blocks it. Rows are never deleted: with the switch off the active stops stay, ignored, and
+     * turning it back on resumes them. While it is off a new operator or bot stop is refused as
+     * frozen (an ignored stop would only mislead), and the POS poll goes back to writing the
+     * position boolean.
+     *
+     * <p>On by default, platform and tenant scope, and not tenant-visible.
+     */
+    public static final ConfigurationKey<Boolean> STOPS_READ_ENABLED = ConfigurationKey.of(
+                    STOPS_READ_ENABLED_CODE, Boolean.class)
+            .defaultValue(true)
+            .ownedBy("inventory")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether stops are consulted at all. Turning it off is a decommission: it sells "
+                    + "every stopped dish again that a materialisation run could not land on a position, and "
+                    + "is refused (MATERIALISATION_REQUIRED) until the run's report was acknowledged.")
+            .build();
+
     private InventoryConfigurationKeys() {}
 }

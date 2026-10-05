@@ -149,6 +149,23 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0141, rollback switch three (stop consulting stops -- the decommission). Declared
+     * identically in {@code inventory.api.InventoryConfigurationKeys}, where {@code
+     * AvailabilityResolver} reads it. Not tenant-visible: it is a decommission and not a setting
+     * (platform staff turn it, and the write is refused until the materialisation run's report was
+     * acknowledged -- see that class).
+     */
+    public static final ConfigurationKey<Boolean> INVENTORY_STOPS_READ_ENABLED = ConfigurationKey.of(
+                    "inventory.stops.read_enabled", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("inventory")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether stops are consulted at all. Turning it off is a decommission: it sells "
+                    + "every stopped dish again that a materialisation run could not land on a position, and "
+                    + "is refused (MATERIALISATION_REQUIRED) until the run's report was acknowledged.")
+            .build();
+
+    /**
      * ADR 0141, rollback switch two (suspend the reconciler), declared identically in {@code
      * integration.api.MarketplaceConfigurationKeys} — see that class for why the pair exists.
      */
@@ -682,6 +699,7 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             CATALOG_USE_STOCK_LOGIC,
             INVENTORY_STOPS_CREATION_ENABLED,
+            INVENTORY_STOPS_READ_ENABLED,
             MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED,
             MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS,
             MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS,

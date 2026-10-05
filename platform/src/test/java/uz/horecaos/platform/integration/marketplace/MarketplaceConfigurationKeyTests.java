@@ -39,6 +39,22 @@ class MarketplaceConfigurationKeyTests {
     }
 
     @Test
+    @DisplayName(
+            "the decommission switch is declared identically on both sides, on by default, and hidden from tenants")
+    void theReadSwitchAgrees() {
+        assertThat(ConfigurationKeys.require(InventoryConfigurationKeys.STOPS_READ_ENABLED_CODE))
+                .isEqualTo(InventoryConfigurationKeys.STOPS_READ_ENABLED);
+        assertThat(InventoryConfigurationKeys.STOPS_READ_ENABLED.defaultValue())
+                .as("a default that flipped would make every stopped dish sellable again for every tenant")
+                .isTrue();
+        assertThat(InventoryConfigurationKeys.STOPS_READ_ENABLED.tenantVisible())
+                .as("a decommission, not a setting a tenant finds in its settings screen")
+                .isFalse();
+        assertThat(InventoryConfigurationKeys.STOPS_READ_ENABLED.settableScopes())
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
+    }
+
+    @Test
     @DisplayName("defaults: new stops allowed, the reconciler on, a five minute resync")
     void theDefaults() {
         assertThat(InventoryConfigurationKeys.STOPS_CREATION_ENABLED.defaultValue())

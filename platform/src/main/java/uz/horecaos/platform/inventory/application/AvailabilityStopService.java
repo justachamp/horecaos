@@ -80,6 +80,7 @@ public class AvailabilityStopService implements AvailabilityStopPort {
     private final AuditRecorder audit;
     private final java.time.Clock clock;
     private final ConfigurationResolver configuration;
+    private final StopReadSwitch readSwitch;
 
     public AvailabilityStopService(
             JdbcAvailabilityStopStore stops,
@@ -94,6 +95,7 @@ public class AvailabilityStopService implements AvailabilityStopPort {
         this.audit = audit;
         this.rls = rls;
         this.configuration = configuration;
+        this.readSwitch = new StopReadSwitch(configuration);
     }
 
     /**
@@ -466,6 +468,11 @@ public class AvailabilityStopService implements AvailabilityStopPort {
             if (Boolean.FALSE.equals(enabled)) {
                 throw new StopsFrozenException();
             }
+            // Rollback switch three (ADR 0141): with stops no longer consulted, a new stop would
+            // sit on its row doing nothing while the operator believed the dish was off sale.
+            if (!readSwitch.readsEnabled(command.tenantId(), command.brandId())) {
+                throw new StopsFrozenException("Stops are switched off for this tenant; a new stop would be ignored");
+            }
         }
     }
 
@@ -559,6 +566,10 @@ public class AvailabilityStopService implements AvailabilityStopPort {
     public static final class StopsFrozenException extends RuntimeException {
         public StopsFrozenException() {
             super("New stops are paused for this tenant");
+        }
+
+        public StopsFrozenException(String message) {
+            super(message);
         }
     }
 
