@@ -233,6 +233,21 @@ describe('ApprovalsSettingsPage', () => {
     expect(publishButton(PERCENTAGE).disabled).toBe(false);
   });
 
+  it('refuses an export limit the server cannot store, before asking it', async () => {
+    // customers.pii_export_approval_threshold_rows is an Integer key: the server narrows the
+    // request's number with Math.toIntExact, so anything above 2^31 - 1 used to be a 500 on Publish.
+    await create();
+
+    for (const tooBig of ['2147483648', '3000000000', '9007199254740991']) {
+      await edit(EXPORT_ROWS, tooBig, 'a reason');
+      expect(publishButton(EXPORT_ROWS).disabled, `draft "${tooBig}"`).toBe(true);
+      expect(row(EXPORT_ROWS).querySelector('.invalid'), `draft "${tooBig}"`).not.toBeNull();
+    }
+    await edit(EXPORT_ROWS, '2147483647', 'a reason');
+    expect(publishButton(EXPORT_ROWS).disabled).toBe(false);
+    expect(row(EXPORT_ROWS).querySelector('.invalid')).toBeNull();
+  });
+
   it('turns the markup switch on or off with a boolean value', async () => {
     await create();
 

@@ -37,6 +37,9 @@ interface ApprovalFieldDef {
   readonly max?: number;
 }
 
+/** The largest value a Java `Integer` configuration key stores. */
+const MAX_INT32 = 2_147_483_647;
+
 /**
  * The three ADR 0140 promotion limits and the customer-export row limit (ADR 0027).
  *
@@ -77,6 +80,9 @@ export const APPROVAL_FIELDS: readonly ApprovalFieldDef[] = [
     labelKey: 'field.exportRows',
     hintKey: 'field.exportRows.hint',
     min: 0,
+    // An Integer key: the server narrows the request's number to 32 bits, so a larger one is
+    // refused here rather than answered with a 500 on Publish. The amount key above is a Long.
+    max: MAX_INT32,
   },
 ];
 

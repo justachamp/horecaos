@@ -358,6 +358,31 @@ class OperationsConfigurationControllerTests {
     }
 
     @Test
+    void refusesANumberAnIntegerKeyCannotStoreInsteadOfFailingWithAnArithmeticError() {
+        FakeValueAuthor values = new FakeValueAuthor();
+        var controller = controller(new FakeResolver(), values);
+
+        // CART_EXPIRY_MINUTES is an Integer key; the request's number is a Long, narrowed to 32 bits.
+        for (long outOfRange : new long[] {2_147_483_648L, 3_000_000_000L, -2_147_483_649L}) {
+            var request = new OperationsConfigurationController.OperationsSetConfigurationValueRequest(
+                    ScopeType.TENANT, null, null, false, null, outOfRange, null, null, null, "because");
+
+            assertThatThrownBy(
+                            () -> controller.setValue(TENANT_ID, ConfigurationKeys.CART_EXPIRY_MINUTES.code(), request))
+                    .as("value " + outOfRange)
+                    .isInstanceOf(ApiException.class)
+                    .satisfies(error ->
+                            assertThat(((ApiException) error).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+        }
+        assertThat(values.lastKey).as("nothing reached the author").isNull();
+
+        var edge = new OperationsConfigurationController.OperationsSetConfigurationValueRequest(
+                ScopeType.TENANT, null, null, false, null, 2_147_483_647L, null, null, null, "the largest");
+        controller.setValue(TENANT_ID, ConfigurationKeys.CART_EXPIRY_MINUTES.code(), edge);
+        assertThat(values.lastValue).as("the largest Integer is still storable").isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     void explicitNullCarriesNoValueThrough() {
         FakeValueAuthor values = new FakeValueAuthor();
         var controller = controller(new FakeResolver(), values);

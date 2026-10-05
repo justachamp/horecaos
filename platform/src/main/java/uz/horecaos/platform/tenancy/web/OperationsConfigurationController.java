@@ -215,7 +215,16 @@ public class OperationsConfigurationController {
                             .formatted(key.code(), type.getSimpleName(), expectedField));
         }
         if (type == Integer.class) {
-            raw = Math.toIntExact((Long) raw);
+            // The request carries a Long; an Integer key stores 32 bits. Narrowing with toIntExact
+            // would surface a number outside them as an unmapped ArithmeticException, a 500.
+            long wide = (Long) raw;
+            if (wide < Integer.MIN_VALUE || wide > Integer.MAX_VALUE) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "%s is an Integer key: %d is outside %d to %d"
+                                .formatted(key.code(), wide, Integer.MIN_VALUE, Integer.MAX_VALUE));
+            }
+            raw = (int) wide;
         }
         return type.cast(raw);
     }

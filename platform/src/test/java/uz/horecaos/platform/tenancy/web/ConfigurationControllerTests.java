@@ -242,6 +242,25 @@ class ConfigurationControllerTests {
     }
 
     @Test
+    void refusesANumberAnIntegerKeyCannotStoreInsteadOfFailingWithAnArithmeticError() {
+        FakeValueAuthor values = new FakeValueAuthor();
+        var controller = controller(new FakeResolver(), values);
+
+        // CART_EXPIRY_MINUTES is an Integer key; the request's number is a Long, narrowed to 32 bits.
+        for (long outOfRange : new long[] {2_147_483_648L, 3_000_000_000L, -2_147_483_649L}) {
+            var request = new ConfigurationController.SetConfigurationValueRequest(
+                    ScopeType.TENANT, TENANT_ID, null, null, false, null, outOfRange, null, null, null, "because");
+
+            assertThatThrownBy(() -> controller.setValue(ConfigurationKeys.CART_EXPIRY_MINUTES.code(), request))
+                    .as("value " + outOfRange)
+                    .isInstanceOf(ApiException.class)
+                    .satisfies(error ->
+                            assertThat(((ApiException) error).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+        }
+        assertThat(values.lastKey).as("nothing reached the author").isNull();
+    }
+
+    @Test
     void refusesAMissingValueRatherThanSettingNull() {
         var controller = controller(new FakeResolver(), new FakeValueAuthor());
         var request = new ConfigurationController.SetConfigurationValueRequest(
