@@ -122,7 +122,8 @@ public final class ClassificationScanner {
         } else if (resolved instanceof ParameterizedType parameterized) {
             Class<?> raw = (Class<?>) parameterized.getRawType();
             if (raw.isRecord()) {
-                walkRecordOrDeclared(raw, resolved, bindingsOf(parameterized, bindings), path, ancestors, findings, root);
+                walkRecordOrDeclared(
+                        raw, resolved, bindingsOf(parameterized, bindings), path, ancestors, findings, root);
             } else if (holdsElements(raw)) {
                 for (Type argument : parameterized.getActualTypeArguments()) {
                     walk(argument, bindings, path + "[]", ancestors, findings, false);
@@ -191,7 +192,9 @@ public final class ClassificationScanner {
     private static @Nullable Classified declaredOnType(Type type, Map<TypeVariable<?>, Type> bindings) {
         Type resolved = resolve(type, bindings);
         if (resolved instanceof Class<?> raw) {
-            return raw.isArray() ? declaredOnType(raw.getComponentType(), bindings) : raw.getAnnotation(Classified.class);
+            return raw.isArray()
+                    ? declaredOnType(raw.getComponentType(), bindings)
+                    : raw.getAnnotation(Classified.class);
         }
         if (resolved instanceof GenericArrayType array) {
             return declaredOnType(array.getGenericComponentType(), bindings);

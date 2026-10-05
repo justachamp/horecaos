@@ -13,8 +13,8 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.web.bind.annotation.RestController;
-import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.ClassificationScanner;
+import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 class TmpScannerDiffTests {
@@ -33,20 +33,25 @@ class TmpScannerDiffTests {
                 java.lang.reflect.Type type = ResponseBodyProtection.scanTypeOf(m.getGenericReturnType());
                 if (type == null) continue;
                 Class<?> raw = ResponseBodyProtection.responseTypeOf(m.getGenericReturnType());
+                if (raw == null) continue;
                 List<String> oldF = new ArrayList<>();
                 oldScan(raw, raw.getSimpleName(), new LinkedHashSet<>(), oldF);
                 List<String> newF = ClassificationScanner.scan(type, raw.getSimpleName()).stream()
-                        .map(Object::toString).toList();
+                        .map(Object::toString)
+                        .toList();
                 Set<String> added = new LinkedHashSet<>(newF);
                 added.removeAll(oldF);
                 Set<String> removed = new LinkedHashSet<>(oldF);
                 removed.removeAll(newF);
                 if (!added.isEmpty() || !removed.isEmpty()) {
-                    out.add(controller.getSimpleName() + "#" + m.getName() + " [" + m.getGenericReturnType().getTypeName() + "]\n   +" + added + "\n   -" + removed);
+                    out.add(controller.getSimpleName() + "#" + m.getName() + " ["
+                            + m.getGenericReturnType().getTypeName() + "]\n   +" + added + "\n   -" + removed);
                 }
             }
         }
-        Files.writeString(Path.of(System.getProperty("tmp.diff.out", "/tmp/scanner-diff.txt")), String.join("\n", out) + "\ncount=" + out.size() + "\n");
+        Files.writeString(
+                Path.of(System.getProperty("tmp.diff.out", "/tmp/scanner-diff.txt")),
+                String.join("\n", out) + "\ncount=" + out.size() + "\n");
     }
 
     static void oldScan(Class<?> type, String path, Set<Class<?>> visited, List<String> findings) {
