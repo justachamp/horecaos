@@ -93,6 +93,8 @@ class PromotionLifecycleHttpTests {
     private static final UUID OTHER_LOCATION = UUID.fromString("018fd400-d000-7000-8000-0000000000c2");
     private static final UUID CUSTOMER = UUID.fromString("018fd400-d000-7000-8000-0000000000d1");
 
+    private static final String ISSUER = "https://issuer.test/realms/horecaos";
+    private static final String SHOPPER = "lifecycle-shopper";
     private static final String OPERATOR = "lifecycle-operator";
     private static final String MARKETER = "lifecycle-marketer";
     private static final String FINANCE = "lifecycle-finance";
@@ -121,6 +123,7 @@ class PromotionLifecycleHttpTests {
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
         registry.add("horecaos.realtime.signals.publish", () -> "false");
+        registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> ISSUER);
         // Closing the day pseudonymises the subject of each order, which needs the key.
         registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
@@ -168,6 +171,8 @@ class PromotionLifecycleHttpTests {
     private PlatformTransactionManager transactionManager;
 
     private UUID burgerVariant;
+    private UUID burgerProduct;
+    private UUID colaVariant;
     private UUID priceBook;
     private ScheduledOrderRequoteWorker sweep;
 
@@ -221,6 +226,18 @@ class PromotionLifecycleHttpTests {
 
         seedTenancyAndCatalog();
         seedPricingAndStock();
+        jdbc.sql("""
+                INSERT INTO customer.principal_links (
+                    id, tenant_id, customer_account_id, issuer, subject, status, linked_at)
+                VALUES (:id, :t, :accountId, :issuer, :subject, 'ACTIVE', :now)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("accountId", CUSTOMER)
+                .param("issuer", ISSUER)
+                .param("subject", SHOPPER)
+                .param("now", TEN_AM.minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .update();
         grant(OPERATOR, PlatformRole.TENANT_OWNER);
         grant(MARKETER, PlatformRole.TENANT_OWNER);
         grant(FINANCE, PlatformRole.TENANT_FINANCE);
@@ -485,6 +502,58 @@ class PromotionLifecycleHttpTests {
         assertThat(findings(scheduled)).isEmpty();
     }
 
+    // ================================================================ the gift, offered on the priced cart
+
+    @Test
+    @DisplayName("the priced cart over HTTP offers the gift a firing FREE_ITEM rule would price free, adds nothing, "
+            + "and prices it free once the customer puts it in")
+    void thePricedCartOffersTheGiftAndAddsNothing() throws Exception {
+        UUID rule = activate(PromotionDbFixture.definition(
+                "FREECOLA",
+                Promotion.Scope.ITEM,
+                "gift",
+                List.of(PromotionDbFixture.condition(
+                        1, Promotion.Condition.Type.PRODUCT, "productIds", List.of(burgerProduct.toString()))),
+                List.of(PromotionDbFixture.action(
+                        1,
+                        Promotion.Action.Type.FREE_ITEM,
+                        "variantIds",
+                        List.of(colaVariant.toString()),
+                        "quantity",
+                        1L))));
+        UUID cart = tx(() ->
+                        carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.PICKUP, CUSTOMER, null))
+                .cartId();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "burger", burgerVariant, 1, List.of(), null));
+
+        JsonNode offered = priceStorefrontCart(cart);
+        assertThat(offered.get("totalMinor").asLong())
+                .as("the gift is not in the cart, so nothing is priced for it")
+                .isEqualTo(50_000L);
+        assertThat(offered.get("discountMinor").asLong()).isZero();
+        assertThat(offered.get("giftOffers")).hasSize(1);
+        JsonNode offer = offered.get("giftOffers").get(0);
+        assertThat(offer.get("ruleId").asText()).isEqualTo(rule.toString());
+        assertThat(offer.get("variantId").asText()).isEqualTo(colaVariant.toString());
+        assertThat(offer.get("quantity").decimalValue()).isEqualByComparingTo("1");
+        assertThat(offer.get("inCart").asBoolean()).isFalse();
+        assertThat(offer.get("toAdd").decimalValue()).isEqualByComparingTo("1");
+        assertThat(count("SELECT count(*) FROM ordering.cart_lines WHERE cart_id = :id", cart))
+                .as("pricing never invents a line")
+                .isEqualTo(1);
+
+        // The customer takes the offer: the Cola is in the cart, priced free, and there is nothing left to add.
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "cola", colaVariant, 1, List.of(), null));
+        JsonNode taken = priceStorefrontCart(cart);
+        assertThat(taken.get("discountMinor").asLong()).isEqualTo(12_000L);
+        assertThat(taken.get("totalMinor").asLong()).isEqualTo(50_000L);
+        JsonNode inCart = taken.get("giftOffers").get(0);
+        assertThat(inCart.get("inCart").asBoolean()).isTrue();
+        assertThat(inCart.get("toAdd").decimalValue()).isEqualByComparingTo("0");
+    }
+
     // ===================================================== checkout, day close, the report, who redeemed it
 
     @Test
@@ -546,15 +615,6 @@ class PromotionLifecycleHttpTests {
                 .isNotEqualTo(CUSTOMER.toString());
         assertThat(log.toString()).doesNotContain(CUSTOMER.toString());
         UUID redemptionId = UUID.fromString(redemption.get("redemptionId").asText());
-
-        // The promotion's own drill-down no longer hands an account id to everyone who can read pricing.
-        MvcResult drillDown = mvc.perform(
-                        get(promotionsPath() + "/" + promotion + "/redemptions").with(tokenFor(MARKETER)))
-                .andReturn();
-        assertThat(drillDown.getResponse().getStatus()).isEqualTo(200);
-        assertThat(drillDown.getResponse().getContentAsString())
-                .contains("\"hasCustomerAccount\":true")
-                .doesNotContain(CUSTOMER.toString());
 
         // «Who redeemed it»: refused without a purpose, refused without customer.read, found with both.
         assertThat(reveal(promotion, redemptionId, MARKETER, "{\"purpose\":\"  \"}")
@@ -871,6 +931,20 @@ class PromotionLifecycleHttpTests {
         return JSON.readTree(result.getResponse().getContentAsString());
     }
 
+    /** The storefront's own call: the signed-in customer prices the cart at its current version. */
+    private JsonNode priceStorefrontCart(UUID cart) throws Exception {
+        MvcResult result = mvc.perform(post("/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND + "/carts/"
+                                + cart + "/pricing")
+                        .with(jwt().jwt(builder -> builder.issuer(ISSUER).subject(SHOPPER)))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .header("If-Match", "\"" + cartVersion(cart) + "\""))
+                .andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as(result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
     private MvcResult reveal(UUID promotionId, UUID redemptionId, String subject, String body) throws Exception {
         return mvc.perform(
                         post(promotionsPath() + "/" + promotionId + "/redemptions/" + redemptionId + "/customer-reveal")
@@ -1070,24 +1144,44 @@ class PromotionLifecycleHttpTests {
                 .param("brandId", BRAND)
                 .update();
 
-        UUID productId = UUID.randomUUID();
+        burgerProduct = UUID.randomUUID();
         burgerVariant = UUID.randomUUID();
+        seedProduct(catalogId, burgerProduct, burgerVariant, "BURGER", "Qo'y burger");
+        colaVariant = UUID.randomUUID();
+        seedProduct(catalogId, UUID.randomUUID(), colaVariant, "COLA", "Cola");
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
+                    status, content_hash, activated_at)
+                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash',
+                    :activatedAt)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("activatedAt", TEN_AM.minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    private void seedProduct(UUID catalogId, UUID productId, UUID variantId, String code, String name) {
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
-                VALUES (:id, :tenantId, :brandId, 'BURGER', 'ACTIVE')
+                VALUES (:id, :tenantId, :brandId, :code, 'ACTIVE')
                 """)
                 .param("id", productId)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
+                .param("code", code)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
-                VALUES (:id, :tenantId, :brandId, :productId, 'SKU-BURGER', 'ACTIVE')
+                VALUES (:id, :tenantId, :brandId, :productId, :sku, 'ACTIVE')
                 """)
-                .param("id", burgerVariant)
+                .param("id", variantId)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .param("productId", productId)
+                .param("sku", "SKU-" + code)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
@@ -1101,23 +1195,28 @@ class PromotionLifecycleHttpTests {
         jdbc.sql("""
                 INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id,
                     locale, name)
-                VALUES (:tenantId, :brandId, 'PRODUCT', :productId, 'uz', 'Qo''y burger')
+                VALUES (:tenantId, :brandId, 'PRODUCT', :productId, 'uz', :name)
                 """)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .param("productId", productId)
+                .param("name", name)
                 .update();
+    }
+
+    private void seedPrice(UUID variantId, long amountMinor, java.time.OffsetDateTime validFrom) {
         jdbc.sql("""
-                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
-                    status, content_hash, activated_at)
-                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash',
-                    :activatedAt)
+                INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id, priceable_type,
+                    priceable_id, amount_minor, valid_from)
+                VALUES (:id, :tenantId, :brandId, :priceBookId, 'VARIANT', :variantId, :amount, :from)
                 """)
                 .param("id", UUID.randomUUID())
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
-                .param("catalogId", catalogId)
-                .param("activatedAt", TEN_AM.minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .param("priceBookId", priceBook)
+                .param("variantId", variantId)
+                .param("amount", amountMinor)
+                .param("from", validFrom)
                 .update();
     }
 
@@ -1146,18 +1245,8 @@ class PromotionLifecycleHttpTests {
                 .param("priceBookId", priceBook)
                 .param("from", validFrom)
                 .update();
-        jdbc.sql("""
-                INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id, priceable_type,
-                    priceable_id, amount_minor, valid_from)
-                VALUES (:id, :tenantId, :brandId, :priceBookId, 'VARIANT', :variantId, 50000, :from)
-                """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", TENANT)
-                .param("brandId", BRAND)
-                .param("priceBookId", priceBook)
-                .param("variantId", burgerVariant)
-                .param("from", validFrom)
-                .update();
+        seedPrice(burgerVariant, 50_000L, validFrom);
+        seedPrice(colaVariant, 12_000L, validFrom);
         jdbc.sql("""
                 INSERT INTO pricing.tax_profiles (id, tenant_id, brand_id, jurisdiction_code, mode,
                     rate_basis_points, valid_from)
@@ -1170,6 +1259,7 @@ class PromotionLifecycleHttpTests {
                 .update();
 
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, colaVariant, TrackingMode.BINARY);
     }
 
     @TestConfiguration(proxyBeanMethods = false)

@@ -745,6 +745,28 @@
         },
         "type" : "object"
       },
+      "GiftOfferResponse" : {
+        "properties" : {
+          "inCart" : {
+            "type" : "boolean"
+          },
+          "quantity" : {
+            "type" : "number"
+          },
+          "ruleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "toAdd" : {
+            "type" : "number"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "GrantResponse" : {
         "properties" : {
           "expiresAt" : {
@@ -1703,6 +1725,12 @@
           "feeMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "giftOffers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GiftOfferResponse"
+            },
+            "type" : "array"
           },
           "hiddenCharges" : {
             "items" : {

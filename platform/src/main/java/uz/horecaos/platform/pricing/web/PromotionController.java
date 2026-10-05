@@ -110,10 +110,10 @@ public class PromotionController {
     @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
     @Operation(
             summary = "The redemptions recorded against one promotion",
-            description = "Bounded, newest first, ids and amounts only: an order id, never a name, a contact "
-                    + "or an account id. Whose it is takes the audited customer-reveal below. One row per "
-                    + "(order, promotion): an amended order moves its row in place, so a redemption is "
-                    + "never counted twice.")
+            description = "Bounded, newest first, ids and amounts only: an account id and an order id, never "
+                    + "a name or a contact. One row per (order, promotion): an amended order moves its row in "
+                    + "place, so a redemption is never counted twice. Reading this list is not recorded; "
+                    + "resolving a row of the 7.9 report to its customer is the audited customer-reveal below.")
     public ResponseEntity<List<RedemptionResponse>> redemptions(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID promotionId) {
         return ResponseEntity.ok(authoring.redemptions(tenantId, brandId, promotionId).stream()
@@ -535,15 +535,10 @@ public class PromotionController {
             @Nullable UUID approvalRequestId,
             @Nullable PromotionResponse promotion) {}
 
-    /**
-     * @param hasCustomerAccount whether the order belongs to a customer account (false for a guest). The
-     *     account id itself is not here: it is revealed by {@code customer-reveal}, with a purpose, and
-     *     recorded
-     */
     public record RedemptionResponse(
             UUID redemptionId,
             UUID orderId,
-            boolean hasCustomerAccount,
+            @Nullable UUID customerAccountId,
             int definitionVersion,
             long discountMinor,
             long markupMinor,
@@ -554,7 +549,7 @@ public class PromotionController {
             return new RedemptionResponse(
                     row.id(),
                     row.orderId(),
-                    row.customerAccountId() != null,
+                    row.customerAccountId(),
                     row.definitionVersion(),
                     row.discountMinor(),
                     row.markupMinor(),
