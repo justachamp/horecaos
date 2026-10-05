@@ -347,7 +347,8 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.promoCodes.redemptions.loading': 'Загрузка использований…',
   'marketing.promoCodes.redemptions.empty': 'Этот код ещё никто не использовал.',
   'marketing.promoCodes.redemptions.close': 'Закрыть',
-  'marketing.promoCodes.redemptions.column.customer': 'Аккаунт клиента',
+  'marketing.promoCodes.redemptions.whoNote':
+    'В этом списке клиент не указан. Чтобы узнать, кто применил код, откройте «Маркетинговые отчёты» › «Акции» › «Журнал применений» и выберите «Показать клиента»: для этого нужно право на просмотр клиентов, а просмотр записывается в журнал аудита.',
   'marketing.promoCodes.redemptions.column.order': 'Заказ',
   'marketing.promoCodes.redemptions.column.amount': 'Скидка',
   'marketing.promoCodes.redemptions.column.status': 'Статус',

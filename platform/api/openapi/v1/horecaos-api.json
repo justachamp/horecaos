@@ -22243,6 +22243,8 @@
             "type" : "string"
           },
           "customerAccountId" : {
+            "deprecated" : true,
+            "description" : "Always null: who redeemed it is answered only by customer-reveal",
             "format" : "uuid",
             "type" : "string"
           },
@@ -22462,6 +22464,8 @@
             "type" : "string"
           },
           "customerAccountId" : {
+            "deprecated" : true,
+            "description" : "Always null: who redeemed it is answered only by customer-reveal",
             "format" : "uuid",
             "type" : "string"
           },
@@ -52818,7 +52822,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/redemptions" : {
       "get" : {
-        "description" : "Reservation, redemption and release rows, newest first — the drill-down a bare redeemedCount cannot answer: which customer redeemed it, on which order, when. Account and order ids only; no contact value crosses this endpoint and none can.",
+        "description" : "Reservation, redemption and release rows, newest first — the drill-down a bare redeemedCount cannot answer: on which order, for how much, when. It names no customer (customerAccountId is deprecated and always null) and no contact value: it is open to anyone who may read pricing, and which customer redeemed a code is answered only by the audited customer-reveal (customer.read, a purpose, a security fact).",
         "operationId" : "redemptions_3",
         "parameters" : [ {
           "in" : "path",
@@ -53283,7 +53287,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/redemptions" : {
       "get" : {
-        "description" : "Bounded, newest first, ids and amounts only: an account id and an order id, never a name or a contact. One row per (order, promotion): an amended order moves its row in place, so a redemption is never counted twice. Reading this list is not recorded; resolving a row of the 7.9 report to its customer is the audited customer-reveal below.",
+        "description" : "Bounded, newest first: the redemption's id, its order and its amounts, never the customer behind it (customerAccountId is deprecated and always null). One row per (order, promotion): an amended order moves its row in place, so a redemption is never counted twice. This list is open to anyone who may read promotions and is not recorded, so it names no customer: who redeemed it is answered only by the audited customer-reveal below, which needs customer.read and a purpose and is recorded.",
         "operationId" : "redemptions_2",
         "parameters" : [ {
           "in" : "path",

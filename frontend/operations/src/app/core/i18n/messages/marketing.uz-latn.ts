@@ -349,7 +349,8 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.promoCodes.redemptions.loading': 'Ishlatilishlar yuklanmoqda…',
   'marketing.promoCodes.redemptions.empty': 'Bu kodni hali hech kim ishlatmagan.',
   'marketing.promoCodes.redemptions.close': 'Yopish',
-  'marketing.promoCodes.redemptions.column.customer': 'Mijoz hisobi',
+  'marketing.promoCodes.redemptions.whoNote':
+    'Bu roʻyxatda mijoz koʻrsatilmaydi. Kodni kim ishlatganini bilish uchun «Marketing hisobotlari» › «Aksiyalar» › «Qoʻllanishlar jurnali» boʻlimini ochib, «Mijozni koʻrsatish» ni tanlang: buning uchun mijozlarni koʻrish huquqi kerak va koʻrish audit jurnaliga yoziladi.',
   'marketing.promoCodes.redemptions.column.order': 'Buyurtma',
   'marketing.promoCodes.redemptions.column.amount': 'Chegirma',
   'marketing.promoCodes.redemptions.column.status': 'Holati',

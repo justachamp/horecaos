@@ -676,6 +676,25 @@ class PromotionLifecycleHttpTests {
                 .contains("AUTOMATIC")
                 .doesNotContain("15000");
 
+        // The lists a pricing reader opens must not hand out what the audited step withholds: someone who may
+        // read promotions but not customers sees the redemption and its order, never the account behind it.
+        JsonNode listed = redemptionList(promotionsPath() + "/" + promotion + "/redemptions", FINANCE);
+        assertThat(listed)
+                .as("the redemption is listed, so the absence of the account means something")
+                .hasSize(1);
+        assertThat(listed.get(0).get("redemptionId").asText()).isEqualTo(redemptionId.toString());
+        assertThat(listed.get(0).get("orderId").asText()).isEqualTo(withPromotion.toString());
+        assertThat(listed.toString())
+                .as("a promotion's redemption list carries no customer account")
+                .doesNotContain(CUSTOMER.toString());
+        assertThat(listed.get(0).path("customerAccountId").isNull())
+                .as("the deprecated property stays in the v1 contract and is always null")
+                .isTrue();
+        assertThat(redemptionList(promotionsPath() + "/" + promotion + "/redemptions", MARKETER)
+                        .toString())
+                .as("not even someone who holds customer.read is told from the list: the reveal is the audited way")
+                .doesNotContain(CUSTOMER.toString());
+
         // Not another brand's, not another promotion's, not a made-up id.
         UUID otherBrand = UUID.randomUUID();
         assertThat(mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/brands/" + otherBrand + "/promotions/"
@@ -743,6 +762,29 @@ class PromotionLifecycleHttpTests {
         assertThat(who.get("customerAccountId").asText()).isEqualTo(CUSTOMER.toString());
         assertThat(who.get("sourceKind").asText()).isEqualTo("COUPON");
         assertThat(coupon.couponId()).isNotNull();
+
+        JsonNode listed = redemptionList(
+                "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/promo-codes/" + coupon.couponId()
+                        + "/redemptions",
+                FINANCE);
+        assertThat(listed)
+                .as("the code's redemption is listed, so the absence of the account means something")
+                .hasSize(1);
+        assertThat(listed.get(0).get("orderId").asText()).isEqualTo(orderId.toString());
+        assertThat(listed.toString())
+                .as("a promo code's redemption list carries no customer account for someone without customer.read")
+                .doesNotContain(CUSTOMER.toString());
+        assertThat(listed.get(0).path("customerAccountId").isNull())
+                .as("the deprecated property stays in the v1 contract and is always null")
+                .isTrue();
+
+        JsonNode listedForOwner = redemptionList(
+                "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/promo-codes/" + coupon.couponId()
+                        + "/redemptions",
+                MARKETER);
+        assertThat(listedForOwner.toString())
+                .as("not even someone who holds customer.read is told from the list: the reveal is the audited way")
+                .doesNotContain(CUSTOMER.toString());
     }
 
     // ---------------------------------------------------------------- helpers: promotions
@@ -971,6 +1013,15 @@ class PromotionLifecycleHttpTests {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(body))
                 .andReturn();
+    }
+
+    /** A redemption list read as {@code subject}; the caller asserts on what it does and does not carry. */
+    private JsonNode redemptionList(String path, String subject) throws Exception {
+        MvcResult result = mvc.perform(get(path).with(tokenFor(subject))).andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as(result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
     }
 
     private static String promotionsPath() {

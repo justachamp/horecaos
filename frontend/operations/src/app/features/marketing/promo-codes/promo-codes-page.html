@@ -359,7 +359,6 @@
           <table class="promo-codes__redemptions-table">
             <thead>
               <tr>
-                <th>{{ 'marketing.promoCodes.redemptions.column.customer' | t }}</th>
                 <th>{{ 'marketing.promoCodes.redemptions.column.order' | t }}</th>
                 <th>{{ 'marketing.promoCodes.redemptions.column.amount' | t }}</th>
                 <th>{{ 'marketing.promoCodes.redemptions.column.status' | t }}</th>
@@ -369,7 +368,6 @@
             <tbody>
               @for (row of redemptions(); track row.redemptionId) {
                 <tr data-testid="promo-codes-redemption-row">
-                  <td class="q-tnum">{{ row.customerAccountId ?? '—' }}</td>
                   <td class="q-tnum">{{ row.orderId ?? '—' }}</td>
                   <td class="q-tnum">{{ formatRedemptionAmount(row) }}</td>
                   <td>{{ redemptionStatusLabelKey(row.status) | t }}</td>
@@ -380,6 +378,9 @@
               }
             </tbody>
           </table>
+          <p class="q-caption" data-testid="promo-codes-redemptions-who-note">
+            {{ 'marketing.promoCodes.redemptions.whoNote' | t }}
+          </p>
         }
 
         <div class="q-modal__actions">

@@ -120,11 +120,13 @@ export interface ActivationResult {
   readonly promotion: PromotionView | null;
 }
 
-/** Mirrors `PromotionController.RedemptionResponse`: ids and amounts, never a name or a contact. */
+/**
+ * Mirrors `PromotionController.RedemptionResponse`: ids and amounts, never the customer. The account
+ * behind a redemption is answered only by the audited customer-reveal (ADR 0029).
+ */
 export interface PromotionRedemption {
   readonly redemptionId: string;
   readonly orderId: string;
-  readonly customerAccountId: string | null;
   readonly definitionVersion: number;
   readonly discountMinor: number;
   readonly markupMinor: number;
