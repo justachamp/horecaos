@@ -82,10 +82,10 @@ public class CourierDeliveryService {
 
     private static final Logger log = LoggerFactory.getLogger(CourierDeliveryService.class);
 
-    /** The ADR 0029 purpose recorded against a reveal made while the courier still only holds an offer. */
+    /** The ADR 0029 purpose a reveal states while the courier still only holds an offer. */
     static final String PURPOSE_OFFER = "COURIER_LOCATION_BEFORE_ACCEPT";
 
-    /** The ADR 0029 purpose recorded against a reveal made by the courier carrying the delivery. */
+    /** The ADR 0029 purpose a reveal states when made by the courier carrying the delivery. */
     static final String PURPOSE_DELIVERY = "COURIER_LOCATION_ASSIGNED_DELIVERY";
 
     private final CourierJobsPort jobs;

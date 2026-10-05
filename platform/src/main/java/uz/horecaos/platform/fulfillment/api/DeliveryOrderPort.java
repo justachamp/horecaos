@@ -187,15 +187,15 @@ public interface DeliveryOrderPort {
      * door and the way in, and a courier policy that decides <em>when</em> a courier may see
      * where the customer lives must not hand them the customer's name and number in the same
      * breath. The caller decides whether this read is allowed, and records the audit fact that
-     * names who asked and for which order; this answers the decrypt and records the purpose the
-     * envelope protection keeps against every reveal.
+     * names who asked and for which order; this answers the decrypt, and states the purpose in the
+     * reveal call so the reason travels with the read.
      *
      * <p>Not filtered on the order's status: an order that has since been cancelled still has a
      * door, and refusing the read here would make a courier already standing at it unable to
      * find out where. Whether they may still ask is the caller's rule, taken from the shipment
      * they hold.
      *
-     * @param purpose why the address is being read, recorded with the reveal
+     * @param purpose why the address is being read, stated in the reveal call
      * @return empty when the order is not this tenant's, is not a delivery, or holds no address
      */
     default Optional<CustomerLocation> customerLocation(UUID tenantId, UUID orderId, String purpose) {

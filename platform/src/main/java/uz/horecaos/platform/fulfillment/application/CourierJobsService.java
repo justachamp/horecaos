@@ -68,7 +68,7 @@ public class CourierJobsService implements CourierJobsPort {
 
     private static final Logger log = LoggerFactory.getLogger(CourierJobsService.class);
 
-    /** The ADR 0029 purpose recorded against the decrypt that measures how far a courier is from a door. */
+    /** The ADR 0029 purpose stated by the decrypt that measures how far a courier is from a door. */
     static final String PROXIMITY_PURPOSE = "COURIER_PROXIMITY_CHECK";
 
     private final JdbcCourierJobStore store;

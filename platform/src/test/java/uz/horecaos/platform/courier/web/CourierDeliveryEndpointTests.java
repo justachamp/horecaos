@@ -47,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
+import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.domain.Haversine;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.protection.DataClass;
@@ -181,6 +182,10 @@ class CourierDeliveryEndpointTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private RecordingSignals signals;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private DeliveryOrderPort deliveryOrders;
 
     private final AtomicInteger keys = new AtomicInteger();
     private UUID channelId;
@@ -432,6 +437,21 @@ class CourierDeliveryEndpointTests {
         assertThat(noKey.getResponse().getStatus()).isEqualTo(400);
         assertThat(json(noKey).path("code").asText()).isEqualTo("IDEMPOTENCY_KEY_REQUIRED");
         assertThat(attemptStatus(offer)).isEqualTo("OFFERED");
+    }
+
+    @Test
+    @DisplayName("an accept with no body at all is an accept with no position")
+    void anAcceptNeedsNoBodyWhenNothingIsMeasured() throws Exception {
+        UUID offer = seedOffer(COURIER_ALISHER, "READY");
+
+        MvcResult accepted = mvc.perform(post(BASE + "/offers/" + offer + "/accept")
+                        .with(tokenFor(ALISHER))
+                        .header("Idempotency-Key", nextKey())
+                        .header(HttpHeaders.IF_MATCH, "W/\"1\""))
+                .andReturn();
+
+        assertThat(accepted.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(accepted).path("outcome").asText()).isEqualTo("ACCEPTED");
     }
 
     @Test
@@ -744,6 +764,33 @@ class CourierDeliveryEndpointTests {
     }
 
     @Test
+    @DisplayName(
+            "the customer-location read answers only for its own tenant's delivery orders, and never prints the door")
+    void theCustomerLocationReadIsScoped() {
+        UUID offer = seedOffer(COURIER_ALISHER, "READY");
+        UUID order = orderOfAttempt(offer);
+
+        var door = deliveryOrders.customerLocation(TENANT, order, "TEST").orElseThrow();
+        assertThat(door.addressLine()).contains(STREET_LINE);
+        assertThat(door.instructions()).isEqualTo(GATE_NOTE);
+        assertThat(door.toString())
+                .as("a record's generated toString would put a home address into one interpolated log line")
+                .doesNotContain(STREET_LINE)
+                .doesNotContain(String.valueOf(DOOR_LATITUDE));
+
+        assertThat(deliveryOrders.customerLocation(OTHER_TENANT, order, "TEST"))
+                .as("an order id is not proof of anything; the other tenant holds it and gets nothing")
+                .isEmpty();
+
+        jdbc.sql("UPDATE ordering.orders SET fulfillment_mode = 'PICKUP' WHERE id = :id")
+                .param("id", order)
+                .update();
+        assertThat(deliveryOrders.customerLocation(TENANT, order, "TEST"))
+                .as("a pickup order has no door to send anybody to")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("a finished delivery no longer reveals where its customer lives")
     void noRevealOnceDelivered() throws Exception {
         UUID shipment = pickedUpShipment(ALISHER, "READY", true);
@@ -894,7 +941,7 @@ class CourierDeliveryEndpointTests {
         UUID shipment = acceptedShipment(ALISHER, offer);
         long version = versionOf(shipment);
 
-        for (String stranger : List.of(BOBUR, ELSEWHERE, NOT_A_COURIER)) {
+        for (String stranger : List.of(BOBUR, ELSEWHERE, NOT_A_COURIER, MANAGER)) {
             assertThat(mvc.perform(get(BASE + "/deliveries/" + shipment).with(tokenFor(stranger)))
                             .andReturn()
                             .getResponse()
