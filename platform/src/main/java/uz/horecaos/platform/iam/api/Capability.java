@@ -723,6 +723,19 @@ public enum Capability {
     MARKETPLACE_SHIFT_RECEIVE("marketplace.shift.receive", "marketplace", "shift.receive"),
 
     /**
+     * ADR 0040, ADR 0141 Phase 4: an aggregator reading the current availability of the dishes
+     * it has mapped at a branch it is bound to ({@code PartnerAvailabilityController}).
+     *
+     * <p>Held by the identical machine principal {@link #MARKETPLACE_ORDER_RECEIVE} is, and
+     * for the same reason: the aggregator's confidential client, scoped to the bindings its
+     * installation holds. Deliberately its own capability rather than folded into order
+     * receipt. It is the opposite direction -- HorecaOS answers, the partner does not push --
+     * and a credential that may poll a branch's stop list is not thereby a credential that
+     * may put orders on its pass. It reads identifiers and a boolean and nothing else.
+     */
+    MARKETPLACE_AVAILABILITY_PULL("marketplace.availability.pull", "marketplace", "availability.pull"),
+
+    /**
      * ADR 0040: HorecaOS pushing a menu or an availability change out to a partner
      * that will not pull one.
      *
