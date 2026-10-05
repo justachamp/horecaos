@@ -693,7 +693,8 @@ public class CatalogSnapshotLoader {
         entry.put(
                 "modifierGroupPolicies",
                 own.stream()
-                        .map(attachment -> policyOf(attachment, java.util.Objects.requireNonNull(groups.get(attachment.modifierGroupId()))))
+                        .map(attachment -> policyOf(
+                                attachment, java.util.Objects.requireNonNull(groups.get(attachment.modifierGroupId()))))
                         .toList());
     }
 
@@ -715,7 +716,8 @@ public class CatalogSnapshotLoader {
         entry.put(
                 "nestedGroups",
                 offered.stream()
-                        .map(attachment -> policyOf(attachment, java.util.Objects.requireNonNull(groups.get(attachment.modifierGroupId()))))
+                        .map(attachment -> policyOf(
+                                attachment, java.util.Objects.requireNonNull(groups.get(attachment.modifierGroupId()))))
                         .toList());
     }
 

@@ -22,6 +22,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.catalog.api.VariantPricingLookup;
+import uz.horecaos.platform.catalog.application.CatalogSnapshotLoader;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.AttachmentPolicy;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.NewComboGroup;
@@ -29,6 +31,8 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
+import uz.horecaos.platform.catalog.domain.PublicationStatus;
+import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
@@ -165,6 +169,7 @@ class CompositeQuoteTests {
 
         seedTenancyAndCatalog();
         authorTheLunchBox();
+        republish();
     }
 
     // -------------------------------------------------------------------- combos
@@ -288,11 +293,68 @@ class CompositeQuoteTests {
                 new CompositeProductAuthoringService.ComboComponentChanges(
                         1, 1, uz.horecaos.platform.catalog.domain.CatalogEntities.Status.ARCHIVED),
                 "tester");
+        republish();
 
         assertCartRefused(
                 item("l", lunch, 1, pick(wrapInLunch, 1), pick(colaInLunch, 1)),
                 "COMBO_COMPONENT_NOT_OFFERED",
                 wrapInLunch.id());
+    }
+
+    @Test
+    @DisplayName("a combo edited and not republished still prices the structure that was published")
+    void aComboEditedAndNotRepublishedPricesWhatWasPublished() {
+        // The author takes the wrap out of the lunch box and raises the cola's range, and has not
+        // published: the customer on screen was shown the wrap, and the cart and the quote hold
+        // them to that menu, not to the draft.
+        composites.updateComponent(
+                TENANT,
+                BRAND,
+                wrapInLunch.id(),
+                wrapInLunch.version(),
+                new CompositeProductAuthoringService.ComboComponentChanges(
+                        1, 1, uz.horecaos.platform.catalog.domain.CatalogEntities.Status.ARCHIVED),
+                "tester");
+
+        var quote = quotes.quote(request(comboLine("l", 1, pick(wrapInLunch, 1), pick(colaInLunch, 1))));
+        CartPricingPort.SelectionCheck check = quotes.checkSelection(
+                TENANT, BRAND, "STOREFRONT", item("l", lunch, 1, pick(wrapInLunch, 1), pick(colaInLunch, 1)));
+
+        assertThat(quote.total().minor())
+                .as("the published wrap (28,000) and cola (3,000), whatever the draft now says")
+                .isEqualTo(31_000L);
+        assertThat(check.soldVariantIds()).containsExactlyInAnyOrder(wrap, cola);
+
+        republish();
+        assertCartRefused(
+                item("l", lunch, 1, pick(wrapInLunch, 1), pick(colaInLunch, 1)),
+                "COMBO_COMPONENT_NOT_OFFERED",
+                wrapInLunch.id());
+    }
+
+    @Test
+    @DisplayName("a combo authored after the last publication is not sold until it is published")
+    void aComboNotYetPublishedIsNotSold() {
+        // A second lunch box, authored and priced but never published.
+        UUID dinnerProduct = UUID.randomUUID();
+        UUID dinner = UUID.randomUUID();
+        insertProduct(dinnerProduct, "DINNER-BOX", TENANT, BRAND);
+        insertVariant(dinner, dinnerProduct, TENANT, BRAND);
+        linkToCatalog(dinnerProduct);
+        ComboGroup dinnerMain = composites.createComboGroup(
+                new NewComboGroup(TENANT, BRAND, dinner, "MAIN", "Choose a main", "en", 1, 1, false, 0), "tester");
+        ComboComponent burgerInDinner = composites.addComponent(TENANT, BRAND, dinnerMain.id(), burger, 1, 0, "tester");
+        priceAuthoring.setPrice(TENANT, BRAND, priceBook, PriceableType.COMBO_COMPONENT, burgerInDinner.id(), 25_000L);
+
+        String before = cartRefusalCode(item("d", dinner, 1, pick(burgerInDinner, 1)));
+        republish();
+        var sold = quotes.quote(request(new QuoteRequest.Line(
+                "d", dinner, 1, List.of(), List.of(new QuoteRequest.ComboPick(burgerInDinner.id(), 1)), List.of())));
+
+        assertThat(before)
+                .as("the draft has the combo; the live menu does not, so it is not a combo to the cart")
+                .isEqualTo("COMBO_NOT_CONFIGURED");
+        assertThat(sold.total().minor()).isEqualTo(25_000L);
     }
 
     @Test
@@ -394,6 +456,7 @@ class CompositeQuoteTests {
             priceAuthoring.setPrice(TENANT, BRAND, priceBook, PriceableType.COMBO_COMPONENT, component.id(), 1_000L);
             components.add(component);
         }
+        republish();
         PickSpec[] picks =
                 components.stream().map(component -> pick(component, 1)).toArray(PickSpec[]::new);
         QuoteRequest.Line eleven = new QuoteRequest.Line(
@@ -424,15 +487,15 @@ class CompositeQuoteTests {
     @Test
     @DisplayName("the cart can ask whether a selection is allowed without pricing or storing anything")
     void aSelectionCanBeCheckedWithoutPricingIt() {
-        CartPricingPort.SelectionCheck combo =
-                quotes.checkSelection(TENANT, BRAND, item("l", lunch, 2, pick(wrapInLunch, 1), pick(colaInLunch, 1)));
+        CartPricingPort.SelectionCheck combo = quotes.checkSelection(
+                TENANT, BRAND, "STOREFRONT", item("l", lunch, 2, pick(wrapInLunch, 1), pick(colaInLunch, 1)));
 
         assertThat(combo.combo()).isTrue();
         assertThat(combo.soldVariantIds())
                 .as("what the cart holds stock on and checks sale windows for: the components, never the container")
                 .containsExactlyInAnyOrder(wrap, cola);
 
-        CartPricingPort.SelectionCheck plain = quotes.checkSelection(TENANT, BRAND, item("b", burger, 1));
+        CartPricingPort.SelectionCheck plain = quotes.checkSelection(TENANT, BRAND, "STOREFRONT", item("b", burger, 1));
         assertThat(plain.combo()).isFalse();
         assertThat(plain.soldVariantIds()).containsExactly(burger);
 
@@ -443,7 +506,7 @@ class CompositeQuoteTests {
                 .isZero();
 
         CartPricingPort.PricingRefusedException refused = (CartPricingPort.PricingRefusedException) catchThrowable(
-                () -> quotes.checkSelection(TENANT, BRAND, item("l", lunch, 1, pick(burgerInLunch, 1))));
+                () -> quotes.checkSelection(TENANT, BRAND, "STOREFRONT", item("l", lunch, 1, pick(burgerInLunch, 1))));
         assertThat(refused.code())
                 .as("the very rule pricing applies, so the cart and the quote cannot disagree")
                 .isEqualTo("COMBO_GROUP_MINIMUM_NOT_MET");
@@ -652,6 +715,7 @@ class CompositeQuoteTests {
         UUID sides = group("SIDES", false, 0, 1);
         UUID addSide = option(sides, "ADD-SIDE", sideMeal, 10_000L);
         attachToProduct(burgerProduct, sides);
+        republish();
 
         var priced = quotes.quote(request(new QuoteRequest.Line(
                 "b",
@@ -688,6 +752,7 @@ class CompositeQuoteTests {
         // The variant now requires a spice level: unanswered, the cart is refused even
         // though the customer sent no nested selection at all.
         composites.attachModifierGroupToVariant(TENANT, BRAND, sideMeal, spicyGroup, 1, "tester");
+        republish();
         assertThat(cartRefusalCode(new CartPricingPort.PricingCommand.Item(
                         "b", burger, 1, List.of(addSide), List.of(), List.of())))
                 .isEqualTo("MODIFIER_GROUP_MINIMUM_NOT_MET");
@@ -705,6 +770,7 @@ class CompositeQuoteTests {
         UUID sides = group("SIDES", false, 0, 1);
         UUID addSide = option(sides, "ADD-SIDE", sideMeal, 10_000L);
         attachToProduct(burgerProduct, sides);
+        republish();
 
         String code = cartRefusalCode(new CartPricingPort.PricingCommand.Item(
                 "b",
@@ -720,6 +786,53 @@ class CompositeQuoteTests {
     }
 
     // ---------------------------------------------------------------- fixtures
+
+    /**
+     * Publishes the draft as it stands now, as the brand's live STOREFRONT menu (ADR 0136).
+     *
+     * <p>A quote and the cart's selection check read the structure a customer chooses within from
+     * the live publication, so a test that changes authoring and expects the change to be sold has
+     * to publish it, exactly as an operator does. The validator is not run: several tests author a
+     * state the validator would refuse, to prove what the quote does with it.
+     */
+    private void republish() {
+        var loader = new CatalogSnapshotLoader(catalogStore, (tenantId, assets) -> true, new EverythingPriced(), "uz");
+        var items = loader.toPublicationItems(loader.load(TENANT, BRAND, catalogId));
+        UUID publicationId = UUID.randomUUID();
+        catalogStore.retireActivePublication(TENANT, BRAND, "STOREFRONT", clock.instant());
+        catalogStore.insertPublication(
+                publicationId,
+                TENANT,
+                BRAND,
+                catalogId,
+                "STOREFRONT",
+                PublicationStatus.READY,
+                "hash-" + publicationId,
+                new ValidationFinding.Report(List.of()),
+                null,
+                clock.instant(),
+                null);
+        catalogStore.insertPublicationItems(publicationId, TENANT, BRAND, items);
+        catalogStore.activatePublication(publicationId, clock.instant());
+    }
+
+    /** The publication gate is not under test here; every priceable thing answers priced. */
+    private static final class EverythingPriced implements VariantPricingLookup {
+        @Override
+        public Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds) {
+            return variantIds;
+        }
+
+        @Override
+        public Set<UUID> pricedComboComponents(UUID tenantId, UUID brandId, Set<UUID> componentIds) {
+            return componentIds;
+        }
+
+        @Override
+        public Set<UUID> pricedModifierOptions(UUID tenantId, UUID brandId, Set<UUID> optionIds) {
+            return optionIds;
+        }
+    }
 
     private void assertCartRefused(CartPricingPort.PricingCommand.Item item, String code, UUID subject) {
         Throwable refused = catchThrowable(() -> quotes.priceCart(command(item)));

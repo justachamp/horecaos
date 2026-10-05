@@ -548,7 +548,11 @@ public class KitchenTicketService {
         }
         TicketRow ticket = found.get();
         if (ticket.status().terminal()) {
-            log.debug("Ticket {} is {}; an amendment to order {} has nothing to cook", ticket.id(), ticket.status(), orderId);
+            log.debug(
+                    "Ticket {} is {}; an amendment to order {} has nothing to cook",
+                    ticket.id(),
+                    ticket.status(),
+                    orderId);
             return;
         }
         OrderForKitchen order = orders.find(tenantId, orderId).orElse(null);
@@ -641,7 +645,9 @@ public class KitchenTicketService {
         List<OrderLineForKitchen> toCook = new ArrayList<>();
         for (OrderLineForKitchen line : unrouted) {
             AmendedLineKey key = AmendedLineKey.of(line);
-            BigDecimal credit = contenders.getOrDefault(key, 0L) == 1L ? alreadyMade.getOrDefault(key, BigDecimal.ZERO) : BigDecimal.ZERO;
+            BigDecimal credit = contenders.getOrDefault(key, 0L) == 1L
+                    ? alreadyMade.getOrDefault(key, BigDecimal.ZERO)
+                    : BigDecimal.ZERO;
             BigDecimal remaining = line.quantity().subtract(credit.min(line.quantity()));
             if (remaining.signum() > 0) {
                 toCook.add(new OrderLineForKitchen(
@@ -655,7 +661,8 @@ public class KitchenTicketService {
             } else {
                 // Everything asked for is already on the pass. The line is still the order's, and
                 // has no item: the ticket needs nothing more for it.
-                log.debug("Line {} of order {} is already made; no item was queued", line.orderLineId(), order.orderId());
+                log.debug(
+                        "Line {} of order {} is already made; no item was queued", line.orderLineId(), order.orderId());
             }
         }
         if (toCook.isEmpty()) {

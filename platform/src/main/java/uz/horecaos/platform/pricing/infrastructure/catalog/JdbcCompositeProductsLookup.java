@@ -322,7 +322,8 @@ public class JdbcCompositeProductsLookup implements CompositeProductsLookup {
             List<NestedGroupFact> groups = new ArrayList<>();
             for (OptionRow other : optionRows) {
                 UUID groupId = other.nestedGroupId();
-                if (groupId == null || !row.option().optionId().equals(other.option().optionId())) {
+                if (groupId == null
+                        || !row.option().optionId().equals(other.option().optionId())) {
                     continue;
                 }
                 Boolean allowSame = allowSameOption.get(groupId);
