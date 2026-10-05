@@ -2,7 +2,6 @@ package uz.horecaos.platform.ordering.web;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,6 +17,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,11 +31,14 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
@@ -89,6 +93,27 @@ class DecimalAmendmentHttpTests {
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
+
+    @BeforeAll
+    static void requireDocker() {
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for this endpoint test");
+    }
+
+    @DynamicPropertySource
+    static void properties(DynamicPropertyRegistry registry) {
+        db = TestDatabase.migrated();
+        registry.add("spring.datasource.url", db::jdbcUrl);
+        registry.add("spring.datasource.username", db::username);
+        registry.add("spring.datasource.password", db::password);
+        registry.add("horecaos.messaging.outbox.enabled", () -> "false");
+        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The kitchen ticket raises a realtime signal on the calling thread; against the dead
+        // broker above every one of them waits out the producer's ten-second metadata block.
+        registry.add("horecaos.realtime.signals.publish", () -> "false");
+        // Closing the day pseudonymises the subject of each order, which needs the key.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
+    }
 
     @Autowired
     private MockMvc mvc;
@@ -257,12 +282,15 @@ class DecimalAmendmentHttpTests {
         confirm(orderId, preview);
         assertThat(orderDetail(orderId).get("lines").get(0).get("quantity").asInt())
                 .isEqualTo(3);
-        assertThat(jdbc.sql("SELECT payload_json FROM ordering.order_amendment_commands " + "WHERE amendment_id = :id")
-                        .param("id", UUID.fromString(preview.get("amendmentId").asText()))
-                        .query(String.class)
-                        .single())
-                .as("the stored command reads as it did when the quantity was an integer")
-                .contains("\"quantity\":3}");
+        JsonNode stored = JSON.readTree(jdbc.sql("SELECT payload_json::text FROM ordering.order_amendment_commands "
+                        + "WHERE amendment_id = :id")
+                .param("id", UUID.fromString(preview.get("amendmentId").asText()))
+                .query(String.class)
+                .single());
+        assertThat(stored.get("quantity").isInt())
+                .as("the stored command reads as it did when the quantity was an integer: 3, not 3.000 (%s)", stored)
+                .isTrue();
+        assertThat(stored.get("quantity").asInt()).isEqualTo(3);
     }
 
     @Test
@@ -274,6 +302,7 @@ class DecimalAmendmentHttpTests {
         UUID plov = lineIdOf(orderId, plovVariant);
         UUID soda = lineIdOf(orderId, sodaVariant);
         UUID cake = lineIdOf(orderId, cakeVariant);
+        long totalBefore = totalOf(orderId);
 
         assertThat(refusalCode(orderId, "dec-refuse-1", changeQuantity(soda, "1.5")))
                 .as("a can of soda has no physical block")
@@ -290,7 +319,7 @@ class DecimalAmendmentHttpTests {
         assertThat(amendmentCount(orderId))
                 .as("a refused propose leaves no amendment row")
                 .isZero();
-        assertThat(totalOf(orderId)).isEqualTo(60_000L);
+        assertThat(totalOf(orderId)).as("nothing was written").isEqualTo(totalBefore);
     }
 
     @Test
@@ -311,10 +340,12 @@ class DecimalAmendmentHttpTests {
         UUID plov = lineIdOf(orderId, plovVariant);
         JsonNode raised = amend(orderId, "dec-down-1", changeQuantity(plov, "2.5"), 200);
         confirm(orderId, raised);
+        // The confirmed raise closed the old line and opened a new one: the live line has a new id.
+        UUID raisedLine = lineIdOf(orderId, plovVariant);
 
-        assertThat(refusalCode(orderId, "dec-down-2", changeQuantity(plov, "1.5")))
+        assertThat(refusalCode(orderId, "dec-down-2", changeQuantity(raisedLine, "1.5")))
                 .isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
-        assertThat(refusalCode(orderId, "dec-down-3", changeQuantity(plov, "2.500")))
+        assertThat(refusalCode(orderId, "dec-down-3", changeQuantity(raisedLine, "2.500")))
                 .isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
     }
 
@@ -449,20 +480,6 @@ class DecimalAmendmentHttpTests {
                 null));
     }
 
-    private CartService.CartRefusedException refusal(UUID cartId, UUID variantId, String quantity) {
-        Throwable thrown = catchThrowable(() -> putLine(cartId, "probe", variantId, quantity));
-        assertThat(thrown).isInstanceOf(CartService.CartRefusedException.class);
-        return (CartService.CartRefusedException) thrown;
-    }
-
-    private BigDecimal lineQuantity(UUID cartId, String lineKey) {
-        return jdbc.sql("SELECT quantity FROM ordering.cart_lines WHERE cart_id = :id AND line_key = :key")
-                .param("id", cartId)
-                .param("key", lineKey)
-                .query(BigDecimal.class)
-                .single();
-    }
-
     private UUID checkoutCart(UUID cart, String idempotencyKey) {
         var result = checkoutResult(cart, idempotencyKey, "CASH");
         return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
@@ -506,10 +523,6 @@ class DecimalAmendmentHttpTests {
 
     private String orderPath(UUID orderId) {
         return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/" + orderId;
-    }
-
-    private String linePath(UUID orderId, UUID lineId) {
-        return orderPath(orderId) + "/lines/" + lineId + "/actual-weight";
     }
 
     private JsonNode orderDetail(UUID orderId) throws Exception {
