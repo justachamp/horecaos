@@ -145,7 +145,9 @@ export const routes: Routes = [
             // rows) are `P14`'s — see `new-order-page.ts`'s own doc for the
             // exact line.
             path: 'new',
-            canActivate: [messagesGuard('customers')],
+            // The quote band reads `reports.provenance.*`, the dine-in picker and the party close read
+            // `settings.locations.floorPlan.*`, and the aggregator branch reads `delivery.zones.*`.
+            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings')],
             loadComponent: () =>
               import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
@@ -292,7 +294,8 @@ export const routes: Routes = [
         // section, not a greyed-out link. payment-methods (wave P33) is real
         // now.
         path: 'settings',
-        canActivate: [messagesGuard('settings')],
+        // `staff` for the nav's Approvals entry (`settings-nav.ts` names the staff shell's own label).
+        canActivate: [messagesGuard('settings', 'staff')],
         loadComponent: () =>
           import('./features/settings/settings-shell').then((m) => m.SettingsShell),
         children: [
@@ -318,7 +321,8 @@ export const routes: Routes = [
             children: [
               {
                 path: ':locationId',
-                canActivate: [messagesGuard('staff')],
+                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen).
+                canActivate: [messagesGuard('staff', 'orders')],
                 loadComponent: () =>
                   import('./features/settings/locations/location-detail-pane').then(
                     (m) => m.LocationDetailPane,
@@ -406,6 +410,8 @@ export const routes: Routes = [
           },
           {
             path: 'fiscalization',
+            // The backfill tab's tax-profile vocabulary lives in the `catalog` area.
+            canActivate: [messagesGuard('catalog')],
             loadComponent: () =>
               import('./features/settings/fiscalization/fiscalization-page').then(
                 (m) => m.FiscalizationPage,
@@ -829,6 +835,8 @@ export const routes: Routes = [
             // new this wave); ABC/XYZ stay named-not-built inline — see
             // `product-analytics-page.ts`.
             path: 'products',
+            // The combo-sales caption is the order detail's own (`orders.detail.lines.combo.*`).
+            canActivate: [messagesGuard('orders')],
             loadComponent: () =>
               import('./features/reports/product-analytics-page').then(
                 (m) => m.ProductAnalyticsPage,
