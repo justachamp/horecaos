@@ -505,6 +505,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер проверка соответствия раскрыто',
       'uz-Latn': 'Kuryer muvofiqlik ochib berildi',
     },
+    'courier.customer_location.revealed': {
+      en: 'Courier opened the customer’s location',
+      ru: 'Курьер открыл адрес клиента',
+      'uz-Latn': 'Kuryer mijoz manzilini ochdi',
+    },
+    'courier.delivery.advanced': {
+      en: 'Courier moved a delivery to its next step',
+      ru: 'Курьер перевёл доставку на следующий шаг',
+      'uz-Latn': 'Kuryer yetkazib berishni keyingi bosqichga oʻtkazdi',
+    },
+    'courier.delivery.payment_confirmed': {
+      en: 'Courier confirmed the cash collected',
+      ru: 'Курьер подтвердил полученные наличные',
+      'uz-Latn': 'Kuryer olingan naqd pulni tasdiqladi',
+    },
     'courier.engagement.opened': {
       en: 'Courier engagement opened',
       ru: 'Курьер привлечение открыто',
@@ -534,6 +549,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Courier group left',
       ru: 'Курьер группа вышел',
       'uz-Latn': 'Kuryer guruh chiqdi',
+    },
+    'courier.offer.accepted': {
+      en: 'Courier accepted an offer',
+      ru: 'Курьер принял предложение',
+      'uz-Latn': 'Kuryer taklifni qabul qildi',
+    },
+    'courier.offer.declined': {
+      en: 'Courier declined an offer',
+      ru: 'Курьер отклонил предложение',
+      'uz-Latn': 'Kuryer taklifni rad etdi',
     },
     'courier.payout.authorised': {
       en: 'Courier payout authorised',

@@ -4096,7 +4096,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.consequence.revealCustomerLocationTiming':
     'Qabul qilishdan oldin: kuryer hali qaror qilayotgan paytda mijoz manzilini ochish mumkin. Qabul qilgandan keyin: faqat kuryer buyurtmani olgandan soʻng. Manzil har safar ochilganda audit jurnaliga yoziladi.',
   'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
-    'Yoqilgan: kuryer naqd pulli buyurtmani, olingan pulni kiritmaguncha va u toʻlanishi kerak boʻlgan summaga mos kelmaguncha, yetkazilgan deb belgilay olmaydi. Onlayn toʻlangan buyurtmalarga bu taʼsir qilmaydi.',
+    'Yoqilgan: kuryer naqd pulli buyurtmani, olingan pulni kiritmaguncha va u toʻlanishi kerak boʻlgan summaga mos kelmaguncha, yetkazilgan deb belgilay olmaydi. Onlayn toʻlangan buyurtmalarga bu taʻsir qilmaydi.',
   'delivery.policy.consequence.gpsVerificationEnabled':
     'Yoqilgan: kuryer filialdan qabul radiusidan uzoqroq boʻlsa, taklifni qabul qilish rad etiladi; yetib borish, olish va topshirish kuryer filialdan yoki mijoz eshigidan holat radiusidan uzoqroq boʻlsa rad etiladi. Oʻchirilgan: joylashuv tekshirilmaydi va oʻqilmaydi ham.',
   'delivery.policy.billingMode': 'Kuryerlar billingi (shaxsiy balans)',

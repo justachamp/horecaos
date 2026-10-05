@@ -85,16 +85,17 @@ public class CourierDeliveryController {
     @GetMapping("/offers")
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_READ)
     @Operation(
+            operationId = "courierListOffers",
             summary = "The offers I can still take at this branch",
             description = "Soonest to lapse first. With the tenant's kitchen-ready-only switch on, an "
                     + "order the kitchen has not finished is not listed. Carries no name, telephone "
                     + "number or address of the customer; the address is a separate, audited reveal.")
-    public ResponseEntity<List<OfferResponse>> offers(
+    public ResponseEntity<List<CourierOfferResponse>> offers(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
 
         Where where = new Where(tenantId, brandId, locationId);
         return ResponseEntity.ok(deliveries.offers(where, me(tenantId)).stream()
-                .map(OfferResponse::of)
+                .map(CourierOfferResponse::of)
                 .toList());
     }
 
@@ -102,6 +103,7 @@ public class CourierDeliveryController {
     @CourierSelfAuthorized(Capability.COURIER_OFFER_ACCEPT)
     @Idempotent
     @Operation(
+            operationId = "courierAcceptOffer",
             summary = "Take an offer",
             description = "Requires If-Match with the offer's version. When the tenant's GPS gate is "
                     + "on, the body carries the courier's own position and acceptance is refused "
@@ -109,12 +111,12 @@ public class CourierDeliveryController {
                     + "Refused with KITCHEN_NOT_READY when the tenant takes only finished orders. "
                     + "An offer that lapsed, was taken by another courier, or was never this "
                     + "courier's answers 200 with outcome NO_LONGER_AVAILABLE, never an error.")
-    public ResponseEntity<AcceptResponse> accept(
+    public ResponseEntity<CourierAcceptOfferResponse> accept(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID offerId,
-            @Valid @RequestBody(required = false) @Nullable AcceptRequest body,
+            @Valid @RequestBody(required = false) @Nullable CourierAcceptOfferRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
@@ -125,17 +127,18 @@ public class CourierDeliveryController {
                 expected,
                 position(body == null ? null : body.position()),
                 actor());
-        return ResponseEntity.ok(AcceptResponse.of(outcome));
+        return ResponseEntity.ok(CourierAcceptOfferResponse.of(outcome));
     }
 
     @PostMapping("/offers/{offerId}/decline")
     @CourierSelfAuthorized(Capability.COURIER_OFFER_DECLINE)
     @Idempotent
     @Operation(
+            operationId = "courierDeclineOffer",
             summary = "Turn an offer down",
             description = "Requires If-Match with the offer's version. Sourcing asks the next courier "
                     + "at once rather than when this offer would have lapsed.")
-    public ResponseEntity<DeclineResponse> decline(
+    public ResponseEntity<CourierDeclineOfferResponse> decline(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -145,25 +148,26 @@ public class CourierDeliveryController {
         long expected = AggregateVersion.requireIfMatch(request);
         boolean declined =
                 deliveries.decline(new Where(tenantId, brandId, locationId), me(tenantId), offerId, expected, actor());
-        return ResponseEntity.ok(new DeclineResponse(declined ? "DECLINED" : "NO_LONGER_AVAILABLE"));
+        return ResponseEntity.ok(new CourierDeclineOfferResponse(declined ? "DECLINED" : "NO_LONGER_AVAILABLE"));
     }
 
     @PostMapping("/offers/{offerId}/customer-location-reveals")
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_LOCATION_REVEAL)
     @Idempotent
     @Operation(
+            operationId = "courierRevealOfferCustomerLocation",
             summary = "Open the customer's address while I only hold the offer",
             description = "Refused (422, reason LOCATION_NOT_YET_REVEALED) unless the tenant reveals "
                     + "the customer's location before acceptance. Always an audit fact naming the "
                     + "courier, the order and the offer, and never the address. A courier who has "
                     + "accepted uses the delivery's own reveal.")
-    public ResponseEntity<CustomerLocationResponse> revealForOffer(
+    public ResponseEntity<CourierCustomerLocationResponse> revealForOffer(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID offerId) {
 
-        return ResponseEntity.ok(CustomerLocationResponse.of(
+        return ResponseEntity.ok(CourierCustomerLocationResponse.of(
                 deliveries.revealForOffer(new Where(tenantId, brandId, locationId), me(tenantId), offerId, actor())));
     }
 
@@ -172,25 +176,27 @@ public class CourierDeliveryController {
     @GetMapping("/deliveries")
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_READ)
     @Operation(
+            operationId = "courierListDeliveries",
             summary = "What I am carrying at this branch",
             description = "Assigned, waiting at the pickup, or on the road. Only this courier's own "
                     + "deliveries are ever returned.")
-    public ResponseEntity<List<DeliveryResponse>> deliveries(
+    public ResponseEntity<List<CourierDeliveryResponse>> deliveries(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
 
         Where where = new Where(tenantId, brandId, locationId);
         return ResponseEntity.ok(deliveries.deliveries(where, me(tenantId)).stream()
-                .map(DeliveryResponse::of)
+                .map(CourierDeliveryResponse::of)
                 .toList());
     }
 
     @GetMapping("/deliveries/{shipmentId}")
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_READ)
     @Operation(
+            operationId = "courierGetDelivery",
             summary = "One of my deliveries",
             description = "Any status. A delivery that is not this courier's answers 404, exactly as "
                     + "one that does not exist. Returns an ETag to send back as If-Match.")
-    public ResponseEntity<DeliveryResponse> delivery(
+    public ResponseEntity<CourierDeliveryResponse> delivery(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -203,6 +209,7 @@ public class CourierDeliveryController {
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_ADVANCE)
     @Idempotent
     @Operation(
+            operationId = "courierAdvanceDelivery",
             summary = "Move my delivery to the next step",
             description = "Requires If-Match with the delivery's version. step is PICKUP_PENDING "
                     + "(arrived), PICKED_UP or DELIVERED. When the tenant's GPS gate is on, the body "
@@ -213,12 +220,12 @@ public class CourierDeliveryController {
                     + "DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant "
                     + "requires the cash to be confirmed and cash is due and unconfirmed. The "
                     + "position is measured and discarded.")
-    public ResponseEntity<DeliveryResponse> advance(
+    public ResponseEntity<CourierDeliveryResponse> advance(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID shipmentId,
-            @Valid @RequestBody AdvanceRequest body,
+            @Valid @RequestBody CourierAdvanceDeliveryRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
@@ -236,17 +243,18 @@ public class CourierDeliveryController {
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_PAYMENT_CONFIRM)
     @Idempotent
     @Operation(
+            operationId = "courierConfirmDeliveryPayment",
             summary = "Confirm the cash I collected at the door",
             description = "Requires If-Match with the delivery's version. Only on a delivery that has "
                     + "been picked up. The amount must equal what the settlement says is due (zero "
                     + "for an order the platform already holds the money for); anything else is "
                     + "refused (422, PAYMENT_AMOUNT_MISMATCH) and nothing is stored.")
-    public ResponseEntity<DeliveryResponse> confirmPayment(
+    public ResponseEntity<CourierDeliveryResponse> confirmPayment(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID shipmentId,
-            @Valid @RequestBody PaymentConfirmationRequest body,
+            @Valid @RequestBody CourierPaymentConfirmationRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
@@ -263,25 +271,26 @@ public class CourierDeliveryController {
     @CourierSelfAuthorized(Capability.COURIER_DELIVERY_LOCATION_REVEAL)
     @Idempotent
     @Operation(
+            operationId = "courierRevealDeliveryCustomerLocation",
             summary = "Open the customer's address for a delivery I carry",
             description = "Always an audit fact naming the courier, the order and the shipment, and "
                     + "never the address. Refused once the delivery is finished or cancelled.")
-    public ResponseEntity<CustomerLocationResponse> revealForDelivery(
+    public ResponseEntity<CourierCustomerLocationResponse> revealForDelivery(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID shipmentId) {
 
-        return ResponseEntity.ok(CustomerLocationResponse.of(deliveries.revealForDelivery(
+        return ResponseEntity.ok(CourierCustomerLocationResponse.of(deliveries.revealForDelivery(
                 new Where(tenantId, brandId, locationId), me(tenantId), shipmentId, actor())));
     }
 
     // ----------------------------------------------------------------- helpers
 
-    private static ResponseEntity<DeliveryResponse> respond(DeliveryView view) {
+    private static ResponseEntity<CourierDeliveryResponse> respond(DeliveryView view) {
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(view.job().version()))
-                .body(DeliveryResponse.of(view));
+                .body(CourierDeliveryResponse.of(view));
     }
 
     /** The courier a request is about is always the caller's own, resolved from their token. */
@@ -296,7 +305,7 @@ public class CourierDeliveryController {
         return ActorRef.user(currentActor.get().subject(), null);
     }
 
-    private static @Nullable Position position(@Nullable PositionBody body) {
+    private static @Nullable Position position(@Nullable CourierPositionBody body) {
         if (body == null) {
             return null;
         }
@@ -315,35 +324,36 @@ public class CourierDeliveryController {
      * <p>Boxed: Jackson 3 refuses a missing primitive, and a position missing its accuracy is a
      * position the gate cannot trust.
      */
-    record PositionBody(
+    record CourierPositionBody(
             @NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
             @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude,
             @NotNull @DecimalMin("0") Double accuracyMeters) {
 
         @Override
         public String toString() {
-            return "PositionBody[REDACTED]";
+            return "CourierPositionBody[REDACTED]";
         }
     }
 
-    record AcceptRequest(@Valid @Nullable PositionBody position) {}
+    record CourierAcceptOfferRequest(@Valid @Nullable CourierPositionBody position) {}
 
-    record AdvanceRequest(
-            @NotNull Step step, @Valid @Nullable PositionBody position) {}
+    record CourierAdvanceDeliveryRequest(
+            @NotNull Step step, @Valid @Nullable CourierPositionBody position) {}
 
-    record PaymentConfirmationRequest(@NotNull @Min(0) Long collectedMinor) {}
+    record CourierPaymentConfirmationRequest(
+            @NotNull @Min(0) Long collectedMinor) {}
 
     // --------------------------------------------------------------- responses
 
-    record PickupResponse(
+    record CourierPickupResponse(
             String name,
             String addressLine,
             @Nullable String landmark,
             @Nullable Double latitude,
             @Nullable Double longitude) {
 
-        static PickupResponse of(Pickup pickup) {
-            return new PickupResponse(
+        static CourierPickupResponse of(Pickup pickup) {
+            return new CourierPickupResponse(
                     pickup.name(), pickup.addressLine(), pickup.landmark(), pickup.latitude(), pickup.longitude());
         }
     }
@@ -352,7 +362,7 @@ public class CourierDeliveryController {
      * @param customerLocationRevealable the tenant reveals the customer's address before acceptance,
      *                                   so this offer's {@code customer-location-reveals} will answer
      */
-    record OfferResponse(
+    record CourierOfferResponse(
             UUID offerId,
             long version,
             String orderReference,
@@ -367,12 +377,12 @@ public class CourierDeliveryController {
             Instant pickupWindowStart,
             Instant pickupWindowEnd,
             @Nullable Instant promisedDeliveryEnd,
-            PickupResponse pickup,
+            CourierPickupResponse pickup,
             boolean customerLocationRevealable) {
 
-        static OfferResponse of(OfferView view) {
+        static CourierOfferResponse of(OfferView view) {
             Offer offer = view.offer();
-            return new OfferResponse(
+            return new CourierOfferResponse(
                     offer.offerId(),
                     offer.version(),
                     offer.orderReference(),
@@ -387,7 +397,7 @@ public class CourierDeliveryController {
                     offer.pickupWindowStart(),
                     offer.pickupWindowEnd(),
                     offer.promisedDeliveryEnd(),
-                    PickupResponse.of(offer.pickup()),
+                    CourierPickupResponse.of(offer.pickup()),
                     view.customerLocationRevealable());
         }
     }
@@ -397,16 +407,17 @@ public class CourierDeliveryController {
      *                 taken by another, or was never this courier's
      * @param delivery the delivery now carried, absent unless accepted
      */
-    record AcceptResponse(String outcome, @Nullable DeliveryResponse delivery) {
+    record CourierAcceptOfferResponse(
+            String outcome, @Nullable CourierDeliveryResponse delivery) {
 
-        static AcceptResponse of(AcceptOutcome outcome) {
+        static CourierAcceptOfferResponse of(AcceptOutcome outcome) {
             return outcome.accepted() && outcome.delivery() != null
-                    ? new AcceptResponse("ACCEPTED", DeliveryResponse.of(outcome.delivery()))
-                    : new AcceptResponse("NO_LONGER_AVAILABLE", null);
+                    ? new CourierAcceptOfferResponse("ACCEPTED", CourierDeliveryResponse.of(outcome.delivery()))
+                    : new CourierAcceptOfferResponse("NO_LONGER_AVAILABLE", null);
         }
     }
 
-    record DeclineResponse(String outcome) {}
+    record CourierDeclineOfferResponse(String outcome) {}
 
     /**
      * @param cashDueMinor                what the courier is to collect at the door; zero for an order
@@ -414,7 +425,7 @@ public class CourierDeliveryController {
      * @param paymentConfirmationRequired the tenant requires the cash to be confirmed before this
      *                                    delivery can be marked delivered
      */
-    record DeliveryResponse(
+    record CourierDeliveryResponse(
             UUID shipmentId,
             long version,
             String status,
@@ -434,12 +445,12 @@ public class CourierDeliveryController {
             Instant pickupWindowStart,
             Instant pickupWindowEnd,
             @Nullable Instant promisedDeliveryEnd,
-            PickupResponse pickup,
+            CourierPickupResponse pickup,
             boolean paymentConfirmationRequired) {
 
-        static DeliveryResponse of(DeliveryView view) {
+        static CourierDeliveryResponse of(DeliveryView view) {
             Job job = view.job();
-            return new DeliveryResponse(
+            return new CourierDeliveryResponse(
                     job.shipmentId(),
                     job.version(),
                     job.status().name(),
@@ -459,7 +470,7 @@ public class CourierDeliveryController {
                     job.pickupWindowStart(),
                     job.pickupWindowEnd(),
                     job.promisedDeliveryEnd(),
-                    PickupResponse.of(job.pickup()),
+                    CourierPickupResponse.of(job.pickup()),
                     view.paymentConfirmationRequired());
         }
     }
@@ -467,7 +478,7 @@ public class CourierDeliveryController {
     /**
      * The customer's door and the way in. Personal data throughout, so it prints as nothing.
      */
-    record CustomerLocationResponse(
+    record CourierCustomerLocationResponse(
             double latitude,
             double longitude,
             String addressLine,
@@ -476,8 +487,8 @@ public class CourierDeliveryController {
             @Nullable String apartment,
             @Nullable String instructions) {
 
-        static CustomerLocationResponse of(CustomerLocation location) {
-            return new CustomerLocationResponse(
+        static CourierCustomerLocationResponse of(CustomerLocation location) {
+            return new CourierCustomerLocationResponse(
                     location.latitude(),
                     location.longitude(),
                     location.addressLine(),
@@ -489,7 +500,7 @@ public class CourierDeliveryController {
 
         @Override
         public String toString() {
-            return "CustomerLocationResponse[REDACTED]";
+            return "CourierCustomerLocationResponse[REDACTED]";
         }
     }
 }
