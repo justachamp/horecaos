@@ -9,6 +9,9 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.InventoryConfigurationKeys;
@@ -38,8 +41,11 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <em>turning off</em> is guarded: turning it on, or recording an explicit null (which continues
  * resolution to the value above), restores what the switch withheld.
  *
- * <p>Runs inside the configuration author's transaction, before any row is written, so a refusal
- * leaves no value, no cache eviction and no audit fact behind.
+ * <p>Called inside the configuration author's transaction, before any row is written, so a refusal
+ * leaves no value, no cache eviction and no audit fact behind. The look itself is made in a
+ * transaction of its own: binding the platform ({@code SET LOCAL ROLE}, see {@link TenantRlsSession})
+ * is scoped to a transaction, and a platform-wide write must not leave the author's own statements
+ * running under the bypass role for the rest of theirs.
  */
 @Component
 public class StopReadSwitchGuard implements ConfigurationWriteGuard {
@@ -50,11 +56,19 @@ public class StopReadSwitchGuard implements ConfigurationWriteGuard {
     private final JdbcStopMaterialisationStore materialisation;
     private final TenantRlsSession rls;
     private final Clock clock;
+    private final TransactionTemplate look;
 
-    public StopReadSwitchGuard(JdbcStopMaterialisationStore materialisation, TenantRlsSession rls, Clock clock) {
+    public StopReadSwitchGuard(
+            JdbcStopMaterialisationStore materialisation,
+            TenantRlsSession rls,
+            Clock clock,
+            PlatformTransactionManager transactionManager) {
         this.materialisation = materialisation;
         this.rls = rls;
         this.clock = clock;
+        this.look = new TransactionTemplate(transactionManager);
+        this.look.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.look.setReadOnly(true);
     }
 
     @Override
@@ -66,17 +80,20 @@ public class StopReadSwitchGuard implements ConfigurationWriteGuard {
             return;
         }
         Instant now = clock.instant();
-        List<BrandRef> blocked = new ArrayList<>();
-        for (BrandRef brand : brandsInScope(scope)) {
-            rls.bindTenant(brand.tenantId());
-            boolean acknowledged = materialisation.hasAcknowledgedRun(brand.tenantId(), brand.brandId());
-            int uncarried =
-                    materialisation.stopsInForceNoAcknowledgedRunCarried(brand.tenantId(), brand.brandId(), now);
-            if (!acknowledged || uncarried > 0) {
-                blocked.add(brand);
+        List<BrandRef> blocked = look.execute(status -> {
+            List<BrandRef> found = new ArrayList<>();
+            for (BrandRef brand : brandsInScope(scope)) {
+                rls.bindTenant(brand.tenantId());
+                boolean acknowledged = materialisation.hasAcknowledgedRun(brand.tenantId(), brand.brandId());
+                int uncarried =
+                        materialisation.stopsInForceNoAcknowledgedRunCarried(brand.tenantId(), brand.brandId(), now);
+                if (!acknowledged || uncarried > 0) {
+                    found.add(brand);
+                }
             }
-        }
-        if (blocked.isEmpty()) {
+            return found;
+        });
+        if (blocked == null || blocked.isEmpty()) {
             return;
         }
         Map<String, Object> properties = new LinkedHashMap<>();

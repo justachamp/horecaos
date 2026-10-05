@@ -154,7 +154,7 @@ class StopMaterialisationTests {
                 new StopMaterialisationStep(stopStore, materialisation, inventory, catalog, NO_OP_RLS);
         runs = new StopMaterialisationService(
                 stopStore, materialisation, step, fact -> {}, NO_OP_RLS, clock, transactionManager);
-        guard = new StopReadSwitchGuard(materialisation, NO_OP_RLS, clock);
+        guard = new StopReadSwitchGuard(materialisation, NO_OP_RLS, clock, transactionManager);
         posPort = new SwitchedPosStopPort(stopService, inventory, new StopReadSwitch(config));
     }
 

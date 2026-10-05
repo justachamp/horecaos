@@ -101,6 +101,7 @@ class MarketplaceAvailabilityReconcilerTests {
     private RecordingProviderActivityRecorder activity;
     private RecordingOperationsAlertPort alerts;
     private MarketplaceStaleChannelMonitor staleMonitor;
+    private SimpleMeterRegistry meters;
     private JdbcMarketplaceAvailabilityStore store;
     private JdbcAvailabilityStopStore stopStore;
     private AvailabilityStopService stopService;
@@ -176,10 +177,11 @@ class MarketplaceAvailabilityReconcilerTests {
                 stopService);
         activity = new RecordingProviderActivityRecorder();
         alerts = new RecordingOperationsAlertPort();
+        meters = new SimpleMeterRegistry();
         MarketplaceOutbox outbox = new MarketplaceOutbox(
                 new JdbcOutboxStore(jdbc), JsonMapper.builder().build(), clock);
         staleMonitor = new MarketplaceStaleChannelMonitor(
-                store, outbox, alerts, new SimpleMeterRegistry(), transactionManager, Duration.ofDays(1));
+                store, outbox, alerts, meters, transactionManager, Duration.ofDays(1));
         MarketplaceAdapterRegistry registry =
                 new MarketplaceAdapterRegistry(registerAdapter ? List.of(new FakeAdapter()) : List.of());
         reconciler = new MarketplaceAvailabilityReconciler(
@@ -191,7 +193,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 resolver,
                 activity,
                 clock,
-                new SimpleMeterRegistry(),
+                meters,
                 transactionManager,
                 jdbc,
                 // A seeded jitter would still be a delay; the clock is advanced explicitly.
@@ -1325,6 +1327,43 @@ class MarketplaceAvailabilityReconcilerTests {
                 .as("still stale, still the same episode: reported once")
                 .hasSize(1);
         assertThat(alerts.calls()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "the number of bindings inside a reported stale episode is a gauge, and falls back to zero on recovery")
+    void theStaleChannelsGaugeFollowsTheEpisode() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(40));
+        reconciler.tick();
+        assertThat(meters.get("horecaos.marketplace.availability.stale_channels")
+                        .gauge()
+                        .value())
+                .as("nothing is overdue yet")
+                .isZero();
+
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+        assertThat(meters.get("horecaos.marketplace.availability.stale_channels")
+                        .gauge()
+                        .value())
+                .as("one binding is inside a reported episode")
+                .isEqualTo(1.0);
+        assertThat(meters.get("horecaos.marketplace.channel.went_stale")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+
+        partner.script();
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+        assertThat(rowStates(w)).containsOnly("IN_SYNC");
+        assertThat(meters.get("horecaos.marketplace.availability.stale_channels")
+                        .gauge()
+                        .value())
+                .isZero();
     }
 
     @Test

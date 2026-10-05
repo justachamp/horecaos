@@ -755,6 +755,16 @@ in order, exactly the projection ADR 0017 specifies:
 Each line links to the screen that owns it. This panel is the answer to the most
 common support question in this product and it costs one endpoint.
 
+**Built so far (ADR 0141, operations batch 18):** the stop list's «Почему?» opens a dialog
+over `GET .../inventory/variants/{id}/availability-explanation` that resolves the **Наличие**
+layer and the stop layers the one availability resolver reads: whether the dish sells at this
+branch on no channel in particular or on the channel the operator picks, the supply reason
+(sold out, the channel's cut-off) and **every** stop that covers it with its scope, source,
+reason code and end, and it says when stops are switched off. The other layers in the table
+(publication, the branch's offering, order type, the branch's closure, the channel's own
+switch, the price) are not part of that endpoint's answer yet and are not shown; a dish the
+endpoint calls sellable can still be unbuyable for one of them.
+
 ### States
 
 Loading (skeleton rows; search live immediately) · Empty stop list (*"Ничего не

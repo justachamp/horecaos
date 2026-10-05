@@ -27,7 +27,7 @@ capability.
 | Expected volume | Pilot: tens of pushes per binding per day outside service peaks; a brand-wide stop of a hundred dishes across forty bound venues is four thousand pushes, paced by the partner's rate limit (a `RATE_LIMITED` outcome closes the door for the rest of that binding's batch) |
 | SLO | A stop reaches a connected partner within one reconciler tick plus one call (seconds) when a marker fired, and within one resync interval (5 minutes by default) when none did |
 | Runbook | `docs/routes/marketplace-availability.md#runbook` |
-| Dashboard | Metrics `horecaos.marketplace.route` (tags `event`, `provider`, `operation`, `status`), `horecaos.marketplace.availability.push` (tag `conclusion`), `horecaos.marketplace.availability.pending_items`, `horecaos.marketplace.availability.oldest_pending_seconds`, `horecaos.marketplace.circuit.not_closed` — none labelled by tenant, binding or item |
+| Dashboard | Metrics `horecaos.marketplace.route` (tags `event`, `provider`, `operation`, `status`), `horecaos.marketplace.availability.push` (tag `conclusion`), `horecaos.marketplace.availability.pending_items`, `horecaos.marketplace.availability.oldest_pending_seconds`, `horecaos.marketplace.availability.stale_channels` (bindings inside a reported stale episode), `horecaos.marketplace.channel.went_stale` (a counter, one per episode), `horecaos.marketplace.circuit.not_closed` — none labelled by tenant, binding or item |
 
 ## What the platform believes after an attempt
 

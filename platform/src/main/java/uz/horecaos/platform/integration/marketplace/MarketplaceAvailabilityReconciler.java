@@ -156,6 +156,7 @@ public class MarketplaceAvailabilityReconciler {
 
     private final AtomicLong pendingItems = new AtomicLong();
     private final AtomicLong oldestPendingSeconds = new AtomicLong();
+    private final AtomicLong staleChannels = new AtomicLong();
 
     @Autowired
     public MarketplaceAvailabilityReconciler(
@@ -222,6 +223,10 @@ public class MarketplaceAvailabilityReconciler {
         // Aggregate gauges only: a binding id as a tag would be unbounded (ADR 0029).
         meters.gauge("horecaos.marketplace.availability.pending_items", pendingItems);
         meters.gauge("horecaos.marketplace.availability.oldest_pending_seconds", oldestPendingSeconds);
+        // How many bindings are inside a reported stale episode right now (see
+        // MarketplaceStaleChannelMonitor): the one number an operator-level alert needs, with no
+        // tenant, binding or dish in it.
+        meters.gauge("horecaos.marketplace.availability.stale_channels", staleChannels);
     }
 
     /** What one pass over every binding did. */
@@ -608,6 +613,10 @@ public class MarketplaceAvailabilityReconciler {
                 .optional()
                 .map(java.time.OffsetDateTime::toInstant)
                 .orElse(null);
+        staleChannels.set(jdbc.sql("""
+                SELECT count(*) FROM integration.marketplace_availability_sync_state
+                WHERE stale_alerted_at IS NOT NULL
+                """).query(Long.class).single());
         pendingItems.set(pending);
         oldestPendingSeconds.set(
                 oldest == null ? 0 : Math.max(0, Duration.between(oldest, now).toSeconds()));
