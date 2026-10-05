@@ -439,22 +439,33 @@ export class NewOrderPage implements OnInit {
     return index;
   });
 
-  private readonly modifierGroupIndex = computed(
+  protected readonly modifierGroupIndex = computed(
     () =>
       new Map((this.menu()?.modifierGroups ?? []).map((group) => [group.modifierGroupId, group])),
   );
 
   /**
-   * The groups a product offers, each with this product's own required/min/max where it overrides
-   * the shared group's (ADR 0136) — the same values the cart enforces, so the dialog never offers a
-   * range the platform then refuses.
+   * The groups a portion of a product is offered: the product's, then the ones the portion carries
+   * of its own, each with this product's own required/min/max where it overrides the shared
+   * group's and then the portion's own where that differs (ADR 0136) — the same values the cart
+   * enforces for the variant chosen, so the dialog never offers a range the platform then refuses.
    */
-  protected modifierGroupsFor(product: MenuProduct): readonly MenuModifierGroup[] {
+  protected modifierGroupsFor(
+    product: MenuProduct,
+    variant?: MenuVariant,
+  ): readonly MenuModifierGroup[] {
     const index = this.modifierGroupIndex();
+    // A later row for a group replaces an earlier one whole: the portion's over the product's.
     const policies = new Map(
-      (product.modifierGroupPolicies ?? []).map((policy) => [policy.modifierGroupId, policy]),
+      [...(product.modifierGroupPolicies ?? []), ...(variant?.modifierGroupPolicies ?? [])].map(
+        (policy) => [policy.modifierGroupId, policy],
+      ),
     );
-    return product.modifierGroupIds
+    const ids = [
+      ...product.modifierGroupIds,
+      ...(variant?.modifierGroupIds ?? []).filter((id) => !product.modifierGroupIds.includes(id)),
+    ];
+    return ids
       .map((id) => index.get(id))
       .filter((group): group is MenuModifierGroup => group !== undefined)
       .map((group) => {
@@ -1052,7 +1063,7 @@ export class NewOrderPage implements OnInit {
       this.pendingCombo.set({ product, variant, groups: combos });
       return;
     }
-    const groups = this.modifierGroupsFor(product);
+    const groups = this.modifierGroupsFor(product, variant);
     if (groups.length === 0 && product.commentPresets.length === 0) {
       this.addToBasket(product, variant, [], []);
       return;
@@ -1644,22 +1655,27 @@ export class NewOrderPage implements OnInit {
     this.submitError.set(null);
     this.unavailableItemIds.set([]);
     try {
-      const lines: PlaceOrderLine[] = this.basket().map((line) => ({
-        variantId: line.variantId,
-        quantity: line.quantity,
-        modifierOptionIds: flattenModifiers(line),
-        commentPresetCodes: line.commentPresetCodes,
-        customerNote: line.customerNote,
-        // ADR 0136: a combo goes as its container with the components picked; `quantity` counts combos.
-        ...(line.combo
-          ? {
-              comboPicks: line.combo.picks.map((pick) => ({
-                componentId: pick.componentId,
-                quantity: pick.pickQuantity,
-              })),
-            }
-          : {}),
-      }));
+      const lines: PlaceOrderLine[] = this.basket().map((line) => {
+        const nested = flattenNested(line);
+        return {
+          variantId: line.variantId,
+          quantity: line.quantity,
+          modifierOptionIds: flattenModifiers(line),
+          commentPresetCodes: line.commentPresetCodes,
+          customerNote: line.customerNote,
+          // ADR 0136: a second-level answer goes under the first-level option that asked for it.
+          ...(nested.length > 0 ? { nestedModifiers: nested } : {}),
+          // ADR 0136: a combo goes as its container with the components picked; `quantity` counts combos.
+          ...(line.combo
+            ? {
+                comboPicks: line.combo.picks.map((pick) => ({
+                  componentId: pick.componentId,
+                  quantity: pick.pickQuantity,
+                })),
+              }
+            : {}),
+        };
+      });
       const request: PlaceOrderRequest = {
         customerAccountId: customer.accountId,
         channelCode: this.channelCode(),
@@ -1908,13 +1924,30 @@ export class NewOrderPage implements OnInit {
   }
 }
 
-/** Repeats an option's id once per selected quantity — the exact shape `CartService#requireSelectionRules` counts against. */
+/**
+ * Repeats an option's id once per selected quantity — the exact shape `CartService#requireSelectionRules` counts against.
+ * A second-level answer (ADR 0136) is not one of them: it travels under its parent, see {@link flattenNested}.
+ */
 function flattenModifiers(line: BasketLine): readonly string[] {
   const ids: string[] = [];
   for (const modifier of line.modifiers) {
+    if (modifier.parentOptionId !== undefined) {
+      continue;
+    }
     for (let i = 0; i < modifier.quantity; i += 1) {
       ids.push(modifier.optionId);
     }
   }
   return ids;
+}
+
+/** ADR 0136: the second-level answers of a line, each naming the first-level option that asked for it. */
+function flattenNested(
+  line: BasketLine,
+): readonly { readonly parentOptionId: string; readonly optionId: string }[] {
+  return line.modifiers.flatMap((modifier) =>
+    modifier.parentOptionId === undefined
+      ? []
+      : [{ parentOptionId: modifier.parentOptionId, optionId: modifier.optionId }],
+  );
 }

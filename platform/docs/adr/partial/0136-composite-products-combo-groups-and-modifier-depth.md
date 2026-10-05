@@ -20,10 +20,18 @@
   through `KitchenAmendmentListener` (V0477); sales by combo container is
   `GET /reporting/combo-sales` over `reporting.fact_order_line`, which carries the grouping since
   V0478; duplicating a product copies its combo groups, headings and components (not their
-  prices). Not built: the console's add-lines amendment dialog cannot choose a combo's picks (the
-  server accepts them) and no console or storefront screen draws the second-level chooser or a
-  variant's own groups yet; the fiscal receipt-line builder per component and the Clopos wire
-  fields; modifiers on a combo container are not offered (a combo line takes none, by decision);
+  prices). The console's add-lines amendment dialog chooses a combo's picks with the composer's
+  own picker; product analytics has a Combos tab over `/reporting/combo-sales`; the New Order
+  composer, the item-modifier dialog and both storefronts' product pages and table pickers ask
+  for a portion's own groups and for the choices an option opens, and send the answers as
+  `nestedModifiers` under their parent. A storefront keys a line that carries such an answer by a
+  short hash (the cart stores a line key in sixty-four characters), so `CartLineResponse` now
+  says the first-level options the line holds (`modifierOptionIds`) and a line can be edited from
+  any device. Not built: the customer-facing second-level chooser takes one pick per option (the
+  composer's too; a repeat of a second-level option is accepted by the platform and drawn by
+  nobody), the operations reorder still starts from the product's plain state; the fiscal
+  receipt-line builder per component and the Clopos wire fields; modifiers on a combo container
+  are not offered (a combo line takes none, by decision);
   a variant may not apply by itself (`HIDDEN_AUTO_SELECT`) a group its product offers as a
   choice, because the publication says what a variant adds and overrides and not that it
   withdraws a product's group, so the customer would be asked for it and charged for it again

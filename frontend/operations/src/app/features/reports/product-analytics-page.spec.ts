@@ -510,9 +510,9 @@ describe('ProductAnalyticsPage', () => {
         '[data-testid="combo-sales-row"]',
       );
       expect(row?.textContent).toContain('Бизнес-ланч');
-      // 12 combos over 9 purchases on 8 orders: one purchase may be several combos.
+      // 12 combos on 8 orders: one purchase may be several combos.
       expect(row?.textContent).toMatch(/12/);
-      expect(row?.textContent).toMatch(/9/);
+      expect(row?.textContent).toMatch(/8/);
       expect(row?.textContent).toMatch(/460\s?000/);
     });
 
@@ -550,7 +550,11 @@ describe('ProductAnalyticsPage', () => {
         initialTab: 'combos',
       });
 
-      expect(text()).toContain('200');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="combo-sales-maybe-more"]',
+        ),
+      ).not.toBeNull();
       expect(
         (fixture.nativeElement as HTMLElement).querySelector('[data-testid="combo-sales-note"]'),
       ).not.toBeNull();

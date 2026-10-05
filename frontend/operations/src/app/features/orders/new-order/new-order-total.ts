@@ -41,6 +41,11 @@ export interface BasketModifierSelection {
   readonly quantity: number;
   /** Null means unpriced — see this module's own doc for why that is never treated as zero. */
   readonly amountMinor: number | null;
+  /**
+   * ADR 0136: set on a second-level answer, naming the first-level option that asked for it. It is
+   * priced like any modifier and listed with the others, but travels under its parent on the wire.
+   */
+  readonly parentOptionId?: string;
 }
 
 /** ADR 0136: one component picked inside a combo, with what one unit of it costs in this combo. */

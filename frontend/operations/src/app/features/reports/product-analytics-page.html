@@ -49,7 +49,7 @@
       (click)="selectTab('combos')"
       data-testid="products-tab-combos"
     >
-      {{ 'reports.products.tab.combos' | t }}
+      {{ 'orders.detail.lines.combo.caption' | t }}
     </button>
   </div>
 
@@ -181,15 +181,13 @@
         <table class="table" data-testid="combo-sales-table">
           <thead>
             <tr>
-              <th class="q-caption">{{ 'reports.products.combos.column.name' | t }}</th>
+              <th class="q-caption">{{ 'orders.detail.lines.combo.caption' | t }}</th>
               <th class="q-caption num">{{ 'reports.products.combos.column.sold' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.purchases' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.orders' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.gross' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.discount' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.net' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.delivery' | t }}</th>
-              <th class="q-caption num">{{ 'reports.products.combos.column.pickup' | t }}</th>
+              <th class="q-caption num">{{ 'reports.overview.tile.orders' | t }}</th>
+              <th class="q-caption num">{{ 'reports.overview.tile.revenue' | t }}</th>
+              <th class="q-caption num">{{ 'reports.orders.column.discount' | t }}</th>
+              <th class="q-caption num">{{ 'reports.filter.fulfilment.delivery' | t }}</th>
+              <th class="q-caption num">{{ 'reports.filter.fulfilment.pickup' | t }}</th>
               <th class="q-caption num">{{ 'reports.products.column.share' | t }}</th>
             </tr>
           </thead>
@@ -198,11 +196,9 @@
               <tr data-testid="combo-sales-row">
                 <td class="q-body-sm">{{ row.name }}</td>
                 <td class="q-body-sm q-tnum num">{{ formatCountValue(row.combosSold) }}</td>
-                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.purchases) }}</td>
                 <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orders) }}</td>
-                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.grossSom) }}</td>
-                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.discountSom) }}</td>
                 <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.netSom) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.discountSom) }}</td>
                 <td class="q-body-sm q-tnum num" data-testid="combo-sales-delivery">
                   {{ row.deliveryCombos === null ? '—' : formatCountValue(row.deliveryCombos) }}
                 </td>
@@ -213,14 +209,14 @@
               </tr>
             } @empty {
               <tr>
-                <td class="q-body-sm empty" colspan="10">{{ 'reports.empty.period' | t }}</td>
+                <td class="q-body-sm empty" colspan="8">{{ 'reports.empty.period' | t }}</td>
               </tr>
             }
           </tbody>
         </table>
         @if (comboMaybeMore()) {
-          <p class="q-caption">
-            {{ 'reports.products.combos.maybeMore' | t: { limit: comboLimit } }}
+          <p class="q-caption" data-testid="combo-sales-maybe-more">
+            {{ 'reports.products.maybeMore' | t }}
           </p>
         }
         <p class="q-caption dine-in-note" data-testid="combo-sales-note">

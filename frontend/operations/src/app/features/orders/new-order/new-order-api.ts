@@ -172,6 +172,10 @@ export interface MenuVariant {
   readonly orderable: boolean;
   readonly onSaleNow: boolean;
   readonly amountMinor: number | null;
+  /** ADR 0136: the groups this portion carries of its own, on top of its product's; absent or empty when it carries none. */
+  readonly modifierGroupIds?: readonly string[];
+  /** ADR 0136: the rules this portion holds the customer to for those groups, and for any of its product's it overrides; already the effective values. */
+  readonly modifierGroupPolicies?: readonly MenuModifierGroupPolicy[];
   /**
    * ADR 0137: what the variant physically is, as published. Absent for a fixed unit sold whole
    * (most of the menu). For a catchweight variant `amountMinor` is the price per
@@ -219,6 +223,12 @@ export interface MenuModifierOption {
   readonly amountMinor: number | null;
   /** What the customer reads, in the language the menu was asked in; absent when nobody named the option, and the code is shown. */
   readonly name?: string | null;
+  /**
+   * ADR 0136: the choices taking this option opens (it links a variant that carries groups of its
+   * own), with the rules in force for them. Each is also a group of the menu's `modifierGroups`.
+   * Absent or empty for an option that opens nothing.
+   */
+  readonly nestedGroups?: readonly MenuModifierGroupPolicy[];
 }
 
 // ------------------------------------------------------------ §5.6 placing it
@@ -235,6 +245,11 @@ export interface PlaceOrderLine {
   readonly modifierOptionIds: readonly string[];
   /** ADR 0136: set exactly when `variantId` is a combo's container; `quantity` then counts combos. */
   readonly comboPicks?: readonly ComboPick[];
+  /** ADR 0136: the second-level answers, each naming the first-level option that asked for it. */
+  readonly nestedModifiers?: readonly {
+    readonly parentOptionId: string;
+    readonly optionId: string;
+  }[];
   /** Row 2.1b: the coded presets the operator picked from the product's own offered subset. */
   readonly commentPresetCodes: readonly string[];
   readonly customerNote?: string | null;

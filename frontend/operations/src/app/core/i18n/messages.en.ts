@@ -294,8 +294,7 @@ export const messagesEn = {
   'orders.dialog.addLines.searchPlaceholder': 'Search the menu…',
   'orders.dialog.addLines.empty': 'No items selected yet.',
   'orders.dialog.addLines.remove': 'Remove',
-  'orders.dialog.addLines.combosUnavailable':
-    'The menu could not be read, so a combo cannot be added here. Try again.',
+  'orders.dialog.addLines.combosUnavailable': 'Menu unavailable — no combos here.',
 
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
@@ -5553,20 +5552,9 @@ export const messagesEn = {
   'reports.products.tab.sales': 'Sales',
   'reports.products.tab.abc': 'ABC',
   'reports.products.tab.xyz': 'XYZ',
-  'reports.products.tab.combos': 'Combos',
-  'reports.products.combos.column.name': 'Combo',
-  'reports.products.combos.column.sold': 'Combos sold',
-  'reports.products.combos.column.purchases': 'Purchases',
-  'reports.products.combos.column.orders': 'Orders',
-  'reports.products.combos.column.gross': 'Gross',
-  'reports.products.combos.column.discount': 'Discount',
-  'reports.products.combos.column.net': 'Net',
-  'reports.products.combos.column.delivery': 'Combos (delivery)',
-  'reports.products.combos.column.pickup': 'Combos (pickup)',
-  'reports.products.combos.maybeMore':
-    'There may be more combos than the {limit} shown — this is a bounded read, not a full export.',
+  'reports.products.combos.column.sold': 'Sold',
   'reports.products.combos.note':
-    'Completed orders only. A combo counts once per purchase, however many dishes it was made of, and the money is the sum over those dishes. A dish sold on its own is not a combo and stays under Sales.',
+    'Completed orders only. A dish sold on its own is not a combo — see Sales.',
   'reports.products.column.name': 'Product',
   'reports.products.column.category': 'Category',
   'reports.products.column.deliveryQty': 'Qty (delivery)',

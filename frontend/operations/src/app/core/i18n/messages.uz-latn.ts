@@ -282,8 +282,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.addLines.searchPlaceholder': 'Menyudan qidirish…',
   'orders.dialog.addLines.empty': 'Hali hech narsa tanlanmagan.',
   'orders.dialog.addLines.remove': 'Olib tashlash',
-  'orders.dialog.addLines.combosUnavailable':
-    'Menyuni oʻqib boʻlmadi, shuning uchun bu yerda kombo qoʻshib boʻlmaydi. Qayta urinib koʻring.',
+  'orders.dialog.addLines.combosUnavailable': 'Menyu mavjud emas — kombo qoʻshib boʻlmaydi.',
 
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
@@ -5570,20 +5569,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.tab.sales': 'Sotuvlar',
   'reports.products.tab.abc': 'ABC',
   'reports.products.tab.xyz': 'XYZ',
-  'reports.products.tab.combos': 'Kombolar',
-  'reports.products.combos.column.name': 'Kombo',
-  'reports.products.combos.column.sold': 'Sotilgan kombo',
-  'reports.products.combos.column.purchases': 'Xaridlar',
-  'reports.products.combos.column.orders': 'Buyurtmalar',
-  'reports.products.combos.column.gross': 'Chegirmasiz tushum',
-  'reports.products.combos.column.discount': 'Chegirmalar',
-  'reports.products.combos.column.net': 'Tushum',
-  'reports.products.combos.column.delivery': 'Kombo (yetkazib berish)',
-  'reports.products.combos.column.pickup': 'Kombo (olib ketish)',
-  'reports.products.combos.maybeMore':
-    'Koʻrsatilgan {limit} tadan koʻproq kombo boʻlishi mumkin — bu cheklangan tanlov, toʻliq yuklab olish emas.',
+  'reports.products.combos.column.sold': 'Sotilgan',
   'reports.products.combos.note':
-    'Faqat yakunlangan buyurtmalar. Kombo bir xarid uchun bir marta sanaladi, nechta taomdan iborat boʻlishidan qatʼi nazar, pul esa shu taomlar boʻyicha yigʻindi. Alohida sotilgan taom kombo emas va «Sotuvlar» da qoladi.',
+    'Faqat yakunlangan buyurtmalar. Alohida sotilgan taom kombo emas.',
   'reports.products.column.name': 'Mahsulot',
   'reports.products.column.category': 'Turkum',
   'reports.products.column.deliveryQty': 'Soni (yetkazib berish)',

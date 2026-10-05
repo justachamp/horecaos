@@ -80,9 +80,7 @@ interface ComboRow {
   readonly key: string;
   readonly name: string;
   readonly combosSold: number;
-  readonly purchases: number;
   readonly orders: number;
-  readonly grossSom: number;
   readonly discountSom: number;
   readonly netSom: number;
   readonly deliveryCombos: number | null;
@@ -200,7 +198,6 @@ export class ProductAnalyticsPage {
   protected readonly comboRows = signal<readonly ComboRow[]>([]);
   protected readonly comboProvenance = signal<ProvenanceResponse | null>(null);
   protected readonly comboMaybeMore = signal(false);
-  protected readonly comboLimit = COMBO_SALES_LIMIT;
 
   // ---------------------------------------------------------- ABC / XYZ
   protected readonly classificationState = signal<ClassificationState>('idle');
@@ -685,9 +682,7 @@ function toComboRow(row: ComboSalesRowResponse, totalNetSom: number): ComboRow {
     key: row.comboContainerVariantId,
     name: row.comboName,
     combosSold: row.combosSold,
-    purchases: row.purchases,
     orders: row.orders,
-    grossSom: row.totalGrossSom,
     discountSom: row.totalDiscountSom,
     netSom: row.totalNetSom,
     deliveryCombos: row.deliveryCombos,
