@@ -91,6 +91,7 @@ export interface CartLineResponse {
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
+  modifierOptionIds?: Array<string>;
   nestedModifiers?: Array<NestedModifierResponse>;
   quantity?: number;
   variantId?: string;

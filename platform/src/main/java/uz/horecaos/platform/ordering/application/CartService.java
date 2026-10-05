@@ -272,8 +272,9 @@ public class CartService {
                     for (CartLineRow line : lines) {
                         List<ComboPick> picks = comboPicksOf(line);
                         List<NestedModifier> nested = nestedModifiersOf(line);
-                        if (!picks.isEmpty() || !nested.isEmpty()) {
-                            selections.put(line.lineKey(), new LineSelections(picks, nested));
+                        List<UUID> modifiers = modifierIdsOf(line);
+                        if (!picks.isEmpty() || !nested.isEmpty() || !modifiers.isEmpty()) {
+                            selections.put(line.lineKey(), new LineSelections(picks, nested, modifiers));
                         }
                     }
                     return new CartView(cart, lines, selections);
@@ -1693,14 +1694,25 @@ public class CartService {
         }
     }
 
-    /** ADR 0136: the combo picks and second-level selections of one cart line, parsed. */
-    public record LineSelections(List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers) {
+    /**
+     * ADR 0136: the combo picks and second-level selections of one cart line, parsed, and the
+     * first-level options the line holds. A client keys a line by a short hash once it carries picks
+     * or a second-level choice, so the key no longer spells its options out; the cart says what they
+     * are, and any device that opens the cart can edit the line without guessing.
+     */
+    public record LineSelections(
+            List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers, List<UUID> modifierOptionIds) {
 
-        static final LineSelections NONE = new LineSelections(List.of(), List.of());
+        static final LineSelections NONE = new LineSelections(List.of(), List.of(), List.of());
 
         public LineSelections {
             comboPicks = List.copyOf(comboPicks);
             nestedModifiers = List.copyOf(nestedModifiers);
+            modifierOptionIds = List.copyOf(modifierOptionIds);
+        }
+
+        public LineSelections(List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers) {
+            this(comboPicks, nestedModifiers, List.of());
         }
     }
 

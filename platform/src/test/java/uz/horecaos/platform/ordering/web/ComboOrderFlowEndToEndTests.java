@@ -964,6 +964,49 @@ class ComboOrderFlowEndToEndTests {
     }
 
     @Test
+    @DisplayName("a cart line reads back the options it holds, so a line keyed by a hash can be edited from any device")
+    void aCartLineEchoesItsOptions() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        // A storefront keys a line that carries a second-level choice by a short hash of it: the
+        // key no longer spells the first-level options out, so the cart has to say what they are.
+        String hashedKey = saladVariant + "n0123456789abcd";
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                hashedKey,
+                saladVariant,
+                1,
+                List.of(chiliOption),
+                null,
+                List.of(),
+                List.of(new CartService.NestedModifier(chiliOption, hotOption)),
+                null));
+        put(cart, "plain", saladVariant, 1, List.of());
+
+        linkCustomerPrincipal();
+        MvcResult read = mvc.perform(get("/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND + "/carts/" + cart)
+                        .with(customerToken()))
+                .andReturn();
+        assertThat(read.getResponse().getStatus())
+                .as(read.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode lines = JSON.readTree(read.getResponse().getContentAsString()).get("lines");
+        JsonNode nested = lineWithKey(lines, hashedKey);
+        JsonNode plain = lineWithKey(lines, "plain");
+        assertThat(nested.get("modifierOptionIds")).hasSize(1);
+        assertThat(nested.get("modifierOptionIds").get(0).asText()).isEqualTo(chiliOption.toString());
+        assertThat(nested.get("nestedModifiers").get(0).get("optionId").asText())
+                .isEqualTo(hotOption.toString());
+        assertThat(plain.get("modifierOptionIds"))
+                .as("a line without options says so with an empty list, not by omission")
+                .isNotNull();
+        assertThat(plain.get("modifierOptionIds")).isEmpty();
+    }
+
+    @Test
     @DisplayName(
             "a variant's own override of a shared group is published, and the cart holds the customer to it for that size only")
     void aVariantLevelOverrideIsEnforcedByTheCart() throws Exception {
@@ -1841,6 +1884,15 @@ class ComboOrderFlowEndToEndTests {
     private UUID openCart(FulfillmentMode mode) {
         return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", mode, CUSTOMER, null))
                 .cartId();
+    }
+
+    private static JsonNode lineWithKey(JsonNode lines, String key) {
+        for (JsonNode line : lines) {
+            if (line.get("lineKey").asText().equals(key)) {
+                return line;
+            }
+        }
+        throw new AssertionError("no cart line keyed " + key + " in " + lines);
     }
 
     private void put(UUID cart, String key, UUID variant, int quantity, List<CartService.ComboPick> picks) {

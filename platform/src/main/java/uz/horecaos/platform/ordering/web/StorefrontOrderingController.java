@@ -1061,7 +1061,8 @@ public class StorefrontOrderingController {
                                     view.selectionsOf(line.lineKey()).nestedModifiers().stream()
                                             .map(one ->
                                                     new NestedModifierResponse(one.parentOptionId(), one.optionId()))
-                                            .toList()))
+                                            .toList(),
+                                    view.selectionsOf(line.lineKey()).modifierOptionIds()))
                             .toList(),
                     view.cart().appliedCouponCode(),
                     view.cart().paymentMethodCode());
@@ -1085,7 +1086,10 @@ public class StorefrontOrderingController {
             // ADR 0136: what was picked inside a combo, empty on every other line.
             List<ComboPickResponse> comboPicks,
             // ADR 0136: the second-level modifier selections, empty on most lines.
-            List<NestedModifierResponse> nestedModifiers) {}
+            List<NestedModifierResponse> nestedModifiers,
+            // The first-level modifier options the line holds, so a line keyed by a hash (a combo, or
+            // one with a second-level choice) can be edited from any device. Empty when it holds none.
+            List<UUID> modifierOptionIds) {}
 
     public record ComboPickResponse(UUID componentId, int quantity) {}
 

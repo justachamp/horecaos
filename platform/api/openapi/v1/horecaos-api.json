@@ -4266,6 +4266,13 @@
           "lineKey" : {
             "type" : "string"
           },
+          "modifierOptionIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "nestedModifiers" : {
             "items" : {
               "$ref" : "#/components/schemas/NestedModifierResponse"
