@@ -867,16 +867,6 @@ export const messagesRu: MessageCatalogue = {
     'SMS-шаблон ожидает одобрения шлюза.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS-шаблон отклонён шлюзом.',
   'settings.home.readiness.advisory': 'Рекомендация',
-  'settings.home.readiness.expiring': 'Скоро истекает',
-  'settings.home.readiness.count.blocking': 'Блокирует: {count}',
-  'settings.home.readiness.count.expiring': 'Скоро истекает: {count}',
-  'settings.home.readiness.count.advisory': 'Рекомендаций: {count}',
-  'settings.home.readiness.code.LOCATION_FORCED_CLOSED_NO_EXPIRY':
-    'Заведение закрыто вручную, и нигде не указано, когда оно откроется.',
-  'settings.home.readiness.code.LOCATION_NO_SALES_CHANNEL':
-    'Заведение не подключено ни к одному каналу продаж, поэтому клиенты до него не доберутся.',
-  'settings.home.readiness.code.LOCATION_FISCAL_ASSIGNMENT_ENDING':
-    'Фискальное назначение заведения скоро заканчивается, а следующего нет.',
   'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
     'У части позиций меню фискальная классификация заполнена не полностью (ИКПУ, код упаковки, единица или фискальное название).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
@@ -6654,8 +6644,6 @@ export const messagesRu: MessageCatalogue = {
   'inheritedField.trace.scope.BRAND': 'Бренд',
   'inheritedField.trace.scope.TENANT': 'Компания',
   'inheritedField.trace.scope.PLATFORM': 'Платформа',
-  'inheritedField.trace.changed': 'Версия {version} · {who} · {when}',
-  'inheritedField.trace.unknownActor': 'человек без записи в сотрудниках компании',
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'На главную',

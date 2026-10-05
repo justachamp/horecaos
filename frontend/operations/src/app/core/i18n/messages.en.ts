@@ -904,16 +904,6 @@ export const messagesEn = {
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
     'An SMS template was rejected by the gateway.',
   'settings.home.readiness.advisory': 'Advisory',
-  'settings.home.readiness.expiring': 'Expiring',
-  'settings.home.readiness.count.blocking': '{count} blocking',
-  'settings.home.readiness.count.expiring': '{count} expiring',
-  'settings.home.readiness.count.advisory': '{count} advisory',
-  'settings.home.readiness.code.LOCATION_FORCED_CLOSED_NO_EXPIRY':
-    'A location was closed by hand and nothing says when it reopens.',
-  'settings.home.readiness.code.LOCATION_NO_SALES_CHANNEL':
-    'A location is not switched on for any sales channel, so no customer can reach it.',
-  'settings.home.readiness.code.LOCATION_FISCAL_ASSIGNMENT_ENDING':
-    'A location’s fiscal assignment is about to end and no later one takes over.',
   'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
     'Some menu items still lack a complete fiscal classification (ИКПУ, package code, unit or fiscal name).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
@@ -6703,8 +6693,6 @@ export const messagesEn = {
   'inheritedField.trace.scope.BRAND': 'Brand',
   'inheritedField.trace.scope.TENANT': 'Company',
   'inheritedField.trace.scope.PLATFORM': 'Platform',
-  'inheritedField.trace.changed': 'Version {version} · {who} · {when}',
-  'inheritedField.trace.unknownActor': 'a person with no staff record here',
   // screen. `ui.*` rather than a per-component namespace because `q-denied-
   // state` and `q-locked-state` share both sentences.
 

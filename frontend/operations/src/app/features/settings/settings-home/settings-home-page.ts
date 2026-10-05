@@ -22,6 +22,7 @@ import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationResult } from './readiness-api';
+import { ReadinessMessageKey, readinessMessages } from './readiness-messages';
 import { TierCounts, countByTier, orderFindings, tierOf } from './readiness-order';
 import { SettingsNavGroup, visibleSettings } from '../settings-nav';
 import { CONFIGURATION_KEY_ROUTES, REFERENCE_LISTS } from '../settings-search-index';
@@ -73,13 +74,22 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
   LOCATION_NO_SERVICE_SCHEDULE: 'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE',
   INSTALLATION_SECRET_ROTATION_DUE: 'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE',
   MERCHANT_SECRET_ROTATION_DUE: 'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE',
-  // Batch 18: the forced-closed row the spec calls its most valuable, the branch no channel
-  // reaches, and the first member of the expiring tier.
-  LOCATION_FORCED_CLOSED_NO_EXPIRY: 'settings.home.readiness.code.LOCATION_FORCED_CLOSED_NO_EXPIRY',
-  LOCATION_NO_SALES_CHANNEL: 'settings.home.readiness.code.LOCATION_NO_SALES_CHANNEL',
-  LOCATION_FISCAL_ASSIGNMENT_ENDING:
-    'settings.home.readiness.code.LOCATION_FISCAL_ASSIGNMENT_ENDING',
 };
+
+/**
+ * Batch 18: the forced-closed row the spec calls its most valuable, the branch no channel reaches,
+ * and the first member of the expiring tier. Their sentences are local to this page
+ * (`readiness-messages.ts`), not in the shared catalogues.
+ */
+const LOCAL_READINESS_CODES = [
+  'LOCATION_FORCED_CLOSED_NO_EXPIRY',
+  'LOCATION_NO_SALES_CHANNEL',
+  'LOCATION_FISCAL_ASSIGNMENT_ENDING',
+] as const;
+
+function isLocalReadinessCode(code: string): code is (typeof LOCAL_READINESS_CODES)[number] {
+  return (LOCAL_READINESS_CODES as readonly string[]).includes(code);
+}
 
 /**
  * Where a finding deep-links to. A location-scoped finding always wins (more
@@ -393,8 +403,20 @@ export class SettingsHomePage {
   }
 
   protected readinessMessage(finding: ValidationResult): string {
-    const key = finding.errorCode ? READINESS_CODE_KEYS[finding.errorCode] : undefined;
-    return key ? this.i18n.t(key) : (finding.detail ?? finding.errorCode ?? '');
+    const code = finding.errorCode;
+    if (code !== null && isLocalReadinessCode(code)) {
+      return readinessMessages.text(this.i18n.locale(), code);
+    }
+    const key = code ? READINESS_CODE_KEYS[code] : undefined;
+    return key ? this.i18n.t(key) : (finding.detail ?? code ?? '');
+  }
+
+  /** A sentence of this page's own (`readiness-messages.ts`), in the operator's language. */
+  protected text(
+    key: ReadinessMessageKey,
+    values?: Readonly<Record<string, string | number>>,
+  ): string {
+    return readinessMessages.text(this.i18n.locale(), key, values);
   }
 
   /**
@@ -407,8 +429,9 @@ export class SettingsHomePage {
    * codes and names in it, never a secret or a personal value (ADR 0028).
    */
   protected readinessScope(finding: ValidationResult): string | null {
+    const code = finding.errorCode;
     const known =
-      finding.errorCode !== null && READINESS_CODE_KEYS[finding.errorCode] !== undefined;
+      code !== null && (isLocalReadinessCode(code) || READINESS_CODE_KEYS[code] !== undefined);
     return known ? finding.detail : null;
   }
 

@@ -881,16 +881,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
     'SMS shabloni shlyuz tomonidan rad etildi.',
   'settings.home.readiness.advisory': 'Tavsiya',
-  'settings.home.readiness.expiring': 'Tez orada tugaydi',
-  'settings.home.readiness.count.blocking': 'Toʻsiq: {count}',
-  'settings.home.readiness.count.expiring': 'Tez orada tugaydi: {count}',
-  'settings.home.readiness.count.advisory': 'Tavsiyalar: {count}',
-  'settings.home.readiness.code.LOCATION_FORCED_CLOSED_NO_EXPIRY':
-    'Filial qoʻlda yopilgan va qachon ochilishi hech qayerda koʻrsatilmagan.',
-  'settings.home.readiness.code.LOCATION_NO_SALES_CHANNEL':
-    'Filial birorta sotuv kanaliga ulanmagan, shuning uchun mijozlar unga yeta olmaydi.',
-  'settings.home.readiness.code.LOCATION_FISCAL_ASSIGNMENT_ENDING':
-    'Filialning fiskal biriktiruvi tez orada tugaydi, undan keyingisi yoʻq.',
   'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
     'Menyudagi ayrim pozitsiyalarda fiskal tasnif toʻliq emas (IKPU, qadoq kodi, birlik yoki fiskal nom).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
@@ -6717,8 +6707,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'inheritedField.trace.scope.BRAND': 'Brend',
   'inheritedField.trace.scope.TENANT': 'Kompaniya',
   'inheritedField.trace.scope.PLATFORM': 'Platforma',
-  'inheritedField.trace.changed': 'Versiya {version} · {who} · {when}',
-  'inheritedField.trace.unknownActor': 'bu kompaniyada xodim yozuvi yoʻq shaxs',
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'Bugungi kunga qaytish',

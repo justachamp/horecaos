@@ -1,13 +1,24 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import {
   ConfigurationResolutionView,
   ConfigurationScopeType,
   EditableScopeType,
+  ResolutionTraceLevel,
 } from '../../../core/api/configuration';
+import { I18n } from '../../../core/i18n/i18n';
 import { formatDateTime } from '../../../core/format/datetime';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { traceMessages } from './trace-messages';
 
 /** Same stand-in every other screen uses until the tenant's own zone reaches the console. */
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
@@ -46,6 +57,8 @@ export type InheritedFieldState =
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InheritedField {
+  private readonly i18n = inject(I18n);
+
   readonly label = input.required<string>();
   readonly resolution = input<ConfigurationResolutionView | null>(null);
   readonly loading = input(false);
@@ -158,9 +171,16 @@ export class InheritedField {
     this.popoverOpen.set(false);
   }
 
-  /** `DD.MM HH:mm` in the tenant's zone, or an em dash for a row that records no time. */
-  protected changedAtLabel(iso: string | null | undefined): string {
-    return iso ? formatDateTime(new Date(iso), PLACEHOLDER_TIME_ZONE) : '—';
+  /** «Version 3 · A. Karimov · 30.09 14:15» -- the version, who changed it, and when. */
+  protected traceWho(level: ResolutionTraceLevel): string {
+    const locale = this.i18n.locale();
+    return traceMessages.text(locale, 'changed', {
+      version: level.version ?? 0,
+      who: level.changedByName || traceMessages.text(locale, 'unknownActor'),
+      when: level.changedAt
+        ? formatDateTime(new Date(level.changedAt), PLACEHOLDER_TIME_ZONE)
+        : '—',
+    });
   }
 
   protected outcomeKey(outcome: string): MessageKey {

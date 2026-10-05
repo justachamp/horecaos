@@ -23,17 +23,17 @@
         <p class="readiness__summary q-caption" data-testid="readiness-summary">
           @if (summary().blocking > 0) {
             <span class="readiness__count readiness__count--blocking">{{
-              'settings.home.readiness.count.blocking' | t: { count: summary().blocking }
+              text('count.blocking', { count: summary().blocking })
             }}</span>
           }
           @if (summary().expiring > 0) {
             <span class="readiness__count readiness__count--expiring">{{
-              'settings.home.readiness.count.expiring' | t: { count: summary().expiring }
+              text('count.expiring', { count: summary().expiring })
             }}</span>
           }
           @if (summary().advisory > 0) {
             <span class="readiness__count readiness__count--advisory">{{
-              'settings.home.readiness.count.advisory' | t: { count: summary().advisory }
+              text('count.advisory', { count: summary().advisory })
             }}</span>
           }
         </p>
@@ -50,9 +50,7 @@
                 <span>{{ readinessMessage(row.finding) }}</span>
               }
               @if (isExpiring(row.finding)) {
-                <span class="readiness__expiring q-caption">{{
-                  'settings.home.readiness.expiring' | t
-                }}</span>
+                <span class="readiness__expiring q-caption">{{ text('expiring') }}</span>
               }
               @if (isAdvisory(row.finding)) {
                 <span class="readiness__advisory q-caption">{{
@@ -103,17 +101,17 @@
             <span class="tile__numbers q-caption" data-testid="tile-numbers">
               @if (counts.blocking > 0) {
                 <span class="tile__number tile__number--blocking">{{
-                  'settings.home.readiness.count.blocking' | t: { count: counts.blocking }
+                  text('count.blocking', { count: counts.blocking })
                 }}</span>
               }
               @if (counts.expiring > 0) {
                 <span class="tile__number tile__number--expiring">{{
-                  'settings.home.readiness.count.expiring' | t: { count: counts.expiring }
+                  text('count.expiring', { count: counts.expiring })
                 }}</span>
               }
               @if (counts.advisory > 0) {
                 <span class="tile__number tile__number--advisory">{{
-                  'settings.home.readiness.count.advisory' | t: { count: counts.advisory }
+                  text('count.advisory', { count: counts.advisory })
                 }}</span>
               }
             </span>
