@@ -558,3 +558,207 @@ describe('MenuService: composite products (ADR 0136)', () => {
     expect(service.optionLabels().get('o-bag')).toBe('BAG');
   });
 });
+
+describe("MenuService: a portion's own groups and the choices an option opens (ADR 0136)", () => {
+  const variant = (id: string, extra: Record<string, unknown> = {}) => ({
+    variantId: id,
+    sku: null,
+    unitCode: id,
+    isDefault: false,
+    orderable: true,
+    onSaleNow: true,
+    amountMinor: 10_000,
+    remainingQuantity: null,
+    ...extra,
+  });
+
+  const group = (id: string, extra: Record<string, unknown> = {}) => ({
+    modifierGroupId: id,
+    code: id.toUpperCase(),
+    name: id,
+    required: false,
+    minimumSelections: 0,
+    maximumSelections: 3,
+    allowSameOptionMultipleTimes: false,
+    options: [
+      { optionId: `${id}-a`, code: 'A', maximumQuantity: 1, amountMinor: 0, name: 'A' },
+      { optionId: `${id}-b`, code: 'B', maximumQuantity: 1, amountMinor: 500, name: 'B' },
+    ],
+    ...extra,
+  });
+
+  const product = (extra: Record<string, unknown>) => ({
+    productId: 'p-fries',
+    code: 'FRIES',
+    name: 'Fries',
+    description: null,
+    mediaAssetIds: [],
+    imageUrls: [],
+    variants: [],
+    modifierGroupIds: [],
+    ...extra,
+  });
+
+  it("gives a portion that carries groups of its own the whole list it is offered: the product's, then its own", async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        product({
+          modifierGroupIds: ['g-salt'],
+          variants: [
+            variant('v-small'),
+            variant('v-large', {
+              modifierGroupIds: ['g-dip'],
+              modifierGroupPolicies: [
+                {
+                  modifierGroupId: 'g-dip',
+                  required: true,
+                  minimumSelections: 1,
+                  maximumSelections: 1,
+                },
+              ],
+            }),
+          ],
+        }),
+      ],
+      modifierGroups: [group('g-salt'), group('g-dip')],
+    } satisfies PublishedMenu);
+
+    const item = await service.item('p-fries', 'uz');
+    const small = item?.variants.find((v) => v.id === 'v-small');
+    const large = item?.variants.find((v) => v.id === 'v-large');
+
+    expect(small?.modifierGroups).toBeUndefined();
+    expect(item?.modifierGroups.map((g) => g.id)).toEqual(['g-salt']);
+    expect(
+      large?.modifierGroups?.map((g) => [
+        g.id,
+        g.required,
+        g.minimumSelections,
+        g.maximumSelections,
+      ]),
+    ).toEqual([
+      ['g-salt', false, 0, 3],
+      ['g-dip', true, 1, 1],
+    ]);
+  });
+
+  it("lays a portion's row for a group the product also attaches over the product's, whole", async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        product({
+          modifierGroupIds: ['g-salt'],
+          modifierGroupPolicies: [
+            {
+              modifierGroupId: 'g-salt',
+              required: true,
+              minimumSelections: 1,
+              maximumSelections: 1,
+            },
+          ],
+          variants: [
+            variant('v-small'),
+            variant('v-large', {
+              modifierGroupPolicies: [
+                {
+                  modifierGroupId: 'g-salt',
+                  required: false,
+                  minimumSelections: 0,
+                  maximumSelections: 2,
+                },
+              ],
+            }),
+          ],
+        }),
+      ],
+      modifierGroups: [group('g-salt')],
+    } satisfies PublishedMenu);
+
+    const item = await service.item('p-fries', 'uz');
+
+    expect(item?.modifierGroups[0]).toMatchObject({ required: true, maximumSelections: 1 });
+    expect(item?.variants.find((v) => v.id === 'v-large')?.modifierGroups?.[0]).toMatchObject({
+      required: false,
+      minimumSelections: 0,
+      maximumSelections: 2,
+    });
+  });
+
+  it('resolves the choices an option opens from the menu’s groups, with the rules published for them, one level deep', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [product({ modifierGroupIds: ['g-sauce'], variants: [variant('v-1')] })],
+      modifierGroups: [
+        group('g-sauce', {
+          options: [
+            {
+              optionId: 'o-chili',
+              code: 'CHILI',
+              maximumQuantity: 1,
+              amountMinor: 0,
+              name: 'Chili',
+              nestedGroups: [
+                {
+                  modifierGroupId: 'g-heat',
+                  required: true,
+                  minimumSelections: 1,
+                  maximumSelections: 1,
+                },
+                {
+                  modifierGroupId: 'g-gone',
+                  required: false,
+                  minimumSelections: 0,
+                  maximumSelections: 1,
+                },
+              ],
+            },
+            {
+              optionId: 'o-garlic',
+              code: 'GARLIC',
+              maximumQuantity: 1,
+              amountMinor: 0,
+              name: 'Garlic',
+            },
+          ],
+        }),
+        group('g-heat', {
+          options: [
+            { optionId: 'o-hot', code: 'HOT', maximumQuantity: 1, amountMinor: 0, name: 'Hot' },
+            {
+              optionId: 'o-mild',
+              code: 'MILD',
+              maximumQuantity: 1,
+              amountMinor: 0,
+              name: 'Mild',
+              nestedGroups: [
+                {
+                  modifierGroupId: 'g-sauce',
+                  required: false,
+                  minimumSelections: 0,
+                  maximumSelections: 1,
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+    } satisfies PublishedMenu);
+
+    const item = await service.item('p-fries', 'uz');
+    const [chili, garlic] = item?.modifierGroups[0].options ?? [];
+
+    expect(garlic.nestedGroups).toBeUndefined();
+    expect(chili.nestedGroups?.map((g) => [g.id, g.required, g.minimumSelections])).toEqual([
+      ['g-heat', true, 1],
+    ]);
+    expect(chili.nestedGroups?.[0].options.map((o) => o.label)).toEqual(['Hot', 'Mild']);
+    expect(
+      chili.nestedGroups?.[0].options.every((o) => o.nestedGroups === undefined),
+      'a third level is never drawn',
+    ).toBe(true);
+  });
+});

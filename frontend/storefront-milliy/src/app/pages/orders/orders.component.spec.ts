@@ -240,6 +240,39 @@ describe("OrdersComponent.repeat -- driven by the platform's plan (ADR 0074)", (
     expect(cart.add).toHaveBeenCalledWith('v2', 1, undefined, []);
   });
 
+  it('repeats a line with a second-level choice with its answers under their parent (ADR 0136)', async () => {
+    const nested = [{ parentOptionId: 'o-chili', optionId: 'o-hot' }];
+    const { fixture, cart } = await setUp((orders) => {
+      orders.getOrders.mockReturnValue(of([completed()]));
+      orders.getReorderPlan.mockReturnValue(
+        of(
+          plan('READY', [
+            planLine({
+              lineNumber: 1,
+              variantId: 'v1',
+              quantity: 2,
+              modifierOptionIds: ['o-chili', 'o-garlic'],
+              nestedModifiers: nested,
+            }),
+          ]),
+        ),
+      );
+    });
+
+    (fixture.nativeElement.querySelector('.repeat-btn') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cart.add).toHaveBeenCalledWith(
+      'v1',
+      2,
+      undefined,
+      ['o-chili', 'o-garlic'],
+      undefined,
+      nested,
+    );
+  });
+
   it('shows no button at all when the plan is PARTIAL', async () => {
     const { fixture, cart } = await setUp((orders) => {
       orders.getOrders.mockReturnValue(of([completed()]));

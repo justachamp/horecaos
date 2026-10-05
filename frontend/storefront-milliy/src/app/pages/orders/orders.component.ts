@@ -255,7 +255,22 @@ export class OrdersComponent implements OnInit {
                 line.modifierOptionIds,
                 line.comboPicks,
               )
-            : await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
+            : // ... and a line with a second-level choice with its answers under their parent.
+              line.nestedModifiers && line.nestedModifiers.length > 0
+              ? await this.cart.add(
+                  line.variantId,
+                  line.quantity,
+                  undefined,
+                  line.modifierOptionIds,
+                  undefined,
+                  line.nestedModifiers,
+                )
+              : await this.cart.add(
+                  line.variantId,
+                  line.quantity,
+                  undefined,
+                  line.modifierOptionIds,
+                );
         if (!added) {
           this.repeatMessage.set({ key: this.cart.errorKey() ?? 'errors.generic' });
           return;

@@ -32,13 +32,20 @@ import {
 } from '../../utils/combo-selection';
 import {
   chosenOptionIds,
+  groupsForVariant,
   minimumSelections,
+  nestedOnTheWire,
+  pruneNested,
   selectionRule,
   toggleOption,
   unsatisfiedGroups,
+  unsatisfiedNested,
   type ModifierChoices,
+  type NestedChoices,
+  type NestedModifierWire,
 } from '../../utils/modifier-selection';
 import { ComboChoicesComponent } from '../combo-choices/combo-choices.component';
+import { NestedChoicesComponent } from '../nested-choices/nested-choices.component';
 import { formatQuantity, initialQuantity, portionStep } from '../../utils/physical';
 import { TranslatePipe } from '../translate/translate.pipe';
 
@@ -50,6 +57,8 @@ export interface ModifierSelection {
   readonly modifierOptionIds: readonly string[];
   /** ADR 0136: what was picked inside a combo, in the groups' own order; absent for a dish that is no combo. */
   readonly comboPicks?: readonly ComboPickWire[];
+  /** ADR 0136: the second-level answers, each under the first-level option that asked; absent when there are none. */
+  readonly nestedModifiers?: readonly NestedModifierWire[];
 }
 
 /**
@@ -67,7 +76,7 @@ export interface ModifierSelection {
 @Component({
   selector: 'app-modifier-picker',
   standalone: true,
-  imports: [ComboChoicesComponent, TranslatePipe],
+  imports: [ComboChoicesComponent, NestedChoicesComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './modifier-picker.component.html',
   styleUrl: './modifier-picker.component.scss',
@@ -89,7 +98,19 @@ export class ModifierPickerComponent {
   readonly confirmed = output<ModifierSelection>();
   readonly dismissed = output<void>();
 
-  protected readonly choices = signal<ModifierChoices>({});
+  /** What is chosen at the first level; starts again if the sheet is pointed at another portion, which is offered other groups. */
+  protected readonly choices = linkedSignal<ModifierChoices>(() => {
+    this.variantId();
+    return {};
+  });
+
+  /** ADR 0136, second level: what is chosen under the options that open choices of their own. */
+  protected readonly nestedChoices = linkedSignal<NestedChoices>(() => {
+    this.variantId();
+    return {};
+  });
+
+  protected readonly nestedTouched = signal(false);
 
   /** ADR 0136: the choices a combo asks for, empty on a dish that is no combo. */
   protected readonly comboGroups = computed<readonly MenuItemComboGroup[]>(
@@ -117,9 +138,12 @@ export class ModifierPickerComponent {
     this.comboGroups().some((group) => !comboGroupCanBeSatisfied(group)),
   );
 
-  /** The modifier groups the sheet asks about: none on a combo, whose choices are its components. */
+  /**
+   * The modifier groups the sheet asks about: the portion's own list when the menu published one
+   * (ADR 0136), otherwise the product's; none on a combo, whose choices are its components.
+   */
   protected readonly modifierGroups = computed<readonly MenuItemModifierGroup[]>(() =>
-    this.isCombo() ? [] : this.item().modifierGroups,
+    this.isCombo() ? [] : groupsForVariant(this.item(), this.variantId()),
   );
 
   /** What one complete combo costs, or null while a picked component has no price. */
@@ -174,14 +198,23 @@ export class ModifierPickerComponent {
     unsatisfiedGroups(this.modifierGroups(), this.choices()),
   );
 
+  /** The second-level groups still to be answered, under the options that asked. */
+  protected readonly nestedMissing = computed(() =>
+    unsatisfiedNested(this.modifierGroups(), this.choices(), this.nestedChoices()),
+  );
+
   protected readonly missingNames = computed(() =>
-    [...this.missing(), ...this.comboMissing()].map((group) => group.name).join(', '),
+    [
+      ...[...this.missing(), ...this.comboMissing()].map((group) => group.name),
+      ...this.nestedMissing().map((entry) => `${entry.parent.label}: ${entry.group.name}`),
+    ].join(', '),
   );
 
   protected readonly canConfirm = computed(
     () =>
       this.variant() !== null &&
       this.missing().length === 0 &&
+      this.nestedMissing().length === 0 &&
       comboValid(this.comboGroups(), this.comboPicks()) &&
       !this.comboUnavailable() &&
       !this.busy(),
@@ -200,7 +233,15 @@ export class ModifierPickerComponent {
   }
 
   protected toggle(group: MenuItemModifierGroup, optionId: string): void {
-    this.choices.update((current) => toggleOption(current, group, optionId));
+    const next = toggleOption(this.choices(), group, optionId);
+    this.choices.set(next);
+    // An option taken back takes its answers with it, so nothing stale is sent.
+    this.nestedChoices.update((all) => pruneNested(this.modifierGroups(), next, all));
+  }
+
+  protected setNestedChoices(next: NestedChoices): void {
+    this.nestedChoices.set(next);
+    this.nestedTouched.set(true);
   }
 
   /** What the group asks of the guest; see {@link selectionRule}. */
@@ -225,11 +266,17 @@ export class ModifierPickerComponent {
       return;
     }
     const comboPicks = picksOnTheWire(this.comboGroups(), this.comboPicks());
+    const nestedModifiers = nestedOnTheWire(
+      this.modifierGroups(),
+      this.choices(),
+      this.nestedChoices(),
+    );
     this.confirmed.emit({
       variantId: variant.id,
       quantity: this.quantity(),
       modifierOptionIds: chosenOptionIds(this.modifierGroups(), this.choices()),
       ...(comboPicks.length > 0 ? { comboPicks } : {}),
+      ...(nestedModifiers.length > 0 ? { nestedModifiers } : {}),
     });
   }
 

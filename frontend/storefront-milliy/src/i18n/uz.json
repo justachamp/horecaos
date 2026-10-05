@@ -513,6 +513,9 @@
     "unavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
     "total": "Kombo narxi: {{price}}"
   },
+  "nested": {
+    "for": "«{{option}}» uchun"
+  },
   "physical": {
     "nutritionTitle": "Ozuqaviy qiymati",
     "nutritionPer100g": "100 g uchun",

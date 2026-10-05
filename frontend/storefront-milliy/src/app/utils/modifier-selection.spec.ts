@@ -1,13 +1,26 @@
-import type { MenuItemModifierGroup, MenuItemModifierOption } from '../types/home.types';
+import type {
+  MenuItem,
+  MenuItemModifierGroup,
+  MenuItemModifierOption,
+  MenuItemVariant,
+} from '../types/home.types';
 import {
   canBeSatisfied,
   chosenOptionIds,
+  groupsForVariant,
   isMandatory,
   maximumSelections,
   minimumSelections,
+  nestedKeyHash,
+  nestedOnTheWire,
+  openedGroups,
+  pruneNested,
+  toggleNested,
   toggleOption,
   unsatisfiedGroups,
   unsatisfiedGroupsFor,
+  unsatisfiedNested,
+  unsatisfiedNestedFor,
 } from './modifier-selection';
 
 function option(id: string): MenuItemModifierOption {
@@ -141,5 +154,172 @@ describe('modifier selection rules', () => {
       'c',
     ]);
     expect(chosenOptionIds([first, second], {})).toEqual([]);
+  });
+});
+
+/**
+ * ADR 0136: the second level. A first-level option can link a variant that carries choices of its
+ * own ("Pizza halves" opens "Which pizza?"); taking the option asks them, and the answers travel
+ * under it as `{ parentOptionId, optionId }`.
+ */
+describe('second-level choices', () => {
+  const heat = group({
+    id: 'heat',
+    name: 'Heat',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    options: [option('mild'), option('hot')],
+  });
+  const extras = group({
+    id: 'extras',
+    name: 'Extras',
+    required: false,
+    minimumSelections: 0,
+    maximumSelections: 2,
+    options: [option('cheese'), option('bacon'), option('egg')],
+  });
+  const chili: MenuItemModifierOption = { ...option('chili'), nestedGroups: [heat, extras] };
+  const garlic = option('garlic');
+  const sauces = group({ id: 'sauces', name: 'Sauces', options: [chili, garlic] });
+
+  describe('groupsForVariant', () => {
+    function item(
+      variants: Partial<MenuItemVariant>[],
+    ): Pick<MenuItem, 'modifierGroups' | 'variants'> {
+      return {
+        modifierGroups: [sauces],
+        variants: variants.map((v, i) => ({
+          id: `v${i}`,
+          name: `v${i}`,
+          active: true,
+          onSaleNow: true,
+          preparation_time: 0,
+          price: 0,
+          price_without_discount: 0,
+          remainingQuantity: null,
+          ...v,
+        })),
+      };
+    }
+
+    it("falls back to the product's groups for a portion that published none of its own", () => {
+      expect(groupsForVariant(item([{}, {}]), 'v1')).toEqual([sauces]);
+    });
+
+    it("uses the portion's own complete list when the menu published one", () => {
+      const strict = { ...sauces, required: true, minimumSelections: 1 };
+      const large = item([{}, { modifierGroups: [strict, extras] }]);
+      expect(groupsForVariant(large, 'v1')).toEqual([strict, extras]);
+      expect(groupsForVariant(large, 'v0')).toEqual([sauces]);
+    });
+
+    it('knows no portion by an unknown or missing id, and answers with the shared groups', () => {
+      expect(groupsForVariant(item([{}]), 'nope')).toEqual([sauces]);
+      expect(groupsForVariant(item([{}]), null)).toEqual([sauces]);
+    });
+  });
+
+  describe('openedGroups', () => {
+    it('lists only the chosen options that open choices, in the dish order', () => {
+      expect(openedGroups([sauces], {})).toEqual([]);
+      expect(openedGroups([sauces], { sauces: ['garlic'] })).toEqual([]);
+      expect(openedGroups([sauces], { sauces: ['garlic', 'chili'] })).toEqual([
+        { parent: chili, groups: [heat, extras] },
+      ]);
+    });
+  });
+
+  describe('toggleNested', () => {
+    it('chooses inside the parent, replacing in a one-choice group and refusing past a ceiling', () => {
+      let nested = toggleNested({}, 'chili', heat, 'mild');
+      expect(nested).toEqual({ chili: { heat: ['mild'] } });
+      nested = toggleNested(nested, 'chili', heat, 'hot');
+      expect(nested).toEqual({ chili: { heat: ['hot'] } });
+      nested = toggleNested(nested, 'chili', extras, 'cheese');
+      nested = toggleNested(nested, 'chili', extras, 'bacon');
+      const full = nested;
+      expect(toggleNested(nested, 'chili', extras, 'egg')).toBe(full);
+      expect(toggleNested(nested, 'chili', extras, 'cheese')).toEqual({
+        chili: { heat: ['hot'], extras: ['bacon'] },
+      });
+    });
+  });
+
+  describe('pruneNested', () => {
+    it('forgets the answers under an option that is no longer chosen', () => {
+      const nested = { chili: { heat: ['hot'] } };
+      expect(pruneNested([sauces], { sauces: ['chili'] }, nested)).toEqual(nested);
+      expect(pruneNested([sauces], { sauces: ['garlic'] }, nested)).toEqual({});
+      expect(pruneNested([sauces], {}, nested)).toEqual({});
+    });
+  });
+
+  describe('unsatisfiedNested', () => {
+    it('asks a chosen option for its required group and ignores an option nobody chose', () => {
+      expect(unsatisfiedNested([sauces], { sauces: ['garlic'] }, {})).toEqual([]);
+      const missing = unsatisfiedNested([sauces], { sauces: ['chili'] }, {});
+      expect(missing.map((entry) => [entry.parent.id, entry.group.id])).toEqual([
+        ['chili', 'heat'],
+      ]);
+      expect(
+        unsatisfiedNested([sauces], { sauces: ['chili'] }, { chili: { heat: ['hot'] } }),
+      ).toEqual([]);
+    });
+
+    it('also holds a group over its ceiling to account', () => {
+      const over = unsatisfiedNested(
+        [sauces],
+        { sauces: ['chili'] },
+        { chili: { heat: ['hot'], extras: ['cheese', 'bacon', 'egg'] } },
+      );
+      expect(over.map((entry) => entry.group.id)).toEqual(['extras']);
+    });
+  });
+
+  describe('nestedOnTheWire', () => {
+    it("lists the answers under their parent in the dish's own order", () => {
+      expect(
+        nestedOnTheWire(
+          [sauces],
+          { sauces: ['chili'] },
+          { chili: { extras: ['bacon', 'cheese'], heat: ['hot'] }, gone: { x: ['y'] } },
+        ),
+      ).toEqual([
+        { parentOptionId: 'chili', optionId: 'hot' },
+        { parentOptionId: 'chili', optionId: 'bacon' },
+        { parentOptionId: 'chili', optionId: 'cheese' },
+      ]);
+    });
+  });
+
+  describe('unsatisfiedNestedFor', () => {
+    it('checks a cart line as it travels: option ids and parent/option pairs', () => {
+      expect(unsatisfiedNestedFor([sauces], ['chili'], []).map((entry) => entry.group.id)).toEqual([
+        'heat',
+      ]);
+      expect(
+        unsatisfiedNestedFor([sauces], ['chili'], [{ parentOptionId: 'chili', optionId: 'hot' }]),
+      ).toEqual([]);
+      expect(unsatisfiedNestedFor([sauces], ['garlic'], [])).toEqual([]);
+    });
+  });
+
+  describe('nestedKeyHash', () => {
+    const pair = { parentOptionId: 'chili', optionId: 'hot' };
+
+    it('is the same for the same choice whatever order it was made in', () => {
+      const other = { parentOptionId: 'chili', optionId: 'cheese' };
+      expect(nestedKeyHash(['b', 'a'], [pair, other])).toBe(
+        nestedKeyHash(['a', 'b'], [other, pair]),
+      );
+    });
+
+    it('differs when the answer, the parent or the first-level choice differs', () => {
+      const base = nestedKeyHash(['chili'], [pair]);
+      expect(nestedKeyHash(['chili'], [{ ...pair, optionId: 'mild' }])).not.toBe(base);
+      expect(nestedKeyHash(['chili', 'garlic'], [pair])).not.toBe(base);
+      expect(nestedKeyHash(['chili'], [{ ...pair, parentOptionId: 'other' }])).not.toBe(base);
+    });
   });
 });

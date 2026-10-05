@@ -89,6 +89,18 @@
       </section>
     }
 
+    @if (modifierGroups().length > 0) {
+      <app-nested-choices
+        data-testid="picker-nested"
+        [groups]="modifierGroups()"
+        [choices]="choices()"
+        [nested]="nestedChoices()"
+        [currency]="currency()"
+        [showUnmet]="nestedTouched()"
+        (nestedChange)="setNestedChoices($event)"
+      />
+    }
+
     <div class="qty">
       <span class="qty__label">{{ 'details.quantity' | t }}</span>
       <span class="qty__controls">
@@ -117,7 +129,7 @@
   </div>
 
   <footer class="picker__foot">
-    @if (missing().length > 0 || comboMissing().length > 0) {
+    @if (missing().length > 0 || comboMissing().length > 0 || nestedMissing().length > 0) {
       <p class="picker__hint" role="status" data-testid="modifier-picker-missing">
         {{ 'dineIn.pickerMissing' | t: { groups: missingNames() } }}
       </p>

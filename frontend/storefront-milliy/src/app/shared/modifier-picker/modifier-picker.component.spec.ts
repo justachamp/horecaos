@@ -647,3 +647,75 @@ describe('ModifierPickerComponent -- portions (ADR 0137)', () => {
     expect(view.q('modifier-picker-quantity')?.textContent?.trim()).toBe('2');
   });
 });
+
+describe('ModifierPickerComponent -- a portion’s own groups and second-level choices (ADR 0136)', () => {
+  const heat = group({
+    id: 'heat',
+    name: 'Heat',
+    options: [option('hot'), option('mild')],
+  });
+  const sauces = group({
+    id: 'sauces',
+    name: 'Sauces',
+    required: false,
+    minimumSelections: 0,
+    maximumSelections: 2,
+    options: [option('chili', { nestedGroups: [heat] }), option('garlic')],
+  });
+
+  it('asks the portion the picker is opened for the groups that portion is offered', () => {
+    const dips = group({ id: 'dips', name: 'Dips', options: [option('ketchup')] });
+    const view = render(
+      dish([], [variant({ id: 'v1' }), variant({ id: 'v2', modifierGroups: [dips] })]),
+    );
+    expect(view.all('modifier-group')).toHaveLength(0);
+
+    view.state.variantId.set('v2');
+    view.fixture.detectChanges();
+
+    expect(view.all('modifier-group')).toHaveLength(1);
+    expect(view.addDisabled()).toBe(true);
+    view.tap('KETCHUP');
+    view.add();
+    expect(view.state.confirmed[0]).toMatchObject({
+      variantId: 'v2',
+      modifierOptionIds: ['ketchup'],
+    });
+  });
+
+  it('asks the choices of a taken option, holds the add back until they are answered, and sends them under it', () => {
+    const view = render(dish([sauces]));
+
+    expect(view.addDisabled()).toBe(false);
+    view.tap('CHILI');
+    expect(view.all('nested-group')).toHaveLength(1);
+    expect(view.addDisabled()).toBe(true);
+    expect(view.q('modifier-picker-missing')?.textContent).toContain('Heat');
+
+    const hot = view.all('nested-option').find((entry) => entry.textContent?.includes('HOT'));
+    hot!.click();
+    view.fixture.detectChanges();
+    expect(view.addDisabled()).toBe(false);
+
+    view.add();
+
+    expect(view.state.confirmed).toHaveLength(1);
+    expect(view.state.confirmed[0]).toMatchObject({
+      modifierOptionIds: ['chili'],
+      nestedModifiers: [{ parentOptionId: 'chili', optionId: 'hot' }],
+    });
+  });
+
+  it('forgets the answers under an option that is taken back', () => {
+    const view = render(dish([sauces]));
+
+    view.tap('CHILI');
+    view.all('nested-option')[0].click();
+    view.fixture.detectChanges();
+    view.tap('CHILI');
+    view.add();
+
+    expect(view.state.confirmed[0].modifierOptionIds).toEqual([]);
+    expect(view.state.confirmed[0].nestedModifiers).toBeUndefined();
+  });
+});

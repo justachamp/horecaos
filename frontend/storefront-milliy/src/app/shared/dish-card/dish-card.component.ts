@@ -5,7 +5,7 @@ import { RouterLink } from '@angular/router';
 import { formatMoney, money } from '../../core/money/money';
 import { LangService } from '../../services/lang.service';
 import { TranslateService } from '../../services/translate.service';
-import type { MenuItem, MenuItemVariant } from '../../types/home.types';
+import type { MenuItem, MenuItemModifierGroup, MenuItemVariant } from '../../types/home.types';
 import {
   itemAvailability,
   preferredSellableVariant,
@@ -13,7 +13,7 @@ import {
   type ItemAvailability,
 } from '../../utils/item-availability';
 import { canBeSatisfied as comboGroupCanBeSatisfied } from '../../utils/combo-selection';
-import { canBeSatisfied, isMandatory } from '../../utils/modifier-selection';
+import { canBeSatisfied, groupsForVariant, isMandatory } from '../../utils/modifier-selection';
 import {
   formatQuantity,
   formatWeight,
@@ -133,29 +133,40 @@ export class DishCardComponent {
    */
   protected readonly isCombo = computed(() => (this.item().comboGroups ?? []).length > 0);
 
-  /** The groups the guest must choose from before this dish can be ordered; none on a combo, whose choices are its components. */
-  private readonly mandatoryGroups = computed(() =>
-    this.isCombo() ? [] : this.item().modifierGroups.filter(isMandatory),
-  );
+  /**
+   * The groups the guest must choose from before this portion can be ordered: the portion's own
+   * list when the menu published one (ADR 0136), otherwise the product's; none on a combo, whose
+   * choices are its components.
+   */
+  private mandatoryGroupsFor(variant: MenuItemVariant): readonly MenuItemModifierGroup[] {
+    return this.isCombo()
+      ? []
+      : groupsForVariant(this.item(), variant.id).filter((group) => isMandatory(group));
+  }
 
-  /** True when the dish cannot be added plain: a group the guest must choose from, or a combo. */
-  protected readonly needsChoice = computed(
-    () => this.mandatoryGroups().length > 0 || this.isCombo(),
-  );
+  /** True when this portion cannot be added plain: a group the guest must choose from, or a combo. */
+  private needsChoiceFor(variant: MenuItemVariant): boolean {
+    return this.mandatoryGroupsFor(variant).length > 0 || this.isCombo();
+  }
 
   /**
    * The guest can make the choice here: every mandatory group offers enough options to satisfy it,
    * and every choice of a combo has enough orderable components to reach its minimum.
    */
-  protected readonly choosable = computed(
-    () =>
-      this.needsChoice() &&
-      this.mandatoryGroups().every(canBeSatisfied) &&
-      (this.item().comboGroups ?? []).every(comboGroupCanBeSatisfied),
-  );
+  private choosableFor(variant: MenuItemVariant): boolean {
+    return (
+      this.needsChoiceFor(variant) &&
+      this.mandatoryGroupsFor(variant).every(canBeSatisfied) &&
+      (this.item().comboGroups ?? []).every(comboGroupCanBeSatisfied)
+    );
+  }
 
-  /** The dish must be chosen from and cannot be: only a member of staff can put it in. */
-  protected readonly needsStaff = computed(() => this.needsChoice() && !this.choosable());
+  /** Some portion must be chosen from and cannot be: only a member of staff can put it in. */
+  protected readonly needsStaff = computed(() =>
+    this.item().variants.some(
+      (variant) => this.needsChoiceFor(variant) && !this.choosableFor(variant),
+    ),
+  );
 
   /**
    * The portions the card draws controls for: the ones that can be bought right
@@ -197,12 +208,12 @@ export class DishCardComponent {
 
   /** A portion may be put in the basket (or more of it) plain only while nothing has to be chosen for it. */
   protected canAdd(variant: MenuItemVariant): boolean {
-    return !this.needsChoice() && variantAvailability(variant) === 'AVAILABLE';
+    return !this.needsChoiceFor(variant) && variantAvailability(variant) === 'AVAILABLE';
   }
 
   /** A portion of a dish that must be chosen from can be picked for while it can be bought. */
   protected canChoose(variant: MenuItemVariant): boolean {
-    return this.choosable() && variantAvailability(variant) === 'AVAILABLE';
+    return this.choosableFor(variant) && variantAvailability(variant) === 'AVAILABLE';
   }
 
   /**
