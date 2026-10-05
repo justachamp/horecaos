@@ -268,7 +268,8 @@ public class CourierJobsService implements CourierJobsPort {
         Instant now = clock.instant();
         Runnable publish = () -> {
             try {
-                long version = plans.find(tenantId, planId).map(DeliveryPlan::version).orElse(0);
+                long version =
+                        plans.find(tenantId, planId).map(DeliveryPlan::version).orElse(0);
                 realtime.publish(RealtimeSignal.of(
                         tenantId,
                         StreamChannel.DISPATCH_BOARD,

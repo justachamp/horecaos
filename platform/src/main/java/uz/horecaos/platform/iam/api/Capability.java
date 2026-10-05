@@ -1558,8 +1558,7 @@ public enum Capability {
      * they collected at the door, which a tenant that turns the check on requires before a
      * delivery completes.
      */
-    COURIER_DELIVERY_PAYMENT_CONFIRM(
-            "courier.delivery.payment.confirm", "courier", "delivery.payment.confirm"),
+    COURIER_DELIVERY_PAYMENT_CONFIRM("courier.delivery.payment.confirm", "courier", "delivery.payment.confirm"),
 
     /**
      * Courier policy {@code revealCustomerLocationTiming}: a courier opening the door of the
@@ -1570,8 +1569,7 @@ public enum Capability {
      * <p>A reveal and not a read: it takes a third party's home address out, so a tenant held
      * read-only still cannot exercise it, and it is classified accordingly by its action segment.
      */
-    COURIER_DELIVERY_LOCATION_REVEAL(
-            "courier.delivery.location.reveal", "courier", "delivery.location.reveal"),
+    COURIER_DELIVERY_LOCATION_REVEAL("courier.delivery.location.reveal", "courier", "delivery.location.reveal"),
 
     /**
      * ADR 0042: approving a shift's hours, and closing somebody else's shift.

@@ -162,12 +162,7 @@ public class JdbcCourierJobStore {
      * @return true when this call moved the shipment
      */
     public boolean advance(UUID tenantId, UUID courierId, UUID shipmentId, Step to, Instant now) {
-        List<String> from =
-                switch (to) {
-                    case PICKUP_PENDING -> List.of("ASSIGNED");
-                    case PICKED_UP -> List.of("ASSIGNED", "PICKUP_PENDING");
-                    case DELIVERED -> List.of("PICKED_UP");
-                };
+        List<String> from = to.allowedFrom().stream().map(Enum::name).toList();
         return jdbc.sql("""
                 UPDATE fulfillment.shipments
                 SET status = CAST(:to AS varchar),
@@ -298,7 +293,8 @@ public class JdbcCourierJobStore {
     }
 
     /** The branch's own address as a courier reads it; the name when it has published none. */
-    private static String addressOf(String name, @Nullable String line, @Nullable String district, @Nullable String city) {
+    private static String addressOf(
+            String name, @Nullable String line, @Nullable String district, @Nullable String city) {
         StringBuilder address = new StringBuilder();
         for (String part : new String[] {line, district, city}) {
             if (part == null || part.isBlank()) {

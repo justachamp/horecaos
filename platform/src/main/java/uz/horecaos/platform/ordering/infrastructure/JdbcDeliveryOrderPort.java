@@ -268,9 +268,8 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                 """)
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
-                .query((row, number) -> new String[] {
-                    row.getString(ADDRESS_COLUMN), row.getString(INSTRUCTIONS_COLUMN)
-                })
+                .query((row, number) ->
+                        new String[] {row.getString(ADDRESS_COLUMN), row.getString(INSTRUCTIONS_COLUMN)})
                 .optional()
                 .map(columns -> {
                     DeliveryDestination destination = objectMapper.readValue(

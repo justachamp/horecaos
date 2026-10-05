@@ -1,9 +1,12 @@
 package uz.horecaos.platform.fulfillment.api;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort.CustomerLocation;
@@ -129,14 +132,41 @@ public interface CourierJobsPort {
      * delivered or cancelled: a courier who has finished with an order has no further business
      * knowing where its customer lives.
      */
-    Optional<CustomerLocation> customerLocationOfJob(
-            UUID tenantId, UUID courierId, UUID shipmentId, String purpose);
+    Optional<CustomerLocation> customerLocationOfJob(UUID tenantId, UUID courierId, UUID shipmentId, String purpose);
 
-    /** The steps a courier takes a shipment through. */
+    /**
+     * The steps a courier takes a shipment through.
+     *
+     * <p>Arriving at the branch ({@code PICKUP_PENDING}) may be skipped: a courier who is handed the
+     * bag the moment they walk in goes straight to {@code PICKED_UP}. Nothing is skipped after
+     * that. The set a step may be taken from is stated once, here, so the legality check a caller
+     * runs before it measures anything and the compare-and-set the store runs are the same list.
+     */
     enum Step {
-        PICKUP_PENDING,
-        PICKED_UP,
-        DELIVERED
+        PICKUP_PENDING(JobStatus.ASSIGNED),
+        PICKED_UP(JobStatus.ASSIGNED, JobStatus.PICKUP_PENDING),
+        DELIVERED(JobStatus.PICKED_UP);
+
+        private final Set<JobStatus> allowedFrom;
+
+        Step(JobStatus... allowedFrom) {
+            this.allowedFrom = EnumSet.copyOf(List.of(allowedFrom));
+        }
+
+        /** Whether a shipment standing at {@code status} may take this step. */
+        public boolean canFollow(JobStatus status) {
+            return allowedFrom.contains(status);
+        }
+
+        /** The statuses this step may be taken from. */
+        public Set<JobStatus> allowedFrom() {
+            return Collections.unmodifiableSet(allowedFrom);
+        }
+
+        /** The status a shipment holds once this step is taken. */
+        public JobStatus resultingStatus() {
+            return JobStatus.valueOf(name());
+        }
     }
 
     /** Where a shipment is, in the courier's vocabulary. */
