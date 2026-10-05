@@ -4,6 +4,9 @@
     @if (activeTab() === 'sales') {
       <q-provenance-banner [provenance]="provenance()" [requestedTo]="requestedTo()" />
     }
+    @if (activeTab() === 'combos') {
+      <q-provenance-banner [provenance]="comboProvenance()" [requestedTo]="requestedTo()" />
+    }
   </div>
 
   <div class="products__tabs" role="tablist">
@@ -36,6 +39,17 @@
       (click)="selectTab('xyz')"
     >
       {{ 'reports.products.tab.xyz' | t }}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.tab--active]="activeTab() === 'combos'"
+      [attr.aria-selected]="activeTab() === 'combos'"
+      (click)="selectTab('combos')"
+      data-testid="products-tab-combos"
+    >
+      {{ 'reports.products.tab.combos' | t }}
     </button>
   </div>
 
@@ -143,6 +157,75 @@
           </button>
         }
         <p class="q-caption dine-in-note">{{ 'reports.products.dineInNote' | t }}</p>
+      }
+    }
+  }
+
+  @if (activeTab() === 'combos') {
+    @switch (comboState()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
+      }
+      @case ('denied') {
+        <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+      }
+      @case ('error') {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+          <button type="button" class="secondary" (click)="retryCombos()">
+            {{ 'reports.error.retry' | t }}
+          </button>
+        </div>
+      }
+      @case ('ready') {
+        <table class="table" data-testid="combo-sales-table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'reports.products.combos.column.name' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.sold' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.purchases' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.orders' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.gross' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.discount' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.net' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.delivery' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.combos.column.pickup' | t }}</th>
+              <th class="q-caption num">{{ 'reports.products.column.share' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of comboRows(); track row.key) {
+              <tr data-testid="combo-sales-row">
+                <td class="q-body-sm">{{ row.name }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.combosSold) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.purchases) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatCountValue(row.orders) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.grossSom) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.discountSom) }}</td>
+                <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.netSom) }}</td>
+                <td class="q-body-sm q-tnum num" data-testid="combo-sales-delivery">
+                  {{ row.deliveryCombos === null ? '—' : formatCountValue(row.deliveryCombos) }}
+                </td>
+                <td class="q-body-sm q-tnum num" data-testid="combo-sales-pickup">
+                  {{ row.pickupCombos === null ? '—' : formatCountValue(row.pickupCombos) }}
+                </td>
+                <td class="q-body-sm q-tnum num">{{ row.revenueSharePercent }}%</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="10">{{ 'reports.empty.period' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (comboMaybeMore()) {
+          <p class="q-caption">
+            {{ 'reports.products.combos.maybeMore' | t: { limit: comboLimit } }}
+          </p>
+        }
+        <p class="q-caption dine-in-note" data-testid="combo-sales-note">
+          {{ 'reports.products.combos.note' | t }}
+        </p>
       }
     }
   }

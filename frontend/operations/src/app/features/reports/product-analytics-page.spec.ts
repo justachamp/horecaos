@@ -8,11 +8,14 @@ import { I18n } from '../../core/i18n/i18n';
 import { CatalogApi } from '../catalog/catalog-api';
 import { ProductAnalyticsPage } from './product-analytics-page';
 import { ReportsFilterState } from './reports-filter-state';
+import { ApiError } from '../../core/api/problem-details';
 import {
   AbcCurveListResponse,
   AbcCurveRowResponse,
   ClassificationRowResponse,
   ClassificationRunResponse,
+  ComboSalesListResponse,
+  ComboSalesRowResponse,
   ReportingApi,
   VariantSalesListResponse,
   VariantSalesRowResponse,
@@ -22,7 +25,7 @@ const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' }
 
 /** Reaches past `protected` to drive the component the same way every other report-page spec does. */
 type Internals = {
-  selectTab(tab: 'sales' | 'abc' | 'xyz'): void;
+  selectTab(tab: 'sales' | 'abc' | 'xyz' | 'combos'): void;
 };
 
 function provenance() {
@@ -57,6 +60,29 @@ function variantRow(overrides: Partial<VariantSalesRowResponse> = {}): VariantSa
 
 function salesResponse(rows: readonly VariantSalesRowResponse[]): VariantSalesListResponse {
   return { rows, maybeMore: false, provenance: provenance() };
+}
+
+function comboRow(overrides: Partial<ComboSalesRowResponse> = {}): ComboSalesRowResponse {
+  return {
+    comboContainerVariantId: 'combo-lunch',
+    comboName: 'Бизнес-ланч',
+    combosSold: 12,
+    purchases: 9,
+    orders: 8,
+    totalGrossSom: 480_000,
+    totalDiscountSom: 20_000,
+    totalNetSom: 460_000,
+    deliveryCombos: 7,
+    pickupCombos: 5,
+    ...overrides,
+  };
+}
+
+function comboResponse(
+  rows: readonly ComboSalesRowResponse[],
+  maybeMore = false,
+): ComboSalesListResponse {
+  return { rows, maybeMore, provenance: provenance() };
 }
 
 function classificationRow(
@@ -132,13 +158,15 @@ describe('ProductAnalyticsPage', () => {
   let variantSalesSpy: ReturnType<typeof vi.fn>;
   let latestClassificationSpy: ReturnType<typeof vi.fn>;
   let abcCurveSpy: ReturnType<typeof vi.fn>;
+  let comboSalesSpy: ReturnType<typeof vi.fn>;
 
   async function render(options?: {
     readonly variantSalesMock?: ReturnType<typeof vi.fn>;
     readonly latestClassificationMock?: ReturnType<typeof vi.fn>;
     readonly abcCurveMock?: ReturnType<typeof vi.fn>;
+    readonly comboSalesMock?: ReturnType<typeof vi.fn>;
     readonly configure?: (filters: ReportsFilterState) => void;
-    readonly initialTab?: 'sales' | 'abc' | 'xyz';
+    readonly initialTab?: 'sales' | 'abc' | 'xyz' | 'combos';
   }): Promise<void> {
     TestBed.resetTestingModule();
     // ReportsFilterState reads its initial state from the URL on
@@ -150,6 +178,8 @@ describe('ProductAnalyticsPage', () => {
     latestClassificationSpy = options?.latestClassificationMock ?? vi.fn().mockResolvedValue(null);
     abcCurveSpy =
       options?.abcCurveMock ?? vi.fn().mockResolvedValue(abcCurveResponse([abcCurveRow()]));
+    comboSalesSpy =
+      options?.comboSalesMock ?? vi.fn().mockResolvedValue(comboResponse([comboRow()]));
 
     await TestBed.configureTestingModule({
       imports: [ProductAnalyticsPage],
@@ -170,6 +200,7 @@ describe('ProductAnalyticsPage', () => {
             latestClassification: latestClassificationSpy,
             runClassification: vi.fn().mockResolvedValue(classificationRun([classificationRow()])),
             abcCurve: abcCurveSpy,
+            comboSales: comboSalesSpy,
           },
         },
         {
@@ -447,5 +478,118 @@ describe('ProductAnalyticsPage', () => {
     });
 
     expect(text()).toContain('200');
+  });
+
+  // ------------------------------------------------------- ADR 0136: sales by combo
+
+  describe('«Комбо» tab (ADR 0136)', () => {
+    it('does not read combo sales while the Продажи tab is showing', async () => {
+      await render();
+
+      expect(comboSalesSpy).not.toHaveBeenCalled();
+    });
+
+    it('reads combo sales for the shared period and fulfilment, and lists each combo with what it sold', async () => {
+      await render({
+        configure: (filters) => {
+          filters.setCustomRange({ from: '2026-08-01', to: '2026-08-28' });
+          filters.setFulfilmentType('DELIVERY');
+        },
+        initialTab: 'combos',
+      });
+
+      expect(comboSalesSpy).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          from: '2026-08-01',
+          to: '2026-08-28',
+          fulfilmentType: ['DELIVERY'],
+        }),
+      );
+      const row = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="combo-sales-row"]',
+      );
+      expect(row?.textContent).toContain('Бизнес-ланч');
+      // 12 combos over 9 purchases on 8 orders: one purchase may be several combos.
+      expect(row?.textContent).toMatch(/12/);
+      expect(row?.textContent).toMatch(/9/);
+      expect(row?.textContent).toMatch(/460\s?000/);
+    });
+
+    it('shows a dash where the server has no delivery or pickup count, not a zero', async () => {
+      await render({
+        comboSalesMock: vi
+          .fn()
+          .mockResolvedValue(
+            comboResponse([comboRow({ deliveryCombos: null, pickupCombos: null })]),
+          ),
+        initialTab: 'combos',
+      });
+
+      const cells = (fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="combo-sales-delivery"], [data-testid="combo-sales-pickup"]',
+      );
+      expect(cells).toHaveLength(2);
+      cells.forEach((cell) => expect(cell.textContent?.trim()).toBe('—'));
+    });
+
+    it('re-reads when the shared period changes while the tab is open', async () => {
+      await render({ initialTab: 'combos' });
+      comboSalesSpy.mockClear();
+
+      TestBed.inject(ReportsFilterState).setPeriod('7d');
+      fixture.detectChanges();
+      await flushMicrotasks();
+
+      expect(comboSalesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('says a component sold on its own is under Продажи, and discloses a bounded read', async () => {
+      await render({
+        comboSalesMock: vi.fn().mockResolvedValue(comboResponse([comboRow()], true)),
+        initialTab: 'combos',
+      });
+
+      expect(text()).toContain('200');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="combo-sales-note"]'),
+      ).not.toBeNull();
+    });
+
+    it('shows the empty state when no combo was sold in the period', async () => {
+      await render({
+        comboSalesMock: vi.fn().mockResolvedValue(comboResponse([])),
+        initialTab: 'combos',
+      });
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="combo-sales-row"]'),
+      ).toBeNull();
+      expect(text()).toContain('Нет данных за выбранный период');
+    });
+
+    it('offers a retry on a failed read, and says so plainly on a refusal', async () => {
+      await render({
+        comboSalesMock: vi.fn().mockRejectedValueOnce(new Error('offline')),
+        initialTab: 'combos',
+      });
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).not.toBeNull();
+
+      comboSalesSpy.mockResolvedValueOnce(comboResponse([comboRow()]));
+      (
+        (fixture.nativeElement as HTMLElement).querySelector('.secondary') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="combo-sales-row"]'),
+      ).not.toBeNull();
+
+      await render({
+        comboSalesMock: vi.fn().mockRejectedValue(new ApiError('FORBIDDEN', 403, null, null)),
+        initialTab: 'combos',
+      });
+      expect(text()).toContain('Нет доступа');
+    });
   });
 });

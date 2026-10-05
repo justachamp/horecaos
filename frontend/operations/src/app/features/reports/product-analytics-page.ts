@@ -24,6 +24,7 @@ import {
   AbcCurveListResponse,
   ClassificationRowResponse,
   ClassificationRunResponse,
+  ComboSalesRowResponse,
   ProvenanceResponse,
   ReportingApi,
   VariantSalesCursor,
@@ -33,6 +34,9 @@ import {
 
 /** The row-quantity page pages 200 at a time — same width the previous hard-coded `limit: 200` read in one shot. */
 const SALES_PAGE_SIZE = 200;
+
+/** ADR 0136: the combo tab's bounded read — the same width as the product sales page. */
+const COMBO_SALES_LIMIT = 200;
 
 /** X.19 (w6-reporting-facts, batch 11): the q-abc-curve chart's own bounded read — same width as `SALES_PAGE_SIZE`. */
 const ABC_CURVE_LIMIT = 200;
@@ -71,6 +75,21 @@ interface ClassificationRow {
   readonly xyzClass: 'X' | 'Y' | 'Z';
 }
 
+/** ADR 0136: one combo's row on the «Комбо» tab, its share taken over the rows on screen. */
+interface ComboRow {
+  readonly key: string;
+  readonly name: string;
+  readonly combosSold: number;
+  readonly purchases: number;
+  readonly orders: number;
+  readonly grossSom: number;
+  readonly discountSom: number;
+  readonly netSom: number;
+  readonly deliveryCombos: number | null;
+  readonly pickupCombos: number | null;
+  readonly revenueSharePercent: number;
+}
+
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 
 /**
@@ -82,7 +101,7 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 type ClassificationState =
   'idle' | 'loading' | 'ready' | 'refused' | 'needsRun' | 'running' | 'denied' | 'error';
 
-type Tab = 'sales' | 'abc' | 'xyz';
+type Tab = 'sales' | 'abc' | 'xyz' | 'combos';
 
 /** One of the matrix's nine cells, or `null` for "no filter applied". */
 type MatrixCell = string | null;
@@ -115,6 +134,12 @@ const MINIMUM_CLASSIFICATION_DAYS = 28;
  * into `quantity`/`netSom` and into neither split, so delivery plus pickup
  * need not equal the total whenever the tenant serves any dine-in at all —
  * stated on screen rather than left for a manager to notice as a discrepancy.
+ *
+ * **ADR 0136, «Комбо».** The fourth tab reads `GET .../reporting/combo-sales`: one row per combo
+ * container, with how many combos were sold (one quantity per purchase, however many component
+ * lines the order holds), on how many orders, and the money summed over the purchase's component
+ * lines. It follows the same period and fulfilment controls as «Продажи» and loads only while it is
+ * open. A component sold on its own is not a combo and stays under «Продажи».
  *
  * **Wave 10 w5-reports-exports (7.7).** «Продажи» had no sort control at all
  * (`GET .../variant-sales` only ever answered revenue order) and its
@@ -169,6 +194,13 @@ export class ProductAnalyticsPage {
   protected readonly categoryNames = signal<ReadonlyMap<string, string>>(new Map());
   /** Every variant id currently unavailable (86'd) at this location — statistics.md's «СТОП» marker. */
   protected readonly stoppedVariantIds = signal<ReadonlySet<string>>(new Set());
+
+  // ---------------------------------------------------------- ADR 0136 «Комбо»
+  protected readonly comboState = signal<LoadState>('loading');
+  protected readonly comboRows = signal<readonly ComboRow[]>([]);
+  protected readonly comboProvenance = signal<ProvenanceResponse | null>(null);
+  protected readonly comboMaybeMore = signal(false);
+  protected readonly comboLimit = COMBO_SALES_LIMIT;
 
   // ---------------------------------------------------------- ABC / XYZ
   protected readonly classificationState = signal<ClassificationState>('idle');
@@ -264,13 +296,24 @@ export class ProductAnalyticsPage {
       void this.load(range, fulfilment, sort);
     });
 
+    // ADR 0136: the combo read follows the shared filters, but only while its tab is open.
+    effect(() => {
+      const tab = this.activeTab();
+      const range = this.filters.range();
+      const fulfilment = this.filters.fulfilmentType();
+      if (tab !== 'combos') {
+        return;
+      }
+      void this.loadCombos(range, fulfilment);
+    });
+
     // ABC/XYZ read whatever run is on file for the active window whenever
     // either the tab or the range changes — never on the «Продажи» tab,
     // which has no use for a classification run at all.
     effect(() => {
       const tab = this.activeTab();
       const range = this.filters.range();
-      if (tab === 'sales') {
+      if (tab === 'sales' || tab === 'combos') {
         return;
       }
       this.matrixCell.set(null);
@@ -328,6 +371,10 @@ export class ProductAnalyticsPage {
     } finally {
       this.loadingMore.set(false);
     }
+  }
+
+  protected retryCombos(): void {
+    void this.loadCombos(this.filters.range(), this.filters.fulfilmentType());
   }
 
   protected retryClassification(): void {
@@ -389,6 +436,32 @@ export class ProductAnalyticsPage {
   }
 
   // ------------------------------------------------------------- loading
+
+  /** ADR 0136: sales by combo container for the shared period and fulfilment. */
+  private async loadCombos(range: { from: string; to: string }, fulfilment: string): Promise<void> {
+    this.comboState.set('loading');
+    await this.location.ensureLoaded();
+    const scope = this.location.scope();
+    if (!scope) {
+      this.comboState.set(this.location.denied() ? 'denied' : 'error');
+      return;
+    }
+    try {
+      const result = await this.api.comboSales(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        fulfilmentType: fulfilment === 'ALL' ? undefined : [fulfilment],
+        limit: COMBO_SALES_LIMIT,
+      });
+      const totalNet = result.rows.reduce((sum, row) => sum + row.totalNetSom, 0);
+      this.comboRows.set(result.rows.map((row) => toComboRow(row, totalNet)));
+      this.comboProvenance.set(result.provenance);
+      this.comboMaybeMore.set(result.maybeMore);
+      this.comboState.set('ready');
+    } catch (error) {
+      this.comboState.set(error instanceof ApiError && error.status === 403 ? 'denied' : 'error');
+    }
+  }
 
   private async load(
     range: { from: string; to: string },
@@ -605,4 +678,20 @@ function daysInRange(range: { readonly from: string; readonly to: string }): num
   const fromMs = Date.UTC(fy, fm - 1, fd);
   const toMs = Date.UTC(ty, tm - 1, td);
   return Math.round((toMs - fromMs) / 86_400_000) + 1;
+}
+
+function toComboRow(row: ComboSalesRowResponse, totalNetSom: number): ComboRow {
+  return {
+    key: row.comboContainerVariantId,
+    name: row.comboName,
+    combosSold: row.combosSold,
+    purchases: row.purchases,
+    orders: row.orders,
+    grossSom: row.totalGrossSom,
+    discountSom: row.totalDiscountSom,
+    netSom: row.totalNetSom,
+    deliveryCombos: row.deliveryCombos,
+    pickupCombos: row.pickupCombos,
+    revenueSharePercent: totalNetSom === 0 ? 0 : Math.round((row.totalNetSom / totalNetSom) * 100),
+  };
 }
