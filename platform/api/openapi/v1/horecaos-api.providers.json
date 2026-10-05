@@ -1,6 +1,17 @@
 {
   "components" : {
     "schemas" : {
+      "AvailabilityItemResponse" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "externalItemId" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "Line" : {
         "properties" : {
           "externalItemReference" : {
@@ -32,6 +43,28 @@
           }
         },
         "required" : [ "externalItemReference", "lineAmountMinor", "name", "unitAmountMinor" ],
+        "type" : "object"
+      },
+      "PartnerAvailabilityControllerAvailabilityResponse" : {
+        "properties" : {
+          "asOf" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AvailabilityItemResponse"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "PartnerOrderControllerPushRequest" : {
@@ -265,6 +298,58 @@
         "tags" : [ "Partner API" ]
       }
     },
+    "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability" : {
+      "get" : {
+        "description" : "ADR 0141 Phase 4. For each dish this partner has mapped at the restaurant, whether it may be sold on the partner's channel right now, in the partner's own item-id order and in cursor pages (pass nextCursor back as cursor; limit 1 to 200, default 200). Identifiers and a boolean only. Answered from the platform's own resolver on every call, never from a cache. 404 when the restaurant is not one this credential is bound to; 409 CHANNEL_NOT_CONFIGURED when the integration has no single active channel yet.",
+        "operationId" : "read",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PartnerAvailabilityControllerAvailabilityResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read a restaurant's current availability",
+        "tags" : [ "Partner API" ]
+      }
+    },
     "/providers/payme/{binding}" : {
       "delete" : {
         "operationId" : "handle_3",
@@ -455,6 +540,9 @@
     "name" : "Partner API"
   }, {
     "description" : "Inbound aggregator shift events (ADR 0040)",
+    "name" : "Partner API"
+  }, {
+    "description" : "Inbound aggregator orders, shift events and availability reads (ADR 0040)",
     "name" : "Partner API"
   } ]
 }

@@ -240,4 +240,10 @@ export const kitchenEn = {
   'kitchen.devices.revoke.confirm': 'Confirm revoke',
   'kitchen.devices.revoke.submitting': 'Revoking…',
   'kitchen.devices.revoke.cancel': 'Cancel',
+  'kitchen.stopList.why.open': 'Why?',
+  'kitchen.stopList.why.title': 'Why can’t I sell this?',
+  'kitchen.stopList.why.noChannel': 'No channel (only stops on every channel)',
+  'kitchen.stopList.why.cutoff': 'Remaining is at or below the channel’s cut-off',
+  'kitchen.stopList.why.off': 'Stops are switched off',
+  'kitchen.stopList.why.close': 'Close',
 } as const;

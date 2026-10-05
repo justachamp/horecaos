@@ -243,4 +243,10 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.devices.revoke.confirm': 'Bekor qilishni tasdiqlash',
   'kitchen.devices.revoke.submitting': 'Bekor qilinmoqda…',
   'kitchen.devices.revoke.cancel': 'Yopish',
+  'kitchen.stopList.why.open': 'Nega?',
+  'kitchen.stopList.why.title': 'Nega sotib boʻlmaydi?',
+  'kitchen.stopList.why.noChannel': 'Kanalsiz (barcha kanallardagi stoplar)',
+  'kitchen.stopList.why.cutoff': 'Qoldiq kanal chegarasidan oshmaydi',
+  'kitchen.stopList.why.off': 'Stoplar oʻchirilgan',
+  'kitchen.stopList.why.close': 'Yopish',
 };

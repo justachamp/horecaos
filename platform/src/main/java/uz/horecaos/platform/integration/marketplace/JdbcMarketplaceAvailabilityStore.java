@@ -90,6 +90,26 @@ public class JdbcMarketplaceAvailabilityStore {
                 .list();
     }
 
+    /**
+     * Active {@code MARKETPLACE} bindings of one installation: what a change to the sales channel
+     * that installation backs must wake (ADR 0141 Decision 7's marker for a channel's installation).
+     */
+    public List<UUID> bindingIdsOfInstallation(UUID tenantId, UUID installationId) {
+        return jdbc.sql("""
+                SELECT b.id
+                FROM integration.bindings b
+                JOIN integration.installations i
+                  ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId
+                  AND i.provider_category = 'MARKETPLACE'
+                  AND i.status = 'ACTIVE' AND b.status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query(UUID.class)
+                .list();
+    }
+
     /** The binding's mapped menu items: the partner's id for each HorecaOS variant. */
     public Map<UUID, String> mappedItems(UUID tenantId, UUID bindingId) {
         Map<UUID, String> byVariant = new HashMap<>();
@@ -508,6 +528,69 @@ public class JdbcMarketplaceAvailabilityStore {
                 .update();
     }
 
+    // ------------------------------------------------------------------ staleness
+
+    /**
+     * The dishes of one binding the platform has not been able to confirm since before {@code cutoff}:
+     * pending or uncertain, with {@code pending_since} at or before it. A {@code REJECTED_UNMAPPED}
+     * item is excluded on purpose -- the partner answered, and the fix is a mapping, not a channel
+     * that went quiet.
+     *
+     * @return empty when nothing is that old
+     */
+    public Optional<OverdueSummary> overdueUnconfirmed(UUID tenantId, UUID bindingId, Instant cutoff) {
+        OverdueSummary summary = jdbc.sql("""
+                SELECT count(*) AS item_count, min(pending_since) AS oldest
+                FROM integration.marketplace_item_availability
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                  AND state IN ('PENDING', 'UNCERTAIN')
+                  AND pending_since IS NOT NULL AND pending_since <= :cutoff
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("cutoff", timestamp(cutoff))
+                .query((row, number) -> new OverdueSummary(
+                        row.getInt("item_count"), instant(row.getObject("oldest", OffsetDateTime.class))))
+                .single();
+        return summary.itemCount() == 0 ? Optional.empty() : Optional.of(summary);
+    }
+
+    /**
+     * Records that this binding's staleness has been reported, once. The conditional upsert is the
+     * "once": whoever finds {@code stale_alerted_at} empty sets it and wins; a second replica ticking
+     * the same binding finds it set and reports nothing.
+     *
+     * @return whether this call is the one that reported it
+     */
+    public boolean markStaleReported(UUID tenantId, UUID bindingId, Instant now) {
+        return jdbc.sql("""
+                        INSERT INTO integration.marketplace_availability_sync_state
+                            (tenant_id, binding_id, stale_alerted_at, updated_at)
+                        VALUES (:tenantId, :bindingId, :now, :now)
+                        ON CONFLICT (binding_id) DO UPDATE
+                        SET stale_alerted_at = EXCLUDED.stale_alerted_at, updated_at = EXCLUDED.updated_at
+                        WHERE integration.marketplace_availability_sync_state.stale_alerted_at IS NULL
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("bindingId", bindingId)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
+    }
+
+    /** The binding has nothing unconfirmed past its bound: the next staleness is a new report. */
+    public void clearStaleReported(UUID tenantId, UUID bindingId, Instant now) {
+        jdbc.sql("""
+                UPDATE integration.marketplace_availability_sync_state
+                SET stale_alerted_at = NULL, updated_at = :now
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId AND stale_alerted_at IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("now", timestamp(now))
+                .update();
+    }
+
     // ------------------------------------------------------------------ the propagation read
 
     /** Counts and the oldest pending moment for each binding at one location. */
@@ -691,6 +774,9 @@ public class JdbcMarketplaceAvailabilityStore {
             boolean installationActive) {}
 
     public record Watermark(String alertState, @Nullable Instant lastSuccessAt, int staleAfterSeconds) {}
+
+    /** How many dishes have been unconfirmed past a bound, and since when the longest-waiting has been. */
+    public record OverdueSummary(int itemCount, @Nullable Instant oldestSince) {}
 
     /** Helper for tests and callers that want the variant set of a binding's rows. */
     public static Set<UUID> variantsOf(Collection<ItemRow> rows) {

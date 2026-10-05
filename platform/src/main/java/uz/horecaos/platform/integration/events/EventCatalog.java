@@ -90,6 +90,13 @@ public final class EventCatalog {
     public static final String INVENTORY_EVENTS_TOPIC = KafkaTopicCatalog.INVENTORY_EVENTS;
 
     /**
+     * ADR 0040 marketplace facts. Its own topic, as ADR 0032 names {@code integration.events}:
+     * a consumer of "this venue's channel went stale" should not read ordering's volume to
+     * find it, and the producer is the reconciler inside {@code integration} itself.
+     */
+    public static final String INTEGRATION_EVENTS_TOPIC = KafkaTopicCatalog.INTEGRATION_EVENTS;
+
+    /**
      * ADR 0018 pricing facts. Its own topic rather than a share of {@code
      * tenancy.events}: nothing that reads price-book activations should have to
      * filter out tenant and brand creations to get them, and the two have
@@ -528,6 +535,30 @@ public final class EventCatalog {
                             + "(LOCATION, BRAND, MENU, CHANNEL), a source and an optional end. "
                             + "Symmetric — active carries the direction — and identifiers and "
                             + "stable codes only, never a product name or free text."),
+            new EventContract(
+                    "MarketplaceAvailabilityPushed",
+                    1,
+                    "integration",
+                    INTEGRATION_EVENTS_TOPIC,
+                    "bindingId",
+                    "events/integration.events/MarketplaceAvailabilityPushed.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A marketplace partner is now known to hold a new availability for one mapped dish "
+                            + "(ADR 0040, ADR 0141): the reconciler's state-set was answered with a success "
+                            + "and the platform recorded it. Identifiers, a boolean and a sequence; "
+                            + "never a dish name."),
+            new EventContract(
+                    "MarketplaceChannelWentStale",
+                    1,
+                    "integration",
+                    INTEGRATION_EVENTS_TOPIC,
+                    "bindingId",
+                    "events/integration.events/MarketplaceChannelWentStale.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A marketplace binding has had a dish unconfirmed for longer than its bound "
+                            + "(ADR 0040, ADR 0141). Once per episode; counts and instants only."),
             new EventContract(
                     "PriceBookActivated",
                     1,

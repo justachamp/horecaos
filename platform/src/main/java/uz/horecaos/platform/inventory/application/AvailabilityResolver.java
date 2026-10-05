@@ -83,6 +83,7 @@ public class AvailabilityResolver {
     private final @Nullable JdbcAvailabilityStopStore stops;
     private final @Nullable ChannelOfferingLookup catalog;
     private final ConfigurationResolver configuration;
+    private final StopReadSwitch readSwitch;
 
     public AvailabilityResolver(
             JdbcInventoryStore store,
@@ -93,6 +94,7 @@ public class AvailabilityResolver {
         this.stops = stops;
         this.catalog = catalog;
         this.configuration = configuration;
+        this.readSwitch = new StopReadSwitch(configuration);
     }
 
     /**
@@ -181,6 +183,16 @@ public class AvailabilityResolver {
             return Map.of();
         }
         List<StopRow> inForce = stops.activeForVariants(tenantId, variantIds, at);
+        if (inForce.isEmpty()) {
+            return Map.of();
+        }
+        // Rollback switch three (ADR 0141): once a brand has been decommissioned its stops stay
+        // on their rows, ignored. Asked once per brand present, and only when a stop exists.
+        Map<UUID, Boolean> readsByBrand = new HashMap<>();
+        inForce = inForce.stream()
+                .filter(stop ->
+                        readsByBrand.computeIfAbsent(stop.brandId(), brand -> readSwitch.readsEnabled(tenantId, brand)))
+                .toList();
         if (inForce.isEmpty()) {
             return Map.of();
         }

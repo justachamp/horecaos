@@ -47,6 +47,8 @@ import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.BindingRow;
 import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.Mode;
 import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.Reason;
+import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
+import uz.horecaos.platform.integration.outbox.MarketplaceOutbox;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.inventory.api.StopSource;
@@ -57,6 +59,7 @@ import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.RecordingOperationsAlertPort;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -96,6 +99,9 @@ class MarketplaceAvailabilityReconcilerTests {
     private FakePartner partner;
     private Map<String, Object> configuration;
     private RecordingProviderActivityRecorder activity;
+    private RecordingOperationsAlertPort alerts;
+    private MarketplaceStaleChannelMonitor staleMonitor;
+    private SimpleMeterRegistry meters;
     private JdbcMarketplaceAvailabilityStore store;
     private JdbcAvailabilityStopStore stopStore;
     private AvailabilityStopService stopService;
@@ -136,6 +142,8 @@ class MarketplaceAvailabilityReconcilerTests {
         jdbc.sql("TRUNCATE TABLE catalog.channel_offering_exclusions, catalog.branch_menu_bindings, "
                         + "catalog.menu_items, catalog.menus, catalog.location_offerings CASCADE")
                 .update();
+        jdbc.sql("TRUNCATE TABLE integration.outbox_events").update();
+        setMappingMarker(true);
         transactionManager = new DataSourceTransactionManager(dataSource);
         clock = new MutableClock(Instant.parse("2026-10-01T09:00:00Z"));
         partner = new FakePartner();
@@ -168,6 +176,12 @@ class MarketplaceAvailabilityReconcilerTests {
                 channels,
                 stopService);
         activity = new RecordingProviderActivityRecorder();
+        alerts = new RecordingOperationsAlertPort();
+        meters = new SimpleMeterRegistry();
+        MarketplaceOutbox outbox = new MarketplaceOutbox(
+                new JdbcOutboxStore(jdbc), JsonMapper.builder().build(), clock);
+        staleMonitor = new MarketplaceStaleChannelMonitor(
+                store, outbox, alerts, meters, transactionManager, Duration.ofDays(1));
         MarketplaceAdapterRegistry registry =
                 new MarketplaceAdapterRegistry(registerAdapter ? List.of(new FakeAdapter()) : List.of());
         reconciler = new MarketplaceAvailabilityReconciler(
@@ -179,11 +193,13 @@ class MarketplaceAvailabilityReconcilerTests {
                 resolver,
                 activity,
                 clock,
-                new SimpleMeterRegistry(),
+                meters,
                 transactionManager,
                 jdbc,
                 // A seeded jitter would still be a delay; the clock is advanced explicitly.
-                RetryBackoff.randomisedBy(Duration.ofSeconds(5), Duration.ofMinutes(10), new java.util.Random(7)));
+                RetryBackoff.randomisedBy(Duration.ofSeconds(5), Duration.ofMinutes(10), new java.util.Random(7)),
+                outbox,
+                staleMonitor);
         propagation = new MarketplacePropagationQuery(store, registry, resolver, channels);
     }
 
@@ -567,6 +583,9 @@ class MarketplaceAvailabilityReconcilerTests {
     void aNewMappingConverges() {
         World w = world();
         reconcile(w);
+        // The trigger on the mapping table is the marker; switched off, this proves the sweep alone
+        // is the guarantee for a mapping, exactly as for every input without a marker.
+        setMappingMarker(false);
         UUID variantC = variant(w.tenant(), w.brand(), "C");
         jdbc.sql("""
                 INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
@@ -581,10 +600,109 @@ class MarketplaceAvailabilityReconcilerTests {
         list(w, variantC);
         map(w, variantC, "ext-C");
 
+        assertThat(requested()).as("nothing asked for an early sweep").isEmpty();
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("before the resync interval, with no marker, the partner has not heard of the dish")
+                .doesNotContainKey("ext-C");
+
         clock.advance(RESYNC.plusSeconds(60));
         reconcile(w);
 
         assertThat(partner.held(w)).containsEntry("ext-C", true);
+    }
+
+    @Test
+    @DisplayName(
+            "a new MENU_ITEM mapping marks its binding, and the partner hears of the dish on the next tick, not the next resync")
+    void aNewMappingIsPushedOnTheNextTick() {
+        World w = world();
+        reconcile(w);
+        assertThat(requested())
+                .as("the first sweep honoured the marker the seed mappings left")
+                .isEmpty();
+
+        UUID variantC = variant(w.tenant(), w.brand(), "C");
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                VALUES (:id, :t, :b, :l, :v, 'AVAILABLE')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant)
+                .param("b", w.brand)
+                .param("l", w.location)
+                .param("v", variantC)
+                .update();
+        list(w, variantC);
+        map(w, variantC, "ext-C");
+        assertThat(requested()).containsExactly(w.binding);
+
+        // No time passes: the resync interval is far away.
+        clock.advance(Duration.ofSeconds(5));
+        reconcile(w);
+
+        assertThat(partner.held(w)).containsEntry("ext-C", true);
+    }
+
+    @Test
+    @DisplayName("the marker is the mapping's own: an item added, repointed, retired or removed marks its binding; "
+            + "another entity type, or a touch that changes nothing the reconciler reads, does not")
+    void theItemMappingMarksItsBindingAndNothingElse() {
+        World w = world();
+        UUID otherLocation = location(w.tenant(), w.brand(), "OTHER");
+        UUID otherBinding = binding(w, otherLocation, "mkt-other");
+        reconcile(w);
+        assertThat(requested()).isEmpty();
+
+        // A mapping of some other entity type is none of the reconciler's business.
+        jdbc.sql("""
+                INSERT INTO integration.provider_entity_mappings
+                    (id, tenant_id, installation_id, binding_id, entity_type, horecaos_entity_id,
+                     external_entity_id, status, mapping_source)
+                VALUES (:id, :t, :i, :b, 'VARIANT', :v, 'pos-A', 'ACTIVE', 'OPERATOR')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant())
+                .param("i", w.installation())
+                .param("b", w.binding())
+                .param("v", w.variantA())
+                .update();
+        assertThat(requested()).as("a VARIANT mapping marks nothing").isEmpty();
+
+        // A touch that changes neither the status, the dish nor the partner's id.
+        jdbc.sql("UPDATE integration.provider_entity_mappings SET last_seen_at = now() "
+                        + "WHERE binding_id = :b AND entity_type = 'MENU_ITEM'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a last-seen touch marks nothing").isEmpty();
+
+        // The partner renumbered a dish.
+        jdbc.sql("UPDATE integration.provider_entity_mappings SET external_entity_id = 'ext-A2' "
+                        + "WHERE binding_id = :b AND external_entity_id = 'ext-A'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a repointed partner id marks its binding").containsExactly(w.binding());
+
+        reconcile(w);
+        assertThat(requested()).isEmpty();
+
+        // Retired: the dish is no longer one the reconciler keeps a row for.
+        jdbc.sql("UPDATE integration.provider_entity_mappings SET status = 'RETIRED' "
+                        + "WHERE binding_id = :b AND external_entity_id = 'ext-B'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a retired mapping marks its binding").containsExactly(w.binding());
+
+        reconcile(w);
+        assertThat(requested()).isEmpty();
+
+        // Removed outright.
+        jdbc.sql("DELETE FROM integration.provider_entity_mappings "
+                        + "WHERE binding_id = :b AND external_entity_id = 'ext-A2'")
+                .param("b", w.binding())
+                .update();
+        assertThat(requested()).as("a removed mapping marks its binding").containsExactly(w.binding());
+        assertThat(requested()).doesNotContain(otherBinding);
     }
 
     @Test
@@ -970,9 +1088,477 @@ class MarketplaceAvailabilityReconcilerTests {
         assertThat(requested()).containsExactlyInAnyOrder(w.binding, otherBinding);
     }
 
+    @Test
+    @DisplayName("a sales channel pointed at, or away from, an installation wakes exactly that installation's bindings")
+    void aChannelInstallationChangeWakesItsBindings() {
+        World w = world();
+        UUID otherLocation = location(w.tenant(), w.brand(), "OTHER");
+        UUID otherBinding = binding(w, otherLocation, "mkt-other");
+        UUID otherInstallation = jdbc.sql("SELECT installation_id FROM integration.bindings WHERE id = :b")
+                .param("b", otherBinding)
+                .query(UUID.class)
+                .single();
+        MarketplaceDirtyMarkerListener listener = new MarketplaceDirtyMarkerListener(store, clock);
+        jdbc.sql("DELETE FROM integration.marketplace_availability_sync_state").update();
+
+        listener.onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                w.tenant, w.channel, null, w.installation, clock.instant()));
+        assertThat(requested()).containsExactly(w.binding);
+
+        jdbc.sql("DELETE FROM integration.marketplace_availability_sync_state").update();
+        listener.onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                w.tenant, w.channel, w.installation, otherInstallation, clock.instant()));
+        assertThat(requested())
+                .as("repointed from one installation to another: both lose or gain their channel")
+                .containsExactlyInAnyOrder(w.binding, otherBinding);
+
+        jdbc.sql("DELETE FROM integration.marketplace_availability_sync_state").update();
+        listener.onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                UUID.randomUUID(), w.channel, null, w.installation, clock.instant()));
+        assertThat(requested())
+                .as("another tenant's announcement reaches none of this tenant's bindings")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a channel repointed away from an installation is re-resolved on the next tick, not the next resync")
+    void aChannelRepointedIsReResolvedOnTheNextTick() {
+        World w = world();
+        reconcile(w);
+        assertThat(partner.held(w)).containsEntry("ext-A", true);
+
+        // The channel is paused: nothing resolves for the installation any more. Without a
+        // marker the reconciler would go on believing in the channel it swept five minutes ago.
+        jdbc.sql("UPDATE tenant.sales_channels SET status = 'INACTIVE' WHERE id = :c")
+                .param("c", w.channel)
+                .update();
+        new MarketplaceDirtyMarkerListener(store, clock)
+                .onChannelInstallationChanged(uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged.of(
+                        w.tenant, w.channel, w.installation, w.installation, clock.instant()));
+        assertThat(requested()).containsExactly(w.binding);
+
+        clock.advance(Duration.ofSeconds(5));
+        reconcile(w);
+
+        assertThat(requested()).as("the early sweep was honoured").isEmpty();
+        assertThat(jdbc.sql("SELECT last_sweep_at FROM integration.marketplace_availability_sync_state "
+                                + "WHERE binding_id = :b")
+                        .param("b", w.binding)
+                        .query(java.time.OffsetDateTime.class)
+                        .single()
+                        .toInstant())
+                .as("swept at the later instant, well inside the resync interval")
+                .isEqualTo(clock.instant());
+    }
+
+    // -----------------------------------------------------------------------
+    // Facts: MarketplaceAvailabilityPushed, MarketplaceChannelWentStale and the stale-channel alert
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a confirmed push is published once, as the partner now holding the value, and a quiet tick publishes nothing")
+    void aConfirmedPushIsPublishedOnce() throws Exception {
+        World w = world();
+
+        reconcile(w);
+        List<Map<String, Object>> first = outbox(MarketplaceOutbox.AVAILABILITY_PUSHED);
+        assertThat(first)
+                .as("two dishes, each unknown before and known now: one fact each")
+                .hasSize(2);
+        assertThat(first).allSatisfy(event -> {
+            assertThat(event.get("aggregate_type")).isEqualTo(MarketplaceOutbox.AGGREGATE_TYPE);
+            assertThat(event.get("aggregate_id")).isEqualTo(w.binding());
+            assertThat(event.get("partition_key")).isEqualTo(w.binding().toString());
+            assertThat(event.get("topic")).isEqualTo("integration.events");
+            assertThat(event.get("tenant_id")).isEqualTo(w.tenant());
+        });
+        Map<String, Object> payloadA = payloadOf(first, "ext-A");
+        assertThat(payloadA)
+                .containsEntry("bindingId", w.binding().toString())
+                .containsEntry("locationId", w.location().toString())
+                .containsEntry("variantId", w.variantA().toString())
+                .containsEntry("providerType", PROVIDER)
+                .containsEntry("externalItemId", "ext-A")
+                .containsEntry("available", true);
+        assertValidAgainstSchema(
+                "MarketplaceAvailabilityPushed", String.valueOf(first.get(0).get("payload")));
+
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(1));
+        reconcile(w);
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
+                .as("nothing differed, so nothing was sent and nothing is announced")
+                .hasSize(2);
+
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        reconcile(w);
+        List<Map<String, Object>> afterStop = outbox(MarketplaceOutbox.AVAILABILITY_PUSHED);
+        assertThat(afterStop).hasSize(3);
+        assertThat(payloadOf(afterStop, "ext-A", false))
+                .containsEntry("available", false)
+                .containsEntry("desiredSeq", 2);
+    }
+
+    @Test
+    @DisplayName(
+            "only a success moves the belief: a refused connection and an unknown outcome publish nothing, the later success does")
+    void onlyASuccessIsAnnounced() {
+        World w = world();
+        partner.script(Scenario.CONNECTION_REFUSED, Scenario.TIMEOUT_AFTER_APPLY);
+
+        reconcile(w);
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
+                .as(
+                        "one item refused before anything was written, one answered by a timeout: neither is a confirmation")
+                .isEmpty();
+        assertThat(rowStates(w)).containsExactlyInAnyOrder("PENDING", "UNCERTAIN");
+
+        clock.advance(Duration.ofMinutes(15));
+        reconcile(w);
+
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
+                .as("both are now confirmed: one fact each, announced when the partner answered")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName(
+            "a sweep that finds nothing to send announces nothing; a resumption that forgot every belief announces again")
+    void aQuietSweepAnnouncesNothing() {
+        World w = world();
+        reconcile(w);
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED)).hasSize(2);
+
+        // Somebody edits the portal by hand and a markered sweep finds the platform's belief intact:
+        // nothing differs, nothing is sent.
+        partner.hold(w, "ext-A", false);
+        markDirty(w);
+        reconcile(w);
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED)).hasSize(2);
+
+        // Suspended, then resumed: every belief is withdrawn first and everything is resent once,
+        // and each resend is the partner being known again to hold a value it was not known to.
+        configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
+        reconcile(w);
+        configuration.put("marketplace.availability.reconcile_enabled", true);
+        build();
+        reconcile(w);
+
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
+                .as("two more: the resumption resent both dishes")
+                .hasSize(4);
+        assertThat(partner.held(w)).containsEntry("ext-A", true);
+    }
+
+    @Test
+    @DisplayName("a worker that lost its lease while the call was in flight records nothing and announces nothing")
+    void aLostLeaseAnnouncesNothing() {
+        World w = world();
+        // Another replica takes ext-A's lease the moment the call is made.
+        partner.duringCall = () -> jdbc.sql("""
+                        UPDATE integration.marketplace_item_availability
+                        SET lease_owner = 'another-replica', lease_expires_at = :until
+                        WHERE binding_id = :b AND lease_owner IS NOT NULL
+                        """)
+                .param("b", w.binding())
+                .param(
+                        "until",
+                        java.time.OffsetDateTime.ofInstant(clock.instant().plusSeconds(600), ZoneOffset.UTC))
+                .update();
+
+        reconcile(w);
+
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
+                .as("every row's lease was taken mid-call, so no outcome was recorded and no fact published")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a binding unconfirmed past its bound is reported stale once: one fact, one operations alert")
+    void aStaleChannelIsReportedOnce() throws Exception {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(40));
+
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(9));
+        reconcile(w);
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("nine minutes into a ten-minute bound")
+                .isEmpty();
+        assertThat(alerts.calls()).isEmpty();
+
+        clock.advance(Duration.ofMinutes(2));
+        reconcile(w);
+
+        List<Map<String, Object>> facts = outbox(MarketplaceOutbox.CHANNEL_WENT_STALE);
+        assertThat(facts).hasSize(1);
+        assertThat(facts.get(0).get("aggregate_id")).isEqualTo(w.binding());
+        Map<String, Object> payload = payload(facts.get(0));
+        assertThat(payload)
+                .containsEntry("bindingId", w.binding().toString())
+                .containsEntry("locationId", w.location().toString())
+                .containsEntry("providerType", PROVIDER)
+                .containsEntry("staleAfterSeconds", 600)
+                .containsEntry("unconfirmedItemCount", 2);
+        assertValidAgainstSchema(
+                "MarketplaceChannelWentStale", String.valueOf(facts.get(0).get("payload")));
+        assertThat(alerts.calls()).singleElement().satisfies(call -> {
+            assertThat(call.tenantId()).isEqualTo(w.tenant());
+            assertThat(call.brandId()).isEqualTo(w.brand());
+            assertThat(call.locationId()).isEqualTo(w.location());
+            assertThat(call.eventClass()).isEqualTo(MarketplaceStaleChannelMonitor.MARKETPLACE_CHANNEL_STALE);
+            assertThat(call.subjectId()).isEqualTo(w.binding());
+            assertThat(call.variables())
+                    .containsEntry("provider", PROVIDER)
+                    .containsEntry("itemCount", "2")
+                    .containsEntry("staleAfterMinutes", "10");
+        });
+
+        for (int tick = 0; tick < 5; tick++) {
+            clock.advance(Duration.ofMinutes(3));
+            reconcile(w);
+        }
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("still stale, still the same episode: reported once")
+                .hasSize(1);
+        assertThat(alerts.calls()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "the number of bindings inside a reported stale episode is a gauge, and falls back to zero on recovery")
+    void theStaleChannelsGaugeFollowsTheEpisode() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(40));
+        reconciler.tick();
+        assertThat(meters.get("horecaos.marketplace.availability.stale_channels")
+                        .gauge()
+                        .value())
+                .as("nothing is overdue yet")
+                .isZero();
+
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+        assertThat(meters.get("horecaos.marketplace.availability.stale_channels")
+                        .gauge()
+                        .value())
+                .as("one binding is inside a reported episode")
+                .isEqualTo(1.0);
+        assertThat(meters.get("horecaos.marketplace.channel.went_stale")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+
+        partner.script();
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+        assertThat(rowStates(w)).containsOnly("IN_SYNC");
+        assertThat(meters.get("horecaos.marketplace.availability.stale_channels")
+                        .gauge()
+                        .value())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("two replicas evaluating one stale binding report it once between them")
+    void twoReplicasReportOnce() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(10));
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(20));
+
+        MarketplaceStaleChannelMonitor.Verdict first = staleMonitor.evaluate(binding(w), 600, clock.instant());
+        MarketplaceStaleChannelMonitor.Verdict second = staleMonitor.evaluate(binding(w), 600, clock.instant());
+
+        assertThat(first).isEqualTo(MarketplaceStaleChannelMonitor.Verdict.REPORTED);
+        assertThat(second).isEqualTo(MarketplaceStaleChannelMonitor.Verdict.ALREADY_REPORTED);
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE)).hasSize(1);
+        assertThat(alerts.calls()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a recovered binding is reported again when it next goes stale: a new episode, its own alert")
+    void aNewEpisodeIsAReportOfItsOwn() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(40));
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(15));
+        reconcile(w);
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE)).hasSize(1);
+
+        // The partner comes back: everything is sent and confirmed, and the mark clears.
+        partner.script();
+        clock.advance(Duration.ofMinutes(15));
+        reconcile(w);
+        assertThat(rowStates(w)).containsOnly("IN_SYNC");
+        assertThat(jdbc.sql("SELECT stale_alerted_at FROM integration.marketplace_availability_sync_state "
+                                + "WHERE binding_id = :b")
+                        .param("b", w.binding())
+                        .query((row, number) -> row.getObject(1))
+                        .list()
+                        .get(0))
+                .as("nothing unconfirmed past the bound: the episode ended")
+                .isNull();
+
+        // It breaks again, later.
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        partner.script(refused(40));
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(15));
+        reconcile(w);
+
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE)).hasSize(2);
+        assertThat(alerts.calls()).hasSize(2);
+        assertThat(alerts.calls().get(0).idempotencyKeyBase())
+                .as("each episode is named by when its longest wait began, so an alert is never swallowed as a repeat")
+                .isNotEqualTo(alerts.calls().get(1).idempotencyKeyBase());
+    }
+
+    @Test
+    @DisplayName("a dish the partner refused as unknown is a mapping to fix, not a channel gone quiet")
+    void anUnmappedItemIsNotAStaleChannel() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(Scenario.UNKNOWN_ITEM, Scenario.OK);
+
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(30));
+        reconcile(w);
+
+        assertThat(rowStates(w)).contains("REJECTED_UNMAPPED");
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE)).isEmpty();
+        assertThat(alerts.calls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a suspended reconciler, and a provider with no adapter, never report a channel as stale")
+    void nothingIsReportedWhereNothingIsAttempted() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
+        partner.script(refused(10));
+        reconcile(w);
+
+        configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
+        clock.advance(Duration.ofHours(2));
+        reconcile(w);
+
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE))
+                .as("suspended: no call was attempted, so nothing failed to land")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the stale alert's variables carry no protected field and are exactly the documented four")
+    void theAlertVariablesAreClean() {
+        Map<String, String> variables = MarketplaceStaleChannelMonitor.alertVariables(
+                "YANDEX_EDA", 7, Instant.parse("2026-10-01T09:32:00Z"), 1800);
+
+        assertThat(variables.keySet())
+                .containsExactlyInAnyOrder("provider", "itemCount", "unconfirmedSince", "staleAfterMinutes");
+        assertThat(variables.keySet())
+                .noneMatch(uz.horecaos.platform.iam.api.protection.ClassificationScanner::isProtectedName);
+    }
+
+    @Test
+    @DisplayName(
+            "every operations event class the code offers is admitted by the database check, MARKETPLACE_CHANNEL_STALE included")
+    void everyTelegramEventClassIsAdmittedByTheCheck() {
+        String definition = jdbc.sql("""
+                        SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                        WHERE conname = 'ck_telegram_binding_event_class'
+                        """).query(String.class).single();
+
+        for (var eventClass : uz.horecaos.platform.integration.provider.telegram.TelegramEventClass.values()) {
+            assertThat(definition).as("%s", eventClass).contains("'" + eventClass.name() + "'");
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Fixtures
     // -----------------------------------------------------------------------
+
+    /** {@code count} connection-refused answers: the partner is unreachable for that many calls. */
+    private static Scenario[] refused(int count) {
+        Scenario[] scenarios = new Scenario[count];
+        java.util.Arrays.fill(scenarios, Scenario.CONNECTION_REFUSED);
+        return scenarios;
+    }
+
+    private List<Map<String, Object>> outbox(String eventType) {
+        return jdbc.sql("""
+                        SELECT event_id, event_type, tenant_id, aggregate_type, aggregate_id, topic, partition_key,
+                               CAST(payload AS text) AS payload
+                        FROM integration.outbox_events
+                        WHERE event_type = :type
+                        ORDER BY created_at, event_id
+                        """).param("type", eventType).query().listOfRows();
+    }
+
+    private Map<String, Object> payload(Map<String, Object> outboxRow) {
+        try {
+            return JsonMapper.builder().build().readValue(String.valueOf(outboxRow.get("payload")), Map.class);
+        } catch (RuntimeException unreadable) {
+            throw new AssertionError("The outbox payload is not JSON", unreadable);
+        }
+    }
+
+    private Map<String, Object> payloadOf(List<Map<String, Object>> rows, String externalItemId) {
+        return rows.stream()
+                .map(this::payload)
+                .filter(payload -> externalItemId.equals(payload.get("externalItemId")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No fact for " + externalItemId));
+    }
+
+    private Map<String, Object> payloadOf(List<Map<String, Object>> rows, String externalItemId, boolean available) {
+        return rows.stream()
+                .map(this::payload)
+                .filter(payload -> externalItemId.equals(payload.get("externalItemId"))
+                        && Boolean.valueOf(available).equals(payload.get("available")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No fact for " + externalItemId + " = " + available));
+    }
+
+    private void assertValidAgainstSchema(String eventType, String payloadJson) throws Exception {
+        var contract = uz.horecaos.platform.integration.events.EventCatalog.require(eventType, 1);
+        var factory = com.networknt.schema.JsonSchemaFactory.getInstance(
+                com.networknt.schema.SpecVersion.VersionFlag.V202012);
+        try (java.io.InputStream schemaStream =
+                getClass().getClassLoader().getResourceAsStream(contract.schemaPath())) {
+            assertThat(schemaStream)
+                    .as("schema %s exists", contract.schemaPath())
+                    .isNotNull();
+            var schema = factory.getSchema(
+                    java.util.Objects.requireNonNull(schemaStream),
+                    com.networknt.schema.SchemaValidatorsConfig.builder().build());
+            var payload = new com.fasterxml.jackson.databind.ObjectMapper().readTree(payloadJson);
+            assertThat(schema.validate(payload))
+                    .as("the payload of %s satisfies %s: %s", eventType, contract.schemaPath(), payload)
+                    .isEmpty();
+        }
+    }
+
+    /** Switches the mapping table's marker trigger, so a test can prove the sweep alone is the guarantee. */
+    private void setMappingMarker(boolean on) {
+        jdbc.sql("ALTER TABLE integration.provider_entity_mappings " + (on ? "ENABLE" : "DISABLE")
+                        + " TRIGGER trg_marketplace_mapping_marks_sweep")
+                .update();
+    }
 
     private record World(
             UUID tenant,

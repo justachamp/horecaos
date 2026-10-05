@@ -805,11 +805,90 @@ public class JdbcPartnerStore {
                 .list();
     }
 
+    // ------------------------------------------------- availability pull (ADR 0141)
+
+    /**
+     * The one live {@code MARKETPLACE} binding, among those a partner credential may act for, that
+     * serves this branch.
+     *
+     * <p>Narrowed by the caller's own binding set rather than by tenant alone: a binding of the
+     * same tenant that belongs to <em>another</em> aggregator's installation answers nothing here,
+     * exactly as an unknown branch does, so a partner cannot tell the two apart (ADR 0040's reason
+     * for answering "not found" instead of "forbidden" on this surface). When more than one of the
+     * partner's bindings serves the branch the lowest priority number wins, as {@link #findVenue}
+     * does.
+     */
+    public Optional<PullBinding> findBindingAtLocation(
+            UUID tenantId, java.util.Collection<UUID> permittedBindingIds, UUID locationId, Instant at) {
+        if (permittedBindingIds.isEmpty()) {
+            return Optional.empty();
+        }
+        return jdbc.sql("""
+                SELECT b.id AS binding_id, b.installation_id, b.brand_id
+                FROM integration.bindings b
+                JOIN integration.installations i
+                  ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                WHERE b.tenant_id = :tenantId
+                  AND b.id = ANY(:permitted)
+                  AND b.location_id = :locationId
+                  AND i.provider_category = 'MARKETPLACE'
+                  AND i.status = 'ACTIVE'
+                  AND b.status = 'ACTIVE'
+                  AND b.effective_from <= :at
+                  AND (b.effective_until IS NULL OR b.effective_until > :at)
+                ORDER BY b.priority, b.id
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("permitted", permittedBindingIds.toArray(UUID[]::new))
+                .param("locationId", locationId)
+                .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+                .query((row, number) -> new PullBinding(
+                        row.getObject("binding_id", UUID.class),
+                        row.getObject("installation_id", UUID.class),
+                        row.getObject("brand_id", UUID.class)))
+                .optional();
+    }
+
+    /**
+     * A page of the binding's mapped menu items in the partner's own id order, strictly after
+     * {@code afterExternalId}. Ordered by the partner's identifier because that is the one key
+     * that is unique within a binding and stable across calls: a dish mapped or unmapped between
+     * two pages moves nothing that has already been returned.
+     */
+    public List<MappedMenuItem> mappedMenuItemsAfter(
+            UUID tenantId, UUID bindingId, @Nullable String afterExternalId, int limit) {
+        return jdbc.sql("""
+                SELECT external_entity_id, horecaos_entity_id
+                FROM integration.provider_entity_mappings
+                WHERE tenant_id = :tenantId
+                  AND binding_id = :bindingId
+                  AND entity_type = 'MENU_ITEM'
+                  AND status = 'ACTIVE'
+                  AND (CAST(:after AS text) IS NULL OR external_entity_id > CAST(:after AS text))
+                ORDER BY external_entity_id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("after", afterExternalId)
+                .param("limit", limit)
+                .query((row, number) -> new MappedMenuItem(
+                        row.getString("external_entity_id"), row.getObject("horecaos_entity_id", UUID.class)))
+                .list();
+    }
+
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
     // -------------------------------------------------------------------- rows
+
+    /** The binding that serves a branch for a partner, and what it needs to resolve availability. */
+    public record PullBinding(UUID bindingId, UUID installationId, UUID brandId) {}
+
+    /** One mapped dish: the partner's identifier and the HorecaOS variant behind it. */
+    public record MappedMenuItem(String externalItemId, UUID variantId) {}
 
     public record Venue(
             UUID bindingId,

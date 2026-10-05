@@ -581,6 +581,72 @@ public class InventoryService implements InventoryReservationPort, ChannelAvaila
                 clock.instant()));
     }
 
+    /** What {@link #materialiseStopOnPosition} found at one location. */
+    public enum MaterialisedPosition {
+        /** The BINARY position was available and is now unavailable. */
+        WRITTEN,
+        /** The BINARY position already was unavailable: the stop adds nothing there. */
+        ALREADY_UNAVAILABLE,
+        /** An UNTRACKED item has no boolean to set. */
+        UNTRACKED,
+        /** A QUANTITY item has no boolean to set. */
+        QUANTITY,
+        /** The variant is not stocked here, so there is nothing to sell and nothing to carry. */
+        NOT_STOCKED
+    }
+
+    /**
+     * Writes a stop in force onto the position it covers: {@code binary_available = false} on a
+     * BINARY item, with the stop's true source and the movement reason {@code
+     * EMBARGO_MATERIALISED} (ADR 0141, rollback switch three).
+     *
+     * <p>Unlike {@link #setAvailability} this publishes no {@code ItemAvailabilityChanged}: the
+     * dish was already not sellable here because of the stop, so nothing a reader sees moves --
+     * no digest line "86'd" for a dish the kitchen stopped last week, no marker for the
+     * reconciler to chase a change that is not one. The run that calls it is itself an ADR 0027
+     * audit fact. Idempotent: a position already unavailable is left as it is and counted.
+     *
+     * <p>One transaction per call: a run walks thousands of positions, and one that cannot be
+     * written must not roll back the rest.
+     */
+    @Transactional
+    public MaterialisedPosition materialiseStopOnPosition(
+            UUID tenantId, UUID locationId, UUID variantId, UUID stopId, StopSource source, @Nullable UUID actorId) {
+        rls.bindTenant(tenantId);
+        Optional<StockItemRow> found = store.findStockItem(tenantId, locationId, variantId);
+        if (found.isEmpty()) {
+            return MaterialisedPosition.NOT_STOCKED;
+        }
+        StockItemRow item = found.get();
+        switch (item.trackingMode()) {
+            case UNTRACKED -> {
+                return MaterialisedPosition.UNTRACKED;
+            }
+            case QUANTITY -> {
+                return MaterialisedPosition.QUANTITY;
+            }
+            case BINARY -> {
+                if (Boolean.FALSE.equals(item.binaryAvailable())) {
+                    return MaterialisedPosition.ALREADY_UNAVAILABLE;
+                }
+            }
+        }
+        store.setBinaryAvailability(
+                tenantId,
+                item.stockItemId(),
+                false,
+                "materialise:%s:%d".formatted(stopId, item.positionSequence()),
+                MATERIALISED_REASON,
+                actorId == null ? "SERVICE" : "USER",
+                actorId,
+                source.name(),
+                clock.instant());
+        return MaterialisedPosition.WRITTEN;
+    }
+
+    /** The movement reason a materialised stop leaves on the position it was written onto. */
+    public static final String MATERIALISED_REASON = "EMBARGO_MATERIALISED";
+
     /**
      * The same 86 toggle as {@link #setAvailability}, plus the ADR 0027 audit
      * fact it never wrote on any channel: "a kitchen marking a dish sold out,

@@ -1,0 +1,91 @@
+<q-modal
+  [title]="'kitchen.stopList.why.title' | t"
+  (dismiss)="close()"
+  data-testid="stop-explainer-dialog"
+>
+  <p class="explainer__dish q-body-sm" data-testid="explainer-dish">{{ productName() }}</p>
+
+  <label class="explainer__field">
+    <span class="q-caption">{{ 'kitchen.stopList.scope.channel' | t }}</span>
+    <select
+      class="explainer__select q-body-sm"
+      [value]="channelCode()"
+      (change)="pickChannel($any($event.target).value)"
+      data-testid="explainer-channel"
+    >
+      <option value="">{{ 'kitchen.stopList.why.noChannel' | t }}</option>
+      @for (channel of channels(); track channel.id) {
+        <option [value]="channel.code">{{ channel.displayName }}</option>
+      }
+    </select>
+  </label>
+
+  @if (loading()) {
+    <p class="q-body-sm explainer__note" role="status" data-testid="explainer-loading">
+      {{ 'kitchen.stopList.loading' | t }}
+    </p>
+  } @else if (denied()) {
+    <p class="q-body-sm explainer__note" data-testid="explainer-denied">
+      {{ 'kitchen.stopList.denied' | t }}
+    </p>
+  } @else if (errorText(); as error) {
+    <p class="q-body-sm explainer__error" role="alert" data-testid="explainer-error">{{ error }}</p>
+  } @else if (explanation(); as answer) {
+    <p
+      class="q-emphasis explainer__verdict"
+      [class.explainer__verdict--no]="!answer.sellable"
+      data-testid="explainer-verdict"
+      [attr.data-sellable]="answer.sellable"
+    >
+      {{
+        (answer.sellable ? 'kitchen.stopList.status.available' : 'kitchen.stopList.status.onStop')
+          | t
+      }}
+    </p>
+
+    @if (answer.stopsConsulted === false) {
+      <p class="q-caption explainer__note" data-testid="explainer-stops-off">
+        {{ 'kitchen.stopList.why.off' | t }}
+      </p>
+    }
+
+    @if (otherReasons(answer).length > 0) {
+      <ul class="explainer__list">
+        @for (reason of otherReasons(answer); track reason) {
+          <li class="q-body-sm" data-testid="explainer-reason">{{ reasonText(reason) }}</li>
+        }
+      </ul>
+    }
+
+    @if (answer.stops.length > 0) {
+      <ul class="explainer__list">
+        @for (stop of answer.stops; track stop.id) {
+          <li
+            class="q-body-sm"
+            [class.explainer__ignored]="stop.ignored"
+            data-testid="explainer-stop"
+          >
+            {{ scopeText(stop.scopeType) }} · {{ sourceText(stop.source) }} ·
+            {{ stop.reasonCode }} ·
+            {{ untilText(stop) }}
+            @if (stop.ignored) {
+              <span class="q-caption">({{ 'kitchen.stopList.why.off' | t }})</span>
+            }
+          </li>
+        }
+      </ul>
+      <p class="q-caption explainer__note">{{ 'kitchen.stopList.panel.union' | t }}</p>
+    }
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="explainer__close q-body-sm"
+      (click)="close()"
+      data-testid="explainer-close"
+    >
+      {{ 'kitchen.stopList.why.close' | t }}
+    </button>
+  </ng-container>
+</q-modal>

@@ -241,4 +241,10 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.devices.revoke.confirm': 'Подтвердить отзыв',
   'kitchen.devices.revoke.submitting': 'Отзыв…',
   'kitchen.devices.revoke.cancel': 'Отмена',
+  'kitchen.stopList.why.open': 'Почему?',
+  'kitchen.stopList.why.title': 'Почему нельзя продать?',
+  'kitchen.stopList.why.noChannel': 'Без канала (стопы на все каналы)',
+  'kitchen.stopList.why.cutoff': 'Остаток не выше порога канала',
+  'kitchen.stopList.why.off': 'Стопы отключены',
+  'kitchen.stopList.why.close': 'Закрыть',
 };

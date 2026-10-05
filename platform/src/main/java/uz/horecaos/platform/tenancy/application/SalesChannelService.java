@@ -25,6 +25,7 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelActivated;
 import uz.horecaos.platform.tenancy.api.SalesChannelArchived;
+import uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -128,7 +129,27 @@ public class SalesChannelService {
                 "Sales channel created",
                 Map.of(),
                 snapshotOf(channel));
+        announceInstallation(tenantId, channel.id(), null, channel.providerInstallationId());
         return channel;
+    }
+
+    /**
+     * Tells the marketplace reconciler that the installation a channel resolves for has moved,
+     * or that the channel it resolves to was paused, reopened or retired (ADR 0141 Decision 7's
+     * marker for a channel's installation). Nothing is published for a channel with no
+     * installation before or after: no binding resolves through it. An accelerator only -- the
+     * resync sweep re-resolves the channel of every binding on its own.
+     */
+    private void announceInstallation(
+            UUID tenantId,
+            UUID channelId,
+            @Nullable UUID previousInstallationId,
+            @Nullable UUID currentInstallationId) {
+        if (previousInstallationId == null && currentInstallationId == null) {
+            return;
+        }
+        events.publishEvent(SalesChannelInstallationChanged.of(
+                tenantId, channelId, previousInstallationId, currentInstallationId, clock.instant()));
     }
 
     @Transactional(readOnly = true)
@@ -213,6 +234,10 @@ public class SalesChannelService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcSalesChannelStore.explain(violation);
         }
+        if (!java.util.Objects.equals(channel.providerInstallationId(), command.providerInstallationId())) {
+            announceInstallation(
+                    tenantId, channelId, channel.providerInstallationId(), command.providerInstallationId());
+        }
         SalesChannel updated = new SalesChannel(
                 channel.id(),
                 channel.tenantId(),
@@ -287,6 +312,7 @@ public class SalesChannelService {
         if (!store.updateStatus(tenantId, channelId, to, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
+        announceInstallation(tenantId, channelId, channel.providerInstallationId(), channel.providerInstallationId());
         SalesChannel transitioned = new SalesChannel(
                 channel.id(),
                 channel.tenantId(),
@@ -333,6 +359,7 @@ public class SalesChannelService {
         int newVersion = channel.version() + 1;
         events.publishEvent(new SalesChannelArchived(
                 UUID.randomUUID(), new TenantId(tenantId), channelId, clock.instant(), channel.code(), newVersion));
+        announceInstallation(tenantId, channelId, channel.providerInstallationId(), channel.providerInstallationId());
         SalesChannel archived = new SalesChannel(
                 channel.id(),
                 channel.tenantId(),

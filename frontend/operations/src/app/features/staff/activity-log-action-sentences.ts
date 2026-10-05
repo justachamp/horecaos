@@ -980,6 +980,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Стоп блюда изменён',
       'uz-Latn': 'Taom stopi oʻzgartirildi',
     },
+    'inventory.stop_materialisation.acknowledged': {
+      en: 'Stop report acknowledged before stops are switched off',
+      ru: 'Отчёт по стопам принят перед отключением стопов',
+      'uz-Latn': 'Stoplar oʻchirilishidan oldin stop hisoboti qabul qilindi',
+    },
+    'inventory.stop_materialisation.run': {
+      en: 'Stops written onto positions and reported',
+      ru: 'Стопы записаны в остатки, составлен отчёт',
+      'uz-Latn': 'Stoplar qoldiqlarga yozildi va hisobot tuzildi',
+    },
     'kitchen.device.enrolled': {
       en: 'Kitchen device enrolled',
       ru: 'Кухня устройство зарегистрировано',
