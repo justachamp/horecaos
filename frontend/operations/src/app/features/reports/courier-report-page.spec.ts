@@ -1,8 +1,9 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
+import { SlaBucketSetApi } from '../../core/api/sla-bucket-set-api';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { CouriersApi } from '../couriers/couriers-api';
@@ -57,6 +58,12 @@ describe('CourierReportPage', () => {
   let fixture: ComponentFixture<CourierReportPage>;
   let reconcileSpy: ReturnType<typeof vi.fn>;
   let externalCostRows: readonly ExternalDeliveryCostRowResponse[];
+  /** What the Settings card's endpoint answers; `null` makes the read fail. */
+  let bucketSetVersion: number | null;
+
+  beforeEach(() => {
+    bucketSetVersion = 1;
+  });
 
   async function render(): Promise<void> {
     TestBed.resetTestingModule();
@@ -65,6 +72,18 @@ describe('CourierReportPage', () => {
       imports: [CourierReportPage],
       providers: [
         ReportsFilterState,
+        {
+          provide: SlaBucketSetApi,
+          useValue: {
+            get: vi
+              .fn()
+              .mockImplementation(() =>
+                bucketSetVersion === null
+                  ? Promise.reject(new Error('refused'))
+                  : Promise.resolve({ version: bucketSetVersion, buckets: [] }),
+              ),
+          },
+        },
         {
           provide: CurrentLocation,
           useValue: {
@@ -104,7 +123,18 @@ describe('CourierReportPage', () => {
               ],
               provenance: provenance(),
             }),
-            courierSlaBuckets: vi.fn().mockResolvedValue({ buckets: [], provenance: provenance() }),
+            courierSlaBuckets: vi.fn().mockResolvedValue({
+              buckets: [
+                {
+                  businessDate: '2026-09-10',
+                  courierId: 'courier-1',
+                  bucketCode: 'UNDER_30',
+                  orderCount: 4,
+                  shareBasisPoints: 10_000,
+                },
+              ],
+              provenance: provenance(),
+            }),
             courierTariffAudit: vi.fn().mockResolvedValue({ rows: [], provenance: provenance() }),
             courierExternalDeliveryCost: vi.fn(async () => ({
               rows: externalCostRows,
@@ -128,6 +158,27 @@ describe('CourierReportPage', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('K-014');
     expect(host.textContent).not.toContain('courier-1');
+  });
+
+  it('prints the bucket-set version the Settings card’s endpoint answers, not a constant (row 10.10c)', async () => {
+    externalCostRows = [];
+    bucketSetVersion = 7;
+    await render();
+
+    const footnote = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="sla-bucket-version"]',
+    );
+    expect(footnote?.textContent?.trim()).toBe('Buckets: sla_bucket_set.v7');
+  });
+
+  it('leaves the footnote out, and still draws the report, when the version cannot be read', async () => {
+    externalCostRows = [];
+    bucketSetVersion = null;
+    await render();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="sla-bucket-version"]')).toBeNull();
+    expect(host.textContent).toContain('K-014');
   });
 
   it('offers the reconcile action only on a row the report marked reconcilable', async () => {

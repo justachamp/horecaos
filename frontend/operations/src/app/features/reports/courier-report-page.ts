@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
+import { SlaBucketSetApi } from '../../core/api/sla-bucket-set-api';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
@@ -146,6 +147,7 @@ export class CourierReportPage {
   private readonly tariffsApi = inject(DeliveryTariffsApi);
   private readonly zonesApi = inject(DeliveryZonesApi);
   private readonly location = inject(CurrentLocation);
+  private readonly slaBucketSets = inject(SlaBucketSetApi);
   private readonly filters = inject(ReportsFilterState);
   protected readonly i18n = inject(I18n);
 
@@ -156,7 +158,8 @@ export class CourierReportPage {
   protected readonly costRows = signal<readonly ExternalCostRow[]>([]);
   protected readonly costTotalVarianceMinor = signal(0);
   protected readonly provenance = signal<ProvenanceResponse | null>(null);
-  protected readonly slaBucketSetVersion = 1;
+  /** From the endpoint the Settings card reads (row `10.10c`); absent until it answers, never a guess. */
+  protected readonly slaBucketSetVersion = signal<number | null>(null);
   protected readonly slaBucketCodes = SLA_BUCKETS;
   protected readonly requestedTo = computed(() => this.filters.range().to);
 
@@ -240,6 +243,18 @@ export class CourierReportPage {
     }
   }
 
+  /**
+   * Row `10.10c`: the version the Settings card shows, from the same endpoint. Best effort -- a
+   * failed read leaves the footnote out, it never fails the report whose numbers are already fine.
+   */
+  private async readBucketSetVersion(tenantId: string): Promise<void> {
+    try {
+      this.slaBucketSetVersion.set((await this.slaBucketSets.get(tenantId)).version);
+    } catch {
+      this.slaBucketSetVersion.set(null);
+    }
+  }
+
   private async load(): Promise<void> {
     this.state.set('loading');
     await this.location.ensureLoaded();
@@ -249,6 +264,7 @@ export class CourierReportPage {
       return;
     }
     this.tenantId = scope.tenantId;
+    void this.readBucketSetVersion(scope.tenantId);
     try {
       const range = this.filters.range();
 
