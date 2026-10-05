@@ -24,6 +24,8 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyAuthoringService;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyAuthoringService.Editor;
@@ -231,14 +233,20 @@ public class OrderLatenessPolicyEditorController {
      *
      * @param version         the policy version in force at this exact scope, absent when nothing was authored here
      * @param approvedByName  who approved that version, by the name the tenant knows them by; absent when the
-     *                        principal has no member record in this tenant
+     *                        principal has no member record in this tenant. PERSONAL (ADR 0029, ADR 0139):
+     *                        this record is the reply to the idempotent POST, and the declaration is what
+     *                        keeps the stored reply encrypted -- the name heuristic does not know the word
      * @param validFrom       when that version took effect
      */
     public record LevelResponse(
             ScopeType scopeType,
             String outcome,
             @Nullable Long version,
-            @Nullable String approvedByName,
+
+            @Classified(value = DataClass.PERSONAL, reason = "a staff member's name, read from StaffDirectory")
+            @Nullable
+            String approvedByName,
+
             @Nullable Instant validFrom) {
 
         static LevelResponse of(OrderLatenessPolicyAuthoringService.Level level, Map<String, String> names) {
