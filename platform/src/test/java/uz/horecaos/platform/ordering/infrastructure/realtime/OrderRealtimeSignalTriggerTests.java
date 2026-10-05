@@ -45,7 +45,7 @@ class OrderRealtimeSignalTriggerTests {
     private final OrderRealtimeSignalTrigger trigger = new OrderRealtimeSignalTrigger(realtime);
 
     @Test
-    @DisplayName("a confirmation publishes on both ORDER_QUEUE and ORDER_DETAIL, at the order's location")
+    @DisplayName("a confirmation publishes ORDER_QUEUE at its branch and at its brand, and ORDER_DETAIL at its branch")
     void confirmationPublishesOnQueueAndDetail() {
         trigger.onOrderingEvent(new OrderConfirmed(
                 UUID.randomUUID(),
@@ -62,19 +62,36 @@ class OrderRealtimeSignalTriggerTests {
                 "CONFIRMED",
                 2));
 
-        assertThat(realtime.signals).hasSize(2);
         assertThat(realtime.signals)
-                .extracting(RealtimeSignal::channel)
-                .containsExactlyInAnyOrder(StreamChannel.ORDER_QUEUE, StreamChannel.ORDER_DETAIL);
+                .extracting(signal -> signal.channel() + "@" + signal.scopeKey().canonical())
+                .containsExactlyInAnyOrder(
+                        StreamChannel.ORDER_QUEUE + "@"
+                                + ScopeKey.location(LOCATION).canonical(),
+                        StreamChannel.ORDER_QUEUE + "@" + ScopeKey.brand(BRAND).canonical(),
+                        StreamChannel.ORDER_DETAIL + "@"
+                                + ScopeKey.location(LOCATION).canonical());
 
         for (RealtimeSignal signal : realtime.signals) {
             assertThat(signal.tenantId()).isEqualTo(TENANT);
-            assertThat(signal.scopeKey()).isEqualTo(ScopeKey.location(LOCATION));
             assertThat(signal.resourceType()).isEqualTo("Order");
             assertThat(signal.resourceId()).isEqualTo(ORDER);
             assertThat(signal.version()).isEqualTo(2L);
             assertThat(signal.occurredAt()).isEqualTo(NOW);
         }
+    }
+
+    @Test
+    @DisplayName("the brand signal names the order's own brand, never another one")
+    void theBrandSignalNamesTheOrdersBrand() {
+        UUID otherBrand = UUID.randomUUID();
+        trigger.onOrderingEvent(new OrderCompleted(
+                UUID.randomUUID(), new TenantId(TENANT), ORDER, NOW, otherBrand, LOCATION, NOW, "UZS", 45_000L, 3));
+
+        assertThat(realtime.signals)
+                .filteredOn(signal -> signal.channel() == StreamChannel.ORDER_QUEUE)
+                .extracting(RealtimeSignal::scopeKey)
+                .containsExactlyInAnyOrder(ScopeKey.location(LOCATION), ScopeKey.brand(otherBrand))
+                .doesNotContain(ScopeKey.brand(BRAND));
     }
 
     @Test
@@ -141,8 +158,13 @@ class OrderRealtimeSignalTriggerTests {
         trigger.onOrderingEvent(new OrderCompleted(
                 UUID.randomUUID(), new TenantId(TENANT), ORDER, NOW, BRAND, LOCATION, NOW, "UZS", 45_000L, 3));
 
-        // Six events, two frames each.
-        assertThat(realtime.signals).hasSize(12);
+        // Six events, three frames each: the queue at the branch, the queue at the brand, the detail.
+        assertThat(realtime.signals).hasSize(18);
+        assertThat(realtime.signals)
+                .filteredOn(signal -> signal.scopeKey().equals(ScopeKey.brand(BRAND)))
+                .extracting(RealtimeSignal::channel)
+                .containsOnly(StreamChannel.ORDER_QUEUE)
+                .hasSize(6);
     }
 
     @Test

@@ -136,6 +136,67 @@ class OperationsStreamControllerTests {
         assertThat(registry.openStreams()).isOne();
     }
 
+    // ------------------------------------------------- the brand-wide queue (gap map row 1.1)
+
+    @Test
+    @DisplayName("the brand-wide queue is authorized at the brand, not at the branch the connection was opened at")
+    void theBrandQueueIsAuthorizedAtTheBrand() {
+        ScopedAuthorization scoped = new ScopedAuthorization(ResourceScope.ScopeType.BRAND);
+        OperationsStreamController brandController = controllerWith(scoped);
+
+        SseEmitter emitter =
+                brandController.open(TENANT, BRAND, LOCATION, "BRAND:" + BRAND, List.of("order_queue"), null, null);
+
+        assertThat(emitter).isNotNull();
+        assertThat(registry.openStreams()).isOne();
+        assertThat(scoped.checked)
+                .as("order.read was asked for at BRAND scope, naming this brand")
+                .containsExactly(Capability.ORDER_READ + "@" + ResourceScope.brand(TENANT, BRAND));
+    }
+
+    @Test
+    @DisplayName("a principal who reads only this branch is refused the brand-wide queue, and nothing is opened")
+    void aBranchGrantDoesNotBuyTheBrandQueue() {
+        // Holds order.read at LOCATION and nowhere wider: the branch board's grant.
+        ScopedAuthorization scoped = new ScopedAuthorization(ResourceScope.ScopeType.LOCATION);
+        OperationsStreamController branchOnly = controllerWith(scoped);
+
+        assertThatThrownBy(() ->
+                        branchOnly.open(TENANT, BRAND, LOCATION, "BRAND:" + BRAND, List.of("order_queue"), null, null))
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+        assertThat(registry.openStreams()).isZero();
+
+        // The same principal still gets the branch board.
+        assertThat(branchOnly.open(TENANT, BRAND, LOCATION, null, List.of("order_queue"), null, null))
+                .isNotNull();
+        assertThat(registry.openStreams()).isOne();
+    }
+
+    @Test
+    @DisplayName(
+            "a brand key naming a brand the connection was not opened at is refused before any capability is asked")
+    void aForeignBrandKeyIsRefusedBeforeAuthorization() {
+        ScopedAuthorization scoped = new ScopedAuthorization(ResourceScope.ScopeType.BRAND);
+        OperationsStreamController brandController = controllerWith(scoped);
+        UUID otherBrand = UUID.randomUUID();
+
+        assertThatThrownBy(() -> brandController.open(
+                        TENANT, BRAND, LOCATION, "BRAND:" + otherBrand, List.of("order_queue"), null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(scoped.checked).isEmpty();
+        assertThat(registry.openStreams()).isZero();
+    }
+
+    private OperationsStreamController controllerWith(AuthorizationService authorization) {
+        return new OperationsStreamController(
+                registry,
+                authorization,
+                () -> new AuthenticatedActor("brand-board-1", Set.of(), Map.of()),
+                allowEveryConnect(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
     private static RateLimiter allowEveryConnect() {
         return (key, policy) -> RateLimiter.Decision.allowed(policy.permits());
     }
@@ -159,6 +220,49 @@ class OperationsStreamControllerTests {
             if (!granted.contains(capability)) {
                 throw new AccessDeniedException(capability, scope);
             }
+        }
+
+        @Override
+        public CapabilityView viewFor(String subject, UUID tenantId) {
+            throw new UnsupportedOperationException("Not exercised by this suite");
+        }
+    }
+
+    /**
+     * Holds {@code order.read} at exactly one scope type, and answers a request at any other
+     * with the refusal a real grant would give: a grant at a narrower scope never covers a
+     * request for a wider one. Records what it was asked, so a test can say at which scope.
+     */
+    private static final class ScopedAuthorization implements AuthorizationService {
+
+        private final ResourceScope.ScopeType heldAt;
+        final List<String> checked = new java.util.ArrayList<>();
+
+        ScopedAuthorization(ResourceScope.ScopeType heldAt) {
+            this.heldAt = heldAt;
+        }
+
+        @Override
+        public boolean has(String subject, Capability capability, ResourceScope scope) {
+            return capability == Capability.ORDER_READ && covers(scope);
+        }
+
+        @Override
+        public void require(String subject, Capability capability, ResourceScope scope) {
+            checked.add(capability + "@" + scope);
+            if (!has(subject, capability, scope)) {
+                throw new AccessDeniedException(capability, scope);
+            }
+        }
+
+        private boolean covers(ResourceScope scope) {
+            // BRAND covers a brand and everything under it; LOCATION covers a location only.
+            return switch (heldAt) {
+                case BRAND ->
+                    scope.type() == ResourceScope.ScopeType.BRAND || scope.type() == ResourceScope.ScopeType.LOCATION;
+                case LOCATION -> scope.type() == ResourceScope.ScopeType.LOCATION;
+                default -> false;
+            };
         }
 
         @Override
