@@ -355,7 +355,9 @@ public class JdbcReportingStore {
     public List<SourceLine> readSourceLines(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
                 SELECT l.id, l.order_id, l.source_variant_id, l.product_name_snapshot,
-                       l.quantity, l.base_amount_minor, l.final_amount_minor, resolved.category_id
+                       l.quantity, l.base_amount_minor, l.final_amount_minor, resolved.category_id,
+                       l.combo_selection_id, l.combo_container_variant_id, l.combo_quantity,
+                       l.combo_name_snapshot
                   FROM ordering.order_lines l
                   JOIN ordering.orders o ON o.id = l.order_id AND o.tenant_id = l.tenant_id
                   LEFT JOIN catalog.variants v
@@ -369,6 +371,11 @@ public class JdbcReportingStore {
                        ) resolved ON true
                  WHERE l.tenant_id = :tenantId
                    AND o.created_at >= :from AND o.created_at < :to
+                   -- An amendment never edits a line: it closes it (revision_to) and appends its
+                   -- replacement (ADR 0039). The order is the lines it holds now; read with the
+                   -- closed ones an amended order's facts had both versions of every rewritten
+                   -- line, and any sum over them counted it twice.
+                   AND l.revision_to IS NULL
                  ORDER BY l.order_id, l.line_number
                 """)
                 .param("tenantId", tenantId)
@@ -382,7 +389,11 @@ public class JdbcReportingStore {
                         row.getBigDecimal("quantity"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
-                        row.getObject("category_id", UUID.class)))
+                        row.getObject("category_id", UUID.class),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class),
+                        row.getObject("combo_quantity", Integer.class),
+                        row.getString("combo_name_snapshot")))
                 .list();
     }
 
@@ -573,7 +584,13 @@ public class JdbcReportingStore {
             /** Wave 9 w4-reports-distance-crm (7.1): the delivery leg's resolved distance (ADR 0037), null for a non-delivery order. */
             @Nullable Integer deliveryDistanceMeters) {}
 
-    /** @param categoryId wave W02 (7.8a): see {@link #readSourceLines}'s own doc for how this is resolved */
+    /**
+     * @param categoryId wave W02 (7.8a): see {@link #readSourceLines}'s own doc for how this is resolved
+     * @param comboSelectionId ADR 0136: the purchase this line is a component of; null when it is no combo's
+     * @param comboContainerVariantId the combo it was bought as part of, set exactly when {@code comboSelectionId} is
+     * @param comboQuantity how many combos the purchase was, set exactly when {@code comboSelectionId} is
+     * @param comboName the combo's name as it was sold, set exactly when {@code comboSelectionId} is
+     */
     public record SourceLine(
             UUID lineId,
             UUID orderId,
@@ -582,7 +599,11 @@ public class JdbcReportingStore {
             BigDecimal quantity,
             long baseAmountMinor,
             long finalAmountMinor,
-            @Nullable UUID categoryId) {
+            @Nullable UUID categoryId,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId,
+            @Nullable Integer comboQuantity,
+            @Nullable String comboName) {
 
         public SourceLine {
             quantity = Quantities.normalise(quantity);
@@ -869,16 +890,22 @@ public class JdbcReportingStore {
         params.put("net", fact.netSom());
         params.put("occurredAt", utc(fact.occurredAt()));
         params.put("legalEntityId", fact.legalEntityId());
+        params.put("comboSelectionId", fact.comboSelectionId());
+        params.put("comboContainerVariantId", fact.comboContainerVariantId());
+        params.put("comboQuantity", fact.comboQuantity());
+        params.put("comboName", fact.comboNameSnapshot());
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
                     category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som,
-                    occurred_at, legal_entity_id)
+                    occurred_at, legal_entity_id,
+                    combo_selection_id, combo_container_variant_id, combo_quantity, combo_name_snapshot)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
                     :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt,
-                    :legalEntityId)
+                    :legalEntityId,
+                    :comboSelectionId, :comboContainerVariantId, :comboQuantity, :comboName)
                 """).params(params).update();
     }
 
@@ -2571,6 +2598,102 @@ public class JdbcReportingStore {
     }
 
     /**
+     * Sales by combo (ADR 0136, row 4.2a): one row per combo container over the range, from
+     * {@code reporting.fact_order_line} alone.
+     *
+     * <p>A combo is sold as several ordinary lines that share a {@code combo_selection_id}, and the
+     * container is never a line, so there is nothing to sum for "how many Lunch boxes". The count is
+     * taken one value per <em>selection</em>: {@code combo_quantity} is how many combos that purchase
+     * was and it is the same on every component line of it, so summing it over the lines would count a
+     * purchase once per component. Money is the other way round: each component line carries its own
+     * share of the price, so the combo's revenue is the sum over its lines, once the lines are
+     * collected under their selection.
+     *
+     * <p>Completed orders only, the filter every sales read in this class applies: a combo on an order
+     * that was cancelled, rejected or never paid was not sold. Narrowed by location and fulfilment type
+     * exactly as {@link #readVariantSales} is, and ordered by net revenue so the combo that earns the
+     * most is first; the container id is the tiebreak, so a page is stable.
+     *
+     * <p>Bounded, not cursor-paged: a brand sells tens of combos, and a read that comes back full says
+     * so through {@code ReportQueryService#comboSales}.
+     */
+    public List<ComboSalesRow> readComboSales(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            int limit) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+        params.put("limit", limit);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND l.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+        String fulfilmentFilter = "";
+        if (!fulfilmentTypes.isEmpty()) {
+            fulfilmentFilter = " AND o.fulfilment_type IN (:fulfilmentTypes)";
+            params.put("fulfilmentTypes", fulfilmentTypes);
+        }
+
+        return jdbc.sql("""
+                WITH purchases AS (
+                    SELECT l.combo_container_variant_id AS container_id,
+                           l.combo_selection_id AS selection_id,
+                           l.order_id,
+                           max(l.combo_name_snapshot) AS combo_name,
+                           max(l.combo_quantity) AS combos,
+                           sum(l.gross_som) AS gross_som,
+                           sum(l.discount_som) AS discount_som,
+                           sum(l.net_som) AS net_som,
+                           max(o.fulfilment_type) AS fulfilment_type
+                      FROM reporting.fact_order_line l
+                      JOIN reporting.fact_order o
+                        ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date
+                       AND o.order_id = l.order_id
+                     WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
+                       AND l.combo_selection_id IS NOT NULL
+                       AND o.terminal_status = 'COMPLETED'
+                """ + locationFilter + fulfilmentFilter + """
+                     GROUP BY l.combo_container_variant_id, l.combo_selection_id, l.order_id
+                )
+                SELECT container_id,
+                       max(combo_name) AS combo_name,
+                       sum(combos) AS combos_sold,
+                       count(*) AS purchases,
+                       count(DISTINCT order_id) AS orders,
+                       sum(gross_som) AS gross_som,
+                       sum(discount_som) AS discount_som,
+                       sum(net_som) AS net_som,
+                       sum(combos) FILTER (WHERE fulfilment_type = 'DELIVERY') AS delivery_combos,
+                       sum(combos) FILTER (WHERE fulfilment_type = 'PICKUP') AS pickup_combos
+                  FROM purchases
+                 GROUP BY container_id
+                 ORDER BY sum(net_som) DESC, container_id
+                 LIMIT :limit
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new ComboSalesRow(
+                        row.getObject("container_id", UUID.class),
+                        row.getString("combo_name"),
+                        row.getLong("combos_sold"),
+                        row.getLong("purchases"),
+                        row.getLong("orders"),
+                        row.getLong("gross_som"),
+                        row.getLong("discount_som"),
+                        row.getLong("net_som"),
+                        row.getObject("delivery_combos", Long.class),
+                        row.getObject("pickup_combos", Long.class)))
+                .list();
+    }
+
+    /**
      * The un-bounded total net revenue across every variant in range — the
      * same tenant/date/location/fulfilment filters {@link #readVariantSales}
      * applies, but summed with no variant grouping and no {@code LIMIT}.
@@ -2649,6 +2772,30 @@ public class JdbcReportingStore {
             @Nullable Long deliveryNetSom,
             @Nullable BigDecimal pickupQuantity,
             @Nullable Long pickupNetSom) {}
+
+    /**
+     * One combo's summed sales in range -- see {@link #readComboSales}.
+     *
+     * @param comboContainerVariantId the combo, by the container variant it is sold as
+     * @param comboName the name it was sold under, from the line facts (a combo renamed mid-range
+     *                  reads as the name on its latest line)
+     * @param combosSold how many combos were sold: one {@code combo_quantity} per purchase
+     * @param purchases how many purchases those were: distinct {@code combo_selection_id}s
+     * @param orders on how many orders
+     * @param deliveryCombos of {@code combosSold}, those on DELIVERY orders; null when none were
+     * @param pickupCombos of {@code combosSold}, those on PICKUP orders; null when none were
+     */
+    public record ComboSalesRow(
+            UUID comboContainerVariantId,
+            String comboName,
+            long combosSold,
+            long purchases,
+            long orders,
+            long totalGrossSom,
+            long totalDiscountSom,
+            long totalNetSom,
+            @Nullable Long deliveryCombos,
+            @Nullable Long pickupCombos) {}
 
     // -------------------------------------------------------- T12: 7.5 operator leaderboard
 

@@ -620,7 +620,13 @@ public class DayCloseService {
                 // legal_entity_id, so ProductClassificationService can filter
                 // or refuse revenue.gross.v1 by legal entity without a join
                 // back to fact_order.
-                order.legalEntityId());
+                order.legalEntityId(),
+                // ADR 0136 (V0478): which combo the line was bought as part of, copied so
+                // "sales by combo" reads the fact alone.
+                line.comboSelectionId(),
+                line.comboContainerVariantId(),
+                line.comboQuantity(),
+                line.comboName());
     }
 
     private static @Nullable Integer elapsed(@Nullable Instant from, @Nullable Instant to) {

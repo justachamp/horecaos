@@ -833,6 +833,29 @@ public class ReportQueryService {
     }
 
     /**
+     * Sales by combo container (ADR 0136, row 4.2a): how many of each combo were sold, on how many
+     * orders, and for how much. See {@code JdbcReportingStore#readComboSales} for what is counted
+     * once per purchase and what is summed per line.
+     */
+    @Transactional(readOnly = true)
+    public ComboSalesResult comboSales(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            int limit) {
+
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.ComboSalesRow> rows =
+                store.readComboSales(tenantId, from, to, locationIds, fulfilmentTypes, limit);
+        return new ComboSalesResult(
+                rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
      * X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share
      * curve behind the product analytics page's own {@code q-abc-curve}
      * chart — cut from the same variant-sales source {@link #variantSales}
@@ -1608,6 +1631,9 @@ public class ReportQueryService {
 
     public record VariantSalesResult(
             List<JdbcReportingStore.VariantSalesRow> rows, boolean maybeMore, Provenance provenance) {}
+
+    public record ComboSalesResult(
+            List<JdbcReportingStore.ComboSalesRow> rows, boolean maybeMore, Provenance provenance) {}
 
     public record OutcomeResult(List<JdbcReportingStore.OutcomeRow> rows, Provenance provenance) {}
 
