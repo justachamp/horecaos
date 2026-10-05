@@ -43,21 +43,37 @@ function order(overrides: Partial<OrderSummaryResponse>): OrderSummaryResponse {
   };
 }
 
-/** Awaiting approval, a confirmed order with a courier to assign, and a finished one with nothing to do. */
+/**
+ * Awaiting approval, a confirmed order with a courier to assign, and a finished one with nothing to do.
+ *
+ * The «Все» tab sorts newest first, so each order gets its own `createdAt`, one second apart in the
+ * order the rows must appear. Three `new Date()` calls usually land in the same millisecond and
+ * tie — but not always: on a loaded CI runner they straddled a millisecond boundary, the rows came
+ * out in a different order, and `j` seemed to move two rows.
+ */
+const FIXTURE_NOW = Date.now();
 const ORDERS: readonly OrderSummaryResponse[] = [
   order({
     orderId: 'order-a',
     publicOrderNumber: '0001',
     status: 'AWAITING_APPROVAL',
+    createdAt: new Date(FIXTURE_NOW).toISOString(),
     actions: [{ action: 'APPROVE' }, { action: 'REJECT' }],
   }),
   order({
     orderId: 'order-b',
     publicOrderNumber: '0002',
     status: 'RECEIVED',
+    createdAt: new Date(FIXTURE_NOW - 1_000).toISOString(),
     actions: [{ action: 'CANCEL' }, { action: 'ASSIGN_COURIER' }],
   }),
-  order({ orderId: 'order-c', publicOrderNumber: '0003', status: 'COMPLETED', actions: [] }),
+  order({
+    orderId: 'order-c',
+    publicOrderNumber: '0003',
+    status: 'COMPLETED',
+    createdAt: new Date(FIXTURE_NOW - 2_000).toISOString(),
+    actions: [],
+  }),
 ];
 
 function configure(
