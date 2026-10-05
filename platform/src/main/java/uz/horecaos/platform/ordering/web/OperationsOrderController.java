@@ -597,7 +597,7 @@ public class OperationsOrderController {
                     + "A POST because the basket is a body; `ORDER_PLACE` because the answer is "
                     + "a price for a customer's would-be order. Needs an `Idempotency-Key`, which "
                     + "the screen mints fresh on every call.")
-    public ResponseEntity<OrderQuoteResponse> quote(
+    public ResponseEntity<OrderQuoteResponse> quoteOrder(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,

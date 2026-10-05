@@ -3806,6 +3806,22 @@ export interface OrderPosExportResponse {
   posCapable?: boolean;
 }
 
+export interface OrderQuoteResponse {
+  currency?: string;
+  deliveryFreeFromMinor?: number;
+  deliveryMinBasketMinor?: number;
+  deliveryOutcome?: string;
+  deliveryShortfallMinor?: number;
+  discountMinor?: number;
+  discounts?: Array<QuotedDiscountResponse>;
+  feeMinor?: number;
+  lines?: Array<QuotedLineResponse>;
+  provisional?: boolean;
+  subtotalMinor?: number;
+  taxMinor?: number;
+  totalMinor?: number;
+}
+
 export interface OrderRowResponse {
   businessDate?: string;
   cancellationReasonCode?: string;
@@ -4114,6 +4130,7 @@ export interface PickupView {
 }
 
 export interface PlaceOrderRequest {
+  cashTenderedMinor?: number;
   channelCode: string;
   customerAccountId: string;
   destination?: OperationsOrderControllerDestinationRequest;
@@ -4441,6 +4458,21 @@ export interface QuoteResponse {
   subtotalMinor?: number;
   taxMinor?: number;
   totalMinor?: number;
+}
+
+export interface QuotedDiscountResponse {
+  amountMinor?: number;
+  code?: string;
+  lineIndex?: number;
+  type?: string;
+}
+
+export interface QuotedLineResponse {
+  baseAmountMinor?: number;
+  finalAmountMinor?: number;
+  index?: number;
+  provisional?: boolean;
+  taxAmountMinor?: number;
 }
 
 export interface QuotedState {
@@ -6877,6 +6909,7 @@ export interface Operations {
   "drafts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/drafts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string; from?: string; limit?: number; to?: string } } }; responses: { "200": Array<DraftCartResponse> } };
   "marketplaceBindings": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/marketplace-bindings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": MarketplaceBindingsResponse } };
   "myWorkChannelMix": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/my-work/channel-mix"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { actorId?: string } } }; responses: { "200": MyWorkChannelMixResponse } };
+  "quoteOrder": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/quote"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: PlaceOrderRequest }; responses: { "200": OrderQuoteResponse } };
   "rejectReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<RejectReasonResponse> } };
   "detail_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { revision?: number } } }; responses: { "200": OrderDetailResponse } };
   "listAmendments": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/amendments"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<AmendmentResponse> } };
