@@ -73,7 +73,9 @@
   movement on it is somebody else's; the stale-channel mark (and so the `stale_channels` gauge) ends
   with a binding that stops being worked (reconciler switched off, installation or binding
   suspended, no adapter), so a binding switched back on into a partner that still refuses is
-  reported, and alerted, as the new outage it is.
+  reported, and alerted, as the new outage it is; and a sweep clears only the marker it read before it
+  began (the sync-state row's `xmin`, compared in `recordSweep`), so a stop that commits while a sweep
+  is running is swept on the next pass and not left for the resync interval.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)

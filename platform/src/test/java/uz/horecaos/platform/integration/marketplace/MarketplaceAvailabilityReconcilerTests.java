@@ -50,6 +50,7 @@ import uz.horecaos.platform.integration.marketplace.MarketplacePropagationQuery.
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MarketplaceOutbox;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
 import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.inventory.api.StopSource;
 import uz.horecaos.platform.inventory.api.TrackingMode;
@@ -110,6 +111,9 @@ class MarketplaceAvailabilityReconcilerTests {
     private MarketplaceAvailabilityReconciler reconciler;
     private MarketplacePropagationQuery propagation;
     private boolean registerAdapter;
+
+    /** Runs once, inside a sweep, right after the resolver has answered: a change landing mid-sweep. */
+    private volatile @Nullable Runnable afterResolve;
 
     @BeforeAll
     static void startDatabase() {
@@ -193,11 +197,21 @@ class MarketplaceAvailabilityReconcilerTests {
                 store, outbox, alerts, meters, transactionManager, Duration.ofDays(1));
         MarketplaceAdapterRegistry registry =
                 new MarketplaceAdapterRegistry(registerAdapter ? List.of(new FakeAdapter()) : List.of());
+        ChannelAvailabilityPort resolving = (tenantId, brandId, locationId, channelId, variantIds, at) -> {
+            Map<UUID, ChannelAvailabilityPort.ChannelAvailability> answer =
+                    inventory.resolve(tenantId, brandId, locationId, channelId, variantIds, at);
+            Runnable hook = afterResolve;
+            afterResolve = null;
+            if (hook != null) {
+                hook.run();
+            }
+            return answer;
+        };
         reconciler = new MarketplaceAvailabilityReconciler(
                 store,
                 registry,
                 partner,
-                inventory,
+                resolving,
                 channels,
                 resolver,
                 activity,
@@ -895,6 +909,70 @@ class MarketplaceAvailabilityReconcilerTests {
                 .as("every item of the binding is resent once, the unchanged one included")
                 .containsExactlyInAnyOrder(new Call("ext-A", false), new Call("ext-B", true));
         assertThat(partner.held(w)).containsEntry("ext-A", false).containsEntry("ext-B", true);
+    }
+
+    @Test
+    @DisplayName(
+            "a marker that lands while a sweep is running is not erased by it: the stop is swept at once, not a resync interval later")
+    void aMarkerThatLandsDuringASweepSurvivesIt() {
+        World w = world();
+        reconcile(w);
+        markDirty(w); // the first stop's marker: the reason this sweep runs
+        afterResolve = () -> {
+            // The manager's second stop, committed after the resolver has read and before the
+            // sweep's last statement.
+            stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+            markDirty(w);
+        };
+
+        reconcile(w);
+        assertThat(partner.held(w))
+                .as("this sweep read the resolver before the stop, so the partner has not heard of it")
+                .containsEntry("ext-A", true);
+        assertThat(requested())
+                .as("the marker the stop wrote is still there for the next pass")
+                .containsExactly(w.binding);
+
+        reconcile(w); // no time has passed: the resync interval is minutes away
+
+        assertThat(partner.held(w))
+                .as("the partner is told within seconds, not after the resync interval")
+                .containsEntry("ext-A", false);
+        assertThat(requested())
+                .as("and that sweep, which saw the stop, honoured its marker")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a mapping marker that lands during a sweep while an older marker is pending is not erased by it either")
+    void aMappingMarkerThatLandsDuringASweepSurvivesIt() {
+        World w = world();
+        reconcile(w);
+        UUID variantC = variant(w.tenant(), w.brand(), "C");
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                VALUES (:id, :t, :b, :l, :v, 'AVAILABLE')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant)
+                .param("b", w.brand)
+                .param("l", w.location)
+                .param("v", variantC)
+                .update();
+        list(w, variantC);
+        markDirty(w); // an older marker is pending, so the mapping trigger's own write coalesces into it
+        afterResolve = () -> map(w, variantC, "ext-C");
+
+        reconcile(w);
+        assertThat(partner.held(w)).doesNotContainKey("ext-C");
+        assertThat(requested()).containsExactly(w.binding);
+
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("the new dish reaches the partner on the next pass, not after the resync interval")
+                .containsEntry("ext-C", true);
     }
 
     @Test
