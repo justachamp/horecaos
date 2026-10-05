@@ -225,14 +225,14 @@ describe('FiscalBackfillEditor', () => {
     const note = byId('fiscal-backfill-reference-note')?.textContent ?? '';
     expect(note).toContain('not imported yet');
     expect(note).toContain('17 digits');
-    expect(note).toContain('a search finds nothing');
+    expect(note).toContain('cannot be looked up by name');
   });
 
   it('shows an empty state when every dish has both codes', async () => {
     await render([CODES_ONLY, FEE]);
 
     expect(byId('fiscal-backfill-empty')?.textContent).toContain(
-      'Every dish and modifier option has an ИКПУ and a package code',
+      'Every item has an ИКПУ and a package code',
     );
     expect(byId('backfill-save')).toBeNull();
   });

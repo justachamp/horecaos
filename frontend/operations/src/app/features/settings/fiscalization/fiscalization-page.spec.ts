@@ -574,8 +574,7 @@ describe('FiscalizationPage', () => {
       const row = normalised('fiscal-vat-defaults');
       expect(row).toContain('UZ');
       expect(row).toContain('12 %');
-      expect(row).toContain('Tax included in the price');
-      expect(row).toContain('2026-01-01');
+      expect(row).toContain('Inclusive');
       expect(byTestId('fiscal-vat-entities')?.textContent?.trim()).toBe('Rayhon LLC');
       expect(byTestId('fiscal-vat-link')?.getAttribute('href')).toBe('/catalog/prices/tax-profile');
     });
@@ -584,7 +583,8 @@ describe('FiscalizationPage', () => {
       taxProfiles.mockReturnValue(of([]));
       await openClassification();
 
-      expect(byTestId('fiscal-vat-empty')?.textContent).toContain('every cart is refused');
+      expect(byTestId('fiscal-vat-empty')).not.toBeNull();
+      expect(byTestId('fiscal-vat-row')).toBeNull();
     });
 
     it('draws a fractional rate as it is, never rounded', async () => {
@@ -594,7 +594,7 @@ describe('FiscalizationPage', () => {
       await openClassification();
 
       expect(normalised('fiscal-vat-defaults')).toContain('12.5 %');
-      expect(normalised('fiscal-vat-defaults')).toContain('Tax added on top');
+      expect(normalised('fiscal-vat-defaults')).toContain('Exclusive');
     });
 
     it('groups the registry’s payment methods by the responsibility each was registered under', async () => {
@@ -607,15 +607,17 @@ describe('FiscalizationPage', () => {
       expect(normalised('fiscal-resp-PARTNER')).not.toContain('Cash');
     });
 
-    it('draws every responsibility, an empty one included, and marks a disabled method', async () => {
+    it('draws every responsibility, an empty one included, and leaves a disabled method out', async () => {
       await openClassification();
 
       expect(byTestId('fiscal-resp-TERMINAL')).not.toBeNull();
       expect(
         byTestId('fiscal-resp-TERMINAL')?.querySelector('[data-testid="fiscal-resp-none"]'),
       ).not.toBeNull();
-      expect(normalised('fiscal-resp-MARKETPLACE')).toContain('Express24');
-      expect(normalised('fiscal-resp-MARKETPLACE')).toContain('disabled');
+      expect(
+        byTestId('fiscal-resp-MARKETPLACE')?.querySelector('[data-testid="fiscal-resp-none"]'),
+      ).not.toBeNull();
+      expect(text()).not.toContain('Express24');
       expect(byTestId('fiscal-resp-link')?.getAttribute('href')).toBe('/settings/payment-methods');
     });
 

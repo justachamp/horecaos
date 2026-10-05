@@ -1487,53 +1487,16 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Markirovka talab qilinadi',
   'settings.fiscalization.classification.deliveryFee.submit': 'Saqlash',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saqlanmoqda…',
-  'settings.fiscalization.classification.vat.title': 'Soliq profillari boʻyicha QQS stavkalari',
-  'settings.fiscalization.classification.vat.lead':
-    'Faqat oʻqish uchun. Soliq profili narxlar va cheklarga qoʻllaydigan stavka. Yuridik shaxsning (1-yorliq) QQS tartibi u koʻrsatgan profildan olinadi.',
-  'settings.fiscalization.classification.vat.field.jurisdiction': 'Yurisdiksiya',
-  'settings.fiscalization.classification.vat.field.rate': 'Stavka',
-  'settings.fiscalization.classification.vat.field.mode': 'Narxlar',
-  'settings.fiscalization.classification.vat.field.validFrom': 'Amal qilish boshlanishi',
-  'settings.fiscalization.classification.vat.field.entities': 'Yuridik shaxslar',
-  'settings.fiscalization.classification.vat.mode.INCLUSIVE': 'Soliq narxga kiritilgan',
-  'settings.fiscalization.classification.vat.mode.EXCLUSIVE': 'Soliq narx ustiga qoʻshiladi',
-  'settings.fiscalization.classification.vat.empty':
-    'Bu brend uchun soliq profili hali belgilanmagan; usiz har bir savat rad etiladi.',
-  'settings.fiscalization.classification.vat.denied':
-    'Sizning rolingiz soliq profillarini oʻqiy olmaydi.',
-  'settings.fiscalization.classification.vat.failed': 'Soliq profillarini yuklab boʻlmadi.',
-  'settings.fiscalization.classification.vat.edit': 'Tahrirlash: Katalog → Narxlar → Soliq profili',
-  'settings.fiscalization.classification.responsibility.title':
-    'Chekni kim beradi: toʻlov usullari boʻyicha',
-  'settings.fiscalization.classification.responsibility.lead':
-    'Sozlamalar → Toʻlov usullari boʻlimining faqat oʻqish uchun koʻrinishi. Har bir usul bitta javobgarlik ostida roʻyxatdan oʻtgan; u keyin oʻzgarmaydi va qabul qilingan pul uchun fiskal chek kimning zimmasida ekanini belgilaydi.',
-  'settings.fiscalization.classification.responsibility.PARTNER':
-    'Chekni toʻlov provayderining savdo hisobi beradi.',
-  'settings.fiscalization.classification.responsibility.TERMINAL':
-    'Chekni restoranning fiskal terminali beradi (2-yorliq).',
-  'settings.fiscalization.classification.responsibility.MARKETPLACE':
-    'Chekni agregator fiskal agent sifatida beradi; platforma shartnoma havolasini saqlaydi.',
-  'settings.fiscalization.classification.responsibility.OPERATOR':
-    'Bu usul boʻyicha chekni tashqaridan hech kim bermaydi; restoran javob beradi.',
-  'settings.fiscalization.classification.responsibility.none': 'Toʻlov usuli yoʻq',
-  'settings.fiscalization.classification.responsibility.disabled': 'oʻchirilgan',
-  'settings.fiscalization.classification.responsibility.denied':
-    'Sizning rolingiz toʻlov usullari reyestrini oʻqiy olmaydi.',
-  'settings.fiscalization.classification.responsibility.failed':
-    'Toʻlov usullarini yuklab boʻlmadi.',
-  'settings.fiscalization.classification.responsibility.edit':
-    'Tahrirlash: Sozlamalar → Toʻlov usullari',
+  'settings.fiscalization.noAccess': 'Ruxsat yoʻq',
+  'settings.fiscalization.responsibility': 'Chekni kim beradi',
   'settings.fiscalization.backfill.title': 'IKPU va qadoq kodlarini toʻldirish',
   'settings.fiscalization.backfill.lead':
-    '{count} ta pozitsiyada (taom va modifikatorlarda) IKPU yoki qadoq kodi yetishmaydi. Kodni nomi yoki raqami boʻyicha qidiring, qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Pozitsiyada allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
+    '{count} ta pozitsiyada IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Pozitsiyada allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
   'settings.fiscalization.backfill.referenceNote':
-    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun qidiruv hech narsa topmaydi: kod faqat formati boʻyicha tekshiriladi (17 raqam), qadoq kodlari qoʻlda kiritiladi. Roʻyxat yuklangach, undan tanlangan kod roʻyxat unga koʻrsatgan qadoq kodlarini olib keladi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
-  'settings.fiscalization.backfill.empty':
-    'Barcha taom va modifikatorlarda IKPU va qadoq kodi bor.',
+    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
+  'settings.fiscalization.backfill.empty': 'Barcha pozitsiyalarda IKPU va qadoq kodi bor.',
   'settings.fiscalization.backfill.column.mxik': 'IKPU (17 raqam)',
   'settings.fiscalization.backfill.column.packageCode': 'Qadoq kodi',
-  'settings.fiscalization.backfill.packageSuggestions': 'Roʻyxatdagi qadoq kodlari:',
-  'settings.fiscalization.backfill.mxikPlaceholder': 'Qidiring yoki kod kiriting',
   'settings.fiscalization.backfill.copyDefault': 'Toifadan olish',
   'settings.fiscalization.backfill.copyDefault.title':
     'Boʻsh kataklarni “{category}” toifasidagi {sample} ta tasniflangan taomdan {agreeing} tasi ishlatadigan qiymat bilan toʻldirish: {mxik}, qadoq {package}',

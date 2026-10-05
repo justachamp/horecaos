@@ -171,13 +171,16 @@ export class FiscalizationPage {
 
   /**
    * The registry of payment methods (10.6) grouped by the responsibility each was registered
-   * under, in ADR 0038's order. Every responsibility is drawn, an empty one included: «no method
+   * under, in ADR 0038's order. Only a method that can still be tendered is listed: a disabled one
+   * fiscalizes nothing. Every responsibility is drawn, an empty one included: «no method
    * fiscalizes through a terminal» is a fact an owner reads here, not a gap in the list.
    */
   protected readonly responsibilityGroups = computed<readonly ResponsibilityGroup[]>(() =>
     PAYMENT_METHOD_RESPONSIBILITIES.map((responsibility) => ({
       responsibility,
-      methods: this.paymentMethods().filter((method) => method.responsibility === responsibility),
+      methods: this.paymentMethods().filter(
+        (method) => method.responsibility === responsibility && method.status === 'ACTIVE',
+      ),
     })),
   );
 
@@ -594,17 +597,15 @@ export class FiscalizationPage {
   }
 
   protected vatModeLabel(mode: TaxProfile['mode']): string {
-    return this.i18n.t(`settings.fiscalization.classification.vat.mode.${mode}` as MessageKey);
+    return this.i18n.t(
+      mode === 'INCLUSIVE'
+        ? 'catalog.taxProfile.mode.inclusive'
+        : 'catalog.taxProfile.mode.exclusive',
+    );
   }
 
   protected responsibilityLabel(responsibility: PaymentMethodResponsibility): string {
     return this.i18n.t(`settings.paymentMethods.responsibility.${responsibility}` as MessageKey);
-  }
-
-  protected responsibilityHint(responsibility: PaymentMethodResponsibility): string {
-    return this.i18n.t(
-      `settings.fiscalization.classification.responsibility.${responsibility}` as MessageKey,
-    );
   }
 
   /**

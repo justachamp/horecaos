@@ -633,7 +633,6 @@
               [code]="deliveryFeeMxik()"
               [scope]="searchScope()"
               [ariaLabel]="'settings.fiscalization.classification.deliveryFee.mxik' | t"
-              [placeholder]="'settings.fiscalization.backfill.mxikPlaceholder' | t"
               (codeChange)="deliveryFeeMxik.set($event)"
             />
           </fieldset>
@@ -730,60 +729,45 @@
       <p class="q-caption hint">{{ 'settings.fiscalization.classification.notAnEditor' | t }}</p>
 
       <section class="reference" data-testid="fiscal-vat-defaults">
-        <h3 class="q-subhead">{{ 'settings.fiscalization.classification.vat.title' | t }}</h3>
-        <p class="q-caption hint">{{ 'settings.fiscalization.classification.vat.lead' | t }}</p>
+        <h3 class="q-subhead">{{ 'catalog.taxProfile.title' | t }}</h3>
         @switch (taxProfilesState()) {
           @case ('loading') {
             <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
           }
           @case ('denied') {
             <p class="q-body-sm denied" data-testid="fiscal-vat-denied">
-              {{ 'settings.fiscalization.classification.vat.denied' | t }}
+              {{ 'settings.fiscalization.noAccess' | t }}
             </p>
           }
           @case ('failed') {
             <p class="q-body-sm error" role="alert" data-testid="fiscal-vat-failed">
-              {{ 'settings.fiscalization.classification.vat.failed' | t }}
+              {{ 'error.unknown.noReference' | t }}
             </p>
           }
           @default {
             <table class="table vat">
               <thead>
                 <tr>
-                  <th class="q-caption">
-                    {{ 'settings.fiscalization.classification.vat.field.jurisdiction' | t }}
-                  </th>
-                  <th class="q-caption">
-                    {{ 'settings.fiscalization.classification.vat.field.rate' | t }}
-                  </th>
-                  <th class="q-caption">
-                    {{ 'settings.fiscalization.classification.vat.field.mode' | t }}
-                  </th>
-                  <th class="q-caption">
-                    {{ 'settings.fiscalization.classification.vat.field.validFrom' | t }}
-                  </th>
-                  <th class="q-caption">
-                    {{ 'settings.fiscalization.classification.vat.field.entities' | t }}
-                  </th>
+                  <th class="q-caption">{{ 'catalog.taxProfile.jurisdictionCode' | t }}</th>
+                  <th class="q-caption">{{ 'catalog.taxProfile.rate' | t }}</th>
+                  <th class="q-caption">{{ 'settings.fiscalization.entities.title' | t }}</th>
                 </tr>
               </thead>
               <tbody>
                 @for (row of vatDefaults(); track row.profile.taxProfileId) {
                   <tr data-testid="fiscal-vat-row">
                     <td class="q-body-sm q-mono">{{ row.profile.jurisdictionCode }}</td>
-                    <td class="q-body-sm">{{ row.ratePercent }} %</td>
                     <td class="q-body-sm">
-                      {{ vatModeLabel(row.profile.mode) }}
+                      {{ row.ratePercent }} % · {{ vatModeLabel(row.profile.mode) }}
                     </td>
-                    <td class="q-body-sm">{{ row.profile.validFrom.slice(0, 10) }}</td>
                     <td class="q-body-sm" data-testid="fiscal-vat-entities">
                       {{ row.legalEntities.length > 0 ? row.legalEntities.join(', ') : '—' }}
                     </td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td class="q-body-sm empty" colspan="5" data-testid="fiscal-vat-empty">
-                      {{ 'settings.fiscalization.classification.vat.empty' | t }}
+                    <td class="q-body-sm empty" colspan="3" data-testid="fiscal-vat-empty">
+                      {{ 'catalog.taxProfile.noneYet' | t }}
                     </td>
                   </tr>
                 }
@@ -794,30 +778,28 @@
         <a
           class="q-caption link"
           routerLink="/catalog/prices/tax-profile"
+          [attr.aria-label]="
+            ('settings.fiscalization.entities.edit' | t) + ': ' + ('catalog.taxProfile.title' | t)
+          "
           data-testid="fiscal-vat-link"
-          >{{ 'settings.fiscalization.classification.vat.edit' | t }}</a
+          >{{ 'settings.fiscalization.entities.edit' | t }}</a
         >
       </section>
 
       <section class="reference" data-testid="fiscal-responsibility">
-        <h3 class="q-subhead">
-          {{ 'settings.fiscalization.classification.responsibility.title' | t }}
-        </h3>
-        <p class="q-caption hint">
-          {{ 'settings.fiscalization.classification.responsibility.lead' | t }}
-        </p>
+        <h3 class="q-subhead">{{ 'settings.fiscalization.responsibility' | t }}</h3>
         @switch (paymentMethodsState()) {
           @case ('loading') {
             <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
           }
           @case ('denied') {
             <p class="q-body-sm denied" data-testid="fiscal-responsibility-denied">
-              {{ 'settings.fiscalization.classification.responsibility.denied' | t }}
+              {{ 'settings.fiscalization.noAccess' | t }}
             </p>
           }
           @case ('failed') {
             <p class="q-body-sm error" role="alert" data-testid="fiscal-responsibility-failed">
-              {{ 'settings.fiscalization.classification.responsibility.failed' | t }}
+              {{ 'error.unknown.noReference' | t }}
             </p>
           }
           @default {
@@ -827,29 +809,16 @@
                   class="responsibility"
                   [attr.data-testid]="'fiscal-resp-' + group.responsibility"
                 >
-                  <dt class="q-body-sm">
-                    {{ responsibilityLabel(group.responsibility) }}
-                    <span class="q-caption hint">{{
-                      responsibilityHint(group.responsibility)
-                    }}</span>
-                  </dt>
+                  <dt class="q-body-sm">{{ responsibilityLabel(group.responsibility) }}</dt>
                   <dd class="q-body-sm">
                     @for (method of group.methods; track method.id) {
                       <span
                         class="method"
-                        [class.method--off]="method.status === 'DISABLED'"
                         [attr.data-testid]="'fiscal-resp-method-' + method.code"
-                        >{{ method.displayName }}
-                        @if (method.status === 'DISABLED') {
-                          <span class="q-caption">{{
-                            'settings.fiscalization.classification.responsibility.disabled' | t
-                          }}</span>
-                        }
-                      </span>
+                        >{{ method.displayName }}</span
+                      >
                     } @empty {
-                      <span class="q-caption hint" data-testid="fiscal-resp-none">{{
-                        'settings.fiscalization.classification.responsibility.none' | t
-                      }}</span>
+                      <span class="q-caption hint" data-testid="fiscal-resp-none">—</span>
                     }
                   </dd>
                 </div>
@@ -860,8 +829,13 @@
         <a
           class="q-caption link"
           routerLink="/settings/payment-methods"
+          [attr.aria-label]="
+            ('settings.fiscalization.entities.edit' | t) +
+            ': ' +
+            ('settings.paymentMethods.title' | t)
+          "
           data-testid="fiscal-resp-link"
-          >{{ 'settings.fiscalization.classification.responsibility.edit' | t }}</a
+          >{{ 'settings.fiscalization.entities.edit' | t }}</a
         >
       </section>
     }

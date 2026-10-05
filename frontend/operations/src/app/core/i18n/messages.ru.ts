@@ -1467,52 +1467,16 @@ export const messagesRu: MessageCatalogue = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Требуется маркировка',
   'settings.fiscalization.classification.deliveryFee.submit': 'Сохранить',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Сохранение…',
-  'settings.fiscalization.classification.vat.title': 'Ставки НДС по налоговым профилям',
-  'settings.fiscalization.classification.vat.lead':
-    'Только для чтения. Ставка, которую налоговый профиль применяет к ценам и чекам. Налоговый режим юридического лица (вкладка 1) берётся из профиля, на который оно указывает.',
-  'settings.fiscalization.classification.vat.field.jurisdiction': 'Юрисдикция',
-  'settings.fiscalization.classification.vat.field.rate': 'Ставка',
-  'settings.fiscalization.classification.vat.field.mode': 'Цены',
-  'settings.fiscalization.classification.vat.field.validFrom': 'Действует с',
-  'settings.fiscalization.classification.vat.field.entities': 'Юрлица',
-  'settings.fiscalization.classification.vat.mode.INCLUSIVE': 'Налог включён в цену',
-  'settings.fiscalization.classification.vat.mode.EXCLUSIVE': 'Налог сверху цены',
-  'settings.fiscalization.classification.vat.empty':
-    'Для этого бренда налоговый профиль ещё не задан; без него любая корзина отклоняется.',
-  'settings.fiscalization.classification.vat.denied':
-    'Ваша роль не может читать налоговые профили.',
-  'settings.fiscalization.classification.vat.failed': 'Не удалось загрузить налоговые профили.',
-  'settings.fiscalization.classification.vat.edit': 'Изменить: Каталог → Цены → Налоговый профиль',
-  'settings.fiscalization.classification.responsibility.title':
-    'Кто выдаёт чек, по способам оплаты',
-  'settings.fiscalization.classification.responsibility.lead':
-    'Проекция раздела «Способы оплаты», только для чтения. Каждый способ зарегистрирован с одной ответственностью; она не меняется после регистрации и определяет, кто отвечает за фискальный чек по принятым деньгам.',
-  'settings.fiscalization.classification.responsibility.PARTNER':
-    'Чек выдаёт торговый аккаунт платёжного провайдера.',
-  'settings.fiscalization.classification.responsibility.TERMINAL':
-    'Чек выдаёт фискальный терминал ресторана (вкладка 2).',
-  'settings.fiscalization.classification.responsibility.MARKETPLACE':
-    'Чек выдаёт агрегатор как фискальный агент; платформа хранит ссылку на договор.',
-  'settings.fiscalization.classification.responsibility.OPERATOR':
-    'Чек по этому способу не выдаёт никто снаружи; отвечает ресторан.',
-  'settings.fiscalization.classification.responsibility.none': 'Нет способов оплаты',
-  'settings.fiscalization.classification.responsibility.disabled': 'отключён',
-  'settings.fiscalization.classification.responsibility.denied':
-    'Ваша роль не может читать реестр способов оплаты.',
-  'settings.fiscalization.classification.responsibility.failed':
-    'Не удалось загрузить способы оплаты.',
-  'settings.fiscalization.classification.responsibility.edit':
-    'Изменить: Настройки → Способы оплаты',
+  'settings.fiscalization.noAccess': 'Нет доступа',
+  'settings.fiscalization.responsibility': 'Кто выдаёт чек',
   'settings.fiscalization.backfill.title': 'Заполнение ИКПУ и кодов упаковки',
   'settings.fiscalization.backfill.lead':
-    'У {count} позиций (блюд и модификаторов) не хватает ИКПУ или кода упаковки. Найдите код по названию или номеру, введите его вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку. Уже заданный у позиции код показан как есть и здесь не меняется; измените его в редакторе товаров.',
+    'У {count} позиций не хватает ИКПУ или кода упаковки. Введите коды вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку. Уже заданный у позиции код показан как есть и здесь не меняется; измените его в редакторе товаров.',
   'settings.fiscalization.backfill.referenceNote':
-    'Официальный справочник ИКПУ ещё не загружен, поэтому поиск ничего не находит: код проверяется только по формату (17 цифр), а коды упаковки вводятся вручную. После загрузки справочника выбранный из него код подставит коды упаковки, которые справочник указывает для него. Единицу измерения и фискальное название задают в фискальном верстаке каталога.',
-  'settings.fiscalization.backfill.empty': 'У всех блюд и модификаторов есть ИКПУ и код упаковки.',
+    'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название задают в фискальном верстаке каталога.',
+  'settings.fiscalization.backfill.empty': 'У всех позиций есть ИКПУ и код упаковки.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 цифр)',
   'settings.fiscalization.backfill.column.packageCode': 'Код упаковки',
-  'settings.fiscalization.backfill.packageSuggestions': 'Коды упаковки в справочнике:',
-  'settings.fiscalization.backfill.mxikPlaceholder': 'Поиск или ввод кода',
   'settings.fiscalization.backfill.copyDefault': 'Взять из категории',
   'settings.fiscalization.backfill.copyDefault.title':
     'Заполнить пустые ячейки тем, что используют {agreeing} из {sample} классифицированных блюд категории «{category}»: {mxik}, упаковка {package}',
