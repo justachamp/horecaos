@@ -75,7 +75,8 @@
           "builder": "@angular/build:unit-test",
           "options": {
             "buildTarget": "horecaos-operations:build:development",
-            "setupFiles": ["src/testing/i18n-preload.setup.ts"]
+            "setupFiles": ["src/testing/i18n-preload.setup.ts"],
+            "isolate": true
           }
         }
       }
