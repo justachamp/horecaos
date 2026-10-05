@@ -230,7 +230,13 @@ export class LatenessPolicyCard {
       cameFromDefault: view.isPlatformDefault,
       source: view.isPlatformDefault ? 'CODE_DEFAULT' : 'SCOPED_VALUE',
       winningScope: view.winningScope,
-      inspectedLevels: view.inspectedLevels,
+      inspectedLevels: view.inspectedLevels.map((level) => ({
+        scopeType: level.scopeType,
+        outcome: level.outcome,
+        version: level.version ?? null,
+        changedByName: level.approvedByName ?? null,
+        changedAt: level.validFrom ?? null,
+      })),
       describe: `ordering.lateness -> ${view.winningScope ?? 'PLATFORM DEFAULT'}`,
       currentVersionAtScope: view.currentVersionAtScope > 0 ? view.currentVersionAtScope : null,
     };

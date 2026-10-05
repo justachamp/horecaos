@@ -51,6 +51,36 @@ const EXPLICIT_UNSET_AT_BRAND: ConfigurationResolutionView = {
   currentVersionAtScope: 1,
 };
 
+/** A ladder whose brand and company rows both store something, one by a named person and one by nobody the tenant knows. */
+const WITH_PROVENANCE: ConfigurationResolutionView = {
+  keyCode: 'ordering.cart_expiry_minutes',
+  value: 180,
+  cameFromDefault: false,
+  source: 'SCOPED_VALUE',
+  winningScope: 'BRAND',
+  inspectedLevels: [
+    { scopeType: 'LOCATION', outcome: 'NOT_SET' },
+    {
+      scopeType: 'BRAND',
+      outcome: 'VALUE',
+      version: 3,
+      changedByName: 'A. Karimov',
+      // 09:15 UTC is 14:15 in Tashkent.
+      changedAt: '2026-09-30T09:15:00Z',
+    },
+    {
+      scopeType: 'TENANT',
+      outcome: 'VALUE',
+      version: 1,
+      changedByName: null,
+      changedAt: '2026-08-12T05:20:00Z',
+    },
+    { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
+  ],
+  describe: 'ordering.cart_expiry_minutes -> SCOPED_VALUE at BRAND',
+  currentVersionAtScope: 3,
+};
+
 describe('InheritedField', () => {
   async function render(
     resolution: ConfigurationResolutionView | null,
@@ -101,6 +131,28 @@ describe('InheritedField', () => {
     expect(rows).toHaveLength(3);
     expect(rows[0].textContent).toContain('Brand');
     expect(rows[0].classList.contains('field__ladderRow--winner')).toBe(true);
+  });
+
+  it('names, for every level that stores a row, its version, who changed it and when', async () => {
+    const fixture = await render(WITH_PROVENANCE, 'BRAND');
+    (fixture.nativeElement.querySelector('.field__chip') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const who = [...fixture.nativeElement.querySelectorAll('[data-testid="trace-who"]')].map(
+      (el: HTMLElement) => el.textContent?.trim(),
+    );
+    expect(who).toEqual([
+      'Version 3 · A. Karimov · 30.09 14:15',
+      'Version 1 · a person with no staff record here · 12.08 10:20',
+    ]);
+  });
+
+  it('prints no who-line for a level where nothing is stored, and never an id', async () => {
+    const fixture = await render(SET_AT_BRAND, 'BRAND');
+    (fixture.nativeElement.querySelector('.field__chip') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="trace-who"]')).toHaveLength(0);
   });
 
   it('closes the popover on Escape', async () => {

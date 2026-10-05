@@ -6703,6 +6703,8 @@ export const messagesEn = {
   'inheritedField.trace.scope.BRAND': 'Brand',
   'inheritedField.trace.scope.TENANT': 'Company',
   'inheritedField.trace.scope.PLATFORM': 'Platform',
+  'inheritedField.trace.changed': 'Version {version} · {who} · {when}',
+  'inheritedField.trace.unknownActor': 'a person with no staff record here',
   // screen. `ui.*` rather than a per-component namespace because `q-denied-
   // state` and `q-locked-state` share both sentences.
 

@@ -6717,6 +6717,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'inheritedField.trace.scope.BRAND': 'Brend',
   'inheritedField.trace.scope.TENANT': 'Kompaniya',
   'inheritedField.trace.scope.PLATFORM': 'Platforma',
+  'inheritedField.trace.changed': 'Versiya {version} · {who} · {when}',
+  'inheritedField.trace.unknownActor': 'bu kompaniyada xodim yozuvi yoʻq shaxs',
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'Bugungi kunga qaytish',

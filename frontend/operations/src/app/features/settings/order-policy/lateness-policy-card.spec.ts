@@ -180,6 +180,40 @@ describe('LatenessPolicyCard', () => {
     expect(button('Edit')).toBeTruthy();
   });
 
+  it('carries each authored level’s version, approver and time into the trace popover', async () => {
+    await render({
+      ...SET_AT_BRAND,
+      inspectedLevels: [
+        {
+          scopeType: 'BRAND',
+          outcome: 'VALUE',
+          version: 2,
+          approvedByName: 'A. Karimov',
+          validFrom: '2026-09-30T09:15:00Z',
+        },
+        {
+          scopeType: 'TENANT',
+          outcome: 'VALUE',
+          version: 1,
+          approvedByName: null,
+          validFrom: '2026-08-12T05:20:00Z',
+        },
+        { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
+      ],
+    });
+
+    (el().querySelector('button.field__chip') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const who = [...el().querySelectorAll('[data-testid="trace-who"]')].map((row) =>
+      row.textContent?.trim(),
+    );
+    expect(who).toEqual([
+      'Version 2 · A. Karimov · 30.09 14:15',
+      'Version 1 · a person with no staff record here · 12.08 10:20',
+    ]);
+  });
+
   it('never offers "revert to inherited": a published version is not withdrawn', async () => {
     await render(SET_AT_BRAND);
     expect(el().textContent).not.toContain('Revert to inherited');

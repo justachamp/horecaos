@@ -6654,6 +6654,8 @@ export const messagesRu: MessageCatalogue = {
   'inheritedField.trace.scope.BRAND': 'Бренд',
   'inheritedField.trace.scope.TENANT': 'Компания',
   'inheritedField.trace.scope.PLATFORM': 'Платформа',
+  'inheritedField.trace.changed': 'Версия {version} · {who} · {when}',
+  'inheritedField.trace.unknownActor': 'человек без записи в сотрудниках компании',
 
   // --- shell/access-denied-page (operations IA §9.1c) ---------------------
   'shell.accessDenied.backHome': 'На главную',

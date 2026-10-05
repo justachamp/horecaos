@@ -178,7 +178,8 @@ class ScopeResolutionTests {
         assertThat(resolved.trace().inspectedLevels())
                 .filteredOn(level -> level.outcome() == Outcome.EXPLICIT_NULL_TERMINATED)
                 .singleElement()
-                .satisfies(level -> assertThat(level.provenance().principal()).isEqualTo("subject-a"));
+                .satisfies(level -> assertThat(level.provenance())
+                        .isEqualTo(new ResolutionTrace.Provenance(1, "subject-a", changedAt)));
     }
 
     @Test
