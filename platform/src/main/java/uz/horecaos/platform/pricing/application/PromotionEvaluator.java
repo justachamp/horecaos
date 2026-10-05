@@ -163,11 +163,17 @@ public class PromotionEvaluator {
             }
         }
 
+        // The rules that would join the winner's own combination if their gift were in the cart: the
+        // automatic ones when the automatic combination won, none when an exclusive scenario did (an
+        // exclusive scenario is one promotion, and the winning one is already applied).
+        Set<UUID> inTheWinningPool = winner == combination
+                ? automatic.stream().map(Promotion::promotionId).collect(Collectors.toSet())
+                : Set.of();
         return build(
                 winner.chosen(),
                 basket,
                 new ArrayList<>(trace.values()),
-                settledOffers(offers, trace, winner.chosen()));
+                settledOffers(offers, trace, winner, inTheWinningPool));
     }
 
     /**
@@ -700,19 +706,46 @@ public class PromotionEvaluator {
     /**
      * The offers worth telling the customer about once the contest is decided: those of
      * a rule that applied, and those of a rule that held every condition and gave nothing
-     * only because the gift is not in the cart. A rule that lost its group, was set aside
-     * by an exclusive promotion or was refused is not offered: the gift would not be free.
+     * only because the gift is not in the cart, when nothing stands in the way of the gift
+     * being free. A rule that lost its group, was set aside by an exclusive promotion or was
+     * refused is not offered: the gift would not be free.
+     *
+     * <p>A rule whose gift is missing never became a candidate, so the contest never saw it
+     * and its verdict is plain {@code ZERO_BENEFIT} whatever else won. The gift's price is
+     * not known while the gift is not in the cart, so what would happen once it is cannot be
+     * priced here, and the offer is kept only where it cannot be outweighed:
+     *
+     * <ul>
+     *   <li>the rule is in the winner's own pool, so it joins the winning combination when the
+     *       gift arrives (an automatic rule beside the automatic combination); or
+     *   <li>the winner is worth nothing, so any gift beats it (a promo code's gift in a cart
+     *       with no automatic discount).
+     * </ul>
+     *
+     * Anywhere else a better offer is already taking the cart, and the gift, once added, would
+     * lose to it or to the exclusive scenario that set it aside: an automatic gift under an
+     * exclusive promotion, an exclusive gift beside an automatic discount, or one exclusive
+     * gift beside another exclusive promotion. The customer would be told the gift is free and
+     * would pay for it.
+     *
+     * <p>Two rules of the same group are not compared, for the same reason: the incumbent is
+     * priced and the gift is not.
      */
     private static List<GiftOffer> settledOffers(
-            Map<UUID, List<GiftOffer>> offers, Map<UUID, TraceEntry> trace, List<Candidate> chosen) {
-        Set<UUID> applied = chosen.stream()
+            Map<UUID, List<GiftOffer>> offers,
+            Map<UUID, TraceEntry> trace,
+            Combination winner,
+            Set<UUID> inTheWinningPool) {
+        Set<UUID> applied = winner.chosen().stream()
                 .map(candidate -> candidate.promotion().promotionId())
                 .collect(Collectors.toSet());
+        boolean nothingToOutweighIt = winner.valueMinor() <= 0;
         List<GiftOffer> settled = new ArrayList<>();
         offers.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             TraceEntry verdict = trace.get(entry.getKey());
             boolean gaveNothingForWantOfTheGift = verdict != null && verdict.verdict() == Verdict.ZERO_BENEFIT;
-            if (applied.contains(entry.getKey()) || gaveNothingForWantOfTheGift) {
+            boolean couldStillBeFree = inTheWinningPool.contains(entry.getKey()) || nothingToOutweighIt;
+            if (applied.contains(entry.getKey()) || (gaveNothingForWantOfTheGift && couldStillBeFree)) {
                 settled.addAll(entry.getValue());
             }
         });
