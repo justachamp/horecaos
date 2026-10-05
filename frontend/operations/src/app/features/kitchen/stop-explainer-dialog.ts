@@ -150,20 +150,25 @@ export class StopExplainerDialog implements OnInit {
     this.closed.emit();
   }
 
-  /** One literal `t` key per code, so a typo is a build error; a code this build does not know is shown as itself. */
+  /**
+   * One literal `t` key per code, so a typo is a build error. `ON_STOP` is not listed: the stops
+   * below are the reason, each with its own scope and source. A code this build has no sentence
+   * for is shown as itself rather than hidden.
+   */
   protected reasonText(code: string): string {
     switch (code) {
-      case 'ON_STOP':
-        return this.i18n.t('kitchen.stopList.explainer.reason.onStop');
       case 'SOLD_OUT':
-        return this.i18n.t('kitchen.stopList.explainer.reason.soldOut');
+        return this.i18n.t('kitchen.stopList.bulk.reason.outOfStock');
       case 'CHANNEL_STOPPED':
-        return this.i18n.t('kitchen.stopList.explainer.reason.channelStopped');
-      case 'NOT_STOCKED_AT_LOCATION':
-        return this.i18n.t('kitchen.stopList.explainer.reason.notStocked');
+        return this.i18n.t('kitchen.stopList.why.cutoff');
       default:
-        return this.i18n.t('kitchen.stopList.explainer.reason.unknown', { code });
+        return code;
     }
+  }
+
+  /** The reasons worth a line of their own: everything but the stops, which are listed one by one. */
+  protected otherReasons(explanation: AvailabilityExplanation): readonly string[] {
+    return explanation.reasons.filter((reason) => reason !== 'ON_STOP');
   }
 
   protected scopeText(scope: StopScope): string {

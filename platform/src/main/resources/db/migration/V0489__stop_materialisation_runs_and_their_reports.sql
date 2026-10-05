@@ -68,6 +68,9 @@ CREATE TABLE inventory.stop_materialisation_runs (
         stops_seen >= 0 AND positions_written >= 0 AND positions_already_unavailable >= 0
         AND not_carried >= 0 AND failed_stops >= 0),
     CONSTRAINT ck_materialisation_run_version CHECK (version >= 1),
+    -- The children below reference (id, tenant_id), so a row of one tenant can never point at
+    -- another tenant's run.
+    CONSTRAINT uq_materialisation_run_tenant UNIQUE (id, tenant_id),
     CONSTRAINT fk_materialisation_run_brand FOREIGN KEY (tenant_id, brand_id)
         REFERENCES tenant.brands (tenant_id, id)
 );
@@ -81,6 +84,12 @@ CREATE UNIQUE INDEX ux_materialisation_run_running
 CREATE INDEX ix_materialisation_run_brand
     ON inventory.stop_materialisation_runs (tenant_id, brand_id, started_at DESC);
 
+-- The stop a report line or a carried-stop row points at: the key V0462 left at the id alone is not
+-- one a foreign key may reference without the tenant (a foreign key must reference a unique
+-- constraint on exactly its own columns).
+ALTER TABLE inventory.availability_stops
+    ADD CONSTRAINT uq_availability_stops_id_tenant UNIQUE (id, tenant_id);
+
 CREATE TABLE inventory.stop_materialisation_stops (
     run_id uuid NOT NULL,
     tenant_id uuid NOT NULL,
@@ -93,10 +102,10 @@ CREATE TABLE inventory.stop_materialisation_stops (
     PRIMARY KEY (run_id, stop_id),
     CONSTRAINT ck_materialisation_stop_counts CHECK (
         positions_written >= 0 AND positions_already_unavailable >= 0 AND not_carried >= 0),
-    CONSTRAINT fk_materialisation_stop_run FOREIGN KEY (run_id)
-        REFERENCES inventory.stop_materialisation_runs (id) ON DELETE CASCADE,
-    CONSTRAINT fk_materialisation_stop_stop FOREIGN KEY (stop_id)
-        REFERENCES inventory.availability_stops (id)
+    CONSTRAINT fk_materialisation_stop_run FOREIGN KEY (run_id, tenant_id)
+        REFERENCES inventory.stop_materialisation_runs (id, tenant_id) ON DELETE CASCADE,
+    CONSTRAINT fk_materialisation_stop_stop FOREIGN KEY (stop_id, tenant_id)
+        REFERENCES inventory.availability_stops (id, tenant_id)
 );
 
 CREATE INDEX ix_materialisation_stop_stop ON inventory.stop_materialisation_stops (stop_id);
@@ -129,10 +138,10 @@ CREATE TABLE inventory.stop_materialisation_lines (
 
     CONSTRAINT ck_materialisation_line_reason CHECK (reason_code IN (
         'UNTRACKED_ITEM', 'QUANTITY_ITEM', 'CHANNEL_SCOPE', 'MENU_NOT_EVERY_CHANNEL', 'WRITE_FAILED')),
-    CONSTRAINT fk_materialisation_line_run FOREIGN KEY (run_id)
-        REFERENCES inventory.stop_materialisation_runs (id) ON DELETE CASCADE,
-    CONSTRAINT fk_materialisation_line_stop FOREIGN KEY (stop_id)
-        REFERENCES inventory.availability_stops (id)
+    CONSTRAINT fk_materialisation_line_run FOREIGN KEY (run_id, tenant_id)
+        REFERENCES inventory.stop_materialisation_runs (id, tenant_id) ON DELETE CASCADE,
+    CONSTRAINT fk_materialisation_line_stop FOREIGN KEY (stop_id, tenant_id)
+        REFERENCES inventory.availability_stops (id, tenant_id)
 );
 
 -- The report's page: a run's lines in a stable order.

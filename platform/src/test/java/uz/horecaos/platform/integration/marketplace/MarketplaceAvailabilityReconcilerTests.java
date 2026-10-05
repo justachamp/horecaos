@@ -1223,8 +1223,8 @@ class MarketplaceAvailabilityReconcilerTests {
 
     @Test
     @DisplayName(
-            "a resend that repeats what is already confirmed announces nothing; a resumption that forgot it announces again")
-    void aRepeatedValueIsNotAChange() {
+            "a sweep that finds nothing to send announces nothing; a resumption that forgot every belief announces again")
+    void aQuietSweepAnnouncesNothing() {
         World w = world();
         reconcile(w);
         assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED)).hasSize(2);

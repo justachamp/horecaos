@@ -383,11 +383,11 @@ five unpublished siblings.
 
 Both are produced by the marketplace availability reconciler (ADR 0141), through the
 outbox, in the same transaction as the row they describe. `MarketplaceAvailabilityPushed`
-is published when a partner's success answer moves what the platform *knows* the partner
-holds for one mapped dish — it was unknown or different before. A resend that repeats an
-already confirmed value, a push the partner refused, and a push whose outcome is unknown
-(which withdraws the belief rather than confirming it) publish nothing, so a consumer reads
-the event as "the partner now holds this", never as "we tried". The partner's own item id is
+is published when a partner's success answer is recorded for one mapped dish: the partner
+is now *known* to hold that value. A push the partner refused, a push whose outcome is unknown
+(which withdraws the belief rather than confirming it) and a push by a worker that lost its
+lease publish nothing, so a consumer reads the event as "the partner now holds this", never as
+"we tried". The partner's own item id is
 the partner's identifier for a dish, not a name; a consumer resolves the dish through the
 authorized catalog API with `variantId`.
 

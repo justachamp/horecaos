@@ -546,7 +546,7 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A marketplace partner is now known to hold a new availability for one mapped dish "
                             + "(ADR 0040, ADR 0141): the reconciler's state-set was answered with a success "
-                            + "and the platform's belief moved. Identifiers, a boolean and a sequence; "
+                            + "and the platform recorded it. Identifiers, a boolean and a sequence; "
                             + "never a dish name."),
             new EventContract(
                     "MarketplaceChannelWentStale",

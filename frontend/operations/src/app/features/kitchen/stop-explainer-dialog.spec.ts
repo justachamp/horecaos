@@ -69,6 +69,7 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
   async function render(
     explain: ReturnType<typeof vi.fn>,
     channels: readonly ChannelView[] = [channel('UZUM', 'Uzum Tezkor'), channel('WEB', 'Website')],
+    channelList: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(channels),
   ): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [Host],
@@ -81,7 +82,7 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
           },
         },
         { provide: StopsApi, useValue: { explain } },
-        { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue(channels) } },
+        { provide: SalesChannelsApi, useValue: { list: channelList } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -93,32 +94,34 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
   }
 
   const text = (el: Element | null): string => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const verdict = (host: HTMLElement): string =>
+    text(host.querySelector('[data-testid="explainer-verdict"]'));
+  const reasons = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('[data-testid="explainer-reason"]')].map((li) => text(li));
+  const stopLines = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('[data-testid="explainer-stop"]')].map((li) => text(li));
 
-  it('asks about the dish on no channel first, and says it cannot be sold, why, and by which stop', async () => {
+  it('asks about the dish on no channel first, and says it is on stop and by which stop', async () => {
     const explain = vi.fn().mockResolvedValue(explanation());
     const host = await render(explain);
 
     expect(explain).toHaveBeenCalledWith(SCOPE, 'v-1', undefined);
     expect(text(host.querySelector('[data-testid="explainer-dish"]'))).toBe('Plov');
-    expect(text(host.querySelector('[data-testid="explainer-verdict"]'))).toBe(
-      'It cannot be sold here now.',
-    );
+    expect(verdict(host)).toBe('On stop');
     expect(
       host.querySelector('[data-testid="explainer-verdict"]')?.getAttribute('data-sellable'),
     ).toBe('false');
     expect(
-      [...host.querySelectorAll('[data-testid="explainer-reason"]')].map((li) => text(li)),
-    ).toEqual(['A stop covers it']);
-    expect(
-      [...host.querySelectorAll('[data-testid="explainer-stop"]')].map((li) => text(li)),
-    ).toEqual(['Whole brand · Kitchen · RECALL · until lifted']);
+      reasons(host),
+      'ON_STOP is not a line of its own: the stops below are the reason',
+    ).toEqual([]);
+    expect(stopLines(host)).toEqual(['Whole brand · Kitchen · RECALL · until lifted']);
   });
 
   it('lists every stop that covers the dish, not the first, each with its own scope, source and end', async () => {
     const host = await render(
       vi.fn().mockResolvedValue(
         explanation({
-          reasons: ['ON_STOP'],
           stops: [
             stop({ id: 's-1', scopeType: 'BRAND', source: 'OPERATOR', reasonCode: 'RECALL' }),
             stop({
@@ -133,26 +136,20 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
       ),
     );
 
-    const lines = [...host.querySelectorAll('[data-testid="explainer-stop"]')].map((li) =>
-      text(li),
-    );
+    const lines = stopLines(host);
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('Whole brand · Kitchen · RECALL');
     expect(lines[1]).toContain('This branch · POS · POS_STOP_LIST · until ');
   });
 
-  it('says it can be sold and that no stop covers it', async () => {
+  it('says it is available and lists no stop when none covers it', async () => {
     const host = await render(
       vi.fn().mockResolvedValue(explanation({ sellable: true, reasons: [], stops: [] })),
     );
 
-    expect(text(host.querySelector('[data-testid="explainer-verdict"]'))).toBe(
-      'It can be sold here now.',
-    );
-    expect(text(host.querySelector('[data-testid="explainer-no-stops"]'))).toBe(
-      'No stop covers it.',
-    );
-    expect(host.querySelector('[data-testid="explainer-reason"]')).toBeNull();
+    expect(verdict(host)).toBe('Available');
+    expect(stopLines(host)).toEqual([]);
+    expect(reasons(host)).toEqual([]);
   });
 
   it('puts the channel question to the platform: choosing one asks again with that channel’s code', async () => {
@@ -176,10 +173,8 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
     fixture.detectChanges();
 
     expect(explain).toHaveBeenLastCalledWith(SCOPE, 'v-1', 'UZUM');
-    expect(text(host.querySelector('[data-testid="explainer-verdict"]'))).toBe(
-      'It cannot be sold here now.',
-    );
-    expect(text(host.querySelector('[data-testid="explainer-stop"]'))).toContain('One channel');
+    expect(verdict(host)).toBe('On stop');
+    expect(stopLines(host)[0]).toContain('One channel');
   });
 
   it('shows the answer to the last question asked, never an older one that arrived late', async () => {
@@ -200,17 +195,13 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
     fixture.detectChanges();
     await settle();
     fixture.detectChanges();
-    expect(text(host.querySelector('[data-testid="explainer-verdict"]'))).toBe(
-      'It can be sold here now.',
-    );
+    expect(verdict(host)).toBe('Available');
 
     releaseFirst(explanation());
     await settle();
     fixture.detectChanges();
 
-    expect(text(host.querySelector('[data-testid="explainer-verdict"]'))).toBe(
-      'It can be sold here now.',
-    );
+    expect(verdict(host)).toBe('Available');
   });
 
   it('says so when stops are switched off, and marks the stops it lists as ignored', async () => {
@@ -225,22 +216,26 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
       ),
     );
 
-    expect(text(host.querySelector('[data-testid="explainer-stops-off"]'))).toContain(
-      'Stops are switched off for this company',
+    expect(text(host.querySelector('[data-testid="explainer-stops-off"]'))).toBe(
+      'Stops are switched off',
     );
-    expect(text(host.querySelector('[data-testid="explainer-stop"]'))).toContain(
-      '(ignored — stops are switched off)',
-    );
+    expect(stopLines(host)[0]).toContain('(Stops are switched off)');
   });
 
-  it('names a reason code it does not know as itself rather than hiding it', async () => {
+  it('words the reasons it has a sentence for and shows any other code as itself rather than hiding it', async () => {
     const host = await render(
       vi.fn().mockResolvedValue(explanation({ reasons: ['SOLD_OUT', 'SOMETHING_NEW'], stops: [] })),
     );
 
-    expect(
-      [...host.querySelectorAll('[data-testid="explainer-reason"]')].map((li) => text(li)),
-    ).toEqual(['It is sold out here', 'Other reason (SOMETHING_NEW)']);
+    expect(reasons(host)).toEqual(['Out of stock', 'SOMETHING_NEW']);
+  });
+
+  it('says what the channel’s cut-off is when that is why', async () => {
+    const host = await render(
+      vi.fn().mockResolvedValue(explanation({ reasons: ['CHANNEL_STOPPED'], stops: [] })),
+    );
+
+    expect(reasons(host)).toEqual(['Remaining is at or below the channel’s cut-off']);
   });
 
   it('says there is no access on a 403, and shows the problem on any other failure', async () => {
@@ -257,32 +252,13 @@ describe('StopExplainerDialog (ADR 0141, “why can’t I sell this?”)', () =>
   });
 
   it('can still be asked when the channel list cannot be read: it just offers no channel', async () => {
-    await TestBed.configureTestingModule({
-      imports: [Host],
-      providers: [
-        {
-          provide: CurrentLocation,
-          useValue: {
-            scope: signal<LocationScope | null>(SCOPE),
-            ensureLoaded: () => Promise.resolve(),
-          },
-        },
-        { provide: StopsApi, useValue: { explain: vi.fn().mockResolvedValue(explanation()) } },
-        {
-          provide: SalesChannelsApi,
-          useValue: { list: vi.fn().mockRejectedValue(new Error('x')) },
-        },
-      ],
-    }).compileComponents();
-    TestBed.inject(I18n).setLocale('en');
-    fixture = TestBed.createComponent(Host);
-    fixture.detectChanges();
-    await settle();
-    fixture.detectChanges();
+    const host = await render(
+      vi.fn().mockResolvedValue(explanation()),
+      [],
+      vi.fn().mockRejectedValue(new Error('x')),
+    );
 
-    const select = (fixture.nativeElement as HTMLElement).querySelector(
-      '[data-testid="explainer-channel"]',
-    ) as HTMLSelectElement;
+    const select = host.querySelector('[data-testid="explainer-channel"]') as HTMLSelectElement;
     expect([...select.options].map((option) => option.value)).toEqual(['']);
   });
 

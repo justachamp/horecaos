@@ -491,13 +491,12 @@ public class MarketplaceAvailabilityReconciler {
             case CONFIRMED -> {
                 // The row that records the confirmation and the fact that announces it commit
                 // together, and only if this worker still holds the lease: a worker whose lease
-                // lapsed writes neither, so a change is announced once. Announced only when the
-                // platform's belief moved -- it did not know what the partner held, or knew
-                // something else -- so a resend that repeats a confirmed value says nothing.
-                boolean beliefMoved = !Boolean.valueOf(sent).equals(item.confirmedAvailable());
+                // lapsed writes neither, so a change is announced once. Only a success is
+                // announced: a refusal changes nothing the platform believes, and an unknown
+                // outcome withdraws the belief rather than confirming anything.
                 transactions.executeWithoutResult(transaction -> {
                     boolean recorded = store.recordOutcome(item, owner, sent, Outcome.CONFIRMED, null, now, null);
-                    if (recorded && beliefMoved) {
+                    if (recorded) {
                         outbox.availabilityPushed(
                                 binding.tenantId(),
                                 new MarketplaceAvailabilityPushedPayload(
