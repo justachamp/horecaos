@@ -7,9 +7,11 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -24,9 +26,11 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.ChannelOfferingLookupAdapter;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.inventory.api.StopScopeType;
@@ -35,6 +39,7 @@ import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.CreateStop;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.application.MaterialisedPositionRestorer;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.pos.FakePosAdapter;
@@ -177,7 +182,19 @@ class PosAvailabilityPollTests {
             public void bindPlatform() {}
         };
         stopService = new AvailabilityStopService(
-                stopStore, event -> {}, clock, audit, noRls, new FakeConfigurationResolver());
+                stopStore,
+                event -> {},
+                clock,
+                audit,
+                noRls,
+                new FakeConfigurationResolver(),
+                new MaterialisedPositionRestorer(
+                        stopStore,
+                        inventoryStore,
+                        new ChannelOfferingLookupAdapter(
+                                catalogStore,
+                                new JdbcMenuStore(jdbc),
+                                (tenantId, locationId) -> Optional.of(ZoneId.of("Asia/Tashkent")))));
         inventory = new InventoryService(
                 inventoryStore,
                 event -> {},

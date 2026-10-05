@@ -122,6 +122,22 @@ public class JdbcAvailabilityStopStore {
     }
 
     /**
+     * {@link #findById} that takes a share lock on the row: a lift or an expiry of it (an {@code
+     * UPDATE}) waits for the caller's transaction, and a caller that arrives after one waits for it
+     * and reads the row as it became. What lets a materialisation run and a lift agree on who went
+     * first -- a position written for a stop that was lifted a moment earlier would be nobody's to
+     * give back.
+     */
+    public Optional<StopRow> findByIdForShare(UUID tenantId, UUID stopId) {
+        return jdbc.sql("SELECT %s FROM inventory.availability_stops WHERE tenant_id = :tenantId AND id = :id FOR SHARE"
+                        .formatted(COLUMNS))
+                .param("tenantId", tenantId)
+                .param("id", stopId)
+                .query(JdbcAvailabilityStopStore::mapStop)
+                .optional();
+    }
+
+    /**
      * Every stop in force at {@code at} on any of these variants — the
      * resolver's single read. In force means {@code ACTIVE} and not past its
      * {@code ends_at}; a row whose end has passed but which the sweeper has not

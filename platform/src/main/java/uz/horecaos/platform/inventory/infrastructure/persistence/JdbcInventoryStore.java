@@ -81,6 +81,40 @@ public class JdbcInventoryStore {
                 .optional();
     }
 
+    /** One unavailable BINARY position whose latest availability movement is a given reason's own write. */
+    public record PositionRow(UUID stockItemId, UUID locationId, long positionSequence) {}
+
+    /**
+     * Every BINARY position of a variant that is unavailable <em>and</em> whose latest availability
+     * movement carries {@code reasonCode}: the positions whose "off" is, as far as the ledger can
+     * say, nobody's but that reason's. A later movement by anyone else -- a kitchen's own 86, a POS
+     * reading -- moves the latest one and takes the position out of the answer, which is what lets a
+     * caller undo its own write without ever undoing somebody else's.
+     */
+    public List<PositionRow> unavailablePositionsLastSetBy(UUID tenantId, UUID variantId, String reasonCode) {
+        return jdbc.sql("""
+                SELECT s.id, s.location_id, p.position_sequence
+                FROM inventory.stock_items s
+                JOIN inventory.positions p ON p.stock_item_id = s.id AND p.tenant_id = s.tenant_id
+                WHERE s.tenant_id = :tenantId AND s.variant_id = :variantId
+                  AND s.status = 'ACTIVE' AND s.tracking_mode = 'BINARY'
+                  AND p.binary_available = false
+                  AND (SELECT m.reason_code FROM inventory.movements m
+                       WHERE m.stock_item_id = s.id AND m.tenant_id = s.tenant_id
+                         AND m.movement_type = 'AVAILABILITY_CHANGE'
+                       ORDER BY m.sequence_number DESC LIMIT 1) = :reasonCode
+                ORDER BY s.location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("variantId", variantId)
+                .param("reasonCode", reasonCode)
+                .query((row, number) -> new PositionRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("position_sequence")))
+                .list();
+    }
+
     /** Stock items for a set of variants at one location, in one round trip. */
     public Map<UUID, StockItemRow> findStockItems(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
         if (variantIds.isEmpty()) {

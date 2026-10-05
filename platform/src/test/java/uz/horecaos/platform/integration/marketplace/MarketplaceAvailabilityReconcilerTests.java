@@ -56,6 +56,7 @@ import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.CreateStop;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.application.MaterialisedPositionRestorer;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
@@ -157,14 +158,22 @@ class MarketplaceAvailabilityReconcilerTests {
         FakeConfigurationResolver resolver = new FakeConfigurationResolver(configuration);
         store = new JdbcMarketplaceAvailabilityStore(jdbc);
         stopStore = new JdbcAvailabilityStopStore(jdbc);
-        stopService = new AvailabilityStopService(stopStore, event -> {}, clock, fact -> {}, NO_OP_RLS, resolver);
         JdbcSalesChannelStore channels = new JdbcSalesChannelStore(jdbc);
         ChannelOfferingLookupAdapter catalog = new ChannelOfferingLookupAdapter(
                 new JdbcCatalogStore(jdbc, JsonMapper.builder().build()),
                 new JdbcMenuStore(jdbc),
                 (tenantId, locationId) -> Optional.of(ZoneId.of("Asia/Tashkent")));
+        JdbcInventoryStore inventoryStore = new JdbcInventoryStore(jdbc);
+        stopService = new AvailabilityStopService(
+                stopStore,
+                event -> {},
+                clock,
+                fact -> {},
+                NO_OP_RLS,
+                resolver,
+                new MaterialisedPositionRestorer(stopStore, inventoryStore, catalog));
         inventory = new InventoryService(
-                new JdbcInventoryStore(jdbc),
+                inventoryStore,
                 event -> {},
                 clock,
                 fact -> {},
