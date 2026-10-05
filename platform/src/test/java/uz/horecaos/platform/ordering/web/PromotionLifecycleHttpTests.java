@@ -265,7 +265,11 @@ class PromotionLifecycleHttpTests {
 
         // 12:30 local, an hour before the promised time, inside 12:00 to 15:00.
         CLOCK.set(instantAt(12, 30));
+        double changedBefore = requoteCount("changed");
         assertThat(sweep.sweepOnce(CLOCK.instant())).isEqualTo(1);
+        assertThat(requoteCount("changed"))
+                .as("the finding is counted, by its outcome and nothing else")
+                .isEqualTo(changedBefore + 1);
 
         JsonNode finding = onlyFinding(orderId);
         assertThat(finding.get("trigger").asText()).isEqualTo("CHECKPOINT");
@@ -888,6 +892,16 @@ class PromotionLifecycleHttpTests {
                 SELECT id, status, discount_minor, claimed_quote_id, current_quote_id, last_revision
                 FROM pricing.promotion_redemptions WHERE order_id = :id
                 """).param("id", orderId).query().singleRow();
+    }
+
+    /** The checkpoint counter for one outcome, which is the only label it has. */
+    private double requoteCount(String outcome) {
+        var counter = requoteService
+                .metrics()
+                .find(ScheduledOrderRequoteService.REQUOTES)
+                .tag("outcome", outcome)
+                .counter();
+        return counter == null ? 0 : counter.count();
     }
 
     private long count(String sql, @Nullable Object parameter) {
