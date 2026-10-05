@@ -1306,7 +1306,11 @@ class CartCheckoutAndOrderTests {
     private void activateOperatorPromoCode() {
         var promoCodeStore =
                 new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
-        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
+                promoCodeStore,
+                clock,
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                uz.horecaos.platform.support.AuditTrail.actor("promo-author"));
         var drafted = authoring.draft(
                 TENANT,
                 BRAND,

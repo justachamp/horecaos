@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged;
@@ -80,6 +81,8 @@ class SalesChannelInstallationAnnouncementTests {
         channels = new SalesChannelService(
                 new JdbcSalesChannelStore(jdbc),
                 Clock.fixed(Instant.parse("2026-10-03T09:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.recorder(jdbc),
+                AuditTrail.actor("channel-author"),
                 published::add);
     }
 
