@@ -23,7 +23,8 @@ export interface BrandOption {
  * **What it is not.** It is not an authorization claim (the server decides what any brand shows),
  * and it does not touch an operator whose scope is a brand or a branch: their own grant names the
  * brand, {@link options} stays empty for them and the picker is not drawn. The Settings scope bar
- * keeps its own brand in the URL (`?brand=`); this seeds it when the URL names none.
+ * keeps its own brand in the URL (`?brand=`); this seeds it when the URL names none, and a pick made
+ * while Settings is open outranks the URL ({@link picks}).
  *
  * Remembered in `localStorage` with the same tolerant try/catch every other per-viewer
  * convenience in the console uses (`CurrentLocation`, `I18n`): a kiosk profile with storage off
@@ -33,6 +34,7 @@ export interface BrandOption {
 export class BrandChoice {
   private readonly offered = signal<readonly BrandOption[]>([]);
   private readonly picked = signal<string | null>(readStored());
+  private readonly pickCount = signal(0);
 
   /** Every brand the tenant-wide operator may pick between; empty until the list has been read. */
   readonly options: Signal<readonly BrandOption[]> = this.offered.asReadonly();
@@ -50,13 +52,25 @@ export class BrandChoice {
     return options.some((option) => option.id === wanted) ? wanted : options[0].id;
   });
 
+  /**
+   * How many times the operator has changed the brand in effect since the page loaded. Not the
+   * brand: a consumer that keeps its own copy of the brand (the Settings scope bar keeps one in the
+   * URL) compares this with the count it last saw, to tell a pick made since from a brand that was
+   * simply already so.
+   */
+  readonly picks: Signal<number> = this.pickCount.asReadonly();
+
   /** Called by whoever has just read the tenant's brand list. */
   offer(options: readonly BrandOption[]): void {
     this.offered.set(options);
   }
 
   select(brandId: string): void {
+    const changed = this.brandId() !== brandId;
     this.picked.set(brandId);
+    if (changed) {
+      this.pickCount.update((count) => count + 1);
+    }
     try {
       globalThis.localStorage?.setItem(STORAGE_KEY, brandId);
     } catch {

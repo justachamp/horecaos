@@ -106,6 +106,8 @@ describe('SettingsScope', () => {
   let get: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    // The header's pick is remembered in real storage, which jsdom keeps across tests in a file.
+    localStorage.removeItem('horecaos.operations.brandId');
     get = vi.fn((path: string) => {
       if (path.includes('/brands/brand-1/locations')) {
         return of({ value: LOCATIONS_FOR_BRAND_1 });
@@ -160,6 +162,72 @@ describe('SettingsScope', () => {
     await flushMicrotasks();
 
     expect(scope.brandId()).toBe('brand-1');
+  });
+
+  describe('a brand picked in the shell’s header while Settings is open', () => {
+    /** Settings open on the first brand, as the scope bar left it, with the header offering both. */
+    async function openOnBrand1(query: string): Promise<SettingsScope> {
+      configure(get);
+      TestBed.inject(BrandChoice).offer(
+        BRANDS.map((brand) => ({ id: brand.id, displayName: brand.displayName })),
+      );
+      await RouterTestingHarness.create(`/settings?${query}`);
+      const scope = TestBed.inject(SettingsScope);
+      await flushMicrotasks();
+      return scope;
+    }
+
+    it('is the brand the screen reads at once, with the branch of the brand just left dropped', async () => {
+      const scope = await openOnBrand1('brand=brand-1&location=loc-1');
+      expect(scope.brandId()).toBe('brand-1');
+      expect(scope.locationId()).toBe('loc-1');
+
+      // What the shell does on a pick, and then rebuilds the screen, which reads the scope straight away.
+      TestBed.inject(BrandChoice).select('brand-2');
+
+      expect(scope.brandId()).toBe('brand-2');
+      expect(scope.locationId()).toBeNull();
+      expect(scope.level()).toBe('BRAND');
+    });
+
+    it('re-points the URL at the picked brand, clearing the branch, and reads that brand’s branches', async () => {
+      const scope = await openOnBrand1('brand=brand-1&location=loc-1');
+
+      TestBed.inject(BrandChoice).select('brand-2');
+      TestBed.tick();
+      await flushMicrotasks();
+
+      const url = TestBed.inject(Router).url;
+      expect(url).toContain('brand=brand-2');
+      expect(url).not.toContain('location=');
+      expect(scope.brandId()).toBe('brand-2');
+      expect(scope.locations()).toEqual(LOCATIONS_FOR_BRAND_2);
+    });
+
+    it('leaves the company-wide level, as picking a brand in the scope bar does', async () => {
+      const scope = await openOnBrand1('brand=brand-1&level=tenant');
+      expect(scope.level()).toBe('TENANT');
+
+      TestBed.inject(BrandChoice).select('brand-2');
+      TestBed.tick();
+      await flushMicrotasks();
+
+      expect(scope.level()).toBe('BRAND');
+      expect(TestBed.inject(Router).url).not.toContain('level=');
+    });
+
+    it('does not outrank a brand chosen in the scope bar afterwards', async () => {
+      const scope = await openOnBrand1('brand=brand-1');
+      TestBed.inject(BrandChoice).select('brand-2');
+      TestBed.tick();
+      await flushMicrotasks();
+
+      scope.setBrand('brand-1');
+      await flushMicrotasks();
+
+      expect(scope.brandId()).toBe('brand-1');
+      expect(TestBed.inject(Router).url).toContain('brand=brand-1');
+    });
   });
 
   it('ignores a shell pick this tenant’s brand list does not contain', async () => {

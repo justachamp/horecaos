@@ -62,6 +62,14 @@ export interface LocationOption {
  * locations of whichever brand is picked, so the location picker and the 76 screens behind it
  * follow the pick. An operator who never picks gets the first brand, as before.
  *
+ * **The gap after a pick.** The brand in effect changes the moment the operator picks, but that
+ * brand's branches arrive a read later, and the shell rebuilds the open screen at once. In that
+ * gap this class answers «not known yet» ({@link scope} is `null`, {@link denied} is false,
+ * {@link options} is empty) instead of the previous brand's branch under the new brand's name,
+ * and {@link ensureLoaded} does not resolve until the read has settled -- so the rebuilt screen,
+ * which awaits it before reading {@link scope}, loads the brand the header names and never the one
+ * it just left.
+ *
  * **What this does not do.** It does not enforce anything — same
  * non-enforcement stance this class always documented: the server decides
  * what the operator may see at the location it resolves to, this only picks
@@ -85,11 +93,28 @@ export class CurrentLocation {
   private readonly selectedLocationId = signal<string | null>(readStoredLocationId());
   private readonly hasLoaded = signal(false);
 
-  /** The operator's location, or null before load and when they cover none. */
+  /**
+   * True from the pick of a brand whose branches are not the ones loaded until they have been read
+   * (or could not be). Derived from the two signals rather than set by the read, so it is right in
+   * the same tick as the pick, before the effect below has had a chance to start the read.
+   */
+  private readonly switching: Signal<boolean> = computed(() => {
+    const tenantId = this.tenantPathTenantId();
+    const brandId = this.choice.brandId();
+    return tenantId !== null && brandId !== null && this.resolvedBrand()?.brandId !== brandId;
+  });
+
+  /**
+   * The operator's location, or null before load, when they cover none, and while the branches of a
+   * brand they have just picked are being read.
+   */
   readonly scope: Signal<LocationScope | null> = computed(() => {
     const direct = firstLocationScope(this.context());
     if (direct) {
       return direct;
+    }
+    if (this.switching()) {
+      return null;
     }
     const brand = this.resolvedBrand();
     const options = this.resolvedOptions();
@@ -111,8 +136,13 @@ export class CurrentLocation {
    * grant that never named one, without a round trip this wave deliberately
    * does not spend on the common case. Consumers other than the picker
    * should not read this as "every location the operator can see."
+   *
+   * Empty while the branches of a freshly picked brand are being read: the previous brand's are
+   * not an answer for the new one.
    */
-  readonly options: Signal<readonly LocationOption[]> = this.resolvedOptions.asReadonly();
+  readonly options: Signal<readonly LocationOption[]> = computed(() =>
+    this.switching() ? [] : this.resolvedOptions(),
+  );
 
   /**
    * True once loading has settled (successfully or not) and no location was
@@ -121,7 +151,9 @@ export class CurrentLocation {
    * response would tell an operator they lack access when the truth is simply
    * that nobody has asked yet.
    */
-  readonly denied: Signal<boolean> = computed(() => this.hasLoaded() && this.scope() === null);
+  readonly denied: Signal<boolean> = computed(
+    () => this.hasLoaded() && !this.switching() && this.scope() === null,
+  );
 
   private loadPromise: Promise<void> | null = null;
 
@@ -136,18 +168,39 @@ export class CurrentLocation {
       }
       untracked(() => {
         if (this.resolvedBrand()?.brandId !== brandId) {
-          void this.loadOptionsFor({ tenantId, brandId });
+          void this.readOptionsFor({ tenantId, brandId });
         }
       });
     });
   }
 
-  /** Fetches the session context once; every later call replays the same promise. */
+  /**
+   * Fetches the session context once; every later call replays the same promise. After a brand
+   * pick it also waits for the picked brand's branches, so what a caller reads from {@link scope}
+   * once this resolves is the brand in effect and never the one the operator just left.
+   */
   ensureLoaded(): Promise<void> {
     if (this.loadPromise === null) {
       this.loadPromise = this.load();
     }
-    return this.loadPromise;
+    return this.loadPromise.then(() => this.settleBrandPick());
+  }
+
+  /**
+   * Waits out the read of the branches of the brand now picked. Looped, because a second pick can
+   * land while the first is being read: that read's answer is dropped, and the one that decides is
+   * the one for the brand in effect when this looks again. Each pass ends in a settled read --
+   * stored, failed (which stores an empty list) or superseded by a newer one -- so it terminates.
+   */
+  private async settleBrandPick(): Promise<void> {
+    while (this.switching()) {
+      const tenantId = this.tenantPathTenantId();
+      const brandId = this.choice.brandId();
+      if (tenantId === null || brandId === null) {
+        return;
+      }
+      await this.readOptionsFor({ tenantId, brandId });
+    }
   }
 
   /**
@@ -179,7 +232,7 @@ export class CurrentLocation {
         const direct = firstBrandScope(result.value);
         const brand = direct ?? (await resolveBrandForTenant(this.api, result.value, this.choice));
         if (brand) {
-          await this.loadOptionsFor(brand);
+          await this.readOptionsFor(brand);
           // After the first read, never before: the effect above compares this brand with the one
           // already loaded, and arming it earlier would read the same locations twice.
           if (!direct && this.resolvedBrand() !== null) {
@@ -198,6 +251,23 @@ export class CurrentLocation {
 
   /** Bumped per read, so a slow answer for a brand the operator has since left is dropped. */
   private optionsRequest = 0;
+
+  /** The read under way, so the effect and a screen's `ensureLoaded()` share one request per brand. */
+  private optionsRead: { readonly brandId: string; readonly promise: Promise<void> } | null = null;
+
+  private readOptionsFor(brand: BrandScope): Promise<void> {
+    if (this.optionsRead?.brandId === brand.brandId) {
+      return this.optionsRead.promise;
+    }
+    const read = { brandId: brand.brandId, promise: this.loadOptionsFor(brand) };
+    this.optionsRead = read;
+    void read.promise.finally(() => {
+      if (this.optionsRead === read) {
+        this.optionsRead = null;
+      }
+    });
+    return read.promise;
+  }
 
   private async loadOptionsFor(brand: BrandScope): Promise<void> {
     const request = ++this.optionsRequest;

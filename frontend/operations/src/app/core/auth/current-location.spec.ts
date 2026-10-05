@@ -412,6 +412,68 @@ describe('CurrentLocation', () => {
       expect(loc.denied()).toBe(true);
     });
 
+    it('answers «not known yet» for the picked brand, never the previous brand’s branch, until its branches are read', async () => {
+      const loc = await loadTenantWide();
+
+      TestBed.inject(BrandChoice).select('b2');
+      // The same tick as the pick, before the effect has started any read.
+      expect(loc.scope()).toBeNull();
+      expect(loc.denied()).toBe(false);
+      expect(loc.options()).toEqual([]);
+
+      let settled = false;
+      const waiting = loc.ensureLoaded().then(() => {
+        settled = true;
+      });
+      await tick();
+      // One read for the brand, shared by the effect and the waiting screen.
+      const read = http.expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'));
+      expect(settled).toBe(false);
+
+      read.flush([location_('l9', 'Sergeli')]);
+      await waiting;
+
+      expect(settled).toBe(true);
+      expect(loc.scope()).toEqual({ tenantId: 't1', brandId: 'b2', locationId: 'l9' });
+    });
+
+    it('waits for the brand in effect when a second pick lands while the first is being read', async () => {
+      const loc = await loadTenantWide();
+      const choice = TestBed.inject(BrandChoice);
+
+      choice.select('b2');
+      const waiting = loc.ensureLoaded();
+      await tick();
+      const first = http.expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'));
+
+      choice.select('b3');
+      TestBed.tick();
+      await tick();
+      first.flush([location_('l20', 'Sergeli')]);
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b3/locations'))
+        .flush([location_('l30', 'Yunusabad')]);
+      await waiting;
+
+      expect(loc.scope()).toEqual({ tenantId: 't1', brandId: 'b3', locationId: 'l30' });
+    });
+
+    it('stops waiting when the picked brand’s branches cannot be read, and reads as denied', async () => {
+      const loc = await loadTenantWide();
+
+      TestBed.inject(BrandChoice).select('b2');
+      const waiting = loc.ensureLoaded();
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'))
+        .flush('nope', { status: 500, statusText: 'Server Error' });
+      await waiting;
+
+      expect(loc.scope()).toBeNull();
+      expect(loc.denied()).toBe(true);
+    });
+
     it('leaves an operator whose grant names a branch alone: no brand list is read, no picker offered', async () => {
       const loc = location();
       const promise = loc.ensureLoaded();

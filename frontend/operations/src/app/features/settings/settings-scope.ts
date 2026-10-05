@@ -1,4 +1,4 @@
-import { Injectable, Signal, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -56,6 +56,16 @@ export class SettingsScope {
   private readonly queryBrandId = signal<string | null>(null);
   private readonly queryLocationId = signal<string | null>(null);
   private readonly queryTenantWide = signal(false);
+  /**
+   * The header's pick count ({@link BrandChoice.picks}) when the query was last read. The query
+   * describes the brand the operator was on when it was written; a pick made in the header since
+   * then replaces that brand, so until the URL is re-pointed (or the operator moves it) the query's
+   * brand, branch and level are not in force.
+   */
+  private readonly queryReadAtPick = signal(this.shellBrand.picks());
+  private readonly queryOutranked = computed(
+    () => this.shellBrand.picks() > this.queryReadAtPick(),
+  );
   private readonly brandsSig = signal<readonly BrandView[]>([]);
   private readonly locationsSig = signal<readonly LocationView[]>([]);
   private readonly loadingBrands = signal(false);
@@ -73,13 +83,18 @@ export class SettingsScope {
    * The brand in effect: the query param when it names a brand this tenant has; else the one picked
    * in the shell's header (`BrandChoice`, row `X.1`), so opening Settings does not silently switch
    * an operator to another brand than the one they have been working in; else the first one.
+   *
+   * A header pick made while Settings is open outranks the query -- the screen the shell rebuilds
+   * for the pick reads this at once, before the URL has been re-pointed, and must not read the brand
+   * the header no longer names (a query the operator or a pasted link set *after* the pick wins
+   * again).
    */
   readonly brandId: Signal<string | null> = computed(() => {
     const brands = this.brandsSig();
     if (brands.length === 0) {
       return null;
     }
-    const requested = this.queryBrandId();
+    const requested = this.queryOutranked() ? null : this.queryBrandId();
     if (requested && brands.some((brand) => brand.id === requested)) {
       return requested;
     }
@@ -89,7 +104,7 @@ export class SettingsScope {
 
   /** `null` means "Все филиалы" — editing at BRAND level. A location outside the current brand is dropped. */
   readonly locationId: Signal<string | null> = computed(() => {
-    const requested = this.queryLocationId();
+    const requested = this.queryOutranked() ? null : this.queryLocationId();
     if (!requested) {
       return null;
     }
@@ -97,10 +112,12 @@ export class SettingsScope {
   });
 
   /** Whether the bar is currently set to the tenant-wide (row 10.3b) level. */
-  readonly tenantWide: Signal<boolean> = this.queryTenantWide.asReadonly();
+  readonly tenantWide: Signal<boolean> = computed(
+    () => this.queryTenantWide() && !this.queryOutranked(),
+  );
 
   readonly level: Signal<SettingsEditingLevel> = computed(() => {
-    if (this.queryTenantWide()) {
+    if (this.tenantWide()) {
       return 'TENANT';
     }
     return this.locationId() ? 'LOCATION' : 'BRAND';
@@ -119,6 +136,25 @@ export class SettingsScope {
       this.queryBrandId.set(params.get('brand'));
       this.queryLocationId.set(params.get('location'));
       this.queryTenantWide.set(params.get('level') === 'tenant');
+      this.queryReadAtPick.set(untracked(() => this.shellBrand.picks()));
+    });
+
+    // Puts a header pick into the URL, so a link copied from here opens the brand the screen shows
+    // and the scope bar's own pickers follow. Only when the URL pins a brand: with none, the pick is
+    // already what {@link brandId} falls back to. It does what choosing the brand in the scope bar
+    // does -- the branch and the company-wide level go.
+    effect(() => {
+      const outranked = this.queryOutranked();
+      const brands = this.brandsSig();
+      if (!outranked || brands.length === 0) {
+        return;
+      }
+      untracked(() => {
+        const brandId = this.brandId();
+        if (brandId && this.queryBrandId() !== null) {
+          this.setBrand(brandId);
+        }
+      });
     });
 
     void this.loadBrands();

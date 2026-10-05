@@ -50,6 +50,21 @@ describe('BrandChoice', () => {
     expect(choice().brandId()).toBe('b2');
   });
 
+  it('counts the picks that change the brand in effect, so a consumer can tell a pick made since it last looked', () => {
+    choice().offer(TWO);
+    expect(choice().picks()).toBe(0);
+
+    choice().select('b2');
+    expect(choice().picks()).toBe(1);
+
+    // Picking what is already in effect changes nothing.
+    choice().select('b2');
+    expect(choice().picks()).toBe(1);
+
+    choice().select('b1');
+    expect(choice().picks()).toBe(2);
+  });
+
   it('falls back to the first brand when the remembered one is no longer offered', () => {
     localStorage.setItem(STORAGE_KEY, 'gone');
     choice().offer(TWO);
