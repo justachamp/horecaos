@@ -5,7 +5,11 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
 import { type ComboPickWire, comboKeyHash } from '../utils/combo-selection';
-import { type NestedModifierWire, nestedKeyHash } from '../utils/modifier-selection';
+import {
+  type NestedModifierWire,
+  modifierKeyHash,
+  nestedKeyHash,
+} from '../utils/modifier-selection';
 import type { AppliedPromotion } from './applied-promotions';
 
 /**
@@ -421,10 +425,13 @@ export class CartService {
 /**
  * The key that identifies one line.
  *
- * Derived from the variant and the exact modifier selection, sorted, so the same
+ * Derived from the variant and the exact modifier selection, order aside, so the same
  * choice always produces the same key and two different choices never collide.
  * Without the modifiers in it, adding "osh with extra meat" to a cart already
- * holding plain osh would replace the plain one.
+ * holding plain osh would replace the plain one. A line with no modifiers is keyed by
+ * its variant alone; any other is a short hash after it (the platform stores a line key
+ * in sixty-four characters), and what it holds comes back on the cart's own echo of the line
+ * ({@link optionIdsOfLine}).
  */
 export function lineKeyFor(
   variantId: string,
@@ -446,20 +453,22 @@ export function lineKeyFor(
     // read them back out of the key.
     return `${variantId}c${comboKeyHash(comboPicks, modifierOptionIds)}`;
   }
-  return modifierOptionIds.length === 0
-    ? variantId
-    : `${variantId}+${[...modifierOptionIds].sort().join('.')}`;
+  if (modifierOptionIds.length === 0) {
+    return variantId;
+  }
+  // The platform stores a line key in sixty-four characters and a variant's id is thirty-six, so
+  // even one option's id spelled after it overflows the column and the line is refused. The
+  // options are hashed instead, and read back from the cart's own echo of the line.
+  return `${variantId}m${modifierKeyHash(modifierOptionIds)}`;
 }
 
 /**
- * The inverse of {@link lineKeyFor}.
+ * Reads the options out of a key that spells them out (`variant+option.option`).
  *
- * The server's own `CartLineResponse` carries a `lineKey` and a `variantId`
- * and nothing about which modifiers were chosen -- `modifierOptionIds` is a
- * request field, never echoed back. This client chose the key's shape, so it
- * alone can read it back apart: `variantId` is a UUID (no `+` or `.` in it)
- * and each modifier option id is a UUID (no `.` in it), so splitting on the
- * one `+` and then on `.` is exact and never ambiguous with either id.
+ * Only a cart from a platform that does not echo a line's options can need this, and only for a
+ * key spelled that way; {@link lineKeyFor} no longer writes one, because it does not fit the
+ * sixty-four characters the platform stores. A hashed key spells nothing out and reads as no
+ * options here: use {@link optionIdsOfLine}, which prefers the platform's own echo.
  */
 export function modifierOptionIdsFromLineKey(
   lineKey: string,

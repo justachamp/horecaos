@@ -305,6 +305,19 @@ export function nestedOnTheWire(
 }
 
 /**
+ * A short, stable key for a line that carries first-level modifier options.
+ *
+ * A cart line is addressed by a key the platform stores in sixty-four characters, and a variant's
+ * id alone is thirty-six: spelling a single option's id after it (thirty-six more) already
+ * overflows the column and the platform refuses the line. So the options are hashed into a short
+ * suffix, in any tap order to the same key, and what a line holds is read back from the cart's own
+ * echo of it (`modifierOptionIds`), never decoded from the key.
+ */
+export function modifierKeyHash(modifierOptionIds: readonly string[]): string {
+  return shortHash([...modifierOptionIds].sort().join('.'));
+}
+
+/**
  * A short, stable key for a line that carries second-level answers.
  *
  * A cart line is addressed by a key the platform stores in sixty-four characters, and a variant's id
