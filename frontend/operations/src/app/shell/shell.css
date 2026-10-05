@@ -218,6 +218,19 @@
   gap: 12px;
 }
 
+.brand,
+.location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The visible caption a multi-brand operator reads the scope from. */
+.scope__caption {
+  color: var(--q-ink-subtle);
+}
+
+.brand__select,
 .location__select,
 .locale__select {
   background: var(--q-canvas);
@@ -225,6 +238,22 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   padding: 2px 4px;
+}
+
+/* A mouse user's way to the cheat-sheet; the keyboard's is `?`. */
+.keys {
+  min-width: 24px;
+  height: 24px;
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.keys:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 2px;
 }
 
 .main {

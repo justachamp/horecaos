@@ -265,6 +265,116 @@ class OnboardingReadinessEndpointTests {
         assertThat(anonymous.getResponse().getStatus()).isEqualTo(401);
     }
 
+    @Test
+    @DisplayName(
+            "a branch closed by hand with no end time is an advisory row that names the branch and does not turn the run red")
+    void aLocationForcedClosedWithNoExpiryIsAdvisoryAndNamesTheBranch() throws Exception {
+        coverLocation();
+        jdbc.sql("""
+                INSERT INTO tenant.location_service_state
+                    (location_id, tenant_id, brand_id, mode, reason_code, note, changed_at)
+                VALUES (:locationId, :tenantId, :brandId, 'FORCE_CLOSED', 'FRYER_BROKEN',
+                        'ring Aziz on +998901112233', now() - interval '5 days')
+                """)
+                .param("locationId", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+
+        String body = validate(TENANT, RUN, OWNER);
+
+        assertThat(field(body, "LOCATION_FORCED_CLOSED_NO_EXPIRY", "locationId"))
+                .containsExactly(LOCATION.toString());
+        assertThat(field(body, "LOCATION_FORCED_CLOSED_NO_EXPIRY", "severity")).containsExactly("ADVISORY");
+        assertThat(field(body, "LOCATION_FORCED_CLOSED_NO_EXPIRY", "advisory")).containsExactly(true);
+        assertThat(body)
+                .as("the operator's free-text note stays in its table")
+                .doesNotContain("Aziz")
+                .doesNotContain("998901112233");
+        assertThat(JsonPath.<Boolean>read(body, "$.allPassed"))
+                .as("a closure somebody chose is advice, not a stop")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("a closure with an end time is not reported")
+    void aLocationForcedClosedWithAnEndTimeIsNotReported() throws Exception {
+        coverLocation();
+        jdbc.sql("""
+                INSERT INTO tenant.location_service_state
+                    (location_id, tenant_id, brand_id, mode, reason_code, effective_until)
+                VALUES (:locationId, :tenantId, :brandId, 'FORCE_CLOSED', 'HOLIDAY', now() + interval '2 days')
+                """)
+                .param("locationId", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+
+        assertThat(rows(validate(TENANT, RUN, OWNER), "LOCATION_FORCED_CLOSED_NO_EXPIRY"))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("an active branch no sales channel reaches is a blocking row with its locationId")
+    void aLocationNoChannelReachesIsBlocking() throws Exception {
+        insertChannel(TENANT, STOREFRONT, "STOREFRONT");
+        enablePaymentMethod(TENANT, STOREFRONT);
+        enableMode(TENANT, STOREFRONT, "PICKUP");
+
+        String body = validate(TENANT, RUN, OWNER);
+
+        assertThat(field(body, "LOCATION_NO_SALES_CHANNEL", "locationId")).containsExactly(LOCATION.toString());
+        assertThat(field(body, "LOCATION_NO_SALES_CHANNEL", "severity")).containsExactly("BLOCKING");
+        assertThat(field(body, "LOCATION_NO_SALES_CHANNEL", "advisory")).containsExactly(false);
+        assertThat(JsonPath.<Boolean>read(body, "$.allPassed")).isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "a fiscal assignment about to end with nothing after it is an expiring row, between blocking and advisory")
+    void aFiscalAssignmentAboutToEndIsExpiring() throws Exception {
+        coverLocation();
+        UUID entity = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, vat_registered, status)
+                VALUES (:id, :tenantId, 'ACME', 'Acme LLC', '123456789', false, 'ACTIVE')
+                """).param("id", entity).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.location_fiscal_assignments
+                    (id, tenant_id, brand_id, location_id, legal_entity_id, effective_from, effective_until,
+                     approved_by)
+                VALUES (:id, :tenantId, :brandId, :locationId, :entity,
+                        CURRENT_DATE - 400, CURRENT_DATE + 9, 'test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("entity", entity)
+                .update();
+
+        String body = validate(TENANT, RUN, OWNER);
+
+        assertThat(field(body, "LOCATION_FISCAL_ASSIGNMENT_ENDING", "locationId"))
+                .containsExactly(LOCATION.toString());
+        assertThat(field(body, "LOCATION_FISCAL_ASSIGNMENT_ENDING", "severity")).containsExactly("EXPIRING");
+        assertThat(field(body, "LOCATION_FISCAL_ASSIGNMENT_ENDING", "advisory"))
+                .as("an older console reads an expiring row as advice")
+                .containsExactly(true);
+        assertThat(JsonPath.<Boolean>read(body, "$.allPassed"))
+                .as("nothing is broken today")
+                .isTrue();
+    }
+
+    /** One channel that sells pickup at the fixture branch, with hours: nothing else is reported. */
+    private void coverLocation() {
+        insertChannel(TENANT, STOREFRONT, "STOREFRONT");
+        enablePaymentMethod(TENANT, STOREFRONT);
+        enableMode(TENANT, STOREFRONT, "PICKUP");
+        serveAt(TENANT, STOREFRONT, LOCATION);
+        bindSchedule(TENANT, BRAND, LOCATION, "PICKUP");
+    }
+
     // -------------------------------------------------------------- helpers
 
     private static String path(UUID tenantId, UUID runId) {

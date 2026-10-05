@@ -39,6 +39,19 @@ public interface OnboardingReadinessCheck {
     boolean advisory();
 
     /**
+     * The tier a finding from this check sorts into (settings.md §10.0:
+     * blocking → expiring → advisory). Defaults to the two-tier answer {@link
+     * #advisory} gave before the third tier existed; a check whose findings
+     * carry a date after which they stop trade overrides it with {@link
+     * ReadinessSeverity#EXPIRING} (and then also answers {@code advisory()
+     * == true}, since an expiring finding does not stop trade today). This is
+     * the method {@link OnboardingService#validate} reads.
+     */
+    default ReadinessSeverity severity() {
+        return advisory() ? ReadinessSeverity.ADVISORY : ReadinessSeverity.BLOCKING;
+    }
+
+    /**
      * Looks at the tenant's current configuration. Must only read.
      *
      * @return {@code COMPLETED} when nothing is wrong, otherwise a

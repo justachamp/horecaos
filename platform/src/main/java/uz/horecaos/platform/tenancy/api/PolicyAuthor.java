@@ -1,5 +1,6 @@
 package uz.horecaos.platform.tenancy.api;
 
+import java.util.Optional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.ResourceScope;
 
@@ -70,4 +71,21 @@ public interface PolicyAuthor {
      * and a stale answer would defeat the comparison.
      */
     int currentVersion(PolicyKey<?> key, ResourceScope scope);
+
+    /**
+     * Who approved the latest version authored at exactly {@code scope}, and when it
+     * took effect — the facts a resolution trace shows for a rung of the ladder
+     * (settings.md §1.2). Empty when nothing has been authored there.
+     *
+     * <p>The principal is the subject as stored in {@code approved_by} (falling back to
+     * {@code created_by} for a row that records no approver), never a name (ADR 0029). Like
+     * {@link #currentVersion}, read from the table and not through any cache: it is shown
+     * beside a version an {@code expectedVersion} is compared with.
+     *
+     * <p>Defaults to empty so an implementation that keeps no such record (a test double)
+     * answers honestly rather than inventing one.
+     */
+    default Optional<ResolutionTrace.Provenance> provenance(PolicyKey<?> key, ResourceScope scope) {
+        return Optional.empty();
+    }
 }

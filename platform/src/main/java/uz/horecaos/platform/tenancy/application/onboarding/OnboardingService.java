@@ -766,7 +766,7 @@ public class OnboardingService implements OnboardingHealthQuery {
         if (outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.COMPLETED) {
             return List.of();
         }
-        return validationResultsFor(check.checkKey(), outcome, check.advisory());
+        return validationResultsFor(check.checkKey(), outcome, check.severity());
     }
 
     /**
@@ -841,9 +841,20 @@ public class OnboardingService implements OnboardingHealthQuery {
      * {@link #validationResultsFor(OnboardingStep, OnboardingStepHandler.StepResult)}
      * for a check that is not an {@link OnboardingStep} and so has only a key.
      */
-    @SuppressWarnings("unchecked")
     static List<ValidationResult> validationResultsFor(
             String stepKey, OnboardingStepHandler.StepResult outcome, boolean advisory) {
+        return validationResultsFor(
+                stepKey, outcome, advisory ? ReadinessSeverity.ADVISORY : ReadinessSeverity.BLOCKING);
+    }
+
+    /**
+     * {@link #validationResultsFor(String, OnboardingStepHandler.StepResult, boolean)}
+     * for a check that sorts into the three-tier ladder (blocking, expiring,
+     * advisory) rather than the old two.
+     */
+    @SuppressWarnings("unchecked")
+    static List<ValidationResult> validationResultsFor(
+            String stepKey, OnboardingStepHandler.StepResult outcome, ReadinessSeverity severity) {
         Object rawFindings = outcome.result().get(OnboardingStepHandler.StepResult.FINDINGS_KEY);
         if (outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.FAILED
                 && rawFindings instanceof List<?> findings
@@ -857,7 +868,7 @@ public class OnboardingService implements OnboardingHealthQuery {
                             finding.errorCode(),
                             finding.detail(),
                             finding.locationId(),
-                            advisory,
+                            severity,
                             finding.subject()))
                     .toList();
         }
@@ -867,7 +878,7 @@ public class OnboardingService implements OnboardingHealthQuery {
                 outcome.errorCode(),
                 outcome.detail(),
                 null,
-                advisory));
+                severity));
     }
 
     /**
@@ -1307,15 +1318,21 @@ public class OnboardingService implements OnboardingHealthQuery {
      *                   (wave P31: {@link OnboardingStepHandler.StepResult#failedWithFindings});
      *                   {@code null} for a step reported as a single row, the
      *                   same as before that reshape
-     * @param advisory   true for a finding from a check whose severity is
-     *                   advisory (settings.md §10.0): shown, but not counted
+     * @param advisory   true for a finding that does not stop the tenant
+     *                   trading, which is every tier but {@link
+     *                   ReadinessSeverity#BLOCKING}: shown, but not counted
      *                   against {@link ValidationOutcome#allPassed()}; false for
-     *                   every {@code VALIDATING}-phase step
+     *                   every {@code VALIDATING}-phase step. Kept beside {@code
+     *                   severity} so a console older than the third tier still
+     *                   reads an expiring finding as advice
      * @param subject    the one non-location object the finding is about (a
      *                   sales channel), when it names one, so the console can
      *                   link to that object rather than to a list; {@code null}
      *                   for every finding that names none — serialised as an
      *                   absent {@code subject}, which an older console ignores
+     * @param severity   the tier the finding sorts into (settings.md §10.0:
+     *                   blocking → expiring → advisory); always consistent with
+     *                   {@code advisory}
      */
     public record ValidationResult(
             String stepKey,
@@ -1324,7 +1341,56 @@ public class OnboardingService implements OnboardingHealthQuery {
             @Nullable String detail,
             @Nullable UUID locationId,
             boolean advisory,
-            OnboardingStepHandler.StepResult.@Nullable FindingSubject subject) {
+            OnboardingStepHandler.StepResult.@Nullable FindingSubject subject,
+            ReadinessSeverity severity) {
+
+        public ValidationResult {
+            // One source of truth: a caller that says "advisory" and a tier that
+            // says "blocking" cannot both be true, so the tier wins.
+            advisory = severity.advisory();
+        }
+
+        /** A finding of a given tier, naming its subject. */
+        public ValidationResult(
+                String stepKey,
+                boolean passed,
+                @Nullable String errorCode,
+                @Nullable String detail,
+                @Nullable UUID locationId,
+                ReadinessSeverity severity,
+                OnboardingStepHandler.StepResult.@Nullable FindingSubject subject) {
+            this(stepKey, passed, errorCode, detail, locationId, severity.advisory(), subject, severity);
+        }
+
+        /** A finding of a given tier that names no per-item object. */
+        public ValidationResult(
+                String stepKey,
+                boolean passed,
+                @Nullable String errorCode,
+                @Nullable String detail,
+                @Nullable UUID locationId,
+                ReadinessSeverity severity) {
+            this(stepKey, passed, errorCode, detail, locationId, severity, null);
+        }
+
+        /** A finding that names its subject, tiered by the two-tier flag every check had before the third tier. */
+        public ValidationResult(
+                String stepKey,
+                boolean passed,
+                @Nullable String errorCode,
+                @Nullable String detail,
+                @Nullable UUID locationId,
+                boolean advisory,
+                OnboardingStepHandler.StepResult.@Nullable FindingSubject subject) {
+            this(
+                    stepKey,
+                    passed,
+                    errorCode,
+                    detail,
+                    locationId,
+                    advisory ? ReadinessSeverity.ADVISORY : ReadinessSeverity.BLOCKING,
+                    subject);
+        }
 
         /** A finding that names no per-item object — what every result was before {@code subject} existed. */
         public ValidationResult(
@@ -1344,7 +1410,7 @@ public class OnboardingService implements OnboardingHealthQuery {
                 @Nullable String errorCode,
                 @Nullable String detail,
                 @Nullable UUID locationId) {
-            this(stepKey, passed, errorCode, detail, locationId, false, null);
+            this(stepKey, passed, errorCode, detail, locationId, ReadinessSeverity.BLOCKING, null);
         }
     }
 

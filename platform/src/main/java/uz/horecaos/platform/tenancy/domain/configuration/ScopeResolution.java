@@ -47,15 +47,15 @@ public final class ScopeResolution {
             }
             if (stored.explicitNull()) {
                 if (key.explicitNullTerminates()) {
-                    inspected.add(new Level(scopeType, Outcome.EXPLICIT_NULL_TERMINATED));
+                    inspected.add(new Level(scopeType, Outcome.EXPLICIT_NULL_TERMINATED, stored.provenance()));
                     return new Resolved<>(
                             null, new ResolutionTrace(key.code(), Source.SCOPED_VALUE, scopeType, inspected));
                 }
-                inspected.add(new Level(scopeType, Outcome.EXPLICIT_NULL_CONTINUED));
+                inspected.add(new Level(scopeType, Outcome.EXPLICIT_NULL_CONTINUED, stored.provenance()));
                 continue;
             }
 
-            inspected.add(new Level(scopeType, Outcome.VALUE));
+            inspected.add(new Level(scopeType, Outcome.VALUE, stored.provenance()));
             return new Resolved<>(
                     key.valueType().cast(stored.value()),
                     new ResolutionTrace(key.code(), Source.SCOPED_VALUE, scopeType, inspected));

@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
   untracked,
 } from '@angular/core';
@@ -113,6 +114,16 @@ export class LatenessPolicyCard {
   readonly locationId = input.required<string | null>();
   /** Bumped by the page when the *Warn before the promised time* scalar changes, so the default shown here follows it. */
   readonly reloadToken = input(0);
+
+  /**
+   * A publication landed, at the scope the form was opened at (which is not necessarily the one the
+   * bar shows by now). The page announces it; a form that closes cannot confirm itself.
+   */
+  readonly published = output<{
+    readonly scopeType: EditableScopeType;
+    readonly brandId: string | null;
+    readonly locationId: string | null;
+  }>();
 
   protected readonly modes = LATENESS_MODES;
   protected readonly editableScopes: readonly ConfigurationScopeType[] = [
@@ -230,7 +241,13 @@ export class LatenessPolicyCard {
       cameFromDefault: view.isPlatformDefault,
       source: view.isPlatformDefault ? 'CODE_DEFAULT' : 'SCOPED_VALUE',
       winningScope: view.winningScope,
-      inspectedLevels: view.inspectedLevels,
+      inspectedLevels: view.inspectedLevels.map((level) => ({
+        scopeType: level.scopeType,
+        outcome: level.outcome,
+        version: level.version ?? null,
+        changedByName: level.approvedByName ?? null,
+        changedAt: level.validFrom ?? null,
+      })),
       describe: `ordering.lateness -> ${view.winningScope ?? 'PLATFORM DEFAULT'}`,
       currentVersionAtScope: view.currentVersionAtScope > 0 ? view.currentVersionAtScope : null,
     };
@@ -293,6 +310,11 @@ export class LatenessPolicyCard {
         dineIn: inputOf(drafts.dineIn),
         expectedVersion: opened.expectedVersion,
         reason: this.draftReason().trim(),
+      });
+      this.published.emit({
+        scopeType: opened.scopeType,
+        brandId: opened.brandId,
+        locationId: opened.locationId,
       });
       if (scopeKey === this.shownScopeKey) {
         // A read that left before this publish landed describes the document it replaced.

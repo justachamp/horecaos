@@ -29,6 +29,16 @@ export interface ConfigurationKeyView {
 export interface ResolutionTraceLevel {
   readonly scopeType: ConfigurationScopeType;
   readonly outcome: ResolutionOutcome;
+  /**
+   * What was stored at this level (settings.md §1.2: who set it, and when). All three are absent
+   * where nothing is stored, and the name is absent when the person who changed it has no member
+   * record in this tenant. The trace itself carries the principal's id and nothing else (ADR 0029);
+   * the server resolves the name through `StaffDirectory` when it answers.
+   */
+  readonly version?: number | null;
+  readonly changedByName?: string | null;
+  /** RFC 3339, UTC. */
+  readonly changedAt?: string | null;
 }
 
 /** Mirrors OperationsConfigurationController.OperationsConfigurationResolutionResponse. */

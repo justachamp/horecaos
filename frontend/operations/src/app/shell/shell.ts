@@ -1,7 +1,16 @@
-import { ChangeDetectionStrategy, Component, HostListener, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  HostListener,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { Auth } from '../core/auth/auth';
+import { BrandChoice } from '../core/auth/brand-choice';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { OwnProfile } from '../core/auth/own-profile';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
@@ -9,12 +18,15 @@ import { RegionalFormatSync } from '../core/format/regional-format-sync';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
+import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
 import { ConnectionStateBanner } from '../shared/ui/connection-state-banner';
 import { LiveBadge } from '../shared/ui/live-badge';
 import { RefreshIndicator } from '../shared/ui/refresh-indicator';
 import { Toasts } from '../shared/ui/toast';
 import { ToastHost } from '../shared/ui/toast-host';
 import { CallBar } from './call-bar';
+import { ShellMessageKey, shellMessages } from './shell-messages';
+import { ShortcutSheet } from './shortcut-sheet';
 import { NAVIGATION, NavGroup } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
@@ -39,20 +51,26 @@ import { VoicePresence } from './voice-presence';
  * 3. **The late count is always visible**, on every screen, whatever the
  *    operator is doing. See `service-status.ts`.
  *
- * **The location picker (wave 50).** `docs/operations-spec/settings.md`
- * §1.1 specifies a full scope bar — brand picker, location picker, a level
- * readout, the selection carried in the URL query — for Settings screens.
- * This is only the location half, and it lives here rather than under
- * Settings because `CurrentLocation` is what the other 76 location-scoped
- * screens (Orders, Kitchen, Delivery, Reservations, Capacity, …) already
- * depend on: putting the switch where every screen already reads its answer
- * means none of those screens has to change. No brand picker, no level
- * readout, no URL query param — an operator whose scope spans more than one
- * brand is still pinned to whichever one `CurrentBrand` resolves first (see
- * that class's own doc comment). `CurrentLocation.options()` already hides
- * itself down to nothing when there is at most one choice, so this template
- * only has to ask "is there more than one" — see the `.location` block in
- * `shell.html`.
+ * **The brand and location pickers (wave 50, row `X.1` of batch 18).**
+ * `docs/operations-spec/settings.md` §1.1 specifies a scope bar -- brand
+ * picker, location picker, a level readout, the selection carried in the URL
+ * query -- for Settings screens, and that bar lives under Settings. The shell
+ * carries the pickers the other 76 screens (Orders, Kitchen, Delivery, the
+ * catalogue, …) depend on, because `CurrentLocation` and `CurrentBrand` are
+ * what they already read: putting the switch where every screen already reads
+ * its answer means none of those screens has to change. The location picker
+ * hides itself at one option; the **brand picker** (batch 18) does the same
+ * for a tenant with one brand, and for an operator whose own grant names the
+ * brand, so only a tenant-wide operator of a multi-brand tenant ever sees it.
+ * Choosing a brand re-points `CurrentBrand` and `CurrentLocation` (see
+ * `BrandChoice`) and re-creates the routed screen, because the screens read
+ * their brand when they load and not on every change.
+ *
+ * **The keyboard (batch 18, row `X.1`).** One `keydown` listener on the
+ * document hands every key to `ShortcutRegistry`; this component registers the
+ * keys that belong to the shell itself (F2, `?`), and each screen registers its
+ * own for as long as it is mounted. `?` opens the cheat-sheet over whatever is
+ * registered.
  */
 @Component({
   selector: 'q-shell',
@@ -67,6 +85,7 @@ import { VoicePresence } from './voice-presence';
     ConnectionStateBanner,
     LiveBadge,
     RefreshIndicator,
+    ShortcutSheet,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
@@ -88,6 +107,8 @@ export class Shell {
   // `start()` a caller might forget.
   protected readonly realtime = inject(RealtimeClient);
   private readonly toasts = inject(Toasts);
+  private readonly shortcuts = inject(ShortcutRegistry);
+  protected readonly brandChoice = inject(BrandChoice);
 
   /**
    * The rail, filtered to sections this operator has any business in
@@ -129,7 +150,18 @@ export class Shell {
     () => this.currentLocation.scope()?.locationId ?? '',
   );
 
+  /**
+   * Bumped when the operator picks another brand. Keys the router outlet in `shell.html`, so the
+   * open screen is created afresh for the new brand instead of going on showing the old one.
+   */
+  private readonly brandSwitches = signal(0);
+  protected readonly outletKeys = computed(() => [this.brandSwitches()]);
+
+  protected readonly brandOptions = this.brandChoice.options;
+  protected readonly selectedBrandId = computed(() => this.brandChoice.brandId() ?? '');
+
   constructor() {
+    this.registerShortcuts();
     // The shell mounts before any routed screen does, so kicking off
     // resolution here — rather than waiting for the first screen to call
     // `ensureLoaded()` itself — is what lets the picker be populated by the
@@ -165,23 +197,69 @@ export class Shell {
   }
 
   /**
-   * F2 starts an order, from anywhere.
-   *
-   * One shortcut, not a scheme. An operator who has to reach for a mouse to
-   * start an order will not use a shortcut at all, and F2 is the till-key
-   * convention every restaurant system in this market already uses — so it is
-   * the one binding staff arrive already knowing.
-   *
-   * Bound on the document rather than on an element because it has to work while
-   * focus is in a search box, a filter, or nothing at all.
+   * Every key goes to the registry (see {@link ShortcutRegistry}); this is the only `keydown`
+   * listener the console has. Bound on the document rather than on an element because the shell's
+   * keys have to work while focus is in a search box, a filter, or nothing at all.
    */
   @HostListener('document:keydown', ['$event'])
   protected onKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'F2' || event.defaultPrevented) {
+    this.shortcuts.dispatch(event);
+  }
+
+  /**
+   * The shell's own keys: **F2** starts an order from anywhere (orders.md §5.8), the till-key
+   * convention every restaurant system in this market already uses, so it is the one binding staff
+   * arrive already knowing -- and it fires from inside a text field and over a dialog, because an
+   * operator who has to reach for a mouse to start an order will not use a shortcut at all. **`?`**
+   * opens the cheat-sheet. **Esc** is listed for completeness: every dialog and popover closes
+   * itself on it (`OverlayBehaviour`), so there is nothing here to run.
+   */
+  private registerShortcuts(): void {
+    const text = (key: ShellMessageKey): string => shellMessages.text(this.i18n.locale(), key);
+    this.shortcuts.register(
+      {
+        id: 'shell',
+        title: () => text('keys.scope.global'),
+        shortcuts: [
+          {
+            keys: ['F2'],
+            caps: ['F2'],
+            label: () => this.i18n.t('shell.newOrder'),
+            inField: true,
+            overDialog: true,
+            run: () => void this.startOrder(),
+          },
+          {
+            keys: ['?'],
+            caps: ['?'],
+            label: () => text('keys.open'),
+            run: () => this.shortcuts.openSheet(),
+          },
+          {
+            keys: ['Escape'],
+            caps: ['Esc'],
+            label: () => text('keys.closeDialog'),
+          },
+        ],
+      },
+      inject(DestroyRef),
+    );
+  }
+
+  protected openShortcutSheet(): void {
+    this.shortcuts.openSheet();
+  }
+
+  protected text(key: ShellMessageKey): string {
+    return shellMessages.text(this.i18n.locale(), key);
+  }
+
+  protected onBrandChange(brandId: string): void {
+    if (brandId === this.brandChoice.brandId()) {
       return;
     }
-    event.preventDefault();
-    void this.startOrder();
+    this.brandChoice.select(brandId);
+    this.brandSwitches.update((count) => count + 1);
   }
 
   protected startOrder(): Promise<boolean> {

@@ -26,6 +26,7 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { PhonePipe } from '../../core/format/phone.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
+import { Toasts } from '../../shared/ui/toast';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { StepItem, Steps } from '../../shared/ui/steps';
@@ -249,6 +250,7 @@ export class OrderDetailPane {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
+  private readonly toasts = inject(Toasts);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
   readonly orderId = input.required<string>();
@@ -1907,6 +1909,8 @@ export class OrderDetailPane {
             action: this.decisionActionLabel(result.effectiveAction),
           }),
         );
+      } else if (result.applied) {
+        this.announceApplied();
       }
       await this.load(orderId);
     } catch (error) {
@@ -1924,6 +1928,7 @@ export class OrderDetailPane {
     this.busy.set(true);
     try {
       await firstValueFrom(request);
+      this.announceApplied();
       await this.load(orderId);
     } catch (error) {
       this.handleMutationError(orderId, error, false);
@@ -1956,6 +1961,7 @@ export class OrderDetailPane {
       if (outcomeText) {
         this.notice.set(outcomeText);
       }
+      this.announceApplied();
       await this.load(orderId);
     } catch (error) {
       this.handleMutationError(orderId, error, false);
@@ -1980,6 +1986,19 @@ export class OrderDetailPane {
     if (outcome.shouldReread) {
       void this.load(orderId);
     }
+  }
+
+  /**
+   * Says the mutation landed, in the shell's toast host (ADR 0101, row `X.17`) -- the same sentence
+   * and the same host the board uses for the same actions. This pane used to confirm a success by
+   * redrawing the order and said nothing, so an operator who looked away did not know it applied;
+   * only a refusal had words, in the notice band, and that stays there: a failure the operator has to
+   * act on belongs beside the thing that failed, not in a toast that times out.
+   *
+   * No order number and no customer data in the text (ADR 0029).
+   */
+  private announceApplied(): void {
+    this.toasts.show({ message: this.i18n.t('orders.action.applied'), tone: 'success' });
   }
 
   private decisionActionLabel(effectiveAction: string): string {
@@ -2280,6 +2299,8 @@ export class OrderDetailPane {
         this.notice.set(
           this.i18n.t('orders.detail.courier.refused', { reason: result.reason ?? '' }),
         );
+      } else {
+        this.announceApplied();
       }
       this.courierPickerOpen.set(false);
       await this.loadDelivery(orderId);
@@ -2309,6 +2330,8 @@ export class OrderDetailPane {
         this.notice.set(
           this.i18n.t('orders.detail.courier.refused', { reason: result.reason ?? '' }),
         );
+      } else {
+        this.announceApplied();
       }
       await this.loadDelivery(orderId);
     } catch (error) {

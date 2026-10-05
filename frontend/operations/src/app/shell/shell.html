@@ -87,12 +87,39 @@
       </div>
 
       <div class="scope">
+        <!-- Row X.1: the brand picker, for a tenant-wide operator of a tenant
+             with more than one brand and for nobody else (settings.md §1.1: a
+             picker with one option is noise). Here, with the location picker,
+             it is also the scope readout -- the two selects name the brand and
+             the branch every location-scoped screen is about -- so for this
+             operator both carry a visible caption. -->
+        @if (brandChoice.multiBrand()) {
+          <label class="brand q-caption">
+            <span class="scope__caption">{{ text('brand.label') }}</span>
+            <select
+              class="brand__select q-caption"
+              data-testid="shell-brand-picker"
+              (change)="onBrandChange($any($event.target).value)"
+            >
+              @for (option of brandOptions(); track option.id) {
+                <option [value]="option.id" [selected]="option.id === selectedBrandId()">
+                  {{ option.displayName }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+
         <!-- Hidden below two options on purpose (settings.md §1.1): a picker
              with nothing to switch between is noise, and an operator whose
              scope is one branch must see no change at all. -->
         @if (locationOptions().length > 1) {
           <label class="location q-caption">
-            <span class="q-visually-hidden">{{ 'shell.locationPicker.label' | t }}</span>
+            <span
+              [class.q-visually-hidden]="!brandChoice.multiBrand()"
+              [class.scope__caption]="brandChoice.multiBrand()"
+              >{{ 'shell.locationPicker.label' | t }}</span
+            >
             <select
               class="location__select q-caption"
               (change)="onLocationChange($any($event.target).value)"
@@ -114,6 +141,17 @@
           </label>
         }
 
+        <button
+          type="button"
+          class="keys q-caption"
+          [attr.aria-label]="text('keys.open')"
+          [title]="text('keys.open')"
+          data-testid="shell-shortcuts-button"
+          (click)="openShortcutSheet()"
+        >
+          ?
+        </button>
+
         <label class="locale q-caption">
           <span class="q-visually-hidden">{{ 'shell.locale.label' | t }}</span>
           <select
@@ -130,7 +168,12 @@
     </header>
 
     <main id="main" class="main" tabindex="-1">
-      <router-outlet />
+      <!-- Keyed by brand picks, not by the brand itself: the screens read their
+           brand when they load, so a new pick needs a new screen -- and the
+           first resolution of the brand must not re-create the first one. -->
+      @for (key of outletKeys(); track key) {
+        <router-outlet />
+      }
     </main>
   </div>
 </div>
@@ -139,3 +182,6 @@
      the dialog that raised it closing and the navigation a successful mutation
      usually triggers (ADR 0101). Its two live regions are always in the DOM. -->
 <q-toast-host />
+
+<!-- `?`: the keys whatever is open on screen answers to. Rendered only while open. -->
+<q-shortcut-sheet />

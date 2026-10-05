@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
+import { BrandChoice } from '../../core/auth/brand-choice';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { BrandView } from './brand-profile/brand-profile-api';
 import { LocationView } from './locations/locations-api';
@@ -134,6 +135,46 @@ describe('SettingsScope', () => {
     expect(scope.brandId()).toBe('brand-1');
     const router = TestBed.inject(Router);
     expect(router.url).toContain('brand=brand-1');
+  });
+
+  it('opens on the brand picked in the shell’s header when the URL names none, not on the first brand (row X.1)', async () => {
+    configure(get);
+    const shell = TestBed.inject(BrandChoice);
+    shell.offer(BRANDS.map((brand) => ({ id: brand.id, displayName: brand.displayName })));
+    shell.select('brand-2');
+    await RouterTestingHarness.create('/settings');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    expect(scope.brandId()).toBe('brand-2');
+    expect(TestBed.inject(Router).url).toContain('brand=brand-2');
+  });
+
+  it('lets ?brand= beat the shell’s pick: a pasted link opens what it names', async () => {
+    configure(get);
+    const shell = TestBed.inject(BrandChoice);
+    shell.offer(BRANDS.map((brand) => ({ id: brand.id, displayName: brand.displayName })));
+    shell.select('brand-2');
+    await RouterTestingHarness.create('/settings?brand=brand-1');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    expect(scope.brandId()).toBe('brand-1');
+  });
+
+  it('ignores a shell pick this tenant’s brand list does not contain', async () => {
+    configure(get);
+    const shell = TestBed.inject(BrandChoice);
+    shell.offer([
+      { id: 'gone', displayName: 'Gone' },
+      { id: 'brand-1', displayName: 'Rayhon' },
+    ]);
+    shell.select('gone');
+    await RouterTestingHarness.create('/settings');
+    const scope = TestBed.inject(SettingsScope);
+    await flushMicrotasks();
+
+    expect(scope.brandId()).toBe('brand-1');
   });
 
   it('reads no ?location= as "Все филиалы" — editing at BRAND level', async () => {

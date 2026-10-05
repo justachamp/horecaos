@@ -1,12 +1,27 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import {
   ConfigurationResolutionView,
   ConfigurationScopeType,
   EditableScopeType,
+  ResolutionTraceLevel,
 } from '../../../core/api/configuration';
+import { I18n } from '../../../core/i18n/i18n';
+import { formatDateTime } from '../../../core/format/datetime';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { traceMessages } from './trace-messages';
+
+/** Same stand-in every other screen uses until the tenant's own zone reaches the console. */
+const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
 /** The five states settings.md §1.2 names — "Locked by plan" is not wired yet; no entitlement data reaches this wave. */
 export type InheritedFieldState =
@@ -25,13 +40,14 @@ export type InheritedFieldState =
  * the actual input control as projected content when the state calls for one
  * (`SET_HERE`, or after `setValueRequested`/`override`).
  *
- * **What the trace popover can show today.** `ResolutionTrace.Level` carries
- * only `(scopeType, outcome)` per level — ADR 0030 does not yet surface
- * which actor set a non-winning level's row, when, or why, only the winning
- * value and `describe()`'s one-line summary. The popover renders the ladder
- * settings.md asks for (most specific first, the winning row marked) with
- * what is real; per-level actor/timestamp/reason is a `ConfigurationResolver`
- * gap for a later wave, not something this component fabricates.
+ * **What the trace popover shows.** The ladder settings.md asks for (most
+ * specific first, the winning row marked), and for every level that stores
+ * something, which version is in force there, who changed it and when
+ * (row `X.1`, ADR 0030's `ResolutionTrace.Provenance`). The trace carries the
+ * principal's id; the server resolves the name through `StaffDirectory` when it
+ * answers, so a person with no member record in this tenant arrives without a
+ * name and the popover says so rather than printing an id. The reason is not
+ * shown: a free-text reason is not part of the trace (ADR 0029).
  */
 @Component({
   selector: 'q-inherited-field',
@@ -41,6 +57,8 @@ export type InheritedFieldState =
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InheritedField {
+  private readonly i18n = inject(I18n);
+
   readonly label = input.required<string>();
   readonly resolution = input<ConfigurationResolutionView | null>(null);
   readonly loading = input(false);
@@ -151,6 +169,18 @@ export class InheritedField {
 
   protected closePopover(): void {
     this.popoverOpen.set(false);
+  }
+
+  /** «Version 3 · A. Karimov · 30.09 14:15» -- the version, who changed it, and when. */
+  protected traceWho(level: ResolutionTraceLevel): string {
+    const locale = this.i18n.locale();
+    return traceMessages.text(locale, 'changed', {
+      version: level.version ?? 0,
+      who: level.changedByName || traceMessages.text(locale, 'unknownActor'),
+      when: level.changedAt
+        ? formatDateTime(new Date(level.changedAt), PLACEHOLDER_TIME_ZONE)
+        : '—',
+    });
   }
 
   protected outcomeKey(outcome: string): MessageKey {

@@ -31,6 +31,12 @@ export interface LatenessAtRiskDefault {
 export interface LatenessLevelView {
   readonly scopeType: ConfigurationScopeType;
   readonly outcome: 'VALUE' | 'NOT_SET';
+  /** The policy version in force at exactly this scope; absent when nothing was authored here. */
+  readonly version?: number | null;
+  /** Who approved that version, by the name this tenant knows them by; absent without a member record. */
+  readonly approvedByName?: string | null;
+  /** When that version took effect (RFC 3339, UTC). */
+  readonly validFrom?: string | null;
 }
 
 /** Mirrors `OrderLatenessPolicyEditorController.EditorResponse`. */

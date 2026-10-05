@@ -6,7 +6,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -22,12 +24,14 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyAuthoringService;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyAuthoringService.Editor;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument.ModeThresholds;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy.LatenessThresholds;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -65,11 +69,13 @@ public class OrderLatenessPolicyEditorController {
 
     private final OrderLatenessPolicyAuthoringService authoring;
     private final CurrentActor currentActor;
+    private final StaffDirectory staff;
 
     public OrderLatenessPolicyEditorController(
-            OrderLatenessPolicyAuthoringService authoring, CurrentActor currentActor) {
+            OrderLatenessPolicyAuthoringService authoring, CurrentActor currentActor, StaffDirectory staff) {
         this.authoring = authoring;
         this.currentActor = currentActor;
+        this.staff = staff;
     }
 
     @GetMapping
@@ -89,7 +95,7 @@ public class OrderLatenessPolicyEditorController {
             @RequestParam ScopeType scopeType,
             @RequestParam(required = false) @Nullable UUID brandId,
             @RequestParam(required = false) @Nullable UUID locationId) {
-        return EditorResponse.of(authoring.view(scopeOf(tenantId, scopeType, brandId, locationId)));
+        return withNames(tenantId, authoring.view(scopeOf(tenantId, scopeType, brandId, locationId)));
     }
 
     @PostMapping
@@ -112,7 +118,25 @@ public class OrderLatenessPolicyEditorController {
                 request.expectedVersion(),
                 ActorRef.user(currentActor.get().subject(), null),
                 request.reason());
-        return ResponseEntity.ok(EditorResponse.of(published));
+        return ResponseEntity.ok(withNames(tenantId, published));
+    }
+
+    /**
+     * The editor with each rung's approver named. The trace carries the principal's id and nothing
+     * else (ADR 0029); the name is looked up here, for this tenant, in one read, and goes into this
+     * response only -- a principal with no member row (a support session, a device) simply has no name
+     * and the console says so.
+     */
+    private EditorResponse withNames(UUID tenantId, Editor editor) {
+        List<String> principals = editor.levels().stream()
+                .map(OrderLatenessPolicyAuthoringService.Level::provenance)
+                .filter(java.util.Objects::nonNull)
+                .map(ResolutionTrace.Provenance::principal)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<String, String> names = principals.isEmpty() ? Map.of() : staff.namesOf(tenantId, principals);
+        return EditorResponse.of(editor, names);
     }
 
     /**
@@ -201,8 +225,32 @@ public class OrderLatenessPolicyEditorController {
      */
     public record AtRiskDefaultResponse(int seconds, String source) {}
 
-    /** One rung of the resolution ladder; {@code outcome} is {@code VALUE} or {@code NOT_SET}, as the configuration trace names them. */
-    public record LevelResponse(ScopeType scopeType, String outcome) {}
+    /**
+     * One rung of the resolution ladder; {@code outcome} is {@code VALUE} or {@code NOT_SET}, as the
+     * configuration trace names them.
+     *
+     * @param version         the policy version in force at this exact scope, absent when nothing was authored here
+     * @param approvedByName  who approved that version, by the name the tenant knows them by; absent when the
+     *                        principal has no member record in this tenant
+     * @param validFrom       when that version took effect
+     */
+    public record LevelResponse(
+            ScopeType scopeType,
+            String outcome,
+            @Nullable Long version,
+            @Nullable String approvedByName,
+            @Nullable Instant validFrom) {
+
+        static LevelResponse of(OrderLatenessPolicyAuthoringService.Level level, Map<String, String> names) {
+            ResolutionTrace.Provenance provenance = level.provenance();
+            return new LevelResponse(
+                    level.scopeType(),
+                    level.authored() ? "VALUE" : "NOT_SET",
+                    provenance == null ? null : provenance.version(),
+                    provenance == null || provenance.principal() == null ? null : names.get(provenance.principal()),
+                    provenance == null ? null : provenance.since());
+        }
+    }
 
     /**
      * @param isPlatformDefault      no document was authored anywhere in the chain
@@ -223,7 +271,7 @@ public class OrderLatenessPolicyEditorController {
             int currentVersionAtScope,
             List<LevelResponse> inspectedLevels) {
 
-        static EditorResponse of(Editor editor) {
+        static EditorResponse of(Editor editor, Map<String, String> names) {
             OrderLatenessDocument document = editor.document();
             return new EditorResponse(
                     ModeResponse.of(
@@ -244,7 +292,7 @@ public class OrderLatenessPolicyEditorController {
                     editor.policyVersion(),
                     editor.versionAtScope(),
                     editor.levels().stream()
-                            .map(level -> new LevelResponse(level.scopeType(), level.authored() ? "VALUE" : "NOT_SET"))
+                            .map(level -> LevelResponse.of(level, names))
                             .toList());
         }
     }

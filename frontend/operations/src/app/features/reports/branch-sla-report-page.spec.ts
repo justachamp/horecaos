@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -9,6 +9,7 @@ import { PaymentMethodsApi } from '../settings/payment-methods/payment-methods-a
 import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { LocationsApi } from '../settings/locations/locations-api';
 import { BranchSlaReportPage, buildSlaRows } from './branch-sla-report-page';
+import { SlaBucketSetApi } from '../../core/api/sla-bucket-set-api';
 import { BucketResponse, ReportingApi } from './reporting-api';
 import { ReportsFilterState } from './reports-filter-state';
 
@@ -126,6 +127,12 @@ describe('buildSlaRows: sharePercent is the whole range’s share', () => {
 
 describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
   let fixture: ComponentFixture<BranchSlaReportPage>;
+  beforeEach(() => {
+    bucketSetVersion = 1;
+  });
+
+  /** What the Settings card's endpoint answers; `null` makes the read fail. */
+  let bucketSetVersion: number | null;
 
   async function render(
     deliveryTimeRows: readonly { locationId: string; averageSeconds: number | null }[] = [],
@@ -135,6 +142,18 @@ describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
       imports: [BranchSlaReportPage],
       providers: [
         ReportsFilterState,
+        {
+          provide: SlaBucketSetApi,
+          useValue: {
+            get: vi
+              .fn()
+              .mockImplementation(() =>
+                bucketSetVersion === null
+                  ? Promise.reject(new Error('refused'))
+                  : Promise.resolve({ version: bucketSetVersion, buckets: [] }),
+              ),
+          },
+        },
         {
           provide: CurrentLocation,
           useValue: {
@@ -214,6 +233,25 @@ describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
       (r) => r.textContent?.includes('30') && r.textContent?.includes('35'),
     );
     expect(m3040Row?.querySelector('td')?.textContent?.trim()).toBe('0');
+  });
+
+  it('prints the bucket-set version the Settings card’s endpoint answers, not a constant (row 10.10c)', async () => {
+    bucketSetVersion = 7;
+    await render();
+
+    const footnote = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="sla-bucket-version"]',
+    );
+    expect(footnote?.textContent?.trim()).toBe('Buckets: sla_bucket_set.v7');
+  });
+
+  it('leaves the footnote out, and still draws the report, when the version cannot be read', async () => {
+    bucketSetVersion = null;
+    await render();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="sla-bucket-version"]')).toBeNull();
+    expect(host.querySelector('[data-testid="q-histogram-chart"]')).not.toBeNull();
   });
 
   it('renders the branch leaderboard’s average delivery (courier transit) time column, row 7.3', async () => {

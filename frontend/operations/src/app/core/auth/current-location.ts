@@ -1,10 +1,11 @@
-import { Injectable, Signal, computed, inject, signal } from '@angular/core';
+import { Injectable, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { LocationScope } from '../api/operations-paths';
 import { ApiClient } from '../api/api-client';
 import { settingsPaths } from '../api/settings-paths';
 import { BrandScope } from '../api/catalog-paths';
+import { BrandChoice } from './brand-choice';
 import { firstBrandScope, resolveBrandForTenant } from './current-brand';
 import { SessionContext } from './session-context';
 
@@ -56,6 +57,11 @@ export interface LocationOption {
  *    board's denied state is still the right answer for it, exactly as
  *    before.
  *
+ * **Row `X.1`, batch 18.** On the brand path of §2 a tenant-wide operator with several brands now
+ * picks one in the shell's header (`BrandChoice`); the effect in the constructor re-reads the
+ * locations of whichever brand is picked, so the location picker and the 76 screens behind it
+ * follow the pick. An operator who never picks gets the first brand, as before.
+ *
  * **What this does not do.** It does not enforce anything — same
  * non-enforcement stance this class always documented: the server decides
  * what the operator may see at the location it resolves to, this only picks
@@ -69,9 +75,12 @@ export interface LocationOption {
 @Injectable({ providedIn: 'root' })
 export class CurrentLocation {
   private readonly api = inject(ApiClient);
+  private readonly choice = inject(BrandChoice);
 
   private readonly context = signal<SessionContext | null>(null);
   private readonly resolvedBrand = signal<BrandScope | null>(null);
+  /** The tenant of the TENANT grant the brand path resolved through; null on the other paths. */
+  private readonly tenantPathTenantId = signal<string | null>(null);
   private readonly resolvedOptions = signal<readonly LocationOption[]>([]);
   private readonly selectedLocationId = signal<string | null>(readStoredLocationId());
   private readonly hasLoaded = signal(false);
@@ -116,6 +125,23 @@ export class CurrentLocation {
 
   private loadPromise: Promise<void> | null = null;
 
+  constructor() {
+    // Follows a brand pick made after the first load. `untracked` for everything but the two
+    // signals that matter: re-reading `resolvedBrand` here must not re-run the effect.
+    effect(() => {
+      const tenantId = this.tenantPathTenantId();
+      const brandId = this.choice.brandId();
+      if (!tenantId || !brandId) {
+        return;
+      }
+      untracked(() => {
+        if (this.resolvedBrand()?.brandId !== brandId) {
+          void this.loadOptionsFor({ tenantId, brandId });
+        }
+      });
+    });
+  }
+
   /** Fetches the session context once; every later call replays the same promise. */
   ensureLoaded(): Promise<void> {
     if (this.loadPromise === null) {
@@ -150,10 +176,15 @@ export class CurrentLocation {
       const result = await firstValueFrom(this.api.get<SessionContext>('/api/v1/session/context'));
       this.context.set(result.value);
       if (!firstLocationScope(result.value)) {
-        const brand =
-          firstBrandScope(result.value) ?? (await resolveBrandForTenant(this.api, result.value));
+        const direct = firstBrandScope(result.value);
+        const brand = direct ?? (await resolveBrandForTenant(this.api, result.value, this.choice));
         if (brand) {
           await this.loadOptionsFor(brand);
+          // After the first read, never before: the effect above compares this brand with the one
+          // already loaded, and arming it earlier would read the same locations twice.
+          if (!direct && this.resolvedBrand() !== null) {
+            this.tenantPathTenantId.set(brand.tenantId);
+          }
         }
       }
     } catch {
@@ -165,13 +196,20 @@ export class CurrentLocation {
     }
   }
 
+  /** Bumped per read, so a slow answer for a brand the operator has since left is dropped. */
+  private optionsRequest = 0;
+
   private async loadOptionsFor(brand: BrandScope): Promise<void> {
+    const request = ++this.optionsRequest;
     try {
       const result = await firstValueFrom(
         this.api.get<readonly LocationOption[]>(
           settingsPaths.locations({ ...brand, locationId: '' }),
         ),
       );
+      if (request !== this.optionsRequest) {
+        return;
+      }
       // Set together, even when empty: {@link scope}'s `!brand` guard would
       // otherwise never fire for a brand that resolved but has zero
       // locations, since `resolvedBrand` would stay at its initial `null`.
@@ -181,6 +219,14 @@ export class CurrentLocation {
       // Leave both unset — the brand resolved but its locations could not be
       // read, which is the same "denied" outcome as never resolving a brand
       // at all, not a reason to throw a screen into an error state instead.
+      //
+      // After a *switch* the previous brand's branches are already loaded; keeping them while the
+      // header names another brand would show the operator one brand's branches under the other's
+      // name. The honest answer is the same denied outcome.
+      if (request === this.optionsRequest && this.resolvedBrand() !== null) {
+        this.resolvedBrand.set(brand);
+        this.resolvedOptions.set([]);
+      }
     }
   }
 }

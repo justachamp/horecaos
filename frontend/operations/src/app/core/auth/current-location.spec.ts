@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../environments/environment';
 import { ApiClient } from '../api/api-client';
+import { BrandChoice } from './brand-choice';
 import { CurrentLocation } from './current-location';
 import { SessionContext } from './session-context';
 
@@ -294,6 +295,141 @@ describe('CurrentLocation', () => {
     await promise;
 
     expect(loc.options().length).toBe(1);
+  });
+  describe('a tenant with several brands (row X.1)', () => {
+    const BRANDS = [
+      { id: 'b1', tenantId: 't1', code: 'A', slug: 'a', displayName: 'Rayhon', status: 'ACTIVE' },
+      { id: 'b2', tenantId: 't1', code: 'B', slug: 'b', displayName: 'Evos', status: 'ACTIVE' },
+      { id: 'b3', tenantId: 't1', code: 'C', slug: 'c', displayName: 'Oqtepa', status: 'ACTIVE' },
+    ];
+
+    /** A tenant-wide operator, loaded onto the first brand's first branch. */
+    async function loadTenantWide(): Promise<CurrentLocation> {
+      const loc = location();
+      const promise = loc.ensureLoaded();
+      http.expectOne(url('/api/v1/session/context')).flush(
+        context([
+          {
+            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+            roleCode: 'OWNER',
+          },
+        ]),
+      );
+      await tick();
+      http.expectOne(url('/api/v1/operations/tenants/t1/brands')).flush(BRANDS);
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b1/locations'))
+        .flush([location_('l1', 'Chilanzar')]);
+      await promise;
+      TestBed.tick();
+      return loc;
+    }
+
+    it('publishes the brand list it read, for the shell’s picker, and starts on the first brand', async () => {
+      const loc = await loadTenantWide();
+
+      expect(
+        TestBed.inject(BrandChoice)
+          .options()
+          .map((option) => option.displayName),
+      ).toEqual(['Rayhon', 'Evos', 'Oqtepa']);
+      expect(loc.scope()?.brandId).toBe('b1');
+    });
+
+    it('starts on the brand the operator picked last time, not on the first', async () => {
+      localStorage.setItem('horecaos.operations.brandId', 'b2');
+      const loc = location();
+      const promise = loc.ensureLoaded();
+      http.expectOne(url('/api/v1/session/context')).flush(
+        context([
+          {
+            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+            roleCode: 'OWNER',
+          },
+        ]),
+      );
+      await tick();
+      http.expectOne(url('/api/v1/operations/tenants/t1/brands')).flush(BRANDS);
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'))
+        .flush([location_('l7', 'Sergeli')]);
+      await promise;
+
+      expect(loc.scope()).toEqual({ tenantId: 't1', brandId: 'b2', locationId: 'l7' });
+    });
+
+    it('follows a brand picked afterwards: reads that brand’s branches and re-points the picker', async () => {
+      const loc = await loadTenantWide();
+
+      TestBed.inject(BrandChoice).select('b2');
+      TestBed.tick();
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'))
+        .flush([location_('l9', 'Sergeli'), location_('l10', 'Mirobod')]);
+      await tick();
+
+      expect(loc.options().map((option) => option.id)).toEqual(['l9', 'l10']);
+      expect(loc.scope()).toEqual({ tenantId: 't1', brandId: 'b2', locationId: 'l9' });
+    });
+
+    it('drops a slow answer for a brand the operator has already left', async () => {
+      const loc = await loadTenantWide();
+      const choice = TestBed.inject(BrandChoice);
+
+      choice.select('b2');
+      TestBed.tick();
+      await tick();
+      const slow = http.expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'));
+
+      choice.select('b3');
+      TestBed.tick();
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b3/locations'))
+        .flush([location_('l30', 'Yunusabad')]);
+      await tick();
+      slow.flush([location_('l20', 'Sergeli')]);
+      await tick();
+
+      expect(loc.scope()).toEqual({ tenantId: 't1', brandId: 'b3', locationId: 'l30' });
+    });
+
+    it('reads as denied, not as the previous brand’s branches, when the new brand’s cannot be read', async () => {
+      const loc = await loadTenantWide();
+
+      TestBed.inject(BrandChoice).select('b2');
+      TestBed.tick();
+      await tick();
+      http
+        .expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'))
+        .flush('nope', { status: 500, statusText: 'Server Error' });
+      await tick();
+
+      expect(loc.scope()).toBeNull();
+      expect(loc.denied()).toBe(true);
+    });
+
+    it('leaves an operator whose grant names a branch alone: no brand list is read, no picker offered', async () => {
+      const loc = location();
+      const promise = loc.ensureLoaded();
+      http.expectOne(url('/api/v1/session/context')).flush(
+        context([
+          {
+            scope: { type: 'LOCATION', tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+            roleCode: 'MANAGER',
+          },
+        ]),
+      );
+      await promise;
+      TestBed.inject(BrandChoice).select('b2');
+      TestBed.tick();
+
+      expect(loc.scope()).toEqual({ tenantId: 't1', brandId: 'b1', locationId: 'l1' });
+      expect(TestBed.inject(BrandChoice).options()).toEqual([]);
+    });
   });
 });
 

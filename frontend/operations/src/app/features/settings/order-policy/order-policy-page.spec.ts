@@ -1,4 +1,5 @@
 import { signal } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,9 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { Toasts } from '../../../shared/ui/toast';
 import { DispatchRulesApi } from '../../delivery/dispatch-rules-api';
 import { ConfigurationApi } from '../configuration-api';
+import { SavedTarget } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
+import { LatenessPolicyCard } from './lateness-policy-card';
 import { LatenessEditorView, LatenessPolicyEditorApi } from './lateness-policy-editor-api';
 import { AcceptancePolicyResponse, OrderPolicyApi } from './order-policy-api';
 import { OrderPolicyPage } from './order-policy-page';
@@ -92,6 +96,16 @@ class FakeSettingsScope {
   readonly locationId = signal<string | null>(null);
   readonly level = signal<'TENANT' | 'BRAND' | 'LOCATION'>('BRAND');
   readonly denied = signal(false);
+  /** What the real bar names for the level it is at (`SettingsScope.target`). */
+  readonly target = signal<SavedTarget>({ level: 'BRAND', name: 'Rayhon' });
+  readonly targetFor = vi.fn(
+    (level: 'TENANT' | 'BRAND' | 'LOCATION', _brandId: string | null, locationId: string | null) =>
+      level === 'LOCATION'
+        ? { level, name: locationId === 'loc-1' ? 'Chilanzar' : null }
+        : level === 'TENANT'
+          ? { level, name: null }
+          : { level, name: 'Rayhon' },
+  );
 }
 
 class FakeCurrentTenant {
@@ -657,5 +671,128 @@ describe('OrderPolicyPage', () => {
     expect(host.querySelector('[data-testid="dispatch-summary-link"]')?.getAttribute('href')).toBe(
       '/delivery/dispatch-rules',
     );
+  });
+  // -------------------------------------------------- settings.md §1.3: a toast names the level
+
+  describe('confirming a save in the toast host (row X.1)', () => {
+    let toasts: Toasts;
+
+    function clickPublish(): void {
+      (
+        Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+        ).find((button) => button.textContent?.includes('Publish')) as HTMLButtonElement
+      ).click();
+    }
+
+    beforeEach(() => {
+      toasts = TestBed.inject(Toasts);
+      toasts.clear();
+    });
+
+    const messages = (): string[] => toasts.visible().map((toast) => toast.message);
+
+    it('says which brand Card 1 was published for', async () => {
+      (fixture.nativeElement.querySelector('.card .primary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const reason = fixture.nativeElement.querySelector('#policy-reason') as HTMLInputElement;
+      reason.value = 'Peak hours';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      clickPublish();
+      await flushMicrotasks();
+
+      expect(messages()).toEqual(['Order acceptance — new version published for brand “Rayhon”']);
+    });
+
+    it('names the setting, its new value and the level when a field is overridden', async () => {
+      const row = fixture.nativeElement.querySelectorAll('.field-row')[3] as HTMLElement;
+      (row.querySelector('.field__action') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const value = fixture.nativeElement.querySelector(
+        '[id="field-ordering.late_order_threshold_minutes"]',
+      ) as HTMLInputElement;
+      value.value = '20';
+      value.dispatchEvent(new Event('input'));
+      const reason = fixture.nativeElement.querySelector(
+        '[id="field-reason-ordering.late_order_threshold_minutes"]',
+      ) as HTMLInputElement;
+      reason.value = 'Faster kitchen';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      configApi.resolution.mockImplementation((_tenantId: string, code: string) =>
+        Promise.resolve({
+          ...defaultResolution(code),
+          value: code === 'ordering.late_order_threshold_minutes' ? 20 : CARD2_5_DEFAULTS[code],
+        }),
+      );
+
+      clickPublish();
+      await flushMicrotasks();
+
+      expect(messages()).toHaveLength(1);
+      expect(messages()[0]).toMatch(/: 20 — set for brand “Rayhon”$/);
+    });
+
+    it('says the value went back to the inherited one when a field is reverted', async () => {
+      configApi.resolution.mockImplementation((_tenantId: string, code: string) =>
+        Promise.resolve(
+          code === 'ordering.operator_promo_code_allowed'
+            ? {
+                ...defaultResolution(code),
+                value: true,
+                cameFromDefault: false,
+                source: 'SCOPED_VALUE' as const,
+                winningScope: 'BRAND' as const,
+                inspectedLevels: [{ scopeType: 'BRAND' as const, outcome: 'VALUE' as const }],
+                currentVersionAtScope: 1,
+              }
+            : defaultResolution(code),
+        ),
+      );
+      fixture = TestBed.createComponent(OrderPolicyPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      const rows = fixture.nativeElement.querySelectorAll('.field-row');
+      const revert = Array.from(
+        (rows[rows.length - 1] as HTMLElement).querySelectorAll('.field__action'),
+      ).find((button) => button.textContent?.includes('Revert')) as HTMLButtonElement;
+
+      revert.click();
+      await flushMicrotasks();
+
+      expect(messages()).toHaveLength(1);
+      expect(messages()[0]).toMatch(/ — back to the inherited value for brand “Rayhon”$/);
+    });
+
+    it('stays silent when the save fails: the error belongs beside the field, not in a toast', async () => {
+      configApi.setValue.mockRejectedValue(new Error('nope'));
+      const row = fixture.nativeElement.querySelectorAll('.field-row')[3] as HTMLElement;
+      (row.querySelector('.field__action') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const reason = fixture.nativeElement.querySelector(
+        '[id="field-reason-ordering.late_order_threshold_minutes"]',
+      ) as HTMLInputElement;
+      reason.value = 'Faster kitchen';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      clickPublish();
+      await flushMicrotasks();
+
+      expect(messages()).toEqual([]);
+    });
+
+    it('names the scope the lateness form was opened at, not the one the bar shows by now', async () => {
+      const card = fixture.debugElement.query(By.directive(LatenessPolicyCard))
+        .componentInstance as LatenessPolicyCard;
+
+      card.published.emit({ scopeType: 'LOCATION', brandId: BRAND_ID, locationId: 'loc-1' });
+
+      expect(messages()).toEqual([
+        'When an order counts as late — new version published for branch “Chilanzar”',
+      ]);
+    });
   });
 });

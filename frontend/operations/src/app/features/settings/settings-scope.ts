@@ -4,9 +4,11 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { settingsPaths } from '../../core/api/settings-paths';
+import { BrandChoice } from '../../core/auth/brand-choice';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { BrandView } from './brand-profile/brand-profile-api';
 import { LocationView } from './locations/locations-api';
+import { SavedTarget } from './settings-saved';
 
 /** The level a settings screen is currently writing to (settings.md §1.1's "Уровень редактирования"). */
 export type SettingsEditingLevel = 'TENANT' | 'BRAND' | 'LOCATION';
@@ -49,6 +51,7 @@ export class SettingsScope {
   private readonly router = inject(Router);
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(ApiClient);
+  private readonly shellBrand = inject(BrandChoice);
 
   private readonly queryBrandId = signal<string | null>(null);
   private readonly queryLocationId = signal<string | null>(null);
@@ -66,14 +69,22 @@ export class SettingsScope {
   /** Hidden entirely when the tenant has exactly one brand — a picker with one option is noise. */
   readonly showBrandPicker: Signal<boolean> = computed(() => this.brandsSig().length > 1);
 
-  /** The brand in effect: the query param when it names a brand this tenant has, else the first one. */
+  /**
+   * The brand in effect: the query param when it names a brand this tenant has; else the one picked
+   * in the shell's header (`BrandChoice`, row `X.1`), so opening Settings does not silently switch
+   * an operator to another brand than the one they have been working in; else the first one.
+   */
   readonly brandId: Signal<string | null> = computed(() => {
     const brands = this.brandsSig();
     if (brands.length === 0) {
       return null;
     }
     const requested = this.queryBrandId();
-    return requested && brands.some((brand) => brand.id === requested) ? requested : brands[0].id;
+    if (requested && brands.some((brand) => brand.id === requested)) {
+      return requested;
+    }
+    const shellPick = this.shellBrand.brandId();
+    return shellPick && brands.some((brand) => brand.id === shellPick) ? shellPick : brands[0].id;
   });
 
   /** `null` means "Все филиалы" — editing at BRAND level. A location outside the current brand is dropped. */
@@ -94,6 +105,11 @@ export class SettingsScope {
     }
     return this.locationId() ? 'LOCATION' : 'BRAND';
   });
+
+  /** What the bar is set to write to, named, for the «задано для филиала …» confirmation (settings.md §1.3). */
+  readonly target: Signal<SavedTarget> = computed(() =>
+    this.targetFor(this.level(), this.brandId(), this.locationId()),
+  );
 
   readonly loading: Signal<boolean> = this.loadingBrands.asReadonly();
   readonly denied: Signal<boolean> = this.deniedSig.asReadonly();
@@ -119,6 +135,31 @@ export class SettingsScope {
         void this.loadLocations(tenantId, brandId);
       }
     });
+  }
+
+  /**
+   * The level a write went to and the name of the brand or branch it names, for a confirmation that
+   * must say where the change landed. A name the lists have not resolved is absent, never invented.
+   */
+  targetFor(
+    level: SettingsEditingLevel,
+    brandId: string | null,
+    locationId: string | null,
+  ): SavedTarget {
+    if (level === 'TENANT') {
+      return { level, name: null };
+    }
+    if (level === 'LOCATION') {
+      return {
+        level,
+        name:
+          this.locationsSig().find((location) => location.id === locationId)?.displayName ?? null,
+      };
+    }
+    return {
+      level: 'BRAND',
+      name: this.brandsSig().find((brand) => brand.id === brandId)?.displayName ?? null,
+    };
   }
 
   /**

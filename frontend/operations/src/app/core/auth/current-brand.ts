@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { BrandScope } from '../api/catalog-paths';
 import { ApiClient } from '../api/api-client';
 import { settingsPaths } from '../api/settings-paths';
+import { BrandChoice } from './brand-choice';
 import { SessionContext, ScopeGrant } from './session-context';
 
 /**
@@ -43,21 +44,35 @@ import { SessionContext, ScopeGrant } from './session-context';
  * available today" stance `current-location.ts`'s own doc comment takes for
  * picking a first `LOCATION` grant. A real brand picker is `settings.md`
  * §1.1 work this wave did not build (see `current-location.ts`, which does
- * build the location half); a TENANT-scoped actor with several brands is
- * silently pinned to whichever one the platform lists first until it exists.
+ * build the location half). **Row `X.1`, batch 18:** a TENANT-scoped actor with
+ * several brands now picks one in the shell's header (`BrandChoice`); this
+ * class follows that pick on the TENANT path, and still takes the first brand
+ * for an operator who has made none.
  */
 @Injectable({ providedIn: 'root' })
 export class CurrentBrand {
   private readonly api = inject(ApiClient);
+  private readonly choice = inject(BrandChoice);
 
   private readonly context = signal<SessionContext | null>(null);
-  private readonly tenantFallback = signal<BrandScope | null>(null);
+  /** The tenant a TENANT grant resolved to, once its brand list has been read. */
+  private readonly tenantFallbackTenantId = signal<string | null>(null);
   private readonly hasLoaded = signal(false);
 
-  /** The operator's brand, or null before load and when no grant covers one. */
-  readonly scope: Signal<BrandScope | null> = computed(
-    () => firstBrandScope(this.context()) ?? this.tenantFallback(),
-  );
+  /**
+   * The operator's brand, or null before load and when no grant covers one. On the TENANT path it
+   * follows {@link BrandChoice}, so a pick in the shell's header re-points every brand-scoped
+   * screen without a reload.
+   */
+  readonly scope: Signal<BrandScope | null> = computed(() => {
+    const direct = firstBrandScope(this.context());
+    if (direct) {
+      return direct;
+    }
+    const tenantId = this.tenantFallbackTenantId();
+    const brandId = this.choice.brandId();
+    return tenantId && brandId ? { tenantId, brandId } : null;
+  });
 
   /** See {@link CurrentLocation.denied} for why this is false, not unknown, before load settles. */
   readonly denied: Signal<boolean> = computed(() => this.hasLoaded() && this.scope() === null);
@@ -77,7 +92,8 @@ export class CurrentBrand {
       const result = await firstValueFrom(this.api.get<SessionContext>('/api/v1/session/context'));
       this.context.set(result.value);
       if (!firstBrandScope(result.value)) {
-        this.tenantFallback.set(await resolveBrandForTenant(this.api, result.value));
+        const resolved = await resolveBrandForTenant(this.api, result.value, this.choice);
+        this.tenantFallbackTenantId.set(resolved?.tenantId ?? null);
       }
     } catch {
       this.context.set(null);
@@ -124,6 +140,7 @@ export function firstBrandScope(context: SessionContext | null): BrandScope | nu
 export async function resolveBrandForTenant(
   api: ApiClient,
   context: SessionContext | null,
+  choice?: BrandChoice,
 ): Promise<BrandScope | null> {
   const tenantId = firstTenantId(context);
   if (!tenantId) {
@@ -135,16 +152,25 @@ export async function resolveBrandForTenant(
         settingsPaths.brands({ tenantId, brandId: '', locationId: '' }),
       ),
     );
-    const first = (result.value ?? [])[0];
+    const brands = result.value ?? [];
+    if (choice) {
+      // Whoever reads the list publishes it: the shell's brand picker draws from here, and the
+      // pick (or the first brand, for an operator who has made none) is what comes back.
+      choice.offer(brands.map((brand) => ({ id: brand.id, displayName: brand.displayName })));
+      const chosen = choice.brandId();
+      return chosen ? { tenantId, brandId: chosen } : null;
+    }
+    const first = brands[0];
     return first ? { tenantId, brandId: first.id } : null;
   } catch {
     return null;
   }
 }
 
-/** Only the field this module reads from `OperationsBrandController.list`'s `BrandView`. */
+/** Only the fields this module reads from `OperationsBrandController.list`'s `BrandView`. */
 interface BrandSummary {
   readonly id: string;
+  readonly displayName: string;
 }
 
 function firstTenantId(context: SessionContext | null): string | null {

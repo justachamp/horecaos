@@ -24,6 +24,7 @@ import uz.horecaos.platform.ordering.domain.OrderLatenessDocument.ModeThresholds
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.PolicyAuthor;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -165,7 +166,13 @@ public class OrderLatenessPolicyAuthoringService {
             boolean authored = level.type() == scope.type()
                     ? versionAtScope > 0
                     : author.currentVersion(OrderingConfigurationKeys.LATENESS_POLICY, level) > 0;
-            levels.add(new Level(level.type(), authored));
+            levels.add(new Level(
+                    level.type(),
+                    authored,
+                    authored
+                            ? author.provenance(OrderingConfigurationKeys.LATENESS_POLICY, level)
+                                    .orElse(null)
+                            : null));
         }
         return new Editor(
                 document,
@@ -230,6 +237,15 @@ public class OrderLatenessPolicyAuthoringService {
             int versionAtScope,
             List<Level> levels) {}
 
-    /** One rung of the resolution ladder: whether a document was authored at exactly that scope. */
-    public record Level(ScopeType scopeType, boolean authored) {}
+    /**
+     * One rung of the resolution ladder: whether a document was authored at exactly that scope and, when
+     * one was, which version is in force there, who approved it and when it took effect -- ids only
+     * (ADR 0029), the console resolves the person through {@code StaffDirectory}.
+     */
+    public record Level(ScopeType scopeType, boolean authored, ResolutionTrace.@Nullable Provenance provenance) {
+
+        public Level(ScopeType scopeType, boolean authored) {
+            this(scopeType, authored, null);
+        }
+    }
 }

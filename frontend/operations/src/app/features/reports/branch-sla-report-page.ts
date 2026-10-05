@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
+import { SlaBucketSetApi } from '../../core/api/sla-bucket-set-api';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
@@ -186,6 +187,7 @@ export class BranchSlaReportPage {
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly paymentMethodsApi = inject(PaymentMethodsApi);
+  private readonly slaBucketSets = inject(SlaBucketSetApi);
   private readonly filters = inject(ReportsFilterState);
   protected readonly i18n = inject(I18n);
 
@@ -195,8 +197,12 @@ export class BranchSlaReportPage {
   protected readonly channelRows = signal<readonly ChannelRow[]>([]);
   protected readonly paymentSplitRows = signal<readonly PaymentSplitRow[]>([]);
   protected readonly provenance = signal<ProvenanceResponse | null>(null);
-  /** `sla_bucket_set.v1` is the only version this build defines — see `SLA_BUCKETS`'s own doc. */
-  protected readonly slaBucketSetVersion = 1;
+  /**
+   * The bucket-set version the table's counts were computed under, read from the endpoint the
+   * Settings card reads (row `10.10c`), not a constant: absent while it loads or when that read
+   * fails, in which case the footnote is left out rather than guessed.
+   */
+  protected readonly slaBucketSetVersion = signal<number | null>(null);
 
   protected readonly slaBucketCodes = SLA_BUCKETS;
   protected readonly requestedTo = computed(() => this.filters.range().to);
@@ -278,6 +284,18 @@ export class BranchSlaReportPage {
     return sharePercent === null ? '—' : `${sharePercent}%`;
   }
 
+  /**
+   * Row `10.10c`: the version the Settings card shows, from the same endpoint. Best effort -- a
+   * failed read leaves the footnote out, it never fails the report whose numbers are already fine.
+   */
+  private async readBucketSetVersion(tenantId: string): Promise<void> {
+    try {
+      this.slaBucketSetVersion.set((await this.slaBucketSets.get(tenantId)).version);
+    } catch {
+      this.slaBucketSetVersion.set(null);
+    }
+  }
+
   private async load(): Promise<void> {
     this.state.set('loading');
     await this.location.ensureLoaded();
@@ -292,6 +310,7 @@ export class BranchSlaReportPage {
         this.state.set('singleLocation');
         return;
       }
+      void this.readBucketSetVersion(scope.tenantId);
       const nameById = new Map<string, string>(
         locations.map((loc: LocationView) => [loc.id, loc.displayName]),
       );

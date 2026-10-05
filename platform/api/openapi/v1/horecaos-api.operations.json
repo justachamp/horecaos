@@ -8760,12 +8760,23 @@
       },
       "LevelResponse" : {
         "properties" : {
+          "approvedByName" : {
+            "type" : "string"
+          },
           "outcome" : {
             "type" : "string"
           },
           "scopeType" : {
             "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
             "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -11287,12 +11298,23 @@
       },
       "OperationsTraceLevel" : {
         "properties" : {
+          "changedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "changedByName" : {
+            "type" : "string"
+          },
           "outcome" : {
             "type" : "string"
           },
           "scopeType" : {
             "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
             "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"

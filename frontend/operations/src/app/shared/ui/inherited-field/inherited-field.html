@@ -78,6 +78,9 @@
           >
             <span class="field__ladderScope">{{ scopeLabelKey(level.scopeType) | t }}</span>
             <span class="field__ladderOutcome">{{ outcomeKey(level.outcome) | t }}</span>
+            @if (level.version !== null && level.version !== undefined) {
+              <span class="field__ladderWho" data-testid="trace-who">{{ traceWho(level) }}</span>
+            }
           </li>
         }
       </ol>

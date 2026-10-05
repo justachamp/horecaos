@@ -29,6 +29,7 @@ import {
 import { OrderHandoverApi } from './order-handover-api';
 import { NewOrderApi } from './new-order/new-order-api';
 import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
+import { Toasts } from '../../shared/ui/toast';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
@@ -575,6 +576,136 @@ describe('OrderDetailPane: approve/reject idempotency and the lost-race render',
 
     const callsAfter = get.mock.calls.filter((c: unknown[]) => c[0] === ORDER_PATH).length;
     expect(callsAfter).toBeGreaterThan(callsBefore);
+  });
+});
+
+/**
+ * Row `X.1`, the toast host: the pane confirmed a success by redrawing the order and said nothing, so an
+ * operator who looked away did not know it applied. The same sentence the board uses now says so; a
+ * refusal keeps its place in the notice band beside the order.
+ */
+describe('OrderDetailPane: an applied action is announced in the toast host', () => {
+  const messages = (): string[] =>
+    TestBed.inject(Toasts)
+      .visible()
+      .map((toast) => toast.message);
+
+  function appliedDecision() {
+    return vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CONFIRMED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+  }
+
+  afterEach(() => TestBed.inject(Toasts).clear());
+
+  it('says an approval applied, with no order number and no customer data in the sentence', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      actionsApi: { approve: appliedDecision() },
+    });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+
+    expect(messages()).toEqual(['Order updated']);
+    expect(TestBed.inject(Toasts).visible()[0].tone).toBe('success');
+  });
+
+  it('says a state change applied', async () => {
+    const advance = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'PREPARING',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    const confirmed = detail({
+      summary: {
+        ...detail().summary,
+        status: 'CONFIRMED',
+        actions: [{ action: 'ADVANCE', targetStatus: 'PREPARING' }],
+      },
+    });
+    configure({ get: apiGet({ value: confirmed, version: 3 }), actionsApi: { advance } });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+
+    expect(messages()).toEqual(['Order updated']);
+  });
+
+  it('keeps a lost race as the inline notice, and raises no toast: nothing applied', async () => {
+    const approve = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 4,
+        applied: false,
+        effectiveDecisionId: 'someone-elses-decision',
+        effectiveAction: 'REJECT',
+      }),
+    );
+    configure({ get: apiGet({ value: detail(), version: 3 }), actionsApi: { approve } });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(messages()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-notice"]')?.textContent,
+    ).toContain('Already rejected');
+  });
+
+  it('keeps a refusal as the inline notice too', async () => {
+    const advance = vi
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () =>
+            new ApiError(
+              ApiErrorCode.STALE_VERSION,
+              409,
+              { status: 409, expected: 3, actual: 5 },
+              null,
+            ),
+        ),
+      );
+    const confirmed = detail({
+      summary: {
+        ...detail().summary,
+        status: 'CONFIRMED',
+        actions: [{ action: 'ADVANCE', targetStatus: 'PREPARING' }],
+      },
+    });
+    configure({ get: apiGet({ value: confirmed, version: 3 }), actionsApi: { advance } });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(messages()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-notice"]'),
+    ).not.toBeNull();
   });
 });
 
@@ -2428,6 +2559,41 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
     expect(
       fixture.nativeElement.querySelector('[data-testid="order-detail-courier-picker"]'),
     ).toBeNull();
+  });
+
+  it('announces an applied assignment in the toast host, and a refused one only in the notice band (row X.1)', async () => {
+    const assign = vi
+      .fn()
+      .mockResolvedValueOnce({ applied: true, planStatus: 'ASSIGNED', planVersion: 3 })
+      .mockResolvedValueOnce({
+        applied: false,
+        planStatus: 'ASSIGNED',
+        planVersion: 3,
+        reason: 'ALREADY_ASSIGNED',
+      });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+      couriersApi: { roster: () => Promise.resolve([roster()]) },
+      dispatchApi: { assign },
+    });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    await pickCourier(fixture, 'K-014');
+    fixture.detectChanges();
+    expect(
+      TestBed.inject(Toasts)
+        .visible()
+        .map((toast) => toast.message),
+    ).toEqual(['Order updated']);
+
+    TestBed.inject(Toasts).clear();
+    await pickCourier(fixture, 'K-014');
+    fixture.detectChanges();
+    expect(TestBed.inject(Toasts).visible()).toEqual([]);
+    expect(fixture.nativeElement.textContent).toContain('ALREADY_ASSIGNED');
+    TestBed.inject(Toasts).clear();
   });
 
   it('surfaces a refused assign (ALREADY_ASSIGNED, a lost race) as a notice, never a thrown error', async () => {
