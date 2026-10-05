@@ -288,6 +288,10 @@
     "comboSoldOut": "Sold out",
     "comboIncomplete": "Choose from every required group above before adding to cart.",
     "comboUnavailable": "This combo cannot be ordered right now.",
+    "nestedFor": "For {{option}}",
+    "pickAtLeast": "Choose at least {{min}}",
+    "pickAny": "Choose any",
+    "variantGroupsTitle": "Choices for {{variant}}",
     "fromPrice": "from {{price}}"
   },
   "terms": {

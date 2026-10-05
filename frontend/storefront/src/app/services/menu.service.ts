@@ -250,6 +250,7 @@ export class MenuService {
       onSaleNow: variant.onSaleNow,
       remainingQuantity: variant.remainingQuantity,
       physical: variant.physical ?? null,
+      ...variantGroups(product, variant, modifierGroups),
     }));
 
     return {
@@ -272,7 +273,11 @@ export class MenuService {
       modifierGroups: product.modifierGroupIds
         .map((id) => modifierGroups.get(id))
         .filter((group): group is PublishedModifierGroup => group !== undefined)
-        .map((group) => withProductPolicy(toMenuItemModifierGroup(group), product)),
+        .map((group) =>
+          withPolicies(toMenuItemModifierGroup(group, modifierGroups), [
+            product.modifierGroupPolicies,
+          ]),
+        ),
       commentPresets: product.commentPresets.map(toMenuItemCommentPreset),
       comboGroups: combos,
     };
@@ -280,23 +285,60 @@ export class MenuService {
 }
 
 /**
- * This product's own rule for a group it attaches, where it overrides the shared group's (ADR 0136).
- * The published values are already the effective ones, so they replace the group's outright and
- * the add-to-cart guard asks for exactly what the cart will enforce.
+ * The rules published for a group where a product, and a portion of it, state their own (ADR 0136).
+ * The published values are already the effective ones, so they replace the group's outright --
+ * and a later list replaces an earlier one, the portion's row over the product's, as the cart
+ * enforces it -- and the add-to-cart guard asks for exactly what the cart will enforce.
  */
-function withProductPolicy(
+function withPolicies(
   group: MenuItemModifierGroup,
-  product: PublishedProduct,
+  policyLists: readonly (readonly PublishedModifierGroupPolicy[] | undefined)[],
 ): MenuItemModifierGroup {
-  const policy = (product.modifierGroupPolicies ?? []).find((p) => p.modifierGroupId === group.id);
-  return policy
-    ? {
-        ...group,
+  let result = group;
+  for (const list of policyLists) {
+    const policy = (list ?? []).find((p) => p.modifierGroupId === group.id);
+    if (policy) {
+      result = {
+        ...result,
         required: policy.required,
         minimumSelections: policy.minimumSelections,
         maximumSelections: policy.maximumSelections,
-      }
-    : group;
+      };
+    }
+  }
+  return result;
+}
+
+/**
+ * The whole list of groups one portion is offered with, when it differs from its product's: the
+ * product's, then the ones the portion carries of its own, each under the product's rule and then
+ * the portion's. Nothing for a portion that adds and overrides nothing, which uses the product's.
+ */
+function variantGroups(
+  product: PublishedProduct,
+  variant: PublishedVariant,
+  modifierGroups: ReadonlyMap<string, PublishedModifierGroup>,
+): { modifierGroups?: MenuItemModifierGroup[] } {
+  const own = variant.modifierGroupIds ?? [];
+  const overrides = variant.modifierGroupPolicies ?? [];
+  if (own.length === 0 && overrides.length === 0) {
+    return {};
+  }
+  const ids = [
+    ...product.modifierGroupIds,
+    ...own.filter((id) => !product.modifierGroupIds.includes(id)),
+  ];
+  return {
+    modifierGroups: ids
+      .map((id) => modifierGroups.get(id))
+      .filter((group): group is PublishedModifierGroup => group !== undefined)
+      .map((group) =>
+        withPolicies(toMenuItemModifierGroup(group, modifierGroups), [
+          product.modifierGroupPolicies,
+          overrides,
+        ]),
+      ),
+  };
 }
 
 function toMenuItemComboGroup(group: PublishedComboGroup): MenuItemComboGroup {
@@ -354,7 +396,15 @@ function modifierGroupsById(menu: PublishedMenu): ReadonlyMap<string, PublishedM
   return new Map(menu.modifierGroups.map((group) => [group.modifierGroupId, group]));
 }
 
-function toMenuItemModifierGroup(group: PublishedModifierGroup): MenuItemModifierGroup {
+/**
+ * A published group as the screens read it. At the first level an option that opens choices carries
+ * them as `nestedGroups`, each resolved from the menu's own groups under the rules published for it
+ * under that option; one level and no more, so the options of a nested group open nothing further.
+ */
+function toMenuItemModifierGroup(
+  group: PublishedModifierGroup,
+  all?: ReadonlyMap<string, PublishedModifierGroup>,
+): MenuItemModifierGroup {
   return {
     id: group.modifierGroupId,
     name: group.name,
@@ -362,14 +412,27 @@ function toMenuItemModifierGroup(group: PublishedModifierGroup): MenuItemModifie
     minimumSelections: group.minimumSelections,
     maximumSelections: group.maximumSelections,
     allowSameOptionMultipleTimes: group.allowSameOptionMultipleTimes,
-    options: group.options.map((option) => ({
-      id: option.optionId,
-      // The option's name in the customer's language when the menu carries one, else the
-      // authoring code a menu published before options were named still sends.
-      label: option.name || option.code || '',
-      amountMinor: option.amountMinor,
-      maximumQuantity: option.maximumQuantity,
-    })),
+    options: group.options.map((option) => {
+      const nested = all
+        ? (option.nestedGroups ?? [])
+            .map((policy) => {
+              const published = all.get(policy.modifierGroupId);
+              return published
+                ? withPolicies(toMenuItemModifierGroup(published), [[policy]])
+                : null;
+            })
+            .filter((entry): entry is MenuItemModifierGroup => entry !== null)
+        : [];
+      return {
+        id: option.optionId,
+        // The option's name in the customer's language when the menu carries one, else the
+        // authoring code a menu published before options were named still sends.
+        label: option.name || option.code || '',
+        amountMinor: option.amountMinor,
+        maximumQuantity: option.maximumQuantity,
+        ...(nested.length > 0 ? { nestedGroups: nested } : {}),
+      };
+    }),
   };
 }
 
@@ -476,6 +539,10 @@ export interface PublishedCommentPreset {
 
 export interface PublishedVariant {
   readonly variantId: string;
+  /** ADR 0136: the groups this portion carries of its own, on top of its product's; absent or empty when it carries none. */
+  readonly modifierGroupIds?: readonly string[];
+  /** ADR 0136: the rules this portion holds the customer to for those groups (and any of its product's it overrides), already the effective values. */
+  readonly modifierGroupPolicies?: readonly PublishedModifierGroupPolicy[];
   readonly sku: string | null;
   readonly unitCode: string | null;
   readonly isDefault: boolean;
@@ -523,4 +590,6 @@ export interface PublishedModifierOption {
   readonly amountMinor: number | null;
   /** What the customer reads, in their language then the brand's; null/absent when nobody named the option. */
   readonly name?: string | null;
+  /** ADR 0136: the choices taking this option opens, with the rules for them; absent or empty when it opens nothing. */
+  readonly nestedGroups?: readonly PublishedModifierGroupPolicy[];
 }

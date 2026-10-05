@@ -30,6 +30,14 @@ export interface MenuItemVariant {
    * unit sold whole, which is most of the menu.
    */
   physical?: PhysicalFacts | null;
+  /**
+   * ADR 0136: the complete list of modifier groups this portion is offered with, when it differs
+   * from its product's -- the product's groups, then the ones the portion carries of its own, each
+   * with the rules this portion holds the customer to (a portion's own row for a group replaces the
+   * product's whole). Absent for a portion that adds and overrides nothing: use
+   * `groupsForVariant` rather than reading this directly.
+   */
+  modifierGroups?: MenuItemModifierGroup[];
 }
 
 /**
@@ -48,6 +56,12 @@ export interface MenuItemModifierOption {
   amountMinor: number | null;
   /** How many times this one option may be picked within its group. */
   maximumQuantity: number;
+  /**
+   * ADR 0136, second level: the choices taking this option opens (it links a variant that carries
+   * groups of its own), with the rules in force for them. Absent or empty for an option that opens
+   * nothing. One level and no more: the options of these groups open nothing further.
+   */
+  nestedGroups?: MenuItemModifierGroup[];
 }
 
 /**

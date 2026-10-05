@@ -595,6 +595,37 @@ describe('OrderDetailComponent: combos and what the server added (ADR 0136)', ()
 
     expect(cartAdd).toHaveBeenCalledWith('v-lunch', 2, undefined, [], undefined, picks);
   });
+
+  it('repeats a line with a second-level choice with its answers under their parent (ADR 0136)', async () => {
+    const nested = [{ parentOptionId: 'o-chili', optionId: 'o-hot' }];
+    const { fixture, cartAdd } = await render(
+      apiOrderDetail(),
+      of(
+        plan('READY', [
+          planLine({
+            variantId: 'v-1',
+            quantity: 2,
+            modifierOptionIds: ['o-chili', 'o-garlic'],
+            nestedModifiers: nested,
+          }),
+        ]),
+      ),
+    );
+
+    (fixture.nativeElement.querySelector('.repeat-btn') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cartAdd).toHaveBeenCalledWith(
+      'v-1',
+      2,
+      undefined,
+      ['o-chili', 'o-garlic'],
+      undefined,
+      undefined,
+      nested,
+    );
+  });
 });
 
 describe('OrderDetailComponent: portions and weighed lines (ADR 0137)', () => {

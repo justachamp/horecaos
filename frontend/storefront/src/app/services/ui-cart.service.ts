@@ -11,7 +11,7 @@ import type {
 } from '../types/cart.types';
 import {
   CartService,
-  modifierOptionIdsFromLineKey,
+  optionIdsOfLine,
   type CheckoutResult,
   type DeliveryCharge,
   type FulfillmentMode,
@@ -19,6 +19,7 @@ import {
   type PricedCart,
 } from './cart.service';
 import type { ComboPickWire } from '../utils/combo-selection';
+import type { NestedModifierWire } from '../utils/modifier-selection';
 import {
   MenuService,
   type PublishedCommentPreset,
@@ -410,13 +411,17 @@ export class UiCartService {
       existing?.lines.map((line) => ({
         variantId: line.variantId,
         quantity: line.quantity,
-        modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+        modifierOptionIds: optionIdsOfLine(line),
         // Row 2.1b: carried across the same as the modifiers above -- a mode
         // switch rebuilds every line from scratch and must not drop what the
         // customer already picked.
         commentPresetCodes: line.commentPresetCodes,
         // ADR 0136: and a combo's picks, or its container would be put back with nothing chosen.
         ...(line.comboPicks && line.comboPicks.length > 0 ? { comboPicks: line.comboPicks } : {}),
+        // ... and the second-level answers, or the options that asked for them would be refused.
+        ...(line.nestedModifiers && line.nestedModifiers.length > 0
+          ? { nestedModifiers: line.nestedModifiers }
+          : {}),
       })) ?? [];
 
     this.fulfillmentModeDefault.set(mode);
@@ -437,6 +442,7 @@ export class UiCartService {
           modifierOptionIds: line.modifierOptionIds,
           commentPresetCodes: line.commentPresetCodes,
           ...('comboPicks' in line ? { comboPicks: line.comboPicks } : {}),
+          ...('nestedModifiers' in line ? { nestedModifiers: line.nestedModifiers } : {}),
         });
       }
       await this.project(this.carts.cart());
@@ -484,6 +490,8 @@ export class UiCartService {
    * @param comboPicks ADR 0136: what the customer picked inside a combo, set exactly when
    *        `variantId` is a combo's container. Part of the line's identity, like the modifiers: the
    *        same combo with other picks is another line.
+   * @param nestedModifiers ADR 0136: the second-level answers, each under the first-level option
+   *        that opened it. Part of the line's identity as well.
    */
   async add(
     variantId: string,
@@ -492,6 +500,7 @@ export class UiCartService {
     modifierOptionIds?: readonly string[],
     commentPresetCodes?: readonly string[],
     comboPicks?: readonly ComboPickWire[],
+    nestedModifiers?: readonly NestedModifierWire[],
   ): Promise<void> {
     this.updating.set(true);
     this.error.set(null);
@@ -504,6 +513,7 @@ export class UiCartService {
         modifierOptionIds,
         commentPresetCodes,
         comboPicks,
+        nestedModifiers,
       });
       await this.project(cart);
     } catch {
@@ -539,8 +549,10 @@ export class UiCartService {
               quantity,
               modifierOptionIds: item.modifierOptionIds,
               commentPresetCodes: item.commentPresetCodes,
-              // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+              // ADR 0136: resent whole, or a quantity change would strip a combo's picks
+              // and the second-level answers under the options.
               comboPicks: item.comboPicks,
+              nestedModifiers: item.nestedModifiers,
             });
       await this.project(cart);
     } catch {
@@ -821,9 +833,14 @@ export class UiCartService {
         if (!known) {
           return null;
         }
-        const modifierOptionIds = modifierOptionIdsFromLineKey(line.lineKey, line.variantId);
-        const modifiers: CartResponseModifierSelection[] = modifierOptionIds
-          .map((optionId) => {
+        const modifierOptionIds = optionIdsOfLine(line);
+        const nestedModifiers = line.nestedModifiers ?? [];
+        // The first-level choices, then the answers under them (each marked with its parent).
+        const modifiers: CartResponseModifierSelection[] = [
+          ...modifierOptionIds.map((optionId) => ({ optionId, parentOptionId: null })),
+          ...nestedModifiers,
+        ]
+          .map(({ optionId, parentOptionId }) => {
             const resolved = modifierOptionsById.get(optionId);
             return resolved
               ? {
@@ -831,6 +848,7 @@ export class UiCartService {
                   groupName: resolved.groupName,
                   label: resolved.label,
                   amountMinor: resolved.amountMinor,
+                  ...(parentOptionId ? { parentOptionId } : {}),
                 }
               : null;
           })
@@ -884,6 +902,7 @@ export class UiCartService {
           commentPresets,
           comboPicks,
           comboComponents,
+          nestedModifiers,
         };
         return projected;
       })

@@ -16,6 +16,7 @@ import type {
   MenuItemVariant,
 } from '../../types/home.types';
 import { ComboChoicesComponent } from '../../shared/combo-choices/combo-choices.component';
+import { NestedChoicesComponent } from '../../shared/nested-choices/nested-choices.component';
 import {
   type ComboPickWire,
   type ComboPicks,
@@ -25,6 +26,19 @@ import {
   picksOnTheWire,
   samePicks,
 } from '../../utils/combo-selection';
+import {
+  type ModifierChoices,
+  type NestedChoices,
+  type NestedModifierWire,
+  chosenOptionIds,
+  groupsForVariant,
+  nestedOnTheWire,
+  pruneNested,
+  toggleNested,
+  toggleOption,
+  unsatisfiedGroups,
+  unsatisfiedNested,
+} from '../../utils/modifier-selection';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
@@ -107,22 +121,34 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
   };
 }
 
-/** The cart line for one variant with exactly this modifier selection and these combo picks. */
+/** The cart line for one variant with exactly this modifier selection, these combo picks and these second-level answers. */
 function lineMatches(
   line: {
     variant_id: string;
     modifierOptionIds: readonly string[];
     comboPicks?: readonly ComboPickWire[];
+    nestedModifiers?: readonly NestedModifierWire[];
   },
   variantId: string,
   selection: readonly string[],
   picks: readonly ComboPickWire[],
+  nested: readonly NestedModifierWire[],
 ): boolean {
   return (
     line.variant_id === variantId &&
     sameOptionIds(line.modifierOptionIds, selection) &&
-    samePicks(line.comboPicks ?? [], picks)
+    samePicks(line.comboPicks ?? [], picks) &&
+    sameNested(line.nestedModifiers ?? [], nested)
   );
+}
+
+/** Two sets of second-level answers are the same whatever order they were given in. */
+function sameNested(a: readonly NestedModifierWire[], b: readonly NestedModifierWire[]): boolean {
+  const keys = (list: readonly NestedModifierWire[]) =>
+    list.map((pair) => `${pair.parentOptionId}>${pair.optionId}`).sort();
+  const left = keys(a);
+  const right = keys(b);
+  return left.length === right.length && left.every((key, index) => key === right[index]);
 }
 
 /** Sorted-value comparison; the order a customer picked options in never matters. */
@@ -142,6 +168,7 @@ function sameOptionIds(a: readonly string[], b: readonly string[]): boolean {
     FoodCarouselComponent,
     CartHintBadgeComponent,
     ComboChoicesComponent,
+    NestedChoicesComponent,
     PhysicalFactsComponent,
     TranslatePipe,
   ],
@@ -233,13 +260,61 @@ export class ProductComponent {
     this.isCombo() ? [] : (this.rawItem()?.modifierGroups ?? []),
   );
 
+  /**
+   * ADR 0136: the groups one portion is offered -- its own complete list when the menu published
+   * one (the product's groups and the ones it carries itself, under the rules it holds the customer
+   * to), otherwise the product's. None on a combo, whose choices are its components. The cart
+   * enforces exactly this list for the variant chosen.
+   */
+  groupsFor(variantId: string | null): readonly MenuItemModifierGroup[] {
+    const item = this.rawItem();
+    return !item || this.isCombo() ? [] : groupsForVariant(item, variantId);
+  }
+
+  /** The groups only this portion offers: drawn in its own row, since the shared section is the product's. */
+  variantExtraGroups(variantId: string): readonly MenuItemModifierGroup[] {
+    const shared = new Set(this.modifierGroups().map((group) => group.id));
+    return this.groupsFor(variantId).filter((group) => !shared.has(group.id));
+  }
+
+  /** Every group any portion of this product could hold a choice in, to forget answers whose option is gone. */
+  private readonly everyGroup = computed<readonly MenuItemModifierGroup[]>(() => {
+    const byId = new Map<string, MenuItemModifierGroup>();
+    for (const group of [
+      ...this.modifierGroups(),
+      ...(this.rawItem()?.variants ?? []).flatMap((variant) => variant.modifierGroups ?? []),
+    ]) {
+      byId.set(group.id, group);
+    }
+    return [...byId.values()];
+  });
+
   /** Row 2.1b: the coded comment presets this product offers, in the catalogue's own order. */
   readonly commentPresets = computed<MenuItemCommentPreset[]>(
     () => this.rawItem()?.commentPresets ?? [],
   );
 
   /** groupId -> the option ids currently chosen within it. */
-  private readonly selectedOptions = signal<Record<string, readonly string[]>>({});
+  private readonly selectedOptions = signal<ModifierChoices>({});
+
+  /** What is chosen at the first level, for the second-level chooser to read which options are taken. */
+  readonly optionChoices = computed<ModifierChoices>(() => this.selectedOptions());
+
+  /** ADR 0136, second level: what is chosen under the options that open choices of their own. */
+  readonly nestedChoices = signal<NestedChoices>({});
+
+  /** Whether the customer has started on the second level, so its hint names the groups still short instead of greeting them with errors. */
+  readonly nestedTouched = signal(false);
+
+  setNestedChoices(next: NestedChoices): void {
+    this.nestedChoices.set(next);
+    this.nestedTouched.set(true);
+  }
+
+  /** A tap on an option of a group an option opened; the same rules as the first level. */
+  toggleNested(parentOptionId: string, group: MenuItemModifierGroup, optionId: string): void {
+    this.setNestedChoices(toggleNested(this.nestedChoices(), parentOptionId, group, optionId));
+  }
 
   /** Row 2.1b: the preset codes currently checked. */
   private readonly selectedPresetCodes = signal<ReadonlySet<string>>(new Set());
@@ -294,28 +369,35 @@ export class ProductComponent {
   }
 
   /**
-   * Whether every required group has a selection within its min/max bounds.
+   * Whether every required group of this portion has a selection within its min/max bounds, every
+   * option taken that opens choices has them answered, and a combo is complete.
    *
    * Blocks add-to-cart rather than sending a line the platform would reject
    * (or, worse, accept as "no modifiers" when the customer meant to choose
    * one) -- there is no server-side echo of what was picked to correct a
-   * client guess against.
+   * client guess against. Asked per portion (ADR 0136): a size may carry a group of its own.
    */
-  readonly modifiersValid = computed(() => {
+  modifiersValidFor(variantId: string | null): boolean {
+    const groups = this.groupsFor(variantId);
     const selections = this.selectedOptions();
-    const modifiersOk = this.modifierGroups().every((group) => {
-      const count = (selections[group.id] ?? []).length;
-      const min = group.required ? Math.max(group.minimumSelections, 1) : group.minimumSelections;
-      const max = group.maximumSelections > 0 ? group.maximumSelections : Number.POSITIVE_INFINITY;
-      return count >= min && count <= max;
-    });
+    const modifiersOk =
+      unsatisfiedGroups(groups, selections).length === 0 &&
+      unsatisfiedNested(groups, selections, this.nestedChoices()).length === 0;
     // ADR 0136: and a combo is complete only when every one of its choices is within its range.
     return modifiersOk && (!this.isCombo() || comboValid(this.comboGroups(), this.comboPicks()));
-  });
+  }
 
-  /** The chosen options, flattened for the wire -- order does not matter to the platform. */
-  private flattenedSelection(): readonly string[] {
-    return Object.values(this.selectedOptions()).flat();
+  /** The sole-variant bottom bar's guard: the portion it adds. */
+  readonly modifiersValid = computed(() => this.modifiersValidFor(this.variantId()));
+
+  /** The chosen options this portion is offered, flattened for the wire -- order does not matter to the platform. */
+  private flattenedSelection(variantId: string | null): readonly string[] {
+    return chosenOptionIds(this.groupsFor(variantId), this.selectedOptions());
+  }
+
+  /** The second-level answers this portion is offered, each under the option that asked. */
+  private flattenedNested(variantId: string | null): readonly NestedModifierWire[] {
+    return nestedOnTheWire(this.groupsFor(variantId), this.selectedOptions(), this.nestedChoices());
   }
 
   isOptionSelected(groupId: string, optionId: string): boolean {
@@ -331,21 +413,10 @@ export class ProductComponent {
    * either.
    */
   toggleOption(group: MenuItemModifierGroup, optionId: string): void {
-    this.selectedOptions.update((current) => {
-      const chosen = current[group.id] ?? [];
-      const isSelected = chosen.includes(optionId);
-      let next: readonly string[];
-      if (isSelected) {
-        next = chosen.filter((id) => id !== optionId);
-      } else if (group.maximumSelections === 1) {
-        next = [optionId];
-      } else if (group.maximumSelections > 0 && chosen.length >= group.maximumSelections) {
-        return current;
-      } else {
-        next = [...chosen, optionId];
-      }
-      return { ...current, [group.id]: next };
-    });
+    const next = toggleOption(this.selectedOptions(), group, optionId);
+    this.selectedOptions.set(next);
+    // An option taken back takes its answers with it, so nothing stale is sent.
+    this.nestedChoices.update((all) => pruneNested(this.everyGroup(), next, all));
   }
 
   /** Quantity in cart for the current variant *and* the currently chosen modifiers. */
@@ -359,9 +430,7 @@ export class ProductComponent {
   readonly cartLine = computed(() => {
     const vid = this.variantId();
     if (!vid) return null;
-    const selection = this.flattenedSelection();
-    const picks = this.flattenedComboPicks();
-    return this.cartService.items().find((i) => lineMatches(i, vid, selection, picks)) ?? null;
+    return this.lineFor(vid);
   });
 
   /** Formatted line total (unit × qty) for bottom bar */
@@ -425,6 +494,8 @@ export class ProductComponent {
           // from the previous item on this route could name an option id that
           // does not even exist on this one.
           this.selectedOptions.set({});
+          this.nestedChoices.set({});
+          this.nestedTouched.set(false);
           this.selectedPresetCodes.set(new Set());
           this.comboPicks.set({});
           this.comboTouched.set(false);
@@ -474,20 +545,24 @@ export class ProductComponent {
     this.decreaseVariant(vid);
   }
 
-  qtyForVariant(variantId: string): number {
-    const selection = this.flattenedSelection();
+  /** The basket's line for this portion with exactly the choices made now, if there is one. */
+  private lineFor(variantId: string): CartResponseItem | null {
+    const selection = this.flattenedSelection(variantId);
     const picks = this.flattenedComboPicks();
+    const nested = this.flattenedNested(variantId);
     return (
-      this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks))?.quantity ??
-      0
+      this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks, nested)) ??
+      null
     );
+  }
+
+  qtyForVariant(variantId: string): number {
+    return this.lineFor(variantId)?.quantity ?? 0;
   }
 
   lineTotalForVariant(variantId: string): string {
     this.translate.current();
-    const selection = this.flattenedSelection();
-    const picks = this.flattenedComboPicks();
-    const line = this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks));
+    const line = this.lineFor(variantId);
     if (!line) return '';
     return this.lineTotalText(line);
   }
@@ -547,7 +622,7 @@ export class ProductComponent {
     if (
       !variantId ||
       this.cartService.updating() ||
-      !this.modifiersValid() ||
+      !this.modifiersValidFor(variantId) ||
       !this.variantOnSaleNow(variantId)
     )
       return;
@@ -557,13 +632,14 @@ export class ProductComponent {
       this.router.navigate(['/auth/login']).catch(() => {});
       return;
     }
-    const selection = this.flattenedSelection();
+    const selection = this.flattenedSelection(variantId);
     const presetSelection = this.flattenedPresetSelection();
     const comboPicks = this.flattenedComboPicks();
+    const nested = this.flattenedNested(variantId);
     const run = (): void => {
       const line = this.cartService
         .items()
-        .find((i) => lineMatches(i, variantId, selection, comboPicks));
+        .find((i) => lineMatches(i, variantId, selection, comboPicks, nested));
       // ADR 0106, gap-map row 10.8e: fired for both branches below -- a
       // bumped existing line and a brand-new one are the same customer
       // action, one more unit of this variant landing in the cart -- right
@@ -586,6 +662,17 @@ export class ProductComponent {
             presetSelection,
             comboPicks,
           );
+        } else if (nested.length > 0) {
+          // ADR 0136: a second-level answer goes under the first-level option that asked for it.
+          void this.cartService.add(
+            variantId,
+            quantity,
+            undefined,
+            selection,
+            presetSelection,
+            undefined,
+            nested,
+          );
         } else {
           void this.cartService.add(variantId, quantity, undefined, selection, presetSelection);
         }
@@ -599,9 +686,7 @@ export class ProductComponent {
   }
 
   decreaseVariant(variantId: string): void {
-    const selection = this.flattenedSelection();
-    const picks = this.flattenedComboPicks();
-    const line = this.cartService.items().find((i) => lineMatches(i, variantId, selection, picks));
+    const line = this.lineFor(variantId);
     if (!line || this.cartService.updating()) return;
     this.cartService.decreaseQuantity(line);
   }

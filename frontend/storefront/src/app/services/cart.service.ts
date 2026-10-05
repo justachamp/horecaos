@@ -5,6 +5,7 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
 import { type ComboPickWire, comboKeyHash } from '../utils/combo-selection';
+import { type NestedModifierWire, nestedKeyHash } from '../utils/modifier-selection';
 import type { AppliedPromotion } from './applied-promotions';
 
 /**
@@ -134,9 +135,19 @@ export class CartService {
      * every write, for the same reason `modifierOptionIds` is.
      */
     comboPicks?: readonly ComboPickWire[];
+    /**
+     * ADR 0136: the second-level answers, each under the first-level option that opened it. Part of
+     * the line's identity and resent whole on every write, like `modifierOptionIds`.
+     */
+    nestedModifiers?: readonly NestedModifierWire[];
     customerNote?: string;
   }): Promise<PlatformCart> {
-    const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? [], input.comboPicks);
+    const lineKey = lineKeyFor(
+      input.variantId,
+      input.modifierOptionIds ?? [],
+      input.comboPicks,
+      input.nestedModifiers,
+    );
     return this.withVersion((cart, version) =>
       this.api.mutate<PlatformCart>(
         'PUT',
@@ -150,6 +161,9 @@ export class CartService {
             customerNote: input.customerNote,
             ...(input.comboPicks && input.comboPicks.length > 0
               ? { comboPicks: input.comboPicks }
+              : {}),
+            ...(input.nestedModifiers && input.nestedModifiers.length > 0
+              ? { nestedModifiers: input.nestedModifiers }
               : {}),
           },
           expectedVersion: version,
@@ -416,7 +430,15 @@ export function lineKeyFor(
   variantId: string,
   modifierOptionIds: readonly string[],
   comboPicks: readonly ComboPickWire[] = [],
+  nestedModifiers: readonly NestedModifierWire[] = [],
 ): string {
+  if (nestedModifiers.length > 0 && comboPicks.length === 0) {
+    // ADR 0136: the platform stores a line key in sixty-four characters and a variant's id is
+    // thirty-six, so the first-level options and the answers under them are hashed into a short
+    // suffix rather than spelled out. The cart echoes what a line holds (`modifierOptionIds`,
+    // `nestedModifiers`), so nothing needs to read them back out of the key.
+    return `${variantId}n${nestedKeyHash(modifierOptionIds, nestedModifiers)}`;
+  }
   if (comboPicks.length > 0) {
     // ADR 0136: the platform limits a combo line's key to sixty characters and a container's id
     // is thirty-six, so the picks (and any modifiers) are hashed into a short suffix rather than
@@ -457,6 +479,16 @@ export function modifierOptionIdsFromLineKey(
   return suffix ? suffix.split('.') : [];
 }
 
+/**
+ * The first-level modifier options a cart line holds. The platform echoes them on the line
+ * (`modifierOptionIds`), which is the only way to know them for a line keyed by a hash (one with a
+ * second-level choice); a cart from a platform that does not echo them is read back from the key
+ * this client minted, as before.
+ */
+export function optionIdsOfLine(line: PlatformCartLine): readonly string[] {
+  return line.modifierOptionIds ?? modifierOptionIdsFromLineKey(line.lineKey, line.variantId);
+}
+
 const STORAGE_PREFIX = 'horecaos_cart_';
 
 function readCartId(locationId: string): string | null {
@@ -495,6 +527,13 @@ export interface PlatformCartLine {
   readonly hasCustomerNote: boolean;
   /** ADR 0136: what was picked inside a combo; absent or empty on every other line. */
   readonly comboPicks?: readonly ComboPickWire[];
+  /** ADR 0136: the second-level answers, each under the first-level option that opened it; absent or empty on most lines. */
+  readonly nestedModifiers?: readonly NestedModifierWire[];
+  /**
+   * The first-level modifier options the line holds, echoed by the platform (an empty list when it
+   * holds none); absent from a platform that does not. See {@link optionIdsOfLine}.
+   */
+  readonly modifierOptionIds?: readonly string[];
 }
 
 export interface PlatformCart {

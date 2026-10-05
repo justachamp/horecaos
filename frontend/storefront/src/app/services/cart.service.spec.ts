@@ -4,6 +4,7 @@ import {
   CartService,
   lineKeyFor,
   modifierOptionIdsFromLineKey,
+  optionIdsOfLine,
   type PlatformCart,
   type PricedCart,
 } from './cart.service';
@@ -471,5 +472,96 @@ describe('combo lines (ADR 0136)', () => {
     await service.putLine({ variantId: 'v1', quantity: 1 });
 
     expect(api.mutate.mock.calls[0][2].body).not.toHaveProperty('comboPicks');
+  });
+});
+
+describe('lines with second-level choices (ADR 0136)', () => {
+  const VARIANT = '3f2b8c1e-0000-4000-8000-000000000001';
+  const CHILI = '3f2b8c1e-0000-4000-8000-0000000000a1';
+  const GARLIC = '3f2b8c1e-0000-4000-8000-0000000000a2';
+  const nested = [{ parentOptionId: CHILI, optionId: '3f2b8c1e-0000-4000-8000-0000000000b1' }];
+
+  it('keys such a line by its variant and a short hash, within the sixty characters the platform allows', () => {
+    const key = lineKeyFor(VARIANT, [CHILI, GARLIC], [], nested);
+
+    expect(key.startsWith(`${VARIANT}n`)).toBe(true);
+    expect(key.length).toBeLessThanOrEqual(60);
+    expect(key).not.toContain('~');
+  });
+
+  it('gives the same selection the same key in any order, and another answer another key', () => {
+    const other = [{ parentOptionId: CHILI, optionId: '3f2b8c1e-0000-4000-8000-0000000000b2' }];
+
+    expect(lineKeyFor(VARIANT, [GARLIC, CHILI], [], nested)).toBe(
+      lineKeyFor(VARIANT, [CHILI, GARLIC], [], nested),
+    );
+    expect(lineKeyFor(VARIANT, [CHILI], [], other)).not.toBe(
+      lineKeyFor(VARIANT, [CHILI], [], nested),
+    );
+    expect(lineKeyFor(VARIANT, [CHILI, GARLIC], [], nested)).not.toBe(
+      lineKeyFor(VARIANT, [CHILI], [], nested),
+    );
+  });
+
+  it('leaves the key of a line with no second-level answer exactly as it was', () => {
+    expect(lineKeyFor(VARIANT, [CHILI])).toBe(`${VARIANT}+${CHILI}`);
+    expect(lineKeyFor(VARIANT, [CHILI], [], [])).toBe(`${VARIANT}+${CHILI}`);
+  });
+
+  it('puts the answers in the body and the hashed key in the path', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({
+      variantId: VARIANT,
+      quantity: 1,
+      modifierOptionIds: [CHILI],
+      nestedModifiers: nested,
+    });
+
+    const [method, path, options] = api.mutate.mock.calls[0];
+    expect(method).toBe('PUT');
+    expect(path).toContain(encodeURIComponent(lineKeyFor(VARIANT, [CHILI], [], nested)));
+    expect(options.body).toMatchObject({
+      variantId: VARIANT,
+      modifierOptionIds: [CHILI],
+      nestedModifiers: nested,
+    });
+  });
+
+  it('sends no nestedModifiers at all for an ordinary line', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: 'v1', quantity: 1, modifierOptionIds: ['m1'] });
+
+    expect(api.mutate.mock.calls[0][2].body).not.toHaveProperty('nestedModifiers');
+  });
+});
+
+describe('optionIdsOfLine', () => {
+  const line = (extra: Record<string, unknown>) => ({
+    lineKey: 'v1+m1.m2',
+    variantId: 'v1',
+    quantity: 1,
+    hasCustomerNote: false,
+    commentPresetCodes: [],
+    ...extra,
+  });
+
+  it("reads the options off the cart's own echo of the line when it has one", () => {
+    expect(
+      optionIdsOfLine(line({ lineKey: 'v1n0123456789abcd', modifierOptionIds: ['m9'] })),
+    ).toEqual(['m9']);
+  });
+
+  it('says a line holds nothing when the echo is an empty list, whatever its key looks like', () => {
+    expect(optionIdsOfLine(line({ modifierOptionIds: [] }))).toEqual([]);
+  });
+
+  it('falls back to the key it minted for a cart from a platform that does not echo the options', () => {
+    expect(optionIdsOfLine(line({}))).toEqual(['m1', 'm2']);
   });
 });

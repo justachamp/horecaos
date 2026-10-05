@@ -226,6 +226,11 @@ export function comboKeyHash(
       .sort((a, b) => a.componentId.localeCompare(b.componentId))
       .map((pick) => `${pick.componentId}x${pick.quantity}`)
       .join('.');
+  return shortHash(text);
+}
+
+/** cyrb53 as 14 hex digits: a short, stable key for any text. See {@link comboKeyHash}. */
+export function shortHash(text: string): string {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
   for (let index = 0; index < text.length; index += 1) {

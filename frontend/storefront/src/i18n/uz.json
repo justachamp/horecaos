@@ -288,6 +288,10 @@
     "comboSoldOut": "Tugagan",
     "comboIncomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
     "comboUnavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "nestedFor": "«{{option}}» uchun",
+    "pickAtLeast": "Kamida {{min}} ta tanlang",
+    "pickAny": "Istaganingizni tanlang",
+    "variantGroupsTitle": "«{{variant}}» uchun tanlov",
     "fromPrice": "{{price}} dan"
   },
   "terms": {
