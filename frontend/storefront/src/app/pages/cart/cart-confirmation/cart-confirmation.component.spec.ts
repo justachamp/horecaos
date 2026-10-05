@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { CartConfirmationComponent } from './cart-confirmation.component';
-import type { PromotionRow } from '../../../services/applied-promotions';
+import type { GiftOfferGroup, PromotionRow } from '../../../services/applied-promotions';
+import { LangService } from '../../../services/lang.service';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
@@ -42,6 +43,18 @@ class FakeUiCartService {
   /** ADR 0136: what the server added by itself, itemised. */
   hiddenCharges = vi.fn<() => readonly HiddenChargeRow[]>(() => []);
   hasProvisionalLines = vi.fn(() => false);
+  /** ADR 0140: the free gifts on offer, and taking one up. */
+  giftOffers = vi.fn<() => readonly GiftOfferGroup[]>(() => []);
+  updating = vi.fn(() => false);
+  addGift = vi.fn().mockResolvedValue(undefined);
+  /** ADR 0072: the promo-code entry. */
+  appliedPromoCode = vi.fn<() => string | null>(() => null);
+  promoBusy = vi.fn(() => false);
+  promoError = vi.fn<() => string | null>(() => null);
+  promoOutcomeKey = vi.fn<() => string | null>(() => null);
+  promoCodeDiscountFormatted = vi.fn<() => string | null>(() => null);
+  applyPromoCode = vi.fn().mockResolvedValue(true);
+  removePromoCode = vi.fn().mockResolvedValue(undefined);
 }
 
 class FakeDeliverySelectionService {
@@ -74,6 +87,10 @@ const CONFIG: AppConfig = {
   yandexMapsApiKey: '',
   brand: { displayName: 'Test Brand', theme: { accent: '#000000', accentDeep: '#000000' } },
 };
+
+class FakeLangService {
+  langId = () => 'en';
+}
 
 class FakeTranslateService {
   get(key: string): string {
@@ -166,6 +183,7 @@ async function setUp(
       { provide: PaymentSessionService, useValue: paymentSessions },
       { provide: NotificationService, useValue: notification },
       { provide: TranslateService, useClass: FakeTranslateService },
+      { provide: LangService, useClass: FakeLangService },
       { provide: DeliverySelectionService, useValue: delivery },
       { provide: LocationProfileService, useValue: locations },
       { provide: APP_CONFIG, useValue: CONFIG },
@@ -314,6 +332,43 @@ describe('CartConfirmationComponent: the promotions behind the price (ADR 0140)'
       'cart.deliveryOfferNote',
     );
     expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+  });
+});
+
+describe('CartConfirmationComponent: free gifts and the promo-code entry (ADR 0140, ADR 0072)', () => {
+  it('offers the free gift the platform offered, and taking it up goes through the cart', async () => {
+    const { fixture, cart } = await setUp(['CASH'], (c) => {
+      c.giftOffers.mockReturnValue([
+        {
+          ruleId: 'rule-1',
+          toAdd: 1,
+          choices: [{ variantId: 'v-cola', name: 'Cola', image: null, inCart: false }],
+        },
+      ]);
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    const add = host.querySelector<HTMLButtonElement>('[data-testid="gift-offer-add"]')!;
+    expect(add.textContent).toContain('cart.giftOffer.add');
+    add.click();
+
+    expect(cart.addGift).toHaveBeenCalledWith('v-cola');
+  });
+
+  it('offers no gift when the platform offered none', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="gift-offers"]'),
+    ).toBeNull();
+  });
+
+  it('has the promo-code entry beside the totals, so a code can be typed where its saving shows', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="promo-input"]'),
+    ).not.toBeNull();
   });
 });
 

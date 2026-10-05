@@ -41,6 +41,8 @@ class FakeCartService {
   checkout = vi.fn();
   discard = vi.fn();
   selectPaymentMethod = vi.fn();
+  applyPromoCode = vi.fn();
+  removePromoCode = vi.fn();
 }
 
 class FakeMenuService {
@@ -847,6 +849,347 @@ describe('UiCartService promotions behind the price (ADR 0140)', () => {
       { labelKey: 'cart.deliveryOfferNote', amount: fmt(5_000) },
       { labelKey: 'cart.surchargeNote', amount: fmt(1_500) },
     ]);
+  });
+});
+
+/** A cart line for `variantId`, as the platform reports it. */
+function lineOf(variantId: string, quantity = 1, extra: Record<string, unknown> = {}) {
+  return {
+    lineKey: variantId,
+    variantId,
+    quantity,
+    commentPresetCodes: [],
+    hasCustomerNote: false,
+    ...extra,
+  };
+}
+
+/** A published product with one orderable variant. */
+function productOf(variantId: string, name: string, amountMinor = 10_000) {
+  return {
+    productId: `p-${variantId}`,
+    code: null,
+    name,
+    description: null,
+    mediaAssetIds: [],
+    imageUrls: [`/${variantId}.png`],
+    variants: [
+      {
+        variantId,
+        sku: null,
+        unitCode: null,
+        isDefault: true,
+        orderable: true,
+        amountMinor,
+        onSaleNow: true,
+        remainingQuantity: null,
+      },
+    ],
+    modifierGroupIds: [],
+    commentPresets: [],
+  };
+}
+
+describe('UiCartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
+  function cartWith(promoCode: string | null): PlatformCart {
+    return baseCart({ lines: [lineOf('v-known')], appliedPromoCode: promoCode });
+  }
+
+  it("trims the code, applies it, and re-prices so the discount is the platform's own answer", async () => {
+    const { service, carts, menu } = setUp();
+    const applied = cartWith('OSH2026');
+    carts.applyPromoCode.mockResolvedValue(applied);
+    carts.price.mockResolvedValue(pricedFor(applied, { discountMinor: 4_800 }));
+    menu.menu.mockResolvedValue(emptyMenu({ products: [productOf('v-known', 'Osh')] }));
+
+    const ok = await service.applyPromoCode('  OSH2026  ');
+
+    expect(ok).toBe(true);
+    expect(carts.applyPromoCode).toHaveBeenCalledWith('OSH2026');
+    expect(carts.price).toHaveBeenCalled();
+    expect(service.appliedPromoCode()).toBe('OSH2026');
+    expect(service.discountFormatted()).toBe(fmt(4_800));
+    expect(service.promoError()).toBeNull();
+    expect(service.promoBusy()).toBe(false);
+  });
+
+  it('never calls the platform for a blank code', async () => {
+    const { service, carts } = setUp();
+
+    const ok = await service.applyPromoCode('   ');
+
+    expect(ok).toBe(false);
+    expect(carts.applyPromoCode).not.toHaveBeenCalled();
+  });
+
+  it('shows a refusal as the customer-facing sentence for its reason, never the raw code', async () => {
+    const { service, carts } = setUp();
+    carts.applyPromoCode.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'expired',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'CODE_EXPIRED' },
+      }),
+    );
+
+    const ok = await service.applyPromoCode('OLDCODE');
+
+    expect(ok).toBe(false);
+    // The fake TranslateService echoes the key, so this is the *key* the message resolves to.
+    expect(service.promoError()).toBe('errors.reason.codeExpired');
+    expect(service.promoBusy()).toBe(false);
+  });
+
+  it('names an unknown code, which the platform answers 404', async () => {
+    const { service, carts } = setUp();
+    carts.applyPromoCode.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 404,
+        code: 'RESOURCE_NOT_FOUND',
+        detail: 'no such code',
+        problem: { status: 404, code: 'RESOURCE_NOT_FOUND', reason: 'CODE_NOT_FOUND' },
+      }),
+    );
+
+    await service.applyPromoCode('NOPE');
+
+    expect(service.promoError()).toBe('errors.reason.codeNotFound');
+  });
+
+  it('falls back to the generic sentence when it is not a platform answer', async () => {
+    const { service, carts } = setUp();
+    carts.applyPromoCode.mockRejectedValue(new Error('boom'));
+
+    await service.applyPromoCode('X');
+
+    expect(service.promoError()).toBe('errors.generic');
+  });
+
+  it('keeps what was priced before when the code is refused', async () => {
+    const { service, carts, menu } = setUp();
+    const before = cartWith(null);
+    carts.ensure.mockResolvedValue(before);
+    carts.price.mockResolvedValue(pricedFor(before, { totalMinor: 7_000 }));
+    menu.menu.mockResolvedValue(emptyMenu({ products: [productOf('v-known', 'Osh')] }));
+    await service.load();
+    carts.applyPromoCode.mockRejectedValue(new Error('boom'));
+
+    await service.applyPromoCode('X');
+
+    expect(service.totalAmount()).toBe(fmt(7_000));
+    expect(service.appliedPromoCode()).toBeNull();
+  });
+
+  it('removePromoCode re-prices without the code', async () => {
+    const { service, carts, menu } = setUp();
+    const cleared = cartWith(null);
+    carts.removePromoCode.mockResolvedValue(cleared);
+    carts.price.mockResolvedValue(pricedFor(cleared, { discountMinor: 0 }));
+    menu.menu.mockResolvedValue(emptyMenu({ products: [productOf('v-known', 'Osh')] }));
+
+    await service.removePromoCode();
+
+    expect(carts.removePromoCode).toHaveBeenCalled();
+    expect(service.appliedPromoCode()).toBeNull();
+    expect(service.discountFormatted()).toBeNull();
+  });
+
+  it('removePromoCode: a refusal is named, not flattened to the generic sentence', async () => {
+    const { service, carts } = setUp();
+    carts.removePromoCode.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'frozen',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'CART_NOT_EDITABLE' },
+      }),
+    );
+
+    await service.removePromoCode();
+
+    expect(service.promoError()).toBe('errors.reason.cartNotEditable');
+  });
+});
+
+describe('UiCartService: what became of the code on the cart (ADR 0140)', () => {
+  async function priceWith(
+    overrides: Partial<PricedCart>,
+    promoCode: string | null,
+  ): Promise<UiCartService> {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({ lines: [lineOf('v-known')], appliedPromoCode: promoCode });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart, overrides));
+    menu.menu.mockResolvedValue(emptyMenu({ products: [productOf('v-known', 'Osh')] }));
+    await service.load();
+    return service;
+  }
+
+  it("says the offers are already better, from the platform's verdict, when a code did not move the price", async () => {
+    const service = await priceWith(
+      {
+        discountMinor: 18_000,
+        appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 18_000 }],
+        promoCodeOutcome: 'OFFERS_ARE_BETTER',
+      },
+      'SMALL5',
+    );
+
+    expect(service.appliedPromoCode()).toBe('SMALL5');
+    expect(service.promoOutcomeKey()).toBe('cart.promoOffersBetter');
+  });
+
+  it('says nothing about a code that applied', async () => {
+    const service = await priceWith({ promoCodeOutcome: 'APPLIED' }, 'BIG30');
+
+    expect(service.promoOutcomeKey()).toBeNull();
+  });
+
+  it('reports what the code itself took off, apart from an offer that applied without it', async () => {
+    const service = await priceWith(
+      {
+        discountMinor: 6_000,
+        appliedPromotions: [
+          { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 },
+          { source: 'PROMO_CODE', effect: 'DISCOUNT', amountMinor: 2_000 },
+        ],
+        promoCodeOutcome: 'APPLIED',
+      },
+      'SAVE10',
+    );
+
+    expect(service.promoCodeDiscountFormatted()).toBe(fmt(2_000));
+  });
+
+  it('claims no saving for a code the offers beat', async () => {
+    const service = await priceWith(
+      {
+        discountMinor: 18_000,
+        appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 18_000 }],
+        promoCodeOutcome: 'OFFERS_ARE_BETTER',
+      },
+      'SMALL5',
+    );
+
+    expect(service.promoCodeDiscountFormatted()).toBeNull();
+  });
+
+  it('says nothing when the cart carries no code, whatever a stale verdict says', async () => {
+    const service = await priceWith({ promoCodeOutcome: 'OFFERS_ARE_BETTER' }, null);
+
+    expect(service.promoOutcomeKey()).toBeNull();
+  });
+});
+
+describe('UiCartService gift offers (ADR 0140: an offer, never a line)', () => {
+  const GIFT = {
+    ruleId: 'rule-1',
+    variantId: 'v-cola',
+    quantity: 1,
+    inCart: false,
+    toAdd: 1,
+  };
+
+  async function offered(
+    giftOffers: PricedCart['giftOffers'],
+    lines = [lineOf('v-known')],
+    products = [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola')],
+  ) {
+    const fakes = setUp();
+    const cart = baseCart({ lines });
+    fakes.carts.ensure.mockResolvedValue(cart);
+    fakes.carts.price.mockResolvedValue(pricedFor(cart, { giftOffers }));
+    fakes.menu.menu.mockResolvedValue(emptyMenu({ products }));
+    await fakes.service.load();
+    return { ...fakes, cart };
+  }
+
+  it('offers the free gift by the name the menu gives it, and puts nothing in the basket', async () => {
+    const { service, carts } = await offered([GIFT]);
+
+    expect(service.giftOffers()).toEqual([
+      {
+        ruleId: 'rule-1',
+        toAdd: 1,
+        choices: [{ variantId: 'v-cola', name: 'Cola', image: '/v-cola.png', inCart: false }],
+      },
+    ]);
+    expect(service.items().map((item) => item.variant_id)).toEqual(['v-known']);
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing when the priced cart carries no offer', async () => {
+    const { service } = await offered(undefined);
+
+    expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('does not offer a gift the menu no longer carries', async () => {
+    const { service } = await offered([{ ...GIFT, variantId: 'v-gone' }]);
+
+    expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('adds the gift through the normal cart call, then prices the cart again', async () => {
+    const { service, carts, cart } = await offered([GIFT]);
+    const withGift = baseCart({ lines: [lineOf('v-known'), lineOf('v-cola')], version: 2 });
+    carts.ensure.mockResolvedValue(cart);
+    carts.putLine.mockResolvedValue(withGift);
+    carts.price.mockClear();
+    carts.price.mockResolvedValue(
+      pricedFor(withGift, {
+        discountMinor: 10_000,
+        appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 10_000 }],
+        giftOffers: [{ ...GIFT, inCart: true, toAdd: 0 }],
+      }),
+    );
+
+    await service.addGift('v-cola');
+
+    expect(carts.putLine).toHaveBeenCalledTimes(1);
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({ variantId: 'v-cola', quantity: 1 });
+    expect(carts.price).toHaveBeenCalled();
+    // The platform priced it free; the offer is gone and the discount is its own figure.
+    expect(service.giftOffers()).toEqual([]);
+    expect(service.discountFormatted()).toBe(fmt(10_000));
+  });
+
+  it('adds only what is still missing when the cart already holds part of the allowance', async () => {
+    const { service, carts } = await offered(
+      [{ ...GIFT, quantity: 3, inCart: true, toAdd: 2 }],
+      [lineOf('v-known'), lineOf('v-cola', 1)],
+    );
+    carts.putLine.mockResolvedValue(baseCart({ lines: [lineOf('v-cola', 3)] }));
+
+    await service.addGift('v-cola');
+
+    // One already there plus the two missing: the line is replaced by its new quantity.
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({ variantId: 'v-cola', quantity: 3 });
+  });
+
+  it('keeps the comment presets of the gift line it tops up, or the write would strip them', async () => {
+    const { service, carts } = await offered(
+      [{ ...GIFT, quantity: 2, inCart: true, toAdd: 1 }],
+      [lineOf('v-cola', 1, { commentPresetCodes: ['NO_ICE'] })],
+    );
+    carts.putLine.mockResolvedValue(baseCart({ lines: [lineOf('v-cola', 2)] }));
+
+    await service.addGift('v-cola');
+
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({
+      variantId: 'v-cola',
+      quantity: 2,
+      commentPresetCodes: ['NO_ICE'],
+    });
+  });
+
+  it('adds nothing for a variant that is not on offer', async () => {
+    const { service, carts } = await offered([GIFT]);
+
+    await service.addGift('v-known');
+
+    expect(carts.putLine).not.toHaveBeenCalled();
   });
 });
 

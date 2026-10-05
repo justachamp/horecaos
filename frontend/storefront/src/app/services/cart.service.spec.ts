@@ -198,6 +198,65 @@ describe('CartService (withVersion, via putLine)', () => {
   });
 });
 
+describe('CartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
+  it('applyPromoCode sends the code and the held version, and adopts the returned cart', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 4 }));
+    const updated = baseCart({ version: 5, appliedPromoCode: 'OSH2026' });
+    api.mutate.mockResolvedValue(updated);
+
+    const result = await service.applyPromoCode('osh2026');
+
+    expect(result).toEqual(updated);
+    expect(service.cart()).toEqual(updated);
+    expect(api.mutate).toHaveBeenCalledWith(
+      'POST',
+      expect.stringMatching(/\/carts\/cart-1\/promo-code$/),
+      expect.objectContaining({ body: { code: 'osh2026' }, expectedVersion: 4 }),
+    );
+    // A mutation, so an idempotency key goes with it (ADR 0031).
+    expect(api.mutate.mock.calls[0][2].idempotencyKey).toBeTruthy();
+  });
+
+  it('applyPromoCode retries once on STALE_VERSION, against the reloaded version', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    const refreshed = baseCart({ version: 2 });
+    const succeeded = baseCart({ version: 3, appliedPromoCode: 'OSH2026' });
+    api.mutate.mockRejectedValueOnce(staleVersion(2)).mockResolvedValueOnce(succeeded);
+    api.get.mockResolvedValueOnce(refreshed);
+
+    const result = await service.applyPromoCode('OSH2026');
+
+    expect(result).toEqual(succeeded);
+    expect(api.mutate.mock.calls[1][2]?.expectedVersion).toBe(2);
+  });
+
+  it('applyPromoCode refuses to write when there is no cart held at all', async () => {
+    const { service } = setUp();
+
+    await expect(service.applyPromoCode('OSH2026')).rejects.toThrow(
+      'There is no cart to write to.',
+    );
+  });
+
+  it('removePromoCode sends a DELETE with the held version and adopts the returned cart', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 4, appliedPromoCode: 'OSH2026' }));
+    const updated = baseCart({ version: 5, appliedPromoCode: null });
+    api.mutate.mockResolvedValue(updated);
+
+    const result = await service.removePromoCode();
+
+    expect(result).toEqual(updated);
+    expect(api.mutate).toHaveBeenCalledWith(
+      'DELETE',
+      expect.stringMatching(/\/carts\/cart-1\/promo-code$/),
+      expect.objectContaining({ expectedVersion: 4 }),
+    );
+  });
+});
+
 describe('CartService.selectPaymentMethod (ADR 0140)', () => {
   it('PUTs the code to the cart with the held version, and adopts the returned cart', async () => {
     const { service, api } = setUp();

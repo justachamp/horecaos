@@ -5,6 +5,8 @@ import { FormsModule } from '@angular/forms';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { TranslateService } from '../../../services/translate.service';
 import { LangService } from '../../../services/lang.service';
+import { GiftOffersComponent } from '../../../shared/gift-offers/gift-offers.component';
+import { PromoCodeComponent } from '../../../shared/promo-code/promo-code.component';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import type { CartResponseComboComponent, CartResponseItem } from '../../../types/cart.types';
 import { presetLabelFor } from '../../../utils/preset-label';
@@ -13,7 +15,14 @@ import { catchweightEstimateGrams, formatQuantity, formatWeight } from '../../..
 @Component({
   selector: 'app-cart-items',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslatePipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslatePipe,
+    GiftOffersComponent,
+    PromoCodeComponent,
+  ],
   templateUrl: './cart-items.component.html',
   styleUrl: './cart-items.component.scss',
 })

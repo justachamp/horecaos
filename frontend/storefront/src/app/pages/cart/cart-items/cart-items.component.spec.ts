@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import type { GiftOfferGroup } from '../../../services/applied-promotions';
 import { LangService } from '../../../services/lang.service';
 import { TranslateService } from '../../../services/translate.service';
 import { UiCartService } from '../../../services/ui-cart.service';
@@ -44,6 +45,17 @@ class FakeUiCartService {
   increaseQuantity = vi.fn();
   decreaseQuantity = vi.fn();
   lineAmount = vi.fn((item: CartResponseItem) => item.price * item.quantity);
+  /** ADR 0140: the free gifts on offer, and taking one up. */
+  readonly giftOffers = signal<readonly GiftOfferGroup[]>([]);
+  addGift = vi.fn().mockResolvedValue(undefined);
+  /** ADR 0072: the promo-code entry. */
+  readonly appliedPromoCode = signal<string | null>(null);
+  readonly promoBusy = signal(false);
+  readonly promoError = signal<string | null>(null);
+  readonly promoOutcomeKey = signal<string | null>(null);
+  readonly promoCodeDiscountFormatted = signal<string | null>(null);
+  applyPromoCode = vi.fn().mockResolvedValue(true);
+  removePromoCode = vi.fn().mockResolvedValue(undefined);
 }
 
 function line(
@@ -208,5 +220,62 @@ describe('CartItemsComponent: combos (ADR 0136)', () => {
     const { host } = open([line()]);
 
     expect(host.querySelector('[data-testid="cart-line-combo"]')).toBeNull();
+  });
+});
+
+describe('CartItemsComponent: free gifts and the promo-code entry (ADR 0140, ADR 0072)', () => {
+  it('offers the free gift the platform offered, one tap away, and adds it through the cart', () => {
+    const { host, cart } = open([line()], (c) =>
+      c.giftOffers.set([
+        {
+          ruleId: 'rule-1',
+          toAdd: 1,
+          choices: [{ variantId: 'v-cola', name: 'Cola', image: null, inCart: false }],
+        },
+      ]),
+    );
+
+    const add = host.querySelector<HTMLButtonElement>('[data-testid="gift-offer-add"]')!;
+    expect(add.textContent).toContain('cart.giftOffer.add|Cola');
+    add.click();
+
+    expect(cart.addGift).toHaveBeenCalledWith('v-cola');
+  });
+
+  it('shows no gift block when nothing is on offer', () => {
+    const { host } = open([line()]);
+
+    expect(host.querySelector('[data-testid="gift-offers"]')).toBeNull();
+  });
+
+  it('lets a code be typed on the cart and applied through the cart service', async () => {
+    const { fixture, host, cart } = open([line()]);
+    const input = host.querySelector<HTMLInputElement>('[data-testid="promo-input"]')!;
+    input.value = 'SAVE10';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="promo-apply"]')!.click();
+    await fixture.whenStable();
+
+    expect(cart.applyPromoCode).toHaveBeenCalledWith('SAVE10');
+  });
+
+  it('tells the customer when the offers already beat the code on the cart', () => {
+    const { host } = open([line()], (c) => {
+      c.appliedPromoCode.set('SMALL5');
+      c.promoOutcomeKey.set('cart.promoOffersBetter');
+    });
+
+    expect(host.querySelector('[data-testid="promo-outcome"]')!.textContent).toContain(
+      'cart.promoOffersBetter',
+    );
+  });
+
+  it('puts neither on an empty basket', () => {
+    const { host } = open([]);
+
+    expect(host.querySelector('[data-testid="promo-code"]')).toBeNull();
+    expect(host.querySelector('[data-testid="gift-offers"]')).toBeNull();
   });
 });

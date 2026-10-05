@@ -133,7 +133,22 @@
     },
     "offerDiscount": "Special offer",
     "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
-    "surchargeNote": "Includes a surcharge of {{amount}}"
+    "surchargeNote": "Includes a surcharge of {{amount}}",
+    "promoTitle": "Promo code",
+    "promoPlaceholder": "Enter the code",
+    "promoApply": "Apply",
+    "promoRemove": "Remove",
+    "promoApplied": "{{code}} applied",
+    "promoCodeLabel": "Code {{code}}",
+    "promoOffersBetter": "Your current offers are already better than this code, so it was not applied.",
+    "promoNotApplicable": "This code does not apply to this order.",
+    "promoNoLongerValid": "This code is no longer valid.",
+    "giftOffer": {
+      "title": "A free gift is waiting for you",
+      "choose": "Choose your free gift",
+      "add": "Add your free {{name}}",
+      "addMany": "Add your free {{name}} ×{{count}}"
+    }
   },
   "orders": {
     "title": "Orders",
