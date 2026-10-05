@@ -9,7 +9,12 @@ import {
   signal,
 } from '@angular/core';
 
-import { formatQuantity } from '../../core/format/quantity';
+import {
+  MAX_LINE_QUANTITY,
+  formatQuantity,
+  isOrderableQuantity,
+  nextQuantityAbove,
+} from '../../core/format/quantity';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Modal } from '../../shared/ui/modal';
@@ -29,6 +34,11 @@ export interface QuantityChoice {
   readonly current: number;
   /** Units on the sent line for one step of {@link current}: one, or a combo's units on that component. */
   readonly unitsPerStep: number;
+  /**
+   * The step the quantity moves by (ADR 0137): the published portion size of a splittable dish,
+   * one for everything else, and always one for a combo, which is a count of whole combos.
+   */
+  readonly step: number;
   readonly isCombo: boolean;
 }
 
@@ -83,6 +93,7 @@ export class OrderChangeQuantityDialog {
           name: line.productName,
           current: line.quantity,
           unitsPerStep: 1,
+          step: line.portionSize && line.portionSize > 0 ? line.portionSize : 1,
           isCombo: false,
         });
         continue;
@@ -101,6 +112,7 @@ export class OrderChangeQuantityDialog {
           combo.quantity > 0 && line.quantity % combo.quantity === 0
             ? line.quantity / combo.quantity
             : 1,
+        step: 1,
         isCombo: true,
       });
     }
@@ -112,16 +124,37 @@ export class OrderChangeQuantityDialog {
   );
 
   /**
-   * The smallest whole number strictly above the line's quantity. An amendment changes whole
-   * units (ADR 0137), and a line sold by the portion can hold `0.5`: the next quantity up is `1`,
-   * not `1.5`. A combo's quantity is a count of combos, always whole.
+   * The smallest quantity strictly above the line's that the dish can be ordered in (ADR 0137).
+   * A splittable dish moves by its published portion: `1` goes to `1,5` and `1,5` to `2`. A dish
+   * with no portion step takes whole units, so a line that holds `0.5` goes to `1`. A combo's
+   * quantity is a count of combos, always whole.
    */
-  protected readonly minQuantity = computed(
-    () => Math.floor(this.selectedChoice()?.current ?? 0) + 1,
-  );
+  protected readonly minQuantity = computed(() => {
+    const choice = this.selectedChoice();
+    return choice ? nextQuantityAbove(choice.current, choice.step) : 1;
+  });
+
+  /** Fractions are offered only for a dish that publishes a portion; the rest keep whole units. */
+  protected readonly step = computed(() => this.selectedChoice()?.step ?? 1);
+
+  protected readonly splittable = computed(() => this.step() !== 1);
+
+  /** The quantity is above the line's, a whole number of portions, and within what a line holds. */
+  protected readonly quantityProblem = computed<'notAPortion' | null>(() => {
+    const quantity = this.quantity();
+    return Number.isFinite(quantity) &&
+      quantity >= this.minQuantity() &&
+      quantity <= MAX_LINE_QUANTITY &&
+      !isOrderableQuantity(quantity, this.step())
+      ? 'notAPortion'
+      : null;
+  });
 
   protected readonly canSubmit = computed(
-    () => this.selectedChoice() !== null && this.quantity() >= this.minQuantity(),
+    () =>
+      this.selectedChoice() !== null &&
+      this.quantity() >= this.minQuantity() &&
+      isOrderableQuantity(this.quantity(), this.step()),
   );
 
   constructor() {
@@ -133,14 +166,14 @@ export class OrderChangeQuantityDialog {
       this.lastSeededLines = lines;
       const first = this.choices()[0] ?? null;
       this.selectedLineId.set(first?.lineId ?? null);
-      this.quantity.set(Math.floor(first?.current ?? 0) + 1);
+      this.quantity.set(first ? nextQuantityAbove(first.current, first.step) : 1);
     });
   }
 
   protected selectLine(lineId: string): void {
     this.selectedLineId.set(lineId);
     const choice = this.choices().find((candidate) => candidate.lineId === lineId);
-    this.quantity.set(Math.floor(choice?.current ?? 0) + 1);
+    this.quantity.set(choice ? nextQuantityAbove(choice.current, choice.step) : 1);
   }
 
   protected quantityText(quantity: number): string {
@@ -148,10 +181,20 @@ export class OrderChangeQuantityDialog {
   }
 
   protected setQuantity(value: string): void {
-    const parsed = Number.parseInt(value, 10);
+    // A number input hands back a dot whatever the keyboard typed. A dish with no portion step
+    // keeps reading whole units only, exactly as before quantities were decimal.
+    const parsed = this.splittable()
+      ? value.trim() === ''
+        ? Number.NaN
+        : Number(value)
+      : Number.parseInt(value, 10);
     if (Number.isFinite(parsed)) {
       this.quantity.set(parsed);
     }
+  }
+
+  protected stepText(): string {
+    return this.quantityText(this.step());
   }
 
   protected submit(): void {

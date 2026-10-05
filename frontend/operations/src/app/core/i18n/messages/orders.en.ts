@@ -802,4 +802,5 @@ export const ordersEn = {
   'orders.party.confirm.walkout.body':
     '{amount} is recorded as unpaid and goes to the audit trail.',
   'orders.dialog.addLines.combosUnavailable': 'Menu unavailable — no combos here.',
+  'orders.dialog.changeQuantity.step': 'Ordered in steps of {step}',
 } as const;

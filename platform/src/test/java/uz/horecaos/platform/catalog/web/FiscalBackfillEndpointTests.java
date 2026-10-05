@@ -134,6 +134,7 @@ class FiscalBackfillEndpointTests {
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("TRUNCATE TABLE catalog.fiscal_classifications, catalog.fees, catalog.category_products, "
                         + "catalog.categories, catalog.catalogs, catalog.translations, catalog.location_offerings, "
+                        + "catalog.modifier_options, catalog.modifier_groups, "
                         + "catalog.variants, catalog.products CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -472,6 +473,103 @@ class FiscalBackfillEndpointTests {
                 .isZero();
     }
 
+    // ------------------------------------------------------------------ modifier options (row 10.7c)
+
+    @Test
+    @DisplayName("a modifier option is listed with its codes and backfilled through the same MERGE path as a dish")
+    void aModifierOptionIsBackfilledLikeADish() throws Exception {
+        UUID cheese = UUID.fromString("018f9f30-3000-7000-8000-0000000000e1");
+        insertModifierOption(TENANT, BRAND, cheese, "CHEESE", null, "Cheese");
+
+        String before = coverage();
+        assertThat(nodeIds(before, "MODIFIER_OPTION"))
+                .as("an option nobody classified is a node the receipt cannot print")
+                .containsExactly(cheese.toString());
+        assertThat(node(before, cheese, "name")).isEqualTo("Cheese");
+        assertThat(node(before, cheese, "mxikCode")).isNull();
+        assertThat(node(before, cheese, "categoryId"))
+                .as("an option sits in no category, so there is no category default to copy")
+                .isNull();
+
+        String body = bulk("MERGE", optionItem(cheese, MXIK_NEW, PACKAGE_NEW));
+
+        assertThat(statuses(body)).containsExactly("CLASSIFIED");
+        assertThat(JsonPath.<List<String>>read(body, "$.outcomes[*].nodeType")).containsExactly("MODIFIER_OPTION");
+        Map<String, Object> stored = optionRow(cheese);
+        assertThat(stored.get("mxik_code")).isEqualTo(MXIK_NEW);
+        assertThat(stored.get("package_code")).isEqualTo(PACKAGE_NEW);
+        assertThat(stored.get("source")).isEqualTo("MANUAL");
+        assertThat(node(coverage(), cheese, "mxikCode"))
+                .as("still listed, because the unit and the fiscal name are not set; the codes read back")
+                .isEqualTo(MXIK_NEW);
+    }
+
+    @Test
+    @DisplayName("a modifier option's stored code is never replaced by a backfill, and a repeat is quiet")
+    void aStoredOptionCodeIsNeverReplaced() throws Exception {
+        UUID cheese = UUID.fromString("018f9f30-3000-7000-8000-0000000000e2");
+        insertModifierOption(TENANT, BRAND, cheese, "CHEESE", null, "Cheese");
+        bulk("MERGE", optionItem(cheese, MXIK_NEW, null));
+
+        assertThat(statuses(bulk("MERGE", optionItem(cheese, MXIK_NEW, null))))
+                .as("the same code again changes nothing")
+                .containsExactly("UNCHANGED");
+        assertThat(statuses(bulk("MERGE", optionItem(cheese, MXIK_A, null))))
+                .as("a different code meets the stored one")
+                .containsExactly("CONFLICT");
+        assertThat(optionRow(cheese).get("mxik_code")).isEqualTo(MXIK_NEW);
+        assertThat(statuses(bulk("MERGE", optionItem(cheese, null, PACKAGE_NEW))))
+                .as("the gap beside the stored code is still filled")
+                .containsExactly("CLASSIFIED");
+        assertThat(optionRow(cheese).get("package_code")).isEqualTo(PACKAGE_NEW);
+    }
+
+    @Test
+    @DisplayName("dishes and options in one batch are one audit fact, naming each node's before and after")
+    void aMixedBatchIsAuditedOnce() throws Exception {
+        UUID cheese = UUID.fromString("018f9f30-3000-7000-8000-0000000000e3");
+        insertModifierOption(TENANT, BRAND, cheese, "CHEESE", null, "Cheese");
+
+        bulk("MERGE", item(BARE, MXIK_NEW, PACKAGE_NEW), optionItem(cheese, MXIK_NEW, PACKAGE_NEW));
+
+        List<String> facts = jdbc.sql("""
+                        SELECT change_document::text FROM audit.audit_events
+                         WHERE action_code = 'catalog.fiscalClassification.bulkSet'
+                        """).query(String.class).list();
+        assertThat(facts).singleElement().satisfies(document -> {
+            assertThat(JsonPath.<Object>read(document, "$['" + BARE + "'].before.mxikCode"))
+                    .isNull();
+            assertThat(JsonPath.<String>read(document, "$['" + BARE + "'].after.mxikCode"))
+                    .isEqualTo(MXIK_NEW);
+            assertThat(JsonPath.<Object>read(document, "$['" + cheese + "'].before.mxikCode"))
+                    .isNull();
+            assertThat(JsonPath.<String>read(document, "$['" + cheese + "'].after.packageCode"))
+                    .isEqualTo(PACKAGE_NEW);
+        });
+    }
+
+    @Test
+    @DisplayName("an option that is itself a sellable dish is classified through that dish and is not listed twice")
+    void anOptionLinkedToADishIsNotListed() throws Exception {
+        UUID linked = UUID.fromString("018f9f30-3000-7000-8000-0000000000e4");
+        insertModifierOption(TENANT, BRAND, linked, "EXTRA_SHOT", COLA, "Extra shot");
+
+        assertThat(nodeIds(coverage(), "MODIFIER_OPTION")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("another tenant's option is NOT_FOUND in a batch, and nothing is written for it")
+    void aForeignOptionIsNotFound() throws Exception {
+        UUID foreign = UUID.fromString("018f9f30-3000-7000-8000-0000000000e5");
+        insertModifierOption(OTHER_TENANT, OTHER_BRAND, foreign, "FOREIGN_OPTION", null, "Foreign");
+
+        String body = bulk("MERGE", optionItem(foreign, MXIK_NEW, PACKAGE_NEW));
+
+        assertThat(statuses(body)).containsExactly("NOT_FOUND");
+        assertThat(count("catalog.fiscal_classifications WHERE modifier_option_id = '" + foreign + "'"))
+                .isZero();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static String coveragePath(UUID tenantId, UUID brandId) {
@@ -519,6 +617,44 @@ class FiscalBackfillEndpointTests {
                     .append('"');
         }
         return "{\"nodeType\":\"VARIANT\",\"nodeId\":\"%s\",\"fiscal\":{%s}}".formatted(variantId, fiscal);
+    }
+
+    private static String optionItem(UUID optionId, @Nullable String mxik, @Nullable String packageCode) {
+        return item(optionId, mxik, packageCode).replace("\"VARIANT\"", "\"MODIFIER_OPTION\"");
+    }
+
+    private Map<String, Object> optionRow(UUID optionId) {
+        return jdbc.sql("""
+                        SELECT mxik_code, package_code, fiscal_unit_code, fiscal_name, source, version
+                          FROM catalog.fiscal_classifications WHERE modifier_option_id = :id
+                        """).param("id", optionId).query().singleRow();
+    }
+
+    private void insertModifierOption(
+            UUID tenantId, UUID brandId, UUID optionId, String code, @Nullable UUID linkedVariantId, String name) {
+        UUID groupId = UUID.nameUUIDFromBytes(("group-" + optionId).getBytes(UTF_8));
+        jdbc.sql("""
+                INSERT INTO catalog.modifier_groups (id, tenant_id, brand_id, code, status)
+                VALUES (:id, :tenantId, :brandId, :code, 'ACTIVE')
+                """)
+                .param("id", groupId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", "G-" + code)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.modifier_options
+                    (id, tenant_id, brand_id, modifier_group_id, code, linked_variant_id, status)
+                VALUES (:id, :tenantId, :brandId, :groupId, :code, :linked, 'ACTIVE')
+                """)
+                .param("id", optionId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("groupId", groupId)
+                .param("code", code)
+                .param("linked", linkedVariantId)
+                .update();
+        translateFor(tenantId, brandId, "MODIFIER_OPTION", optionId, name);
     }
 
     private static List<String> statuses(String body) {

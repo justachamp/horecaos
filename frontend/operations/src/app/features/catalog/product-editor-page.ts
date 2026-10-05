@@ -44,6 +44,7 @@ import {
   listResolutionLocale,
   toCatalogLocale,
 } from './catalog-domain';
+import { perQuantumLabel } from './per-quantum';
 import { PricingApi } from './pricing-api';
 import { MediaApi } from './media-api';
 import { InventoryApi } from './inventory-api';
@@ -329,6 +330,8 @@ export class ProductEditorPage implements OnInit {
   protected readonly modifierLibrary = signal<readonly ModifierGroupSummary[]>([]);
 
   protected readonly prices = signal<Readonly<Record<string, number>>>({});
+  /** ADR 0137: the grams each weighed variant's price is quoted per; a variant not in it is priced per unit. */
+  protected readonly priceQuanta = signal<Readonly<Record<string, number>>>({});
   protected readonly priceCurrency = signal<string | null>(null);
   protected readonly priceBookId = signal<string | null>(null);
 
@@ -538,6 +541,7 @@ export class ProductEditorPage implements OnInit {
         ),
       );
       this.prices.set(resolved.amountsMinor);
+      this.priceQuanta.set(resolved.catchweightQuantumGrams ?? {});
       this.priceCurrency.set(resolved.currency ?? null);
       this.priceBookId.set(resolved.priceBookId ?? null);
     } catch {
@@ -979,6 +983,11 @@ export class ProductEditorPage implements OnInit {
   }
 
   // ------------------------------------------------------------ Tab 2 — Варианты
+
+  /** «per 100 g» beside the price of a variant sold by weight (ADR 0137); null for every other. */
+  protected priceUnitLabel(variantId: string): string | null {
+    return perQuantumLabel(this.i18n, this.priceQuanta()[variantId]);
+  }
 
   protected priceLabel(variantId: string): string {
     const amountMinor = this.prices()[variantId];

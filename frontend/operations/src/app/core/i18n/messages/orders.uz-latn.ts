@@ -797,4 +797,5 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.party.confirm.walkout.body':
     '{amount} toʻlanmagan deb yoziladi va audit jurnaliga tushadi.',
   'orders.dialog.addLines.combosUnavailable': 'Menyu mavjud emas — kombo qoʻshib boʻlmaydi.',
+  'orders.dialog.changeQuantity.step': 'Buyurtma {step} porsiyalarda qilinadi',
 };

@@ -438,8 +438,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
-            "type" : "integer"
+            "maximum" : 999,
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -744,8 +744,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
-            "type" : "integer"
+            "maximum" : 999,
+            "type" : "number"
           },
           "recipientName" : {
             "maxLength" : 255,
@@ -10917,6 +10917,9 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "portionSize" : {
+            "type" : "number"
           },
           "productName" : {
             "type" : "string"

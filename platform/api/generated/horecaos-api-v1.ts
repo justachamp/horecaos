@@ -5357,6 +5357,7 @@ export interface OperationsOrderControllerLineResponse {
   lineId?: string;
   lineNumber?: number;
   modifiers?: Array<string>;
+  portionSize?: number;
   productName?: string;
   quantity?: number;
   sku?: string;
@@ -6746,6 +6747,7 @@ export interface PriceBookMatrixRowResponse {
   basePriceMinor?: number;
   bookPriceMinor?: number;
   bookPriceVersion?: number;
+  catchweightQuantumGrams?: number;
   categoryId?: string;
   categoryName?: string;
   currency?: string;
@@ -7912,6 +7914,7 @@ export interface ResolveResponse {
 
 export interface ResolvedPricesResponse {
   amountsMinor?: { [key: string]: number };
+  catchweightQuantumGrams?: { [key: string]: number };
   currency?: string;
   priceBookId?: string;
 }

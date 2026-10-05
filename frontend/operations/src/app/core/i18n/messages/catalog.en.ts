@@ -762,4 +762,6 @@ export const catalogEn = {
   'catalog.priceBulk.status.wouldFail': 'Would fail',
   'catalog.priceBulk.status.applied': 'Applied',
   'catalog.priceBulk.status.failed': 'Failed',
+
+  'catalog.price.perQuantum': 'per {quantum}',
 } as const;

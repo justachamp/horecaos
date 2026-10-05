@@ -1,11 +1,14 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { of } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { CatalogApi } from '../../catalog/catalog-api';
+import { MxikReferenceRow } from '../../catalog/catalog-domain';
 import {
   BACKFILL_BATCH_SIZE,
   FiscalBackfillEditor,
@@ -82,19 +85,20 @@ async function flush(): Promise<void> {
 
 function applied(items: readonly FiscalBackfillItem[]): FiscalBackfillOutcome[] {
   return items.map((item) => ({
-    nodeType: 'VARIANT' as const,
+    nodeType: item.nodeType,
     nodeId: item.nodeId,
     status: 'CLASSIFIED' as const,
   }));
 }
 
 describe('isMissingCodes', () => {
-  it('is true for a variant short of either code, and false for everything the editor is not for', () => {
+  it('is true for a dish or a modifier option short of either code, and false for everything the editor is not for', () => {
     expect(isMissingCodes(BARE)).toBe(true);
     expect(isMissingCodes(HALF)).toBe(true);
     expect(isMissingCodes(variant('pkg-only', { packageCode: PACKAGE_A }))).toBe(true);
     expect(isMissingCodes(CODES_ONLY)).toBe(false);
-    expect(isMissingCodes(OPTION)).toBe(false);
+    expect(isMissingCodes(OPTION)).toBe(true);
+    expect(isMissingCodes({ ...OPTION, mxikCode: MXIK_A, packageCode: PACKAGE_A })).toBe(false);
     expect(isMissingCodes(FEE)).toBe(false);
   });
 
@@ -122,6 +126,7 @@ describe('the format guards', () => {
 describe('FiscalBackfillEditor', () => {
   let fixture: ComponentFixture<FiscalBackfillEditor>;
   let api: { backfillCodes: ReturnType<typeof vi.fn> };
+  let reference: { searchMxikReference: ReturnType<typeof vi.fn> };
   let savedCount: number;
 
   async function render(
@@ -137,10 +142,13 @@ describe('FiscalBackfillEditor', () => {
 
   beforeEach(async () => {
     api = { backfillCodes: vi.fn(async (_scope, items) => applied(items)) };
+    // The official list has never been imported: a lookup answers with nothing.
+    reference = { searchMxikReference: vi.fn(() => of<readonly MxikReferenceRow[]>([])) };
     await TestBed.configureTestingModule({
       imports: [FiscalBackfillEditor],
       providers: [
         { provide: FiscalizationApi, useValue: api },
+        { provide: CatalogApi, useValue: reference },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -158,8 +166,15 @@ describe('FiscalBackfillEditor', () => {
     return el().querySelector(`[data-testid="${testId}"]`);
   }
 
+  /**
+   * The text field behind a cell: the cell itself for a plain input, or the typeahead's field
+   * inside the fieldset that carries the ИКПУ cell's test id.
+   */
   function input(testId: string): HTMLInputElement {
-    return byId(testId) as HTMLInputElement;
+    const cell = byId(testId) as HTMLElement;
+    return cell instanceof HTMLInputElement
+      ? cell
+      : (cell.querySelector('input') as HTMLInputElement);
   }
 
   function type(testId: string, value: string): void {
@@ -195,10 +210,10 @@ describe('FiscalBackfillEditor', () => {
 
   // ------------------------------------------------------------------ the list
 
-  it('lists only the variants still short of an ИКПУ or a package code, with the code a dish already holds', async () => {
+  it('lists only the dishes and modifier options still short of a code, with the code an item already holds', async () => {
     await render([BARE, HALF, CODES_ONLY, OPTION, FEE]);
 
-    expect(rowIds()).toEqual(['bare', 'half']);
+    expect(rowIds()).toEqual(['bare', 'half', 'option']);
     expect(input('backfill-mxik-half').value).toBe(MXIK_B);
     expect(input('backfill-package-half').value).toBe('');
     expect(input('backfill-mxik-bare').value).toBe('');
@@ -217,7 +232,7 @@ describe('FiscalBackfillEditor', () => {
     await render([CODES_ONLY, FEE]);
 
     expect(byId('fiscal-backfill-empty')?.textContent).toContain(
-      'Every dish has an ИКПУ and a package code',
+      'Every item has an ИКПУ and a package code',
     );
     expect(byId('backfill-save')).toBeNull();
   });
@@ -240,7 +255,9 @@ describe('FiscalBackfillEditor', () => {
     await save();
 
     expect(api.backfillCodes).toHaveBeenCalledTimes(1);
-    expect(itemsOfCall(0)).toEqual([{ nodeId: 'cola', mxikCode: MXIK_A, packageCode: undefined }]);
+    expect(itemsOfCall(0)).toEqual([
+      { nodeType: 'VARIANT', nodeId: 'cola', mxikCode: MXIK_A, packageCode: undefined },
+    ]);
   });
 
   it('strips the spaces a spreadsheet cell arrives with', async () => {
@@ -354,8 +371,8 @@ describe('FiscalBackfillEditor', () => {
     await save();
 
     expect(itemsOfCall(0)).toEqual([
-      { nodeId: 'bare', mxikCode: MXIK_A, packageCode: undefined },
-      { nodeId: 'cola', mxikCode: MXIK_A, packageCode: undefined },
+      { nodeType: 'VARIANT', nodeId: 'bare', mxikCode: MXIK_A, packageCode: undefined },
+      { nodeType: 'VARIANT', nodeId: 'cola', mxikCode: MXIK_A, packageCode: undefined },
     ]);
   });
 
@@ -366,7 +383,7 @@ describe('FiscalBackfillEditor', () => {
     await save();
 
     expect(itemsOfCall(0)).toEqual([
-      { nodeId: 'half', mxikCode: undefined, packageCode: PACKAGE_A },
+      { nodeType: 'VARIANT', nodeId: 'half', mxikCode: undefined, packageCode: PACKAGE_A },
     ]);
   });
 
@@ -425,7 +442,7 @@ describe('FiscalBackfillEditor', () => {
     await save();
 
     expect(itemsOfCall(0)).toEqual([
-      { nodeId: 'match', mxikCode: undefined, packageCode: PACKAGE_A },
+      { nodeType: 'VARIANT', nodeId: 'match', mxikCode: undefined, packageCode: PACKAGE_A },
     ]);
   });
 
@@ -459,7 +476,7 @@ describe('FiscalBackfillEditor', () => {
     await save();
 
     expect(api.backfillCodes).toHaveBeenCalledWith(SCOPE, [
-      { nodeId: 'half', mxikCode: undefined, packageCode: PACKAGE_A },
+      { nodeType: 'VARIANT', nodeId: 'half', mxikCode: undefined, packageCode: PACKAGE_A },
     ]);
   });
 
@@ -627,5 +644,256 @@ describe('FiscalBackfillEditor', () => {
     fixture.detectChanges();
 
     expect(rowIds()).toEqual(['cola']);
+  });
+
+  // -------------------------------------------------- modifier options (row 10.7c)
+
+  describe('modifier options', () => {
+    const CHEESE: FiscalCoverageNode = {
+      nodeType: 'MODIFIER_OPTION',
+      nodeId: 'cheese',
+      name: 'Cheese',
+      categoryName: null,
+      locationCount: 0,
+      categoryId: null,
+      mxikCode: null,
+      packageCode: null,
+    };
+
+    it('lists an option beside the dishes and says which kind each row is', async () => {
+      await render([BARE, CHEESE]);
+
+      const kinds = [...el().querySelectorAll('[data-testid="backfill-row"] td:first-child')].map(
+        (cell) => cell.textContent?.trim(),
+      );
+      expect(kinds).toEqual(['Dish', 'Modifier']);
+    });
+
+    it('sends an option with its own node type, in the same batch as a dish', async () => {
+      await render([BARE, CHEESE]);
+
+      type('backfill-mxik-bare', MXIK_A);
+      type('backfill-package-cheese', PACKAGE_A);
+      type('backfill-mxik-cheese', MXIK_B);
+      await save();
+
+      expect(api.backfillCodes).toHaveBeenCalledTimes(1);
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'bare', mxikCode: MXIK_A, packageCode: undefined },
+        { nodeType: 'MODIFIER_OPTION', nodeId: 'cheese', mxikCode: MXIK_B, packageCode: PACKAGE_A },
+      ]);
+      expect(byId('backfill-summary')?.textContent).toContain('Saved 2');
+    });
+
+    it('offers an option no category default, whatever the other rows are offered', async () => {
+      await render([BARE, CHEESE]);
+
+      expect((byId('backfill-copy-bare') as HTMLButtonElement).disabled).toBe(false);
+      expect((byId('backfill-copy-cheese') as HTMLButtonElement).disabled).toBe(true);
+      (byId('backfill-copy-all') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(input('backfill-mxik-cheese').value).toBe('');
+    });
+
+    it('keeps the code an option already holds, and fills the empty cell beside it', async () => {
+      await render([{ ...CHEESE, mxikCode: MXIK_B }]);
+
+      expect(input('backfill-mxik-cheese').readOnly).toBe(true);
+      type('backfill-package-cheese', PACKAGE_A);
+      await save();
+
+      expect(itemsOfCall(0)).toEqual([
+        {
+          nodeType: 'MODIFIER_OPTION',
+          nodeId: 'cheese',
+          mxikCode: undefined,
+          packageCode: PACKAGE_A,
+        },
+      ]);
+    });
+  });
+
+  // ----------------------------------------------- the ИКПУ typeahead (row 4.2e)
+
+  describe('the ИКПУ typeahead', () => {
+    const MILK: MxikReferenceRow = {
+      code: MXIK_A,
+      labelRu: 'Молоко',
+      labelUz: 'Sut',
+      labelEn: 'Milk',
+      defaultPackageCodes: [PACKAGE_A],
+      validFrom: '2024-01-01',
+    };
+    const BREAD: MxikReferenceRow = {
+      code: MXIK_B,
+      labelRu: 'Хлеб',
+      labelUz: 'Non',
+      labelEn: 'Bread',
+      defaultPackageCodes: ['1500175', '1500999'],
+      validFrom: '2024-01-01',
+    };
+    const PLAIN: MxikReferenceRow = { ...MILK, code: '10202002002000000', defaultPackageCodes: [] };
+
+    afterEach(() => vi.useRealTimers());
+
+    /** Types a name into a row’s ИКПУ cell and lets the debounced lookup answer. */
+    async function lookUp(
+      nodeId: string,
+      text: string,
+      rows: readonly MxikReferenceRow[],
+    ): Promise<void> {
+      reference.searchMxikReference.mockReturnValue(of(rows));
+      vi.useFakeTimers();
+      type(`backfill-mxik-${nodeId}`, text);
+      await vi.advanceTimersByTimeAsync(300);
+      fixture.detectChanges();
+      vi.useRealTimers();
+    }
+
+    function choose(nodeId: string, index: number): void {
+      (
+        el().querySelectorAll(
+          `[data-testid="backfill-mxik-${nodeId}"] [data-testid="q-combobox-option"]`,
+        )[index] as HTMLElement
+      ).click();
+      fixture.detectChanges();
+    }
+
+    it('searches the reference in the brand’s scope and writes nothing while a name is being typed', async () => {
+      await render([BARE]);
+
+      await lookUp('bare', 'milk', [MILK]);
+
+      expect(reference.searchMxikReference).toHaveBeenCalledWith(SCOPE, 'milk');
+      expect(byId('backfill-dirty-count')).toBeNull();
+      expect((byId('backfill-save') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('does not flag a name as a badly formed code', async () => {
+      await render([BARE]);
+
+      await lookUp('bare', 'milk', [MILK]);
+
+      expect(byId('backfill-mxik-error-bare')).toBeNull();
+      expect(input('backfill-mxik-bare').getAttribute('aria-invalid')).not.toBe('true');
+    });
+
+    it('writes the chosen code, and fills the one package code the reference lists for it', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'milk', [MILK]);
+
+      choose('bare', 0);
+
+      expect(input('backfill-mxik-bare').value).toBe(MXIK_A);
+      expect(input('backfill-package-bare').value).toBe(PACKAGE_A);
+      await save();
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'bare', mxikCode: MXIK_A, packageCode: PACKAGE_A },
+      ]);
+    });
+
+    it('offers several package codes as a choice, fills none, and fills the one that is clicked', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'bread', [BREAD]);
+
+      choose('bare', 0);
+
+      expect(input('backfill-package-bare').value).toBe('');
+      expect(byId('backfill-package-suggestions-bare')?.textContent).toContain('1500175');
+      expect(byId('backfill-package-suggestions-bare')?.textContent).toContain('1500999');
+
+      (byId('backfill-package-suggestion-bare-1500999') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(input('backfill-package-bare').value).toBe('1500999');
+      expect(byId('backfill-package-suggestion-bare-1500999')).toBeNull();
+      expect(byId('backfill-package-suggestion-bare-1500175')).not.toBeNull();
+    });
+
+    it('leaves the package cell to be typed when the reference lists no package code', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'plain', [PLAIN]);
+
+      choose('bare', 0);
+
+      expect(input('backfill-mxik-bare').value).toBe(PLAIN.code);
+      expect(input('backfill-package-bare').value).toBe('');
+      expect(byId('backfill-package-suggestions-bare')).toBeNull();
+    });
+
+    it('does not write over a package code the operator already typed', async () => {
+      await render([BARE]);
+      type('backfill-package-bare', '1500777');
+      await lookUp('bare', 'milk', [MILK]);
+
+      choose('bare', 0);
+
+      expect(input('backfill-package-bare').value).toBe('1500777');
+    });
+
+    it('does not touch a package code the item already holds, or suggest over it', async () => {
+      await render([variant('pkg-only', { packageCode: '1500777' })]);
+      await lookUp('pkg-only', 'bread', [BREAD]);
+
+      choose('pkg-only', 0);
+
+      expect(input('backfill-package-pkg-only').value).toBe('1500777');
+      expect(input('backfill-package-pkg-only').readOnly).toBe(true);
+      expect(byId('backfill-package-suggestions-pkg-only')).toBeNull();
+    });
+
+    it('withdraws the suggestions once the code in the cell is no longer the picked one', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'bread', [BREAD]);
+      choose('bare', 0);
+      expect(byId('backfill-package-suggestions-bare')).not.toBeNull();
+
+      type('backfill-mxik-bare', MXIK_A);
+
+      expect(byId('backfill-package-suggestions-bare')).toBeNull();
+    });
+
+    it('still takes a typed code when the reference has nothing, as it did before there was a lookup', async () => {
+      await render([BARE]);
+      await lookUp('bare', MXIK_A, []);
+
+      expect(input('backfill-mxik-bare').value).toBe(MXIK_A);
+      await save();
+
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'bare', mxikCode: MXIK_A, packageCode: undefined },
+      ]);
+    });
+
+    it('drops a half-typed name and a picked row when the edits are discarded', async () => {
+      await render([BARE, COLA]);
+      await lookUp('bare', 'bread', [BREAD]);
+      choose('bare', 0);
+      await lookUp('cola', 'cola drink', []);
+
+      (byId('backfill-discard') as HTMLButtonElement | null)?.click();
+      fixture.detectChanges();
+
+      expect(input('backfill-mxik-bare').value).toBe('');
+      expect(input('backfill-mxik-cola').value).toBe('');
+      expect(byId('backfill-package-suggestions-bare')).toBeNull();
+    });
+
+    it('is disabled while a save is in flight', async () => {
+      let release: (outcomes: FiscalBackfillOutcome[]) => void = () => undefined;
+      api.backfillCodes.mockImplementation(
+        () => new Promise<FiscalBackfillOutcome[]>((resolve) => (release = resolve)),
+      );
+      await render([BARE]);
+      type('backfill-mxik-bare', MXIK_A);
+
+      (byId('backfill-save') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(input('backfill-mxik-bare').matches(':disabled')).toBe(true);
+      release([{ nodeType: 'VARIANT', nodeId: 'bare', status: 'CLASSIFIED' }]);
+      await flush();
+    });
   });
 });

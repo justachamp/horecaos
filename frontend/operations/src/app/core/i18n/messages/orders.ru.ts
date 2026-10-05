@@ -786,4 +786,5 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.party.confirm.walkout.body':
     '{amount} будут записаны как неоплаченные и попадут в журнал аудита.',
   'orders.dialog.addLines.combosUnavailable': 'Меню недоступно — комбо не добавить.',
+  'orders.dialog.changeQuantity.step': 'Заказывается порциями по {step}',
 };

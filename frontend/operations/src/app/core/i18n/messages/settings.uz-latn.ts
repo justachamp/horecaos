@@ -679,10 +679,10 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saqlanmoqda…',
   'settings.fiscalization.backfill.title': 'IKPU va qadoq kodlarini toʻldirish',
   'settings.fiscalization.backfill.lead':
-    '{count} ta taomda IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Taomda allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
+    '{count} ta pozitsiyada IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Pozitsiyada allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
   'settings.fiscalization.backfill.referenceNote':
     'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
-  'settings.fiscalization.backfill.empty': 'Barcha taomlarda IKPU va qadoq kodi bor.',
+  'settings.fiscalization.backfill.empty': 'Barcha pozitsiyalarda IKPU va qadoq kodi bor.',
   'settings.fiscalization.backfill.column.mxik': 'IKPU (17 raqam)',
   'settings.fiscalization.backfill.column.packageCode': 'Qadoq kodi',
   'settings.fiscalization.backfill.copyDefault': 'Toifadan olish',
@@ -699,14 +699,14 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.error.packageCode':
     'Qadoq kodi faqat raqamlardan iborat, 10 tagacha.',
   'settings.fiscalization.backfill.pasteSkipped':
-    'Qoldirilgan joylangan kodlar: {count}. Bu kataklarda taomda allaqachon kod bor; kiritilgan kodni mahsulot muharririda oʻzgartiring.',
+    'Qoldirilgan joylangan kodlar: {count}. Bu kataklarda pozitsiyada allaqachon kod bor; kiritilgan kodni mahsulot muharririda oʻzgartiring.',
   'settings.fiscalization.backfill.invalidSkipped':
     'Qatorlarda ({count}) kod formati notoʻgʻri, ular yuborilmadi. Belgilangan kataklarni tuzating.',
   'settings.fiscalization.backfill.summary':
     'Saqlandi: {saved}, allaqachon toʻldirilgan: {unchanged}, saqlanmadi: {failed}.',
-  'settings.fiscalization.backfill.status.notFound': 'Bu taom endi mavjud emas.',
+  'settings.fiscalization.backfill.status.notFound': 'Bu pozitsiya endi mavjud emas.',
   'settings.fiscalization.backfill.status.conflict':
-    'Taomda allaqachon boshqa kod bor; u oʻzgartirilmadi. Roʻyxat yangilandi.',
+    'Pozitsiyada allaqachon boshqa kod bor; u oʻzgartirilmadi. Roʻyxat yangilandi.',
   'settings.fiscalization.backfill.status.failed': 'Saqlanmadi. Qayta urinib koʻring.',
 
   // 10.9 Bildirishnomalar
@@ -1332,4 +1332,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.integrations.failures.empty': 'Hozircha xato xabarlar yoʻq.',
   'settings.home.description.approvals':
     'Aksiya yoki yirik mijozlar eksporti ikkinchi imzoni kutadigan chegaralar.',
+  'settings.fiscalization.noAccess': 'Ruxsat yoʻq',
+  'settings.fiscalization.responsibility': 'Chekni kim beradi',
 };

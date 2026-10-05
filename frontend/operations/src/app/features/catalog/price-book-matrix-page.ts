@@ -24,6 +24,7 @@ import {
   PriceBookSummary,
   listResolutionLocale,
 } from './catalog-domain';
+import { perQuantumLabel } from './per-quantum';
 import { PricingApi } from './pricing-api';
 
 /** The matrix loads and "load more"s this many rows a call, matching `variantsAtLocation`'s own default page. */
@@ -201,6 +202,11 @@ export class PriceBookMatrixPage implements OnInit {
       return '—';
     }
     return formatMoney({ amountMinor, currency }, this.i18n.locale());
+  }
+
+  /** «per 100 g» beside the prices of a variant sold by weight (ADR 0137); null for every other. */
+  protected unitLabel(row: PriceBookMatrixRow): string | null {
+    return perQuantumLabel(this.i18n, row.catchweightQuantumGrams);
   }
 
   protected deltaLabel(row: PriceBookMatrixRow): string {

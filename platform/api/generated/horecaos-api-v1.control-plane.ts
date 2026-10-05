@@ -2560,6 +2560,7 @@ export interface PriceBookMatrixRowResponse {
   basePriceMinor?: number;
   bookPriceMinor?: number;
   bookPriceVersion?: number;
+  catchweightQuantumGrams?: number;
   categoryId?: string;
   categoryName?: string;
   currency?: string;
@@ -2890,6 +2891,7 @@ export interface ResolveQuarantineRequest {
 
 export interface ResolvedPricesResponse {
   amountsMinor?: { [key: string]: number };
+  catchweightQuantumGrams?: { [key: string]: number };
   currency?: string;
   priceBookId?: string;
 }

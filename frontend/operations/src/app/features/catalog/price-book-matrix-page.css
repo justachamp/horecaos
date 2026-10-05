@@ -104,3 +104,10 @@
   cursor: pointer;
   font-size: var(--q-type-body-xs);
 }
+
+/* ADR 0137: «per 100 g» beside the price of a variant sold by weight. */
+.price-matrix__unit {
+  display: block;
+  color: var(--q-ink-muted);
+  white-space: nowrap;
+}

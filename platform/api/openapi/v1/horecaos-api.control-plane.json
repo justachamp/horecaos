@@ -7972,6 +7972,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "catchweightQuantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "categoryId" : {
             "format" : "uuid",
             "type" : "string"
@@ -9034,6 +9038,13 @@
           "amountsMinor" : {
             "additionalProperties" : {
               "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "catchweightQuantumGrams" : {
+            "additionalProperties" : {
+              "format" : "int32",
               "type" : "integer"
             },
             "type" : "object"

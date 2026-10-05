@@ -128,3 +128,29 @@
   color: var(--q-ink-subtle);
   cursor: default;
 }
+
+/* The ИКПУ cell is a typeahead: a fieldset only so that «saving» disables the field inside it. */
+.backfill__picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 150px;
+}
+
+.backfill__picker--dirty {
+  background: var(--q-warning-tint);
+  border-radius: var(--q-radius);
+}
+
+.backfill__picker--invalid {
+  background: var(--q-error-tint);
+  border-radius: var(--q-radius);
+}
+
+.backfill__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 2px;
+  color: var(--q-ink-muted);
+}

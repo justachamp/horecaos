@@ -771,4 +771,6 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.priceBulk.status.wouldFail': 'Rad etiladi',
   'catalog.priceBulk.status.applied': 'Qoʻllandi',
   'catalog.priceBulk.status.failed': 'Rad etildi',
+
+  'catalog.price.perQuantum': '{quantum} uchun',
 };

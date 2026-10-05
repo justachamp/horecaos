@@ -672,10 +672,10 @@ export const settingsEn = {
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saving…',
   'settings.fiscalization.backfill.title': 'Fill in ИКПУ and package codes',
   'settings.fiscalization.backfill.lead':
-    '{count} dishes still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code a dish already holds is shown as it is and cannot be changed here; change it in the product editor.',
+    '{count} items (dishes and modifier options) still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code an item already holds is shown as it is and cannot be changed here; change it in the product editor.',
   'settings.fiscalization.backfill.referenceNote':
     'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
-  'settings.fiscalization.backfill.empty': 'Every dish has an ИКПУ and a package code.',
+  'settings.fiscalization.backfill.empty': 'Every item has an ИКПУ and a package code.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 digits)',
   'settings.fiscalization.backfill.column.packageCode': 'Package code',
   'settings.fiscalization.backfill.copyDefault': 'Copy category default',
@@ -691,14 +691,14 @@ export const settingsEn = {
   'settings.fiscalization.backfill.error.mxik': 'An ИКПУ is exactly 17 digits.',
   'settings.fiscalization.backfill.error.packageCode': 'A package code is digits only, up to 10.',
   'settings.fiscalization.backfill.pasteSkipped':
-    'Pasted codes left out: {count}. Those dishes already hold a code in that cell; change a stored code in the product editor.',
+    'Pasted codes left out: {count}. Those items already hold a code in that cell; change a stored code in the product editor.',
   'settings.fiscalization.backfill.invalidSkipped':
     '{count} rows have a code in the wrong format and were not sent. Fix the highlighted cells.',
   'settings.fiscalization.backfill.summary':
     'Saved {saved}, already set {unchanged}, not saved {failed}.',
-  'settings.fiscalization.backfill.status.notFound': 'This dish no longer exists.',
+  'settings.fiscalization.backfill.status.notFound': 'This item no longer exists.',
   'settings.fiscalization.backfill.status.conflict':
-    'This dish already holds a code that differs from yours; it was not changed. The list has been refreshed.',
+    'This item already holds a code that differs from yours; it was not changed. The list has been refreshed.',
   'settings.fiscalization.backfill.status.failed': 'Not saved. Try again.',
 
   // 10.9 Notifications
@@ -1319,4 +1319,6 @@ export const settingsEn = {
   'settings.integrations.failures.empty': 'No failed messages right now.',
   'settings.home.description.approvals':
     'The limits above which a promotion or a large customer export waits for a second signature.',
+  'settings.fiscalization.noAccess': 'No access',
+  'settings.fiscalization.responsibility': 'Who issues the receipt',
 } as const;

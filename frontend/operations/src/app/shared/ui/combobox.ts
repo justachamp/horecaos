@@ -58,6 +58,8 @@ export class Combobox {
   readonly loading = input(false, { transform: booleanAttribute });
   readonly placeholder = input<string>('');
   readonly ariaLabel = input<string | null>(null);
+  /** Marks the text field `aria-invalid` for a caller that checks the typed value itself. */
+  readonly invalid = input(false, { transform: booleanAttribute });
   readonly multiple = input(false, { transform: booleanAttribute });
   readonly selected = input<readonly ComboboxOption[]>([]);
   readonly allowCreate = input(false, { transform: booleanAttribute });

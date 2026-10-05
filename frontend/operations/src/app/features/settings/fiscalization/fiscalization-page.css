@@ -192,3 +192,69 @@
 .denied {
   color: var(--q-ink-muted);
 }
+
+/* Tab 3's ИКПУ field is a typeahead inside a fieldset, so that «saving» disables it. */
+.picker {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  min-inline-size: 280px;
+  max-width: 420px;
+}
+
+/* The two read-only references under the classification tab: VAT defaults and who issues receipts. */
+.reference {
+  margin-top: 32px;
+}
+
+.reference .hint {
+  max-width: 720px;
+}
+
+.responsibilities {
+  margin: 8px 0;
+  display: grid;
+  gap: 8px;
+}
+
+.responsibility {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) 1fr;
+  gap: 4px 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.responsibility dt {
+  font-weight: 600;
+}
+
+.responsibility dt .hint {
+  display: block;
+  font-weight: 400;
+  color: var(--q-ink-muted);
+}
+
+.responsibility dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.method {
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.method--off {
+  color: var(--q-ink-subtle);
+  text-decoration: line-through;
+}
+
+@media (max-width: 640px) {
+  .responsibility {
+    grid-template-columns: 1fr;
+  }
+}

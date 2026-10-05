@@ -249,6 +249,13 @@
                             "
                             >{{ priceLabel(variant.variantId) }}</span
                           >
+                          @if (priceUnitLabel(variant.variantId); as unit) {
+                            <span
+                              class="q-caption editor__price-unit"
+                              data-testid="editor-price-unit"
+                              >{{ unit }}</span
+                            >
+                          }
                           @if (priceBookId()) {
                             <input
                               #priceInput

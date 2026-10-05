@@ -85,6 +85,7 @@
     <table class="backfill__table">
       <thead>
         <tr>
+          <th class="q-caption">{{ 'settings.fiscalization.classification.field.type' | t }}</th>
           <th class="q-caption">{{ 'settings.fiscalization.classification.field.name' | t }}</th>
           <th class="q-caption">
             {{ 'settings.fiscalization.classification.field.category' | t }}
@@ -100,30 +101,46 @@
       <tbody>
         @for (row of rows(); track row.nodeId; let index = $index) {
           <tr data-testid="backfill-row" [attr.data-node-id]="row.nodeId">
+            <td class="q-body-sm">{{ typeLabel(row.nodeType) }}</td>
             <td class="q-body-sm">{{ row.name }}</td>
             <td class="q-body-sm">{{ row.categoryName ?? '—' }}</td>
             <td class="q-body-sm backfill__num">{{ row.locationCount }}</td>
             <td>
-              <input
-                class="q-body-sm backfill__cell"
-                [class.backfill__cell--dirty]="row.mxikDirty"
-                [class.backfill__cell--stored]="row.mxikStored"
-                [class.backfill__cell--invalid]="row.mxikError !== null"
-                type="text"
-                inputmode="numeric"
-                autocomplete="off"
-                spellcheck="false"
-                [value]="row.mxik"
-                [readOnly]="row.mxikStored"
-                [attr.aria-readonly]="row.mxikStored"
-                [disabled]="saving()"
-                [attr.aria-label]="'settings.fiscalization.backfill.column.mxik' | t"
-                [attr.aria-invalid]="row.mxikError !== null"
-                [attr.aria-describedby]="row.mxikError !== null ? 'mxik-error-' + row.nodeId : null"
-                (input)="onInput(row.nodeId, 'mxik', $any($event.target).value)"
-                (paste)="onPaste($event, index, 'mxik')"
-                [attr.data-testid]="'backfill-mxik-' + row.nodeId"
-              />
+              @if (row.mxikStored) {
+                <input
+                  class="q-body-sm backfill__cell backfill__cell--stored"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  spellcheck="false"
+                  [value]="row.mxik"
+                  readonly
+                  aria-readonly="true"
+                  [disabled]="saving()"
+                  [attr.aria-label]="'settings.fiscalization.backfill.column.mxik' | t"
+                  (paste)="onPaste($event, index, 'mxik')"
+                  [attr.data-testid]="'backfill-mxik-' + row.nodeId"
+                />
+              } @else {
+                <fieldset
+                  class="backfill__picker"
+                  [class.backfill__picker--dirty]="row.mxikDirty"
+                  [class.backfill__picker--invalid]="row.mxikError !== null"
+                  [disabled]="saving()"
+                  [attr.data-testid]="'backfill-mxik-' + row.nodeId"
+                  (paste)="onPaste($event, index, 'mxik')"
+                >
+                  <q-mxik-picker
+                    [code]="row.mxik"
+                    [resetKey]="epoch()"
+                    [scope]="searchScope()"
+                    [invalid]="row.mxikError !== null"
+                    [ariaLabel]="'settings.fiscalization.backfill.column.mxik' | t"
+                    (codeChange)="onInput(row.nodeId, 'mxik', $event)"
+                    (picked)="onMxikPicked(row.nodeId, $event)"
+                  />
+                </fieldset>
+              }
               @if (row.mxikError; as key) {
                 <span
                   class="q-caption backfill__error"
@@ -161,6 +178,25 @@
                   [attr.data-testid]="'backfill-package-error-' + row.nodeId"
                   >{{ key | t }}</span
                 >
+              }
+              @if (row.packageSuggestions.length > 0) {
+                <span
+                  class="q-caption backfill__suggestions"
+                  [attr.data-testid]="'backfill-package-suggestions-' + row.nodeId"
+                >
+                  {{ 'settings.fiscalization.backfill.column.packageCode' | t }}:
+                  @for (code of row.packageSuggestions; track code) {
+                    <button
+                      type="button"
+                      class="q-caption backfill__link"
+                      [disabled]="saving()"
+                      (click)="usePackageCode(row.nodeId, code)"
+                      [attr.data-testid]="'backfill-package-suggestion-' + row.nodeId + '-' + code"
+                    >
+                      {{ code }}
+                    </button>
+                  }
+                </span>
               }
             </td>
             <td class="backfill__actions">

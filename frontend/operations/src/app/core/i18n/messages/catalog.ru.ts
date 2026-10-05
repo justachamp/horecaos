@@ -761,4 +761,6 @@ export const catalogRu: AreaMessages<typeof catalogEn> = {
   'catalog.priceBulk.status.wouldFail': 'Откажет',
   'catalog.priceBulk.status.applied': 'Применено',
   'catalog.priceBulk.status.failed': 'Отказало',
+
+  'catalog.price.perQuantum': 'за {quantum}',
 };

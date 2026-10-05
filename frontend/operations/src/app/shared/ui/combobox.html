@@ -32,6 +32,7 @@
         : null
     "
     [attr.aria-label]="ariaLabel()"
+    [attr.aria-invalid]="invalid() ? 'true' : null"
     [placeholder]="placeholder()"
     [value]="query()"
     (input)="onInput($any($event.target).value)"

@@ -41,3 +41,12 @@
   opacity: 0.6;
   cursor: default;
 }
+
+.change-quantity-dialog__step {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.change-quantity-dialog__step--problem {
+  color: var(--q-error-text);
+}

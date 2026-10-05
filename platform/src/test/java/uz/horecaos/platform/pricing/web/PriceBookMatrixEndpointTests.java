@@ -191,6 +191,77 @@ class PriceBookMatrixEndpointTests {
     }
 
     @Test
+    void aCatchweightVariantIsMarkedPerQuantumAndNoOtherVariantIs() throws Exception {
+        UUID weighed = product(BRAND, null, "CAKE", "Cake by weight");
+        UUID portioned = product(BRAND, null, "PLOV", "Plov by the portion");
+        UUID plain = product(BRAND, null, "COLA", "Cola");
+        physicalAttributes(weighed, true, 100, false);
+        physicalAttributes(portioned, false, null, true);
+        UUID draft = draftBook(BRAND);
+        setPrice(draft, weighed, 15_000L, null);
+
+        MvcResult result = mvc.perform(
+                        get(PRICING + "/price-books/" + draft + "/matrix").with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(rowOf(result, weighed).path("catchweightQuantumGrams").asInt())
+                .as("the price is per 100 g")
+                .isEqualTo(100);
+        assertThat(rowOf(result, portioned).path("catchweightQuantumGrams").isNull())
+                .as("a splittable dish is priced per portion, not per quantum")
+                .isTrue();
+        assertThat(rowOf(result, plain).path("catchweightQuantumGrams").isNull())
+                .as("a dish with no physical block is priced per unit")
+                .isTrue();
+    }
+
+    @Test
+    void resolvedPricesNameTheQuantumOfEveryCatchweightVariantAsked() throws Exception {
+        UUID weighed = product(BRAND, null, "CAKE", "Cake by weight");
+        UUID plain = product(BRAND, null, "COLA", "Cola");
+        physicalAttributes(weighed, true, 1_000, false);
+        UUID book = liveBrandBook(BRAND, weighed, 150_000L);
+        setPrice(book, plain, 5_000L, null);
+
+        MvcResult result = mvc.perform(get(PRICING + "/price-books/resolved/prices")
+                        .param("locationId", UUID.randomUUID().toString())
+                        .param("priceableType", "VARIANT")
+                        .param("ids", weighed.toString(), plain.toString())
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json(result);
+        assertThat(body.path("amountsMinor").path(weighed.toString()).asLong()).isEqualTo(150_000L);
+        assertThat(body.path("catchweightQuantumGrams").path(weighed.toString()).asInt())
+                .as("150 000 is the price of a kilogram")
+                .isEqualTo(1_000);
+        assertThat(body.path("catchweightQuantumGrams").has(plain.toString()))
+                .as("a unit-priced variant is simply absent")
+                .isFalse();
+    }
+
+    @Test
+    void resolvedPricesForANonVariantAskNothingAboutQuanta() throws Exception {
+        UUID weighed = product(BRAND, null, "CAKE", "Cake by weight");
+        physicalAttributes(weighed, true, 100, false);
+        liveBrandBook(BRAND, weighed, 15_000L);
+
+        MvcResult result = mvc.perform(get(PRICING + "/price-books/resolved/prices")
+                        .param("locationId", UUID.randomUUID().toString())
+                        .param("priceableType", "MODIFIER_OPTION")
+                        .param("ids", weighed.toString())
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(result).path("catchweightQuantumGrams").size())
+                .as("a modifier option id is never read as a variant id")
+                .isZero();
+    }
+
+    @Test
     void categoryFilterNarrowsToProductsCarryingThatCategory() throws Exception {
         UUID mains = category(BRAND, "MAINS");
         UUID drinks = category(BRAND, "DRINKS");
@@ -454,6 +525,15 @@ class PriceBookMatrixEndpointTests {
         return result;
     }
 
+    private static JsonNode rowOf(MvcResult result, UUID variantId) throws Exception {
+        for (JsonNode row : items(result)) {
+            if (variantId.toString().equals(row.path("variantId").asString())) {
+                return row;
+            }
+        }
+        throw new AssertionError("no matrix row for variant " + variantId);
+    }
+
     private static JsonNode firstRow(MvcResult result) throws Exception {
         return items(result).get(0);
     }
@@ -585,6 +665,28 @@ class PriceBookMatrixEndpointTests {
                     .update();
         }
         return variantId;
+    }
+
+    /** One {@code catalog.variant_physical_attributes} row: weighed with a quantum, or splittable by halves. */
+    private void physicalAttributes(
+            UUID variantId, boolean catchweight, @Nullable Integer quantumGrams, boolean splittable) {
+        jdbc.sql("""
+                INSERT INTO catalog.variant_physical_attributes
+                    (variant_id, tenant_id, brand_id, net_weight_grams, is_catchweight,
+                     catchweight_quantum_grams, catchweight_nominal_grams, is_splittable, portion_size)
+                VALUES (:variantId, :tenantId, :brandId, :netWeight, :catchweight, :quantum, :nominal,
+                        :splittable, :portion)
+                """)
+                .param("variantId", variantId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("netWeight", catchweight ? 1_200 : null)
+                .param("catchweight", catchweight)
+                .param("quantum", quantumGrams)
+                .param("nominal", catchweight ? 1_200 : null)
+                .param("splittable", splittable)
+                .param("portion", splittable ? new java.math.BigDecimal("0.5") : null)
+                .update();
     }
 
     private void translateCategory(UUID categoryId, String locale, String name) {
