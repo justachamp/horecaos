@@ -48,6 +48,32 @@ DELETE FROM reporting.fact_order_line f
    AND l.id = f.line_id
    AND l.revision_to IS NOT NULL;
 
+-- The order fact beside those lines was built from the same rows: DayCloseService#toFact counts
+-- line_count and item_count over the lines it was handed, so an amended order's fact still says
+-- it held both versions of each rewritten line, and the operator and basket-depth reads sum
+-- those columns. Recounted here from the line facts that are left, with day close's own rule
+-- (ADR 0137: the exact quantity summed, then rounded up once). An order that was never amended
+-- has no closed line and is not touched, and one whose day was already rebuilt gets back the
+-- numbers it has. Nothing else on fact_order is derived from the lines: the money columns come
+-- from the order row, and no aggregate table holds a line or item count.
+UPDATE reporting.fact_order o
+   SET line_count = c.line_count,
+       item_count = c.item_count
+  FROM (SELECT f.tenant_id, f.business_date, f.order_id,
+               count(*)::integer AS line_count,
+               ceil(sum(f.quantity))::integer AS item_count
+          FROM reporting.fact_order_line f
+         WHERE EXISTS (SELECT 1
+                         FROM ordering.order_lines closed
+                        WHERE closed.tenant_id = f.tenant_id
+                          AND closed.order_id = f.order_id
+                          AND closed.revision_to IS NOT NULL)
+         GROUP BY f.tenant_id, f.business_date, f.order_id) c
+ WHERE o.tenant_id = c.tenant_id
+   AND o.business_date = c.business_date
+   AND o.order_id = c.order_id
+   AND (o.line_count, o.item_count) IS DISTINCT FROM (c.line_count, c.item_count);
+
 -- Combos exist since batch 17 (V0443-V0447), so a pilot database can already hold facts built
 -- before these columns did. The same values are on the order line they were built from, and day
 -- close writes them the next time it rebuilds that day; filling them now means the report is

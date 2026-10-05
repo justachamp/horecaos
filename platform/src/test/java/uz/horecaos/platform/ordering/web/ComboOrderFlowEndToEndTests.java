@@ -10,6 +10,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -1311,6 +1312,64 @@ class ComboOrderFlowEndToEndTests {
     }
 
     @Test
+    @DisplayName(
+            "a second amendment of a dish already credited once is not credited again: every salad ordered is cooked or on the pass")
+    void aCreditIsSpentOnceAcrossTwoAmendmentsOfOneDish() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "salad", saladVariant, 3, List.of());
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        OrderLine salad = orderLines(orderId).stream()
+                .filter(line -> line.variantId().equals(saladVariant))
+                .findFirst()
+                .orElseThrow();
+        // Three salads are on the pass while the lunch is still cooking, so the ticket stays open.
+        TicketItemRow saladBefore = itemFor(tickets.items(TENANT, ticket.id()), salad);
+        tickets.start(TENANT, saladBefore.id(), "cook", null);
+        tickets.ready(TENANT, saladBefore.id(), "cook", null);
+
+        amend(orderId, "amend-salad-three-to-four", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":4}""".formatted(salad.lineId()));
+        assertThat(saladsMadeOrQueued(orderId, ticket.id()))
+                .as("four ordered: the three on the pass and one more queued")
+                .isEqualByComparingTo("4");
+
+        amend(orderId, "amend-two-more-salads", """
+                {"type":"ADD_LINES","lines":[{"variantId":"%s","quantity":2}]}""".formatted(saladVariant));
+
+        assertThat(saladsMadeOrQueued(orderId, ticket.id()))
+                .as(
+                        "six ordered in all: the three already made were credited to the four once, never to the two as well")
+                .isEqualByComparingTo("6");
+        assertThat(tickets.items(TENANT, ticket.id()).stream()
+                        .filter(item -> item.id().equals(saladBefore.id()))
+                        .findFirst()
+                        .orElseThrow()
+                        .status())
+                .as("the salads on the pass are left where they are")
+                .isEqualTo(TicketItemStatus.READY);
+    }
+
+    /** What the kitchen has made or still means to make of the salad, whichever revision of its line holds it. */
+    private BigDecimal saladsMadeOrQueued(UUID orderId, UUID ticketId) {
+        Set<UUID> saladLines = new HashSet<>(jdbc.sql("""
+                        SELECT id FROM ordering.order_lines
+                        WHERE order_id = :id AND source_variant_id = :variant
+                        """)
+                .param("id", orderId)
+                .param("variant", saladVariant)
+                .query(UUID.class)
+                .list());
+        return tickets.items(TENANT, ticketId).stream()
+                .filter(item -> saladLines.contains(item.orderLineId()))
+                .filter(item -> item.status() != TicketItemStatus.CANCELLED)
+                .map(TicketItemRow::quantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Test
     @DisplayName("an amendment that touches no line leaves the ticket as it was, and a replay adds nothing")
     void anAmendmentThatChangesNoLineLeavesTheTicketAlone() throws Exception {
         UUID cart = openCart(FulfillmentMode.PICKUP);
@@ -1383,7 +1442,7 @@ class ComboOrderFlowEndToEndTests {
         assertThat(exported.lines())
                 .as("two components, three of each; the two rows the amendment closed are history")
                 .extracting(PosAdapter.OrderExport.Line::quantity)
-                .containsExactly(java.math.BigDecimal.valueOf(3), java.math.BigDecimal.valueOf(3));
+                .containsExactly(BigDecimal.valueOf(3), BigDecimal.valueOf(3));
         assertThat(exported.lines())
                 .extracting(PosAdapter.OrderExport.Line::externalProductId)
                 .containsExactly("ext-" + burgerVariant, "ext-" + colaVariant);

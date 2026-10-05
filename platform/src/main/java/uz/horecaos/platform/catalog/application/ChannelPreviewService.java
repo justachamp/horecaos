@@ -416,12 +416,32 @@ public class ChannelPreviewService {
      * of the catalog reports, and saying so for every channel at once would drown the finding that
      * names a real gap on this one. The same posture as {@code CHANNEL_PRICE_MISSING} for a
      * variant, whose all-channels twin is {@code VARIANT_HAS_NO_ACTIVE_PRICE}.
+     *
+     * <p>A product offers its own groups, the groups one of its served variants carries, and the
+     * groups below an option that links a variant (ADR 0136): the menu publishes all three, so a
+     * customer can pick from them and an unpriced option there fails the cart as surely as one in
+     * a product's own group.
      */
     private List<ValidationFinding> optionPriceFindings(SalesChannel channel, ChannelProjection projection) {
         Set<UUID> offered = new java.util.HashSet<>();
         for (MenuProduct product : projection.products()) {
             offered.addAll(product.modifierGroupIds());
+            for (MenuVariant variant : product.variants()) {
+                offered.addAll(variant.modifierGroupIds());
+            }
         }
+        // One level below an option, and the options of those groups open nothing further: the
+        // validator refuses a third level (MODIFIER_NESTING_DEPTH_EXCEEDED).
+        Set<UUID> nestedOffered = new java.util.HashSet<>();
+        for (MenuModifierGroup group : projection.modifierGroups()) {
+            if (!offered.contains(group.modifierGroupId())) {
+                continue;
+            }
+            for (MenuModifierOption option : group.options()) {
+                option.nestedGroups().forEach(nested -> nestedOffered.add(nested.modifierGroupId()));
+            }
+        }
+        offered.addAll(nestedOffered);
         Map<UUID, MenuModifierOption> unpriced = new LinkedHashMap<>();
         for (MenuModifierGroup group : projection.modifierGroups()) {
             if (!offered.contains(group.modifierGroupId())) {
