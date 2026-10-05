@@ -475,7 +475,7 @@ public class OperatorOrderingService {
      * The checks every operator order shares, whether it is about to be placed or only priced.
      * Refused before anything is created, so a malformed request costs no cart at all.
      */
-    void requireWellFormed(PlaceOrderCommand command) {
+    public void requireWellFormed(PlaceOrderCommand command) {
         if (command.lines().isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "An order needs at least one line");
         }
@@ -523,7 +523,7 @@ public class OperatorOrderingService {
     }
 
     /** A cart opened for the operator's basket, and the quote that prices it. */
-    record FilledCart(CartRow cart, CartService.PricedCart priced) {}
+    public record FilledCart(CartRow cart, CartService.PricedCart priced) {}
 
     /**
      * Opens the customer's cart, puts every line, the destination, the promo code and the
@@ -535,7 +535,7 @@ public class OperatorOrderingService {
      * One method, so the figure an operator is shown and the figure the order is booked at
      * come from the same steps in the same order and cannot drift apart.
      */
-    FilledCart fillAndPrice(PlaceOrderCommand command) {
+    public FilledCart fillAndPrice(PlaceOrderCommand command) {
         boolean delivery = command.fulfillmentMode() == FulfillmentMode.DELIVERY;
         CartRow cart = carts.create(
                 command.tenantId(),
