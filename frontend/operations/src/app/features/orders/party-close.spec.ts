@@ -248,6 +248,112 @@ describe('PartyClose', () => {
     });
   });
 
+  describe('a bill that changes while the operator is deciding', () => {
+    /** The same party with a second round on it: the figure a phone operator's order makes. */
+    function withSecondRound(totalMinor: number): SessionDetailView {
+      return { ...bill(totalMinor), orderIds: ['o1', 'o2'], roundCount: 2 };
+    }
+
+    it('settles nothing the operator has not seen: a round that arrived since is shown, and the close waits for a second yes', async () => {
+      const detail = vi
+        .fn()
+        .mockReturnValueOnce(of(bill(120_000)))
+        .mockReturnValue(of(withSecondRound(150_000)));
+      const host = await render(['DINEIN_SESSION_MANAGE'], { detail });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      expect(byId(host, 'q-confirm-dialog')!.textContent).toContain('120');
+
+      await click(host, 'q-confirm-confirm');
+
+      expect(
+        api.close,
+        'the bill the operator confirmed is not the bill that stands',
+      ).not.toHaveBeenCalled();
+      expect(api.forceClose).not.toHaveBeenCalled();
+      expect(closed).toEqual([]);
+      expect(byId(host, 'q-confirm-dialog'), 'the stale confirmation is withdrawn').toBeNull();
+      expect(byId(host, 'party-close-bill')!.textContent, 'the new figure is on offer').toContain(
+        '150',
+      );
+      expect(byId(host, 'party-close-error')!.textContent).toContain('150');
+
+      await click(host, 'party-close-paid');
+      expect(byId(host, 'q-confirm-dialog')!.textContent).toContain('150');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.close).toHaveBeenCalledTimes(1);
+      expect(closed).toEqual(['ses-1']);
+    });
+
+    it('does not free a table the operator read as empty once an order has arrived on it', async () => {
+      const detail = vi
+        .fn()
+        .mockReturnValueOnce(of(bill(0)))
+        .mockReturnValue(of(withSecondRound(30_000)));
+      const host = await render(['DINEIN_SESSION_MANAGE'], { detail });
+
+      await click(host, 'party-close-open');
+      expect(byId(host, 'q-confirm-dialog')).not.toBeNull();
+
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.close, 'the nothing-owed close would settle a live order').not.toHaveBeenCalled();
+      expect(closed).toEqual([]);
+      expect(byId(host, 'party-close-choose'), 'it is a party that owes now').not.toBeNull();
+      expect(byId(host, 'party-close-bill')!.textContent).toContain('30');
+    });
+
+    it('closes against the version of the bill it just checked, not the one the dialog opened on', async () => {
+      const detail = vi
+        .fn()
+        .mockReturnValueOnce(of(bill(87_000)))
+        .mockReturnValue(of({ ...bill(87_000), session: party({ version: 11 }) }));
+      const host = await render(['DINEIN_SESSION_MANAGE'], { detail });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      await click(host, 'q-confirm-confirm');
+
+      expect(
+        api.close.mock.calls[0][3],
+        'the same figure at a newer version is still that figure',
+      ).toBe(11);
+    });
+
+    it('closes nothing when the bill cannot be read again at the moment of confirming', async () => {
+      const detail = vi
+        .fn()
+        .mockReturnValueOnce(of(bill(87_000)))
+        .mockReturnValue(throwError(() => new Error('offline')));
+      const host = await render(['DINEIN_SESSION_MANAGE'], { detail });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.close).not.toHaveBeenCalled();
+      expect(closed).toEqual([]);
+      expect(byId(host, 'party-close-error')!.textContent?.trim()).toBeTruthy();
+    });
+
+    it('says the list is behind when the party ended while the operator was deciding', async () => {
+      const detail = vi
+        .fn()
+        .mockReturnValueOnce(of(bill(87_000)))
+        .mockReturnValue(of(bill(87_000, { status: 'CLOSED' })));
+      const host = await render(['DINEIN_SESSION_MANAGE'], { detail });
+
+      await click(host, 'party-close-open');
+      await click(host, 'party-close-paid');
+      await click(host, 'q-confirm-confirm');
+
+      expect(api.close).not.toHaveBeenCalled();
+      expect(staleCount).toBe(1);
+    });
+  });
+
   describe('when it cannot be done', () => {
     it('never guesses a table is empty when the bill cannot be read', async () => {
       const host = await render(['DINEIN_SESSION_MANAGE'], {

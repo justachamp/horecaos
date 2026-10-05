@@ -796,6 +796,8 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.party.confirm.paid.body': '{amount} hisob toʻlangan deb yoziladi. Bekor qilib boʻlmaydi.',
   'orders.party.confirm.walkout.body':
     '{amount} toʻlanmagan deb yoziladi va audit jurnaliga tushadi.',
+  'orders.party.billChanged':
+    'Hisob tanlayotganingizda oʻzgardi: endi {amount}. Tekshirib, qaytadan tanlang.',
   'orders.dialog.addLines.combosUnavailable': 'Menyu mavjud emas — kombo qoʻshib boʻlmaydi.',
   'orders.dialog.changeQuantity.step': 'Buyurtma {step} porsiyalarda qilinadi',
 };

@@ -19,6 +19,20 @@ import {
 /** How the party is being closed, and so what the confirmation says and which call it makes. */
 type CloseKind = 'EMPTY' | 'PAID' | 'WALKOUT';
 
+/** The party has already ended: nothing to close, and the list the operator is looking at is behind. */
+function isOver(detail: SessionDetailView): boolean {
+  return detail.session.status === 'CLOSED' || detail.session.status === 'FORCE_CLOSED';
+}
+
+/** Whether what the party owes is no longer what the operator was shown: another round, or fewer. */
+function billChanged(shown: SessionDetailView, current: SessionDetailView): boolean {
+  return (
+    shown.totalMinor !== current.totalMinor ||
+    shown.roundCount !== current.roundCount ||
+    shown.currency !== current.currency
+  );
+}
+
 /**
  * Ends the party a screen seated (gap map rows `1.3` and `10.2d`): «Закрыть стол», on the New order
  * screen's table picker and on the floor plan's table panel.
@@ -44,9 +58,15 @@ type CloseKind = 'EMPTY' | 'PAID' | 'WALKOUT';
  *   that a party paid -- payment is not recorded against a session yet -- so it asks, and the
  *   confirmation says what is being asserted.
  *
- * Every close is conditional on the version just read with the bill, so a party someone else
- * already moved answers a stale-version refusal rather than being closed twice; the screen is
- * then told to re-read the room (`stale`).
+ * **A close settles the bill the operator saw, and only that one.** The confirmation names an
+ * amount, and the audit record carries the amount the server then settles, so the two must be the
+ * same figure. Two things hold them together. At the moment of the second yes the bill is read
+ * again: a round that joined it since, or one that left, withdraws the confirmation and shows the
+ * new figure instead of settling it unseen. And the close is conditional on the version of that
+ * fresh read; the server moves a session's version whenever a round is attached to it
+ * (`TableSessionService.addRound`), so a round landing in the last instant answers a
+ * stale-version refusal rather than being closed over, and the screen is told to re-read the room
+ * (`stale`). A party someone else already closed answers the same way.
  */
 @Component({
   selector: 'q-party-close',
@@ -113,21 +133,29 @@ export class PartyClose {
       const detail = await firstValueFrom(
         this.sessionsApi.detail(this.scope(), this.session().sessionId),
       );
-      if (detail.session.status === 'CLOSED' || detail.session.status === 'FORCE_CLOSED') {
-        // Already over: nothing to close, and the list the operator is looking at is behind.
-        this.stale.emit();
-        return;
-      }
-      if (detail.totalMinor <= 0) {
-        this.confirming.set({ kind: 'EMPTY', detail });
-      } else {
-        this.owing.set(detail);
-      }
+      this.present(detail);
     } catch {
       // Never guess the table is empty: without the bill there is nothing honest to offer.
       this.error.set(this.i18n.t('error.unknown.noReference'));
     } finally {
       this.reading.set(false);
+    }
+  }
+
+  /**
+   * Puts a bill just read in front of the operator: nothing owed asks for the one confirmation,
+   * something owed asks which kind of close this is, and a party that is already over asks for
+   * nothing and tells the screen its list is behind.
+   */
+  private present(detail: SessionDetailView): void {
+    if (isOver(detail)) {
+      this.stale.emit();
+      return;
+    }
+    if (detail.totalMinor <= 0) {
+      this.confirming.set({ kind: 'EMPTY', detail });
+    } else {
+      this.owing.set(detail);
     }
   }
 
@@ -178,10 +206,26 @@ export class PartyClose {
     this.busy.set(true);
     this.error.set(null);
     const sessionId = this.session().sessionId;
-    // The version read with the bill, not the one the list carried: a party that took a round
-    // since the list was read has moved on, and closing it against the old figure is the mistake.
-    const version = pending.detail.session.version;
     try {
+      // The bill again, now: the figure on the dialog was true when it was read, and a waiter or
+      // a phone operator may have put a round on the table while the operator was deciding.
+      const current = await firstValueFrom(this.sessionsApi.detail(this.scope(), sessionId));
+      if (isOver(current)) {
+        this.confirming.set(null);
+        this.owing.set(null);
+        this.stale.emit();
+        return;
+      }
+      if (billChanged(pending.detail, current)) {
+        this.confirming.set(null);
+        this.owing.set(null);
+        this.present(current);
+        this.error.set(this.i18n.t('orders.party.billChanged', { amount: this.amount(current) }));
+        return;
+      }
+      // The version of this read, not the one the list or the first read carried: the figure is
+      // the same, and the close is conditional on the party being exactly as it was just seen.
+      const version = current.session.version;
       if (pending.kind === 'WALKOUT') {
         await firstValueFrom(
           this.sessionsApi.forceClose(
