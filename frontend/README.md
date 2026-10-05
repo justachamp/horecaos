@@ -117,7 +117,7 @@ the initial bundle (`operations` is tighter, see below); the numbers are what th
   locale ships eagerly: every wave that added messages was raising the budget by a kilobyte.
   The catalogue is now split by feature area and only its `core` area is eager (batch 18; the
   layout is in [`operations/README.md`](operations/README.md#localisation)), which took the
-  initial total to 373.82 kB (-457.56 kB). The budget was reset to that plus 60 kB: **error at
+  initial total to 373.96 kB (-457.42 kB). The budget was reset to that plus 60 kB: **error at
   434 kB, warning at 400 kB**. Messages no longer count against it unless they go into `core`
   (a few hundred keys; `message-areas.ts` is where that is decided), so a feature that grows the
   initial bundle has put eager code there, and the answer is to lazy-load it. The figure ages with

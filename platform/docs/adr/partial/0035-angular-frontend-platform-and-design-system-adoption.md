@@ -117,7 +117,7 @@
   derives `MessageKey`), and a check in the unit-test run
   (`tools/i18n/areas.mjs`) fails a route that names a key of an area nothing on
   its way declares. The measured initial total dropped from 831.38 kB to
-  373.82 kB, and `angular.json`'s `maximumError` was reset to 434 kB (measured
+  373.96 kB, and `angular.json`'s `maximumError` was reset to 434 kB (measured
   plus 60 kB) with a 400 kB warning. No decision changes: the runtime-switchable
   locales, the type-checked completeness and `t()` staying synchronous are all
   as decided; this is the loading model, refined.
