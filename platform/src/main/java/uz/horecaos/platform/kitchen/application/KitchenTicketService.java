@@ -529,7 +529,9 @@ public class KitchenTicketService {
      *       cancelled, because the replacement carries the whole line;
      *   <li>an item already <em>ready</em> for a closed line is left on the pass and credited
      *       against its replacement, which is queued for what is still to be made -- the three
-     *       burgers that became four are one burger, not four more.
+     *       burgers that became four are one burger, not four more. A credit is spent once: what
+     *       an earlier amendment's replacement already took is not offered to a later line of the
+     *       same dish ({@link #netOfCreditAlreadySpent}).
      * </ul>
      *
      * <p>Nothing is done for an order with no ticket (it is built from the live lines when it is
@@ -603,6 +605,7 @@ public class KitchenTicketService {
 
         Set<UUID> itemisedLineIds = new java.util.HashSet<>();
         items.forEach(item -> itemisedLineIds.add(item.orderLineId()));
+        netOfCreditAlreadySpent(alreadyMade, order.lines(), items, itemisedLineIds);
         List<OrderLineForKitchen> unrouted = order.lines().stream()
                 .filter(line -> !itemisedLineIds.contains(line.orderLineId()))
                 .toList();
@@ -627,6 +630,47 @@ public class KitchenTicketService {
         }
         TicketRow after = rollUp(tenantId, ticket, "SERVICE", "kitchen", orderId.toString(), now);
         signalBoardChanged(tenantId, after.locationId(), after.id(), after.version(), now);
+    }
+
+    /**
+     * Takes from the food on the pass the part an earlier amendment has already counted against a
+     * live line, so one ready item is never credited twice.
+     *
+     * <p>The credit is rebuilt from the ticket on every sync (a READY item of a closed line), and
+     * nothing is written when it is spent. Left as it is, a second amendment of the same dish
+     * finds the first one's food still on the pass and credits it again: three salads made, the
+     * line made four (one queued), two more added -- and the two were "covered" by the three that
+     * had already gone to the four, so nobody cooked them.
+     *
+     * <p>What was spent is read back from the ticket itself. A line routed with a credit holds an
+     * item for what was still to be cooked, so the part of its quantity that no item of it holds is
+     * the part the pass covered; a line routed at opening holds an item for all of it and spent
+     * nothing. Every item counts, whatever its state: a station that cancelled the replacement's
+     * item has not given the credit back. A line with no item has spent nothing yet -- it is the
+     * one {@link #routeAmendedLines} is about to decide for.
+     */
+    private static void netOfCreditAlreadySpent(
+            Map<AmendedLineKey, BigDecimal> alreadyMade,
+            List<OrderLineForKitchen> liveLines,
+            List<TicketItemRow> items,
+            Set<UUID> itemisedLineIds) {
+
+        if (alreadyMade.isEmpty()) {
+            return;
+        }
+        Map<UUID, BigDecimal> heldByLine = new HashMap<>();
+        items.forEach(item -> heldByLine.merge(item.orderLineId(), item.quantity(), BigDecimal::add));
+        for (OrderLineForKitchen line : liveLines) {
+            if (!itemisedLineIds.contains(line.orderLineId())) {
+                continue;
+            }
+            BigDecimal covered = line.quantity().subtract(heldByLine.getOrDefault(line.orderLineId(), BigDecimal.ZERO));
+            if (covered.signum() > 0) {
+                alreadyMade.computeIfPresent(
+                        AmendedLineKey.of(line),
+                        (key, made) -> made.subtract(covered).max(BigDecimal.ZERO));
+            }
+        }
     }
 
     /** Routes the lines an amendment added or rewrote, at the quantity still to be cooked. */
