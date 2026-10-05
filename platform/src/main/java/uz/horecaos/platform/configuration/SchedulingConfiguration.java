@@ -249,9 +249,13 @@ public class SchedulingConfiguration {
      * MediaAssetDeletionWorker.deleteScheduledBatch}, which removes the objects of
      * an asset whose deletion was requested -- a staff photo that was removed,
      * replaced or anonymised used to leave its picture in the store for good.
-     * The pool-size test counts them.
+     * Batch 18 added one: {@code ScheduledOrderRequoteWorker.sweep}, which
+     * re-prices an accepted scheduled order shortly before its promised time so
+     * that a promotion that has since ended or begun is shown to the operator
+     * rather than discovered on the receipt (ADR 0140). The pool-size test counts
+     * them.
      */
-    static final int DEFAULT_POOL_SIZE = 75;
+    static final int DEFAULT_POOL_SIZE = 76;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
