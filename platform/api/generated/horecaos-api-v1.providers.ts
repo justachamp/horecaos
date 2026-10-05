@@ -23,7 +23,7 @@ export interface Line {
   unitAmountMinor: number;
 }
 
-export interface PartnerAvailabilityControllerAvailabilityResponse {
+export interface PartnerAvailabilityResponse {
   asOf?: string;
   items?: Array<AvailabilityItemResponse>;
   locationId?: string;
@@ -74,7 +74,7 @@ export interface Totals {
 export interface Operations {
   "push_1": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/marketplace/shift-events"; request: { parameters: { path: { tenantId: string } }; body: ShiftEventRequest }; responses: { "200": ShiftEventResponse } };
   "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PartnerOrderControllerPushRequest }; responses: { "200": PushResponse } };
-  "read": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PartnerAvailabilityControllerAvailabilityResponse } };
+  "read": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PartnerAvailabilityResponse } };
   "handle_3": { method: "DELETE"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle": { method: "GET"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle_5": { method: "HEAD"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };

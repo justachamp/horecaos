@@ -77,7 +77,7 @@ public class PartnerAvailabilityController {
                     + "and a boolean only. Answered from the platform's own resolver on every call, never from a "
                     + "cache. 404 when the restaurant is not one this credential is bound to; 409 "
                     + "CHANNEL_NOT_CONFIGURED when the integration has no single active channel yet.")
-    public ResponseEntity<AvailabilityResponse> read(
+    public ResponseEntity<PartnerAvailabilityResponse> read(
             @PathVariable UUID tenantId,
             @PathVariable UUID locationId,
             @RequestParam(required = false) @Nullable String cursor,
@@ -99,21 +99,21 @@ public class PartnerAvailabilityController {
         return ResponseEntity.ok()
                 // The answer is only true as of the instant it carries.
                 .cacheControl(CacheControl.noStore())
-                .body(AvailabilityResponse.of(page));
+                .body(PartnerAvailabilityResponse.of(page));
     }
 
     /**
      * @param asOf the instant the availability was evaluated at
      * @param nextCursor null on the last page
      */
-    public record AvailabilityResponse(
+    public record PartnerAvailabilityResponse(
             UUID locationId,
             java.time.Instant asOf,
             List<AvailabilityItemResponse> items,
             @Nullable String nextCursor) {
 
-        static AvailabilityResponse of(AvailabilityPage page) {
-            return new AvailabilityResponse(
+        static PartnerAvailabilityResponse of(AvailabilityPage page) {
+            return new PartnerAvailabilityResponse(
                     page.locationId(),
                     page.asOf(),
                     page.items().stream().map(AvailabilityItemResponse::of).toList(),

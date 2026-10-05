@@ -45,7 +45,7 @@
         "required" : [ "externalItemReference", "lineAmountMinor", "name", "unitAmountMinor" ],
         "type" : "object"
       },
-      "PartnerAvailabilityControllerAvailabilityResponse" : {
+      "PartnerAvailabilityResponse" : {
         "properties" : {
           "asOf" : {
             "format" : "date-time",
@@ -339,7 +339,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PartnerAvailabilityControllerAvailabilityResponse"
+                  "$ref" : "#/components/schemas/PartnerAvailabilityResponse"
                 }
               }
             },
