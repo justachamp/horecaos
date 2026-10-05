@@ -581,11 +581,23 @@ public class PriceAuthoringController {
         }
     }
 
+    /**
+     * @param catchweightQuantumGrams for each priced variant sold by weight, the grams its amount is
+     *        quoted per (ADR 0137), so a screen can say «per 100 g» beside the figure. A variant sold
+     *        per unit or by the portion is absent from the map, as is every id of another kind.
+     */
     public record ResolvedPricesResponse(
-            @Nullable UUID priceBookId, @Nullable String currency, Map<UUID, Long> amountsMinor) {
+            @Nullable UUID priceBookId,
+            @Nullable String currency,
+            Map<UUID, Long> amountsMinor,
+            Map<UUID, Integer> catchweightQuantumGrams) {
 
         static ResolvedPricesResponse of(PriceQueryService.ResolvedPrices resolved) {
-            return new ResolvedPricesResponse(resolved.priceBookId(), resolved.currency(), resolved.amountsMinor());
+            return new ResolvedPricesResponse(
+                    resolved.priceBookId(),
+                    resolved.currency(),
+                    resolved.amountsMinor(),
+                    resolved.catchweightQuantumGrams());
         }
     }
 
@@ -601,6 +613,9 @@ public class PriceAuthoringController {
      *                        variant
      * @param deltaMinor      {@code bookPriceMinor - basePriceMinor}, null
      *                        whenever either side is
+     * @param catchweightQuantumGrams the grams every price on this row is quoted per, for a
+     *                        variant sold by weight (ADR 0137), or null for a variant priced per
+     *                        unit or by the portion
      */
     public record PriceBookMatrixRowResponse(
             UUID variantId,
@@ -612,7 +627,8 @@ public class PriceAuthoringController {
             long bookPriceVersion,
             @Nullable Long basePriceMinor,
             @Nullable Long deltaMinor,
-            String currency) {
+            String currency,
+            @Nullable Integer catchweightQuantumGrams) {
 
         static PriceBookMatrixRowResponse of(JdbcPricingStore.MatrixRow row, String currency) {
             Long delta = row.bookPriceMinor() != null && row.basePriceMinor() != null
@@ -628,7 +644,8 @@ public class PriceAuthoringController {
                     row.bookVersion() == null ? 0 : row.bookVersion(),
                     row.basePriceMinor(),
                     delta,
-                    currency);
+                    currency,
+                    row.catchweightQuantumGrams());
         }
     }
 

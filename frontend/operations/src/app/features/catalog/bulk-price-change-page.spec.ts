@@ -81,6 +81,29 @@ describe('BulkPriceChangePage', () => {
     expect(host.querySelectorAll('[data-testid="dg-row"]')).toHaveLength(3);
   });
 
+  it('words the price of a variant sold by weight per its quantum, current and new, and no other', async () => {
+    await render(
+      { variantsAtLocation: () => of({ items: VARIANTS, nextCursor: null }) },
+      {
+        resolvedVariantPrices: () =>
+          of({
+            ...RESOLVED,
+            catchweightQuantumGrams: { v2: 100 } as Readonly<Record<string, number>>,
+          }),
+      },
+    );
+
+    const rows = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="dg-row"]'),
+    ].map((row) => row.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+    const pizza = rows.find((row) => row.includes('Pizza')) ?? '';
+    const burger = rows.find((row) => row.includes('Burger')) ?? '';
+
+    // 70 000 now and 77 000 after the default +10%, both per 100 g (row text has its spaces normalised).
+    expect(pizza.match(/per 100 g/g)).toHaveLength(2);
+    expect(burger).not.toContain('per ');
+  });
+
   it('narrows the selection to one category', async () => {
     await render(
       { variantsAtLocation: () => of({ items: VARIANTS, nextCursor: null }) },

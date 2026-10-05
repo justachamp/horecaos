@@ -25,6 +25,7 @@ import {
   BulkPriceChangeReport,
   VariantAvailabilityRow,
 } from './catalog-domain';
+import { perQuantumLabel } from './per-quantum';
 import { PricingApi } from './pricing-api';
 
 type Direction = 'INCREASE' | 'DECREASE';
@@ -37,6 +38,8 @@ interface BulkRow {
   readonly category: string;
   readonly currentAmountMinor: number | null;
   readonly newAmountMinor: number | null;
+  /** ADR 0137: set for a variant sold by weight — both prices are per this many grams. */
+  readonly quantumGrams: number | null;
   readonly status: RowStatus;
   readonly problemCode: string | null;
 }
@@ -107,6 +110,8 @@ export class BulkPriceChangePage implements OnInit {
   protected readonly currency = signal<string | null>(null);
   protected readonly variants = signal<readonly VariantAvailabilityRow[]>([]);
   protected readonly currentPrices = signal<Readonly<Record<string, number>>>({});
+  /** ADR 0137: grams each weighed variant's price is quoted per, as the price read says. */
+  protected readonly quanta = signal<Readonly<Record<string, number>>>({});
 
   protected readonly categoryFilter = signal('');
   protected readonly search = signal('');
@@ -139,6 +144,7 @@ export class BulkPriceChangePage implements OnInit {
     const category = this.categoryFilter();
     const query = this.search().trim().toLowerCase();
     const prices = this.currentPrices();
+    const quanta = this.quanta();
     const outcomes = this.outcomeByVariant();
     const report = this.lastReport();
     const kind = this.calculatorKind();
@@ -172,6 +178,7 @@ export class BulkPriceChangePage implements OnInit {
           category: row.category ?? '—',
           currentAmountMinor: current,
           newAmountMinor: newAmount,
+          quantumGrams: quanta[row.variantId] ?? null,
           status,
           problemCode: outcome?.problemCode ?? null,
         };
@@ -195,13 +202,13 @@ export class BulkPriceChangePage implements OnInit {
         key: 'current',
         header: this.i18n.t('catalog.priceBulk.column.current'),
         numeric: true,
-        getValue: (row) => this.moneyLabel(row.currentAmountMinor),
+        getValue: (row) => this.priceLabel(row.currentAmountMinor, row.quantumGrams),
       },
       {
         key: 'new',
         header: this.i18n.t('catalog.priceBulk.column.new'),
         numeric: true,
-        getValue: (row) => this.moneyLabel(row.newAmountMinor),
+        getValue: (row) => this.priceLabel(row.newAmountMinor, row.quantumGrams),
       },
       {
         key: 'status',
@@ -245,10 +252,12 @@ export class BulkPriceChangePage implements OnInit {
         this.priceBookId.set(resolved.priceBookId ?? null);
         this.currency.set(resolved.currency ?? null);
         this.currentPrices.set(resolved.amountsMinor);
+        this.quanta.set(resolved.catchweightQuantumGrams ?? {});
       } else {
         this.priceBookId.set(null);
         this.currency.set(null);
         this.currentPrices.set({});
+        this.quanta.set({});
       }
       this.denied.set(false);
     } catch (error) {
@@ -273,6 +282,7 @@ export class BulkPriceChangePage implements OnInit {
       this.pricingApi.resolvedVariantPrices(brandScope, locationScope.locationId, variantIds),
     );
     this.currentPrices.set(resolved.amountsMinor);
+    this.quanta.set(resolved.catchweightQuantumGrams ?? {});
   }
 
   protected canRunBulk(): boolean {
@@ -341,6 +351,16 @@ export class BulkPriceChangePage implements OnInit {
       return '—';
     }
     return formatMoney({ amountMinor, currency }, this.i18n.locale());
+  }
+
+  /**
+   * A price with its unit when the variant is sold by weight (ADR 0137): «150 000 сум за 100 г».
+   * An absent price stays a bare dash, because there is no figure to qualify.
+   */
+  protected priceLabel(amountMinor: number | null, quantumGrams: number | null): string {
+    const money = this.moneyLabel(amountMinor);
+    const unit = amountMinor === null ? null : perQuantumLabel(this.i18n, quantumGrams);
+    return unit ? `${money} ${unit}` : money;
   }
 
   protected statusLabel(row: BulkRow): string {

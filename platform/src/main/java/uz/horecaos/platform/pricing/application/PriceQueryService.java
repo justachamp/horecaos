@@ -114,11 +114,16 @@ public class PriceQueryService {
         Optional<JdbcPricingStore.PriceBookRow> resolved =
                 store.resolvePriceBook(tenantId, brandId, locationId, pricingChannelId, at);
         if (resolved.isEmpty()) {
-            return new ResolvedPrices(null, null, Map.of());
+            return new ResolvedPrices(null, null, Map.of(), Map.of());
         }
         JdbcPricingStore.PriceBookRow book = resolved.get();
         Map<UUID, Long> amounts = store.pricesFor(book.id(), type.name(), priceableIds, at);
-        return new ResolvedPrices(book.id(), book.currency(), amounts);
+        // ADR 0137: a variant sold by weight is priced per quantum and not per unit, and a price
+        // screen has to say so. Only a variant can be sold by weight; the same id read as a
+        // modifier option or a fee asks nothing of the catalog's physical facts.
+        Map<UUID, Integer> quanta =
+                type == PriceableType.VARIANT ? store.catchweightQuanta(tenantId, brandId, amounts.keySet()) : Map.of();
+        return new ResolvedPrices(book.id(), book.currency(), amounts, quanta);
     }
 
     /**
@@ -176,6 +181,13 @@ public class PriceQueryService {
             @Nullable Instant validUntil,
             int version) {}
 
+    /**
+     * @param catchweightQuantumGrams for each priced variant sold by weight, the grams its price is
+     *        quoted per (ADR 0137); a variant sold per unit or by the portion is absent
+     */
     public record ResolvedPrices(
-            @Nullable UUID priceBookId, @Nullable String currency, Map<UUID, Long> amountsMinor) {}
+            @Nullable UUID priceBookId,
+            @Nullable String currency,
+            Map<UUID, Long> amountsMinor,
+            Map<UUID, Integer> catchweightQuantumGrams) {}
 }

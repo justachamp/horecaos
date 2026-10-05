@@ -82,9 +82,21 @@
                   (input)="onEditInput(row.variantId, $any($event.target).value)"
                   [attr.data-testid]="'price-matrix-input-' + row.variantId"
                 />
+                @if (unitLabel(row); as unit) {
+                  <span
+                    class="q-caption price-matrix__unit"
+                    [attr.data-testid]="'price-matrix-unit-' + row.variantId"
+                    >{{ unit }}</span
+                  >
+                }
               </td>
               <td class="q-mono q-tnum" data-testid="price-matrix-base">
                 {{ moneyLabel(row.basePriceMinor, row.currency) }}
+                @if (row.basePriceMinor !== null && row.basePriceMinor !== undefined) {
+                  @if (unitLabel(row); as unit) {
+                    <span class="q-caption price-matrix__unit">{{ unit }}</span>
+                  }
+                }
               </td>
               <td class="q-mono q-tnum" data-testid="price-matrix-delta">
                 {{ deltaLabel(row) }}
