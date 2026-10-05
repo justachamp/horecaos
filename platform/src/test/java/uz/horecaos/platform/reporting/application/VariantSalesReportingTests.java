@@ -345,6 +345,34 @@ class VariantSalesReportingTests {
                 .containsExactly(VARIANT_SALAD, VARIANT_BURGER);
     }
 
+    @Test
+    @DisplayName(
+            "a line of an order that did not complete is not a sale: the rows and the total leave out cancelled and rejected orders")
+    void onlyCompletedOrdersAreSales() {
+        UUID completed = insertOrder(TENANT, "DONE", LOCATION_A, "DELIVERY");
+        insertLine(TENANT, completed, LOCATION_A, VARIANT_PIZZA, 1, 40_000L, 40_000L);
+        UUID cancelled = insertOrder(TENANT, "CANCELLED", LOCATION_A, "DELIVERY", "CANCELLED");
+        insertLine(TENANT, cancelled, LOCATION_A, VARIANT_PIZZA, 2, 80_000L, 80_000L);
+        UUID rejected = insertOrder(TENANT, "REJECTED", LOCATION_A, "PICKUP", "REJECTED");
+        insertLine(TENANT, rejected, LOCATION_A, VARIANT_SALAD, 5, 100_000L, 100_000L);
+
+        List<JdbcReportingStore.VariantSalesRow> rows =
+                store.readVariantSales(TENANT, DAY, DAY, List.of(), List.of(), 100);
+
+        assertThat(rows)
+                .as("the salad was only ever on a rejected order, and the cancelled pizzas are not sold pizzas")
+                .singleElement()
+                .satisfies(pizza -> {
+                    assertThat(pizza.variantId()).isEqualTo(VARIANT_PIZZA);
+                    assertThat(pizza.totalQuantity()).isEqualByComparingTo("1");
+                    assertThat(pizza.totalNetSom()).isEqualTo(40_000L);
+                    assertThat(pizza.deliveryQuantity()).isEqualByComparingTo("1");
+                });
+        assertThat(store.readVariantSalesTotalNetSom(TENANT, DAY, DAY, List.of(), List.of()))
+                .as("the total a share is divided by counts the same orders as the rows it divides")
+                .isEqualTo(40_000L);
+    }
+
     // ----------------------------------------------------------------- fixtures
 
     private static UUID orderId(String seed) {
@@ -357,6 +385,11 @@ class VariantSalesReportingTests {
     }
 
     private UUID insertOrder(UUID tenantId, String seed, UUID locationId, String fulfilmentType) {
+        return insertOrder(tenantId, seed, locationId, fulfilmentType, "COMPLETED");
+    }
+
+    private UUID insertOrder(
+            UUID tenantId, String seed, UUID locationId, String fulfilmentType, String terminalStatus) {
         UUID orderId = orderId(seed);
         OffsetDateTime occurredAt = DAY.atTime(9, 0).minusHours(5).atOffset(ZoneOffset.UTC);
 
@@ -370,7 +403,7 @@ class VariantSalesReportingTests {
         params.put("locationId", locationId);
         params.put("channelCode", "TELEGRAM");
         params.put("fulfilmentType", fulfilmentType);
-        params.put("terminalStatus", "COMPLETED");
+        params.put("terminalStatus", terminalStatus);
         params.put("lineCount", 1);
         params.put("itemCount", 1);
         params.put("metricCalculationVersion", 1);

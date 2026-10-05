@@ -2465,6 +2465,12 @@ public class JdbcReportingStore {
      * the join stays inside the range's own partitions rather than scanning the
      * whole history.
      *
+     * <p>Completed orders only (ADR 0043's {@code revenue.gross.v1} and {@code orders.count.v1}):
+     * day close writes the lines of every order created in the day, cancelled, rejected and still
+     * open ones included, and a dish on an order that was never fulfilled was not sold. The same
+     * filter {@link #readComboSales} and {@link #readVariantSalesTotalNetSom} apply, so the Sales and
+     * Combos tabs and the ABC share agree about which orders they count.
+     *
      * <p>Grouped and bounded, on the same footing as {@link #readOrders}: a
      * capped, magnitude-ordered read serves the tab at pilot scale, and a
      * cursor-paginated feed is follow-up work for whenever a tenant's catalogue
@@ -2576,6 +2582,7 @@ public class JdbcReportingStore {
                   JOIN reporting.fact_order o
                     ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
+                   AND o.terminal_status = 'COMPLETED'
                 """ + locationFilter + fulfilmentFilter + """
                  GROUP BY l.variant_id, l.category_id
                 """ + havingClause + " " + orderClause + """
@@ -2701,9 +2708,14 @@ public class JdbcReportingStore {
      * <p>Exists so a bounded, revenue-ranked read (a capped page of {@link
      * #readVariantSales}, such as {@code ReportQueryService#abcCurve}'s own
      * curve) can divide a visible row's revenue by the tenant's true total
-     * rather than by the sum of only the rows the page returned — the same
-     * total {@code ProductClassificationService#run} sums, unbounded, over
-     * every ranked variant before computing its own cumulative share.
+     * rather than by the sum of only the rows the page returned. Completed
+     * orders only, as the rows it divides are.
+     *
+     * <p>{@code ProductClassificationService#run} sums its own total over the
+     * line facts with no join back to {@code fact_order} (see {@code
+     * JdbcClassificationStore#readVariantBuckets}), so it still counts the
+     * lines of an order that did not complete; the two totals agree only
+     * where every order in range did.
      */
     public long readVariantSalesTotalNetSom(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> fulfilmentTypes) {
@@ -2731,6 +2743,7 @@ public class JdbcReportingStore {
                   JOIN reporting.fact_order o
                     ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
+                   AND o.terminal_status = 'COMPLETED'
                 """ + locationFilter + fulfilmentFilter)
                 .params(params)
                 .query((ResultSet row, int number) -> row.getLong("total_net_som"))
