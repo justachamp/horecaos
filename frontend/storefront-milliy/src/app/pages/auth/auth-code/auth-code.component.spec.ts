@@ -156,7 +156,7 @@ describe('AuthCodeComponent -- the countdown', () => {
     expect(h.host.querySelector('[data-testid="auth-countdown"]')?.textContent).toContain('00:44');
   });
 
-  it('offers a new code at once when the challenge\'s deadline has already passed', () => {
+  it("offers a new code at once when the challenge's deadline has already passed", () => {
     const h = setUp(validState(-5));
     h.fixture.detectChanges();
 
@@ -267,7 +267,14 @@ describe('AuthCodeComponent -- answering', () => {
     fourth.dispatchEvent(new Event('input'));
     h.fixture.detectChanges();
 
-    expect([0, 1, 2, 3, 4, 5].map((index) => box(h.host, index).value)).toEqual(['', '', '', '7', '', '']);
+    expect([0, 1, 2, 3, 4, 5].map((index) => box(h.host, index).value)).toEqual([
+      '',
+      '',
+      '',
+      '7',
+      '',
+      '',
+    ]);
     expect(document.activeElement).toBe(box(h.host, 4));
   });
 
@@ -391,26 +398,33 @@ describe('AuthCodeComponent -- answering', () => {
   });
 
   it.each([
-    ['a wrong code with tries left', new OtpCodeRejectedError(2), 'auth.errors.codeRejectedWithTries:{"count":2}'],
+    [
+      'a wrong code with tries left',
+      new OtpCodeRejectedError(2),
+      'auth.errors.codeRejectedWithTries:{"count":2}',
+    ],
     ['a wrong code with no count', new OtpCodeRejectedError(null), 'auth.errors.codeRejected'],
     ['an ended challenge', new OtpChallengeOverError(), 'auth.errors.challengeOver'],
     ['a rate limit', new OtpRateLimitedError(30), 'auth.errors.rateLimited'],
     ['sign-in being unavailable', new CustomerSignInUnavailableError(), 'auth.errors.unavailable'],
     ['anything else', new Error('boom'), 'errors.generic'],
-  ])('says what happened after %s, clears the boxes, and stays', async (_label, failure, message) => {
-    const h = setUp(validState());
-    h.fixture.detectChanges();
-    h.otp.submitCode.mockRejectedValue(failure);
+  ])(
+    'says what happened after %s, clears the boxes, and stays',
+    async (_label, failure, message) => {
+      const h = setUp(validState());
+      h.fixture.detectChanges();
+      h.otp.submitCode.mockRejectedValue(failure);
 
-    enterCode(h, '123456');
-    submitButton(h.host).click();
-    await settle(h);
+      enterCode(h, '123456');
+      submitButton(h.host).click();
+      await settle(h);
 
-    expect(errorText(h.host)).toContain(message);
-    expect(box(h.host, 0).value).toBe('');
-    expect(h.navigate).not.toHaveBeenCalled();
-    expect(h.delivery.rememberSignInPhone).not.toHaveBeenCalled();
-  });
+      expect(errorText(h.host)).toContain(message);
+      expect(box(h.host, 0).value).toBe('');
+      expect(h.navigate).not.toHaveBeenCalled();
+      expect(h.delivery.rememberSignInPhone).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not remember the phone or leave when the grant cannot be redeemed', async () => {
     const h = setUp(validState());

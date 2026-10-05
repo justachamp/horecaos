@@ -105,6 +105,46 @@
           }
         </div>
 
+        <!-- One modifier group with its options; drawn for the product and in the row of a portion that carries it -->
+        <ng-template #groupBlock let-group>
+          <div>
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <span class="text-[13px] font-medium text-text-primary">{{ group.name }}</span>
+              @if (group.required) {
+                <span
+                  class="shrink-0 rounded-full bg-brand-accent/15 px-2 py-0.5 text-[11px] font-semibold text-brand-accent"
+                >
+                  {{ 'product.modifierRequired' | t }}
+                </span>
+              }
+            </div>
+            <div class="flex flex-col gap-2">
+              @for (option of group.options; track option.id) {
+                <label
+                  class="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2.5 text-text-primary"
+                >
+                  <span class="flex min-w-0 items-center gap-2 text-[13px]">
+                    <input
+                      type="checkbox"
+                      [checked]="isOptionSelected(group.id, option.id)"
+                      (change)="toggleOption(group, option.id)"
+                      class="h-4 w-4 shrink-0 accent-brand-accent"
+                    />
+                    <span class="truncate">{{
+                      option.label || ('product.modifierOption' | t)
+                    }}</span>
+                  </span>
+                  @if (option.amountMinor) {
+                    <span class="shrink-0 text-[12px] text-zinc-400"
+                      >+{{ formatPrice(option.amountMinor) }}</span
+                    >
+                  }
+                </label>
+              }
+            </div>
+          </div>
+        </ng-template>
+
         @if (modifierGroups().length > 0) {
           <div class="border-b border-zinc-700 pb-4">
             <h2 class="mb-3 text-sm font-bold text-text-primary">
@@ -112,43 +152,16 @@
             </h2>
             <div class="flex flex-col gap-4">
               @for (group of modifierGroups(); track group.id) {
-                <div>
-                  <div class="mb-2 flex items-center justify-between gap-2">
-                    <span class="text-[13px] font-medium text-text-primary">{{ group.name }}</span>
-                    @if (group.required) {
-                      <span
-                        class="shrink-0 rounded-full bg-brand-accent/15 px-2 py-0.5 text-[11px] font-semibold text-brand-accent"
-                      >
-                        {{ 'product.modifierRequired' | t }}
-                      </span>
-                    }
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    @for (option of group.options; track option.id) {
-                      <label
-                        class="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2.5 text-text-primary"
-                      >
-                        <span class="flex min-w-0 items-center gap-2 text-[13px]">
-                          <input
-                            type="checkbox"
-                            [checked]="isOptionSelected(group.id, option.id)"
-                            (change)="toggleOption(group, option.id)"
-                            class="h-4 w-4 shrink-0 accent-brand-accent"
-                          />
-                          <span class="truncate">{{
-                            option.label || ('product.modifierOption' | t)
-                          }}</span>
-                        </span>
-                        @if (option.amountMinor) {
-                          <span class="shrink-0 text-[12px] text-zinc-400"
-                            >+{{ formatPrice(option.amountMinor) }}</span
-                          >
-                        }
-                      </label>
-                    }
-                  </div>
-                </div>
+                <ng-container *ngTemplateOutlet="groupBlock; context: { $implicit: group }" />
               }
+              <app-nested-choices
+                class="contents"
+                [groups]="modifierGroups()"
+                [choices]="optionChoices()"
+                [nested]="nestedChoices()"
+                [showUnmet]="nestedTouched()"
+                (nestedChange)="setNestedChoices($event)"
+              />
               @if (!modifiersValid()) {
                 <p class="text-[12px] text-red-400">{{ 'product.modifiersIncomplete' | t }}</p>
               }
@@ -212,6 +225,33 @@
                     variant.label
                   }}</span>
                   <app-physical-facts [physical]="variant.physical" [priceMinor]="variant.price" />
+                  @if (variantExtraGroups(variant.id); as extras) {
+                    @if (extras.length > 0) {
+                      <div class="flex flex-col gap-3" data-testid="variant-groups">
+                        <span class="text-[12px] font-semibold text-text-primary">{{
+                          'product.variantGroupsTitle' | t: { variant: variant.label }
+                        }}</span>
+                        @for (group of extras; track group.id) {
+                          <ng-container
+                            *ngTemplateOutlet="groupBlock; context: { $implicit: group }"
+                          />
+                        }
+                        <app-nested-choices
+                          class="contents"
+                          [groups]="extras"
+                          [choices]="optionChoices()"
+                          [nested]="nestedChoices()"
+                          [showUnmet]="nestedTouched()"
+                          (nestedChange)="setNestedChoices($event)"
+                        />
+                        @if (!modifiersValidFor(variant.id)) {
+                          <p class="text-[12px] text-red-400">
+                            {{ 'product.modifiersIncomplete' | t }}
+                          </p>
+                        }
+                      </div>
+                    }
+                  }
                   @if (variant.remainingQuantity !== null) {
                     <p class="text-[12px] text-amber-400" data-testid="product-low-stock">
                       {{ 'product.lowStock' | t: { count: variant.remainingQuantity } }}
@@ -245,7 +285,7 @@
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                         [disabled]="
                           cartService.updating() ||
-                          !modifiersValid() ||
+                          !modifiersValidFor(variant.id) ||
                           !variant.onSaleNow ||
                           comboUnavailable()
                         "
@@ -261,7 +301,7 @@
                       class="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-brand-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
                       [disabled]="
                         cartService.updating() ||
-                        !modifiersValid() ||
+                        !modifiersValidFor(variant.id) ||
                         !variant.onSaleNow ||
                         comboUnavailable()
                       "

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/integration.events/MarketplaceAvailabilityPushed.v1.schema.json",
+  "title": "MarketplaceAvailabilityPushed v1 payload",
+  "description": "A marketplace partner is now known to hold a new availability for one mapped dish (ADR 0040, ADR 0141). Published by the availability reconciler when the partner answered a state-set with a success and the answer was recorded. A refused push and a push whose outcome is unknown publish nothing, because neither confirms anything. Identifiers, a boolean and a sequence only: the partner's own item id is the partner's identifier for a dish, never a name, and nothing here is personal data (ADR 0029). A consumer resolves the dish's name through the authorized catalog API with variantId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bindingId", "locationId", "variantId", "providerType", "externalItemId", "available", "desiredSeq", "confirmedAt"],
+  "properties": {
+    "bindingId": { "type": "string", "format": "uuid" },
+    "locationId": { "type": "string", "format": "uuid" },
+    "variantId": { "type": "string", "format": "uuid" },
+    "providerType": { "type": "string", "maxLength": 64 },
+    "externalItemId": { "type": "string", "maxLength": 255 },
+    "available": { "type": "boolean" },
+    "desiredSeq": { "type": "integer", "minimum": 1 },
+    "confirmedAt": { "type": "string", "format": "date-time" }
+  }
+}

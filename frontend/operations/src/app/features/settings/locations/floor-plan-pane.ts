@@ -21,6 +21,7 @@ import {
 } from '../../../shared/ui/floor-plan-canvas/floor-plan-canvas';
 import { TablePrintCard } from '../../../shared/ui/table-print-card/table-print-card';
 import { describeApiError } from '../../orders/order-errors';
+import { PartyClose } from '../../orders/party-close';
 import { ReservationsApi } from '../../orders/reservations-api';
 import {
   SESSION_CURRENCY,
@@ -65,7 +66,7 @@ const QR_MODES: readonly { readonly value: QrMode; readonly selectable: boolean 
  */
 @Component({
   selector: 'q-floor-plan-pane',
-  imports: [TPipe, FloorPlanCanvas, TablePrintCard],
+  imports: [TPipe, FloorPlanCanvas, TablePrintCard, PartyClose],
   templateUrl: './floor-plan-pane.html',
   styleUrl: './floor-plan-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -633,6 +634,26 @@ export class FloorPlanPane {
     } finally {
       this.claimBusy.set(false);
     }
+  }
+
+  /** The party at this table, when it is the kind «Закрыть стол» is for: seated by staff, or a guest's claim that was confirmed. An unconfirmed claim has its own keep-or-release above. */
+  protected closablePartyAt(table: TableView): SessionView | null {
+    const session = this.sessionAt(table);
+    return session !== null && !isUnconfirmedClaim(session) ? session : null;
+  }
+
+  /** A party was closed from this panel (row `10.2d`): it leaves the room, and what it freed is read again. */
+  protected async onPartyClosed(sessionId: string): Promise<void> {
+    this.liveSessions.set(
+      (this.liveSessions() ?? []).filter((session) => session.sessionId !== sessionId),
+    );
+    this.seatedNotice.set(null);
+    await this.loadRoom(this.scope());
+  }
+
+  /** Someone moved the party first, or the close was refused: what the plan shows is out of date. */
+  protected async onPartyStale(): Promise<void> {
+    await this.loadRoom(this.scope());
   }
 
   /** When the claim gives the table back, as a time the host reads off a clock. */

@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, input, output, computed, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  input,
+  output,
+  computed,
+  OnInit,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { LangService, LANG_LABELS } from '../../../services/lang.service';
@@ -22,7 +30,7 @@ export interface ProfileMenuItem {
   imports: [CommonModule, RouterLink, TranslatePipe],
   templateUrl: './profile-menu.html',
   styleUrl: './profile-menu.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileMenuComponent implements OnInit {
   private readonly lang = inject(LangService);
@@ -32,13 +40,28 @@ export class ProfileMenuComponent implements OnInit {
   readonly logoutClick = output<void>();
 
   private readonly allItems: ProfileMenuItem[] = [
-    { id: 'favorites', labelKey: 'profile.favorites', route: '/profile/favorites', authorizedOnly: true },
-    { id: 'locations', labelKey: 'profile.locations', route: '/locations/list', authorizedOnly: true },
+    {
+      id: 'favorites',
+      labelKey: 'profile.favorites',
+      route: '/profile/favorites',
+      authorizedOnly: true,
+    },
+    {
+      id: 'locations',
+      labelKey: 'profile.locations',
+      route: '/locations/list',
+      authorizedOnly: true,
+    },
     { id: 'language', labelKey: 'profile.language', route: '/profile/language' },
     { id: 'theme', labelKey: 'profile.theme', isTheme: true },
-    { id: 'telegram', labelKey: 'profile.telegram', route: '/profile/telegram', authorizedOnly: true },
+    {
+      id: 'telegram',
+      labelKey: 'profile.telegram',
+      route: '/profile/telegram',
+      authorizedOnly: true,
+    },
     { id: 'support', labelKey: 'profile.support', route: '/profile/support' },
-    { id: 'logout', labelKey: 'profile.logout', isLogout: true }
+    { id: 'logout', labelKey: 'profile.logout', isLogout: true },
   ];
 
   readonly items = computed(() => {
@@ -54,9 +77,7 @@ export class ProfileMenuComponent implements OnInit {
     }
     const id = this.lang.langId();
     const langValue = LANG_LABELS[id] ?? LANG_LABELS['ru'];
-    return list.map((item) =>
-      item.id === 'language' ? { ...item, value: langValue } : item
-    );
+    return list.map((item) => (item.id === 'language' ? { ...item, value: langValue } : item));
   });
 
   ngOnInit(): void {

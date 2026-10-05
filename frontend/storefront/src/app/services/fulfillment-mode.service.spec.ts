@@ -57,7 +57,10 @@ describe('FulfillmentModeService.modes', () => {
 
     await service.modes('other-location');
 
-    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/locations/other-location/'), expect.anything());
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringContaining('/locations/other-location/'),
+      expect.anything(),
+    );
   });
 
   it('returns an empty list rather than throwing when the response carries no modes field', async () => {

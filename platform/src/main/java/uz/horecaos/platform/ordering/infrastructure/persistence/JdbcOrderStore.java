@@ -315,6 +315,30 @@ public class JdbcOrderStore {
     }
 
     /**
+     * Records the cash the customer said they would hand over on an order the caller is
+     * creating in this very transaction (ADR 0039, gap map row {@code 1.3e}).
+     *
+     * <p>Only fills a column that is still empty. The amendment path ({@code applyRevision})
+     * is the way to change a figure that has been set, and it versions and audits the change;
+     * this is the order's own first value, written beside the row that creates it, so it takes
+     * no version and writes no revision of its own. {@code false} when the order already
+     * carries a figure or is not this tenant's.
+     */
+    public boolean recordCashTenderedAtCreation(UUID tenantId, UUID orderId, long amountMinor) {
+        return jdbc.sql("""
+                UPDATE ordering.orders
+                SET cash_tendered_expected_minor = :amount
+                WHERE tenant_id = :tenantId AND id = :orderId
+                  AND cash_tendered_expected_minor IS NULL
+                """)
+                        .param("amount", amountMinor)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .update()
+                == 1;
+    }
+
+    /**
      * Closes a live line at a revision boundary (ADR 0039 {@code
      * CHANGE_LINE_QUANTITY}).
      *

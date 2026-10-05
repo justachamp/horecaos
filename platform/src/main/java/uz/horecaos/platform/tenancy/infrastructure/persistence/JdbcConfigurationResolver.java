@@ -1,5 +1,6 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
+import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,8 @@ public class JdbcConfigurationResolver implements ConfigurationResolver, Configu
 
     private static final String SELECT_CHAIN = """
             SELECT scope_type, value_type, boolean_value, integer_value,
-                   decimal_value, string_value, is_explicit_null
+                   decimal_value, string_value, is_explicit_null,
+                   version, set_by, updated_at
               FROM tenant.configuration_values
              WHERE key_code = :keyCode
                AND (
@@ -102,16 +104,23 @@ public class JdbcConfigurationResolver implements ConfigurationResolver, Configu
                         (Long) resultSet.getObject("integer_value"),
                         resultSet.getBigDecimal("decimal_value"),
                         resultSet.getString("string_value"),
-                        resultSet.getBoolean("is_explicit_null")))
+                        resultSet.getBoolean("is_explicit_null"),
+                        new ResolutionTrace.Provenance(
+                                resultSet.getLong("version"),
+                                resultSet.getString("set_by"),
+                                resultSet
+                                        .getObject("updated_at", OffsetDateTime.class)
+                                        .toInstant())))
                 .list();
 
         Map<ScopeType, ScopedConfigurationRow> values = new EnumMap<>(ScopeType.class);
         for (Row row : rows) {
             values.put(
                     row.scopeType(),
-                    row.explicitNull()
-                            ? ScopedConfigurationRow.explicitNull(row.scopeType())
-                            : ScopedConfigurationRow.of(row.scopeType(), row.typedValue(key)));
+                    (row.explicitNull()
+                                    ? ScopedConfigurationRow.explicitNull(row.scopeType())
+                                    : ScopedConfigurationRow.of(row.scopeType(), row.typedValue(key)))
+                            .withProvenance(row.provenance()));
         }
         return values;
     }
@@ -123,7 +132,8 @@ public class JdbcConfigurationResolver implements ConfigurationResolver, Configu
             Long integerValue,
             java.math.BigDecimal decimalValue,
             String stringValue,
-            boolean explicitNull) {
+            boolean explicitNull,
+            ResolutionTrace.Provenance provenance) {
 
         Object typedValue(ConfigurationKey<?> key) {
             Object raw =

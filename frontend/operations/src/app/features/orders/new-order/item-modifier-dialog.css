@@ -71,3 +71,8 @@
   background: var(--q-primary);
   color: var(--q-inverse-ink);
 }
+
+/* ADR 0136: the name of a group asked under an option, between that option's legend and its choices. */
+.modifier-dialog__nested-group {
+  margin: 8px 0 4px;
+}

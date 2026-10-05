@@ -13,7 +13,7 @@ import { OrdersService, type ApiOrder } from '../../../services/orders.service';
   standalone: true,
   imports: [CommonModule, RouterLink, TranslatePipe],
   templateUrl: './finished-order.component.html',
-  styleUrl: './finished-order.component.scss'
+  styleUrl: './finished-order.component.scss',
 })
 export class FinishedOrderComponent implements OnInit, OnDestroy {
   orders = signal<OrderItem[]>([]);
@@ -49,7 +49,7 @@ export class FinishedOrderComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? err?.message ?? "Buyurtmalar yuklanmadi.");
+        this.error.set(err?.error?.message ?? err?.message ?? 'Buyurtmalar yuklanmadi.');
       },
     });
   }

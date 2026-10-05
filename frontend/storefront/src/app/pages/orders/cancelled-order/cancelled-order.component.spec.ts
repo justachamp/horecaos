@@ -3,7 +3,11 @@ import { provideRouter } from '@angular/router';
 import { Subject, of } from 'rxjs';
 
 import { CancelledOrderComponent } from './cancelled-order.component';
-import { OrdersService, type ApiOrder, type OrdersLoadedEvent } from '../../../services/orders.service';
+import {
+  OrdersService,
+  type ApiOrder,
+  type OrdersLoadedEvent,
+} from '../../../services/orders.service';
 import { TranslateService } from '../../../services/translate.service';
 
 class FakeTranslateService {
@@ -52,7 +56,11 @@ describe('CancelledOrderComponent: never fabricates an item count or distance', 
   it('leaves the subtitle honest -- no "0 ta", falls back to the placed-at date', async () => {
     const { fixture, comp, ordersService } = setUp();
     ordersService.ordersToReturn = [
-      apiOrder({ items_count: undefined, delivery_distance: undefined, created_date: '2026-09-01T10:00:00Z' }),
+      apiOrder({
+        items_count: undefined,
+        delivery_distance: undefined,
+        created_date: '2026-09-01T10:00:00Z',
+      }),
     ];
 
     fixture.detectChanges();

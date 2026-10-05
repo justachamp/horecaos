@@ -80,6 +80,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -163,7 +164,8 @@ class TelegramOperationsNotificationIntegrationTest {
 
         notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
 
         AuditRecorder audit = new JdbcAuditRecorder(jdbc, objectMapper);
         TelegramBotApiClient botApiClient = new TelegramBotApiClient(objectMapper);
@@ -533,7 +535,11 @@ class TelegramOperationsNotificationIntegrationTest {
     private void activateTelegramTemplate() {
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
         NotificationTemplateService templates = new NotificationTemplateService(
-                templateStore, JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
+                templateStore,
+                JsonMapper.builder().build(),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                AuditTrail.discarding(),
+                AuditTrail.actor("template-author"));
         UUID templateId = templates.createTemplate(
                 TENANT,
                 BRAND,

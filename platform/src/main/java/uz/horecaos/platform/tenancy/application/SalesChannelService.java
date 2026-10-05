@@ -1,21 +1,31 @@
 package uz.horecaos.platform.tenancy.application;
 
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.ChannelAvailabilityChanged;
 import uz.horecaos.platform.tenancy.api.ChannelSocialPlatform;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelActivated;
 import uz.horecaos.platform.tenancy.api.SalesChannelArchived;
+import uz.horecaos.platform.tenancy.api.SalesChannelInstallationChanged;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -27,28 +37,48 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelS
  * on Monday and sells on it without waiting for a release. What the tenant cannot
  * do is invent a {@link SalesChannelSystemType}, because behaviour keys on the
  * type.
+ *
+ * <p><strong>Every write leaves an audit fact</strong> (ADR 0027, staff row
+ * {@code 9.3a}) in the transaction that made it: {@code channel.created},
+ * {@code channel.updated}, {@code channel.deactivated}, {@code channel.reactivated},
+ * {@code channel.archived} and one {@code channel.*.replaced} per matrix. A channel
+ * gates which payment methods, fulfilment modes and branches a customer can use, so
+ * «who turned cash off on the website» has to be answerable from the history. The
+ * matrices are recorded as the sorted lists they are; a social link records which
+ * platforms are linked and never where they point, because a handle on a personal
+ * profile is a person's identifier and the audit trail is not the place it lives.
  */
 @Service
 public class SalesChannelService {
 
     private final JdbcSalesChannelStore store;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
     private final ApplicationEventPublisher events;
 
     /**
-     * The two-argument form a caller could always construct without a Spring
-     * context. Events published through it go nowhere, which is no change from
-     * before this class published any — a test built this way is asserting
-     * something other than the outbox and was never wired to it.
+     * The form a caller could always construct without a Spring context. Events
+     * published through it go nowhere, which is no change from before this class
+     * published any — a test built this way is asserting something other than the
+     * outbox and was never wired to it.
      */
-    public SalesChannelService(JdbcSalesChannelStore store, Clock clock) {
-        this(store, clock, event -> {});
+    public SalesChannelService(
+            JdbcSalesChannelStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
+        this(store, clock, audit, currentActor, event -> {});
     }
 
     @Autowired
-    public SalesChannelService(JdbcSalesChannelStore store, Clock clock, ApplicationEventPublisher events) {
+    public SalesChannelService(
+            JdbcSalesChannelStore store,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            ApplicationEventPublisher events) {
         this.store = store;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
         this.events = events;
     }
 
@@ -90,7 +120,36 @@ public class SalesChannelService {
                 channel.code(),
                 channel.systemType().name(),
                 channel.version()));
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                AuditFact.of("channel.created", AuditClass.BUSINESS),
+                tenantId,
+                channel.id(),
+                channel.version(),
+                "Sales channel created",
+                Map.of(),
+                snapshotOf(channel));
+        announceInstallation(tenantId, channel.id(), null, channel.providerInstallationId());
         return channel;
+    }
+
+    /**
+     * Tells the marketplace reconciler that the installation a channel resolves for has moved,
+     * or that the channel it resolves to was paused, reopened or retired (ADR 0141 Decision 7's
+     * marker for a channel's installation). Nothing is published for a channel with no
+     * installation before or after: no binding resolves through it. An accelerator only -- the
+     * resync sweep re-resolves the channel of every binding on its own.
+     */
+    private void announceInstallation(
+            UUID tenantId,
+            UUID channelId,
+            @Nullable UUID previousInstallationId,
+            @Nullable UUID currentInstallationId) {
+        if (previousInstallationId == null && currentInstallationId == null) {
+            return;
+        }
+        events.publishEvent(SalesChannelInstallationChanged.of(
+                tenantId, channelId, previousInstallationId, currentInstallationId, clock.instant()));
     }
 
     @Transactional(readOnly = true)
@@ -175,7 +234,11 @@ public class SalesChannelService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcSalesChannelStore.explain(violation);
         }
-        return new SalesChannel(
+        if (!java.util.Objects.equals(channel.providerInstallationId(), command.providerInstallationId())) {
+            announceInstallation(
+                    tenantId, channelId, channel.providerInstallationId(), command.providerInstallationId());
+        }
+        SalesChannel updated = new SalesChannel(
                 channel.id(),
                 channel.tenantId(),
                 channel.code(),
@@ -190,6 +253,15 @@ public class SalesChannelService {
                 command.brandColorPrimary(),
                 command.brandColorSecondary(),
                 expectedVersion + 1);
+        recordAudit(
+                AuditFact.of("channel.updated", AuditClass.BUSINESS),
+                tenantId,
+                channelId,
+                updated.version(),
+                "Sales channel edited",
+                snapshotOf(channel),
+                snapshotOf(updated));
+        return updated;
     }
 
     /**
@@ -202,18 +274,36 @@ public class SalesChannelService {
     @Transactional
     public SalesChannel deactivate(UUID tenantId, UUID channelId, int expectedVersion) {
         return transitionActiveStatus(
-                tenantId, channelId, SalesChannel.Status.ACTIVE, SalesChannel.Status.INACTIVE, expectedVersion);
+                tenantId,
+                channelId,
+                SalesChannel.Status.ACTIVE,
+                SalesChannel.Status.INACTIVE,
+                expectedVersion,
+                AuditFact.of("channel.deactivated", AuditClass.BUSINESS),
+                "Sales channel deactivated");
     }
 
     /** The reverse of {@link #deactivate}. */
     @Transactional
     public SalesChannel reactivate(UUID tenantId, UUID channelId, int expectedVersion) {
         return transitionActiveStatus(
-                tenantId, channelId, SalesChannel.Status.INACTIVE, SalesChannel.Status.ACTIVE, expectedVersion);
+                tenantId,
+                channelId,
+                SalesChannel.Status.INACTIVE,
+                SalesChannel.Status.ACTIVE,
+                expectedVersion,
+                AuditFact.of("channel.reactivated", AuditClass.BUSINESS),
+                "Sales channel reactivated");
     }
 
     private SalesChannel transitionActiveStatus(
-            UUID tenantId, UUID channelId, SalesChannel.Status from, SalesChannel.Status to, int expectedVersion) {
+            UUID tenantId,
+            UUID channelId,
+            SalesChannel.Status from,
+            SalesChannel.Status to,
+            int expectedVersion,
+            AuditFact.Builder fact,
+            String reason) {
         SalesChannel channel = require(tenantId, channelId);
         if (channel.status() != from) {
             throw new TenantResourceConflictException(
@@ -222,7 +312,8 @@ public class SalesChannelService {
         if (!store.updateStatus(tenantId, channelId, to, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
-        return new SalesChannel(
+        announceInstallation(tenantId, channelId, channel.providerInstallationId(), channel.providerInstallationId());
+        SalesChannel transitioned = new SalesChannel(
                 channel.id(),
                 channel.tenantId(),
                 channel.code(),
@@ -237,6 +328,15 @@ public class SalesChannelService {
                 channel.brandColorPrimary(),
                 channel.brandColorSecondary(),
                 expectedVersion + 1);
+        recordAudit(
+                fact,
+                tenantId,
+                channelId,
+                transitioned.version(),
+                reason,
+                lifecycleOf(channel, from),
+                lifecycleOf(transitioned, to));
+        return transitioned;
     }
 
     /**
@@ -259,7 +359,8 @@ public class SalesChannelService {
         int newVersion = channel.version() + 1;
         events.publishEvent(new SalesChannelArchived(
                 UUID.randomUUID(), new TenantId(tenantId), channelId, clock.instant(), channel.code(), newVersion));
-        return new SalesChannel(
+        announceInstallation(tenantId, channelId, channel.providerInstallationId(), channel.providerInstallationId());
+        SalesChannel archived = new SalesChannel(
                 channel.id(),
                 channel.tenantId(),
                 channel.code(),
@@ -274,6 +375,15 @@ public class SalesChannelService {
                 channel.brandColorPrimary(),
                 channel.brandColorSecondary(),
                 newVersion);
+        recordAudit(
+                AuditFact.of("channel.archived", AuditClass.BUSINESS),
+                tenantId,
+                channelId,
+                archived.version(),
+                "Sales channel archived",
+                lifecycleOf(channel, channel.status()),
+                lifecycleOf(archived, SalesChannel.Status.ARCHIVED));
+        return archived;
     }
 
     /**
@@ -285,7 +395,9 @@ public class SalesChannelService {
      */
     @Transactional
     public void replacePaymentMethods(UUID tenantId, UUID channelId, Map<String, Boolean> matrix, int expectedVersion) {
-        require(tenantId, channelId);
+        SalesChannel channel = require(tenantId, channelId);
+        // Read before the replace below rewrites it: the previous matrix is the "before".
+        Map<String, Boolean> previous = store.paymentMethods(tenantId, channelId);
         try {
             if (!store.replacePaymentMethods(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
                 throw new TenantResourceConflictException("The channel changed since it was read");
@@ -302,22 +414,40 @@ public class SalesChannelService {
         }
         publishAvailabilityChanged(
                 tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.PAYMENT_METHODS, expectedVersion);
+        recordAudit(
+                AuditFact.of("channel.payment_methods.replaced", AuditClass.BUSINESS),
+                tenantId,
+                channelId,
+                expectedVersion + 1,
+                "Sales channel payment methods replaced",
+                matrixSnapshot(channel, "paymentMethods", previous),
+                matrixSnapshot(channel, "paymentMethods", matrix));
     }
 
     @Transactional
     public void replaceFulfillmentModes(
             UUID tenantId, UUID channelId, Map<FulfillmentMode, Boolean> matrix, int expectedVersion) {
-        require(tenantId, channelId);
+        SalesChannel channel = require(tenantId, channelId);
+        Map<FulfillmentMode, Boolean> previous = store.fulfillmentModes(tenantId, channelId);
         if (!store.replaceFulfillmentModes(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
         publishAvailabilityChanged(
                 tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.FULFILLMENT_MODES, expectedVersion);
+        recordAudit(
+                AuditFact.of("channel.fulfillment_modes.replaced", AuditClass.BUSINESS),
+                tenantId,
+                channelId,
+                expectedVersion + 1,
+                "Sales channel fulfilment modes replaced",
+                matrixSnapshot(channel, "fulfillmentModes", named(previous)),
+                matrixSnapshot(channel, "fulfillmentModes", named(matrix)));
     }
 
     @Transactional
     public void replaceLocations(UUID tenantId, UUID channelId, List<UUID> locationIds, int expectedVersion) {
-        require(tenantId, channelId);
+        SalesChannel channel = require(tenantId, channelId);
+        List<UUID> previous = store.locations(tenantId, channelId);
         try {
             if (!store.replaceLocations(tenantId, channelId, locationIds, expectedVersion, clock.instant())) {
                 throw new TenantResourceConflictException("The channel changed since it was read");
@@ -327,6 +457,14 @@ public class SalesChannelService {
         }
         publishAvailabilityChanged(
                 tenantId, channelId, ChannelAvailabilityChanged.MatrixKind.LOCATIONS, expectedVersion);
+        recordAudit(
+                AuditFact.of("channel.locations.replaced", AuditClass.BUSINESS),
+                tenantId,
+                channelId,
+                expectedVersion + 1,
+                "Sales channel locations replaced",
+                locationsSnapshot(channel, previous),
+                locationsSnapshot(channel, locationIds));
     }
 
     /**
@@ -348,7 +486,8 @@ public class SalesChannelService {
      */
     @Transactional
     public void replaceSocialLinks(UUID tenantId, UUID channelId, Map<String, String> links, int expectedVersion) {
-        require(tenantId, channelId);
+        SalesChannel channel = require(tenantId, channelId);
+        Map<String, String> previous = store.socialLinks(tenantId, channelId);
         links.forEach((platform, url) -> {
             ChannelSocialPlatform.require(platform);
             if (url == null || !url.regionMatches(true, 0, "https://", 0, "https://".length())) {
@@ -362,6 +501,15 @@ public class SalesChannelService {
         } catch (DataIntegrityViolationException violation) {
             throw JdbcSalesChannelStore.explain(violation);
         }
+        // Platforms only: where a link points can be a person's own handle.
+        recordAudit(
+                AuditFact.of("channel.social_links.replaced", AuditClass.BUSINESS),
+                tenantId,
+                channelId,
+                expectedVersion + 1,
+                "Sales channel social links replaced",
+                socialSnapshot(channel, previous),
+                socialSnapshot(channel, links));
     }
 
     /**
@@ -379,6 +527,106 @@ public class SalesChannelService {
                 clock.instant(),
                 matrixKind.name(),
                 expectedVersion + 1));
+    }
+
+    // ------------------------------------------------------------------ audit
+
+    /**
+     * One fact per write, in the caller's transaction. The reason is a plain statement of the
+     * action: the console has no field for one, and ADR 0027 refuses a user-initiated fact
+     * without it.
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            UUID tenantId,
+            UUID channelId,
+            int version,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.tenant(tenantId))
+                .target("tenancy.sales-channel", channelId)
+                .targetVersion((long) version)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(channelId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /** The fields an operator edits, as they read once the write lands. */
+    private static Map<String, Object> snapshotOf(SalesChannel channel) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("systemType", channel.systemType().name());
+        snapshot.put("displayName", channel.displayName());
+        snapshot.put("status", channel.status().name());
+        snapshot.put("pricePlaneChannelId", idOrNull(channel.pricePlaneChannelId()));
+        snapshot.put("externallyPriced", channel.externallyPriced());
+        snapshot.put("guestOrdersAllowed", channel.guestOrdersAllowed());
+        snapshot.put("providerInstallationId", idOrNull(channel.providerInstallationId()));
+        snapshot.put("icon", channel.icon());
+        snapshot.put("brandColorPrimary", channel.brandColorPrimary());
+        snapshot.put("brandColorSecondary", channel.brandColorSecondary());
+        return snapshot;
+    }
+
+    /** A status step: the channel recognisable by its code, with the status it holds on that side. */
+    private static Map<String, Object> lifecycleOf(SalesChannel channel, SalesChannel.Status status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("status", status.name());
+        return snapshot;
+    }
+
+    /**
+     * A matrix as two sorted lists, so a diff says «CASH moved from enabled to disabled» and not
+     * «the map changed»; an entry the matrix never mentioned is in neither list.
+     */
+    private static Map<String, Object> matrixSnapshot(SalesChannel channel, String name, Map<String, Boolean> matrix) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("enabled" + capitalized(name), sortedKeys(matrix, true));
+        snapshot.put("disabled" + capitalized(name), sortedKeys(matrix, false));
+        return snapshot;
+    }
+
+    private static <K extends Enum<K>> Map<String, Boolean> named(Map<K, Boolean> matrix) {
+        Map<String, Boolean> byName = new LinkedHashMap<>();
+        matrix.forEach((key, enabled) -> byName.put(key.name(), enabled));
+        return byName;
+    }
+
+    private static List<String> sortedKeys(Map<String, Boolean> matrix, boolean enabled) {
+        return matrix.entrySet().stream()
+                .filter(entry -> Boolean.TRUE.equals(entry.getValue()) == enabled)
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+    }
+
+    private static Map<String, Object> locationsSnapshot(SalesChannel channel, List<UUID> locationIds) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put(
+                "locationIds", locationIds.stream().map(UUID::toString).sorted().collect(Collectors.toList()));
+        return snapshot;
+    }
+
+    private static Map<String, Object> socialSnapshot(SalesChannel channel, Map<String, String> links) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", channel.code());
+        snapshot.put("socialPlatforms", links.keySet().stream().sorted().collect(Collectors.toList()));
+        return snapshot;
+    }
+
+    private static @Nullable String idOrNull(@Nullable UUID id) {
+        return id == null ? null : id.toString();
+    }
+
+    private static String capitalized(String name) {
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     @Transactional(readOnly = true)

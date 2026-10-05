@@ -759,6 +759,92 @@ describe('StopListPage', () => {
     expect(host.textContent).toContain('Partly stopped');
   });
 
+  it('offers “why?” only on a dish that is stopped, and opens the explainer over the platform’s own explanation', async () => {
+    const explanation = {
+      sellable: false,
+      reasons: ['ON_STOP'],
+      stops: [
+        {
+          id: 's-brand',
+          variantId: 'v1',
+          scopeType: 'BRAND',
+          source: 'OPERATOR',
+          reasonCode: 'RECALL',
+          endsAt: null,
+          status: 'ACTIVE',
+          createdAt: '2026-10-01T08:00:00Z',
+          version: 3,
+          ignored: false,
+        },
+      ],
+      stopsConsulted: true,
+    };
+    const get = vi.fn((path: string) =>
+      of({
+        value: path.endsWith('/availability-explanation')
+          ? explanation
+          : path.endsWith('/availability-counts')
+            ? DEFAULT_COUNTS
+            : [],
+      }),
+    );
+    await render(
+      vi.fn().mockReturnValue(
+        of({
+          items: [
+            {
+              variantId: 'v1',
+              productName: 'Lagman',
+              category: 'Soups',
+              available: false,
+              stopSource: 'UNKNOWN',
+              stops: [STOPPED_BY_BRAND],
+            },
+            {
+              variantId: 'v2',
+              productName: 'Somsa',
+              category: 'Bakery',
+              available: true,
+              stopSource: 'UNKNOWN',
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+      { get },
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const buttons = host.querySelectorAll('[data-testid="stop-list-explain"]');
+    expect(buttons, 'a dish that sells has no question to answer').toHaveLength(1);
+    expect(host.querySelector('[data-testid="stop-explainer-dialog"]')).toBeNull();
+
+    (buttons[0] as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="stop-explainer-dialog"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="explainer-dish"]')?.textContent?.trim()).toBe(
+      'Lagman',
+    );
+    expect(
+      host.querySelector('[data-testid="explainer-verdict"]')?.getAttribute('data-sellable'),
+    ).toBe('false');
+    // A literal path: comparing against the builder's own output cannot fail whichever prefix is wrong.
+    expect(
+      get.mock.calls.some(
+        ([path]) =>
+          path ===
+          '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v1/availability-explanation',
+      ),
+    ).toBe(true);
+
+    (host.querySelector('[data-testid="explainer-close"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="stop-explainer-dialog"]')).toBeNull();
+  });
+
   it('lifts a stop through the brand route for a brand-wide stop, quoting the version the row showed', async () => {
     const page = vi.fn().mockReturnValue(
       of({

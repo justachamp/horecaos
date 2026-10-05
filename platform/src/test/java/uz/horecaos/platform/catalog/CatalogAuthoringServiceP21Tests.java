@@ -31,12 +31,15 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService.BulkClas
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.BulkClassifyStatus;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.ProductCreated;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
+import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService.NewComboGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
@@ -88,6 +91,7 @@ class CatalogAuthoringServiceP21Tests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE catalog.media_relations, catalog.fiscal_classifications, "
+                        + "catalog.combo_components, catalog.combo_groups, catalog.variant_modifier_groups, "
                         + "catalog.product_modifier_groups, catalog.modifier_options, catalog.modifier_groups, "
                         + "catalog.category_products, catalog.categories, catalog.catalog_products, "
                         + "catalog.location_offerings, catalog.translations, catalog.variants, catalog.products, "
@@ -193,6 +197,80 @@ class CatalogAuthoringServiceP21Tests {
         // The original is untouched.
         assertThat(query.productDetail(TENANT, BRAND, plov.productId()).variants())
                 .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("duplicating a combo copies its groups, their headings and their components onto the copy's "
+            + "container, and leaves the original and every price alone (ADR 0136)")
+    void duplicateProductCopiesTheComboStructure() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        ProductCreated lunch = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LUNCH", "Tushlik", null, LOCALE, "SKU-LUNCH", "PIECE", UNCLASSIFIED, ACTOR);
+        ProductCreated burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-B", "PIECE", UNCLASSIFIED, ACTOR);
+        ProductCreated cola = authoring.createProduct(
+                TENANT, BRAND, catalogId, "COLA", "Kola", null, LOCALE, "SKU-C", "PIECE", UNCLASSIFIED, ACTOR);
+        var composites = new CompositeProductAuthoringService(
+                new JdbcCompositeCatalogStore(jdbc),
+                store,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
+                        jdbc, JsonMapper.builder().build()),
+                Clock.systemUTC());
+        var main = composites.createComboGroup(
+                new NewComboGroup(TENANT, BRAND, lunch.defaultVariantId(), "MAIN", "Asosiy", LOCALE, 1, 2, false, 0),
+                ACTOR_SUBJECT);
+        var drink = composites.createComboGroup(
+                new NewComboGroup(TENANT, BRAND, lunch.defaultVariantId(), "DRINK", "Ichimlik", LOCALE, 0, 1, true, 1),
+                ACTOR_SUBJECT);
+        authoring.translate(TENANT, BRAND, EntityType.COMBO_GROUP, main.id(), "ru", "Основное", null);
+        composites.addComponent(TENANT, BRAND, main.id(), burger.defaultVariantId(), 2, 0, ACTOR_SUBJECT);
+        composites.addComponent(TENANT, BRAND, drink.id(), cola.defaultVariantId(), 1, 0, ACTOR_SUBJECT);
+
+        ProductCreated copy = authoring.duplicateProduct(TENANT, BRAND, lunch.productId(), ACTOR);
+
+        var composite = store.composite();
+        var copiedGroups = composite.comboGroupsForContainer(TENANT, BRAND, copy.defaultVariantId());
+        assertThat(copiedGroups)
+                .as("the copy is a combo: both groups, in the author's order, with the author's ranges")
+                .extracting(g -> g.code() + ":" + g.minimumSelections() + "-" + g.maximumSelections() + ":"
+                        + g.allowSameComponentMultipleTimes() + ":" + g.sortOrder())
+                .containsExactly("MAIN:1-2:false:0", "DRINK:0-1:true:1");
+        assertThat(copiedGroups)
+                .extracting(g -> g.id())
+                .as("new rows, not the original's")
+                .doesNotContain(main.id(), drink.id());
+        var copiedComponents = composite.componentsForGroups(
+                TENANT, BRAND, copiedGroups.stream().map(g -> g.id()).toList());
+        assertThat(copiedComponents)
+                .extracting(c -> c.componentVariantId() + ":" + c.defaultQuantity())
+                .containsExactlyInAnyOrder(burger.defaultVariantId() + ":2", cola.defaultVariantId() + ":1");
+        assertThat(copiedComponents)
+                .extracting(c -> c.id())
+                .doesNotContainAnyElementsOf(
+                        composite.componentsForGroups(TENANT, BRAND, List.of(main.id(), drink.id())).stream()
+                                .map(c -> c.id())
+                                .toList());
+        assertThat(copiedComponents).allSatisfy(c -> assertThat(c.version()).isEqualTo(1));
+
+        var headings = store.translations(TENANT, BRAND).stream()
+                .filter(row -> row.entityType() == EntityType.COMBO_GROUP
+                        && copiedGroups.get(0).id().equals(row.entityId()))
+                .collect(java.util.stream.Collectors.toMap(
+                        uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow::locale,
+                        uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow::name));
+        assertThat(headings)
+                .as("the customer reads the heading in every language the author wrote it in")
+                .containsEntry("uz", "Asosiy")
+                .containsEntry("ru", "Основное");
+
+        assertThat(composite.comboGroupsForContainer(TENANT, BRAND, lunch.defaultVariantId()))
+                .as("the original keeps its own groups, untouched")
+                .extracting(g -> g.id())
+                .containsExactly(main.id(), drink.id());
+        assertThat(composite
+                        .componentsForGroups(TENANT, BRAND, List.of(main.id(), drink.id()))
+                        .size())
+                .isEqualTo(2);
     }
 
     @Test

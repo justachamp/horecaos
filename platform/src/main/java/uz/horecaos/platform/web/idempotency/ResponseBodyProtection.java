@@ -92,18 +92,19 @@ public class ResponseBodyProtection {
     }
 
     static Optional<DataClass> classify(Method handler) {
-        Class<?> responseType = responseTypeOf(handler.getGenericReturnType());
-        if (responseType == null) {
+        Type scanType = scanTypeOf(handler.getGenericReturnType());
+        if (scanType == null) {
             return Optional.empty();
         }
-        return ClassificationScanner.scan(responseType, responseType.getSimpleName()).stream()
+        String name = rawClassOf(scanType).getSimpleName();
+        return ClassificationScanner.scan(scanType, name).stream()
                 .map(ClassificationScanner.Finding::dataClass)
                 .filter(DataClass::requiresEncryption)
                 .max(Comparator.comparingInt(Enum::ordinal));
     }
 
     /**
-     * The type a handler actually serialises, unwrapping the containers that
+     * The class a handler actually serialises, unwrapping the containers that
      * carry it.
      *
      * <p>{@code ResponseEntity<List<AddressResponse>>} is an address book, and a
@@ -111,22 +112,44 @@ public class ResponseBodyProtection {
      * on any endpoint in the codebase and pass forever.
      */
     static @Nullable Class<?> responseTypeOf(Type type) {
+        Type scanType = scanTypeOf(type);
+        return scanType == null ? null : rawClassOf(scanType);
+    }
+
+    /**
+     * The same type with its arguments kept: {@code ResponseEntity<Page<Customer>>}
+     * unwraps to {@code Page<Customer>}, not to the bare {@code Page}.
+     *
+     * <p>A generic record says nothing about what it holds until it is read with its
+     * arguments, so the scanner is given the parameterised type and a response
+     * wrapped in a page, a cursor or an envelope is classified by its contents.
+     */
+    static @Nullable Type scanTypeOf(Type type) {
         if (type instanceof ParameterizedType parameterized) {
             Type raw = parameterized.getRawType();
             if (raw instanceof Class<?> rawClass && isContainer(rawClass)) {
                 Type[] arguments = parameterized.getActualTypeArguments();
-                return arguments.length == 0 ? null : responseTypeOf(arguments[arguments.length - 1]);
+                return arguments.length == 0 ? null : scanTypeOf(arguments[arguments.length - 1]);
             }
-            return responseTypeOf(raw);
+            if (raw instanceof Class<?> rawClass && rawClass.isRecord()) {
+                return parameterized;
+            }
+            return scanTypeOf(raw);
         }
         if (type instanceof WildcardType wildcard) {
             Type[] bounds = wildcard.getUpperBounds();
-            return bounds.length == 0 ? null : responseTypeOf(bounds[0]);
+            return bounds.length == 0 ? null : scanTypeOf(bounds[0]);
         }
         if (type instanceof Class<?> candidate) {
             return candidate.isRecord() ? candidate : null;
         }
         return null;
+    }
+
+    private static Class<?> rawClassOf(Type scanType) {
+        return scanType instanceof ParameterizedType parameterized
+                ? (Class<?>) parameterized.getRawType()
+                : (Class<?>) scanType;
     }
 
     private static boolean isContainer(Class<?> type) {

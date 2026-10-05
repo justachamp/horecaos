@@ -71,9 +71,9 @@ export function firstSellableVariant<T extends AvailabilityVariant>(item: {
  * basket. An authored default that is off its sale window (a breakfast-only
  * portion at 15:00) is skipped, exactly as a sold-out one is.
  */
-export function preferredSellableVariant<T extends AvailabilityVariant & { readonly isDefault?: boolean }>(item: {
-  readonly variants: readonly T[];
-}): T | null {
+export function preferredSellableVariant<
+  T extends AvailabilityVariant & { readonly isDefault?: boolean },
+>(item: { readonly variants: readonly T[] }): T | null {
   return (
     item.variants.find(
       (variant) => variant.isDefault === true && variantAvailability(variant) === 'AVAILABLE',

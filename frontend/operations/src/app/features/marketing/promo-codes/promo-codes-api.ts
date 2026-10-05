@@ -42,12 +42,11 @@ export interface PromoCodeView {
  * One reservation, redemption or release recorded against a code. Mirrors
  * `PromoCodeController.PromoCodeRedemptionResponse`.
  *
- * `customerAccountId` is a pseudonymous account id, never a phone number or
- * a name — the same PII boundary `SegmentsApi`'s snapshot export holds.
+ * There is no customer on it, by design: the list is read under `pricing.read`, and the
+ * account behind a redemption is answered only by the audited customer-reveal (ADR 0029).
  */
 export interface PromoCodeRedemption {
   readonly redemptionId: string;
-  readonly customerAccountId: string | null;
   readonly orderId: string | null;
   readonly status: string;
   readonly amountMinor: number;

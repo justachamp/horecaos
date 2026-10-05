@@ -789,6 +789,51 @@ public class JdbcPromotionStore {
                 .list();
     }
 
+    /**
+     * Whose redemption this is: the one place a redemption id the 7.9 report shows is resolved back
+     * to the account behind it. The fact holds only the ADR 0029 pseudonym; the plaintext
+     * relationship lives here, in the ledger (an automatic promotion) or in the coupon redemptions
+     * (a typed code), and the report's {@code redemptionId} is the row's own id in either.
+     *
+     * <p>Scoped to the brand and the promotion in the path as well as the tenant, so an id from
+     * another brand's report resolves to nothing rather than to somebody else's customer.
+     */
+    public Optional<RedemptionOwner> findRedemptionOwner(
+            UUID tenantId, UUID brandId, UUID promotionId, UUID redemptionId) {
+        Optional<RedemptionOwner> automatic = jdbc.sql("""
+                SELECT order_id, customer_account_id
+                FROM pricing.promotion_redemptions
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND promotion_id = :promotionId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("promotionId", promotionId)
+                .param("id", redemptionId)
+                .query((row, n) -> new RedemptionOwner(
+                        "AUTOMATIC",
+                        row.getObject("order_id", UUID.class),
+                        row.getObject("customer_account_id", UUID.class)))
+                .optional();
+        if (automatic.isPresent()) {
+            return automatic;
+        }
+        return jdbc.sql("""
+                SELECT order_id, customer_account_id
+                FROM pricing.coupon_redemptions
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND promotion_id = :promotionId AND id = :id
+                  AND order_id IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("promotionId", promotionId)
+                .param("id", redemptionId)
+                .query((row, n) -> new RedemptionOwner(
+                        "COUPON",
+                        row.getObject("order_id", UUID.class),
+                        row.getObject("customer_account_id", UUID.class)))
+                .optional();
+    }
+
     /** Ledger and coupon rows redeemed in [from, to), the source of the day-close fact. */
     public List<RedemptionFactRow> redemptionFactRows(UUID tenantId, Instant from, Instant to) {
         List<RedemptionFactRow> rows = new ArrayList<>(jdbc.sql("""
@@ -976,6 +1021,13 @@ public class JdbcPromotionStore {
             long markupMinor,
             String currency,
             String status) {}
+
+    /**
+     * @param sourceKind {@code AUTOMATIC} or {@code COUPON}, the same words the 7.9 fact uses
+     * @param customerAccountId null for a guest order, which has no account to resolve to
+     */
+    public record RedemptionOwner(
+            String sourceKind, UUID orderId, @Nullable UUID customerAccountId) {}
 
     public record QuotePromotionAmount(
             UUID promotionId, int definitionVersion, String currency, long discountMinor, long markupMinor) {}

@@ -3,11 +3,17 @@ package uz.horecaos.platform.web.idempotency;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -241,6 +247,95 @@ class IdempotentResponseClassificationTests {
                         contact phone are the fields ADR 0029 classifies wherever they sit --
                         both were being stored in clear for the same reason the address was.""")
                 .contains("FloorPlanController#rotate", "TenantControlPlaneController#describeLocation");
+        assertThat(classified).as("""
+                        And the one a staff member's name reached: the lateness editor names who
+                        approved each rung of its ladder, from StaffDirectory, in the reply to the
+                        POST that publishes a version. The name heuristic does not know the word,
+                        so only the declaration on LevelResponse.approvedByName keeps it encrypted.""").contains("OrderLatenessPolicyEditorController#authorLatenessPolicy");
+    }
+
+    // ------------------------------------------------- a staff member's name (ADR 0029, ADR 0139)
+
+    /**
+     * A record component that names the person who did something -- {@code approvedByName},
+     * {@code changedByName}, {@code createdByDisplayName}, {@code operatorName}. The name heuristic
+     * of {@link uz.horecaos.platform.iam.api.protection.ClassificationScanner} is a list of fields
+     * about <em>customers</em> ({@code phone}, {@code firstName}, ...) and does not contain the bare
+     * word {@code name}, because a product, a table and a brand all have one. A staff member's name
+     * reaches a response under a role-and-name component the list never anticipated, which is how
+     * {@code approvedByName} was stored in clear for a day. It is found by the shape of its name
+     * and then <em>declared</em>, because a declaration is what survives the next rename.
+     */
+    private static final java.util.regex.Pattern PERSON_BEHIND_AN_ACTION = java.util.regex.Pattern.compile(
+            "(?i)(by|approver|operator|actor|author|assignee|staff|employee|member)(display)?name$");
+
+    @Test
+    @DisplayName(
+            "a component named for the person behind an action is classified wherever an idempotent reply holds it")
+    void aPersonBehindAnActionIsDeclaredNotGuessed() {
+        List<String> undeclared = new ArrayList<>();
+
+        for (Method handler : idempotentHandlers()) {
+            Type scanType = ResponseBodyProtection.scanTypeOf(handler.getGenericReturnType());
+            if (scanType == null) {
+                continue;
+            }
+            Set<String> found = new LinkedHashSet<>();
+            undeclaredPersonComponents(scanType, found, new HashSet<>());
+            found.forEach(component -> undeclared.add(nameOf(handler) + " -> " + component));
+        }
+
+        assertThat(undeclared).as("""
+                        A response component named like approvedByName holds a person's name whoever
+                        fills it. Annotate it @Classified(DataClass.PERSONAL, reason = ...) -- the
+                        name heuristic does not know the word, and the reply is stored in clear
+                        until it is declared.""").isEmpty();
+    }
+
+    @Test
+    @DisplayName("the staff-name checks can fail: an undeclared approver name is found, a declared one is not")
+    void theStaffNameChecksCanFailAndCanPass() {
+        Set<String> found = new LinkedHashSet<>();
+        undeclaredPersonComponents(SampleApproval.class, found, new HashSet<>());
+        assertThat(found).containsExactly("approvedByName(SampleApproval)");
+
+        Set<String> declared = new LinkedHashSet<>();
+        undeclaredPersonComponents(SampleDeclaredApproval.class, declared, new HashSet<>());
+        assertThat(declared).isEmpty();
+    }
+
+    /** Record components reachable from {@code type} that name a person behind an action and are not declared. */
+    private static void undeclaredPersonComponents(Type type, Set<String> found, Set<Type> ancestors) {
+        Class<?> raw = type instanceof ParameterizedType parameterized
+                ? (Class<?>) parameterized.getRawType()
+                : type instanceof Class<?> candidate ? candidate : null;
+        if (raw == null) {
+            return;
+        }
+        if (raw.isArray()) {
+            undeclaredPersonComponents(raw.getComponentType(), found, ancestors);
+            return;
+        }
+        if (type instanceof ParameterizedType parameterized && !raw.isRecord()) {
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                undeclaredPersonComponents(argument, found, ancestors);
+            }
+            return;
+        }
+        if (!raw.isRecord() || !ancestors.add(type)) {
+            return;
+        }
+        for (RecordComponent component : raw.getRecordComponents()) {
+            Classified declared = component.getAnnotation(Classified.class);
+            if (declared == null
+                    && PERSON_BEHIND_AN_ACTION.matcher(component.getName()).find()) {
+                found.add(component.getName() + "(" + raw.getSimpleName() + ")");
+            }
+            if (declared == null) {
+                undeclaredPersonComponents(component.getGenericType(), found, ancestors);
+            }
+        }
+        ancestors.remove(type);
     }
 
     // ------------------------------------------------------- the classifier itself
@@ -275,6 +370,57 @@ class IdempotentResponseClassificationTests {
                 .as("filing a passport number under the ordinary-personal key would put it "
                         + "below its classification, and the key is per class so it need not be")
                 .contains(DataClass.PERSONAL_SENSITIVE);
+    }
+
+    @Test
+    @DisplayName("a list inside a record is read: a response holding a hundred addresses is not cleaner than one")
+    void theClassifierReadsThroughAListInsideARecord() {
+        assertThat(ResponseBodyProtection.classify(signature("batch"))).as("""
+                        Every list the scan met inside a record used to read as clean, because
+                        the component's erased class is List and not a record. A response
+                        assembled from rows is exactly what an operator screen is made of.""").contains(DataClass.PERSONAL);
+        assertThat(ResponseBodyProtection.classify(signature("tally")))
+                .as("a list of counts per status is still not personal data")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a generic page is classified by what it holds, not by being a page")
+    void aGenericPageIsReadWithItsArgument() {
+        assertThat(ResponseBodyProtection.classify(signature("pagedAddresses")))
+                .as("Page<SampleAddress> is a page of addresses; read as the bare Page it is clean")
+                .contains(DataClass.PERSONAL);
+        assertThat(ResponseBodyProtection.classify(signature("pagedOrders")))
+                .as("and a page of orders stays unclassified, or every list endpoint would need a key")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the three fields the stronger scan wrongly flagged are declared, and their responses stay clean")
+    void aVersionNumberIsNotATaxNumber() {
+        // «resulTINg» holds "tin", and "commentPresetCodes" / "hasCustomerNote" hold "comment" and
+        // "note": the name heuristic reads each as a person's data, and the stronger scan now sees them
+        // inside the lists that carry them. Left alone, every cart edit and every bulk order action
+        // would have stored its idempotent reply encrypted and paid a key lookup and a decrypt on
+        // each replay, for a number, a code and a flag.
+        List<String> misclassified = new ArrayList<>();
+        int inspected = 0;
+        for (Method handler : idempotentHandlers()) {
+            String name = nameOf(handler);
+            boolean aCartAnswer = name.startsWith("StorefrontOrderingController#")
+                    && String.valueOf(handler.getGenericReturnType()).contains("CartResponse");
+            if (aCartAnswer || name.equals("OperationsOrderController#bulkAction")) {
+                inspected++;
+                if (ResponseBodyProtection.classify(handler).isPresent()) {
+                    misclassified.add(name);
+                }
+            }
+        }
+
+        assertThat(inspected)
+                .as("the cart answers and the bulk action: if this reads zero the test is no longer looking")
+                .isGreaterThanOrEqualTo(10);
+        assertThat(misclassified).isEmpty();
     }
 
     @Test
@@ -328,6 +474,22 @@ class IdempotentResponseClassificationTests {
         ResponseEntity<java.util.Map<String, Object>> opaque() {
             return null;
         }
+
+        ResponseEntity<SampleBatch> batch() {
+            return null;
+        }
+
+        ResponseEntity<SampleTally> tally() {
+            return null;
+        }
+
+        ResponseEntity<SamplePage<SampleAddress>> pagedAddresses() {
+            return null;
+        }
+
+        ResponseEntity<SamplePage<SampleOrder>> pagedOrders() {
+            return null;
+        }
     }
 
     private record SampleAddress(UUID addressId, String line1) {}
@@ -339,6 +501,20 @@ class IdempotentResponseClassificationTests {
 
             @Classified(value = DataClass.PERSONAL_SENSITIVE, reason = "an identity document")
             String documentNumber) {}
+
+    private record SampleBatch(UUID batchId, List<SampleAddress> entries) {}
+
+    private record SampleTally(UUID batchId, List<SampleOrder> orders) {}
+
+    private record SamplePage<T>(List<T> items, @Nullable String cursor) {}
+
+    private record SampleApproval(UUID approvalId, String approvedByName) {}
+
+    private record SampleDeclaredApproval(
+            UUID approvalId,
+
+            @Classified(value = DataClass.PERSONAL, reason = "a staff member's name")
+            String approvedByName) {}
 
     private static Method signature(String name) {
         for (Method method : Samples.class.getDeclaredMethods()) {

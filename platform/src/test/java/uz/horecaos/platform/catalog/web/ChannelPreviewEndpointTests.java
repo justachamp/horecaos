@@ -719,6 +719,92 @@ class ChannelPreviewEndpointTests {
         assertThat(storefront.path("channelReady").asBoolean()).isTrue();
     }
 
+    @Test
+    @DisplayName(
+            "an option in a group only a variant carries, or one an option opens, is a blocker when the channel's price plane does not price it")
+    void variantLevelAndNestedOptionsMissingFromThePlaneAreBlockers() throws Exception {
+        w.offerEverythingAt(w.l1);
+        ProductRef fries = w.product("FRIES", "Fries", w.mainsCategory);
+        ProductRef chili = w.product("CHILI", "Chili", w.mainsCategory);
+        w.offer(fries, OfferingStatus.AVAILABLE);
+        w.offer(chili, OfferingStatus.AVAILABLE);
+
+        // The fries' own topping group is attached to the variant and to no product; the chili option
+        // links the chili variant, which carries the "how hot" group: the second level of choosing.
+        UUID toppings =
+                authoring.createModifierGroup(w.tenant, w.brand, "TOPPINGS", "Qo'shimcha", LOCALE, false, 0, 2, true);
+        UUID cheese = authoring.addModifierOption(
+                w.tenant,
+                w.brand,
+                toppings,
+                "CHEESE",
+                "Pishloq",
+                LOCALE,
+                null,
+                1,
+                1,
+                FiscalClassification.unclassified(),
+                null);
+        UUID chiliOption = authoring.addModifierOption(
+                w.tenant,
+                w.brand,
+                toppings,
+                "CHILI",
+                "Achchiq",
+                LOCALE,
+                chili.defaultVariantId(),
+                1,
+                2,
+                FiscalClassification.unclassified(),
+                null);
+        UUID heat = authoring.createModifierGroup(w.tenant, w.brand, "HEAT", "Qanchalik", LOCALE, true, 1, 1, false);
+        UUID hot = authoring.addModifierOption(
+                w.tenant,
+                w.brand,
+                heat,
+                "HOT",
+                "Achchiq",
+                LOCALE,
+                null,
+                1,
+                1,
+                FiscalClassification.unclassified(),
+                null);
+        composites.attachModifierGroupToVariant(w.tenant, w.brand, fries.defaultVariantId(), toppings, 0, "tester");
+        composites.attachModifierGroupToVariant(w.tenant, w.brand, chili.defaultVariantId(), heat, 0, "tester");
+
+        // The brand book prices both dishes and both choices that cost something; the chili option itself
+        // is a sauce nobody has priced, which is not this channel's gap.
+        w.addPrice(w.brandBook, "VARIANT", fries.defaultVariantId(), 12_000L);
+        w.addPrice(w.brandBook, "VARIANT", chili.defaultVariantId(), 1_000L);
+        w.addPrice(w.brandBook, "MODIFIER_OPTION", cheese, 3_000L);
+        w.addPrice(w.brandBook, "MODIFIER_OPTION", hot, 1_000L);
+        w.priceBook(
+                "UZUM_BOOK",
+                "CHANNEL",
+                w.uzum,
+                Map.of(
+                        w.lagman, 31_000L, w.plov, 26_000L, w.samsa, 8_500L, w.tea, 5_500L, fries, 13_000L, chili,
+                        1_500L));
+
+        JsonNode uzum = previewAll(w.uzum, "locationId", w.l1.toString());
+
+        assertThat(findings(uzum, ChannelFindings.CHANNEL_PRICE_MISSING))
+                .as(
+                        "the topping only the fries carry and the heat the chili choice opens are offered to a customer, and neither has a price here")
+                .extracting(finding -> finding.path("entityType").asText() + ":"
+                        + finding.path("entityId").asText())
+                .contains("MODIFIER_OPTION:" + cheese, "MODIFIER_OPTION:" + hot)
+                .doesNotContain("MODIFIER_OPTION:" + chiliOption);
+        assertThat(uzum.path("channelReady").asBoolean())
+                .as("a null price on an option a customer can pick would fail the cart: the channel is not ready")
+                .isFalse();
+        assertThat(findings(
+                        previewAll(w.storefront, "locationId", w.l1.toString()), ChannelFindings.CHANNEL_PRICE_MISSING))
+                .as("the storefront resolves the brand book, which prices both")
+                .isEmpty();
+    }
+
     // -------------------------------------------------------------- findings
 
     @Test

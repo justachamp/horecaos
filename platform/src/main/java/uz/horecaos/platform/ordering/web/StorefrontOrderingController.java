@@ -34,6 +34,8 @@ import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -1061,7 +1063,8 @@ public class StorefrontOrderingController {
                                     view.selectionsOf(line.lineKey()).nestedModifiers().stream()
                                             .map(one ->
                                                     new NestedModifierResponse(one.parentOptionId(), one.optionId()))
-                                            .toList()))
+                                            .toList(),
+                                    view.selectionsOf(line.lineKey()).modifierOptionIds()))
                             .toList(),
                     view.cart().appliedCouponCode(),
                     view.cart().paymentMethodCode());
@@ -1080,12 +1083,22 @@ public class StorefrontOrderingController {
             UUID variantId,
             BigDecimal quantity,
             // Row 2.1b: the coded presets this line currently carries.
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "codes from the tenant's own kitchen-instruction vocabulary, never free text")
             List<String> commentPresetCodes,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "whether a note exists, a flag; the note itself is revealed only with a purpose")
             boolean hasCustomerNote,
             // ADR 0136: what was picked inside a combo, empty on every other line.
             List<ComboPickResponse> comboPicks,
             // ADR 0136: the second-level modifier selections, empty on most lines.
-            List<NestedModifierResponse> nestedModifiers) {}
+            List<NestedModifierResponse> nestedModifiers,
+            // The first-level modifier options the line holds, so a line keyed by a hash (a combo, or
+            // one with a second-level choice) can be edited from any device. Empty when it holds none.
+            List<UUID> modifierOptionIds) {}
 
     public record ComboPickResponse(UUID componentId, int quantity) {}
 
@@ -1159,7 +1172,8 @@ public class StorefrontOrderingController {
             // against the lines. Each is already inside its line's price and the total.
             List<HiddenChargeResponse> hiddenCharges,
             List<AppliedPromotionResponse> appliedPromotions,
-            @Nullable String promoCodeOutcome) {
+            @Nullable String promoCodeOutcome,
+            List<GiftOfferResponse> giftOffers) {
 
         static PricedCartResponse of(CartService.PricedCart priced, AppliedPromotions promotions) {
             QuoteSnapshot quote = priced.quote();
@@ -1185,7 +1199,33 @@ public class StorefrontOrderingController {
                     AppliedPromotionResponse.of(promotions),
                     promotions.couponOutcome() == null
                             ? null
-                            : promotions.couponOutcome().name());
+                            : promotions.couponOutcome().name(),
+                    GiftOfferResponse.of(promotions));
+        }
+    }
+
+    /**
+     * A free gift a rule would give, which the customer may add (ADR 0140).
+     *
+     * <p>An offer, never a line: pricing adds nothing to the cart, so the gift is free only
+     * once the customer (or the screen on their behalf, with their say) puts it in and the
+     * cart is priced again. {@code toAdd} is what is still missing; when it is zero the
+     * allowance is already in the cart and the offer is only a way to say so.
+     *
+     * @param ruleId    opaque key of the rule behind the offer, stable across quotes
+     * @param variantId the variant to add
+     * @param quantity  the units the rule gives free once taken up, across its gift variants
+     * @param inCart    whether the cart already holds this variant
+     * @param toAdd     the units still missing for the allowance to be complete
+     */
+    public record GiftOfferResponse(
+            UUID ruleId, UUID variantId, BigDecimal quantity, boolean inCart, BigDecimal toAdd) {
+
+        static List<GiftOfferResponse> of(AppliedPromotions promotions) {
+            return promotions.giftOffers().stream()
+                    .map(offer -> new GiftOfferResponse(
+                            offer.ruleId(), offer.variantId(), offer.quantity(), offer.inCart(), offer.toAdd()))
+                    .toList();
         }
     }
 

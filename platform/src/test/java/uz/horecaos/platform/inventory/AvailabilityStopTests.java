@@ -51,6 +51,7 @@ import uz.horecaos.platform.inventory.application.InventoryStopGestureService.Ge
 import uz.horecaos.platform.inventory.application.InventoryStopGestureService.GestureResult;
 import uz.horecaos.platform.inventory.application.InventoryStopGestureService.ItemOutcome;
 import uz.horecaos.platform.inventory.application.InventoryStopGestureService.ItemStatus;
+import uz.horecaos.platform.inventory.application.MaterialisedPositionRestorer;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore.StopRow;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
@@ -126,9 +127,17 @@ class AvailabilityStopTests {
     private void rebuild() {
         FakeConfigurationResolver resolver = new FakeConfigurationResolver(configuration);
         stopStore = new JdbcAvailabilityStopStore(jdbc);
-        stopService = new AvailabilityStopService(stopStore, events::add, clock, facts::add, NO_OP_RLS, resolver);
+        JdbcInventoryStore inventoryStore = new JdbcInventoryStore(jdbc);
+        stopService = new AvailabilityStopService(
+                stopStore,
+                events::add,
+                clock,
+                facts::add,
+                NO_OP_RLS,
+                resolver,
+                new MaterialisedPositionRestorer(stopStore, inventoryStore, catalog));
         inventory = new InventoryService(
-                new JdbcInventoryStore(jdbc),
+                inventoryStore,
                 events::add,
                 clock,
                 facts::add,

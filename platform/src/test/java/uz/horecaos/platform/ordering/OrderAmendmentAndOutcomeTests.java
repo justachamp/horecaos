@@ -381,7 +381,8 @@ class OrderAmendmentAndOutcomeTests {
                                 jdbc, objectMapper)),
                 new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
                         new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
-                                jdbc, objectMapper)));
+                                jdbc, objectMapper)),
+                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper));
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 
@@ -1826,7 +1827,10 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = orderIdOf(placePromoOrder("idem-promo-retired-1", "retired10"));
 
         var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
-                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()), clock);
+                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()),
+                clock,
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                uz.horecaos.platform.support.AuditTrail.actor("promo-author"));
         authoring.retire(TENANT, BRAND, coupon.couponId());
 
         var proposed = proposeOnly(
@@ -1845,7 +1849,10 @@ class OrderAmendmentAndOutcomeTests {
     private uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow
             authorPromoCode(String code, long basisPoints, @Nullable Integer totalLimit, int perCustomerLimit) {
         var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
-                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()), clock);
+                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()),
+                clock,
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                uz.horecaos.platform.support.AuditTrail.actor("promo-author"));
         var drafted = authoring.draft(
                 TENANT,
                 BRAND,

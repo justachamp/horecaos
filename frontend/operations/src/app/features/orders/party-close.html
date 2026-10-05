@@ -1,0 +1,67 @@
+@if (canClose()) {
+  <div class="party-close" data-testid="party-close">
+    @if (owing(); as bill) {
+      <div class="party-close__choose" role="group" data-testid="party-close-choose">
+        <p class="q-caption party-close__bill" data-testid="party-close-bill">
+          {{ 'orders.newOrder.order.total' | t }}: {{ amount(bill) }}
+        </p>
+        <button
+          type="button"
+          class="party-close__button q-caption"
+          (click)="choose('PAID')"
+          data-testid="party-close-paid"
+        >
+          {{ 'orders.party.choose.paid' | t }}
+        </button>
+        @if (canWalkout()) {
+          <button
+            type="button"
+            class="party-close__button party-close__button--danger q-caption"
+            (click)="choose('WALKOUT')"
+            data-testid="party-close-walkout"
+          >
+            {{ 'orders.party.choose.walkout' | t }}
+          </button>
+        }
+        <button
+          type="button"
+          class="party-close__link q-caption"
+          (click)="dismiss()"
+          data-testid="party-close-back"
+        >
+          {{ 'orders.dialog.dismiss' | t }}
+        </button>
+      </div>
+    } @else {
+      <button
+        type="button"
+        class="party-close__button q-caption"
+        [disabled]="reading() || busy()"
+        (click)="start()"
+        data-testid="party-close-open"
+      >
+        {{ 'settings.locations.floorPlan.claim.release' | t }}
+      </button>
+    }
+
+    @if (error(); as message) {
+      <p class="q-caption party-close__error" role="alert" data-testid="party-close-error">
+        {{ message }}
+      </p>
+    }
+
+    @if (confirming(); as pending) {
+      <q-confirm-dialog
+        [title]="confirmTitle()"
+        [body]="confirmBody(pending.kind, pending.detail)"
+        [confirmLabel]="confirmLabel(pending.kind)"
+        [cancelLabel]="'orders.dialog.dismiss' | t"
+        [tone]="pending.kind === 'EMPTY' ? 'default' : 'destructive'"
+        [busy]="busy()"
+        (confirm)="confirm()"
+        (cancel)="dismiss()"
+        data-testid="party-close-confirm"
+      />
+    }
+  </div>
+}

@@ -756,3 +756,206 @@ describe('ProductComponent: portions and weighed items (ADR 0137)', () => {
     expect(normalised((fixture.nativeElement as HTMLElement).textContent)).toContain('≈ 360 000');
   });
 });
+
+describe('ProductComponent: a portion’s own groups and second-level choices (ADR 0136)', () => {
+  const option = (id: string, label: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    label,
+    amountMinor: null,
+    maximumQuantity: 1,
+    ...extra,
+  });
+  const heat = {
+    id: 'heat',
+    name: 'Heat',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameOptionMultipleTimes: false,
+    options: [option('hot', 'Hot'), option('mild', 'Mild')],
+  };
+  const sauces = {
+    id: 'sauces',
+    name: 'Sauces',
+    required: false,
+    minimumSelections: 0,
+    maximumSelections: 2,
+    allowSameOptionMultipleTimes: false,
+    options: [option('chili', 'Chili', { nestedGroups: [heat] }), option('garlic', 'Garlic')],
+  };
+  const dips = {
+    id: 'dips',
+    name: 'Dips',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameOptionMultipleTimes: false,
+    options: [option('ketchup', 'Ketchup'), option('mayo', 'Mayo')],
+  };
+
+  async function renderItem(item: MenuItem, lines: CartResponseItem[] = []) {
+    const menuService = new FakeMenuService();
+    menuService.item.mockResolvedValue(item);
+    const cartService = new FakeUiCartService();
+    cartService.cartData.mockReturnValue({});
+    cartService.items.mockReturnValue(lines);
+    return { ...(await render({ menuService, cartService })), cartService };
+  }
+
+  const saucy = () =>
+    menuItem({
+      variants: [onSaleVariant()],
+      modifierGroups: [sauces] as MenuItem['modifierGroups'],
+    });
+
+  it('asks nothing under an option nobody chose, and draws its required group once it is chosen', async () => {
+    const { fixture, comp, cartService } = await renderItem(saucy());
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(comp.modifiersValid()).toBe(true);
+    expect(host.querySelector('[data-testid="nested-group"]')).toBeNull();
+
+    comp.toggleOption(sauces as MenuItem['modifierGroups'][number], 'chili');
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="nested-group"]')).not.toBeNull();
+    expect(comp.modifiersValid()).toBe(false);
+    comp.add();
+    expect(cartService.add).not.toHaveBeenCalled();
+  });
+
+  it('adds with the answers under the first-level option that asked for them', async () => {
+    const { fixture, comp, cartService } = await renderItem(saucy());
+
+    comp.toggleOption(sauces as MenuItem['modifierGroups'][number], 'chili');
+    comp.toggleNested('chili', heat as MenuItem['modifierGroups'][number], 'hot');
+    fixture.detectChanges();
+    expect(comp.modifiersValid()).toBe(true);
+    comp.add();
+
+    expect(cartService.add).toHaveBeenCalledWith(
+      'variant-1',
+      1,
+      undefined,
+      ['chili'],
+      [],
+      undefined,
+      [{ parentOptionId: 'chili', optionId: 'hot' }],
+    );
+  });
+
+  it('forgets the answers when the option that asked for them is unchecked', async () => {
+    const { comp, cartService } = await renderItem(saucy());
+    const group = sauces as MenuItem['modifierGroups'][number];
+
+    comp.toggleOption(group, 'chili');
+    comp.toggleNested('chili', heat as MenuItem['modifierGroups'][number], 'hot');
+    comp.toggleOption(group, 'chili');
+    comp.add();
+
+    expect(cartService.add).toHaveBeenCalledWith('variant-1', 1, undefined, [], []);
+  });
+
+  it('finds the line by its answers: the same choice is bumped, another is a line of its own', async () => {
+    const line = cartLine({
+      variant_id: 'variant-1',
+      modifierOptionIds: ['chili'],
+      nestedModifiers: [{ parentOptionId: 'chili', optionId: 'hot' }],
+    });
+    const { comp, cartService } = await renderItem(saucy(), [line]);
+    const group = sauces as MenuItem['modifierGroups'][number];
+    const heatGroup = heat as MenuItem['modifierGroups'][number];
+
+    comp.toggleOption(group, 'chili');
+    comp.toggleNested('chili', heatGroup, 'hot');
+    comp.add();
+    expect(cartService.increaseQuantity).toHaveBeenCalledWith(line);
+    expect(cartService.add).not.toHaveBeenCalled();
+
+    comp.toggleNested('chili', heatGroup, 'mild');
+    comp.add();
+    expect(cartService.add).toHaveBeenCalledWith(
+      'variant-1',
+      1,
+      undefined,
+      ['chili'],
+      [],
+      undefined,
+      [{ parentOptionId: 'chili', optionId: 'mild' }],
+    );
+  });
+
+  describe('a portion that carries groups of its own', () => {
+    const fries = () =>
+      menuItem({
+        variants: [
+          onSaleVariant({ id: 'small', name: 'Small' }),
+          { ...onSaleVariant({ id: 'large', name: 'Large' }), modifierGroups: [dips] },
+        ] as MenuItem['variants'],
+        modifierGroups: [],
+      });
+
+    it('draws them in that portion’s own row, and holds only that portion to them', async () => {
+      const { fixture, comp } = await renderItem(fries());
+      const host: HTMLElement = fixture.nativeElement;
+
+      expect(host.querySelectorAll('[data-testid="variant-groups"]')).toHaveLength(1);
+      expect(host.querySelector('[data-testid="variant-groups"]')?.textContent).toContain('Dips');
+      expect(comp.modifiersValidFor('small')).toBe(true);
+      expect(comp.modifiersValidFor('large')).toBe(false);
+    });
+
+    it('sends the choice with that portion and never with another', async () => {
+      const { comp, cartService } = await renderItem(fries());
+
+      comp.toggleOption(dips as MenuItem['modifierGroups'][number], 'ketchup');
+      comp.increaseVariant('large');
+      comp.increaseVariant('small');
+
+      expect(cartService.add).toHaveBeenNthCalledWith(1, 'large', 1, undefined, ['ketchup'], []);
+      expect(cartService.add).toHaveBeenNthCalledWith(2, 'small', 1, undefined, [], []);
+    });
+
+    it('refuses to add that portion until its group is answered', async () => {
+      const { comp, cartService } = await renderItem(fries());
+
+      comp.increaseVariant('large');
+
+      expect(cartService.add).not.toHaveBeenCalled();
+    });
+  });
+
+  it('never asks a combo for modifiers or second-level choices: its choices are its components', async () => {
+    const { fixture, comp } = await renderItem(
+      menuItem({
+        variants: [onSaleVariant({ id: 'v-lunch' })],
+        modifierGroups: [sauces] as MenuItem['modifierGroups'],
+        comboGroups: [
+          {
+            id: 'g-main',
+            name: 'Main',
+            minimumSelections: 1,
+            maximumSelections: 1,
+            allowSameComponentMultipleTimes: false,
+            components: [
+              {
+                id: 'c-burger',
+                name: 'Burger',
+                variantName: null,
+                defaultQuantity: 1,
+                active: true,
+                amountMinor: 25_000,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(comp.modifierGroups()).toEqual([]);
+    expect(host.querySelector('app-nested-choices')).toBeNull();
+    comp.setComboPicks({ 'c-burger': 1 });
+    expect(comp.modifiersValid()).toBe(true);
+  });
+});

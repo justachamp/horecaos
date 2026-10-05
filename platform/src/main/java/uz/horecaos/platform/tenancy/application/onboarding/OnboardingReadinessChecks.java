@@ -3,8 +3,10 @@ package uz.horecaos.platform.tenancy.application.onboarding;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +25,10 @@ import uz.horecaos.platform.tenancy.domain.Brand;
  * map row {@code 10.0}, settings.md §10.0): fiscal classification coverage,
  * channel payment-method coverage and secret-rotation age (batch 15), then
  * channel fulfilment-mode coverage and location service-binding coverage
- * (batch 16).
+ * (batch 16), then the three the spec's table still lacked (batch 18): a
+ * location forced closed by hand with no end time, an active location no sales
+ * channel reaches, and a fiscal assignment about to end with nothing after it —
+ * the first member of the «expiring» tier.
  *
  * <p>Each is an {@link OnboardingReadinessCheck}: it names every offending item
  * in the {@link StepResult#failedWithFindings} shape the {@code VALIDATING}
@@ -545,5 +550,237 @@ public final class OnboardingReadinessChecks {
                 @Nullable String mode,
                 @Nullable Boolean bound,
                 boolean anyBound) {}
+    }
+
+    /**
+     * Every active location that someone closed by hand and never said when it
+     * reopens (settings.md §10.0: «Location manually forced closed with no
+     * expiry»).
+     *
+     * <p><strong>Advisory</strong>, and the table's own verdict is that it is
+     * «the single most valuable row»: the fryer broke on Tuesday and the branch
+     * is still closed on Saturday, because the person who closed it went home.
+     * {@code tenant.location_service_state}'s comment names exactly that failure.
+     * It is advisory and not blocking because a closure is a decision somebody
+     * took on purpose; what is wrong is that nobody set an end to it. A closure
+     * with an {@code effective_until} reopens by being read as elapsed and is
+     * not reported.
+     *
+     * <p>Judged over {@code ACTIVE} locations only: a suspended or draft branch
+     * is closed for a reason the status already states. The longest-closed branch
+     * is listed first. The detail carries the closing reason's code and how long
+     * the branch has been shut, never the free-text note an operator typed (that
+     * text can hold a name or a phone number, ADR 0029); the finding's {@code
+     * locationId} opens the branch, where the override is lifted.
+     */
+    @Component
+    public static class LocationForcedClosedNoExpiry implements OnboardingReadinessCheck {
+
+        static final String KEY = "LOCATION_FORCED_CLOSED_VALIDATE";
+        static final String FORCED_CLOSED_NO_EXPIRY = "LOCATION_FORCED_CLOSED_NO_EXPIRY";
+
+        private final JdbcClient jdbc;
+        private final Clock clock;
+
+        public LocationForcedClosedNoExpiry(JdbcClient jdbc, Clock clock) {
+            this.jdbc = jdbc;
+            this.clock = clock;
+        }
+
+        @Override
+        public String checkKey() {
+            return KEY;
+        }
+
+        @Override
+        public boolean advisory() {
+            return true;
+        }
+
+        @Override
+        public StepResult check(UUID tenantId) {
+            Instant now = clock.instant();
+            List<StepResult.Finding> findings = jdbc.sql("""
+                            SELECT l.id AS location_id, l.code, s.reason_code, s.changed_at
+                              FROM tenant.location_service_state s
+                              JOIN tenant.locations l
+                                ON l.tenant_id = s.tenant_id AND l.id = s.location_id
+                             WHERE s.tenant_id = :tenantId AND l.status = 'ACTIVE'
+                               AND s.mode = 'FORCE_CLOSED' AND s.effective_until IS NULL
+                             ORDER BY s.changed_at, l.code
+                            """)
+                    .param("tenantId", tenantId)
+                    .query((row, number) -> {
+                        long days = Math.max(
+                                0,
+                                Duration.between(
+                                                row.getObject("changed_at", OffsetDateTime.class)
+                                                        .toInstant(),
+                                                now)
+                                        .toDays());
+                        return new StepResult.Finding(
+                                FORCED_CLOSED_NO_EXPIRY,
+                                "Location %s has been closed by hand for %d days (reason %s) with no time set to reopen"
+                                        .formatted(row.getString("code"), days, row.getString("reason_code")),
+                                row.getObject("location_id", UUID.class));
+                    })
+                    .list();
+            return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
+        }
+    }
+
+    /**
+     * Every active location that no active sales channel is switched on for
+     * (settings.md §10.0: «Location active but bound to no sales channel»).
+     *
+     * <p><strong>Blocking.</strong> A customer meets a location through a
+     * channel; a branch no channel reaches is open on paper and unreachable in
+     * practice, which is the same quiet dark-branch failure {@link
+     * LocationServiceBindingCoverage} names for hours. It is held to its own code
+     * because it is fixed somewhere else: in the sales-channels screen, on the
+     * channel's location list, not in the location's hours. A channel counts only
+     * when it is {@code ACTIVE} and its link to the location is {@code ACTIVE}.
+     *
+     * <p>One finding per location, carrying its {@code locationId} so the
+     * finding names the branch; the console sends the operator to the channel
+     * list, where the link is made.
+     */
+    @Component
+    public static class LocationChannelReach implements OnboardingReadinessCheck {
+
+        static final String KEY = "LOCATION_CHANNEL_REACH_VALIDATE";
+        static final String NO_SALES_CHANNEL = "LOCATION_NO_SALES_CHANNEL";
+
+        private final JdbcClient jdbc;
+
+        public LocationChannelReach(JdbcClient jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public String checkKey() {
+            return KEY;
+        }
+
+        @Override
+        public boolean advisory() {
+            return false;
+        }
+
+        @Override
+        public StepResult check(UUID tenantId) {
+            List<StepResult.Finding> findings = jdbc.sql("""
+                            SELECT l.id AS location_id, l.code
+                              FROM tenant.locations l
+                             WHERE l.tenant_id = :tenantId AND l.status = 'ACTIVE'
+                               AND NOT EXISTS (
+                                   SELECT 1
+                                     FROM tenant.sales_channel_locations scl
+                                     JOIN tenant.sales_channels sc
+                                       ON sc.tenant_id = scl.tenant_id AND sc.id = scl.channel_id
+                                      AND sc.status = 'ACTIVE'
+                                    WHERE scl.tenant_id = l.tenant_id AND scl.location_id = l.id
+                                      AND scl.status = 'ACTIVE')
+                             ORDER BY l.code, l.id
+                            """)
+                    .param("tenantId", tenantId)
+                    .query((row, number) -> new StepResult.Finding(
+                            NO_SALES_CHANNEL,
+                            "Location %s is not switched on for any active sales channel"
+                                    .formatted(row.getString("code")),
+                            row.getObject("location_id", UUID.class)))
+                    .list();
+            return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
+        }
+    }
+
+    /**
+     * An active location whose current fiscal assignment ends soon and has
+     * nothing after it (settings.md §10.0: «Location has no active fiscal
+     * assignment», seen one step before it is true).
+     *
+     * <p><strong>Expiring</strong> — the first member of the tier between
+     * blocking and advisory. Today the branch has a seller; on {@code
+     * effective_until} (the first day the assignment no longer applies, ADR 0038)
+     * it has none, {@code PaymentConfigurationValidate} starts reporting {@code
+     * NO_LEGAL_ENTITY} and a receipt cannot name a seller. The finding exists to
+     * be fixed before that day, so it carries the date and the days left.
+     *
+     * <p>«Nothing after it» means no other assignment of the same location that
+     * starts on or before the end date and runs past it: the non-overlap
+     * constraint makes a handover a row starting on the end date, and a gap
+     * (a successor starting later) is as bad as none. Judged over {@code ACTIVE}
+     * locations, within {@code
+     * horecaos.readiness.fiscal-assignment-expiry-window} (default 30 days) of
+     * today. An assignment with no end date never expires.
+     */
+    @Component
+    public static class FiscalAssignmentExpiry implements OnboardingReadinessCheck {
+
+        static final String KEY = "FISCAL_ASSIGNMENT_EXPIRY_VALIDATE";
+        static final String ENDING_SOON = "LOCATION_FISCAL_ASSIGNMENT_ENDING";
+
+        private final JdbcClient jdbc;
+        private final Clock clock;
+        private final Duration window;
+
+        public FiscalAssignmentExpiry(
+                JdbcClient jdbc,
+                Clock clock,
+                @Value("${horecaos.readiness.fiscal-assignment-expiry-window:P30D}") Duration window) {
+            this.jdbc = jdbc;
+            this.clock = clock;
+            this.window = window;
+        }
+
+        @Override
+        public String checkKey() {
+            return KEY;
+        }
+
+        @Override
+        public boolean advisory() {
+            return true;
+        }
+
+        @Override
+        public ReadinessSeverity severity() {
+            return ReadinessSeverity.EXPIRING;
+        }
+
+        @Override
+        public StepResult check(UUID tenantId) {
+            LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+            LocalDate horizon = today.plusDays(window.toDays());
+            List<StepResult.Finding> findings = jdbc.sql("""
+                            SELECT l.id AS location_id, l.code, a.effective_until
+                              FROM tenant.location_fiscal_assignments a
+                              JOIN tenant.locations l
+                                ON l.tenant_id = a.tenant_id AND l.id = a.location_id AND l.status = 'ACTIVE'
+                             WHERE a.tenant_id = :tenantId
+                               AND a.effective_from <= :today
+                               AND a.effective_until > :today AND a.effective_until <= :horizon
+                               AND NOT EXISTS (
+                                   SELECT 1 FROM tenant.location_fiscal_assignments b
+                                    WHERE b.tenant_id = a.tenant_id AND b.location_id = a.location_id
+                                      AND b.id <> a.id
+                                      AND b.effective_from <= a.effective_until
+                                      AND (b.effective_until IS NULL OR b.effective_until > a.effective_until))
+                             ORDER BY a.effective_until, l.code, l.id
+                            """)
+                    .param("tenantId", tenantId)
+                    .param("today", today)
+                    .param("horizon", horizon)
+                    .query((row, number) -> {
+                        LocalDate until = row.getObject("effective_until", LocalDate.class);
+                        return new StepResult.Finding(
+                                ENDING_SOON,
+                                "The fiscal assignment of location %s ends on %s (%d days) and no later assignment covers it"
+                                        .formatted(row.getString("code"), until, ChronoUnit.DAYS.between(today, until)),
+                                row.getObject("location_id", UUID.class));
+                    })
+                    .list();
+            return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
+        }
     }
 }

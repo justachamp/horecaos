@@ -1,12 +1,14 @@
-import { Injectable, Signal, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { settingsPaths } from '../../core/api/settings-paths';
+import { BrandChoice } from '../../core/auth/brand-choice';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { BrandView } from './brand-profile/brand-profile-api';
 import { LocationView } from './locations/locations-api';
+import { SavedTarget } from './settings-saved';
 
 /** The level a settings screen is currently writing to (settings.md §1.1's "Уровень редактирования"). */
 export type SettingsEditingLevel = 'TENANT' | 'BRAND' | 'LOCATION';
@@ -49,10 +51,21 @@ export class SettingsScope {
   private readonly router = inject(Router);
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(ApiClient);
+  private readonly shellBrand = inject(BrandChoice);
 
   private readonly queryBrandId = signal<string | null>(null);
   private readonly queryLocationId = signal<string | null>(null);
   private readonly queryTenantWide = signal(false);
+  /**
+   * The header's pick count ({@link BrandChoice.picks}) when the query was last read. The query
+   * describes the brand the operator was on when it was written; a pick made in the header since
+   * then replaces that brand, so until the URL is re-pointed (or the operator moves it) the query's
+   * brand, branch and level are not in force.
+   */
+  private readonly queryReadAtPick = signal(this.shellBrand.picks());
+  private readonly queryOutranked = computed(
+    () => this.shellBrand.picks() > this.queryReadAtPick(),
+  );
   private readonly brandsSig = signal<readonly BrandView[]>([]);
   private readonly locationsSig = signal<readonly LocationView[]>([]);
   private readonly loadingBrands = signal(false);
@@ -66,19 +79,32 @@ export class SettingsScope {
   /** Hidden entirely when the tenant has exactly one brand — a picker with one option is noise. */
   readonly showBrandPicker: Signal<boolean> = computed(() => this.brandsSig().length > 1);
 
-  /** The brand in effect: the query param when it names a brand this tenant has, else the first one. */
+  /**
+   * The brand in effect: the query param when it names a brand this tenant has; else the one picked
+   * in the shell's header (`BrandChoice`, row `X.1`), so opening Settings does not silently switch
+   * an operator to another brand than the one they have been working in; else the first one.
+   *
+   * A header pick made while Settings is open outranks the query -- the screen the shell rebuilds
+   * for the pick reads this at once, before the URL has been re-pointed, and must not read the brand
+   * the header no longer names (a query the operator or a pasted link set *after* the pick wins
+   * again).
+   */
   readonly brandId: Signal<string | null> = computed(() => {
     const brands = this.brandsSig();
     if (brands.length === 0) {
       return null;
     }
-    const requested = this.queryBrandId();
-    return requested && brands.some((brand) => brand.id === requested) ? requested : brands[0].id;
+    const requested = this.queryOutranked() ? null : this.queryBrandId();
+    if (requested && brands.some((brand) => brand.id === requested)) {
+      return requested;
+    }
+    const shellPick = this.shellBrand.brandId();
+    return shellPick && brands.some((brand) => brand.id === shellPick) ? shellPick : brands[0].id;
   });
 
   /** `null` means "Все филиалы" — editing at BRAND level. A location outside the current brand is dropped. */
   readonly locationId: Signal<string | null> = computed(() => {
-    const requested = this.queryLocationId();
+    const requested = this.queryOutranked() ? null : this.queryLocationId();
     if (!requested) {
       return null;
     }
@@ -86,14 +112,21 @@ export class SettingsScope {
   });
 
   /** Whether the bar is currently set to the tenant-wide (row 10.3b) level. */
-  readonly tenantWide: Signal<boolean> = this.queryTenantWide.asReadonly();
+  readonly tenantWide: Signal<boolean> = computed(
+    () => this.queryTenantWide() && !this.queryOutranked(),
+  );
 
   readonly level: Signal<SettingsEditingLevel> = computed(() => {
-    if (this.queryTenantWide()) {
+    if (this.tenantWide()) {
       return 'TENANT';
     }
     return this.locationId() ? 'LOCATION' : 'BRAND';
   });
+
+  /** What the bar is set to write to, named, for the «задано для филиала …» confirmation (settings.md §1.3). */
+  readonly target: Signal<SavedTarget> = computed(() =>
+    this.targetFor(this.level(), this.brandId(), this.locationId()),
+  );
 
   readonly loading: Signal<boolean> = this.loadingBrands.asReadonly();
   readonly denied: Signal<boolean> = this.deniedSig.asReadonly();
@@ -103,6 +136,25 @@ export class SettingsScope {
       this.queryBrandId.set(params.get('brand'));
       this.queryLocationId.set(params.get('location'));
       this.queryTenantWide.set(params.get('level') === 'tenant');
+      this.queryReadAtPick.set(untracked(() => this.shellBrand.picks()));
+    });
+
+    // Puts a header pick into the URL, so a link copied from here opens the brand the screen shows
+    // and the scope bar's own pickers follow. Only when the URL pins a brand: with none, the pick is
+    // already what {@link brandId} falls back to. It does what choosing the brand in the scope bar
+    // does -- the branch and the company-wide level go.
+    effect(() => {
+      const outranked = this.queryOutranked();
+      const brands = this.brandsSig();
+      if (!outranked || brands.length === 0) {
+        return;
+      }
+      untracked(() => {
+        const brandId = this.brandId();
+        if (brandId && this.queryBrandId() !== null) {
+          this.setBrand(brandId);
+        }
+      });
     });
 
     void this.loadBrands();
@@ -119,6 +171,31 @@ export class SettingsScope {
         void this.loadLocations(tenantId, brandId);
       }
     });
+  }
+
+  /**
+   * The level a write went to and the name of the brand or branch it names, for a confirmation that
+   * must say where the change landed. A name the lists have not resolved is absent, never invented.
+   */
+  targetFor(
+    level: SettingsEditingLevel,
+    brandId: string | null,
+    locationId: string | null,
+  ): SavedTarget {
+    if (level === 'TENANT') {
+      return { level, name: null };
+    }
+    if (level === 'LOCATION') {
+      return {
+        level,
+        name:
+          this.locationsSig().find((location) => location.id === locationId)?.displayName ?? null,
+      };
+    }
+    return {
+      level: 'BRAND',
+      name: this.brandsSig().find((brand) => brand.id === brandId)?.displayName ?? null,
+    };
   }
 
   /**

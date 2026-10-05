@@ -15,6 +15,7 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.tenancy.api.AuthoredConfigurationValue;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
@@ -124,7 +125,117 @@ class OperationsConfigurationControllerTests {
 
     private static OperationsConfigurationController controller(
             ConfigurationResolver resolver, ConfigurationValueAuthor values) {
-        return new OperationsConfigurationController(resolver, values, fakeActor());
+        return controller(resolver, values, new FakeStaff());
+    }
+
+    private static OperationsConfigurationController controller(
+            ConfigurationResolver resolver, ConfigurationValueAuthor values, StaffDirectory staff) {
+        return new OperationsConfigurationController(resolver, values, fakeActor(), staff);
+    }
+
+    /** Knows one person, in one tenant: the real directory is tenant-scoped, so this one is too. */
+    private static final class FakeStaff implements StaffDirectory {
+        final List<String> asked = new java.util.ArrayList<>();
+
+        @Override
+        public @Nullable String nameOf(UUID tenantId, String subject) {
+            return namesOf(tenantId, List.of(subject)).get(subject);
+        }
+
+        @Override
+        public Map<String, String> namesOf(UUID tenantId, java.util.Collection<String> subjects) {
+            asked.addAll(subjects);
+            return TENANT_ID.equals(tenantId) && subjects.contains("subject-aziza")
+                    ? Map.of("subject-aziza", "Aziza Karimova")
+                    : Map.of();
+        }
+
+        @Override
+        public Optional<UUID> memberIdOf(UUID tenantId, String subject) {
+            return Optional.empty();
+        }
+    }
+
+    /** A resolver whose trace has provenance at the tenant rung and none at the brand rung. */
+    private static final class TracedResolver implements ConfigurationResolver {
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> Resolved<T> resolve(ConfigurationKey<T> key, ResourceScope scope) {
+            return new Resolved<>((T) key.defaultValue(), explain(key, scope));
+        }
+
+        @Override
+        public ResolutionTrace explain(ConfigurationKey<?> key, ResourceScope scope) {
+            return new ResolutionTrace(
+                    key.code(),
+                    Source.SCOPED_VALUE,
+                    ScopeType.TENANT,
+                    List.of(
+                            new Level(ScopeType.BRAND, Outcome.NOT_SET),
+                            new Level(
+                                    ScopeType.TENANT,
+                                    Outcome.VALUE,
+                                    new ResolutionTrace.Provenance(
+                                            5, "subject-aziza", java.time.Instant.parse("2026-09-29T12:00:00Z")))));
+        }
+    }
+
+    // ---------------------------------------------------------------- who changed it
+
+    @Test
+    void theResolutionNamesWhoSetEachStoredLevelAndWhenButNeverGivesTheSubjectId() {
+        FakeStaff staff = new FakeStaff();
+
+        var response = controller(new TracedResolver(), new FakeValueAuthor(), staff)
+                .resolution(TENANT_ID, tenantVisibleCode(), ScopeType.BRAND, BRAND_ID, null);
+
+        assertThat(response.inspectedLevels()).hasSize(2);
+        assertThat(response.inspectedLevels().get(0).version())
+                .as("nothing stored at the brand")
+                .isNull();
+        assertThat(response.inspectedLevels().get(0).changedByName()).isNull();
+        assertThat(response.inspectedLevels().get(1).version()).isEqualTo(5L);
+        assertThat(response.inspectedLevels().get(1).changedByName()).isEqualTo("Aziza Karimova");
+        assertThat(response.inspectedLevels().get(1).changedAt())
+                .isEqualTo(java.time.Instant.parse("2026-09-29T12:00:00Z"));
+        assertThat(response.toString())
+                .as("the response is built from names; the principal's id is not a field of it")
+                .doesNotContain("subject-aziza");
+    }
+
+    @Test
+    void aSubjectWithNoMemberRecordInThisTenantIsLeftUnnamedAndAnotherTenantsPersonIsNotNamed() {
+        var inOtherTenant = controller(new TracedResolver(), new FakeValueAuthor(), new FakeStaff())
+                .resolution(OTHER_TENANT_ID, tenantVisibleCode(), ScopeType.BRAND, BRAND_ID, null);
+
+        assertThat(inOtherTenant.inspectedLevels().get(1).version())
+                .as("the version and date are facts about the row and do not depend on a name")
+                .isEqualTo(5L);
+        assertThat(inOtherTenant.inspectedLevels().get(1).changedByName())
+                .as("the directory answers per tenant: Aziza works for TENANT_ID, not here")
+                .isNull();
+    }
+
+    @Test
+    void theDirectoryIsAskedOnceForTheWholeLadderAndNotAtAllWhenNothingIsStored() {
+        FakeStaff staff = new FakeStaff();
+
+        controller(new TracedResolver(), new FakeValueAuthor(), staff)
+                .resolution(TENANT_ID, tenantVisibleCode(), ScopeType.BRAND, BRAND_ID, null);
+        assertThat(staff.asked).containsExactly("subject-aziza");
+
+        staff.asked.clear();
+        controller(new FakeResolver(), new FakeValueAuthor(), staff)
+                .resolution(TENANT_ID, tenantVisibleCode(), ScopeType.BRAND, BRAND_ID, null);
+        assertThat(staff.asked).isEmpty();
+    }
+
+    private static String tenantVisibleCode() {
+        return ConfigurationKeys.all().stream()
+                .filter(ConfigurationKey::tenantVisible)
+                .findFirst()
+                .orElseThrow()
+                .code();
     }
 
     // ---------------------------------------------------------------- keys
@@ -244,6 +355,31 @@ class OperationsConfigurationControllerTests {
                 .isInstanceOf(ApiException.class)
                 .satisfies(
                         error -> assertThat(((ApiException) error).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+    }
+
+    @Test
+    void refusesANumberAnIntegerKeyCannotStoreInsteadOfFailingWithAnArithmeticError() {
+        FakeValueAuthor values = new FakeValueAuthor();
+        var controller = controller(new FakeResolver(), values);
+
+        // CART_EXPIRY_MINUTES is an Integer key; the request's number is a Long, narrowed to 32 bits.
+        for (long outOfRange : new long[] {2_147_483_648L, 3_000_000_000L, -2_147_483_649L}) {
+            var request = new OperationsConfigurationController.OperationsSetConfigurationValueRequest(
+                    ScopeType.TENANT, null, null, false, null, outOfRange, null, null, null, "because");
+
+            assertThatThrownBy(
+                            () -> controller.setValue(TENANT_ID, ConfigurationKeys.CART_EXPIRY_MINUTES.code(), request))
+                    .as("value " + outOfRange)
+                    .isInstanceOf(ApiException.class)
+                    .satisfies(error ->
+                            assertThat(((ApiException) error).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+        }
+        assertThat(values.lastKey).as("nothing reached the author").isNull();
+
+        var edge = new OperationsConfigurationController.OperationsSetConfigurationValueRequest(
+                ScopeType.TENANT, null, null, false, null, 2_147_483_647L, null, null, null, "the largest");
+        controller.setValue(TENANT_ID, ConfigurationKeys.CART_EXPIRY_MINUTES.code(), edge);
+        assertThat(values.lastValue).as("the largest Integer is still storable").isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test

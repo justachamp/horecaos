@@ -151,72 +151,246 @@ describe('CourierPolicyPage', () => {
     expect(identity).toContain('1');
   });
 
-  // Row 3.9 (this wave): P38 stored these four fields but nothing reads them
-  // yet, so they render the stored value locked, with a "not yet enforced"
-  // badge and reason — never as an editable control, which would tell an
-  // operator the switch takes effect when it does not.
-  it('renders the GPS, kitchen-ready, reveal-timing and payment-check rows locked, with their stored value and a not-enforced reason', async () => {
-    const host = await render({
-      policy: () =>
-        Promise.resolve({
-          ...POLICY,
-          gpsVerificationEnabled: true,
-          gpsAcceptRadiusMeters: 2000,
-          gpsStatusChangeRadiusMeters: 120,
-          kitchenReadyOnly: true,
-          revealCustomerLocationTiming: 'BEFORE_ACCEPT',
-          postDeliveryPaymentCheckRequired: true,
-        }),
-    });
+  const ENFORCED_POLICY: CourierPolicyView = {
+    ...POLICY,
+    gpsVerificationEnabled: true,
+    gpsAcceptRadiusMeters: 2000,
+    gpsStatusChangeRadiusMeters: 120,
+    kitchenReadyOnly: true,
+    revealCustomerLocationTiming: 'BEFORE_ACCEPT',
+    postDeliveryPaymentCheckRequired: true,
+  };
+
+  async function openEditor(host: HTMLElement): Promise<void> {
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit')!
+      .click();
+    fixture.detectChanges();
+  }
+
+  async function publishWithReason(host: HTMLElement): Promise<void> {
+    const reason = host.querySelector<HTMLInputElement>('[data-testid="policy-input-reason"]')!;
+    reason.value = 'Pilot branch is going live';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  // Row 3.9 (batch 18): the courier app's endpoints read these four switches where the courier
+  // acts, so they are ordinary rows with a consequence line, not locked ones with a reason why
+  // nothing reads them.
+  it('renders the GPS, kitchen-ready, reveal-timing and payment-check rows as enforced, each with its consequence line', async () => {
+    const host = await render({ policy: () => Promise.resolve(ENFORCED_POLICY) });
 
     const kitchenReadyOnly = host.querySelector('[data-testid="policy-row-kitchenReadyOnly"]')!;
     expect(kitchenReadyOnly.textContent).toContain('Yes');
-    expect(kitchenReadyOnly.textContent).toContain('Not yet enforced');
-    expect(kitchenReadyOnly.querySelector('input, select')).toBeNull();
+    expect(kitchenReadyOnly.textContent).toContain('only orders the kitchen has finished');
 
     const revealTiming = host.querySelector(
       '[data-testid="policy-row-revealCustomerLocationTiming"]',
     )!;
     expect(revealTiming.textContent).toContain('Before accept');
-    expect(revealTiming.textContent).toContain('Not yet enforced');
+    expect(revealTiming.textContent).toContain('written to the audit log');
 
     const paymentCheck = host.querySelector(
       '[data-testid="policy-row-postDeliveryPaymentCheckRequired"]',
     )!;
     expect(paymentCheck.textContent).toContain('Yes');
-    expect(paymentCheck.textContent).toContain('Not yet enforced');
-    expect(paymentCheck.textContent).toContain('ADR 0125');
+    expect(paymentCheck.textContent).toContain('cannot mark a cash order delivered');
 
     const gps = host.querySelector('[data-testid="policy-row-gpsVerificationEnabled"]')!;
-    expect(gps.textContent).toContain('Not yet enforced');
-    expect(gps.textContent?.replace(/\s/g, '')).toContain('2');
+    expect(gps.textContent?.replace(/\s/g, '')).toContain('2km');
     expect(gps.textContent).toContain('120');
-    expect(gps.querySelector('input, select')).toBeNull();
+    expect(gps.textContent).toContain('farther from the branch than the accept radius');
+
+    for (const key of [
+      'kitchenReadyOnly',
+      'revealCustomerLocationTiming',
+      'postDeliveryPaymentCheckRequired',
+      'gpsVerificationEnabled',
+    ]) {
+      const row = host.querySelector(`[data-testid="policy-row-${key}"]`)!;
+      expect(row.textContent).not.toContain('Not yet enforced');
+      expect(row.querySelector('input, select')).toBeNull();
+    }
   });
 
-  // The edit form must offer no control for a field nothing enforces — the
-  // same reason billing mode/telemetry gate were never in the form either.
-  it('offers no editable control for the four not-yet-enforced fields, even while editing', async () => {
+  it('shows the GPS gate as off when the master toggle is off, whatever the stored radii are', async () => {
     const host = await render({
-      policy: () => Promise.resolve(POLICY),
-      writePolicy: vi.fn(),
+      policy: () => Promise.resolve({ ...POLICY, gpsAcceptRadiusMeters: 2000 }),
     });
 
-    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.trim() === 'Edit')!
-      .click();
+    const gps = host.querySelector('[data-testid="policy-row-gpsVerificationEnabled"]')!;
+    expect(gps.textContent).toContain('No');
+    expect(gps.textContent).not.toContain('km');
+  });
+
+  it('flags a location override of the GPS gate against its parent, comparing the radii as well as the toggle', async () => {
+    const parent = { ...POLICY, gpsVerificationEnabled: true, gpsStatusChangeRadiusMeters: 150 };
+    const child = { ...parent, gpsStatusChangeRadiusMeters: 60, winningScope: 'LOCATION' };
+    const policy = vi
+      .fn<(tenantId: string, brandId?: string, locationId?: string) => Promise<CourierPolicyView>>()
+      .mockImplementation(async (_tenantId, _brandId, locationId) => (locationId ? child : parent));
+
+    const host = await render({ policy });
+
+    const gps = host.querySelector('[data-testid="policy-row-gpsVerificationEnabled"]')!;
+    expect(gps.querySelector('q-status-pill')).not.toBeNull();
+    expect(gps.querySelector('[data-testid="policy-row-inherited"]')?.textContent).toContain('150');
+    expect(gps.textContent).toContain('60');
+  });
+
+  it('offers a control for each of the four switches and publishes what the operator chose', async () => {
+    const writePolicy = vi.fn().mockResolvedValue({ ...ENFORCED_POLICY, policyVersion: 2 });
+    const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy });
+    await openEditor(host);
+
+    const kitchen = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-kitchenReadyOnly"]',
+    )!;
+    kitchen.checked = true;
+    kitchen.dispatchEvent(new Event('change'));
+
+    const reveal = host.querySelector<HTMLSelectElement>(
+      '[data-testid="policy-input-revealTiming"]',
+    )!;
+    reveal.value = 'BEFORE_ACCEPT';
+    reveal.dispatchEvent(new Event('change'));
+
+    const payment = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-postDeliveryPaymentCheckRequired"]',
+    )!;
+    payment.checked = true;
+    payment.dispatchEvent(new Event('change'));
+
+    const gps = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsVerificationEnabled"]',
+    )!;
+    gps.checked = true;
+    gps.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    expect(host.querySelector('[data-testid="policy-input-kitchenReadyOnly"]')).toBeNull();
-    expect(host.querySelector('[data-testid="policy-input-revealTiming"]')).toBeNull();
-    expect(
-      host.querySelector('[data-testid="policy-input-postDeliveryPaymentCheckRequired"]'),
-    ).toBeNull();
-    expect(host.querySelector('[data-testid="policy-input-gpsVerificationEnabled"]')).toBeNull();
+    const accept = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsAcceptRadiusKm"]',
+    )!;
+    accept.value = '2';
+    accept.dispatchEvent(new Event('input'));
+    const status = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsStatusChangeRadiusMeters"]',
+    )!;
+    status.value = '120';
+    status.dispatchEvent(new Event('input'));
+
+    await publishWithReason(host);
+
+    expect(writePolicy).toHaveBeenCalledTimes(1);
+    const input = writePolicy.mock.calls[0][1];
+    expect(input.kitchenReadyOnly).toBe(true);
+    expect(input.revealCustomerLocationTiming).toBe('BEFORE_ACCEPT');
+    expect(input.postDeliveryPaymentCheckRequired).toBe(true);
+    expect(input.gpsVerificationEnabled).toBe(true);
+    // Kilometres in the form, metres on the wire.
+    expect(input.gpsAcceptRadiusMeters).toBe(2000);
+    expect(input.gpsStatusChangeRadiusMeters).toBe(120);
+  });
+
+  it("shows each switch's consequence line beside its control while editing", async () => {
+    const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy: vi.fn() });
+    await openEditor(host);
+
+    const form = host.querySelector('.form')!;
+    expect(form.textContent).toContain('only orders the kitchen has finished');
+    expect(form.textContent).toContain('written to the audit log');
+    expect(form.textContent).toContain('cannot mark a cash order delivered');
+    expect(form.textContent).toContain('positions are not checked');
+  });
+
+  it('asks for the two radii only while the GPS gate is on, and will not publish a radius of zero', async () => {
+    const writePolicy = vi.fn().mockResolvedValue(POLICY);
+    const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy });
+    await openEditor(host);
+
     expect(host.querySelector('[data-testid="policy-input-gpsAcceptRadiusKm"]')).toBeNull();
     expect(
       host.querySelector('[data-testid="policy-input-gpsStatusChangeRadiusMeters"]'),
     ).toBeNull();
+
+    const gps = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsVerificationEnabled"]',
+    )!;
+    gps.checked = true;
+    gps.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const status = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsStatusChangeRadiusMeters"]',
+    )!;
+    status.value = '0';
+    status.dispatchEvent(new Event('input'));
+    const reason = host.querySelector<HTMLInputElement>('[data-testid="policy-input-reason"]')!;
+    reason.value = 'Pilot branch is going live';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="policy-gps-radius-error"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.disabled).toBe(
+      true,
+    );
+
+    // Switching the gate off again makes the radii irrelevant, so a zero in the hidden field
+    // must not hold the publish hostage.
+    gps.checked = false;
+    gps.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.disabled).toBe(
+      false,
+    );
+  });
+
+  // The backend validates both radii as positive whether or not the gate is on, and the radius
+  // inputs are only drawn while it is. A zero typed while the gate was on and then hidden by
+  // switching it off must therefore never reach the wire, or the PUT answers 400 about a field the
+  // operator cannot see.
+  it('switches the GPS gate off after a radius was cleared without sending that zero', async () => {
+    const writePolicy = vi.fn().mockResolvedValue(ENFORCED_POLICY);
+    const host = await render({ policy: () => Promise.resolve(ENFORCED_POLICY), writePolicy });
+    await openEditor(host);
+
+    const accept = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsAcceptRadiusKm"]',
+    )!;
+    accept.value = '0';
+    accept.dispatchEvent(new Event('input'));
+    const status = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsStatusChangeRadiusMeters"]',
+    )!;
+    status.value = '0';
+    status.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.disabled).toBe(
+      true,
+    );
+
+    const gps = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-gpsVerificationEnabled"]',
+    )!;
+    gps.checked = false;
+    gps.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(
+      host.querySelector('[data-testid="policy-input-gpsStatusChangeRadiusMeters"]'),
+    ).toBeNull();
+
+    await publishWithReason(host);
+
+    expect(writePolicy).toHaveBeenCalledTimes(1);
+    const input = writePolicy.mock.calls[0][1];
+    expect(input.gpsVerificationEnabled).toBe(false);
+    // The policy's own stored distances stay; the cleared boxes are not sent.
+    expect(input.gpsAcceptRadiusMeters).toBe(ENFORCED_POLICY.gpsAcceptRadiusMeters);
+    expect(input.gpsStatusChangeRadiusMeters).toBe(ENFORCED_POLICY.gpsStatusChangeRadiusMeters);
   });
 
   // couriers.md §16 / settings.md §10.13: courier billing mode is refused by
@@ -360,9 +534,7 @@ describe('CourierPolicyPage', () => {
     const [tenantId, input, expectedVersion] = writePolicy.mock.calls[0];
     expect(tenantId).toBe('t1');
     expect(input.shiftEnforcement).toBe('ENFORCED');
-    // The four not-yet-enforced fields are echoed back unchanged — this form
-    // gives the operator no way to change them (see the locked-rows tests
-    // above), never sent as whatever a stale draft happened to hold.
+    // An untouched switch is sent back as it was read: the whole document is republished.
     expect(input.gpsVerificationEnabled).toBe(POLICY.gpsVerificationEnabled);
     expect(input.gpsAcceptRadiusMeters).toBe(POLICY.gpsAcceptRadiusMeters);
     expect(input.gpsStatusChangeRadiusMeters).toBe(POLICY.gpsStatusChangeRadiusMeters);

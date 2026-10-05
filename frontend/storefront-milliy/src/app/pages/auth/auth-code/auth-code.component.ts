@@ -97,7 +97,9 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
   protected readonly phoneDisplay = signal('');
 
   protected readonly showResend = computed(() => this.countdown() <= 0);
-  protected readonly canSubmit = computed(() => this.code().length === CODE_LENGTH && !this.loading());
+  protected readonly canSubmit = computed(
+    () => this.code().length === CODE_LENGTH && !this.loading(),
+  );
   protected readonly clock = computed(() => {
     const seconds = Math.max(0, this.countdown());
     const minutes = Math.floor(seconds / 60);
@@ -309,5 +311,7 @@ function secondsUntil(expiresAt: string | undefined): number {
 /** `+998 90 *** ** 67`. */
 function mask(e164: string): string {
   const groups = formatUzPhone(e164).split(' ');
-  return groups.length === 5 ? `${groups[0]} ${groups[1]} *** ** ${groups[4]}` : formatUzPhone(e164);
+  return groups.length === 5
+    ? `${groups[0]} ${groups[1]} *** ** ${groups[4]}`
+    : formatUzPhone(e164);
 }

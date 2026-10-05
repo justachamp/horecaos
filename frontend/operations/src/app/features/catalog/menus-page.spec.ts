@@ -343,6 +343,38 @@ describe('MenusPage', () => {
     expect(options.map((option) => option.textContent?.trim())).toEqual(['Зал', 'Uzum Tezkor']);
   });
 
+  it('words the price of a variant sold by weight per its quantum, and no other', async () => {
+    configure(
+      {
+        variantsAtLocation: () =>
+          of({
+            items: [
+              row({ variantId: 'v1', productName: 'Торт' }),
+              row({ variantId: 'v2', productName: 'Кола' }),
+            ],
+            nextCursor: null,
+          }),
+      },
+      {
+        resolvedVariantPrices: () =>
+          of({
+            priceBookId: 'hall-book',
+            currency: 'UZS',
+            amountsMinor: { v1: 150_000, v2: 8_000 },
+            catchweightQuantumGrams: { v1: 100 },
+          }),
+      },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const units = [...host.querySelectorAll('[data-testid="menus-price-unit"]')];
+    expect(units.map((unit) => unit.textContent?.trim())).toEqual(['за 100\u00a0г']);
+    expect(units[0].closest('tr')?.textContent).toContain('Торт');
+  });
+
   it(
     'selecting a channel that has no price book of its own shows a hint instead of an ' +
       'editable price, so a save can never silently rewrite the hall price',

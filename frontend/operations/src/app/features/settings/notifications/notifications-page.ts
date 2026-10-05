@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { Drawer } from '../../../shared/ui/drawer';
 import { StatusPill, StatusTone } from '../../../shared/ui/status-pill';
 import { describeApiError } from '../../orders/order-errors';
+import { SettingsSaved } from '../settings-saved';
 import {
   CHANNEL_SOURCES,
   EventClassOption,
@@ -73,6 +74,7 @@ export class NotificationsPage {
   private readonly configApi = inject(ConfigurationApi);
   protected readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly saved = inject(SettingsSaved);
 
   protected readonly activeTab = signal<NotificationsTab>('templates');
   protected readonly notificationClasses = NOTIFICATION_CLASSES;
@@ -498,9 +500,22 @@ export class NotificationsPage {
       });
       this.paymentLinkAutoSend.set(enabled);
       this.paymentLinkVersion = saved.version;
+      this.announceSwitch('settings.notifications.field.paymentLinkAutoSend', enabled);
     } finally {
       this.automationSaving.set(null);
     }
+  }
+
+  /** A switch saves the moment it is flipped, so nothing else tells the operator it landed (settings.md §1.3). */
+  private announceSwitch(labelKey: MessageKey, enabled: boolean): void {
+    // The two switches are written at BRAND level; the screen follows the shell's branch, which names no
+    // brand of its own, so the confirmation says "for the brand" rather than guess a name.
+    this.saved.announce(
+      'set',
+      this.i18n.t(labelKey),
+      { level: 'BRAND', name: null },
+      this.saved.onOff(enabled),
+    );
   }
 
   protected async toggleAggregatorShiftNotifications(enabled: boolean): Promise<void> {
@@ -521,6 +536,7 @@ export class NotificationsPage {
       });
       this.aggregatorShiftNotifications.set(enabled);
       this.aggregatorShiftVersion = saved.version;
+      this.announceSwitch('settings.notifications.field.aggregatorShiftNotifications', enabled);
     } finally {
       this.automationSaving.set(null);
     }

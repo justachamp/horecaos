@@ -410,6 +410,183 @@ class TableSessionControllerHttpTests {
         assertThat(count("SELECT count(*) FROM dinein.session_orders")).isZero();
     }
 
+    // ------------------------------------------------- closing against the bill that was read
+
+    @Test
+    @DisplayName("a round attached after the bill was read makes the close answer a stale version, "
+            + "and the party is closed only against the bill the second read shows")
+    void aRoundAttachedAfterTheBillWasReadMakesTheCloseStale() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3001", "DINE_IN", 120_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        // The operator opens «Закрыть стол»: the bill reads 120 000 at this version.
+        JsonNode read = readSession(a1, STAFF_A1, sessionId);
+        assertThat(read.path("totalMinor").asLong()).isEqualTo(120_000L);
+        int versionRead = read.path("session").path("version").asInt();
+
+        // A phone operator attaches a 30 000 round to the same table meanwhile.
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3002", "DINE_IN", 30_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult stale = stateAction(a1, STAFF_A1, sessionId, versionRead, "CLOSED");
+
+        assertThat(stale.getResponse().getStatus())
+                .as("the operator confirmed a bill that is no longer the bill")
+                .isEqualTo(409);
+        assertThat(json(stale).path("code").asText()).isEqualTo("STALE_VERSION");
+        assertThat(count("SELECT count(*) FROM dinein.table_sessions WHERE status = 'OPEN'"))
+                .as("the party is still seated")
+                .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM audit.audit_events WHERE action_code = 'dinein.session.closed'"
+                        + " AND target_id = '" + sessionId + "'"))
+                .as("and no settlement was recorded for a bill nobody saw")
+                .isZero();
+
+        // Read again: the figure is 150 000 and the version has moved to say so.
+        JsonNode reread = readSession(a1, STAFF_A1, sessionId);
+        assertThat(reread.path("totalMinor").asLong()).isEqualTo(150_000L);
+        assertThat(reread.path("session").path("version").asInt()).isGreaterThan(versionRead);
+
+        MvcResult closed = stateAction(
+                a1, STAFF_A1, sessionId, reread.path("session").path("version").asInt(), "CLOSED");
+
+        assertThat(closed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(closed).path("settledTotalMinor").asLong())
+                .as("settled at the bill the operator then saw")
+                .isEqualTo(150_000L);
+    }
+
+    @Test
+    @DisplayName("a round attached after an empty party was read does not let the nothing-owed close free "
+            + "the table under a cooking order")
+    void aRoundAttachedToAnEmptyPartyMakesTheNothingOwedCloseStale() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        JsonNode read = readSession(a1, STAFF_A1, sessionId);
+        assertThat(read.path("totalMinor").asLong()).isZero();
+        int versionRead = read.path("session").path("version").asInt();
+
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3003", "DINE_IN", 30_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult stale = stateAction(a1, STAFF_A1, sessionId, versionRead, "CLOSED");
+
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(stale).path("code").asText()).isEqualTo("STALE_VERSION");
+        assertThat(count("SELECT count(*) FROM dinein.table_sessions WHERE status = 'OPEN'"))
+                .as("the table is not freed under the order that arrived")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName(
+            "a party that asked for the bill cannot be closed in one step (ADR 0047 has no BILL_REQUESTED -> CLOSED "
+                    + "edge); through SETTLING it closes and settles the bill, each step on the version the step before left")
+    void aPartyThatAskedForTheBillIsClosedThroughSettling() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3005", "DINE_IN", 45_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        int opened = readSession(a1, STAFF_A1, sessionId)
+                .path("session")
+                .path("version")
+                .asInt();
+
+        MvcResult asked = stateAction(a1, STAFF_A1, sessionId, opened, "BILL_REQUESTED");
+        assertThat(asked.getResponse().getStatus()).isEqualTo(200);
+        int askedVersion = json(asked).path("version").asInt();
+
+        MvcResult direct = stateAction(a1, STAFF_A1, sessionId, askedVersion, "CLOSED");
+
+        assertThat(direct.getResponse().getStatus())
+                .as("the console must not offer a one-step close for this state")
+                .isEqualTo(400);
+        assertThat(json(direct).path("code").asText()).isEqualTo("INVALID_REQUEST");
+        assertThat(count("SELECT count(*) FROM dinein.table_sessions WHERE status = 'BILL_REQUESTED'"))
+                .as("the party is where it was")
+                .isEqualTo(1);
+
+        MvcResult settling = stateAction(a1, STAFF_A1, sessionId, askedVersion, "SETTLING");
+        assertThat(settling.getResponse().getStatus()).isEqualTo(200);
+        MvcResult closed = stateAction(
+                a1, STAFF_A1, sessionId, json(settling).path("version").asInt(), "CLOSED");
+
+        assertThat(closed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(closed).path("status").asText()).isEqualTo("CLOSED");
+        assertThat(json(closed).path("settledTotalMinor").asLong())
+                .as("settled at the bill that stood")
+                .isEqualTo(45_000L);
+        assertThat(count("SELECT count(*) FROM dinein.session_tables WHERE session_id = '" + sessionId
+                        + "' AND left_at IS NULL"))
+                .as("the table is free again")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a round attached while a party is settling answers the close a stale version: the second step is "
+            + "guarded like the first")
+    void aRoundAttachedWhileSettlingMakesTheCloseStale() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        int opened = readSession(a1, STAFF_A1, sessionId)
+                .path("session")
+                .path("version")
+                .asInt();
+        int askedVersion = json(stateAction(a1, STAFF_A1, sessionId, opened, "BILL_REQUESTED"))
+                .path("version")
+                .asInt();
+        int settlingVersion = json(stateAction(a1, STAFF_A1, sessionId, askedVersion, "SETTLING"))
+                .path("version")
+                .asInt();
+
+        assertThat(round(a1, STAFF_A1, sessionId, seedOrder(a1, "A-3006", "DINE_IN", 30_000))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult stale = stateAction(a1, STAFF_A1, sessionId, settlingVersion, "CLOSED");
+
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(stale).path("code").asText()).isEqualTo("STALE_VERSION");
+        assertThat(count("SELECT count(*) FROM dinein.table_sessions WHERE status = 'SETTLING'"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("attaching the same order again moves nothing: a retry does not stale a read that was just made")
+    void aRetriedRoundLeavesTheVersionAlone() throws Exception {
+        TableRow t7 = createTable(a1, "T7", "Table 7");
+        UUID sessionId = sessionIdOf(open(a1, STAFF_A1, t7.id()));
+        UUID order = seedOrder(a1, "A-3004", "DINE_IN", 30_000);
+        assertThat(round(a1, STAFF_A1, sessionId, order).getResponse().getStatus())
+                .isEqualTo(200);
+        int versionRead = readSession(a1, STAFF_A1, sessionId)
+                .path("session")
+                .path("version")
+                .asInt();
+
+        // A dropped response: the console asks again under a fresh idempotency key.
+        assertThat(round(a1, STAFF_A1, sessionId, order).getResponse().getStatus())
+                .isEqualTo(200);
+
+        assertThat(readSession(a1, STAFF_A1, sessionId)
+                        .path("session")
+                        .path("version")
+                        .asInt())
+                .as("the same round, not a changed bill")
+                .isEqualTo(versionRead);
+    }
+
     // -------------------------------------------------------------------- branch isolation
 
     @Test
@@ -511,6 +688,24 @@ class TableSessionControllerHttpTests {
                         .header("Idempotency-Key", key())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"orderId\":\"" + orderId + "\",\"reason\":\"Keyed in at the console\"}"))
+                .andReturn();
+    }
+
+    private JsonNode readSession(Site site, String subject, UUID sessionId) throws Exception {
+        MvcResult result = mvc.perform(get(sessionsPath(site) + "/" + sessionId).with(tokenFor(subject)))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).as("read status").isEqualTo(200);
+        return json(result);
+    }
+
+    private MvcResult stateAction(Site site, String subject, UUID sessionId, int version, String target)
+            throws Exception {
+        return mvc.perform(post(sessionsPath(site) + "/" + sessionId + "/state-actions")
+                        .with(tokenFor(subject))
+                        .header("Idempotency-Key", key())
+                        .header("If-Match", "\"" + version + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetStatus\":\"" + target + "\",\"reason\":\"Closed from the console\"}"))
                 .andReturn();
     }
 

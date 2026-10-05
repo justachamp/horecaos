@@ -1,0 +1,67 @@
+/* The backdrop, panel and button row are `q-modal` (ADR 0101); this file is only the dialog's own
+ * content, projected into it — see `track-reveal-dialog.css`'s identical note on why projected
+ * content is styled from the declaring component. */
+
+.explainer__dish {
+  margin: 0 0 12px;
+  color: var(--q-ink-muted);
+}
+
+.explainer__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.explainer__select {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.explainer__verdict {
+  margin: 0 0 8px;
+}
+
+.explainer__verdict--no {
+  color: var(--q-error-text);
+}
+
+.explainer__heading {
+  margin: 12px 0 4px;
+  color: var(--q-ink-muted);
+  text-transform: none;
+  font-weight: 600;
+}
+
+.explainer__list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.explainer__ignored {
+  color: var(--q-ink-muted);
+}
+
+.explainer__note {
+  margin: 8px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.explainer__error {
+  margin: 8px 0 0;
+  color: var(--q-error-text);
+}
+
+.explainer__close {
+  padding: 8px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}

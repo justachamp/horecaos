@@ -14,6 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
@@ -38,6 +45,14 @@ import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
  * <p>The second rule is that a template can only name variables its schema
  * declares. That is checked when a draft is saved, so a typo is a refused draft
  * rather than a customer reading "Заказ {{orderNumbr}} принят".
+ *
+ * <p><strong>Every write leaves an audit fact</strong> (ADR 0027, staff row {@code 9.3a}) in the
+ * transaction that made it: {@code notification.template.created}, {@code
+ * notification.template.version_added} and {@code notification.template.version_activated}. The
+ * wording is what customers read as the business speaking, so «who changed the confirmation SMS
+ * on Friday» has to be answerable. The fact names the version and the size of each language and
+ * not the text: the version rows already keep the text, addressable by the number the fact
+ * carries, and an audit row is the wrong place for a second copy of marketing copy.
  */
 @Service
 public class NotificationTemplateService {
@@ -47,11 +62,20 @@ public class NotificationTemplateService {
     private final JdbcTemplateStore templates;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public NotificationTemplateService(JdbcTemplateStore templates, ObjectMapper objectMapper, Clock clock) {
+    public NotificationTemplateService(
+            JdbcTemplateStore templates,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor) {
         this.templates = templates;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     /**
@@ -123,6 +147,23 @@ public class NotificationTemplateService {
                 fulfillmentMode == null ? null : fulfillmentMode.name(),
                 channelSource == null ? null : channelSource.name(),
                 clock.instant());
+        Map<String, Object> created = new LinkedHashMap<>();
+        created.put("templateKey", templateKey);
+        created.put("notificationClass", notificationClass.name());
+        created.put("channel", channel.name());
+        created.put("consentPurpose", consentPurpose);
+        created.put("fulfillmentMode", fulfillmentMode == null ? null : fulfillmentMode.name());
+        created.put("channelSource", channelSource == null ? null : channelSource.name());
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                AuditFact.of("notification.template.created", AuditClass.BUSINESS),
+                tenantId,
+                brandId,
+                id,
+                1,
+                "Notification template created",
+                Map.of(),
+                created);
         return id;
     }
 
@@ -192,6 +233,27 @@ public class NotificationTemplateService {
                     now);
         }
 
+        Map<String, Object> added = new LinkedHashMap<>();
+        added.put("templateKey", owned.templateKey());
+        added.put("channel", owned.channel());
+        added.put("versionNumber", versionNumber);
+        // Not «awaiting…»: ChangeDocuments redacts any key containing «tin».
+        added.put("gatewayReviewRequired", awaitsGateway);
+        for (MessageLocale locale : MessageLocale.required()) {
+            Wording wording = Objects.requireNonNull(wordings.get(locale));
+            added.put("characters." + locale.tag(), wording.body().length());
+        }
+        // The version is new: there was no draft of this number to diff against.
+        recordAudit(
+                AuditFact.of("notification.template.version_added", AuditClass.BUSINESS),
+                tenantId,
+                owned.brandId(),
+                templateId,
+                owned.version(),
+                "Notification template wording saved as a new version",
+                Map.of(),
+                added);
+
         return versionNumber;
     }
 
@@ -232,6 +294,53 @@ public class NotificationTemplateService {
         if (!templates.markTemplateActive(tenantId, templateId, versionNumber, template.version(), clock.instant())) {
             throw new IllegalStateException("The template was changed by someone else");
         }
+        recordAudit(
+                AuditFact.of("notification.template.version_activated", AuditClass.BUSINESS),
+                tenantId,
+                template.brandId(),
+                templateId,
+                template.version() + 1,
+                "Notification template version activated",
+                activeVersionOf(template, template.activeVersion()),
+                activeVersionOf(template, versionNumber));
+    }
+
+    // ------------------------------------------------------------------ audit
+
+    /**
+     * One fact per write, in the caller's transaction. The reason is a plain statement of the
+     * action: the console has no field for one, and ADR 0027 refuses a user-initiated fact
+     * without it.
+     *
+     * @param brandId null for the tenant's default wording
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            UUID tenantId,
+            @Nullable UUID brandId,
+            UUID templateId,
+            int version,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(brandId == null ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
+                .target("notification.template", templateId)
+                .targetVersion((long) version)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(templateId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /** The template recognisable by its key and channel, with the version that is sent. */
+    private static Map<String, Object> activeVersionOf(TemplateRow template, @Nullable Integer activeVersion) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("templateKey", template.templateKey());
+        snapshot.put("channel", template.channel());
+        snapshot.put("activeVersion", activeVersion);
+        return snapshot;
     }
 
     // -------------------------------------------------------------- resolution

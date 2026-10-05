@@ -122,7 +122,9 @@ class AmendmentBasketTests {
         OrderLineRow cola = component(2, COLA, COLA_IN_LUNCH, 2, 1, 2);
 
         PricingCommand.Item item = AmendmentBasket.pricingItems(
-                        AmendmentBasket.units(List.of(burger, cola)), Map.of(burger.lineId(), 5), Map.of())
+                        AmendmentBasket.units(List.of(burger, cola)),
+                        Map.of(burger.lineId(), BigDecimal.valueOf(5)),
+                        Map.of())
                 .get(0);
 
         assertThat(item.quantity())
@@ -138,7 +140,7 @@ class AmendmentBasketTests {
         OrderLineRow wings = component(1, BURGER, BURGER_IN_LUNCH, 4, 2, 2);
 
         Throwable refused = catchThrowable(() -> AmendmentBasket.pricingItems(
-                AmendmentBasket.units(List.of(wings)), Map.of(wings.lineId(), 5), Map.of()));
+                AmendmentBasket.units(List.of(wings)), Map.of(wings.lineId(), BigDecimal.valueOf(5)), Map.of()));
 
         assertThat(refused).isInstanceOf(AmendmentRefusedException.class);
         assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("COMBO_QUANTITY_NOT_WHOLE");
@@ -151,7 +153,9 @@ class AmendmentBasketTests {
         OrderLineRow cola = component(2, COLA, COLA_IN_LUNCH, 2, 1, 2);
 
         Throwable refused = catchThrowable(() -> AmendmentBasket.pricingItems(
-                AmendmentBasket.units(List.of(burger, cola)), Map.of(burger.lineId(), 3, cola.lineId(), 4), Map.of()));
+                AmendmentBasket.units(List.of(burger, cola)),
+                Map.of(burger.lineId(), BigDecimal.valueOf(3), cola.lineId(), BigDecimal.valueOf(4)),
+                Map.of()));
 
         assertThat(refused).isInstanceOf(AmendmentRefusedException.class);
         assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("COMBO_QUANTITY_CONFLICT");
@@ -163,10 +167,93 @@ class AmendmentBasketTests {
         OrderLineRow burger = component(1, BURGER, BURGER_IN_LUNCH, 4, 1, 4);
 
         Throwable refused = catchThrowable(() -> AmendmentBasket.pricingItems(
-                AmendmentBasket.units(List.of(burger)), Map.of(burger.lineId(), 2), Map.of()));
+                AmendmentBasket.units(List.of(burger)), Map.of(burger.lineId(), BigDecimal.valueOf(2)), Map.of()));
 
         assertThat(refused).isInstanceOf(AmendmentRefusedException.class);
         assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
+    }
+
+    // ------------------------------------------------- decimal quantities (ADR 0137)
+
+    @Test
+    @DisplayName("a line sold by the portion is priced again at the fraction it was changed to")
+    void aPlainLineTakesADecimalQuantity() {
+        OrderLineRow plov = plain(1, PLAIN_VARIANT, 1);
+
+        PricingCommand.Item item = AmendmentBasket.pricingItems(
+                        AmendmentBasket.units(List.of(plov)), Map.of(plov.lineId(), new BigDecimal("1.50")), Map.of())
+                .get(0);
+
+        assertThat(item.quantity())
+                .as("one and a half portions, not 1 and not 2")
+                .isEqualByComparingTo("1.5");
+        assertThat(item.quantity().scale())
+                .as("the canonical form: no trailing zero, so equal baskets compare equal")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("half a portion added to a whole one is an increase; the same quantity is not")
+    void onlyAStrictlyLargerQuantityIsAnIncrease() {
+        OrderLineRow plov = plain(1, PLAIN_VARIANT, 1);
+
+        assertThat(AmendmentBasket.pricingItems(
+                                AmendmentBasket.units(List.of(plov)),
+                                Map.of(plov.lineId(), new BigDecimal("1.001")),
+                                Map.of())
+                        .get(0)
+                        .quantity())
+                .isEqualByComparingTo("1.001");
+        for (String notLarger : List.of("1", "1.000", "0.5")) {
+            Throwable refused = catchThrowable(() -> AmendmentBasket.pricingItems(
+                    AmendmentBasket.units(List.of(plov)), Map.of(plov.lineId(), new BigDecimal(notLarger)), Map.of()));
+            assertThat(refused).as(notLarger + " is not larger than 1").isInstanceOf(AmendmentRefusedException.class);
+            assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
+        }
+    }
+
+    @Test
+    @DisplayName("a combo changes by whole combos: a fraction of one is refused with the combo code")
+    void aFractionOfAComboIsRefusedWhateverItsSize() {
+        OrderLineRow burger = component(1, BURGER, BURGER_IN_LUNCH, 2, 1, 2);
+
+        Throwable refused = catchThrowable(() -> AmendmentBasket.pricingItems(
+                AmendmentBasket.units(List.of(burger)), Map.of(burger.lineId(), new BigDecimal("2.5")), Map.of()));
+
+        assertThat(refused).isInstanceOf(AmendmentRefusedException.class);
+        assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("COMBO_QUANTITY_NOT_WHOLE");
+    }
+
+    @Test
+    @DisplayName("stock is held in whole units, so only the units beyond those already held are asked for")
+    void aFractionReservesTheDifferenceOfWholeUnits() {
+        OrderLineRow half = plain(1, PLAIN_VARIANT, new BigDecimal("0.5"));
+        OrderLineRow whole = plain(2, PLAIN_VARIANT, 1);
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(List.of(half, whole));
+
+        // 0.5 -> 1 : the half plate already holds a whole one at checkout, so nothing more is held.
+        assertThat(AmendmentBasket.increases(
+                        quote(plainQuoted(half.lineId().toString(), PLAIN_VARIANT, new BigDecimal("1"))),
+                        AmendmentBasket.touched(units, Set.of(half.lineId())),
+                        Set.of()))
+                .isEmpty();
+        // 0.5 -> 1.5 : a second plate.
+        assertThat(AmendmentBasket.increases(
+                        quote(plainQuoted(half.lineId().toString(), PLAIN_VARIANT, new BigDecimal("1.5"))),
+                        AmendmentBasket.touched(units, Set.of(half.lineId())),
+                        Set.of()))
+                .containsOnly(Map.entry(PLAIN_VARIANT, 1));
+        // 1 -> 1.5 : the extra half rounds up to a plate; 1 -> 2.5 holds two.
+        assertThat(AmendmentBasket.increases(
+                        quote(plainQuoted(whole.lineId().toString(), PLAIN_VARIANT, new BigDecimal("1.5"))),
+                        AmendmentBasket.touched(units, Set.of(whole.lineId())),
+                        Set.of()))
+                .containsOnly(Map.entry(PLAIN_VARIANT, 1));
+        assertThat(AmendmentBasket.increases(
+                        quote(plainQuoted(whole.lineId().toString(), PLAIN_VARIANT, new BigDecimal("2.5"))),
+                        AmendmentBasket.touched(units, Set.of(whole.lineId())),
+                        Set.of()))
+                .containsOnly(Map.entry(PLAIN_VARIANT, 2));
     }
 
     // ---------------------------------------------------------------- weighing
@@ -281,6 +368,11 @@ class AmendmentBasketTests {
     }
 
     private static OrderLineRow plain(int number, UUID variant, int quantity) {
+        return plain(number, variant, BigDecimal.valueOf(quantity));
+    }
+
+    private static OrderLineRow plain(int number, UUID variant, BigDecimal quantity) {
+        long finalAmount = quantity.multiply(BigDecimal.valueOf(2_000L)).longValue();
         return new OrderLineRow(
                 UUID.randomUUID(),
                 number,
@@ -289,10 +381,10 @@ class AmendmentBasketTests {
                 "name",
                 "variant",
                 "SKU",
-                BigDecimal.valueOf(quantity),
+                quantity,
                 2_000L,
-                2_000L * quantity,
-                2_000L * quantity,
+                finalAmount,
+                finalAmount,
                 0L,
                 "",
                 null,
@@ -360,7 +452,11 @@ class AmendmentBasketTests {
     }
 
     private static QuoteSnapshot.Line plainQuoted(String key, UUID variant, int quantity) {
-        return new QuoteSnapshot.Line(key, variant, BigDecimal.valueOf(quantity), "name", 2_000L, 2_000L, 2_000L, 0L);
+        return plainQuoted(key, variant, BigDecimal.valueOf(quantity));
+    }
+
+    private static QuoteSnapshot.Line plainQuoted(String key, UUID variant, BigDecimal quantity) {
+        return new QuoteSnapshot.Line(key, variant, quantity, "name", 2_000L, 2_000L, 2_000L, 0L);
     }
 
     private static QuoteSnapshot quote(QuoteSnapshot.Line... lines) {

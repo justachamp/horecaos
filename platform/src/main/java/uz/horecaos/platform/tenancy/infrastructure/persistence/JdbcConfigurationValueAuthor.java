@@ -6,11 +6,13 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -26,6 +28,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.AuthoredConfigurationValue;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
+import uz.horecaos.platform.tenancy.api.ConfigurationWriteGuard;
 import uz.horecaos.platform.tenancy.application.port.ConfigurationValueCache;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -55,13 +58,39 @@ public class JdbcConfigurationValueAuthor implements ConfigurationValueAuthor {
     private final AuditRecorder audit;
     private final Clock clock;
     private final ConfigurationValueCache cache;
+    private final List<ConfigurationWriteGuard> guards;
 
+    /** A fixture built by hand: no module has a veto over any key. */
     public JdbcConfigurationValueAuthor(
             JdbcClient jdbc, AuditRecorder audit, Clock clock, ConfigurationValueCache cache) {
+        this(jdbc, audit, clock, cache, List.of());
+    }
+
+    /**
+     * Production wiring: every module that owns a key with a rule about the state of the world
+     * (see {@link ConfigurationWriteGuard}) contributes its guard, and none is required to.
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    public JdbcConfigurationValueAuthor(
+            JdbcClient jdbc,
+            AuditRecorder audit,
+            Clock clock,
+            ConfigurationValueCache cache,
+            ObjectProvider<ConfigurationWriteGuard> guards) {
+        this(jdbc, audit, clock, cache, guards.orderedStream().toList());
+    }
+
+    public JdbcConfigurationValueAuthor(
+            JdbcClient jdbc,
+            AuditRecorder audit,
+            Clock clock,
+            ConfigurationValueCache cache,
+            List<ConfigurationWriteGuard> guards) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.clock = clock;
         this.cache = cache;
+        this.guards = List.copyOf(guards);
     }
 
     @Override
@@ -105,6 +134,13 @@ public class JdbcConfigurationValueAuthor implements ConfigurationValueAuthor {
             // refused here, at the one place every writer passes through, rather
             // than stored and tripping whoever reads it.
             ConfigurationValueRules.validate(key, value);
+        }
+
+        // A rule about the state of the world rather than about the value (see
+        // ConfigurationWriteGuard): asked after the value is known to be well formed and before
+        // anything is written, so a refusal leaves no row, no cache eviction and no audit fact.
+        for (ConfigurationWriteGuard guard : guards) {
+            guard.beforeSet(key, scope, explicitNull ? null : value, explicitNull);
         }
 
         StoredColumns columns = StoredColumns.of(key, explicitNull ? null : value);

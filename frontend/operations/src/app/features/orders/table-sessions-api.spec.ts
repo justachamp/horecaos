@@ -340,3 +340,80 @@ describe("TableSessionsApi -- a guest's self-seated claim (ADR 0143)", () => {
     expect(isUnconfirmedClaim(confirmed)).toBe(false);
   });
 });
+
+describe('TableSessionsApi -- ending a party (gap map rows 1.3 and 10.2d)', () => {
+  it('reads one party with its running bill, so a close is made against the figure just read', async () => {
+    const { api, http } = setUp();
+
+    const read = firstValueFrom(api.detail(SCOPE, 's1'));
+    const request = http.expectOne(`${URL}/s1`);
+
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      session: session({ version: 7 }),
+      orderIds: ['o1', 'o2'],
+      currency: 'UZS',
+      totalMinor: 87_000,
+      roundCount: 2,
+      openRoundCount: 1,
+    });
+    const detail = await read;
+    expect(detail.totalMinor).toBe(87_000);
+    expect(detail.roundCount).toBe(2);
+    expect(detail.session.version).toBe(7);
+  });
+
+  it('closes a party through the state-action endpoint, on its version, with a fresh Idempotency-Key', async () => {
+    const { api, http } = setUp();
+
+    const closed = firstValueFrom(api.close(SCOPE, 's1', 'The guests paid', 6));
+    const request = http.expectOne(`${URL}/s1/state-actions`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('If-Match')).toContain('6');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ targetStatus: 'CLOSED', reason: 'The guests paid' });
+    request.flush(session({ status: 'CLOSED', version: 7 }));
+    expect((await closed).status).toBe('CLOSED');
+  });
+
+  it('starts settling a party whose guests asked for the bill through the same endpoint, on its version', async () => {
+    const { api, http } = setUp();
+
+    const settling = firstValueFrom(api.startSettling(SCOPE, 's1', 'The guests paid', 6));
+    const request = http.expectOne(`${URL}/s1/state-actions`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('If-Match')).toContain('6');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ targetStatus: 'SETTLING', reason: 'The guests paid' });
+    request.flush(session({ status: 'SETTLING', version: 7 }));
+    expect((await settling).version).toBe(7);
+  });
+
+  it('closes a party that left without paying through force-closures, which is a different endpoint and body', async () => {
+    const { api, http } = setUp();
+
+    const forced = firstValueFrom(api.forceClose(SCOPE, 's1', 'WALKOUT', 'Left at 21:40', 6));
+    const request = http.expectOne(`${URL}/s1/force-closures`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('If-Match')).toContain('6');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ reasonCode: 'WALKOUT', reason: 'Left at 21:40' });
+    request.flush(session({ status: 'FORCE_CLOSED', version: 7 }));
+    expect((await forced).status).toBe('FORCE_CLOSED');
+  });
+
+  it('never asks the state-action endpoint for FORCE_CLOSED, which that endpoint refuses', async () => {
+    const { api, http } = setUp();
+
+    void firstValueFrom(api.close(SCOPE, 's1', 'x', 1));
+    const request = http.expectOne(`${URL}/s1/state-actions`);
+
+    expect((request.request.body as { targetStatus: string }).targetStatus).not.toBe(
+      'FORCE_CLOSED',
+    );
+    request.flush(session({ status: 'CLOSED' }));
+  });
+});

@@ -123,6 +123,43 @@ describe('PriceBookMatrixPage', () => {
     expect(text()).toContain('+5 000');
   });
 
+  it('marks the price of a variant sold by weight as per its quantum, and no other', async () => {
+    const matrixPage: Page<PriceBookMatrixRow> = {
+      items: [
+        row({ variantId: 'cake', displayName: 'Cake', catchweightQuantumGrams: 100 }),
+        row({ variantId: 'soda', displayName: 'Soda' }),
+        row({ variantId: 'ham', displayName: 'Ham', catchweightQuantumGrams: 1_000 }),
+      ],
+      nextCursor: null,
+    };
+    await render({ readPriceBook: () => of(BOOK), matrix: vi.fn(() => of(matrixPage)) });
+
+    expect(query('[data-testid="price-matrix-unit-cake"]')?.textContent?.trim()).toBe(
+      'per 100\u00a0g',
+    );
+    expect(query('[data-testid="price-matrix-unit-ham"]')?.textContent?.trim()).toBe(
+      'per 1\u00a0kg',
+    );
+    expect(query('[data-testid="price-matrix-unit-soda"]')).toBeNull();
+  });
+
+  it('words the unit in the console language', async () => {
+    const matrixPage: Page<PriceBookMatrixRow> = {
+      items: [row({ variantId: 'cake', displayName: 'Торт', catchweightQuantumGrams: 100 })],
+      nextCursor: null,
+    };
+    await render(
+      { readPriceBook: () => of(BOOK), matrix: vi.fn(() => of(matrixPage)) },
+      undefined,
+      BOOK_ID,
+      'ru',
+    );
+
+    expect(query('[data-testid="price-matrix-unit-cake"]')?.textContent?.trim()).toBe(
+      'за 100\u00a0г',
+    );
+  });
+
   it('shows the denied state when the book read is refused', async () => {
     await render({
       readPriceBook: () =>

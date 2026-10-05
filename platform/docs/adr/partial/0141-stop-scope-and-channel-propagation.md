@@ -32,13 +32,31 @@
   per-stop chips with lift, the partly-stopped state and the propagation banner. **No adapter for
   any named aggregator ships** (the first open input stands unanswered), so every real binding
   reads `MANUAL` — "not propagated automatically" — and nothing reaches a partner until an adapter
-  is registered. Not built: the partner pull endpoint (Phase 4); the decommission switch
-  (`inventory.stops.read_enabled`), the materialisation run and its acknowledged report; markers
-  for a channel's installation and for the item mapping itself, which the resync sweep covers
-  within one interval (as it does every marker, by design); `MarketplaceAvailabilityPushed` and
-  `MarketplaceChannelWentStale`, the ADR 0006 failure and the ADR 0058 alert for items unconfirmed
-  past their bound; the Phase 3 dry-run mode; and a console dialog for the explainer (the
-  endpoint and the per-stop tooltip exist).
+  is registered. **Built in operations batch 18 (wave `w8-marketplace-stops`), none of it needing
+  an adapter:** the partner pull (`GET /api/v1/partner/tenants/{t}/restaurants/{l}/availability`,
+  `marketplace.availability.pull`, partner-bound: the aggregator's own client credential and the
+  bindings of its installation, the resolver asked on every call, cursor pages of the partner's own
+  item id and one boolean); the markers for a channel's installation (`SalesChannelInstallationChanged`
+  from the channel service, heard by the marker listener) and for the item mapping itself (a trigger
+  on `integration.provider_entity_mappings`, `V0487`) — accelerators, the resync sweep stays the
+  guarantee (a test switches the mapping trigger off and proves the sweep alone converges);
+  `MarketplaceAvailabilityPushed` and `MarketplaceChannelWentStale` on `integration.events` through
+  the outbox (schema, catalogue entry, docs row, `MarketplaceOutbox`) and the ADR 0058 operations
+  alert for a binding with a dish unconfirmed past `marketplace.availability.stale_after_seconds`
+  (`MarketplaceStaleChannelMonitor`, once per episode, event class `MARKETPLACE_CHANNEL_STALE`,
+  `V0488`); rollback switch three — `inventory.stops.read_enabled`, the materialisation run
+  (`StopMaterialisationService`, `V0489`: the exact set of stops it carried, its report, the
+  acknowledgement by an `inventory.stop.manage` holder at brand scope), the guard that refuses the
+  write with `409 MATERIALISATION_REQUIRED` until every stop in force is in an acknowledged run's
+  set, stops ignored on their rows with a new operator or bot stop refused as frozen meanwhile, and
+  the POS poll's two writers (`SwitchedPosStopPort`); and the console's "why can't I sell this?"
+  dialog over the explain endpoint. Not built: any adapter for a named aggregator, which is the
+  first open input; the Phase 3 dry-run mode (nothing to compare against until an adapter
+  exists); the ADR 0006 failure that ADR 0040 says a stale channel raises (the event and the alert
+  are built; ADR 0006 records failures that happened and has no concept of work that stopped
+  arriving, so an operator-resolved record for it is a decision of its own); and a console
+  surface for the materialisation run and its report (the routes exist:
+  `POST/GET .../inventory/stop-materialisation-runs`, `.../report`, `.../acknowledgement`).
   Corrected after the batch-17 review (`fix17-f-stops`): the effective cross-sell preview
   (`GET .../recommendations/effective`) and the storefront single-variant availability read
   now go through the stops too (the preview drops a target stopped on every channel at the
@@ -48,7 +66,16 @@
   its time budget before every call, closes the door after two unknown outcomes in a row and
   leaves a hung binding alone for a while; and the propagation read gives a `reason` and reads
   `MANUAL` when the reconciler cannot act on a binding (installation not active, no single
-  channel behind it, nothing swept) instead of "in sync".
+  channel behind it, nothing swept) instead of "in sync". Corrected after the batch-18 review
+  (`fix18-h-marketplace`): a position the materialisation run wrote is given back when its stop is
+  lifted, expires or the POS reports the dish back in stock (`MaterialisedPositionRestorer`, in the
+  transaction that ends the stop), unless another stop in force still holds the position or a later
+  movement on it is somebody else's; the stale-channel mark (and so the `stale_channels` gauge) ends
+  with a binding that stops being worked (reconciler switched off, installation or binding
+  suspended, no adapter), so a binding switched back on into a partner that still refuses is
+  reported, and alerted, as the new outage it is; and a sweep clears only the marker it read before it
+  began (the sync-state row's `xmin`, compared in `recordSweep`), so a stop that commits while a sweep
+  is running is swept on the next pass and not left for the resync interval.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)

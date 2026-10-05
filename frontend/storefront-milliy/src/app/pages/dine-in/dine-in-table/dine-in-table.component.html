@@ -241,71 +241,21 @@
     }
 
     @if (ordering() && session.isAuthenticated() && cartCount() > 0) {
-      <footer class="order" data-testid="dine-in-order">
-        <div class="order__summary">
-          <span data-testid="dine-in-cart-count">{{
-            'dineIn.itemsInCart' | t: { count: cartCount() }
-          }}</span>
-          <span class="order__total" data-testid="dine-in-cart-total">{{ totalLabel() }}</span>
-        </div>
-
-        @if (hiddenCharges().length > 0) {
-          <div class="order__hidden" data-testid="dine-in-hidden-charges">
-            <p class="order__hidden-title">{{ 'cart.hiddenCharge.title' | t }}</p>
-            @for (charge of hiddenCharges(); track charge.optionId) {
-              <p class="order__hidden-row" data-testid="dine-in-hidden-charge">
-                <span>{{ charge.label }}</span>
-                <span>{{ charge.amount }}</span>
-              </p>
-            }
-          </div>
-        }
-
-        @if (paymentOptions().length > 1) {
-          <div class="order__methods" data-testid="dine-in-payment-options">
-            @for (code of paymentOptions(); track code) {
-              <button
-                type="button"
-                class="order__method"
-                data-testid="dine-in-payment-option"
-                [class.is-active]="selectedPayment() === code"
-                [attr.aria-pressed]="selectedPayment() === code"
-                (click)="selectPayment(code)"
-              >
-                {{ paymentLabelKey(code) ? (paymentLabelKey(code)! | t) : code }}
-              </button>
-            }
-          </div>
-        }
-
-        @if (priceRefusalKey(); as key) {
-          <p class="table__error" role="alert" data-testid="dine-in-pricing-error">{{ key | t }}</p>
-          <button
-            type="button"
-            class="order__clear"
-            data-testid="dine-in-clear"
-            [disabled]="updating() || checkingOut()"
-            (click)="clearOrder()"
-          >
-            {{ 'dineIn.clearOrder' | t }}
-          </button>
-        }
-        @if (checkoutErrorKey(); as key) {
-          <p class="table__error" role="alert" data-testid="dine-in-checkout-error">
-            {{ key | t }}
-          </p>
-        }
-
-        <button
-          type="button"
-          class="order__cta"
-          data-testid="dine-in-checkout"
-          [disabled]="checkingOut() || updating() || !priced()"
-          (click)="checkout()"
-        >
-          {{ (checkingOut() ? 'common.saving' : 'dineIn.orderRound') | t }}
-        </button>
-      </footer>
+      <app-dine-in-order-bar
+        [cartCount]="cartCount()"
+        [total]="totalLabel()"
+        [hiddenCharges]="hiddenCharges()"
+        [paymentOptions]="paymentOptions()"
+        [selectedPayment]="selectedPayment()"
+        [priceRefusalKey]="priceRefusalKey()"
+        [checkoutErrorKey]="checkoutErrorKey()"
+        [updating]="updating()"
+        [checkingOut]="checkingOut()"
+        [priced]="priced() !== null"
+        (paymentChosen)="selectPayment($event)"
+        (clearRequested)="clearOrder()"
+        (checkoutRequested)="checkout()"
+      />
     }
   }
 </div>

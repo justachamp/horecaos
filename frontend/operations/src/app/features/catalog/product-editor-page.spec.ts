@@ -97,6 +97,7 @@ function configure(
   salesChannelsApi: Partial<SalesChannelsApi> = {},
   inventoryApi: Partial<InventoryApi> = {},
   localeSet: FakeLocaleSet = new FakeLocaleSet(),
+  pricingApi: Partial<PricingApi> = {},
 ): FakeLocaleSet {
   TestBed.configureTestingModule({
     providers: [
@@ -135,6 +136,7 @@ function configure(
           resolvedVariantPrices: () => of({ priceBookId: null, currency: null, amountsMinor: {} }),
           resolvedComponentPrices: () =>
             of({ priceBookId: null, currency: null, amountsMinor: {} }),
+          ...pricingApi,
         },
       },
       {
@@ -530,6 +532,41 @@ describe('ProductEditorPage', () => {
     expect(host.querySelector<HTMLInputElement>('[data-testid="editor-variant-name"]')?.value).toBe(
       'Плов, порция',
     );
+  });
+
+  it('words the price of a variant sold by weight per its quantum on the variants tab, and no other', async () => {
+    const base = productDetail();
+    const weighed = { ...base.variants[0], variantId: 'variant-2', sku: 'CAKE', isDefault: false };
+    configure(
+      { productDetail: () => of({ ...base, variants: [base.variants[0], weighed] }) },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      new FakeLocaleSet(),
+      {
+        resolvedVariantPrices: () =>
+          of({
+            priceBookId: 'book-1',
+            currency: 'UZS',
+            amountsMinor: { [base.variants[0].variantId]: 40_000, 'variant-2': 150_000 },
+            catchweightQuantumGrams: { 'variant-2': 100 },
+          }),
+      },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-VARIANTS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const units = [...host.querySelectorAll('[data-testid="editor-price-unit"]')];
+    expect(units.map((unit) => unit.textContent?.trim())).toEqual(['за 100\u00a0г']);
+    expect(units[0].closest('tr')?.textContent).toContain('150');
   });
 
   it('renders the never-blur-authoring-and-availability publish result inline, not as a thrown error', async () => {

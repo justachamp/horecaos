@@ -3,7 +3,9 @@ package uz.horecaos.platform.kitchen.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,6 +13,13 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
@@ -27,16 +36,29 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * beside {@code categories}, so there is nothing to import and every station here
  * has to be typed in by somebody who has stood in the kitchen. That is stated in
  * V0030 at length because the ADR and the profile findings both say otherwise.
+ *
+ * <p><strong>Every write leaves an audit fact</strong> (ADR 0027, staff row {@code 9.3a}) in the
+ * transaction that made it: {@code kitchen.station.created}, {@code
+ * kitchen.station_capacity.created/updated/deleted} and {@code
+ * kitchen.routing_rule.created/updated}. A station's throughput ceiling decides when a ticket is
+ * released to the line and a routing rule decides which screen a dish appears on, so «who moved
+ * the burgers from the grill to the fryer» has to be a line in the history and not a guess from
+ * a version number.
  */
 @Service
 public class KitchenStationService {
 
     private final JdbcKitchenStore stations;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public KitchenStationService(JdbcKitchenStore stations, Clock clock) {
+    public KitchenStationService(
+            JdbcKitchenStore stations, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
         this.stations = stations;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     /**
@@ -75,6 +97,18 @@ public class KitchenStationService {
                             + "this location. One active station per role is what lets a brand "
                             + "routing rule resolve to exactly one screen.");
         }
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                AuditFact.of("kitchen.station.created", AuditClass.BUSINESS),
+                row.tenantId(),
+                row.brandId(),
+                row.locationId(),
+                "kitchen.station",
+                row.id(),
+                row.version(),
+                "Kitchen station created",
+                Map.of(),
+                stationSnapshot(row));
         return row;
     }
 
@@ -134,6 +168,17 @@ public class KitchenStationService {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT, "This station already has exactly this window on that day");
         }
+        recordAudit(
+                AuditFact.of("kitchen.station_capacity.created", AuditClass.BUSINESS),
+                row.tenantId(),
+                row.brandId(),
+                row.locationId(),
+                "kitchen.station-capacity",
+                row.id(),
+                row.version(),
+                "Station throughput ceiling added",
+                Map.of(),
+                capacitySnapshot(station, row));
         return row;
     }
 
@@ -187,7 +232,7 @@ public class KitchenStationService {
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_CONFLICT, "This ceiling was changed while this edit was being made"));
 
-        return new StationCapacityRow(
+        StationCapacityRow updated = new StationCapacityRow(
                 existing.id(),
                 existing.tenantId(),
                 existing.brandId(),
@@ -199,6 +244,20 @@ public class KitchenStationService {
                 command.portionsPerHour(),
                 newVersion,
                 existing.createdAt());
+        StationRow station = stations.findStation(existing.tenantId(), existing.stationId())
+                .orElseThrow(() -> new IllegalStateException("A throughput ceiling's station is part of its key"));
+        recordAudit(
+                AuditFact.of("kitchen.station_capacity.updated", AuditClass.BUSINESS),
+                updated.tenantId(),
+                updated.brandId(),
+                updated.locationId(),
+                "kitchen.station-capacity",
+                updated.id(),
+                updated.version(),
+                "Station throughput ceiling edited",
+                capacitySnapshot(station, existing),
+                capacitySnapshot(station, updated));
+        return updated;
     }
 
     /**
@@ -223,6 +282,19 @@ public class KitchenStationService {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT, "This ceiling was changed while this delete was being made");
         }
+        StationRow station = stations.findStation(existing.tenantId(), existing.stationId())
+                .orElseThrow(() -> new IllegalStateException("A throughput ceiling's station is part of its key"));
+        recordAudit(
+                AuditFact.of("kitchen.station_capacity.deleted", AuditClass.BUSINESS),
+                existing.tenantId(),
+                existing.brandId(),
+                existing.locationId(),
+                "kitchen.station-capacity",
+                existing.id(),
+                existing.version(),
+                "Station throughput ceiling removed",
+                capacitySnapshot(station, existing),
+                Map.of());
     }
 
     /**
@@ -274,6 +346,25 @@ public class KitchenStationService {
             // reaches two different screens on two different days.
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "That catalogue node is already routed at this layer");
         }
+        recordAudit(
+                AuditFact.of("kitchen.routing_rule.created", AuditClass.BUSINESS),
+                command.tenantId(),
+                command.brandId(),
+                command.locationId(),
+                "kitchen.routing-rule",
+                id,
+                1,
+                "Dish routing rule created",
+                Map.of(),
+                ruleSnapshot(
+                        command.locationId() == null ? "BRAND" : "LOCATION",
+                        command.variantId(),
+                        command.productId(),
+                        command.categoryId(),
+                        command.stationRole() == null
+                                ? null
+                                : command.stationRole().name(),
+                        command.stationId()));
         return id;
     }
 
@@ -318,6 +409,31 @@ public class KitchenStationService {
                             command.tenantId(), existing.id(), command.stationRole(), command.expectedVersion(), now)
                     .orElseThrow(() -> new ApiException(
                             ErrorCode.RESOURCE_CONFLICT, "This rule was changed while this edit was being made"));
+            StationRole newRole = Objects.requireNonNull(command.stationRole(), "checked by the branch above");
+            // A brand-layer rule belongs to the brand, whichever branch's path it was edited from.
+            recordAudit(
+                    AuditFact.of("kitchen.routing_rule.updated", AuditClass.BUSINESS),
+                    command.tenantId(),
+                    command.brandId(),
+                    null,
+                    "kitchen.routing-rule",
+                    existing.id(),
+                    newVersion,
+                    "Dish routing rule changed",
+                    ruleSnapshot(
+                            "BRAND",
+                            existing.variantId(),
+                            existing.productId(),
+                            existing.categoryId(),
+                            existing.stationRole().name(),
+                            null),
+                    ruleSnapshot(
+                            "BRAND",
+                            existing.variantId(),
+                            existing.productId(),
+                            existing.categoryId(),
+                            newRole.name(),
+                            null));
             return new UpdatedRoutingRule(existing.id(), "BRAND", newVersion);
         }
 
@@ -332,7 +448,110 @@ public class KitchenStationService {
                         command.tenantId(), existing.id(), stationId, command.expectedVersion(), now)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_CONFLICT, "This rule was changed while this edit was being made"));
+        recordAudit(
+                AuditFact.of("kitchen.routing_rule.updated", AuditClass.BUSINESS),
+                command.tenantId(),
+                command.brandId(),
+                command.locationId(),
+                "kitchen.routing-rule",
+                existing.id(),
+                newVersion,
+                "Dish routing rule changed",
+                ruleSnapshot(
+                        "LOCATION",
+                        existing.variantId(),
+                        existing.productId(),
+                        existing.categoryId(),
+                        null,
+                        existing.stationId()),
+                ruleSnapshot(
+                        "LOCATION",
+                        existing.variantId(),
+                        existing.productId(),
+                        existing.categoryId(),
+                        null,
+                        stationId));
         return new UpdatedRoutingRule(existing.id(), "LOCATION", newVersion);
+    }
+
+    // ------------------------------------------------------------------ audit
+
+    /**
+     * One fact per write, in the caller's transaction. The reason is a plain statement of the
+     * action: the console has no field for one, and ADR 0027 refuses a user-initiated fact
+     * without it.
+     *
+     * @param locationId null for a brand-layer routing rule, which belongs to no branch
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String targetType,
+            UUID targetId,
+            int version,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(
+                        locationId == null
+                                ? ResourceScope.brand(tenantId, brandId)
+                                : ResourceScope.location(tenantId, brandId, locationId))
+                .target(targetType, targetId)
+                .targetVersion((long) version)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(targetId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    private static Map<String, Object> stationSnapshot(StationRow station) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("code", station.code());
+        snapshot.put("role", station.role().name());
+        snapshot.put("displayNameRu", station.displayNameRu());
+        snapshot.put("displayNameUz", station.displayNameUz());
+        snapshot.put("displayNameEn", station.displayNameEn());
+        snapshot.put("sortOrder", station.sortOrder());
+        snapshot.put("fallback", station.fallback());
+        snapshot.put("status", station.status());
+        return snapshot;
+    }
+
+    /** A ceiling recognisable by the station it bounds, with the window and the rate it sets. */
+    private static Map<String, Object> capacitySnapshot(StationRow station, StationCapacityRow ceiling) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("stationCode", station.code());
+        snapshot.put("weekday", ceiling.weekday());
+        snapshot.put("windowStart", ceiling.windowStart().toString());
+        snapshot.put("windowEnd", ceiling.windowEnd().toString());
+        snapshot.put("portionsPerHour", ceiling.portionsPerHour());
+        return snapshot;
+    }
+
+    /**
+     * A rule as the node it addresses and where it sends that node. The keys avoid the word the
+     * layer is named for: {@code ChangeDocuments} redacts any key containing «tin», and a
+     * «routing…» key would have been written as a marker and not as a value.
+     */
+    private static Map<String, Object> ruleSnapshot(
+            String layer,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId,
+            @Nullable String stationRole,
+            @Nullable UUID stationId) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("layer", layer);
+        snapshot.put("variantId", variantId == null ? null : variantId.toString());
+        snapshot.put("productId", productId == null ? null : productId.toString());
+        snapshot.put("categoryId", categoryId == null ? null : categoryId.toString());
+        snapshot.put("stationRole", stationRole);
+        snapshot.put("stationId", stationId == null ? null : stationId.toString());
+        return snapshot;
     }
 
     private void requireOneNode(NodeAddress node) {

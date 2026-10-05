@@ -349,6 +349,40 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
       expect(view.chooses).toEqual([{ item, variantId: 'large' }]);
     });
 
+    it('asks per portion (ADR 0136): a size that carries a required group of its own is chosen for, its sibling still added plain', () => {
+      const dips = choice({ id: 'dips', name: 'Dips' });
+      const item = dish(
+        [
+          variant({ id: 'small', name: 'S', price: 30_000 }),
+          variant({ id: 'large', name: 'L', price: 50_000, modifierGroups: [dips] }),
+        ],
+        [],
+      );
+      const view = render({ item });
+
+      expect(view.all('dine-in-choose')).toHaveLength(1);
+      view.all('dine-in-choose')[0].click();
+      expect(view.chooses).toEqual([{ item, variantId: 'large' }]);
+      // The small portion needs nothing, so it keeps its plain add.
+      expect(view.all('dine-in-add')).toHaveLength(1);
+      view.all('dine-in-add')[0].click();
+      expect(view.changes).toEqual([{ variantId: 'small', quantity: 1 }]);
+    });
+
+    it('lets a portion whose own list drops the product’s mandatory group be added plain', () => {
+      const item = dish(
+        [
+          variant({ id: 'small', name: 'S' }),
+          variant({ id: 'large', name: 'L', modifierGroups: [] }),
+        ],
+        [choice()],
+      );
+      const view = render({ item });
+
+      expect(view.all('dine-in-choose')).toHaveLength(1);
+      expect(view.all('dine-in-add')).toHaveLength(1);
+    });
+
     it('offers no choosing on a dish that cannot be bought: its badge says why', () => {
       const view = render({ item: dish([variant({ active: false })], [choice()]) });
 

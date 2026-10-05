@@ -42,8 +42,15 @@
   implements to declare the capability. No adapter for Uzum Tezkor, Yandex Eda, Wolt
   or Express24 ships — whether any of them exposes an availability write API to a
   third party is still an unanswered commercial question — so every real binding
-  reads `MANUAL`, "not propagated automatically". `MarketplaceAvailabilityPushed`
-  and `MarketplaceChannelWentStale` are still unbuilt.
+  reads `MANUAL`, "not propagated automatically". Batch 18 adds the rest of that record that
+  needs no adapter: the partner pull `GET /api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability`
+  (capability `marketplace.availability.pull`, the aggregator's own client credential and the
+  bindings of its installation, the resolver asked on every call, cursor pages of the partner's own
+  item id and one boolean), and `MarketplaceAvailabilityPushed` and `MarketplaceChannelWentStale`
+  on `integration.events` through the outbox with the ADR 0058 operations alert for a channel that
+  has not confirmed for longer than its bound. `MarketplaceMenuPublished` and
+  `MarketplaceChannelRecovered` stay unpublished and uncatalogued; the menu pull is not built; the
+  ADR 0006 failure for a stale channel is not built.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), finance (settlement), legal (fiscal liability on aggregator-collected payments), product (partner programme terms)

@@ -37,6 +37,9 @@ public final class KafkaTopicCatalog {
     public static final String INVENTORY_EVENTS = "inventory.events";
     public static final String PRICING_EVENTS = "pricing.events";
 
+    /** ADR 0040 marketplace facts: a partner confirmed a new availability, a channel went stale. */
+    public static final String INTEGRATION_EVENTS = "integration.events";
+
     /** ADR 0012's durable scheduler command. Durable state lives in PostgreSQL; Kafka only has to survive a restart. */
     public static final String POS_COMMANDS = "pos.commands";
 
@@ -64,6 +67,11 @@ public final class KafkaTopicCatalog {
             // control-plane creations have, so this shares tenancy's partition
             // count rather than a per-order topic's.
             new TopicSpecification(PRICING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0040. A confirmed availability push is one record per dish per binding and
+            // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
+            // minute, so this shares tenancy's partition count: keyed by binding, so one
+            // venue's facts stay in order and a poison record holds back that venue only.
+            new TopicSpecification(INTEGRATION_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0012. One schedule row per binding and a pilot's binding count
             // is small, so this shares fulfillment.commands' shape rather than
             // ordering's: a command topic, not a fact topic, and durable state

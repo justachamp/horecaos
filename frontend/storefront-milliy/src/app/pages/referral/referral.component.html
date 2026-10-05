@@ -3,7 +3,9 @@
 </header>
 
 @switch (state()) {
-  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('loading') {
+    <p class="state">{{ 'common.loading' | t }}</p>
+  }
   @case ('error') {
     <div class="state">
       <p>{{ 'referral.loadError' | t }}</p>
@@ -24,12 +26,19 @@
     @if (redeemedAs(); as redemption) {
       <section class="status-card">
         <h2 class="status-card__title">{{ 'referral.redeemedTitle' | t }}</h2>
-        <p class="status-card__status" [class]="'status-card__status--' + redemption.status.toLowerCase()">
-          {{ ('referral.status.' + redemption.status.toLowerCase()) | t }}
+        <p
+          class="status-card__status"
+          [class]="'status-card__status--' + redemption.status.toLowerCase()"
+        >
+          {{ 'referral.status.' + redemption.status.toLowerCase() | t }}
         </p>
-        <p class="status-card__sub">{{ 'referral.redeemedAt' | t: { date: dateLabel(redemption.redeemedAt) } }}</p>
+        <p class="status-card__sub">
+          {{ 'referral.redeemedAt' | t: { date: dateLabel(redemption.redeemedAt) } }}
+        </p>
         @if (redemption.status === 'REWARDED' && redemption.rewardedAt) {
-          <p class="status-card__sub">{{ 'referral.rewardedAt' | t: { date: dateLabel(redemption.rewardedAt) } }}</p>
+          <p class="status-card__sub">
+            {{ 'referral.rewardedAt' | t: { date: dateLabel(redemption.rewardedAt) } }}
+          </p>
         }
         @if (redemption.status === 'PENDING') {
           <p class="status-card__sub">{{ 'referral.pendingHint' | t }}</p>

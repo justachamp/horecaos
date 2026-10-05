@@ -97,3 +97,94 @@ export function noteRowsFor(
     amount: format(line.amountMinor),
   }));
 }
+
+/**
+ * What became of the code on the cart. The code stays on the cart whatever the
+ * outcome, so a customer who typed one and sees no discount needs to be told why.
+ * `APPLIED` is the one that needs no sentence.
+ */
+export type PromoCodeOutcome = 'APPLIED' | 'OFFERS_ARE_BETTER' | 'NOT_APPLICABLE' | 'NOT_VALID';
+
+/**
+ * The sentence for a code that did not move the price, or null when there is nothing to say:
+ * no code, a code that applied, or a verdict this build has no wording for (a newer platform
+ * may add one; saying nothing is better than guessing which).
+ */
+export function promoOutcomeKey(outcome: PromoCodeOutcome | null | undefined): string | null {
+  switch (outcome) {
+    case 'OFFERS_ARE_BETTER':
+      return 'cart.promoOffersBetter';
+    case 'NOT_APPLICABLE':
+      return 'cart.promoNotApplicable';
+    case 'NOT_VALID':
+      return 'cart.promoNoLongerValid';
+    default:
+      return null;
+  }
+}
+
+/**
+ * A free gift a firing rule would price free if the cart held it (ADR 0140): an offer, never a
+ * line. Pricing adds nothing to the cart; the gift is free only once the customer puts it in and
+ * the cart is priced again. A rule that names several gift variants yields one offer per variant,
+ * any of which fills the same allowance.
+ */
+export interface GiftOffer {
+  /** Opaque key of the rule behind the offer, stable across quotes; never shown. */
+  readonly ruleId: string;
+  readonly variantId: string;
+  /** The units the rule gives free once taken up, across its gift variants. */
+  readonly quantity: number;
+  /** Whether the cart already holds this variant. */
+  readonly inCart: boolean;
+  /** The units still missing for the allowance to be complete; zero when there is nothing to add. */
+  readonly toAdd: number;
+}
+
+/** One gift a customer may take, named in their language by the menu. */
+export interface GiftChoice {
+  readonly variantId: string;
+  readonly name: string;
+  readonly image: string | null;
+  readonly inCart: boolean;
+}
+
+/** The gifts of one rule: the units still to add, and the variants any of which will do. */
+export interface GiftOfferGroup {
+  readonly ruleId: string;
+  readonly toAdd: number;
+  readonly choices: readonly GiftChoice[];
+}
+
+/**
+ * The offers a screen may print: one group per rule, in the order the platform listed them,
+ * each variant named from the menu (`known`, by variant id).
+ *
+ * An offer with nothing left to add is not an offer (the gift is already in the basket and the
+ * discount line says so), a gift the menu does not carry cannot be added and is not offered, and
+ * a rule left with no choice is dropped rather than shown empty.
+ */
+export function giftOfferGroups(
+  offers: readonly GiftOffer[] | null | undefined,
+  known: ReadonlyMap<string, { readonly name: string; readonly image: string | null }>,
+): readonly GiftOfferGroup[] {
+  const groups = new Map<string, { ruleId: string; toAdd: number; choices: GiftChoice[] }>();
+  for (const offer of offers ?? []) {
+    const gift = known.get(offer.variantId);
+    if (offer.toAdd <= 0 || !gift) {
+      continue;
+    }
+    // One rule can hold more than one gift action, each with its own allowance: those are
+    // separate offers even though they share the rule's key.
+    const key = `${offer.ruleId}|${offer.quantity}|${offer.toAdd}`;
+    const group = groups.get(key) ?? { ruleId: offer.ruleId, toAdd: offer.toAdd, choices: [] };
+    group.choices.push({
+      variantId: offer.variantId,
+      name: gift.name,
+      image: gift.image,
+      inCart: offer.inCart,
+    });
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}

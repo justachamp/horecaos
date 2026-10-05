@@ -324,12 +324,21 @@ const en = {
   'report.log.all': 'Show every promotion',
   'report.log.empty': 'No redemption to list for this selection.',
   'report.log.intro':
-    'Newest first, at most 200 rows. A cancelled order is listed with its status. The customer is a pseudonym: this report cannot open the customer.',
+    'Newest first, at most 200 rows. A cancelled order is listed with its status. The customer is shown as a pseudonym.',
   'report.log.date': 'Redeemed',
   'report.log.order': 'Order',
   'report.log.customer': 'Customer (pseudonym)',
   'report.log.status': 'Order status',
   'report.log.channel': 'Channel',
+  'report.log.who': 'Who redeemed it',
+  'report.log.showCustomer': 'Show customer',
+  'report.log.openCustomer': 'Open customer card',
+  'report.log.guestOrder': 'Guest order: there is no customer account',
+  'report.log.revealDenied': 'You may not view this customer.',
+  'report.log.revealFailed': 'The customer could not be looked up.',
+  'report.log.revealRetry': 'Try again',
+  'report.log.revealNote':
+    'Showing a customer is recorded in the audit log against that customer, with who looked.',
 };
 
 export type PromotionTextKey = keyof typeof en;
@@ -633,12 +642,21 @@ const ru: Record<PromotionTextKey, string> = {
   'report.log.all': 'Показать все акции',
   'report.log.empty': 'Нет применений для этого выбора.',
   'report.log.intro':
-    'Новые сверху, не более 200 строк. Отменённый заказ показан со своим статусом. Клиент — псевдоним: из этого отчёта клиента открыть нельзя.',
+    'Новые сверху, не более 200 строк. Отменённый заказ показан со своим статусом. Клиент показан псевдонимом.',
   'report.log.date': 'Применена',
   'report.log.order': 'Заказ',
   'report.log.customer': 'Клиент (псевдоним)',
   'report.log.status': 'Статус заказа',
   'report.log.channel': 'Канал',
+  'report.log.who': 'Кто применил',
+  'report.log.showCustomer': 'Показать клиента',
+  'report.log.openCustomer': 'Открыть карточку клиента',
+  'report.log.guestOrder': 'Гостевой заказ: аккаунта клиента нет',
+  'report.log.revealDenied': 'У вас нет права просматривать этого клиента.',
+  'report.log.revealFailed': 'Не удалось найти клиента.',
+  'report.log.revealRetry': 'Повторить',
+  'report.log.revealNote':
+    'Просмотр клиента записывается в журнал аудита по этому клиенту с указанием, кто смотрел.',
 };
 
 const uzLatn: Record<PromotionTextKey, string> = {
@@ -942,12 +960,21 @@ const uzLatn: Record<PromotionTextKey, string> = {
   'report.log.all': 'Barcha aksiyalarni koʻrsatish',
   'report.log.empty': 'Bu tanlov uchun qoʻllanishlar yoʻq.',
   'report.log.intro':
-    'Yangilari tepada, 200 qatorgacha. Bekor qilingan buyurtma oʻz holati bilan koʻrsatiladi. Mijoz — taxallus: bu hisobotdan mijozni ochib boʻlmaydi.',
+    'Yangilari tepada, 200 qatorgacha. Bekor qilingan buyurtma oʻz holati bilan koʻrsatiladi. Mijoz taxallus bilan koʻrsatiladi.',
   'report.log.date': 'Qoʻllangan',
   'report.log.order': 'Buyurtma',
   'report.log.customer': 'Mijoz (taxallus)',
   'report.log.status': 'Buyurtma holati',
   'report.log.channel': 'Kanal',
+  'report.log.who': 'Kim qoʻllagan',
+  'report.log.showCustomer': 'Mijozni koʻrsatish',
+  'report.log.openCustomer': 'Mijoz kartasini ochish',
+  'report.log.guestOrder': 'Mehmon buyurtmasi: mijoz hisobi yoʻq',
+  'report.log.revealDenied': 'Bu mijozni koʻrishga ruxsatingiz yoʻq.',
+  'report.log.revealFailed': 'Mijozni topib boʻlmadi.',
+  'report.log.revealRetry': 'Qayta urinish',
+  'report.log.revealNote':
+    'Mijozni koʻrish audit jurnaliga shu mijoz boʻyicha, kim koʻrgani bilan yoziladi.',
 };
 
 export const PROMOTION_TEXTS: Readonly<Record<Locale, Readonly<Record<PromotionTextKey, string>>>> =

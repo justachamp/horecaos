@@ -48,6 +48,12 @@ export interface ValidationResult {
    */
   readonly advisory?: boolean;
   /**
+   * Which tier the finding is in (settings.md §10.0: blocking → expiring → advisory). `EXPIRING` is a
+   * finding that stops nothing today and will on a known date. Absent on a server older than the
+   * third tier, which sends only `advisory`; `tierOf` then reads the two tiers it knew.
+   */
+  readonly severity?: 'BLOCKING' | 'EXPIRING' | 'ADVISORY';
+  /**
    * The channel (or other non-location object) this finding names, when it
    * names one (gap map row 10.0, batch 16). Absent on an older server and on
    * every finding that names no single object. The row links by error code

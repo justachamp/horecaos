@@ -147,7 +147,9 @@ describe('AuthCodeComponent.ngOnInit (countdown derived from the challenge expir
   afterEach(() => vi.useRealTimers());
 
   it("derives the initial countdown from the challenge's real expiresAt when present, instead of the 44s fallback", () => {
-    const { fixture, comp } = setUp(validState({ expiresAt: new Date(Date.now() + 30_000).toISOString() }));
+    const { fixture, comp } = setUp(
+      validState({ expiresAt: new Date(Date.now() + 30_000).toISOString() }),
+    );
 
     fixture.detectChanges();
 
@@ -437,18 +439,21 @@ describe('AuthCodeComponent.submit', () => {
     [new OtpRateLimitedError(30), 'auth.errors.rateLimited'],
     [new CustomerSignInUnavailableError(), 'auth.errors.unavailable'],
     [new Error('anything else'), 'errors.generic'],
-  ] as const)('maps a failed submit (%j) to the error key "%s", and clears the entered code', async (failure, key) => {
-    const { fixture, comp, otp } = setUp(validState());
-    fixture.detectChanges();
-    comp.code.set('123456');
-    otp.submitCode.mockRejectedValue(failure);
+  ] as const)(
+    'maps a failed submit (%j) to the error key "%s", and clears the entered code',
+    async (failure, key) => {
+      const { fixture, comp, otp } = setUp(validState());
+      fixture.detectChanges();
+      comp.code.set('123456');
+      otp.submitCode.mockRejectedValue(failure);
 
-    await comp.submit();
+      await comp.submit();
 
-    expect(comp.error()).toBe(key);
-    expect(comp.code()).toBe('');
-    expect(comp.loading()).toBe(false);
-  });
+      expect(comp.error()).toBe(key);
+      expect(comp.code()).toBe('');
+      expect(comp.loading()).toBe(false);
+    },
+  );
 
   it('a failure from signIn (after a valid submitCode) is also reported and clears the code', async () => {
     const { fixture, comp, otp } = setUp(validState());

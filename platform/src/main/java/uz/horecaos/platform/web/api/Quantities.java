@@ -38,6 +38,9 @@ public final class Quantities {
     /** The largest value {@code numeric(10,3)} holds. */
     public static final BigDecimal MAX = new BigDecimal("9999999.999");
 
+    /** The integer digits {@code numeric(10,3)} holds: ten digits, three of them fractions. */
+    public static final int MAX_INTEGER_DIGITS = 7;
+
     private Quantities() {}
 
     /** A whole quantity. */
@@ -63,11 +66,45 @@ public final class Quantities {
     }
 
     /**
+     * Whether a client-supplied quantity is small enough to be worth normalising: no more integer
+     * digits than the column holds.
+     *
+     * <p>A {@link BigDecimal} carries its exponent separately from its digits, so {@code 1e600000000}
+     * is a few bytes on the wire and in memory; {@link #normalise} gives it a scale of zero, which
+     * writes out six hundred million digits and costs a request thread minutes of CPU and heap. Ask
+     * this before {@link #normalise} anything a client sent. A tiny value with a huge positive scale
+     * ({@code 1e-600000000}) is cheap to normalise and is left to the fraction-digit rule.
+     */
+    public static boolean hasBoundedMagnitude(BigDecimal quantity) {
+        return quantity.precision() - quantity.scale() <= MAX_INTEGER_DIGITS;
+    }
+
+    /**
+     * Refuses a client-supplied quantity of unbounded magnitude, before anything expands it.
+     *
+     * @throws IllegalArgumentException when the quantity could never fit the column
+     */
+    public static BigDecimal requireBoundedMagnitude(BigDecimal quantity) {
+        Objects.requireNonNull(quantity, "A quantity is required");
+        if (!hasBoundedMagnitude(quantity)) {
+            throw new IllegalArgumentException("A quantity is more than zero and at most " + MAX.toPlainString()
+                    + ", with at most " + SCALE + " fraction digits");
+        }
+        return quantity;
+    }
+
+    /**
      * Whether a client-supplied quantity fits the column: positive, at most
      * {@value #SCALE} fraction digits, and no larger than {@link #MAX}.
+     *
+     * <p>The magnitude is checked before the quantity is normalised, so an absurd exponent is
+     * answered without being expanded.
      */
     public static boolean fitsColumn(BigDecimal quantity) {
-        return quantity.signum() > 0 && normalise(quantity).scale() <= SCALE && quantity.compareTo(MAX) <= 0;
+        return quantity.signum() > 0
+                && hasBoundedMagnitude(quantity)
+                && normalise(quantity).scale() <= SCALE
+                && quantity.compareTo(MAX) <= 0;
     }
 
     /**

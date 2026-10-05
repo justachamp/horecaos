@@ -562,6 +562,11 @@ export interface PriceBookMatrixRow {
   readonly basePriceMinor?: number | null;
   readonly deltaMinor?: number | null;
   readonly currency: string;
+  /**
+   * ADR 0137: set for a variant sold by weight — every price on this row is per this many grams,
+   * not per unit. Absent for a variant priced per unit or by the portion.
+   */
+  readonly catchweightQuantumGrams?: number | null;
 }
 
 /** `ResolvedPricesResponse` — empty (null book) is a real state: no price book resolved yet. */
@@ -569,6 +574,11 @@ export interface ResolvedPrices {
   readonly priceBookId?: string | null;
   readonly currency?: string | null;
   readonly amountsMinor: Readonly<Record<string, number>>;
+  /**
+   * ADR 0137: for each priced variant sold by weight, the grams its amount is quoted per. A
+   * variant sold per unit or by the portion is absent. Optional so an older platform still reads.
+   */
+  readonly catchweightQuantumGrams?: Readonly<Record<string, number>>;
 }
 
 /** `PriceRequest`. */

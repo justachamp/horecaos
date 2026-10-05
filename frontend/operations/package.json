@@ -14,7 +14,9 @@
     "lint": "eslint \"src/**/*.{ts,html,css}\"",
     "lint:rules": "node tools/eslint-plugin-horecaos/no-raw-px-font-size.test.js",
     "i18n:dead": "node tools/i18n/dead-keys.mjs",
-    "i18n:dead:test": "node --test tools/i18n/dead-keys.test.mjs"
+    "i18n:split": "node tools/i18n/split-catalogues.mjs",
+    "i18n:areas": "node tools/i18n/areas.mjs",
+    "i18n:dead:test": "node --test \"tools/i18n/*.test.mjs\""
   },
   "private": true,
   "packageManager": "npm@11.17.0",

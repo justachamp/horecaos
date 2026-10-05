@@ -30,12 +30,20 @@
   paid through a provider refuses a weight that moves its total, because an
   incremental charge or partial refund is not performed, so a basket holding a weighed
   line is sold only for a method that settles at handover (the payment step does not
-  offer the others and checkout refuses them, `WEIGHED_LINES_PAY_AT_HANDOVER`; the
+  offer the others, and checkout and a `CHANGE_PAYMENT_METHOD` amendment refuse them,
+  `WEIGHED_LINES_PAY_AT_HANDOVER`; the
   way to sell one for an online payment is ADR 0153, Proposed); fiscal receipt lines are not
   yet built from order lines, so Payme/Click integer counts are untouched; a
-  fractional stock reservation stays out of scope as the record says; an amendment
-  still changes whole units; no КБЖУ accuracy disclaimer is worded, since the record
-  leaves that to legal and product.
+  fractional stock reservation stays out of scope as the record says; no КБЖУ
+  accuracy disclaimer is worded, since the record leaves that to legal and product.
+  Batch 18 adds the amendment and the price screens: `CHANGE_LINE_QUANTITY` and
+  `ADD_LINES` take a decimal quantity, refused by the cart's own rule
+  (`CartMenuRules.PhysicalRules#refusalOf`) read from the order's channel
+  publication, with the order read carrying `portionSize` for a line of a splittable
+  dish; the operator console's quantity dialog raises such a line by its portion
+  (the add-lines dialog still adds whole units); and the price-book matrix, the
+  resolved-prices read and the bulk price change mark the price of a weighed
+  variant as per its quantum.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from

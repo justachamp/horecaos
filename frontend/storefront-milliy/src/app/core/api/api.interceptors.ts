@@ -72,7 +72,9 @@ export const bearerInterceptor: HttpInterceptorFn = (request, next) => {
 export const problemDetailsInterceptor: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((failure: unknown) =>
-      throwError(() => (failure instanceof HttpErrorResponse ? toHorecaOSApiError(failure) : failure)),
+      throwError(() =>
+        failure instanceof HttpErrorResponse ? toHorecaOSApiError(failure) : failure,
+      ),
     ),
   );
 
@@ -104,7 +106,9 @@ export const expiredSessionInterceptor: HttpInterceptorFn = (request, next) => {
   return next(request).pipe(
     catchError((failure: unknown) => {
       if (
-        isSessionExpired(failure instanceof HttpErrorResponse ? toHorecaOSApiError(failure) : failure)
+        isSessionExpired(
+          failure instanceof HttpErrorResponse ? toHorecaOSApiError(failure) : failure,
+        )
       ) {
         session.expire();
       }

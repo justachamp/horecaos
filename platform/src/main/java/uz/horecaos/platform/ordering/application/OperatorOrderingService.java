@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,6 +20,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.web.api.ApiException;
@@ -81,6 +83,7 @@ public class OperatorOrderingService {
     private final BranchOverrideReasonQueryService overrideReasons;
     private final BranchResolutionQueryService branchResolution;
     private final CustomerAddressBook addresses;
+    private final JdbcOrderStore orders;
     private final AuditRecorder audit;
     private final Clock clock;
 
@@ -93,12 +96,21 @@ public class OperatorOrderingService {
      */
     private static final String OVERRIDE_CHECK_PURPOSE = "OPERATOR_BRANCH_OVERRIDE_CHECK";
 
+    private static final String LINE_KEY_PREFIX = "op";
+
+    /** The payment method code a cash tender is meaningful for. */
+    private static final String CASH = "CASH";
+
+    /** The notice an order carries when the cash tendered is short of its total (ADR 0039, as on an amendment). */
+    static final String CASH_TENDERED_INSUFFICIENT = "CASH_TENDERED_INSUFFICIENT";
+
     public OperatorOrderingService(
             CartService carts,
             CheckoutService checkout,
             BranchOverrideReasonQueryService overrideReasons,
             BranchResolutionQueryService branchResolution,
             CustomerAddressBook addresses,
+            JdbcOrderStore orders,
             AuditRecorder audit,
             Clock clock) {
         this.carts = carts;
@@ -106,6 +118,7 @@ public class OperatorOrderingService {
         this.overrideReasons = overrideReasons;
         this.branchResolution = branchResolution;
         this.addresses = addresses;
+        this.orders = orders;
         this.audit = audit;
         this.clock = clock;
     }
@@ -212,6 +225,14 @@ public class OperatorOrderingService {
      *                           or it does not exist -- the operator no longer
      *                           places an order and then attaches it in a second
      *                           call that a closed party can fail
+     * @param cashTenderedMinor  row 1.3e: what the customer says they will hand over,
+     *                           in whole som, or null. Meaningful only for a {@code
+     *                           CASH} order. Written to {@code
+     *                           cash_tendered_expected_minor} in the transaction that
+     *                           creates the order, so «Сдача» is on the order from its
+     *                           first read rather than after a second, amending call. A
+     *                           later change still goes through the {@code
+     *                           SET_CASH_TENDERED} amendment
      */
     public record PlaceOrderCommand(
             UUID tenantId,
@@ -232,7 +253,53 @@ public class OperatorOrderingService {
             @Nullable UUID proposedLocationId,
             @Nullable String overrideReasonCode,
             @Nullable String overrideNote,
-            @Nullable UUID dineInSessionId) {
+            @Nullable UUID dineInSessionId,
+            @Nullable Long cashTenderedMinor) {
+
+        /** An order that names no cash tendered: every caller that predates row 1.3e. */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    null);
+        }
 
         /** An order that is not put on a table's bill: every mode but DINE_IN, and a DINE_IN one the caller attaches later. */
         @SuppressWarnings("checkstyle:ParameterNumber")
@@ -274,6 +341,7 @@ public class OperatorOrderingService {
                     proposedLocationId,
                     overrideReasonCode,
                     overrideNote,
+                    null,
                     null);
         }
     }
@@ -287,25 +355,9 @@ public class OperatorOrderingService {
      */
     @Transactional
     public CheckoutService.CheckoutResult place(PlaceOrderCommand command) {
-        if (command.lines().isEmpty()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An order needs at least one line");
-        }
-        boolean delivery = command.fulfillmentMode() == FulfillmentMode.DELIVERY;
-        if (delivery && command.destination() == null) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A delivery order needs a destination");
-        }
-        if (!delivery && command.destination() != null) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED, "A " + command.fulfillmentMode() + " order has nowhere to deliver to");
-        }
+        requireWellFormed(command);
         UUID dineInSessionId = command.dineInSessionId();
         if (dineInSessionId != null) {
-            if (command.fulfillmentMode() != FulfillmentMode.DINE_IN) {
-                throw new ApiException(
-                        ErrorCode.VALIDATION_FAILED,
-                        "A " + command.fulfillmentMode()
-                                + " order is not eaten at a table, so it has no bill to go on");
-            }
             // Before anything is created or priced. A party that left while the operator
             // built the basket is the ordinary way for this to fail, and it must cost
             // the operator a refusal and not a cooked order that is on no bill.
@@ -341,6 +393,150 @@ public class OperatorOrderingService {
             }
         }
 
+        FilledCart filled = fillAndPrice(command);
+        CartRow cart = filled.cart();
+        var priced = filled.priced();
+
+        CheckoutService.CheckoutResult result = checkout.checkout(new CheckoutService.CheckoutCommand(
+                command.tenantId(),
+                command.brandId(),
+                cart.cartId(),
+                priced.cartVersion(),
+                priced.quote().quoteId(),
+                priced.quote().contextHash(),
+                command.idempotencyKey(),
+                command.paymentMethodCode(),
+                0L,
+                "USER",
+                command.operatorSubject(),
+                command.correlationId(),
+                command.requestedFor(),
+                command.overrideOutOfHours()));
+
+        // The order is on the party's bill before this transaction commits, or it does
+        // not exist: a refusal here (the party closed in the seconds checkout took, a
+        // currency the bill cannot mix) rolls the cart, the order and the stock it held
+        // back with it. Not after a REJECTED outcome -- nothing was placed -- and safe on
+        // a REPLAYED one, where the round is already on the bill and the write answers
+        // with the sequence it has.
+        if (dineInSessionId != null && result.outcome() != CheckoutService.CheckoutResult.Outcome.REJECTED) {
+            carts.attachOrderToSession(
+                    command.tenantId(),
+                    command.locationId(),
+                    dineInSessionId,
+                    Objects.requireNonNull(result.orderId(), "a non-rejected checkout always names an order"),
+                    command.operatorSubject());
+        }
+
+        // Row 1.3e: «Сдача» is on the order from its first read. Written only on the write
+        // that created it -- a REPLAYED retry of the same Idempotency-Key must not overwrite
+        // what a later SET_CASH_TENDERED amendment has since said -- and in this transaction,
+        // so the order is created with its tender or not at all.
+        Long tendered = command.cashTenderedMinor();
+        if (tendered != null && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            orders.recordCashTenderedAtCreation(
+                    command.tenantId(),
+                    Objects.requireNonNull(result.orderId(), "a created checkout always names an order"),
+                    tendered);
+            if (tendered < priced.quote().totalMinor()) {
+                // As on the amendment: a notice the operator acknowledges, never a refusal. The
+                // customer can hand over more, and the figure is a hint rather than money.
+                List<String> warnings = new ArrayList<>(result.warnings());
+                warnings.add(CASH_TENDERED_INSUFFICIENT);
+                result = new CheckoutService.CheckoutResult(
+                        result.outcome(),
+                        result.orderId(),
+                        result.publicOrderNumber(),
+                        result.status(),
+                        result.orderVersion(),
+                        result.rejectionCode(),
+                        result.rejectionDetail(),
+                        result.unavailableItems(),
+                        List.copyOf(warnings));
+            }
+        }
+
+        // Audited only on the write that actually created the order — never on
+        // a REJECTED outcome (nothing was placed to have a branch at all) and
+        // never a second time on a REPLAYED retry of the same Idempotency-Key,
+        // which would otherwise double the audit trail for one real override.
+        if (overrideReason != null && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            recordOverrideAudit(
+                    command,
+                    overrideReason,
+                    Objects.requireNonNull(result.orderId()),
+                    Objects.requireNonNull(resolvedProposedLocationId));
+        }
+
+        return result;
+    }
+
+    /**
+     * The checks every operator order shares, whether it is about to be placed or only priced.
+     * Refused before anything is created, so a malformed request costs no cart at all.
+     */
+    public void requireWellFormed(PlaceOrderCommand command) {
+        if (command.lines().isEmpty()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An order needs at least one line");
+        }
+        boolean delivery = command.fulfillmentMode() == FulfillmentMode.DELIVERY;
+        if (delivery && command.destination() == null) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A delivery order needs a destination");
+        }
+        if (!delivery && command.destination() != null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A " + command.fulfillmentMode() + " order has nowhere to deliver to");
+        }
+        if (command.dineInSessionId() != null && command.fulfillmentMode() != FulfillmentMode.DINE_IN) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A " + command.fulfillmentMode() + " order is not eaten at a table, so it has no bill to go on");
+        }
+        Long tendered = command.cashTenderedMinor();
+        if (tendered != null) {
+            if (tendered < 0) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "Cash tendered cannot be negative");
+            }
+            if (!CASH.equalsIgnoreCase(command.paymentMethodCode())) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "Cash tendered applies to an order paid in cash, not by " + command.paymentMethodCode());
+            }
+        }
+    }
+
+    /** The cart line key of the operator's {@code index}th line; a quote reads its amounts back by it. */
+    static String lineKey(int index) {
+        return LINE_KEY_PREFIX + index;
+    }
+
+    /** The request line a cart line key names, or null for a key this class did not mint. */
+    static @Nullable Integer lineIndexOf(String lineKey) {
+        if (!lineKey.startsWith(LINE_KEY_PREFIX) || lineKey.length() == LINE_KEY_PREFIX.length()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(lineKey.substring(LINE_KEY_PREFIX.length()));
+        } catch (NumberFormatException notOurs) {
+            return null;
+        }
+    }
+
+    /** A cart opened for the operator's basket, and the quote that prices it. */
+    public record FilledCart(CartRow cart, CartService.PricedCart priced) {}
+
+    /**
+     * Opens the customer's cart, puts every line, the destination, the promo code and the
+     * payment method on it, and prices it -- the whole of an order up to the moment checkout
+     * would accept the quote.
+     *
+     * <p>Shared by {@link #place}, which goes on to check the cart out, and by {@link
+     * OperatorOrderQuoteService}, which prices it inside a transaction it always rolls back.
+     * One method, so the figure an operator is shown and the figure the order is booked at
+     * come from the same steps in the same order and cannot drift apart.
+     */
+    public FilledCart fillAndPrice(PlaceOrderCommand command) {
+        boolean delivery = command.fulfillmentMode() == FulfillmentMode.DELIVERY;
         CartRow cart = carts.create(
                 command.tenantId(),
                 command.brandId(),
@@ -359,7 +555,7 @@ public class OperatorOrderingService {
                     command.customerAccountId(),
                     cart.cartId(),
                     version,
-                    "op" + lineIndex++,
+                    lineKey(lineIndex++),
                     line.variantId(),
                     line.quantity(),
                     line.modifierOptionIds(),
@@ -430,51 +626,7 @@ public class OperatorOrderingService {
 
         var priced =
                 carts.price(command.tenantId(), command.brandId(), command.customerAccountId(), cart.cartId(), version);
-
-        CheckoutService.CheckoutResult result = checkout.checkout(new CheckoutService.CheckoutCommand(
-                command.tenantId(),
-                command.brandId(),
-                cart.cartId(),
-                priced.cartVersion(),
-                priced.quote().quoteId(),
-                priced.quote().contextHash(),
-                command.idempotencyKey(),
-                command.paymentMethodCode(),
-                0L,
-                "USER",
-                command.operatorSubject(),
-                command.correlationId(),
-                command.requestedFor(),
-                command.overrideOutOfHours()));
-
-        // The order is on the party's bill before this transaction commits, or it does
-        // not exist: a refusal here (the party closed in the seconds checkout took, a
-        // currency the bill cannot mix) rolls the cart, the order and the stock it held
-        // back with it. Not after a REJECTED outcome -- nothing was placed -- and safe on
-        // a REPLAYED one, where the round is already on the bill and the write answers
-        // with the sequence it has.
-        if (dineInSessionId != null && result.outcome() != CheckoutService.CheckoutResult.Outcome.REJECTED) {
-            carts.attachOrderToSession(
-                    command.tenantId(),
-                    command.locationId(),
-                    dineInSessionId,
-                    Objects.requireNonNull(result.orderId(), "a non-rejected checkout always names an order"),
-                    command.operatorSubject());
-        }
-
-        // Audited only on the write that actually created the order — never on
-        // a REJECTED outcome (nothing was placed to have a branch at all) and
-        // never a second time on a REPLAYED retry of the same Idempotency-Key,
-        // which would otherwise double the audit trail for one real override.
-        if (overrideReason != null && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
-            recordOverrideAudit(
-                    command,
-                    overrideReason,
-                    Objects.requireNonNull(result.orderId()),
-                    Objects.requireNonNull(resolvedProposedLocationId));
-        }
-
-        return result;
+        return new FilledCart(cart, priced);
     }
 
     /**

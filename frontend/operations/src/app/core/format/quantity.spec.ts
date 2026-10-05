@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { applyRegionalFormats, resetRegionalFormats } from './regional-format';
 import {
+  isOrderableQuantity,
+  nextQuantityAbove,
   catchweightPriceOf,
   formatQuantity,
   formatVolume,
@@ -128,5 +130,50 @@ describe('initialQuantity', () => {
     expect(initialQuantity(0.3)).toBe(1.2);
     expect(initialQuantity(1.5)).toBe(1.5);
     expect(initialQuantity(0.4)).toBe(1.2);
+  });
+});
+
+describe('nextQuantityAbove', () => {
+  it('goes to the next whole number for a line with no portion step', () => {
+    expect(nextQuantityAbove(2, 1)).toBe(3);
+    expect(nextQuantityAbove(0.5, 1)).toBe(1);
+    expect(nextQuantityAbove(1.5, 1)).toBe(2);
+  });
+
+  it('goes to the next portion for a splittable line', () => {
+    expect(nextQuantityAbove(1, 0.5)).toBe(1.5);
+    expect(nextQuantityAbove(1.5, 0.5)).toBe(2);
+    expect(nextQuantityAbove(0.5, 0.5)).toBe(1);
+  });
+
+  it('is exact where binary floating point is not', () => {
+    expect(nextQuantityAbove(0.6, 0.3)).toBe(0.9);
+    expect(nextQuantityAbove(0.9, 0.3)).toBe(1.2);
+  });
+
+  it('takes a quantity that is off the step up to the next multiple', () => {
+    expect(nextQuantityAbove(1.3, 0.5)).toBe(1.5);
+  });
+});
+
+describe('isOrderableQuantity', () => {
+  it('accepts a whole number of portions and refuses a fraction of one', () => {
+    expect(isOrderableQuantity(1.5, 0.5)).toBe(true);
+    expect(isOrderableQuantity(1.3, 0.5)).toBe(false);
+    expect(isOrderableQuantity(0.9, 0.3)).toBe(true);
+  });
+
+  it('refuses a fraction of a whole-unit dish', () => {
+    expect(isOrderableQuantity(3, 1)).toBe(true);
+    expect(isOrderableQuantity(1.5, 1)).toBe(false);
+  });
+
+  it('refuses what the column cannot hold', () => {
+    expect(isOrderableQuantity(0, 1)).toBe(false);
+    expect(isOrderableQuantity(-1, 1)).toBe(false);
+    expect(isOrderableQuantity(1000, 1)).toBe(false);
+    expect(isOrderableQuantity(999, 1)).toBe(true);
+    expect(isOrderableQuantity(2.0001, 0.0001)).toBe(false);
+    expect(isOrderableQuantity(Number.NaN, 1)).toBe(false);
   });
 });

@@ -28,6 +28,7 @@ import { isValidHexColor } from '../../../shared/ui/color/contrast';
 import { InheritedField } from '../../../shared/ui/inherited-field/inherited-field';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
+import { SettingsSaved } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
 import { DispatchRulesSummaryCard } from './dispatch-rules-summary-card';
 import { LatenessPolicyCard } from './lateness-policy-card';
@@ -220,6 +221,7 @@ export class OrderPolicyPage {
   private readonly configApi = inject(ConfigurationApi);
   private readonly tenant = inject(CurrentTenant);
   protected readonly scope = inject(SettingsScope);
+  private readonly saved = inject(SettingsSaved);
   protected readonly i18n = inject(I18n);
 
   protected readonly tenantId = this.tenant.tenantId;
@@ -389,8 +391,13 @@ export class OrderPolicyPage {
     }
     this.saving.set(true);
     this.saveError.set(null);
+    // Named from what is written, not from the bar's level: the acceptance policy is published at a
+    // brand or at a branch (`OrderPolicyApi.publish`), so with the bar at the company-wide level the
+    // version still lands on the brand -- and the toast must not tell the owner every brand has it.
+    const locationId = this.scope.locationId();
+    const target = this.scope.targetFor(locationId ? 'LOCATION' : 'BRAND', brandId, locationId);
     try {
-      const updated = await this.policyApi.publish(tenantId, brandId, this.scope.locationId(), {
+      const updated = await this.policyApi.publish(tenantId, brandId, locationId, {
         mode: this.draftMode(),
         approvalChannel: this.draftApprovalChannel(),
         approvalTimeoutSeconds: this.draftTimeoutSeconds(),
@@ -401,6 +408,7 @@ export class OrderPolicyPage {
       });
       this.policy.set(updated);
       this.editing.set(false);
+      this.saved.announce('published', this.i18n.t('settings.orderPolicy.card1.title'), target);
     } catch (error) {
       this.saveError.set(this.describe(error));
     } finally {
@@ -520,6 +528,7 @@ export class OrderPolicyPage {
     }
     this.fieldSaving.set(true);
     this.fieldSaveError.set(null);
+    const target = this.scope.target();
     try {
       const scopeType: EditableScopeType = this.scope.level();
       const locationId = this.scope.locationId();
@@ -536,6 +545,12 @@ export class OrderPolicyPage {
       await this.reloadField(tenantId, brandId, locationId, field.code);
       this.noteFieldChanged(field.code);
       this.editingFieldCode.set(null);
+      this.saved.announce(
+        'set',
+        this.i18n.t(field.labelKey),
+        target,
+        this.fieldFormatter(field)(this.resolutionFor(field.code)?.value),
+      );
     } catch (error) {
       this.fieldSaveError.set(this.describe(error));
     } finally {
@@ -552,6 +567,7 @@ export class OrderPolicyPage {
     }
     this.fieldSaving.set(true);
     this.fieldSaveError.set(null);
+    const target = this.scope.target();
     try {
       const scopeType: EditableScopeType = this.scope.level();
       const locationId = this.scope.locationId();
@@ -566,11 +582,28 @@ export class OrderPolicyPage {
       });
       await this.reloadField(tenantId, brandId, locationId, field.code);
       this.noteFieldChanged(field.code);
+      this.saved.announce('reverted', this.i18n.t(field.labelKey), target);
     } catch (error) {
       this.fieldSaveError.set(this.describe(error));
     } finally {
       this.fieldSaving.set(false);
     }
+  }
+
+  /**
+   * The lateness card published a version. The card says at which scope it was opened, which can differ
+   * from the bar by now, so the name is looked up for that scope and not for the bar's.
+   */
+  protected onLatenessPublished(published: {
+    readonly scopeType: EditableScopeType;
+    readonly brandId: string | null;
+    readonly locationId: string | null;
+  }): void {
+    this.saved.announce(
+      'published',
+      this.i18n.t('settings.latenessPolicy.title'),
+      this.scope.targetFor(published.scopeType, published.brandId, published.locationId),
+    );
   }
 
   /** The lateness card shows this scalar as its default, so it re-reads when the scalar changes. */

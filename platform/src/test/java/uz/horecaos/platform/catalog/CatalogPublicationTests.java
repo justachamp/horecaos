@@ -41,6 +41,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -140,7 +141,8 @@ class CatalogPublicationTests {
                 new CatalogValidator(),
                 loader,
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.recorder(jdbc));
         // No price book in these fixtures, so the lookup answers empty and the menu
         // renders unpriced. That is the honest shape for a catalog test: what a
         // dish costs is ADR 0018's question and is asserted in the pricing suite.
@@ -702,7 +704,8 @@ class CatalogPublicationTests {
                 new CatalogValidator(),
                 new CatalogSnapshotLoader(store, media, allPriced(), LOCALE),
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-08-21T10:01:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-21T10:01:00Z"), ZoneOffset.UTC),
+                AuditTrail.recorder(jdbc));
         var second = laterPublication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
 
         var history = store.listPublications(TENANT, BRAND, 50);
@@ -820,11 +823,103 @@ class CatalogPublicationTests {
         // While rollback took a channel parameter, a caller could retire the
         // storefront's live menu and activate a kiosk snapshot in its place —
         // leaving customers with no menu and the kiosk with two.
-        publication.rollbackTo(TENANT, BRAND, kioskPublication.publicationId());
+        publication.rollbackTo(TENANT, BRAND, kioskPublication.publicationId(), null);
 
         assertThat(publication.activePublicationId(TENANT, BRAND, "STOREFRONT"))
                 .contains(storefrontPublication.publicationId());
         assertThat(publication.activePublicationId(TENANT, BRAND, "KIOSK")).contains(kioskPublication.publicationId());
+    }
+
+    @Test
+    @DisplayName("going live and rolling back each leave a fact naming the publication that was live before")
+    void publishingAndRollingBackAreAudited() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-AUD", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        AuditTrail.clear(jdbc);
+
+        var first = publication.publish(TENANT, BRAND, catalogId, CHANNEL, ACTOR);
+        var second = publication.publish(TENANT, BRAND, catalogId, CHANNEL, ACTOR);
+        publication.rollbackTo(TENANT, BRAND, first.publicationId(), ACTOR);
+
+        var published = AuditTrail.facts(jdbc, "catalog.published");
+        assertThat(published).hasSize(2);
+        var firstFact = published.get(0);
+        assertThat(firstFact.actorType()).isEqualTo("USER");
+        assertThat(firstFact.actorSubject()).isEqualTo(ACTOR.toString());
+        assertThat(firstFact.scopeType()).isEqualTo("BRAND");
+        assertThat(firstFact.scopeId()).isEqualTo(BRAND);
+        assertThat(firstFact.targetType()).isEqualTo("catalog.publication");
+        assertThat(firstFact.targetId()).isEqualTo(first.publicationId());
+        assertThat(firstFact.reason()).isNotBlank();
+        assertThat(firstFact.before("publicationId").isNull())
+                .as("nothing was live before the first publication")
+                .isTrue();
+        assertThat(firstFact.after("publicationId").asText())
+                .isEqualTo(first.publicationId().toString());
+        assertThat(firstFact.after("contentHash").asText()).isEqualTo(first.contentHash());
+        assertThat(firstFact.after("channel").asText()).isEqualTo(CHANNEL);
+        assertThat(firstFact.after("itemCount").asInt()).isPositive();
+
+        var secondFact = published.get(1);
+        assertThat(secondFact.before("publicationId").asText())
+                .as("the second publication replaced the first")
+                .isEqualTo(first.publicationId().toString());
+        assertThat(secondFact.after("publicationId").asText())
+                .isEqualTo(second.publicationId().toString());
+
+        var rolledBack = AuditTrail.only(jdbc, "catalog.publication.rolled_back");
+        assertThat(rolledBack.actorSubject()).isEqualTo(ACTOR.toString());
+        assertThat(rolledBack.targetId()).isEqualTo(first.publicationId());
+        assertThat(rolledBack.before("publicationId").asText())
+                .isEqualTo(second.publicationId().toString());
+        assertThat(rolledBack.after("publicationId").asText())
+                .isEqualTo(first.publicationId().toString());
+        assertThat(rolledBack.reason()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("a publication made by no signed-in person is recorded as the job it is")
+    void aSystemPublicationIsRecordedAsAJob() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-SYS", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        AuditTrail.clear(jdbc);
+
+        publication.publish(TENANT, BRAND, catalogId, CHANNEL, null);
+
+        var fact = AuditTrail.only(jdbc, "catalog.published");
+        assertThat(fact.actorType()).isEqualTo("SYSTEM_JOB");
+        assertThat(fact.actorSubject()).isEqualTo("catalog-publication");
+    }
+
+    @Test
+    @DisplayName("a rejected publication changes nothing a customer sees and leaves no publication fact")
+    void aRejectedPublicationLeavesNoFact() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID orphanId = UUID.randomUUID();
+        store.insertProduct(
+                orphanId, TENANT, BRAND, "ORPHAN", uz.horecaos.platform.catalog.domain.CatalogEntities.Status.ACTIVE);
+        store.addProductToCatalog(TENANT, BRAND, catalogId, orphanId, 0);
+        store.upsertTranslation(
+                TENANT,
+                BRAND,
+                uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType.PRODUCT,
+                orphanId,
+                LOCALE,
+                "Orphan",
+                null);
+        AuditTrail.clear(jdbc);
+
+        var rejected = publication.publish(TENANT, BRAND, catalogId, CHANNEL, ACTOR);
+
+        assertThat(rejected.status()).isEqualTo(uz.horecaos.platform.catalog.domain.PublicationStatus.REJECTED);
+        assertThat(AuditTrail.facts(jdbc, "catalog.published")).isEmpty();
+        assertThat(publication.activePublicationId(TENANT, BRAND, CHANNEL)).isEmpty();
     }
 
     private static java.util.Map<String, Object> reverseKeyOrder(java.util.Map<String, Object> content) {
@@ -860,7 +955,7 @@ class CatalogPublicationTests {
 
         var rejected = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
 
-        assertThat(catchThrowable(() -> publication.rollbackTo(TENANT, BRAND, rejected.publicationId())))
+        assertThat(catchThrowable(() -> publication.rollbackTo(TENANT, BRAND, rejected.publicationId(), null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("rejected");
     }
@@ -902,7 +997,8 @@ class CatalogPublicationTests {
                 new CatalogValidator(),
                 unwiredLoader,
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.recorder(jdbc));
 
         var result = unwiredPublication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
 

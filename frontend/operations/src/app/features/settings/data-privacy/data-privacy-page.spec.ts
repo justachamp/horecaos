@@ -7,6 +7,7 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
+import { Toasts } from '../../../shared/ui/toast';
 import { AuditEventPage, AuditEventView, ActivityLogApi } from '../../staff/activity-log-api';
 import { ConfigurationApi } from '../configuration-api';
 import { ConsentType, DataPrivacyApi, TenantErasureRequest } from './data-privacy-api';
@@ -234,6 +235,52 @@ describe('DataPrivacyPage', () => {
       'ordering.cart_retention_days',
       expect.objectContaining({ scopeType: 'TENANT', integerValue: 120 }),
     );
+  });
+
+  it('announces a saved retention period in the toast host, naming the company and the new value (row X.1)', async () => {
+    const { fixture } = await setUp();
+    const toasts = TestBed.inject(Toasts);
+    toasts.clear();
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="retention-input-ordering.cart_retention_days"]',
+    ) as HTMLInputElement;
+    input.value = '120';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="retention-save-ordering.cart_retention_days"]',
+      ) as HTMLElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(toasts.visible().map((toast) => toast.message)).toEqual([
+      'Abandoned carts: 120 days — set for the whole company',
+    ]);
+    toasts.clear();
+  });
+
+  it('says nothing in the toast host when a retention value is refused as invalid', async () => {
+    const { fixture, configurationApi } = await setUp();
+    const toasts = TestBed.inject(Toasts);
+    toasts.clear();
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="retention-input-ordering.cart_retention_days"]',
+    ) as HTMLInputElement;
+    input.value = '-3';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="retention-save-ordering.cart_retention_days"]',
+      ) as HTMLElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(configurationApi.setValue).not.toHaveBeenCalled();
+    expect(toasts.visible()).toEqual([]);
   });
 
   it('shows the denied state on a 403 rather than an empty log', async () => {

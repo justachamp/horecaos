@@ -133,7 +133,22 @@
     },
     "offerDiscount": "Aksiya",
     "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
-    "surchargeNote": "Ustama {{amount}} hisobga olingan"
+    "surchargeNote": "Ustama {{amount}} hisobga olingan",
+    "promoTitle": "Promokod",
+    "promoPlaceholder": "Kodni kiriting",
+    "promoApply": "Qo'llash",
+    "promoRemove": "Ayirish",
+    "promoApplied": "{{code}} qo'llandi",
+    "promoCodeLabel": "Kod {{code}}",
+    "promoOffersBetter": "Hozirgi aksiyalaringiz bu promokoddan foydaliroq, shuning uchun u qo'llanmadi.",
+    "promoNotApplicable": "Bu promokod ushbu buyurtmaga mos kelmaydi.",
+    "promoNoLongerValid": "Bu promokod endi amal qilmaydi.",
+    "giftOffer": {
+      "title": "Sizni sovg'a kutmoqda",
+      "choose": "Sovg'angizni tanlang",
+      "add": "Sovg'ani qo'shish: {{name}}",
+      "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
+    }
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -288,6 +303,10 @@
     "comboSoldOut": "Tugagan",
     "comboIncomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
     "comboUnavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "nestedFor": "«{{option}}» uchun",
+    "pickAtLeast": "Kamida {{min}} ta tanlang",
+    "pickAny": "Istaganingizni tanlang",
+    "variantGroupsTitle": "«{{variant}}» uchun tanlov",
     "fromPrice": "{{price}} dan"
   },
   "terms": {

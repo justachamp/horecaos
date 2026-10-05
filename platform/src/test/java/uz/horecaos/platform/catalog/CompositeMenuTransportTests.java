@@ -49,6 +49,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPreset
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -129,7 +130,8 @@ class CompositeMenuTransportTests {
                 new CatalogValidator(),
                 new CatalogSnapshotLoader(store, (tenantId, assets) -> true, live, LOCALE),
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.discarding());
         storefront = new StorefrontCatalogQuery(
                 store,
                 live,
@@ -316,6 +318,217 @@ class CompositeMenuTransportTests {
                 .orElseThrow();
         assertThat(named.toString()).contains("Mayonez");
         assertThat(nameless).doesNotContainKey("names");
+    }
+
+    @Test
+    @DisplayName("a variant's own groups and the rules it states for them are published with the variant, "
+            + "and a group only a variant carries is published at all")
+    void aVariantsOwnGroupsAndRulesArePublishedWithIt() {
+        var fries = authoring.createProduct(
+                TENANT, BRAND, catalogId, "FRIES", "Fries", null, LOCALE, "SKU-F", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID large = authoring.addVariant(
+                TENANT, BRAND, fries.productId(), "SKU-F-L", "PIECE", "Large", LOCALE, 1, UNCLASSIFIED, ACTOR);
+        UUID dips = authoring.createModifierGroup(TENANT, BRAND, "DIPS", "Dips", LOCALE, false, 0, 2, false);
+        authoring.addModifierOption(TENANT, BRAND, dips, "KETCHUP", "Ketchup", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        UUID extras = authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Extras", LOCALE, false, 0, 1, false);
+        authoring.addModifierOption(TENANT, BRAND, extras, "CHEESE", "Cheese", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        authoring.attachModifierGroup(TENANT, BRAND, fries.productId(), dips, 0);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, large, dips, 0, "tester");
+        composites.setAttachmentPolicy(
+                TENANT,
+                BRAND,
+                AttachmentOwnerType.VARIANT,
+                large,
+                dips,
+                1,
+                new AttachmentPolicy(Visibility.VISIBLE, null, true, 1, 1),
+                "tester");
+        composites.attachModifierGroupToVariant(TENANT, BRAND, large, extras, 1, "tester");
+
+        var result = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        assertThat(result.status()).isEqualTo(PublicationStatus.PUBLISHED);
+        assertThat(store.publicationItems(result.publicationId(), EntityType.MODIFIER_GROUP))
+                .extracting(item -> item.entityId())
+                .as("the extras are attached to no product, and are in the menu all the same")
+                .containsExactlyInAnyOrder(dips, extras);
+        var friesItem = store.publicationItems(result.publicationId(), EntityType.PRODUCT).stream()
+                .filter(item -> item.entityId().equals(fries.productId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(friesItem.content().get("modifierGroupIds"))
+                .as("the product still lists only what it attaches")
+                .isEqualTo(List.of(dips.toString()));
+        var variants = listOfMaps(friesItem.content().get("variants"));
+        var largeEntry = variants.stream()
+                .filter(entry -> large.toString().equals(entry.get("variantId")))
+                .findFirst()
+                .orElseThrow();
+        var smallEntry = variants.stream()
+                .filter(entry -> fries.defaultVariantId().toString().equals(entry.get("variantId")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(largeEntry.get("modifierGroupIds")).isEqualTo(List.of(dips.toString(), extras.toString()));
+        assertThat(largeEntry.get("modifierGroupPolicies"))
+                .as(
+                        "the rule the large size holds the customer to for each of its groups, the override laid over the group's own")
+                .isEqualTo(List.of(
+                        Map.of(
+                                "groupId",
+                                dips.toString(),
+                                "required",
+                                true,
+                                "minimumSelections",
+                                1,
+                                "maximumSelections",
+                                1),
+                        Map.of(
+                                "groupId",
+                                extras.toString(),
+                                "required",
+                                false,
+                                "minimumSelections",
+                                0,
+                                "maximumSelections",
+                                1)));
+        assertThat(smallEntry)
+                .as("a variant that adds and overrides nothing publishes exactly what it always did")
+                .doesNotContainKeys("modifierGroupIds", "modifierGroupPolicies");
+    }
+
+    @Test
+    @DisplayName("an option that links a variant carrying groups is published with the choices it opens, "
+            + "and the groups of that variant are published for it")
+    void aNestedChoiceIsPublishedUnderItsParentOption() {
+        var side = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SIDE", "Side", null, LOCALE, "SKU-S", "PIECE", UNCLASSIFIED, ACTOR);
+        var sauce = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SAUCE", "Sauce", null, LOCALE, "SKU-SAUCE", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID heat = authoring.createModifierGroup(TENANT, BRAND, "HEAT", "Heat", LOCALE, true, 1, 1, false);
+        authoring.addModifierOption(TENANT, BRAND, heat, "MILD", "Mild", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        authoring.addModifierOption(TENANT, BRAND, heat, "HOT", "Hot", LOCALE, null, 1, 1, UNCLASSIFIED, ACTOR);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, sauce.defaultVariantId(), heat, 0, "tester");
+        UUID sauces = authoring.createModifierGroup(TENANT, BRAND, "SAUCES", "Sauces", LOCALE, false, 0, 1, false);
+        UUID chili = authoring.addModifierOption(
+                TENANT, BRAND, sauces, "CHILI", "Chili", LOCALE, sauce.defaultVariantId(), 1, 0, UNCLASSIFIED, ACTOR);
+        UUID ketchup = authoring.addModifierOption(
+                TENANT, BRAND, sauces, "KETCHUP", "Ketchup", LOCALE, null, 1, 1, UNCLASSIFIED, ACTOR);
+        authoring.attachModifierGroup(TENANT, BRAND, side.productId(), sauces, 0);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, side.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("PICKUP"));
+
+        var result = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        assertThat(result.status())
+                .as("the menu publishes: %s", result.report().blockers())
+                .isEqualTo(PublicationStatus.PUBLISHED);
+        var groups = store.publicationItems(result.publicationId(), EntityType.MODIFIER_GROUP);
+        assertThat(groups)
+                .extracting(item -> item.entityId())
+                .as("the heat choice is the sauce variant's, offered through the option and listed on no side")
+                .containsExactlyInAnyOrder(sauces, heat);
+        var options = listOfMaps(groups.stream()
+                .filter(item -> item.entityId().equals(sauces))
+                .findFirst()
+                .orElseThrow()
+                .content()
+                .get("options"));
+        var chiliEntry = options.stream()
+                .filter(option -> chili.toString().equals(option.get("optionId")))
+                .findFirst()
+                .orElseThrow();
+        var ketchupEntry = options.stream()
+                .filter(option -> ketchup.toString().equals(option.get("optionId")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(chiliEntry.get("nestedGroups"))
+                .isEqualTo(List.of(Map.of(
+                        "groupId", heat.toString(), "required", true, "minimumSelections", 1, "maximumSelections", 1)));
+        assertThat(ketchupEntry)
+                .as("an option that links nothing publishes as it always did")
+                .doesNotContainKey("nestedGroups");
+
+        // The menu a storefront reads carries it too: the chooser can be drawn from the publication alone.
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+        var chiliOption = menu.modifierGroups().stream()
+                .filter(group -> group.modifierGroupId().equals(sauces))
+                .flatMap(group -> group.options().stream())
+                .filter(option -> option.optionId().equals(chili))
+                .findFirst()
+                .orElseThrow();
+        assertThat(chiliOption.nestedGroups()).singleElement().satisfies(policy -> {
+            assertThat(policy.modifierGroupId()).isEqualTo(heat);
+            assertThat(policy.required()).isTrue();
+            assertThat(policy.minimumSelections()).isEqualTo(1);
+        });
+        assertThat(menu.modifierGroups())
+                .extracting(StorefrontCatalogQuery.MenuModifierGroup::modifierGroupId)
+                .contains(heat);
+    }
+
+    @Test
+    @DisplayName("a group attached to a combo's container is not offered: a combo line takes no modifiers of its own")
+    void aGroupOnAComboContainerIsNotPublished() {
+        var combo = comboOfTwo();
+        UUID extras = authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Extras", LOCALE, false, 0, 1, false);
+        authoring.addModifierOption(TENANT, BRAND, extras, "CHEESE", "Cheese", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, combo.container(), extras, 0, "tester");
+
+        var result = publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        assertThat(result.status()).isEqualTo(PublicationStatus.PUBLISHED);
+        assertThat(store.publicationItems(result.publicationId(), EntityType.MODIFIER_GROUP))
+                .as("nothing offers it, so nothing publishes it")
+                .isEmpty();
+        var container = store.publicationItems(result.publicationId(), EntityType.PRODUCT).stream()
+                .filter(item -> item.entityId().equals(combo.containerProduct()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(listOfMaps(container.content().get("variants")).get(0))
+                .doesNotContainKeys("modifierGroupIds", "modifierGroupPolicies");
+    }
+
+    @Test
+    @DisplayName("the menu serves a variant's own groups and rules on the variant, and none on a variant with none")
+    void theMenuServesAVariantsOwnGroups() {
+        var fries = authoring.createProduct(
+                TENANT, BRAND, catalogId, "FRIES", "Fries", null, LOCALE, "SKU-F", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID large = authoring.addVariant(
+                TENANT, BRAND, fries.productId(), "SKU-F-L", "PIECE", "Large", LOCALE, 1, UNCLASSIFIED, ACTOR);
+        UUID extras = authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Extras", LOCALE, false, 0, 1, false);
+        authoring.addModifierOption(TENANT, BRAND, extras, "CHEESE", "Cheese", LOCALE, null, 1, 0, UNCLASSIFIED, ACTOR);
+        composites.attachModifierGroupToVariant(TENANT, BRAND, large, extras, 0, "tester");
+        for (UUID variant : List.of(fries.defaultVariantId(), large)) {
+            authoring.setOffering(TENANT, BRAND, LOCATION, variant, OfferingStatus.AVAILABLE, List.of("PICKUP"));
+        }
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        var product = menu.products().get(0);
+        var largeVariant = product.variants().stream()
+                .filter(variant -> variant.variantId().equals(large))
+                .findFirst()
+                .orElseThrow();
+        var smallVariant = product.variants().stream()
+                .filter(variant -> variant.variantId().equals(fries.defaultVariantId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(product.modifierGroupIds())
+                .as("the product's own list is the product's")
+                .isEmpty();
+        assertThat(largeVariant.modifierGroupIds()).containsExactly(extras);
+        assertThat(largeVariant.modifierGroupPolicies()).singleElement().satisfies(policy -> {
+            assertThat(policy.modifierGroupId()).isEqualTo(extras);
+            assertThat(policy.required()).isFalse();
+            assertThat(policy.maximumSelections()).isEqualTo(1);
+        });
+        assertThat(smallVariant.modifierGroupIds()).isEmpty();
+        assertThat(smallVariant.modifierGroupPolicies()).isEmpty();
     }
 
     // ---------------------------------------------------------------- the menu

@@ -1,10 +1,13 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { Page } from '../../core/api/page';
+import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { CustomerSummary, CustomersApi } from '../customers/customers-api';
 import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing/marketing-api';
@@ -206,9 +209,13 @@ describe('MarketingReportPage', () => {
     discountHistory: ReturnType<typeof vi.fn>;
     promotionSummary: ReturnType<typeof vi.fn>;
     promotionRedemptions: ReturnType<typeof vi.fn>;
+    revealRedemptionCustomer: ReturnType<typeof vi.fn>;
   };
 
-  async function render(scope: LocationScope | null = SCOPE): Promise<void> {
+  async function render(
+    scope: LocationScope | null = SCOPE,
+    held: readonly Capability[] = [],
+  ): Promise<void> {
     customersApi = {
       list: vi
         .fn()
@@ -226,12 +233,15 @@ describe('MarketingReportPage', () => {
         .mockImplementation(async (_tenant: string, _range: unknown, promotionId: string | null) =>
           promotionLog(promotionId),
         ),
+      revealRedemptionCustomer: vi.fn(),
     };
 
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [MarketingReportPage],
       providers: [
+        provideRouter([]),
+        { provide: SessionCapabilities, useValue: { has: (c: Capability) => held.includes(c) } },
         {
           provide: CurrentLocation,
           useValue: new (class {
@@ -401,6 +411,146 @@ describe('MarketingReportPage', () => {
       await flushMicrotasks();
       fixture.detectChanges();
       expect(host.querySelector('[data-testid="promotion-summary"]')).not.toBeNull();
+    });
+  });
+
+  function discountApiReturns(revealed: unknown): void {
+    discountApi.revealRedemptionCustomer.mockResolvedValue(revealed);
+  }
+
+  describe('row 7.9: who redeemed it', () => {
+    const REVEALED = {
+      redemptionId: 'red-1',
+      promotionId: 'promo-click',
+      sourceKind: 'AUTOMATIC',
+      orderId: 'order-aaa',
+      customerAccountId: 'account-42',
+    };
+
+    async function openLog(held: readonly Capability[] = ['CUSTOMER_READ']): Promise<HTMLElement> {
+      await render(SCOPE, held);
+      const host: HTMLElement = fixture.nativeElement;
+      [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+        .find((button) => button.textContent?.includes('Promotions'))!
+        .click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      return host;
+    }
+
+    function showButtons(host: HTMLElement): HTMLButtonElement[] {
+      return [
+        ...host.querySelectorAll<HTMLButtonElement>('[data-testid="redemption-show-customer"]'),
+      ];
+    }
+
+    async function press(button: HTMLButtonElement): Promise<void> {
+      button.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    function cell(host: HTMLElement, index: number): HTMLElement {
+      return host.querySelectorAll<HTMLElement>('[data-testid="redemption-customer"]')[index];
+    }
+
+    it('offers nothing to an operator without customer.read, and the pseudonym stays all they see', async () => {
+      const host = await openLog([]);
+      expect(showButtons(host)).toHaveLength(0);
+      expect(host.querySelector('[data-testid="redemption-reveal-note"]')).toBeNull();
+      expect(discountApi.revealRedemptionCustomer).not.toHaveBeenCalled();
+    });
+
+    it('offers a row each to an operator who may read customers, and says it is recorded', async () => {
+      const host = await openLog();
+      expect(showButtons(host)).toHaveLength(2);
+      expect(host.querySelector('[data-testid="redemption-reveal-note"]')!.textContent).toContain(
+        'recorded',
+      );
+      // Nothing is looked up until it is asked for.
+      expect(discountApi.revealRedemptionCustomer).not.toHaveBeenCalled();
+    });
+
+    it('asks for the clicked row only, under that row’s own brand and promotion', async () => {
+      const host = await openLog();
+      discountApiReturns(REVEALED);
+      await press(showButtons(host)[0]);
+
+      expect(discountApi.revealRedemptionCustomer).toHaveBeenCalledTimes(1);
+      const [scope, promotionId, redemptionId, purpose] =
+        discountApi.revealRedemptionCustomer.mock.calls[0];
+      expect(scope).toEqual({ tenantId: 'tenant-1', brandId: 'brand-1' });
+      expect(promotionId).toBe('promo-click');
+      expect(redemptionId).toBe('red-1');
+      // Fixed and English, like every other reveal on this console: the audit log reads it, not the operator.
+      expect(purpose).toBe('Operations console: marketing report, who redeemed it');
+    });
+
+    it('links the revealed account to its customer card and puts no name or contact on the row', async () => {
+      const host = await openLog();
+      discountApiReturns(REVEALED);
+      await press(showButtons(host)[0]);
+
+      const link = cell(host, 0).querySelector<HTMLAnchorElement>(
+        'a[data-testid="redemption-customer-link"]',
+      )!;
+      expect(link.getAttribute('href')).toBe('/customers/account-42');
+      expect(link.textContent).toContain('Open customer card');
+      // The other row was not asked for.
+      expect(cell(host, 1).querySelector('a')).toBeNull();
+      expect(showButtons(host)).toHaveLength(1);
+    });
+
+    it('says a guest order has no customer card to open', async () => {
+      const host = await openLog();
+      discountApiReturns({ ...REVEALED, customerAccountId: null });
+      await press(showButtons(host)[0]);
+
+      expect(cell(host, 0).querySelector('a')).toBeNull();
+      expect(cell(host, 0).textContent).toContain('Guest order');
+    });
+
+    it('says plainly when the platform refuses the lookup, and lets it be tried again', async () => {
+      const host = await openLog();
+      discountApi.revealRedemptionCustomer.mockRejectedValueOnce(
+        new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null),
+      );
+      await press(showButtons(host)[0]);
+
+      expect(
+        cell(host, 0).querySelector('[data-testid="redemption-customer-denied"]'),
+      ).not.toBeNull();
+      expect(cell(host, 0).querySelector('a')).toBeNull();
+
+      discountApiReturns(REVEALED);
+      await press(showButtons(host)[0]);
+      expect(cell(host, 0).querySelector('a')).not.toBeNull();
+    });
+
+    it('offers a retry when the lookup fails for any other reason, and shows nothing about the customer', async () => {
+      const host = await openLog();
+      discountApi.revealRedemptionCustomer.mockRejectedValueOnce(new Error('boom'));
+      await press(showButtons(host)[0]);
+
+      expect(
+        cell(host, 0).querySelector('[data-testid="redemption-customer-error"]'),
+      ).not.toBeNull();
+      expect(cell(host, 0).querySelector('a')).toBeNull();
+    });
+
+    it('does not look the same row up twice while the first lookup is under way', async () => {
+      let finish: (value: typeof REVEALED) => void = () => {};
+      const host = await openLog();
+      discountApi.revealRedemptionCustomer.mockImplementation(
+        () => new Promise<typeof REVEALED>((resolve) => (finish = resolve)),
+      );
+      const button = showButtons(host)[0];
+      button.click();
+      button.click();
+      await flushMicrotasks();
+      expect(discountApi.revealRedemptionCustomer).toHaveBeenCalledTimes(1);
+      finish(REVEALED);
+      await flushMicrotasks();
     });
   });
 

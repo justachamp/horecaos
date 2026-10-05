@@ -334,7 +334,8 @@ public class PricingEngine {
                 contextHash(request, inputs),
                 List.copyOf(trace),
                 accrualAllowed,
-                redemptionAllowed);
+                redemptionAllowed,
+                offers.giftOffers());
     }
 
     /**
@@ -1437,10 +1438,42 @@ public class PricingEngine {
             String contextHash,
             List<PromotionEvaluator.TraceEntry> promotionTrace,
             boolean loyaltyAccrualAllowed,
-            boolean loyaltyRedemptionAllowed) {
+            boolean loyaltyRedemptionAllowed,
+            List<PromotionEvaluator.GiftOffer> giftOffers) {
 
         public Result {
             promotionTrace = promotionTrace == null ? List.of() : List.copyOf(promotionTrace);
+            giftOffers = giftOffers == null ? List.of() : List.copyOf(giftOffers);
+        }
+
+        /** A result with no gift offers: every caller that predates the offer on the priced cart. */
+        public Result(
+                Money subtotal,
+                Money tax,
+                Money fees,
+                Money discount,
+                Money total,
+                List<Quote.QuoteLine> lines,
+                List<Adjustment> adjustments,
+                @Nullable Long deliveryShortfallMinor,
+                String contextHash,
+                List<PromotionEvaluator.TraceEntry> promotionTrace,
+                boolean loyaltyAccrualAllowed,
+                boolean loyaltyRedemptionAllowed) {
+            this(
+                    subtotal,
+                    tax,
+                    fees,
+                    discount,
+                    total,
+                    lines,
+                    adjustments,
+                    deliveryShortfallMinor,
+                    contextHash,
+                    promotionTrace,
+                    loyaltyAccrualAllowed,
+                    loyaltyRedemptionAllowed,
+                    List.of());
         }
 
         /** A result with no promotion trace and no loyalty restriction: every caller that predates ADR 0140. */
@@ -1466,7 +1499,8 @@ public class PricingEngine {
                     contextHash,
                     List.of(),
                     true,
-                    true);
+                    true,
+                    List.of());
         }
     }
 

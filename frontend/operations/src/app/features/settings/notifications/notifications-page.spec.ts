@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { Toasts } from '../../../shared/ui/toast';
 import { ConfigurationApi } from '../configuration-api';
 import { NotificationsApi, TemplateResponse, VersionGroup } from './notifications-api';
 import { NotificationsPage } from './notifications-page';
@@ -310,5 +311,40 @@ describe('NotificationsPage', () => {
     // used to see nothing here and would only discover the suppression from
     // a customer who never got a message.
     expect(dialog?.textContent).toContain('Awaiting gateway');
+  });
+  describe('the two automation switches confirm themselves (row X.1)', () => {
+    let toasts: Toasts;
+
+    beforeEach(() => {
+      toasts = TestBed.inject(Toasts);
+      toasts.clear();
+    });
+
+    function flip(index: number, enabled: boolean): void {
+      const box = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>(
+        '.checkbox input[type="checkbox"]',
+      )[index];
+      box.checked = enabled;
+      box.dispatchEvent(new Event('change'));
+    }
+
+    it('names the setting, its new state and the level when a switch is flipped, since it saves at once', async () => {
+      flip(0, true);
+      await flushMicrotasks();
+
+      expect(configApi.setValue).toHaveBeenCalledOnce();
+      expect(toasts.visible().map((toast) => toast.message)).toEqual([
+        expect.stringMatching(/: on — set for the brand$/),
+      ]);
+    });
+
+    it('confirms the second switch the same way', async () => {
+      flip(1, false);
+      await flushMicrotasks();
+
+      expect(toasts.visible().map((toast) => toast.message)).toEqual([
+        expect.stringMatching(/: off — set for the brand$/),
+      ]);
+    });
   });
 });

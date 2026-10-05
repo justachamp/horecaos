@@ -1,10 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 
-import {
-  CustomerApi,
-  type AddressDraft,
-  type CustomerAddress,
-} from '../core/api/customer-api';
+import { CustomerApi, type AddressDraft, type CustomerAddress } from '../core/api/customer-api';
 import { newIdempotencyKey } from '../core/api/idempotency';
 
 /**

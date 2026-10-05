@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { Toasts } from '../../../shared/ui/toast';
 import { ConfigurationApi, ConfigurationResolutionView } from '../configuration-api';
 import { CatalogSettingsPage } from './catalog-settings-page';
 
@@ -166,5 +167,79 @@ describe('CatalogSettingsPage', () => {
         reason: 'Enable ahead of the automatic price-plane wiring',
       }),
     );
+  });
+  describe('confirming a save in the toast host (row X.1)', () => {
+    let toasts: Toasts;
+
+    beforeEach(() => {
+      toasts = TestBed.inject(Toasts);
+      toasts.clear();
+    });
+
+    const messages = (): string[] => toasts.visible().map((toast) => toast.message);
+
+    function overrideAndPublish(fieldIndex: number, reasonId: string): void {
+      (
+        fixture.nativeElement.querySelectorAll(
+          'q-inherited-field .field__action',
+        ) as NodeListOf<HTMLButtonElement>
+      )[fieldIndex].click();
+      fixture.detectChanges();
+      const checkbox = fixture.nativeElement.querySelector(
+        'input[type="checkbox"]',
+      ) as HTMLInputElement;
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+      const reason = fixture.nativeElement.querySelector(`#${reasonId}`) as HTMLInputElement;
+      reason.value = 'because';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (
+        Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+        ).find((button) => button.textContent?.includes('Publish')) as HTMLButtonElement
+      ).click();
+    }
+
+    it('names the whole company, and the new value, when a tenant-wide switch is published', async () => {
+      api.resolution.mockImplementation((_tenantId: string, code: string) =>
+        Promise.resolve(
+          code === 'catalog.use_stock_logic'
+            ? { ...USE_STOCK_LOGIC_OFF, value: true }
+            : QR_KIOSK_OFF,
+        ),
+      );
+
+      overrideAndPublish(0, 'use-stock-logic-reason');
+      await flushMicrotasks();
+
+      expect(messages()).toEqual(['Use stock logic: Yes — set for the whole company']);
+    });
+
+    it('says the QR and kiosk switch was published too', async () => {
+      api.resolution.mockImplementation((_tenantId: string, code: string) =>
+        Promise.resolve(
+          code === 'catalog.qr_kiosk_price_plane'
+            ? { ...QR_KIOSK_OFF, value: true }
+            : USE_STOCK_LOGIC_OFF,
+        ),
+      );
+
+      overrideAndPublish(1, 'qr-kiosk-reason');
+      await flushMicrotasks();
+
+      expect(messages()).toEqual([
+        'QR and kiosk take hall prices: Yes — set for the whole company',
+      ]);
+    });
+
+    it('stays silent when the write is refused', async () => {
+      api.setValue.mockRejectedValue(new Error('refused'));
+
+      overrideAndPublish(0, 'use-stock-logic-reason');
+      await flushMicrotasks();
+
+      expect(messages()).toEqual([]);
+    });
   });
 });

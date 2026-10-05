@@ -43,6 +43,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -124,7 +125,8 @@ class PromoCodeTests {
 
         eligibility = new PromoCodeEligibilityService(promoCodeStore);
         redemptions = new PromoCodeRedemptionService(promoCodeStore, clock);
-        authoring = new PromoCodeAuthoringService(promoCodeStore, clock);
+        authoring = new PromoCodeAuthoringService(
+                promoCodeStore, clock, AuditTrail.recorder(jdbc), AuditTrail.actor("promo-author"));
         quotes = new QuoteService(
                 pricingStore,
                 new PricingEngine(),

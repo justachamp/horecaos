@@ -27,7 +27,7 @@ capability.
 | Expected volume | Pilot: tens of pushes per binding per day outside service peaks; a brand-wide stop of a hundred dishes across forty bound venues is four thousand pushes, paced by the partner's rate limit (a `RATE_LIMITED` outcome closes the door for the rest of that binding's batch) |
 | SLO | A stop reaches a connected partner within one reconciler tick plus one call (seconds) when a marker fired, and within one resync interval (5 minutes by default) when none did |
 | Runbook | `docs/routes/marketplace-availability.md#runbook` |
-| Dashboard | Metrics `horecaos.marketplace.route` (tags `event`, `provider`, `operation`, `status`), `horecaos.marketplace.availability.push` (tag `conclusion`), `horecaos.marketplace.availability.pending_items`, `horecaos.marketplace.availability.oldest_pending_seconds`, `horecaos.marketplace.circuit.not_closed` — none labelled by tenant, binding or item |
+| Dashboard | Metrics `horecaos.marketplace.route` (tags `event`, `provider`, `operation`, `status`), `horecaos.marketplace.availability.push` (tag `conclusion`), `horecaos.marketplace.availability.pending_items`, `horecaos.marketplace.availability.oldest_pending_seconds`, `horecaos.marketplace.availability.stale_channels` (bindings inside a reported stale episode), `horecaos.marketplace.channel.went_stale` (a counter, one per episode), `horecaos.marketplace.circuit.not_closed` — none labelled by tenant, binding or item |
 
 ## What the platform believes after an attempt
 
@@ -64,6 +64,38 @@ the next successful call; nothing needs doing unless the state does not clear.
 
 **Items `REJECTED_UNMAPPED`.** The partner does not know the item id. Fix the
 `MENU_ITEM` mapping (ADR 0012); the row is replaced when the mapping changes.
+
+**A stale-channel alert: "N dishes not confirmed since 14:32".** A binding has had at least
+one dish unconfirmed longer than `marketplace.availability.stale_after_seconds` (default thirty
+minutes). It is reported once per episode: `MarketplaceChannelWentStale` on `integration.events`
+(counts and instants, no dish names) and an ADR 0058 operations alert to the chats subscribed to
+`MARKETPLACE_CHANNEL_STALE`. The partner is still selling what the kitchen stopped. Read the
+propagation view for the branch for the dishes and `lastFailureCode`; update the partner portal by
+hand from the stop list while it is fixed. The report clears when nothing is unconfirmed past the
+bound, or when the binding stops being worked (the reconciler switched off, the installation or the
+binding suspended, no adapter) -- the `stale_channels` gauge counts only bindings still worked --
+so the next outage alerts again, including one a switched-off binding resumes into. A dish the partner refused as unknown is a mapping to fix
+(`REJECTED_UNMAPPED`) and never counts as a channel gone quiet.
+
+**An aggregator that polls instead.** `GET /api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability`
+answers from the same resolver on every call: the partner's own item id and one boolean per mapped
+dish, in cursor pages (`limit` up to 200, `cursor` from the previous page's `nextCursor`).
+Authorised by the aggregator's client credential and the bindings of its installation
+(`marketplace.availability.pull`); a restaurant that is not one of its bound branches is a 404, the
+same as one that does not exist, and an integration with no single active sales channel is a
+`409 CHANNEL_NOT_CONFIGURED` rather than an all-available list.
+
+**Decommissioning stops (`inventory.stops.read_enabled`).** Never a rollback: it sells every stopped
+dish again that no position carries. Run `POST .../inventory/stop-materialisation-runs` for each
+brand that has had a stop (`inventory.stop.manage` at the brand); read the report
+(`GET .../stop-materialisation-runs/{id}/report`: `UNTRACKED_ITEM`, `QUANTITY_ITEM`,
+`CHANNEL_SCOPE`, `MENU_NOT_EVERY_CHANNEL`, `WRITE_FAILED`, each the dish that will be on sale
+again); the brand's owner acknowledges it (`POST .../acknowledgement`, `If-Match`). Only then does
+the configuration write succeed; without it the answer is `409 MATERIALISATION_REQUIRED`, and any
+stop made after the run asks for another. A `WRITE_FAILED` line means the stop is not carried:
+run again. While the switch is off, active stops stay on their rows, ignored and marked so; new
+operator and bot stops are refused as frozen; the POS poll writes the position boolean again.
+Turning it back on resumes the ignored stops and is never refused.
 
 **After an outage, or after switching the reconciler back on.** Every confirmation of
 the binding is withdrawn first and everything is resent once, because the partner

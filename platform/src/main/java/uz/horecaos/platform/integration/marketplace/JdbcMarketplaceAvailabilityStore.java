@@ -90,6 +90,26 @@ public class JdbcMarketplaceAvailabilityStore {
                 .list();
     }
 
+    /**
+     * Active {@code MARKETPLACE} bindings of one installation: what a change to the sales channel
+     * that installation backs must wake (ADR 0141 Decision 7's marker for a channel's installation).
+     */
+    public List<UUID> bindingIdsOfInstallation(UUID tenantId, UUID installationId) {
+        return jdbc.sql("""
+                SELECT b.id
+                FROM integration.bindings b
+                JOIN integration.installations i
+                  ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId
+                  AND i.provider_category = 'MARKETPLACE'
+                  AND i.status = 'ACTIVE' AND b.status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .query(UUID.class)
+                .list();
+    }
+
     /** The binding's mapped menu items: the partner's id for each HorecaOS variant. */
     public Map<UUID, String> mappedItems(UUID tenantId, UUID bindingId) {
         Map<UUID, String> byVariant = new HashMap<>();
@@ -112,7 +132,8 @@ public class JdbcMarketplaceAvailabilityStore {
 
     public Optional<SyncState> syncState(UUID bindingId) {
         return jdbc.sql("""
-                SELECT binding_id, next_sweep_at, sweep_requested_at, reconcile_was_enabled, was_stale
+                SELECT binding_id, next_sweep_at, sweep_requested_at, reconcile_was_enabled, was_stale,
+                       xmin::text AS row_version
                 FROM integration.marketplace_availability_sync_state WHERE binding_id = :bindingId
                 """)
                 .param("bindingId", bindingId)
@@ -121,7 +142,8 @@ public class JdbcMarketplaceAvailabilityStore {
                         instant(row.getObject("next_sweep_at", OffsetDateTime.class)),
                         instant(row.getObject("sweep_requested_at", OffsetDateTime.class)),
                         row.getBoolean("reconcile_was_enabled"),
-                        row.getBoolean("was_stale")))
+                        row.getBoolean("was_stale"),
+                        row.getString("row_version")))
                 .optional();
     }
 
@@ -144,7 +166,21 @@ public class JdbcMarketplaceAvailabilityStore {
         }
     }
 
-    /** Records that a full sweep ran and when the next one is due; clears the marker it honoured. */
+    /**
+     * Records that a full sweep ran and when the next one is due; clears the marker it honoured, and
+     * only that one.
+     *
+     * <p>A marker is a promise that the next sweep will read an input that has just changed. A
+     * marker written <em>after</em> this sweep looked -- a stop committed between its resolver read
+     * and this statement -- has not been honoured, and wiping it would leave that change to wait for
+     * the resync interval. So the marker is cleared only if the row is still the version the sweep
+     * read before it began ({@code observedRowVersion}, {@link SyncState#rowVersion}): any writer of
+     * the row since -- the listener, the mapping trigger (which coalesces into an older marker and so
+     * leaves its value alone), another replica -- makes the sweep leave the marker for the next pass.
+     * The worst a spurious difference costs is one more sweep.
+     *
+     * @param observedRowVersion the row version read before the sweep began, or null when there was no row
+     */
     public void recordSweep(
             UUID tenantId,
             UUID bindingId,
@@ -152,7 +188,8 @@ public class JdbcMarketplaceAvailabilityStore {
             Instant nextSweepAt,
             int itemCount,
             boolean reconcileEnabled,
-            boolean stale) {
+            boolean stale,
+            @Nullable String observedRowVersion) {
         jdbc.sql("""
                 INSERT INTO integration.marketplace_availability_sync_state
                     (tenant_id, binding_id, next_sweep_at, last_sweep_at, last_sweep_item_count,
@@ -162,7 +199,10 @@ public class JdbcMarketplaceAvailabilityStore {
                 SET next_sweep_at = EXCLUDED.next_sweep_at,
                     last_sweep_at = EXCLUDED.last_sweep_at,
                     last_sweep_item_count = EXCLUDED.last_sweep_item_count,
-                    sweep_requested_at = NULL,
+                    sweep_requested_at = CASE
+                        WHEN integration.marketplace_availability_sync_state.xmin::text = CAST(:observedRowVersion AS text)
+                        THEN NULL
+                        ELSE integration.marketplace_availability_sync_state.sweep_requested_at END,
                     reconcile_was_enabled = EXCLUDED.reconcile_was_enabled,
                     was_stale = EXCLUDED.was_stale,
                     updated_at = EXCLUDED.updated_at
@@ -174,6 +214,7 @@ public class JdbcMarketplaceAvailabilityStore {
                 .param("count", itemCount)
                 .param("enabled", reconcileEnabled)
                 .param("stale", stale)
+                .param("observedRowVersion", observedRowVersion)
                 .update();
     }
 
@@ -196,14 +237,19 @@ public class JdbcMarketplaceAvailabilityStore {
                 .update();
     }
 
-    /** Remembers the switch state without a sweep: a suspended tick still has to note that it was suspended. */
+    /**
+     * Remembers the switch state without a sweep: a suspended tick still has to note that it was suspended.
+     * A suspended binding is not being pushed for, so nothing is overdue by its own fault: the stale
+     * episode it was in ends here (see {@link #clearStaleReported}), and a resumption into a partner
+     * that still refuses is reported as the new outage it is.
+     */
     public void recordSuspended(UUID tenantId, UUID bindingId, Instant now) {
         jdbc.sql("""
                 INSERT INTO integration.marketplace_availability_sync_state
                     (tenant_id, binding_id, reconcile_was_enabled, updated_at)
                 VALUES (:tenantId, :bindingId, false, :now)
                 ON CONFLICT (binding_id) DO UPDATE
-                SET reconcile_was_enabled = false, updated_at = EXCLUDED.updated_at
+                SET reconcile_was_enabled = false, stale_alerted_at = NULL, updated_at = EXCLUDED.updated_at
                 """)
                 .param("tenantId", tenantId)
                 .param("bindingId", bindingId)
@@ -508,6 +554,111 @@ public class JdbcMarketplaceAvailabilityStore {
                 .update();
     }
 
+    // ------------------------------------------------------------------ staleness
+
+    /**
+     * The dishes of one binding the platform has not been able to confirm since before {@code cutoff}:
+     * pending or uncertain, with {@code pending_since} at or before it. A {@code REJECTED_UNMAPPED}
+     * item is excluded on purpose -- the partner answered, and the fix is a mapping, not a channel
+     * that went quiet.
+     *
+     * @return empty when nothing is that old
+     */
+    public Optional<OverdueSummary> overdueUnconfirmed(UUID tenantId, UUID bindingId, Instant cutoff) {
+        OverdueSummary summary = jdbc.sql("""
+                SELECT count(*) AS item_count, min(pending_since) AS oldest
+                FROM integration.marketplace_item_availability
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                  AND state IN ('PENDING', 'UNCERTAIN')
+                  AND pending_since IS NOT NULL AND pending_since <= :cutoff
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("cutoff", timestamp(cutoff))
+                .query((row, number) -> new OverdueSummary(
+                        row.getInt("item_count"), instant(row.getObject("oldest", OffsetDateTime.class))))
+                .single();
+        return summary.itemCount() == 0 ? Optional.empty() : Optional.of(summary);
+    }
+
+    /**
+     * Records that this binding's staleness has been reported, once. The conditional upsert is the
+     * "once": whoever finds {@code stale_alerted_at} empty sets it and wins; a second replica ticking
+     * the same binding finds it set and reports nothing.
+     *
+     * @return whether this call is the one that reported it
+     */
+    public boolean markStaleReported(UUID tenantId, UUID bindingId, Instant now) {
+        return jdbc.sql("""
+                        INSERT INTO integration.marketplace_availability_sync_state
+                            (tenant_id, binding_id, stale_alerted_at, updated_at)
+                        VALUES (:tenantId, :bindingId, :now, :now)
+                        ON CONFLICT (binding_id) DO UPDATE
+                        SET stale_alerted_at = EXCLUDED.stale_alerted_at, updated_at = EXCLUDED.updated_at
+                        WHERE integration.marketplace_availability_sync_state.stale_alerted_at IS NULL
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("bindingId", bindingId)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
+    }
+
+    /** The binding has nothing unconfirmed past its bound: the next staleness is a new report. */
+    public void clearStaleReported(UUID tenantId, UUID bindingId, Instant now) {
+        jdbc.sql("""
+                UPDATE integration.marketplace_availability_sync_state
+                SET stale_alerted_at = NULL, updated_at = :now
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId AND stale_alerted_at IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("now", timestamp(now))
+                .update();
+    }
+
+    /**
+     * Ends the stale episode of every binding the reconciler no longer works: an installation or a
+     * binding suspended, a binding with no location, anything {@link #activeMarketplaceBindings} leaves
+     * out. {@code evaluate} clears a mark only for a binding it is asked about, and a binding that left
+     * the worklist is never asked, so without this the mark -- and the gauge an operator alerts on --
+     * would outlive the outage, and a reactivation would find the old episode "already reported".
+     *
+     * @return how many marks were cleared
+     */
+    public int clearStaleReportedOfInactiveBindings(Instant now) {
+        return jdbc.sql("""
+                UPDATE integration.marketplace_availability_sync_state s
+                SET stale_alerted_at = NULL, updated_at = :now
+                WHERE s.stale_alerted_at IS NOT NULL
+                  AND NOT %s
+                """.formatted(ACTIVE_BINDING_OF_STATE))
+                .param("now", timestamp(now))
+                .update();
+    }
+
+    /**
+     * How many bindings are inside a reported stale episode and are still ones the reconciler works.
+     * Never a count of marks alone: a mark on a binding that is no longer pushed for is not an outage.
+     */
+    public long countStaleReportedActive() {
+        return jdbc.sql("""
+                SELECT count(*) FROM integration.marketplace_availability_sync_state s
+                WHERE s.stale_alerted_at IS NOT NULL AND %s
+                """.formatted(ACTIVE_BINDING_OF_STATE))
+                .query(Long.class)
+                .single();
+    }
+
+    /** The worklist's own predicate ({@link #activeMarketplaceBindings}), as a test on a sync-state row {@code s}. */
+    private static final String ACTIVE_BINDING_OF_STATE = """
+            EXISTS (SELECT 1 FROM integration.bindings b
+                    JOIN integration.installations i ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                    WHERE b.id = s.binding_id AND b.tenant_id = s.tenant_id
+                      AND i.provider_category = 'MARKETPLACE'
+                      AND i.status = 'ACTIVE' AND b.status = 'ACTIVE'
+                      AND b.location_id IS NOT NULL)""";
+
     // ------------------------------------------------------------------ the propagation read
 
     /** Counts and the oldest pending moment for each binding at one location. */
@@ -647,12 +798,17 @@ public class JdbcMarketplaceAvailabilityStore {
             String providerType,
             String displayName) {}
 
+    /**
+     * @param rowVersion the row's PostgreSQL {@code xmin}: changes with every write to the row, by anyone.
+     *     What a sweep hands back to {@link #recordSweep} to prove nobody has written a marker since it looked.
+     */
     public record SyncState(
             UUID bindingId,
             @Nullable Instant nextSweepAt,
             @Nullable Instant sweepRequestedAt,
             boolean reconcileWasEnabled,
-            boolean wasStale) {}
+            boolean wasStale,
+            String rowVersion) {}
 
     public record ItemRow(
             UUID tenantId,
@@ -691,6 +847,9 @@ public class JdbcMarketplaceAvailabilityStore {
             boolean installationActive) {}
 
     public record Watermark(String alertState, @Nullable Instant lastSuccessAt, int staleAfterSeconds) {}
+
+    /** How many dishes have been unconfirmed past a bound, and since when the longest-waiting has been. */
+    public record OverdueSummary(int itemCount, @Nullable Instant oldestSince) {}
 
     /** Helper for tests and callers that want the variant set of a binding's rows. */
     public static Set<UUID> variantsOf(Collection<ItemRow> rows) {

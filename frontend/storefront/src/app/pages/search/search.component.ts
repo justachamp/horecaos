@@ -61,7 +61,8 @@ export class SearchComponent implements OnInit, AfterViewInit {
   );
 
   readonly noResults = computed(
-    () => this.query().trim().length >= MIN_LENGTH && !this.loading() && this.results().length === 0,
+    () =>
+      this.query().trim().length >= MIN_LENGTH && !this.loading() && this.results().length === 0,
   );
 
   constructor() {

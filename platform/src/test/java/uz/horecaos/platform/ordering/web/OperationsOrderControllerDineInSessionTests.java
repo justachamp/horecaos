@@ -75,6 +75,7 @@ class OperationsOrderControllerDineInSessionTests {
                 authorization,
                 mock(OrderCallProvenanceService.class),
                 ordering,
+                mock(uz.horecaos.platform.ordering.application.OperatorOrderQuoteService.class),
                 mock(OperatorCustomerLookupService.class),
                 mock(OrderBulkActionService.class),
                 mock(LiveBoardQueryService.class),
@@ -102,7 +103,8 @@ class OperationsOrderControllerDineInSessionTests {
                 null,
                 null,
                 null,
-                sessionId);
+                sessionId,
+                null);
     }
 
     @Test

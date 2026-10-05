@@ -10,6 +10,7 @@ import { ActorChip } from '../../../shared/ui/actor-chip';
 import { describeApiError } from '../../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../../staff/activity-log-api';
 import { ConfigurationApi } from '../configuration-api';
+import { SettingsSaved } from '../settings-saved';
 import { ConsentType, DataPrivacyApi, TenantErasureRequest } from './data-privacy-api';
 import { PII_ACTION_CODES, piiEgressLabelKey } from './pii-audit-labels';
 
@@ -127,6 +128,7 @@ export class DataPrivacyPage {
   private readonly dataPrivacyApi = inject(DataPrivacyApi);
   private readonly configurationApi = inject(ConfigurationApi);
   protected readonly i18n = inject(I18n);
+  private readonly saved = inject(SettingsSaved);
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly loadErrorText = signal<string | null>(null);
@@ -241,6 +243,12 @@ export class DataPrivacyPage {
       const resolution = await this.configurationApi.resolution(tenantId, row.code, 'TENANT');
       row.resolution.set(resolution);
       row.editValue.set(String(resolution.value ?? ''));
+      this.saved.announce(
+        'set',
+        this.i18n.t(row.categoryKey),
+        { level: 'TENANT', name: null },
+        `${parsed} ${this.i18n.t(row.unitKey)}`,
+      );
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         // Somebody else changed this value first; re-read rather than let a

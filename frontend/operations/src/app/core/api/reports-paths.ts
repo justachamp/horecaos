@@ -68,6 +68,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/variant-sales`;
   },
 
+  /** ADR 0136: sales by combo container, from the same line facts `variantSales` reads. */
+  comboSales(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/combo-sales`;
+  },
+
   /** X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve. */
   abcCurve(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/abc-curve`;

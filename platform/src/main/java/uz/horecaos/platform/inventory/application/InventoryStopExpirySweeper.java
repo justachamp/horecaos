@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
  * <p>Not on any correctness path, and that is the design. A read evaluates {@code ends_at}
  * itself ({@link AvailabilityResolver}), and the reconciler's resync sweep evaluates it at its
  * own {@code now}, so a sweeper that is down, lagging or switched off delays a notice and
- * never leaves a dish stopped past its end. One cross-tenant pass per tick, through the ADR
+ * never leaves a dish stopped past its end -- except a timed stop that a materialisation run
+ * wrote onto a position, which only this pass gives back ({@link MaterialisedPositionRestorer}). One cross-tenant pass per tick, through the ADR
  * 0056 exempt role, log-and-continue like {@link InventoryReservationSweeper}; the same
  * switch shape keeps a one-shot process from touching a real tenant's stops on start-up.
  */

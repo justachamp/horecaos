@@ -11,6 +11,11 @@ export interface AmendmentAddLine {
   readonly variantId: string;
   readonly quantity: number;
   readonly modifierOptionIds: readonly string[];
+  /**
+   * ADR 0136: set exactly when `variantId` is a combo's container, and `quantity` then counts
+   * combos. `OrderAmendmentService` adds it as the ordinary lines it is, one per picked component.
+   */
+  readonly comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
 }
 
 /** `OperationsOrderController.DeliveryAddressRequest` — ADR 0039 `CHANGE_DELIVERY_ADDRESS`. */

@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { GiftOffersComponent } from '../../shared/gift-offers/gift-offers.component';
 import { IconComponent } from '../../shared/icon/icon.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { LangService } from '../../services/lang.service';
@@ -36,7 +37,7 @@ type LoadState = 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-cart',
   standalone: true,
-  imports: [IconComponent, TranslatePipe],
+  imports: [GiftOffersComponent, IconComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cart.component.html',
   styleUrl: './cart.component.scss',

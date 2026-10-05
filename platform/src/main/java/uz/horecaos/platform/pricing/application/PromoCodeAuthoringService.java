@@ -3,12 +3,20 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow;
 import uz.horecaos.platform.web.api.ApiException;
@@ -54,6 +62,14 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p><strong>Unlike a loyalty policy, more than one promo code may be live
  * for a brand at once.</strong> Activation therefore never retires a
  * sibling.
+ *
+ * <p><strong>Every write leaves an audit fact</strong> (ADR 0027, staff row
+ * {@code 9.3a}) in the transaction that made it: {@code promo.code.drafted},
+ * {@code promo.code.activated}, {@code promo.code.retired}. A promo code is the
+ * cheapest way to give money away that this platform has, and before this the
+ * history held no line for who drafted a 50% code or who left it live. The code
+ * word itself is a bearer credential whose store keeps only a hash on purpose,
+ * so the fact carries the same last-four hint the screen shows and never the word.
  */
 @Service
 public class PromoCodeAuthoringService {
@@ -62,10 +78,15 @@ public class PromoCodeAuthoringService {
 
     private final JdbcPromoCodeStore store;
     private final Clock clock;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
 
-    public PromoCodeAuthoringService(JdbcPromoCodeStore store, Clock clock) {
+    public PromoCodeAuthoringService(
+            JdbcPromoCodeStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
         this.store = store;
         this.clock = clock;
+        this.audit = audit;
+        this.currentActor = currentActor;
     }
 
     /** ADR 0072's closed discount-shape set. Never widened without a new ADR. */
@@ -207,8 +228,18 @@ public class PromoCodeAuthoringService {
                 draft.validUntil(),
                 now);
 
-        return store.findPromoCodeById(tenantId, brandId, couponId, normalizedCode)
+        PromoCodeAuthoringRow drafted = store.findPromoCodeById(tenantId, brandId, couponId, normalizedCode)
                 .orElseThrow(() -> new IllegalStateException("Just-inserted promo code vanished mid-transaction"));
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                AuditFact.of("promo.code.drafted", AuditClass.BUSINESS),
+                tenantId,
+                brandId,
+                drafted,
+                "Promo code drafted",
+                Map.of(),
+                snapshotOf(drafted));
+        return drafted;
     }
 
     /** Promotes both rows together: the promotion DRAFT to ACTIVE, and the coupon SUSPENDED to ACTIVE. */
@@ -229,6 +260,14 @@ public class PromoCodeAuthoringService {
             // move together, or neither does.
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This promo code was already activated or retired");
         }
+        recordAudit(
+                AuditFact.of("promo.code.activated", AuditClass.BUSINESS),
+                tenantId,
+                brandId,
+                row,
+                "Promo code activated",
+                lifecycleOf(row, row.status()),
+                lifecycleOf(row, "ACTIVE"));
     }
 
     /** Withdraws a live code, or discards a draft nobody activated. Both rows move to ARCHIVED together. */
@@ -244,6 +283,72 @@ public class PromoCodeAuthoringService {
         if (!store.retireCoupon(tenantId, brandId, couponId, now)) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such promo code to retire");
         }
+        recordAudit(
+                AuditFact.of("promo.code.retired", AuditClass.BUSINESS),
+                tenantId,
+                brandId,
+                row,
+                "Promo code retired",
+                lifecycleOf(row, row.status()),
+                lifecycleOf(row, "ARCHIVED"));
+    }
+
+    /**
+     * One fact per write, in the caller's transaction. The reason is a plain statement of the
+     * action: the console has no field for one, and ADR 0027 refuses a user-initiated fact
+     * without it.
+     */
+    private void recordAudit(
+            AuditFact.Builder fact,
+            UUID tenantId,
+            UUID brandId,
+            PromoCodeAuthoringRow row,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(fact.by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("pricing.promo-code", row.couponId())
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(row.couponId().toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * What a reader needs to recognise the code and its terms. The word itself is absent by
+     * design: only the last four characters the authoring screen shows leave this class.
+     */
+    private static Map<String, Object> snapshotOf(PromoCodeAuthoringRow row) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("name", row.name());
+        snapshot.put("codeHint", row.codeHint());
+        snapshot.put("discount", row.actionType());
+        snapshot.put("value", row.value());
+        snapshot.put("maximumDiscountMinor", row.maximumDiscountMinor());
+        snapshot.put("currency", row.currency());
+        snapshot.put("minBasketMinor", row.minBasketMinor());
+        snapshot.put("channels", row.channels().stream().sorted().toList());
+        snapshot.put(
+                "locationIds",
+                row.locationIds().stream().map(UUID::toString).sorted().toList());
+        snapshot.put("totalLimit", row.totalLimit());
+        snapshot.put("perCustomerLimit", row.perCustomerLimit());
+        snapshot.put("validFrom", row.validFrom().toString());
+        snapshot.put(
+                "validUntil", row.validUntil() == null ? null : row.validUntil().toString());
+        snapshot.put("status", row.status());
+        return snapshot;
+    }
+
+    /** A lifecycle step's side: the code recognisable by its hint and name, with the status it holds. */
+    private static Map<String, Object> lifecycleOf(PromoCodeAuthoringRow row, String status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("codeHint", row.codeHint());
+        snapshot.put("name", row.name());
+        snapshot.put("status", status);
+        return snapshot;
     }
 
     private PromoCodeAuthoringRow require(UUID tenantId, UUID brandId, UUID couponId) {

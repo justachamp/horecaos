@@ -25,6 +25,7 @@ import {
   DataTableColumn,
 } from '../../shared/ui/data-table/data-table-types';
 import { describeApiError } from '../orders/order-errors';
+import { StopExplainerDialog } from './stop-explainer-dialog';
 import { StopPropagationBanner } from './stop-propagation-banner';
 import { StopInForce, StopScope, StopsApi } from './stop-scope-api';
 import { StopApplied, StopScopePanel } from './stop-scope-panel';
@@ -156,7 +157,7 @@ interface BulkAvailabilityResponse {
  */
 @Component({
   selector: 'q-stop-list-page',
-  imports: [TPipe, DataTable, QCellDef, StopScopePanel, StopPropagationBanner],
+  imports: [TPipe, DataTable, QCellDef, StopScopePanel, StopPropagationBanner, StopExplainerDialog],
   templateUrl: './stop-list-page.html',
   styleUrl: './stop-list-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -228,6 +229,12 @@ export class StopListPage implements OnInit {
   protected readonly selectedList = computed<readonly string[]>(() => [...this.selectedIds()]);
   /** Bumped after every stop made or lifted, so the propagation banner re-reads what the marketplaces have been told. */
   protected readonly propagationKey = signal(0);
+
+  /** The dish whose "why can't I sell this?" dialog is open (ADR 0141 Decision 1), if any. */
+  protected readonly explaining = signal<{
+    readonly variantId: string;
+    readonly productName: string;
+  } | null>(null);
 
   async ngOnInit(): Promise<void> {
     await this.location.ensureLoaded();
@@ -482,6 +489,19 @@ export class StopListPage implements OnInit {
         })
       : this.i18n.t('kitchen.stopList.stop.indefinite');
     return `${who} · ${stop.reasonCode} · ${until}`;
+  }
+
+  /** A dish that is stopped, or stopped on some channels, has a question worth asking: why. */
+  protected canExplain(item: VariantAvailabilityResponse): boolean {
+    return !item.available || this.isPartlyStopped(item);
+  }
+
+  protected openExplainer(item: VariantAvailabilityResponse): void {
+    this.explaining.set({ variantId: item.variantId, productName: item.productName });
+  }
+
+  protected closeExplainer(): void {
+    this.explaining.set(null);
   }
 
   protected toggleScopePanel(): void {

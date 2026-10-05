@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,6 +29,7 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.tenancy.application.port.PolicyCurrentCache;
 import uz.horecaos.platform.web.api.ApiException;
@@ -85,6 +87,32 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
         Objects.requireNonNull(key, "A policy key is required");
         Objects.requireNonNull(scope, "A scope is required");
         return latestVersion(key.code(), scope);
+    }
+
+    @Override
+    public Optional<ResolutionTrace.Provenance> provenance(PolicyKey<?> key, ResourceScope scope) {
+        Objects.requireNonNull(key, "A policy key is required");
+        Objects.requireNonNull(scope, "A scope is required");
+        return jdbc.sql("""
+                SELECT version, coalesce(approved_by, created_by) AS principal, valid_from
+                  FROM tenant.policies
+                 WHERE key_code = :keyCode AND scope_type = :scopeType
+                   AND tenant_id IS NOT DISTINCT FROM :tenantId
+                   AND brand_id IS NOT DISTINCT FROM :brandId
+                   AND location_id IS NOT DISTINCT FROM :locationId
+                 ORDER BY version DESC
+                 LIMIT 1
+                """)
+                .param("keyCode", key.code())
+                .param("scopeType", scope.type().name())
+                .param("tenantId", scope.tenantId())
+                .param("brandId", scope.brandId())
+                .param("locationId", scope.locationId())
+                .query((row, number) -> new ResolutionTrace.Provenance(
+                        row.getLong("version"),
+                        row.getString("principal"),
+                        row.getObject("valid_from", OffsetDateTime.class).toInstant()))
+                .optional();
     }
 
     private <P> ResolvedPolicy<P> publish(

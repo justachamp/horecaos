@@ -31,9 +31,14 @@ describe('FiscalizationApi.backfillCodes', () => {
 
   it('puts a MERGE batch to the bulk classification endpoint with an idempotency key', async () => {
     const pending = api.backfillCodes(SCOPE, [
-      { nodeId: 'both', mxikCode: '10706001001000000', packageCode: '1500316' },
-      { nodeId: 'package-only', packageCode: '1500175' },
-      { nodeId: 'mxik-only', mxikCode: '10101001001000000' },
+      {
+        nodeType: 'VARIANT',
+        nodeId: 'both',
+        mxikCode: '10706001001000000',
+        packageCode: '1500316',
+      },
+      { nodeType: 'VARIANT', nodeId: 'package-only', packageCode: '1500175' },
+      { nodeType: 'VARIANT', nodeId: 'mxik-only', mxikCode: '10101001001000000' },
     ]);
 
     const request = http.expectOne(
@@ -67,6 +72,38 @@ describe('FiscalizationApi.backfillCodes', () => {
       'CLASSIFIED',
       'UNCHANGED',
       'NOT_FOUND',
+    ]);
+  });
+
+  it('names a modifier option as one, in the same batch as the dishes', async () => {
+    const pending = api.backfillCodes(SCOPE, [
+      { nodeType: 'VARIANT', nodeId: 'dish', packageCode: '1500175' },
+      { nodeType: 'MODIFIER_OPTION', nodeId: 'cheese', mxikCode: '10101001001000000' },
+    ]);
+
+    const request = http.expectOne(
+      `${environment.apiBaseUrl}/api/v1/control-plane/tenants/tenant-1/brands/brand-1/catalog/fiscal-classifications/bulk`,
+    );
+    expect(request.request.body).toEqual({
+      mode: 'MERGE',
+      items: [
+        { nodeType: 'VARIANT', nodeId: 'dish', fiscal: { packageCode: '1500175' } },
+        {
+          nodeType: 'MODIFIER_OPTION',
+          nodeId: 'cheese',
+          fiscal: { mxikCode: '10101001001000000' },
+        },
+      ],
+    });
+    request.flush({
+      outcomes: [
+        { nodeType: 'VARIANT', nodeId: 'dish', status: 'CLASSIFIED' },
+        { nodeType: 'MODIFIER_OPTION', nodeId: 'cheese', status: 'CLASSIFIED' },
+      ],
+    });
+    expect((await pending).map((outcome) => outcome.nodeType)).toEqual([
+      'VARIANT',
+      'MODIFIER_OPTION',
     ]);
   });
 });

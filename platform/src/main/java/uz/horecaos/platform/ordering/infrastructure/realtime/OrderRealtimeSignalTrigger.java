@@ -40,7 +40,8 @@ import uz.horecaos.platform.telemetry.api.StreamChannel;
  * commit costs nothing here — {@link RealtimeSignalPublisher#publish} is
  * fire-and-forget and never blocks on the network call it starts.
  *
- * <p><strong>{@code ORDER_QUEUE} and {@code ORDER_DETAIL}, both, every time.</strong>
+ * <p><strong>{@code ORDER_QUEUE} at the branch and at the brand, and {@code ORDER_DETAIL},
+ * every time.</strong>
  * {@code ORDER_DETAIL} carries no resource-level scope of its own — {@link
  * StreamChannel#ORDER_DETAIL} is subscribable at {@code LOCATION} exactly like
  * {@code ORDER_QUEUE}, per that channel's own doc, because a stream's
@@ -87,6 +88,17 @@ public class OrderRealtimeSignalTrigger {
                 event.orderId(),
                 transition.version(),
                 event.occurredAt()));
+        // Row 1.1: the same change, once more at the order's brand, for the board that reads every
+        // branch of it. A subscription matches exactly one scope key, so this is what a brand-wide
+        // board hears; the branch signal above is unchanged and no branch board hears it twice.
+        realtime.publish(RealtimeSignal.of(
+                tenantId,
+                StreamChannel.ORDER_QUEUE,
+                ScopeKey.brand(transition.brandId()),
+                "Order",
+                event.orderId(),
+                transition.version(),
+                event.occurredAt()));
         realtime.publish(RealtimeSignal.of(
                 tenantId,
                 StreamChannel.ORDER_DETAIL,
@@ -98,23 +110,23 @@ public class OrderRealtimeSignalTrigger {
     }
 
     /**
-     * Pulls {@code locationId}/{@code orderVersion} out of the one {@link
+     * Pulls {@code brandId}/{@code locationId}/{@code orderVersion} out of the one {@link
      * OrderingEvent} subtype it actually is. Neither field is on the sealed
      * interface itself — every permitted record declares its own, identically
      * named — so this is the one place that has to know the shape of each.
      */
     private static @Nullable Transition transitionOf(OrderingEvent event) {
         return switch (event) {
-            case OrderReceived e -> new Transition(e.locationId(), (long) e.orderVersion());
-            case OrderAwaitingApproval e -> new Transition(e.locationId(), (long) e.orderVersion());
-            case OrderConfirmed e -> new Transition(e.locationId(), (long) e.orderVersion());
-            case OrderRejected e -> new Transition(e.locationId(), (long) e.orderVersion());
-            case OrderExpired e -> new Transition(e.locationId(), (long) e.orderVersion());
-            case OrderCancelled e -> new Transition(e.locationId(), (long) e.orderVersion());
-            case OrderCompleted e -> new Transition(e.locationId(), (long) e.orderVersion());
+            case OrderReceived e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderAwaitingApproval e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderConfirmed e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderRejected e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderExpired e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderCancelled e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderCompleted e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
             default -> null;
         };
     }
 
-    private record Transition(UUID locationId, long version) {}
+    private record Transition(UUID brandId, UUID locationId, long version) {}
 }

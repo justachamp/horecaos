@@ -2,9 +2,11 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
   Signal,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -25,9 +27,11 @@ import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { RealtimeClient } from '../../core/realtime/realtime-client';
+import { BrandOrderStream } from '../../core/realtime/brand-order-stream';
+import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
@@ -55,6 +59,7 @@ import {
 import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
+import { BoardKeyAction, OrderBoardKeys, orderBoardScope } from './order-board-shortcuts';
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
@@ -114,6 +119,13 @@ import {
  * not the accelerator below is connected. `RealtimeClient`'s own `ORDER_QUEUE`
  * signal shortens the *usual* wait to under a second; this interval is what
  * still runs the shift if it cannot.
+ *
+ * It is the same 10s for the board over every branch, brand stream open or not. That stream
+ * (like the branch one) is told only of an order's arrival and six status transitions
+ * (`OrderRealtimeSignalTrigger`): a move to PREPARING, READY or FULFILLING, a courier, an
+ * amendment or a payment change a row without a frame, so a board that took the stream for
+ * "everything" showed those rows up to a minute stale with nothing on screen to say so. The poll
+ * is the only thing that finds them.
  */
 const POLL_INTERVAL_MS = 10_000;
 
@@ -286,11 +298,14 @@ export class OrderQueue implements OnInit {
   private readonly crmLogApi = inject(OrderCrmLogApi);
   private readonly serviceStatus = inject(ServiceStatus);
   protected readonly realtime = inject(RealtimeClient);
+  private readonly brandStream = inject(BrandOrderStream);
   private readonly toasts = inject(Toasts);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly shortcuts = inject(ShortcutRegistry);
   protected readonly filterState = inject(OrderQueueFilterState);
 
   protected readonly tabs = ORDER_TABS.map((id) => ORDER_TAB_DEFINITIONS[id]);
@@ -364,6 +379,19 @@ export class OrderQueue implements OnInit {
   protected readonly allBranchesActive = computed(
     () => this.canViewAllBranches() && this.filters().allBranches,
   );
+
+  /**
+   * Row 1.1: a board over every branch listens on the brand's own stream, opened only while that
+   * mode is on screen and closed the moment the operator goes back to one branch (or leaves).
+   * Without it the mode would hear only the operator's own branch. A field, not part of
+   * `ngOnInit`: an effect needs the injection context a field initialiser has.
+   */
+  private readonly brandStreamWatch = effect((onCleanup) => {
+    if (!this.allBranchesActive()) {
+      return;
+    }
+    onCleanup(this.brandStream.watch());
+  });
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
   /** «Фискализация» (wave 16, gap map `1.1c`): `ATTENTION` first, then `fiscal.fiscal_documents`' own statuses. */
   protected readonly fiscalStatusOptions: readonly string[] = [
@@ -492,6 +520,10 @@ export class OrderQueue implements OnInit {
   private syncingUrlFromFilters = false;
 
   ngOnInit(): void {
+    // orders.md §2.12: the board is keyboard-first. Registered while the board is on screen, so the
+    // cheat-sheet over it names these keys and over any other screen does not.
+    this.shortcuts.register(orderBoardScope(this.boardKeys), this.destroyRef);
+
     const querySub = this.route.queryParamMap.subscribe((params) => {
       const tab = params.get('tab');
       const resolved = isOrderTabId(tab) ? tab : DEFAULT_ORDER_TAB;
@@ -531,31 +563,51 @@ export class OrderQueue implements OnInit {
     // §1.6's own fallback, extracted — see `visibility-poll.ts`'s doc.
     // `immediate: false` because {@link start} below does the real first
     // fetch after its own async prerequisites resolve.
-    startVisibilityPoll(() => void this.refresh(), POLL_INTERVAL_MS, this.destroyRef, {
-      immediate: false,
-    });
+    startVisibilityPoll(
+      () => {
+        void this.refresh();
+      },
+      POLL_INTERVAL_MS,
+      this.destroyRef,
+      { immediate: false },
+    );
 
     // The accelerator: `ORDER_QUEUE` and `COUNTERS` both change when this
     // board's rows or tab badges do, so either one is worth an immediate
     // re-fetch rather than waiting up to `POLL_INTERVAL_MS` for the poll
-    // above to notice. Every frame on this connection is filtered by scope
-    // already (`RealtimeClient` reconnects on the operator's own branch);
-    // this only additionally checks the channel, since the same connection
-    // also carries `ORDER_DETAIL` and `DISPATCH_BOARD` frames this screen
-    // does not care about.
-    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+    // above to notice. A frame is taken from one stream, never both: the
+    // operator's own branch is in the branch stream and the brand stream
+    // alike, so taking both would fetch twice for every change there. A
+    // `resync` carries no scope and means "everything may have changed",
+    // so it always counts.
+    const onFrame = (frame: RealtimeFrame): void => {
+      if (frame.kind === 'resync') {
+        void this.refresh();
+        return;
+      }
+      // With the brand stream open, a board over every branch takes its frames and ignores the
+      // branch stream's (the operator's own branch is in both). With it down, the branch
+      // stream's are still better than nothing -- they are what the mode heard before the brand
+      // stream existed -- so they count.
+      const fromBrandStream = frame.scope.startsWith('BRAND:');
+      const wantsBrandStream = this.allBranchesActive() && this.brandStream.state() === 'open';
+      if (fromBrandStream !== wantsBrandStream) {
+        return;
+      }
       if (
         (frame.kind === 'signal' && frame.channel === 'order_queue') ||
-        (frame.kind === 'snapshot' && frame.channel === 'counters') ||
-        frame.kind === 'resync'
+        (frame.kind === 'snapshot' && frame.channel === 'counters')
       ) {
         void this.refresh();
       }
-    });
+    };
+    const unsubscribeRealtime = this.realtime.onFrame(onFrame);
+    const unsubscribeBrand = this.brandStream.onFrame(onFrame);
 
     this.destroyRef.onDestroy(() => {
       querySub.unsubscribe();
       unsubscribeRealtime();
+      unsubscribeBrand();
       if (this.searchDebounceHandle !== null) {
         clearTimeout(this.searchDebounceHandle);
       }
@@ -586,6 +638,111 @@ export class OrderQueue implements OnInit {
   /** Also the manual refresh control (§1.6: "the legacy dashboard's `FaRepeat` button, which staff use"). */
   protected manualRefresh(): void {
     void this.refresh();
+  }
+
+  // --------------------------------------------------------------- §2.12 keyboard
+
+  /** Every focusable row, in table order. `data-order-id` is what ties a row to its order. */
+  private rowElements(): readonly HTMLElement[] {
+    return [...this.host.nativeElement.querySelectorAll<HTMLElement>('tr[data-order-id]')];
+  }
+
+  /** The row that has focus, or the row a focused control inside it (a checkbox, an action button) belongs to. */
+  private focusedRowElement(): HTMLElement | null {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.host.nativeElement.contains(active)) {
+      return null;
+    }
+    return active.closest<HTMLElement>('tr[data-order-id]');
+  }
+
+  /** The order the keyboard is pointing at: the focused row's. Null when focus is anywhere else. */
+  private focusedOrder(): OrderSummaryResponse | null {
+    const orderId = this.focusedRowElement()?.dataset['orderId'];
+    return orderId
+      ? (this.rows().find((row) => row.order.orderId === orderId)?.order ?? null)
+      : null;
+  }
+
+  /**
+   * The server-supplied action a key stands for on the focused order. `x` is the cancel dialog; an
+   * order still awaiting approval offers a refusal instead of a cancellation, and that is the dialog
+   * `x` opens for it.
+   */
+  private keyActionFor(
+    order: OrderSummaryResponse,
+    action: BoardKeyAction,
+  ): OrderActionResponse | null {
+    const offered = this.rowActions(order);
+    const find = (code: string): OrderActionResponse | null =>
+      offered.find((candidate) => candidate.action === code) ?? null;
+    return action === 'CANCEL' ? (find('CANCEL') ?? find('REJECT')) : find(action);
+  }
+
+  private readonly boardKeys: OrderBoardKeys = {
+    locale: () => this.i18n.locale(),
+    hasRows: () => this.visibleRows().length > 0,
+    menuOpen: () => this.openOverflowFor() !== null,
+    canAct: (action) => {
+      const order = this.focusedOrder();
+      return (
+        order !== null &&
+        !this.isRowBusy(order.orderId) &&
+        this.keyActionFor(order, action) !== null
+      );
+    },
+    canToggleSelection: () => this.canSelectOrders() && this.focusedOrder() !== null,
+    hasSelection: () => this.selectionCount() > 0,
+    searchField: () =>
+      this.host.nativeElement.querySelector<HTMLInputElement>(
+        '[data-testid="order-queue-filter-search"]',
+      ),
+    move: (delta) => this.moveRowFocus(delta),
+    act: (action, event) => {
+      const order = this.focusedOrder();
+      const offered = order ? this.keyActionFor(order, action) : null;
+      if (order && offered) {
+        this.onActionClick(order, offered, event);
+      }
+    },
+    toggleSelection: (event) => {
+      const order = this.focusedOrder();
+      if (order) {
+        this.toggleRowSelection(order.orderId, event);
+      }
+    },
+    selectTab: (position) => {
+      const tab = this.tabs[position - 1];
+      if (tab) {
+        this.selectTab(tab.id);
+      }
+    },
+    clearSelection: () => this.clearSelection(),
+    clearSearch: (field) => {
+      field.value = '';
+      this.onSearchInput('');
+      field.blur();
+    },
+    newOrder: () => void this.router.navigateByUrl('/orders/new'),
+    refresh: () => this.manualRefresh(),
+  };
+
+  /** `j`/`k` and the arrows: moves real focus, so Enter, Space and the action keys then act on that row. */
+  private moveRowFocus(delta: 1 | -1): void {
+    const rows = this.rowElements();
+    if (rows.length === 0) {
+      return;
+    }
+    const current = this.focusedRowElement();
+    const index = current ? rows.indexOf(current) : -1;
+    const target =
+      index < 0
+        ? delta === 1
+          ? 0
+          : rows.length - 1
+        : Math.min(rows.length - 1, Math.max(0, index + delta));
+    rows[target].focus();
+    rows[target].scrollIntoView?.({ block: 'nearest' });
   }
 
   /**

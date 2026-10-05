@@ -50,6 +50,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.PricingMenuPriceLooku
 import uz.horecaos.platform.pricing.infrastructure.catalog.PricingVariantLookup;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
@@ -671,7 +672,12 @@ class SampleMenuPublishStepTests {
         CatalogSnapshotLoader loader = new CatalogSnapshotLoader(
                 catalogStore(), (tenant, assetIds) -> true, new PricingVariantLookup(pricingStore(), CLOCK), "uz");
         CatalogPublicationService publications = new CatalogPublicationService(
-                catalogStore(), new CatalogValidator(), loader, new JdbcSalesChannelStore(jdbc), CLOCK);
+                catalogStore(),
+                new CatalogValidator(),
+                loader,
+                new JdbcSalesChannelStore(jdbc),
+                CLOCK,
+                AuditTrail.discarding());
         return new SampleMenuService(catalogStore(), authoring(), publications, "uz");
     }
 

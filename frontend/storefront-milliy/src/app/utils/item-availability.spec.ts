@@ -17,7 +17,7 @@ describe('variantAvailability', () => {
     expect(variantAvailability(v(true, true))).toBe('AVAILABLE');
   });
 
-  it('is sold out when the variant is 86\'d, whatever its schedule says', () => {
+  it("is sold out when the variant is 86'd, whatever its schedule says", () => {
     expect(variantAvailability(v(false, true))).toBe('SOLD_OUT');
     expect(variantAvailability(v(false, false))).toBe('SOLD_OUT');
   });
@@ -29,8 +29,12 @@ describe('variantAvailability', () => {
 
 describe('itemAvailability', () => {
   it('is available as soon as one variant is sellable', () => {
-    expect(itemAvailability({ variants: [v(false, true, 'a'), v(true, true, 'b')] })).toBe('AVAILABLE');
-    expect(itemAvailability({ variants: [v(true, false, 'a'), v(true, true, 'b')] })).toBe('AVAILABLE');
+    expect(itemAvailability({ variants: [v(false, true, 'a'), v(true, true, 'b')] })).toBe(
+      'AVAILABLE',
+    );
+    expect(itemAvailability({ variants: [v(true, false, 'a'), v(true, true, 'b')] })).toBe(
+      'AVAILABLE',
+    );
   });
 
   it('is out of window when nothing is sellable but something is only waiting for its window', () => {
@@ -39,8 +43,10 @@ describe('itemAvailability', () => {
     );
   });
 
-  it('is sold out when every variant is 86\'d', () => {
-    expect(itemAvailability({ variants: [v(false, true, 'a'), v(false, true, 'b')] })).toBe('SOLD_OUT');
+  it("is sold out when every variant is 86'd", () => {
+    expect(itemAvailability({ variants: [v(false, true, 'a'), v(false, true, 'b')] })).toBe(
+      'SOLD_OUT',
+    );
   });
 
   it('is sold out for a product with no variants at all, never available', () => {
@@ -50,7 +56,12 @@ describe('itemAvailability', () => {
 
 describe('firstSellableVariant', () => {
   it('picks the first variant that is both orderable and on sale', () => {
-    const variants = [v(false, true, 'a'), v(true, false, 'b'), v(true, true, 'c'), v(true, true, 'd')];
+    const variants = [
+      v(false, true, 'a'),
+      v(true, false, 'b'),
+      v(true, true, 'c'),
+      v(true, true, 'd'),
+    ];
 
     expect(firstSellableVariant({ variants })?.id).toBe('c');
   });
@@ -83,12 +94,15 @@ describe('preferredSellableVariant', () => {
 
   it('is the first sellable portion when nothing is marked default', () => {
     expect(
-      preferredSellableVariant({ variants: [v(true, false, 'a'), v(true, true, 'b'), v(true, true, 'c')] })
-        ?.id,
+      preferredSellableVariant({
+        variants: [v(true, false, 'a'), v(true, true, 'b'), v(true, true, 'c')],
+      })?.id,
     ).toBe('b');
   });
 
   it('is null when nothing can be bought right now', () => {
-    expect(preferredSellableVariant({ variants: [d(false, true, 'a', true), d(true, false, 'b')] })).toBeNull();
+    expect(
+      preferredSellableVariant({ variants: [d(false, true, 'a', true), d(true, false, 'b')] }),
+    ).toBeNull();
   });
 });

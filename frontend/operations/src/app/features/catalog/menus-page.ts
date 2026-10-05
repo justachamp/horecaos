@@ -19,6 +19,7 @@ import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-
 import { CatalogApi, fetchAllVariantsAtLocation } from './catalog-api';
 import { VariantAvailabilityRow } from './catalog-domain';
 import { InventoryApi } from './inventory-api';
+import { perQuantumLabel } from './per-quantum';
 import { PricingApi } from './pricing-api';
 
 /** The five ways an operator can narrow the matrix — catalog.md §4.5's status tabs. */
@@ -130,6 +131,8 @@ export class MenusPage implements OnInit {
 
   protected readonly rows = signal<readonly VariantAvailabilityRow[]>([]);
   protected readonly prices = signal<Readonly<Record<string, number>>>({});
+  /** ADR 0137: the grams each weighed variant's price is quoted per; a variant not in it is priced per unit. */
+  protected readonly quanta = signal<Readonly<Record<string, number>>>({});
   protected readonly currency = signal<string | null>(null);
   protected readonly busyVariantIds = signal<ReadonlySet<string>>(new Set());
 
@@ -262,6 +265,7 @@ export class MenusPage implements OnInit {
     const rows = this.rows();
     if (rows.length === 0) {
       this.prices.set({});
+      this.quanta.set({});
       this.currency.set(null);
       this.priceBookId.set(null);
       this.hallPriceBookId.set(null);
@@ -278,6 +282,7 @@ export class MenusPage implements OnInit {
 
     if (channelId === null) {
       this.prices.set(hall.amountsMinor);
+      this.quanta.set(hall.catchweightQuantumGrams ?? {});
       this.currency.set(hall.currency ?? null);
       this.priceBookId.set(hall.priceBookId ?? null);
       this.channelExclusions.set(new Set());
@@ -291,6 +296,7 @@ export class MenusPage implements OnInit {
       firstValueFrom(this.catalogApi.channelExclusions(scope, channelId, scope.locationId)),
     ]);
     this.prices.set(channelPrices.amountsMinor);
+    this.quanta.set(channelPrices.catchweightQuantumGrams ?? {});
     this.currency.set(channelPrices.currency ?? null);
     this.priceBookId.set(channelPrices.priceBookId ?? null);
     this.channelExclusions.set(new Set(exclusions.excludedVariantIds));
@@ -330,6 +336,11 @@ export class MenusPage implements OnInit {
   }
 
   // ------------------------------------------------------------ price / cell toggle
+
+  /** «per 100 g» beside the price of a variant sold by weight (ADR 0137); null for every other. */
+  protected priceUnitLabel(variantId: string): string | null {
+    return perQuantumLabel(this.i18n, this.quanta()[variantId]);
+  }
 
   protected priceLabel(variantId: string): string {
     const amountMinor = this.prices()[variantId];

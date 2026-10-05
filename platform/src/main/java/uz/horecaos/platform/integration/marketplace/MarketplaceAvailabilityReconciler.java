@@ -24,6 +24,7 @@ import uz.horecaos.platform.integration.api.marketplace.AvailabilityPush;
 import uz.horecaos.platform.integration.api.marketplace.MarketplaceApiCall;
 import uz.horecaos.platform.integration.api.marketplace.MarketplaceApiTransport;
 import uz.horecaos.platform.integration.api.marketplace.MarketplaceAvailabilityAdapter;
+import uz.horecaos.platform.integration.api.marketplace.MarketplaceAvailabilityPushedPayload;
 import uz.horecaos.platform.integration.api.marketplace.PushConclusion;
 import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -32,6 +33,7 @@ import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityS
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.Outcome;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.SyncState;
 import uz.horecaos.platform.integration.marketplace.JdbcMarketplaceAvailabilityStore.Watermark;
+import uz.horecaos.platform.integration.outbox.MarketplaceOutbox;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
 import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability;
@@ -57,7 +59,10 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * <p><strong>Markers</strong> ({@link MarketplaceDirtyMarkerListener}) ask for an early sweep when
  * an input the resolver reads changes, so a stop reaches the partner in seconds. They are an
  * accelerator: the list of inputs cannot be the correctness argument, because an input the
- * resolver gains next year has no marker on the day it ships. <strong>The resync sweep</strong>
+ * resolver gains next year has no marker on the day it ships. A sweep clears only the marker it
+ * read before it began: one written while it ran (a stop committed after its resolver read) stays
+ * for the next pass, so that stop reaches the partner in seconds too and not a resync interval later
+ * ({@link JdbcMarketplaceAvailabilityStore#recordSweep}). <strong>The resync sweep</strong>
  * recomputes every mapped item of every active binding through the resolver at least every
  * {@code resync_interval}, at <em>its own</em> {@code now}, so a branch rebound to a menu that
  * carries a {@code MENU} stop, an offering switched off, or a stop whose end passed while the
@@ -79,6 +84,17 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * under a lease with {@code FOR UPDATE SKIP LOCKED}, so two overlapping runs send disjoint
  * rows. A state-set call keyed {@code (binding, item, desired_seq)} is idempotent, which makes
  * the rare duplicate harmless rather than merely unlikely.
+ *
+ * <h2>Facts and the stale-channel alert</h2>
+ *
+ * <p>A confirmed push whose answer moved what the platform knows the partner holds publishes
+ * {@code MarketplaceAvailabilityPushed} (ADR 0040) through the outbox, in the same transaction
+ * as the row that records it and only while the worker still holds its lease, so a change is
+ * announced once and an unknown outcome — which withdraws the belief — announces nothing. A
+ * binding with a dish unconfirmed for longer than its bound is reported once per episode by
+ * {@link MarketplaceStaleChannelMonitor}: the {@code MarketplaceChannelWentStale} fact and the
+ * ADR 0058 operations alert, so the manager who stopped the plov hears that the aggregator
+ * still sells it.
  *
  * <h2>Honest about what it cannot do</h2>
  *
@@ -133,6 +149,8 @@ public class MarketplaceAvailabilityReconciler {
     private final TransactionTemplate transactions;
     private final JdbcClient jdbc;
     private final RetryBackoff backoff;
+    private final MarketplaceOutbox outbox;
+    private final MarketplaceStaleChannelMonitor staleMonitor;
 
     /** Bindings whose partner hung, until when they are not called and how many hangs in a row. In memory: a restart simply probes once. */
     private final Map<UUID, HangCooldown> hangs = new ConcurrentHashMap<>();
@@ -141,6 +159,7 @@ public class MarketplaceAvailabilityReconciler {
 
     private final AtomicLong pendingItems = new AtomicLong();
     private final AtomicLong oldestPendingSeconds = new AtomicLong();
+    private final AtomicLong staleChannels = new AtomicLong();
 
     @Autowired
     public MarketplaceAvailabilityReconciler(
@@ -154,7 +173,9 @@ public class MarketplaceAvailabilityReconciler {
             Clock clock,
             MeterRegistry meters,
             PlatformTransactionManager transactionManager,
-            JdbcClient jdbc) {
+            JdbcClient jdbc,
+            MarketplaceOutbox outbox,
+            MarketplaceStaleChannelMonitor staleMonitor) {
         this(
                 store,
                 adapters,
@@ -167,7 +188,9 @@ public class MarketplaceAvailabilityReconciler {
                 meters,
                 transactionManager,
                 jdbc,
-                RetryBackoff.of(Duration.ofSeconds(5), Duration.ofMinutes(10)));
+                RetryBackoff.of(Duration.ofSeconds(5), Duration.ofMinutes(10)),
+                outbox,
+                staleMonitor);
     }
 
     /** The injectable backoff is how a test seeds the jitter. */
@@ -183,7 +206,9 @@ public class MarketplaceAvailabilityReconciler {
             MeterRegistry meters,
             PlatformTransactionManager transactionManager,
             JdbcClient jdbc,
-            RetryBackoff backoff) {
+            RetryBackoff backoff,
+            MarketplaceOutbox outbox,
+            MarketplaceStaleChannelMonitor staleMonitor) {
         this.store = store;
         this.adapters = adapters;
         this.transport = transport;
@@ -196,9 +221,15 @@ public class MarketplaceAvailabilityReconciler {
         this.transactions = new TransactionTemplate(transactionManager);
         this.jdbc = jdbc;
         this.backoff = backoff;
+        this.outbox = outbox;
+        this.staleMonitor = staleMonitor;
         // Aggregate gauges only: a binding id as a tag would be unbounded (ADR 0029).
         meters.gauge("horecaos.marketplace.availability.pending_items", pendingItems);
         meters.gauge("horecaos.marketplace.availability.oldest_pending_seconds", oldestPendingSeconds);
+        // How many bindings are inside a reported stale episode right now (see
+        // MarketplaceStaleChannelMonitor): the one number an operator-level alert needs, with no
+        // tenant, binding or dish in it.
+        meters.gauge("horecaos.marketplace.availability.stale_channels", staleChannels);
     }
 
     /** What one pass over every binding did. */
@@ -223,6 +254,15 @@ public class MarketplaceAvailabilityReconciler {
                 log.warn("Marketplace availability reconcile failed for a {} binding", binding.providerType(), failure);
             }
         }
+        try {
+            // A binding that left the worklist is never evaluated, so its stale mark is ended here.
+            int ended = store.clearStaleReportedOfInactiveBindings(clock.instant());
+            if (ended > 0) {
+                log.info("Ended the stale episode of {} marketplace bindings no longer worked", ended);
+            }
+        } catch (RuntimeException failure) {
+            log.warn("Could not end the stale episodes of marketplace bindings no longer worked", failure);
+        }
         refreshGauges();
         return new TickReport(bindings, sweeps, pushes);
     }
@@ -240,7 +280,9 @@ public class MarketplaceAvailabilityReconciler {
         }
         Optional<MarketplaceAvailabilityAdapter> adapter = adapters.forProvider(binding.providerType());
         if (adapter.isEmpty()) {
-            // MANUAL: this provider has no availability write API this build can call.
+            // MANUAL: this provider has no availability write API this build can call. Nothing is
+            // pushing for the binding, so an episode it was reported stale in has ended.
+            store.clearStaleReported(binding.tenantId(), binding.bindingId(), now);
             return new BindingReport(false, 0, false, true);
         }
 
@@ -266,12 +308,15 @@ public class MarketplaceAvailabilityReconciler {
                 || !sync.get().nextSweepAt().isAfter(now);
         boolean swept = false;
         if (due) {
-            swept = sweep(binding, now, stale);
+            swept = sweep(binding, now, stale, sync.map(SyncState::rowVersion).orElse(null));
         } else if (stale != sync.map(SyncState::wasStale).orElse(false)) {
             store.recordSweepState(binding.tenantId(), binding.bindingId(), true, stale, now);
         }
 
         int pushed = push(binding, adapter.get());
+        // After the pass, judged at the instant the pass ended: a binding whose pushes have gone
+        // unconfirmed for longer than its bound is reported once, and cleared when it recovers.
+        staleMonitor.evaluate(binding, staleAfterSeconds(binding), clock.instant());
         return new BindingReport(swept, pushed, false, false);
     }
 
@@ -282,9 +327,11 @@ public class MarketplaceAvailabilityReconciler {
      * values. Under a transaction-scoped advisory lock so a second replica skips rather than
      * racing it with a staler answer.
      *
+     * @param observedRowVersion the sync-state row as this pass read it before anything below did; a
+     *     marker written since is not the one this sweep honours and survives it
      * @return whether this call did the sweep (false when another run held the lock)
      */
-    private boolean sweep(BindingRow binding, Instant now, boolean stale) {
+    private boolean sweep(BindingRow binding, Instant now, boolean stale, @Nullable String observedRowVersion) {
         Boolean done = transactions.execute(status -> {
             Boolean locked = jdbc.sql("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))")
                     .param("key", "marketplace-availability:" + binding.bindingId())
@@ -299,7 +346,14 @@ public class MarketplaceAvailabilityReconciler {
                 // No unambiguous channel backs this installation (none, or several): nothing can
                 // be resolved, and a push that guessed would tell the partner about the wrong one.
                 store.recordSweep(
-                        binding.tenantId(), binding.bindingId(), now, nextSweepAt(binding, now), 0, true, stale);
+                        binding.tenantId(),
+                        binding.bindingId(),
+                        now,
+                        nextSweepAt(binding, now),
+                        0,
+                        true,
+                        stale,
+                        observedRowVersion);
                 return true;
             }
             Map<UUID, String> mapped = store.mappedItems(binding.tenantId(), binding.bindingId());
@@ -333,7 +387,8 @@ public class MarketplaceAvailabilityReconciler {
                     nextSweepAt(binding, now),
                     mapped.size(),
                     true,
-                    stale);
+                    stale,
+                    observedRowVersion);
             meters.counter("horecaos.marketplace.availability.sweep").increment();
             return true;
         });
@@ -463,7 +518,27 @@ public class MarketplaceAvailabilityReconciler {
 
         switch (conclusion) {
             case CONFIRMED -> {
-                store.recordOutcome(item, owner, sent, Outcome.CONFIRMED, null, now, null);
+                // The row that records the confirmation and the fact that announces it commit
+                // together, and only if this worker still holds the lease: a worker whose lease
+                // lapsed writes neither, so a change is announced once. Only a success is
+                // announced: a refusal changes nothing the platform believes, and an unknown
+                // outcome withdraws the belief rather than confirming anything.
+                transactions.executeWithoutResult(transaction -> {
+                    boolean recorded = store.recordOutcome(item, owner, sent, Outcome.CONFIRMED, null, now, null);
+                    if (recorded) {
+                        outbox.availabilityPushed(
+                                binding.tenantId(),
+                                new MarketplaceAvailabilityPushedPayload(
+                                        binding.bindingId(),
+                                        binding.locationId(),
+                                        item.variantId(),
+                                        binding.providerType(),
+                                        item.externalEntityId(),
+                                        sent,
+                                        item.desiredSeq(),
+                                        now));
+                    }
+                });
                 activity.recordSuccess(
                         binding.tenantId(),
                         binding.bindingId(),
@@ -562,6 +637,7 @@ public class MarketplaceAvailabilityReconciler {
                 .optional()
                 .map(java.time.OffsetDateTime::toInstant)
                 .orElse(null);
+        staleChannels.set(store.countStaleReportedActive());
         pendingItems.set(pending);
         oldestPendingSeconds.set(
                 oldest == null ? 0 : Math.max(0, Duration.between(oldest, now).toSeconds()));

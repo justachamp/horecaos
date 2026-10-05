@@ -135,8 +135,10 @@ export interface FiscalCoverageSummary {
   readonly categoryDefaults?: readonly FiscalCategoryDefault[];
 }
 
-/** One row of a backfill batch: the variant, and only the codes to write. */
+/** One row of a backfill batch: the dish or modifier option, and only the codes to write. */
 export interface FiscalBackfillItem {
+  /** Which kind of priceable node `nodeId` is: the platform keys a classification by both. */
+  readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION';
   readonly nodeId: string;
   readonly mxikCode?: string;
   readonly packageCode?: string;
@@ -156,7 +158,7 @@ export interface FiscalBackfillOutcome {
 interface BulkClassifyRequest {
   readonly mode: 'MERGE';
   readonly items: readonly {
-    readonly nodeType: 'VARIANT';
+    readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION';
     readonly nodeId: string;
     readonly fiscal: { readonly mxikCode?: string; readonly packageCode?: string };
   }[];
@@ -413,9 +415,9 @@ export class FiscalizationApi {
   }
 
   /**
-   * Writes ИКПУ and package codes for a batch of variants through
+   * Writes ИКПУ and package codes for a batch of dishes and modifier options through
    * `CatalogAuthoringController.bulkClassify` in `MERGE` mode (gap map row
-   * 10.7c): a code a row supplies fills the dish's gap and a code it omits keeps
+   * 10.7c): a code a row supplies fills the node's gap and a code it omits keeps
    * the stored one, so completing a half-classified dish cannot blank the unit
    * or fiscal name someone entered earlier. A code that differs from one the
    * dish already holds is never written: that row comes back `CONFLICT` and
@@ -433,7 +435,7 @@ export class FiscalizationApi {
         command({
           mode: 'MERGE',
           items: items.map((item) => ({
-            nodeType: 'VARIANT' as const,
+            nodeType: item.nodeType,
             nodeId: item.nodeId,
             fiscal: {
               ...(item.mxikCode ? { mxikCode: item.mxikCode } : {}),

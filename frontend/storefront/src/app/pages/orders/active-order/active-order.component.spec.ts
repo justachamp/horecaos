@@ -3,7 +3,11 @@ import { provideRouter } from '@angular/router';
 import { NEVER, Subject, of } from 'rxjs';
 
 import { ActiveOrderComponent } from './active-order.component';
-import { OrdersService, type ApiOrder, type OrdersLoadedEvent } from '../../../services/orders.service';
+import {
+  OrdersService,
+  type ApiOrder,
+  type OrdersLoadedEvent,
+} from '../../../services/orders.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { ORDER_STATUS_I18N_KEY } from '../orders.data';
@@ -150,7 +154,7 @@ describe('ActiveOrderComponent: order card item count and distance', () => {
     expect(text).not.toContain('0 ta');
   });
 
-  it('falls back to the order\'s placed-at date when there is no item count or distance to show', async () => {
+  it("falls back to the order's placed-at date when there is no item count or distance to show", async () => {
     const { fixture, comp, ordersService } = setUp();
     ordersService.ordersToReturn = [apiOrder({ created_date: '2026-09-01T10:00:00Z' })];
 

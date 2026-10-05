@@ -67,6 +67,7 @@ import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
@@ -177,7 +178,11 @@ class KitchenExecutionTests {
         store = new JdbcKitchenStore(jdbc);
         proposals = new RecordingOrderProgressPort();
         audit = new RecordingAuditRecorder();
-        stationService = new KitchenStationService(store, clock);
+        // A recorder of its own: this class asserts what the ticket service records, and the stations it
+        // sets up through this one would otherwise be facts in that assertion. The station facts are
+        // asserted against a real recorder in OperationalConfigurationAuditTests.
+        stationService =
+                new KitchenStationService(store, clock, AuditTrail.discarding(), AuditTrail.actor("kitchen-author"));
         realtime = new RecordingRealtimePublisher();
         tickets = new KitchenTicketService(
                 store, new JdbcKitchenOrderSource(jdbc), proposals, audit, clock, unitOfWork, realtime);

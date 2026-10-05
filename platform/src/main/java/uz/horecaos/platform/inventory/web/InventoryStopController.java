@@ -37,6 +37,7 @@ import uz.horecaos.platform.inventory.application.InventoryStopGestureService;
 import uz.horecaos.platform.inventory.application.InventoryStopGestureService.Gesture;
 import uz.horecaos.platform.inventory.application.InventoryStopGestureService.GestureResult;
 import uz.horecaos.platform.inventory.application.InventoryStopGestureService.ItemOutcome;
+import uz.horecaos.platform.inventory.application.StopReadSwitch;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore.StopRow;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
@@ -69,16 +70,19 @@ public class InventoryStopController {
     private final AvailabilityStopService stops;
     private final InventoryService inventory;
     private final CurrentActor currentActor;
+    private final StopReadSwitch readSwitch;
 
     public InventoryStopController(
             InventoryStopGestureService gestures,
             AvailabilityStopService stops,
             InventoryService inventory,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            StopReadSwitch readSwitch) {
         this.gestures = gestures;
         this.stops = stops;
         this.inventory = inventory;
         this.currentActor = currentActor;
+        this.readSwitch = readSwitch;
     }
 
     // ------------------------------------------------------------------ create
@@ -205,7 +209,7 @@ public class InventoryStopController {
                     capability);
             return ResponseEntity.ok()
                     .eTag(AggregateVersion.toETag(outcome.stop().version()))
-                    .body(StopResponse.of(outcome.stop()));
+                    .body(StopResponse.of(outcome.stop(), !readSwitch.readsEnabled(tenantId, brandId)));
         } catch (StopTargetNotFoundException absent) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such stop");
         } catch (StaleStopException stale) {
@@ -265,7 +269,9 @@ public class InventoryStopController {
         int pageSize = Page.limitOrDefault(limit);
         List<StopRow> rows =
                 stops.list(tenantId, brandId, variantId, scope, source, locationId, activeOnly, cursor, pageSize);
-        List<StopResponse> items = rows.stream().map(StopResponse::of).toList();
+        boolean ignored = !readSwitch.readsEnabled(tenantId, brandId);
+        List<StopResponse> items =
+                rows.stream().map(row -> StopResponse.of(row, ignored)).toList();
         String nextCursor =
                 items.size() < pageSize ? null : rows.get(rows.size() - 1).id().toString();
         return new Page<>(items, nextCursor);
@@ -287,10 +293,14 @@ public class InventoryStopController {
             @RequestParam(required = false) @Nullable String channel) {
         InventoryService.Explanation explanation =
                 inventory.explainOnChannelCode(tenantId, brandId, locationId, variantId, channel);
+        boolean consulted = readSwitch.readsEnabled(tenantId, brandId);
         return ResponseEntity.ok(new ExplanationResponse(
                 explanation.sellable(),
                 explanation.reasons(),
-                explanation.coveringStops().stream().map(StopResponse::of).toList()));
+                explanation.coveringStops().stream()
+                        .map(row -> StopResponse.of(row, !consulted))
+                        .toList(),
+                consulted));
     }
 
     // ------------------------------------------------------------------ bodies
@@ -333,9 +343,19 @@ public class InventoryStopController {
             @Nullable UUID groupId,
             Instant createdAt,
             @Nullable Instant liftedAt,
-            int version) {
+            int version,
+            boolean ignored) {
 
+        /** A stop that is read: the usual case. */
         static StopResponse of(StopRow row) {
+            return of(row, false);
+        }
+
+        /**
+         * @param ignored true once stops have been decommissioned for the brand (ADR 0141, rollback
+         *     switch three): the row stays and nothing reads it, until stops are switched back on
+         */
+        static StopResponse of(StopRow row, boolean ignored) {
             return new StopResponse(
                     row.id(),
                     row.variantId(),
@@ -350,7 +370,8 @@ public class InventoryStopController {
                     row.groupId(),
                     row.createdAt(),
                     row.liftedAt(),
-                    row.version());
+                    row.version(),
+                    ignored);
         }
     }
 
@@ -387,5 +408,11 @@ public class InventoryStopController {
         }
     }
 
-    public record ExplanationResponse(boolean sellable, List<String> reasons, List<StopResponse> stops) {}
+    /**
+     * @param stopsConsulted false once stops are switched off for the brand (ADR 0141, rollback
+     *     switch three): then {@code stops} is empty because nothing reads a stop, not because
+     *     none exists
+     */
+    public record ExplanationResponse(
+            boolean sellable, List<String> reasons, List<StopResponse> stops, boolean stopsConsulted) {}
 }

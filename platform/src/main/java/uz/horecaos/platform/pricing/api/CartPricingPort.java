@@ -46,6 +46,11 @@ public interface CartPricingPort {
      *
      * <p>A line that is not composite is accepted as it is, and the answer says so.
      *
+     * <p>Held to the channel's live publication: a combo and the choices an option opens are the
+     * ones that menu carries, so a combo authored or edited since the menu was published is
+     * neither offered nor changed here until it is published.
+     *
+     * @param channelCode the ADR 0036 channel whose live menu the selection is checked against
      * @return the variants this line puts on the order: the picked components for a
      *         combo, whose container is never sold, and the line's own variant
      *         otherwise. The cart checks stock and sale windows on these
@@ -53,7 +58,7 @@ public interface CartPricingPort {
      *         ({@code COMBO_GROUP_MINIMUM_NOT_MET}, {@code
      *         MODIFIER_NESTING_DEPTH_EXCEEDED}, ...) when the selection is not allowed
      */
-    SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item);
+    SelectionCheck checkSelection(UUID tenantId, UUID brandId, String channelCode, PricingCommand.Item item);
 
     /**
      * What a valid selection puts on the order.

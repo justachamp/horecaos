@@ -5,7 +5,11 @@ import { Router, provideRouter } from '@angular/router';
 import { App } from './app';
 import { BottomNavComponent } from './shared/bottom-nav/bottom-nav.component';
 
-@Component({ selector: 'app-bottom-nav', standalone: true, template: '<nav data-testid="tabs"></nav>' })
+@Component({
+  selector: 'app-bottom-nav',
+  standalone: true,
+  template: '<nav data-testid="tabs"></nav>',
+})
 class StubBottomNav {}
 
 @Component({ standalone: true, template: '' })
@@ -30,11 +34,14 @@ async function open(url: string): Promise<HTMLElement> {
 }
 
 describe('App shell: the tab bar', () => {
-  it.each(['/home', '/cart', '/orders', '/profile', '/dine-in/table'])('shows on %s', async (url) => {
-    const host = await open(url);
+  it.each(['/home', '/cart', '/orders', '/profile', '/dine-in/table'])(
+    'shows on %s',
+    async (url) => {
+      const host = await open(url);
 
-    expect(host.querySelector('[data-testid="tabs"]')).not.toBeNull();
-  });
+      expect(host.querySelector('[data-testid="tabs"]')).not.toBeNull();
+    },
+  );
 
   it.each(['/checkout', '/auth/login', '/auth/code'])(
     'is hidden on %s, a screen that owns the whole viewport',

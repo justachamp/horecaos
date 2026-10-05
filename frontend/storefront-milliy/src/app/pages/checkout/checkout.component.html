@@ -87,6 +87,9 @@
       }
     </section>
 
+    <!-- A free gift a promotion offers (ADR 0140), which can depend on the payment method chosen above. -->
+    <app-gift-offers />
+
     <section class="block">
       <h2 class="block__title">{{ 'checkout.promoTitle' | t }}</h2>
       @if (cart.appliedPromoCode(); as applied) {

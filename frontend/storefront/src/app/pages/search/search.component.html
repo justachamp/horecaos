@@ -7,11 +7,18 @@
         class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-text-primary"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
       </button>
 
-      <div class="flex flex-1 items-center gap-3 rounded-2xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent">
+      <div
+        class="flex flex-1 items-center gap-3 rounded-2xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent"
+      >
         <span class="shrink-0 text-text-primary">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -38,7 +45,12 @@
             [attr.aria-label]="'common.close' | t"
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         }
@@ -65,8 +77,18 @@
                 (click)="selectRecent(label)"
                 class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-raised"
               >
-                <svg class="h-4 w-4 shrink-0 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  class="h-4 w-4 shrink-0 text-zinc-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span class="text-sm text-text-primary">{{ label }}</span>
               </button>

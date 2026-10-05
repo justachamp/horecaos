@@ -1,7 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
+import { RouterLink } from '@angular/router';
+
 import { firstPage } from '../../core/api/page';
+import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatDateTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
@@ -31,6 +35,25 @@ import { ProvenanceResponse } from './reporting-api';
 
 type Tab = 'discounts' | 'campaigns' | 'promotions';
 type LoadState = 'idle' | 'loading' | 'ready' | 'denied' | 'error';
+
+/**
+ * Where one «who redeemed it» lookup stands. `account` carries the id the customer card is opened
+ * with and nothing about the person; `guest` is an answer, not a failure (a guest order has no
+ * account); `denied` is the platform's 403, shown as such rather than as a fault.
+ */
+type RevealState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'account'; readonly accountId: string }
+  | { readonly kind: 'guest' }
+  | { readonly kind: 'denied' }
+  | { readonly kind: 'error' };
+
+/**
+ * Fixed, English, machine-facing purpose, not translated: the same reason
+ * `customer-detail-pane.ts`'s `REVEAL_PURPOSE` is not. It is read by whoever reviews the audit log
+ * of the customer who was looked at, not by the operator.
+ */
+const WHO_REDEEMED_PURPOSE = 'Operations console: marketing report, who redeemed it';
 
 const TAB_DEFINITIONS: readonly { readonly id: Tab; readonly labelKey: MessageKey }[] = [
   { id: 'discounts', labelKey: 'reports.marketing.tab.discounts' },
@@ -69,7 +92,7 @@ const TAB_DEFINITIONS: readonly { readonly id: Tab; readonly labelKey: MessageKe
  */
 @Component({
   selector: 'q-marketing-report-page',
-  imports: [TPipe, PromotionTextPipe, Combobox, DateRangePicker, ProvenanceBanner],
+  imports: [TPipe, PromotionTextPipe, Combobox, DateRangePicker, ProvenanceBanner, RouterLink],
   templateUrl: './marketing-report-page.html',
   styleUrl: './marketing-report-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -79,6 +102,7 @@ export class MarketingReportPage {
   private readonly customersApi = inject(CustomersApi);
   private readonly marketingApi = inject(MarketingApi);
   private readonly discountApi = inject(MarketingReportApi);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
 
   protected readonly tabs = TAB_DEFINITIONS;
@@ -131,6 +155,11 @@ export class MarketingReportPage {
   protected readonly promoSelected = signal<PromotionSummaryRow | null>(null);
   protected readonly promoLogState = signal<LoadState>('idle');
   protected readonly promoLog = signal<readonly PromotionRedemptionRow[]>([]);
+  /**
+   * Which log rows have been asked «who redeemed it», by redemption id. Kept across a reload of the
+   * log, so an operator who narrows it does not have to ask again (every ask is an audit fact).
+   */
+  protected readonly reveals = signal<ReadonlyMap<string, RevealState>>(new Map());
 
   constructor() {
     void this.init();
@@ -342,6 +371,68 @@ export class MarketingReportPage {
     } catch {
       this.promoLogState.set('error');
     }
+  }
+
+  /**
+   * Whether to offer «show customer» at all. A usability affordance and nothing more: the platform
+   * enforces `customer.read` at the redemption's brand on the lookup itself, and a refusal there is
+   * shown as one.
+   */
+  protected canRevealCustomer(): boolean {
+    return this.capabilities.has('CUSTOMER_READ');
+  }
+
+  protected revealOf(row: PromotionRedemptionRow): RevealState | null {
+    return this.reveals().get(row.redemptionId) ?? null;
+  }
+
+  /** The account a revealed row opens, or null while it is not (or cannot be) revealed. */
+  protected accountIdOf(row: PromotionRedemptionRow): string | null {
+    const state = this.revealOf(row);
+    return state?.kind === 'account' ? state.accountId : null;
+  }
+
+  /**
+   * Resolves one redemption to its customer account, recorded by the platform as a security fact
+   * against that account. Scoped by the row's own brand and promotion: the log is read across the
+   * tenant, and the lookup is authorized where the redemption happened.
+   */
+  protected async showCustomer(row: PromotionRedemptionRow): Promise<void> {
+    const current = this.revealOf(row);
+    if (current?.kind === 'loading' || current?.kind === 'account' || current?.kind === 'guest') {
+      return;
+    }
+    const scope = this.location.scope();
+    if (!scope) {
+      this.setReveal(row, { kind: 'error' });
+      return;
+    }
+    this.setReveal(row, { kind: 'loading' });
+    try {
+      const answer = await this.discountApi.revealRedemptionCustomer(
+        { tenantId: scope.tenantId, brandId: row.brandId },
+        row.promotionId,
+        row.redemptionId,
+        WHO_REDEEMED_PURPOSE,
+      );
+      this.setReveal(
+        row,
+        answer.customerAccountId
+          ? { kind: 'account', accountId: answer.customerAccountId }
+          : { kind: 'guest' },
+      );
+    } catch (failure) {
+      this.setReveal(
+        row,
+        failure instanceof ApiError && failure.status === 403
+          ? { kind: 'denied' }
+          : { kind: 'error' },
+      );
+    }
+  }
+
+  private setReveal(row: PromotionRedemptionRow, state: RevealState): void {
+    this.reveals.update((held) => new Map(held).set(row.redemptionId, state));
   }
 
   protected selectPromotion(row: PromotionSummaryRow | null): void {

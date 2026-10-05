@@ -33,10 +33,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.customers.api.CustomerConfigurationKeys;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
+import uz.horecaos.platform.tenancy.application.port.ConfigurationValueCache;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
@@ -118,10 +123,21 @@ class CustomerControllerEndpointTests {
     @Autowired
     private RoleRegistrySynchronizer roleRegistry;
 
+    @Autowired
+    private ConfigurationValueAuthor configurationValues;
+
+    @Autowired
+    private ConfigurationValueCache configurationCache;
+
     @BeforeEach
     void reset() {
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
+        // Configuration values carry no foreign key to the tenant, so the tenant truncation below
+        // would leave a threshold one test set for the next -- and the resolver caches the answer.
+        jdbc.sql("TRUNCATE TABLE tenant.configuration_values").update();
+        configurationCache.evict(
+                CustomerConfigurationKeys.PII_EXPORT_APPROVAL_THRESHOLD_ROWS_CODE, ResourceScope.tenant(TENANT));
         jdbc.sql("TRUNCATE TABLE customer.consent_decisions, customer.addresses, "
                         + "customer.contact_points, customer.brand_profiles, customer.principal_links, "
                         + "customer.blacklist_entries, customer.customer_accounts CASCADE")
@@ -333,6 +349,64 @@ class CustomerControllerEndpointTests {
         assertThat(result.getResponse().getHeader("X-Export-Approval-Request-Id"))
                 .isNotNull();
         assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+    }
+
+    /**
+     * Staff row 9.4: the threshold is the tenant's to set (ADR 0030), and the deployment property
+     * this class lowers to two is only the default while the tenant has set nothing. A tenant that
+     * raises it above the export's size is not asked for a second signature, though the
+     * deployment default would have asked.
+     */
+    @Test
+    void aThresholdTheTenantRaisedBeatsTheDeploymentDefaultAndLetsTheExportThrough() throws Exception {
+        seedAccounts(3);
+        authorPiiExportPolicy();
+        setTenantThreshold(10);
+
+        MvcResult result = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getHeader("X-Export-Approval-Status")).isEqualTo("NOT_REQUIRED");
+        assertThat(countOccurrences(result.getResponse().getContentAsString(), "\"accountId\""))
+                .isEqualTo(3);
+    }
+
+    /** The other direction: a tenant that lowers it is asked for exports the deployment default would let through. */
+    @Test
+    void aThresholdTheTenantLoweredMakesAnExportWaitThatTheDeploymentDefaultWouldNotHave() throws Exception {
+        seedAccounts(2);
+        authorPiiExportPolicy();
+        MvcResult atTheDeploymentDefault = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+        assertThat(atTheDeploymentDefault.getResponse().getHeader("X-Export-Approval-Status"))
+                .as("two rows against a deployment default of two: not above it")
+                .isEqualTo("NOT_REQUIRED");
+
+        setTenantThreshold(1);
+
+        MvcResult result = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+
+        assertThat(result.getResponse().getHeader("X-Export-Approval-Status")).isEqualTo("PENDING");
+        assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+    }
+
+    private void setTenantThreshold(int rows) {
+        configurationValues.set(
+                CustomerConfigurationKeys.PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
+                ResourceScope.tenant(TENANT),
+                rows,
+                false,
+                null,
+                ActorRef.user("customer-endpoint-tenant-owner", null),
+                "the tenant owner sets the export threshold");
     }
 
     private static int countOccurrences(String haystack, String needle) {

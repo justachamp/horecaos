@@ -9,10 +9,7 @@
       {{ actionLabel() }}
     </a>
   } @else if (actionHref()) {
-    <a
-      class="text-sm text-zinc-400 transition hover:text-brand-accent"
-      [href]="actionHref()!"
-    >
+    <a class="text-sm text-zinc-400 transition hover:text-brand-accent" [href]="actionHref()!">
       {{ actionLabel() }}
     </a>
   } @else {

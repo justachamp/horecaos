@@ -335,7 +335,11 @@ describe('ProfileTelegramComponent: unlink with confirm', () => {
   it('a failed unlink shows an inline error and leaves the confirm step open, still linked', async () => {
     const { comp, telegramLink } = await setUpLinked();
     comp.requestUnlink();
-    const failure = new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' });
+    const failure = new HorecaOSApiError({
+      status: 0,
+      code: 'NETWORK_UNREACHABLE',
+      detail: 'offline',
+    });
     telegramLink.unlink.mockRejectedValueOnce(failure);
 
     await comp.confirmUnlink();
@@ -352,7 +356,11 @@ describe('ProfileTelegramComponent: error paths', () => {
   it('a failed initial load shows a translated, code-mapped inline error', async () => {
     const { fixture, comp, session, telegramLink } = setUp();
     signIn(session);
-    const failure = new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' });
+    const failure = new HorecaOSApiError({
+      status: 0,
+      code: 'NETWORK_UNREACHABLE',
+      detail: 'offline',
+    });
     telegramLink.refresh.mockRejectedValueOnce(failure);
 
     await mount(fixture);

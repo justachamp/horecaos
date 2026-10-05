@@ -76,6 +76,7 @@ public class PromotionEvaluator {
     public Outcome evaluate(List<Promotion> promotions, Basket basket, PromotionContext context, Instant now) {
         Instant at = context.serviceInstant() != null ? context.serviceInstant() : now;
         Map<UUID, TraceEntry> trace = new LinkedHashMap<>();
+        Map<UUID, List<GiftOffer>> offers = new LinkedHashMap<>();
 
         List<Promotion> live = new ArrayList<>();
         for (Promotion promotion : sortedById(promotions)) {
@@ -94,12 +95,12 @@ public class PromotionEvaluator {
                 live.stream().filter(promotion -> !promotion.exclusive()).toList();
         List<Promotion> exclusive = live.stream().filter(Promotion::exclusive).toList();
 
-        Combination combination = combine(automatic, basket, context, trace);
+        Combination combination = combine(automatic, basket, context, trace, offers);
 
         Combination bestExclusive = null;
         List<Combination> scenarios = new ArrayList<>();
         for (Promotion candidate : exclusive) {
-            Combination scenario = combine(List.of(candidate), basket, context, trace);
+            Combination scenario = combine(List.of(candidate), basket, context, trace, offers);
             if (scenario.chosen().isEmpty()) {
                 continue;
             }
@@ -162,7 +163,17 @@ public class PromotionEvaluator {
             }
         }
 
-        return build(winner.chosen(), basket, new ArrayList<>(trace.values()));
+        // The rules that would join the winner's own combination if their gift were in the cart: the
+        // automatic ones when the automatic combination won, none when an exclusive scenario did (an
+        // exclusive scenario is one promotion, and the winning one is already applied).
+        Set<UUID> inTheWinningPool = winner == combination
+                ? automatic.stream().map(Promotion::promotionId).collect(Collectors.toSet())
+                : Set.of();
+        return build(
+                winner.chosen(),
+                basket,
+                new ArrayList<>(trace.values()),
+                settledOffers(offers, trace, winner, inTheWinningPool));
     }
 
     /**
@@ -294,13 +305,17 @@ public class PromotionEvaluator {
      * promotion, which is what makes an exclusive scenario comparable.
      */
     private Combination combine(
-            List<Promotion> pool, Basket basket, PromotionContext context, Map<UUID, TraceEntry> trace) {
+            List<Promotion> pool,
+            Basket basket,
+            PromotionContext context,
+            Map<UUID, TraceEntry> trace,
+            Map<UUID, List<GiftOffer>> offers) {
 
         Map<UUID, UUID> losers = new LinkedHashMap<>();
         List<Candidate> seen = new ArrayList<>();
 
         // Stage 3, against the basket as priced.
-        List<Candidate> itemCandidates = candidates(pool, Promotion.Scope.ITEM, basket, context, trace);
+        List<Candidate> itemCandidates = candidates(pool, Promotion.Scope.ITEM, basket, context, trace, offers);
         seen.addAll(itemCandidates);
         List<Candidate> chosenItems = clampToLines(selectPerGroup("I", itemCandidates, losers), basket);
         long itemDiscounts = chosenItems.stream()
@@ -311,8 +326,8 @@ public class PromotionEvaluator {
         // threshold because of an item discount no longer meets it.
         Basket reduced = basket.withGoodsSubtotal(basket.goodsSubtotalMinor() - itemDiscounts);
         List<Candidate> orderCandidates = new ArrayList<>();
-        orderCandidates.addAll(candidates(pool, Promotion.Scope.ORDER, reduced, context, trace));
-        orderCandidates.addAll(candidates(pool, Promotion.Scope.DELIVERY, reduced, context, trace));
+        orderCandidates.addAll(candidates(pool, Promotion.Scope.ORDER, reduced, context, trace, offers));
+        orderCandidates.addAll(candidates(pool, Promotion.Scope.DELIVERY, reduced, context, trace, offers));
         seen.addAll(orderCandidates);
         List<Candidate> chosenOrder = selectPerGroup("O", orderCandidates, losers);
 
@@ -338,7 +353,8 @@ public class PromotionEvaluator {
             Promotion.Scope scope,
             Basket basket,
             PromotionContext context,
-            Map<UUID, TraceEntry> trace) {
+            Map<UUID, TraceEntry> trace,
+            Map<UUID, List<GiftOffer>> offers) {
 
         List<Candidate> candidates = new ArrayList<>();
         for (Promotion promotion : promotions) {
@@ -350,6 +366,13 @@ public class PromotionEvaluator {
             if (failed >= 0) {
                 trace.put(promotion.promotionId(), conditionFailed(promotion, failed));
                 continue;
+            }
+            // A gift the rule would price free, whether or not the cart holds it yet. Recorded
+            // while the conditions are known to hold; whether it is worth telling the customer
+            // about is settled once the contest is over (see settledOffers).
+            List<GiftOffer> gifts = giftOffersOf(promotion, basket, matchedLines);
+            if (!gifts.isEmpty()) {
+                offers.put(promotion.promotionId(), gifts);
             }
             Benefit benefit = benefitOf(promotion, basket, matchedLines);
             if (benefit.totalMinor() <= 0) {
@@ -651,6 +674,84 @@ public class PromotionEvaluator {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    // ---------------------------------------------------------------- gift offers
+
+    /**
+     * The gifts one rule would price free, for a rule whose conditions hold. Empty for a
+     * rule with no {@code FREE_ITEM} action and for one whose allowance is nothing yet
+     * (a {@code PER_MULTIPLE} rule short of its first trigger).
+     */
+    private List<GiftOffer> giftOffersOf(Promotion promotion, Basket basket, Set<String> matchedLines) {
+        List<GiftOffer> offers = new ArrayList<>();
+        for (Action action : promotion.actions()) {
+            if (action.type() != Action.Type.FREE_ITEM) {
+                continue;
+            }
+            Gift gift = giftOf(action, basket, matchedLines);
+            if (gift.allowance().signum() <= 0) {
+                continue;
+            }
+            // What is still missing is one number for the whole rule, whichever of its variants
+            // the customer takes, so every variant of the rule reports the same remainder.
+            BigDecimal toAdd = gift.allowance().subtract(gift.unitsInCart()).max(BigDecimal.ZERO);
+            for (UUID variantId : new java.util.TreeSet<>(gift.variantIds())) {
+                boolean inCart =
+                        gift.lines().stream().anyMatch(line -> line.variantId().equals(variantId));
+                offers.add(new GiftOffer(promotion.promotionId(), variantId, gift.allowance(), inCart, toAdd));
+            }
+        }
+        return offers;
+    }
+
+    /**
+     * The offers worth telling the customer about once the contest is decided: those of
+     * a rule that applied, and those of a rule that held every condition and gave nothing
+     * only because the gift is not in the cart, when nothing stands in the way of the gift
+     * being free. A rule that lost its group, was set aside by an exclusive promotion or was
+     * refused is not offered: the gift would not be free.
+     *
+     * <p>A rule whose gift is missing never became a candidate, so the contest never saw it
+     * and its verdict is plain {@code ZERO_BENEFIT} whatever else won. The gift's price is
+     * not known while the gift is not in the cart, so what would happen once it is cannot be
+     * priced here, and the offer is kept only where it cannot be outweighed:
+     *
+     * <ul>
+     *   <li>the rule is in the winner's own pool, so it joins the winning combination when the
+     *       gift arrives (an automatic rule beside the automatic combination); or
+     *   <li>the winner is worth nothing, so any gift beats it (a promo code's gift in a cart
+     *       with no automatic discount).
+     * </ul>
+     *
+     * Anywhere else a better offer is already taking the cart, and the gift, once added, would
+     * lose to it or to the exclusive scenario that set it aside: an automatic gift under an
+     * exclusive promotion, an exclusive gift beside an automatic discount, or one exclusive
+     * gift beside another exclusive promotion. The customer would be told the gift is free and
+     * would pay for it.
+     *
+     * <p>Two rules of the same group are not compared, for the same reason: the incumbent is
+     * priced and the gift is not.
+     */
+    private static List<GiftOffer> settledOffers(
+            Map<UUID, List<GiftOffer>> offers,
+            Map<UUID, TraceEntry> trace,
+            Combination winner,
+            Set<UUID> inTheWinningPool) {
+        Set<UUID> applied = winner.chosen().stream()
+                .map(candidate -> candidate.promotion().promotionId())
+                .collect(Collectors.toSet());
+        boolean nothingToOutweighIt = winner.valueMinor() <= 0;
+        List<GiftOffer> settled = new ArrayList<>();
+        offers.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            TraceEntry verdict = trace.get(entry.getKey());
+            boolean gaveNothingForWantOfTheGift = verdict != null && verdict.verdict() == Verdict.ZERO_BENEFIT;
+            boolean couldStillBeFree = inTheWinningPool.contains(entry.getKey()) || nothingToOutweighIt;
+            if (applied.contains(entry.getKey()) || (gaveNothingForWantOfTheGift && couldStillBeFree)) {
+                settled.addAll(entry.getValue());
+            }
+        });
+        return settled;
+    }
+
     // --------------------------------------------------------------- benefit
 
     /**
@@ -741,6 +842,43 @@ public class PromotionEvaluator {
      * the units one line would; the earlier per-line bound gave one gift per line.
      */
     private Map<String, Long> freeItem(Action action, Basket basket, Set<String> matchedLines) {
+        Gift gift = giftOf(action, basket, matchedLines);
+        // The cart can only hold so many units of the gift: pricing never invents a line.
+        BigDecimal free = gift.allowance().min(gift.unitsInCart());
+
+        Map<String, Long> allocated = new LinkedHashMap<>();
+        for (BasketLine line : gift.lines()) {
+            if (free.signum() <= 0) {
+                break;
+            }
+            BigDecimal units = free.min(line.quantity());
+            // Also bounded by what the line costs: a catchweight line weighed lighter than
+            // its nominal weight is worth less than quantity times its provisional unit price.
+            allocated.put(
+                    line.lineId(), Math.min(Quantities.times(line.unitAmountMinor(), units), line.lineGrossMinor()));
+            free = free.subtract(units);
+        }
+        return allocated;
+    }
+
+    /**
+     * What a {@code FREE_ITEM} action allows and what the cart holds of it.
+     *
+     * <p>The allowance is the units the rule would give free once the customer holds them
+     * all: {@code quantity} for {@code ONCE}, and additionally no more than {@code
+     * floor(M / triggerQuantity)} for {@code PER_MULTIPLE}. It is a property of the rule
+     * and the matched lines alone, so it is the same number whether the gift is in the cart
+     * or not -- which is what lets a gift that is not there be offered. {@link #freeItem}
+     * prices the smaller of it and what the cart holds.
+     *
+     * @param variantIds  the variants the action names
+     * @param allowance   the units free once taken up, across all the named variants
+     * @param lines       the cart's lines of those variants, dearest unit first then by id
+     * @param unitsInCart the units those lines add up to
+     */
+    private record Gift(Set<UUID> variantIds, BigDecimal allowance, List<BasketLine> lines, BigDecimal unitsInCart) {}
+
+    private Gift giftOf(Action action, Basket basket, Set<String> matchedLines) {
         Set<UUID> variantIds = action.operands().requireIds("variantIds");
         BigDecimal bound = BigDecimal.valueOf(action.operands().requireInt("quantity"));
         String mode = action.operands().optionalString("mode").orElse("ONCE");
@@ -758,27 +896,14 @@ public class PromotionEvaluator {
         // Decimal since ADR 0137: half a portion of the gift is half a unit of it.
         BigDecimal giftUnits = giftLines.stream().map(BasketLine::quantity).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal free = bound.min(giftUnits);
+        BigDecimal allowance = bound;
         if ("PER_MULTIPLE".equals(mode)) {
             // floor(M / trigger): a multiple is earned by whole triggers only.
             BigDecimal multiples =
                     quantityOf(basket, matchedLines).divideToIntegralValue(BigDecimal.valueOf(Math.max(1, trigger)));
-            free = free.min(multiples);
+            allowance = allowance.min(multiples);
         }
-
-        Map<String, Long> allocated = new LinkedHashMap<>();
-        for (BasketLine line : giftLines) {
-            if (free.signum() <= 0) {
-                break;
-            }
-            BigDecimal units = free.min(line.quantity());
-            // Also bounded by what the line costs: a catchweight line weighed lighter than
-            // its nominal weight is worth less than quantity times its provisional unit price.
-            allocated.put(
-                    line.lineId(), Math.min(Quantities.times(line.unitAmountMinor(), units), line.lineGrossMinor()));
-            free = free.subtract(units);
-        }
-        return allocated;
+        return new Gift(variantIds, allowance, giftLines, giftUnits);
     }
 
     /**
@@ -862,7 +987,8 @@ public class PromotionEvaluator {
         return (amountMinor * basisPoints + 5_000) / 10_000;
     }
 
-    private Outcome build(List<Candidate> chosen, Basket basket, List<TraceEntry> traceSoFar) {
+    private Outcome build(
+            List<Candidate> chosen, Basket basket, List<TraceEntry> traceSoFar, List<GiftOffer> giftOffers) {
         Map<String, Long> lineDiscounts = new LinkedHashMap<>();
         for (Candidate candidate : chosen) {
             candidate
@@ -921,7 +1047,8 @@ public class PromotionEvaluator {
                 orderDiscount,
                 deliveryBenefit,
                 List.copyOf(applied),
-                List.copyOf(trace.values()));
+                List.copyOf(trace.values()),
+                giftOffers);
     }
 
     /**
@@ -1112,12 +1239,23 @@ public class PromotionEvaluator {
             long orderDiscountMinor,
             long deliveryBenefitMinor,
             List<AppliedPromotion> applied,
-            List<TraceEntry> trace) {
+            List<TraceEntry> trace,
+            List<GiftOffer> giftOffers) {
 
         public Outcome {
             lineDiscountsMinor = lineDiscountsMinor == null ? Map.of() : Map.copyOf(lineDiscountsMinor);
             applied = applied == null ? List.of() : List.copyOf(applied);
             trace = trace == null ? List.of() : List.copyOf(trace);
+            giftOffers = giftOffers == null ? List.of() : List.copyOf(giftOffers);
+        }
+
+        public Outcome(
+                Map<String, Long> lineDiscountsMinor,
+                long orderDiscountMinor,
+                long deliveryBenefitMinor,
+                List<AppliedPromotion> applied,
+                List<TraceEntry> trace) {
+            this(lineDiscountsMinor, orderDiscountMinor, deliveryBenefitMinor, applied, trace, List.of());
         }
 
         public Outcome(
@@ -1125,7 +1263,7 @@ public class PromotionEvaluator {
                 long orderDiscountMinor,
                 long deliveryBenefitMinor,
                 List<AppliedPromotion> applied) {
-            this(lineDiscountsMinor, orderDiscountMinor, deliveryBenefitMinor, applied, List.of());
+            this(lineDiscountsMinor, orderDiscountMinor, deliveryBenefitMinor, applied, List.of(), List.of());
         }
 
         public boolean isEmpty() {
@@ -1204,6 +1342,35 @@ public class PromotionEvaluator {
 
         public long totalMinor() {
             return perLineMinor.values().stream().mapToLong(Long::longValue).sum();
+        }
+    }
+
+    /**
+     * A gift line a firing rule would price free, and whether the cart holds it (ADR 0140).
+     *
+     * <p>Pricing never invents a line, so a {@code FREE_ITEM} rule whose gift the cart
+     * does not hold prices nothing and the customer would never know the offer exists.
+     * This is how the quote says so: it names the rule, the gift variant and how many units
+     * the rule would give, so a storefront can <em>offer</em> adding it. Nothing here adds
+     * a line, and the next quote is the only authority on whether the gift is free.
+     *
+     * @param promotionId the rule that would give it
+     * @param variantId   one of the variants the rule names; a rule naming several yields
+     *                    one offer per variant, any one of which fills the same allowance
+     * @param quantity    the units the rule would give free once taken up, summed across
+     *                    the rule's gift variants: bounded by its {@code quantity}, and for
+     *                    {@code PER_MULTIPLE} by the whole multiples of the trigger the cart
+     *                    holds
+     * @param inCart      whether the cart already holds this variant
+     * @param toAdd       the units still missing for the allowance to be complete: zero when
+     *                    the cart already holds {@code quantity} units of the rule's gift
+     *                    variants
+     */
+    public record GiftOffer(UUID promotionId, UUID variantId, BigDecimal quantity, boolean inCart, BigDecimal toAdd) {
+
+        public GiftOffer {
+            quantity = Quantities.normalise(quantity);
+            toAdd = Quantities.normalise(toAdd);
         }
     }
 

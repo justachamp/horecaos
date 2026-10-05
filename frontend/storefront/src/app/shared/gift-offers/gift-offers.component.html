@@ -1,0 +1,48 @@
+@if (cart.giftOffers().length > 0) {
+  <div class="flex flex-col gap-3" data-testid="gift-offers">
+    @for (offer of cart.giftOffers(); track $index) {
+      <section class="rounded-2xl bg-surface-raised px-4 py-4" data-testid="gift-offer">
+        <p class="text-sm font-bold text-text-primary" data-testid="gift-offer-title">
+          {{ (offer.choices.length > 1 ? 'cart.giftOffer.choose' : 'cart.giftOffer.title') | t }}
+        </p>
+        <div class="mt-3 flex flex-col gap-2">
+          @for (choice of offer.choices; track choice.variantId) {
+            <button
+              type="button"
+              data-testid="gift-offer-add"
+              class="flex w-full items-center gap-3 rounded-xl bg-surface-base px-3 py-2 text-left transition-opacity hover:opacity-95 disabled:opacity-50"
+              [disabled]="cart.updating()"
+              (click)="add(choice.variantId)"
+            >
+              @if (choice.image) {
+                <img
+                  [src]="choice.image"
+                  alt=""
+                  class="h-10 w-10 shrink-0 rounded-lg object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              }
+              <span
+                class="min-w-0 flex-1 text-sm font-medium text-text-primary"
+                data-testid="gift-offer-label"
+              >
+                @if (offer.toAdd === 1) {
+                  {{ 'cart.giftOffer.add' | t: { name: choice.name } }}
+                } @else {
+                  {{
+                    'cart.giftOffer.addMany'
+                      | t: { name: choice.name, count: quantityText(offer.toAdd) }
+                  }}
+                }
+              </span>
+              <span class="shrink-0 text-lg font-light text-brand-accent" aria-hidden="true"
+                >+</span
+              >
+            </button>
+          }
+        </div>
+      </section>
+    }
+  </div>
+}

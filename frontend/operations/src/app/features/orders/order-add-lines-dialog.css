@@ -22,6 +22,12 @@
   flex: 1 1 auto;
 }
 
+/* A combo's picks, under its name. */
+.add-lines-dialog__picks {
+  display: block;
+  color: var(--q-ink-muted, var(--q-ink));
+}
+
 .add-lines-dialog__quantity {
   width: 4em;
   padding: 4px 6px;

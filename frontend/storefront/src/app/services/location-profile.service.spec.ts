@@ -18,7 +18,7 @@ const CONFIG: AppConfig = {
 function profileFixture(overrides: Partial<LocationProfile> = {}): LocationProfile {
   return {
     displayName: 'Chilonzor filiali',
-    addressLine: 'Bunyodkor ko\'chasi 12',
+    addressLine: "Bunyodkor ko'chasi 12",
     district: 'Chilonzor',
     city: 'Toshkent',
     ...overrides,
@@ -69,7 +69,9 @@ describe('LocationProfileService.profile', () => {
 
   it('propagates a failure that is not "not found"', async () => {
     const { service, api } = setUp();
-    api.get.mockRejectedValue(new HorecaOSApiError({ status: 500, code: 'INTERNAL_ERROR', detail: 'x' }));
+    api.get.mockRejectedValue(
+      new HorecaOSApiError({ status: 500, code: 'INTERNAL_ERROR', detail: 'x' }),
+    );
 
     await expect(service.profile('loc-1')).rejects.toThrow();
   });
@@ -86,7 +88,9 @@ describe('LocationProfileService.profile', () => {
 
   it('does not cache a failure -- a later call retries instead of repeating a transient error forever', async () => {
     const { service, api } = setUp();
-    api.get.mockRejectedValueOnce(new HorecaOSApiError({ status: 500, code: 'INTERNAL_ERROR', detail: 'x' }));
+    api.get.mockRejectedValueOnce(
+      new HorecaOSApiError({ status: 500, code: 'INTERNAL_ERROR', detail: 'x' }),
+    );
     api.get.mockResolvedValueOnce(profileFixture());
 
     await expect(service.profile('loc-1')).rejects.toThrow();

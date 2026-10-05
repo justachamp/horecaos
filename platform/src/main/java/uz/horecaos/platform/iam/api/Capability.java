@@ -723,6 +723,19 @@ public enum Capability {
     MARKETPLACE_SHIFT_RECEIVE("marketplace.shift.receive", "marketplace", "shift.receive"),
 
     /**
+     * ADR 0040, ADR 0141 Phase 4: an aggregator reading the current availability of the dishes
+     * it has mapped at a branch it is bound to ({@code PartnerAvailabilityController}).
+     *
+     * <p>Held by the identical machine principal {@link #MARKETPLACE_ORDER_RECEIVE} is, and
+     * for the same reason: the aggregator's confidential client, scoped to the bindings its
+     * installation holds. Deliberately its own capability rather than folded into order
+     * receipt. It is the opposite direction -- HorecaOS answers, the partner does not push --
+     * and a credential that may poll a branch's stop list is not thereby a credential that
+     * may put orders on its pass. It reads identifiers and a boolean and nothing else.
+     */
+    MARKETPLACE_AVAILABILITY_PULL("marketplace.availability.pull", "marketplace", "availability.pull"),
+
+    /**
      * ADR 0040: HorecaOS pushing a menu or an availability change out to a partner
      * that will not pull one.
      *
@@ -1520,6 +1533,56 @@ public enum Capability {
      */
     COURIER_SHIFT_OPEN("courier.shift.open", "courier", "shift.open"),
     COURIER_SHIFT_BREAK("courier.shift.break", "courier", "shift.break"),
+
+    /**
+     * ADR 0042 and ADR 0014, courier policy (gap map row 3.9): a courier reading the offers made
+     * to them and the deliveries they carry.
+     *
+     * <p>Held by the courier over their own record only, like the shift capabilities above: the
+     * handler resolves the courier from the signed token subject and the tenant, every query
+     * names that courier, and an id belonging to anybody else answers as one that does not exist
+     * (ADR 0049). A manager reads the same facts through the dispatch board, at a location
+     * scope, under {@link #DELIVERY_PLAN_READ}.
+     */
+    COURIER_DELIVERY_READ("courier.delivery.read", "courier", "delivery.read"),
+
+    /**
+     * ADR 0014 and ADR 0042: a courier taking, or turning down, an offer that sourcing made them.
+     *
+     * <p>Two capabilities rather than one "respond", for the reason the shift ones are two: a
+     * decline is a person saying no, and no one but that person may say it for them. An operator
+     * who wants to put an order on a courier uses the dispatch board's assign, which is audited
+     * under {@link #DELIVERY_MANUAL_ASSIGN} and which no courier holds. Never granted to a
+     * manager.
+     */
+    COURIER_OFFER_ACCEPT("courier.offer.accept", "courier", "offer.accept"),
+    COURIER_OFFER_DECLINE("courier.offer.decline", "courier", "offer.decline"),
+
+    /**
+     * ADR 0014, courier policy: a courier moving a delivery they carry through arrived, picked
+     * up and delivered, carrying their own position so the GPS gate has something to measure.
+     * The courier alone: a manager marking a bag delivered that is still on a scooter is the
+     * defect this capability's holder-list exists to make impossible.
+     */
+    COURIER_DELIVERY_ADVANCE("courier.delivery.advance", "courier", "delivery.advance"),
+
+    /**
+     * Courier policy {@code postDeliveryPaymentCheckRequired}: the courier confirming the cash
+     * they collected at the door, which a tenant that turns the check on requires before a
+     * delivery completes.
+     */
+    COURIER_DELIVERY_PAYMENT_CONFIRM("courier.delivery.payment.confirm", "courier", "delivery.payment.confirm"),
+
+    /**
+     * Courier policy {@code revealCustomerLocationTiming}: a courier opening the door of the
+     * customer they are to deliver to. Every use is an ADR 0027 audit fact naming the courier, the
+     * order and the shipment or offer, and an ADR 0029 reveal with a recorded purpose; the address
+     * itself is in neither.
+     *
+     * <p>A reveal and not a read: it takes a third party's home address out, so a tenant held
+     * read-only still cannot exercise it, and it is classified accordingly by its action segment.
+     */
+    COURIER_DELIVERY_LOCATION_REVEAL("courier.delivery.location.reveal", "courier", "delivery.location.reveal"),
 
     /**
      * ADR 0042: approving a shift's hours, and closing somebody else's shift.

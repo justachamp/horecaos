@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -447,17 +448,34 @@ public class OrderSettlementService implements CashDueLookupPort {
      * <p>Lets {@link ApiException} (RESOURCE_NOT_FOUND) propagate rather than
      * swallowing it into a plain zero. A caller that answers "nothing due"
      * for "I could not find out" cannot be told apart from a genuinely
-     * settled order, and {@link
-     * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger},
-     * the one production caller, already wraps this in its own {@code
-     * catch (RuntimeException)} specifically to fall back to the order total
-     * for exactly this case — a fallback that can only run if this method
-     * actually throws.
+     * settled order. The throw also marks a joined transaction rollback-only,
+     * so a caller inside a request transaction must not catch it to fall back;
+     * it uses {@link #cashDueMinorIfSettled} instead. {@link
+     * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger}
+     * runs after commit with no transaction to lose and may catch this one.
      */
     @Override
     @Transactional(readOnly = true)
     public long cashDueMinor(UUID tenantId, UUID orderId) {
         return cashDueMinor(tenantId, orderId, PaymentMethod.CASH.code());
+    }
+
+    /**
+     * {@link CashDueLookupPort#cashDueMinorIfSettled}: the figure of {@link
+     * #cashDueMinor(UUID, UUID)}, or empty when the order has no settlement,
+     * with nothing thrown. A throw out of a transactional bean method marks the
+     * transaction it joined rollback-only before any caller's {@code catch}
+     * runs, so the courier app's accept, advance and delivery list could not
+     * fall back to the order total through the throwing form: each answered
+     * 500 and rolled back its own work.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public OptionalLong cashDueMinorIfSettled(UUID tenantId, UUID orderId) {
+        return store.findSettlement(tenantId, orderId)
+                .map(settlement ->
+                        OptionalLong.of(store.cashDueMinor(tenantId, settlement.id(), PaymentMethod.CASH.code())))
+                .orElseGet(OptionalLong::empty);
     }
 
     private SettlementRow require(UUID tenantId, UUID orderId) {

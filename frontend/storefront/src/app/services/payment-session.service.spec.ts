@@ -77,7 +77,7 @@ describe('PaymentSessionService.open', () => {
     expect(body['returnUrl']).toBe(`${window.location.origin}/cart/payment-return/order-42`);
   });
 
-  it('sends the customer\'s current language and a PAYMENT_LINK presentation', async () => {
+  it("sends the customer's current language and a PAYMENT_LINK presentation", async () => {
     const { service, api } = setUp();
     api.mutate.mockResolvedValue({
       attemptId: 'a1',

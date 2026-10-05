@@ -466,7 +466,20 @@ public class StorefrontCatalogQuery {
      * (ADR 0136), already resolved to the effective values.
      */
     private static List<MenuModifierGroupPolicy> policiesOf(Map<String, Object> content) {
-        if (!(content.get("modifierGroupPolicies") instanceof List<?> published)) {
+        return policiesIn(content.get("modifierGroupPolicies"));
+    }
+
+    /**
+     * The groups an option opens one level down (ADR 0136), with the rules in force for them:
+     * published with the option, so the choice a customer is asked for after taking it is the one
+     * the cart and the quote hold them to.
+     */
+    private static List<MenuModifierGroupPolicy> nestedGroupsOf(Map<String, Object> option) {
+        return policiesIn(option.get("nestedGroups"));
+    }
+
+    private static List<MenuModifierGroupPolicy> policiesIn(@Nullable Object raw) {
+        if (!(raw instanceof List<?> published)) {
             return List.of();
         }
         List<MenuModifierGroupPolicy> policies = new ArrayList<>();
@@ -551,7 +564,11 @@ public class StorefrontCatalogQuery {
                     // ADR 0137: read from the published copy, so what the customer is
                     // shown (КБЖУ, "price per 100 g", the portion step) is what the
                     // cart and the quote are held to.
-                    PhysicalFacts.fromPublished(variant.get("physical"))));
+                    PhysicalFacts.fromPublished(variant.get("physical")),
+                    // ADR 0136: the groups this variant carries of its own and the rules it holds
+                    // the customer to, both empty on a publication that predates them.
+                    idList(variant, "modifierGroupIds"),
+                    policiesOf(variant)));
         }
         return variants;
     }
@@ -647,7 +664,10 @@ public class StorefrontCatalogQuery {
                     code(option),
                     intOf(option, "maximumQuantity"),
                     null,
-                    nameIn(option.get("names"), preference)));
+                    nameIn(option.get("names"), preference),
+                    // ADR 0136: the choices taking this option opens, empty for an option that
+                    // links nothing and on a publication that predates them.
+                    nestedGroupsOf(option)));
         }
         return options;
     }
@@ -1075,7 +1095,13 @@ public class StorefrontCatalogQuery {
             boolean onSaleNow,
             @Nullable Long amountMinor,
             @Nullable BigDecimal remainingQuantity,
-            @Nullable PhysicalFacts physical) {
+            @Nullable PhysicalFacts physical,
+            // ADR 0136: the customer-facing groups this variant carries of its own, on top of
+            // its product's, in the author's order. Empty on a variant that carries none.
+            List<UUID> modifierGroupIds,
+            // ADR 0136: the rules this variant holds the customer to for each of those groups.
+            // A variant's row for a group replaces its product's row for the same group whole.
+            List<MenuModifierGroupPolicy> modifierGroupPolicies) {
 
         /** A variant with no physical attributes: a fixed unit sold whole. */
         public MenuVariant(
@@ -1087,12 +1113,33 @@ public class StorefrontCatalogQuery {
                 boolean onSaleNow,
                 @Nullable Long amountMinor,
                 @Nullable BigDecimal remainingQuantity) {
-            this(variantId, sku, unitCode, isDefault, orderable, onSaleNow, amountMinor, remainingQuantity, null);
+            this(
+                    variantId,
+                    sku,
+                    unitCode,
+                    isDefault,
+                    orderable,
+                    onSaleNow,
+                    amountMinor,
+                    remainingQuantity,
+                    null,
+                    List.of(),
+                    List.of());
         }
 
         MenuVariant withPrice(@Nullable Long price) {
             return new MenuVariant(
-                    variantId, sku, unitCode, isDefault, orderable, onSaleNow, price, remainingQuantity, physical);
+                    variantId,
+                    sku,
+                    unitCode,
+                    isDefault,
+                    orderable,
+                    onSaleNow,
+                    price,
+                    remainingQuantity,
+                    physical,
+                    modifierGroupIds,
+                    modifierGroupPolicies);
         }
 
         /**
@@ -1111,7 +1158,9 @@ public class StorefrontCatalogQuery {
                     onSaleNow,
                     amountMinor,
                     remainingQuantity,
-                    physical);
+                    physical,
+                    modifierGroupIds,
+                    modifierGroupPolicies);
         }
     }
 
@@ -1223,10 +1272,14 @@ public class StorefrontCatalogQuery {
             @Nullable Long amountMinor,
             // What the customer reads, in their language then the brand's. Null when nobody
             // named the option, and a client then shows the code as it always has.
-            @Nullable String name) {
+            @Nullable String name,
+            // ADR 0136: the choices taking this option opens (it links a variant that carries
+            // groups of its own), with the rules in force for them. Each is also a group of the
+            // menu's modifierGroups. Empty for an option that opens nothing.
+            List<MenuModifierGroupPolicy> nestedGroups) {
 
         MenuModifierOption withPrice(@Nullable Long price) {
-            return new MenuModifierOption(optionId, code, maximumQuantity, price, name);
+            return new MenuModifierOption(optionId, code, maximumQuantity, price, name, nestedGroups);
         }
     }
 }

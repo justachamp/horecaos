@@ -391,7 +391,11 @@ jobs:
         # scale in tokens.css owns every size). The tree was clean when this step
         # was added; before it, three violations landed unnoticed because
         # nothing ran `npm run lint`. `lint:rules` proves the rule itself still
-        # fails on a violation. The other three apps have their own step below.
+        # fails on a violation. `i18n:dead:test` runs every test under
+        # tools/i18n: the dead-key tool, the catalogue split, and the check that
+        # every route declares the message areas its screens need (so a screen
+        # cannot open on raw keys) and that nothing but `core` is eager. The
+        # other three apps have their own step below.
         if: matrix.app == 'operations'
         working-directory: frontend/${{ matrix.app }}
         run: |
@@ -413,28 +417,29 @@ jobs:
           npm run lint
           npm run lint:rules
 
-      - name: Format check (operations)
+      - name: Format check (operations, storefront, storefront-milliy)
         # The whole tree, so a file cannot slip through unchecked. This step used
         # to run prettier only on the files a change touched (measured against a
         # merge base, or against the tip a push replaced); a push whose run was
         # cancelled by a later one, or whose previous tip was missing from the
-        # clone, was never checked for the files it brought. The tree has been
-        # prettier-clean since it was reformatted in one commit, so the plain
-        # script the app already has does the job. To fix a failure:
-        # `npm run format` in the app. The other three apps are not there yet:
-        # see the changed-files step below.
-        if: matrix.app == 'operations'
+        # clone, was never checked for the files it brought. Each of these trees
+        # is prettier-clean (operations since it was reformatted in one commit,
+        # the two storefronts since their own "whole-tree prettier, no behaviour
+        # change" commits), so the plain script the apps already have does the
+        # job. To fix a failure: `npm run format` in the app. control-plane is not
+        # there yet: see the changed-files step below.
+        if: matrix.app != 'control-plane'
         working-directory: frontend/${{ matrix.app }}
         run: npm run format:check
 
-      - name: Format check on changed files (control-plane, storefront, storefront-milliy)
-        # NOT `npm run format:check`: each of these trees has on the order of a
+      - name: Format check on changed files (control-plane)
+        # NOT `npm run format:check`: control-plane's tree has on the order of a
         # hundred files that predate its prettier config and were never formatted,
         # so the whole-tree check is red on code nobody touched, and a blanket
         # reformat while other branches are open would conflict with every one of
-        # them. Until each app is reformatted in one commit (after which its step
-        # becomes `npm run format:check`, as operations' did) the ratchet is: a
-        # file a change adds or edits must be prettier-clean.
+        # them. Until it is reformatted in one commit (after which this step
+        # becomes `npm run format:check`, as the other three apps' did) the
+        # ratchet is: a file a change adds or edits must be prettier-clean.
         #
         # frontend/tools/format_changed.py lists the src/ files that differ from
         # the merge base -- the pull request's base branch, or on a push the tip
@@ -442,7 +447,7 @@ jobs:
         # same command locally:
         #   python3 frontend/tools/format_changed.py --app control-plane --base main
         # and fix a failure with `npx prettier --write <the [warn] files>` in the app.
-        if: matrix.app != 'operations'
+        if: matrix.app == 'control-plane'
         env:
           FORMAT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: python3 frontend/tools/format_changed.py --app ${{ matrix.app }} --base "$FORMAT_BASE"

@@ -4,8 +4,12 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
-import { reportsPaths } from '../../../core/api/reports-paths';
 import { settingsPaths } from '../../../core/api/settings-paths';
+import {
+  SlaBucketDefinition,
+  SlaBucketSetApi,
+  SlaBucketSetView,
+} from '../../../core/api/sla-bucket-set-api';
 
 export type OutcomeReasonKind = 'CANCELLATION' | 'COMPLETION';
 export type StockDisposition = 'RELEASE' | 'RETURN_TO_STOCK' | 'WRITE_OFF' | 'NO_EFFECT';
@@ -39,18 +43,9 @@ export interface ReasonRequest {
   readonly customerTexts: Readonly<Record<string, string>>;
 }
 
-/** Mirrors ReportingController.SlaBucketController.Bucket — 10.10c's read-only version card. */
-export interface SlaBucketDefinition {
-  readonly code: string;
-  readonly fromMinutes: number;
-  readonly toMinutesExclusive: number | null;
-}
-
-/** Mirrors ReportingController.slaBucketSet's SlaBucketController.SlaBuckets. */
-export interface SlaBucketSetView {
-  readonly version: number;
-  readonly buckets: readonly SlaBucketDefinition[];
-}
+// 10.10c's read-only version card. The types and the read live in `core/api` now, because the
+// branch and courier reports print the same version from the same endpoint.
+export type { SlaBucketDefinition, SlaBucketSetView };
 
 /**
  * 10.10 Reference data — the cancellation/completion reason registry
@@ -60,6 +55,7 @@ export interface SlaBucketSetView {
 @Injectable({ providedIn: 'root' })
 export class ReferenceDataApi {
   private readonly api = inject(ApiClient);
+  private readonly slaBuckets = inject(SlaBucketSetApi);
 
   async list(scope: LocationScope, kind: OutcomeReasonKind): Promise<readonly ReasonResponse[]> {
     const result = await firstValueFrom(
@@ -155,13 +151,7 @@ export class ReferenceDataApi {
   }
 
   /** 10.10c: which bucket definitions the SLA reports are computed under, read-only. */
-  async slaBucketSet(scope: LocationScope): Promise<SlaBucketSetView> {
-    const result = await firstValueFrom(
-      this.api.get<SlaBucketSetView>(reportsPaths.slaBucketSet(scope.tenantId)),
-    );
-    if (!result.value) {
-      throw new Error('The SLA bucket set answered with no body');
-    }
-    return result.value;
+  slaBucketSet(scope: LocationScope): Promise<SlaBucketSetView> {
+    return this.slaBuckets.get(scope.tenantId);
   }
 }

@@ -30,17 +30,30 @@
 
   <label class="change-quantity-dialog__field">
     <span class="q-body-sm">{{
-      'orders.dialog.changeQuantity.newQuantity' | t: { min: minQuantity() }
+      'orders.dialog.changeQuantity.newQuantity' | t: { min: quantityText(minQuantity()) }
     }}</span>
     <input
       type="number"
       class="change-quantity-dialog__input q-body-sm"
       [min]="minQuantity()"
+      [step]="step()"
+      [attr.inputmode]="splittable() ? 'decimal' : 'numeric'"
+      [attr.aria-invalid]="quantityProblem() !== null"
       [value]="quantity()"
       (input)="setQuantity($any($event.target).value)"
       data-testid="order-change-quantity-dialog-quantity"
     />
   </label>
+  @if (splittable()) {
+    <p
+      class="q-caption change-quantity-dialog__step"
+      [class.change-quantity-dialog__step--problem]="quantityProblem() !== null"
+      [attr.role]="quantityProblem() !== null ? 'alert' : null"
+      data-testid="order-change-quantity-dialog-step"
+    >
+      {{ 'orders.dialog.changeQuantity.step' | t: { step: stepText() } }}
+    </p>
+  }
 
   <ng-container qModalActions>
     <button

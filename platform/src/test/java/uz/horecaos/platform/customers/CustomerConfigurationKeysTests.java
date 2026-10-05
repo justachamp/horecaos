@@ -80,4 +80,34 @@ class CustomerConfigurationKeysTests {
                 .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
                 .doesNotContain(ScopeType.LOCATION);
     }
+
+    @Test
+    void theRegistryAndTheCustomersModuleDeclareTheSamePiiExportThresholdKey() {
+        ConfigurationKey<?> registered =
+                ConfigurationKeys.require(CustomerConfigurationKeys.PII_EXPORT_APPROVAL_THRESHOLD_ROWS_CODE);
+        ConfigurationKey<Integer> used = CustomerConfigurationKeys.PII_EXPORT_APPROVAL_THRESHOLD_ROWS;
+
+        assertThat(registered.valueType()).isEqualTo(used.valueType());
+        assertThat(registered.defaultValue()).isEqualTo(used.defaultValue());
+        assertThat(registered.settableScopes()).isEqualTo(used.settableScopes());
+        assertThat(registered.owningModule()).isEqualTo(used.owningModule());
+        assertThat(registered.tenantVisible()).isEqualTo(used.tenantVisible());
+        assertThat(registered.explicitNullTerminates()).isEqualTo(used.explicitNullTerminates());
+    }
+
+    @Test
+    void thePiiExportThresholdIsAnOwnerSettingAtTenantScopeWithTheOldDeploymentDefault() {
+        ConfigurationKey<Integer> key = CustomerConfigurationKeys.PII_EXPORT_APPROVAL_THRESHOLD_ROWS;
+
+        assertThat(key.defaultValue())
+                .as(
+                        "the same 500 the deployment property defaulted to, so nothing moves for a tenant that sets nothing")
+                .isEqualTo(500);
+        assertThat(key.tenantVisible())
+                .as("a tenant owner sets it on the Settings screen, through the tenant-visible surface")
+                .isTrue();
+        assertThat(key.settableScopes())
+                .as("an export is a tenant-level act: there is no brand or branch it could be narrower for")
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
+    }
 }

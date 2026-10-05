@@ -96,6 +96,40 @@ export function initialQuantity(step: number): number {
   return Math.round(Math.max(1, Math.ceil(1 / step - 1e-9)) * step * MILLI) / MILLI;
 }
 
+/** The most one line may hold: the cart's and an amendment's shared limit (ADR 0137). */
+export const MAX_LINE_QUANTITY = 999;
+
+/**
+ * The smallest quantity strictly above `current` that is a whole number of `step`s — what an
+ * amendment of a line sold by the portion starts from (ADR 0137). A step of `0.5` takes `1` to
+ * `1.5` and `1.5` to `2`; a step of `1` takes `0.5` to `1`, which is how a line of a dish with no
+ * published portion still behaves. Worked in thousandths, so `0.3 * 3` is `0.9` and not
+ * `0.8999999999999999`; a quantity that is not itself a multiple of the step (the menu's step moved
+ * after the order was placed) is taken up to the next multiple.
+ */
+export function nextQuantityAbove(current: number, step: number): number {
+  const stepMilli = Math.max(1, Math.round(step * MILLI));
+  const currentMilli = Math.round(current * MILLI);
+  return ((Math.floor(currentMilli / stepMilli) + 1) * stepMilli) / MILLI;
+}
+
+/**
+ * Whether `quantity` is a quantity a line may be raised to in steps of `step`: positive, at most
+ * three fraction digits, within the line limit, and a whole number of steps — the client's copy of
+ * `CartMenuRules.PhysicalRules#refusalOf`, which stays the authority.
+ */
+export function isOrderableQuantity(quantity: number, step: number): boolean {
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_LINE_QUANTITY) {
+    return false;
+  }
+  const quantityMilli = quantity * MILLI;
+  if (Math.abs(quantityMilli - Math.round(quantityMilli)) > 1e-6) {
+    return false;
+  }
+  const stepMilli = Math.max(1, Math.round(step * MILLI));
+  return Math.round(quantityMilli) % stepMilli === 0;
+}
+
 /** A quantity as thousandths, the integer the arithmetic below works in. */
 function milli(quantity: number): bigint {
   return BigInt(Math.round(quantity * MILLI));

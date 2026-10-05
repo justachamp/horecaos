@@ -32,6 +32,7 @@ import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
@@ -91,8 +92,12 @@ class NotificationTemplateControllerTests {
 
         JdbcTemplateStore store = new JdbcTemplateStore(jdbc);
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        NotificationTemplateService service =
-                new NotificationTemplateService(store, JsonMapper.builder().build(), clock);
+        NotificationTemplateService service = new NotificationTemplateService(
+                store,
+                JsonMapper.builder().build(),
+                clock,
+                AuditTrail.discarding(),
+                AuditTrail.actor("template-author"));
         transport = new FakeTransport();
         TemplateTestSendService testSend = new TemplateTestSendService(store, transport);
         CurrentActor currentActor = () -> new AuthenticatedActor("tester", java.util.Set.of(), Map.of());

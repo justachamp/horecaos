@@ -594,13 +594,12 @@ describe('PromotionsPage', () => {
     expect(testId('promotion-validate')).toBeNull();
   });
 
-  it('lists the redemptions of the open promotion, amounts only', async () => {
+  it('lists the redemptions of the open promotion, amounts only (the API sends no customer)', async () => {
     await render([ACTIVE], {
       redemptions: vi.fn().mockResolvedValue([
         {
           redemptionId: 'r1',
           orderId: 'order-9',
-          customerAccountId: 'acct-1',
           definitionVersion: 2,
           discountMinor: 15_000,
           markupMinor: 0,
@@ -615,8 +614,6 @@ describe('PromotionsPage', () => {
     const table = testId('promotion-redemptions') as HTMLElement;
     expect(table.textContent).toContain('order-9');
     expect(table.textContent).toContain('REDEEMED');
-    // The account id is deliberately not shown on this screen.
-    expect(table.textContent).not.toContain('acct-1');
   });
 
   it('shows the recorded definition versions, newest first', async () => {

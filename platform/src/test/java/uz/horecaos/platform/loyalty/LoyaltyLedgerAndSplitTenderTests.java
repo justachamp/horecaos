@@ -1172,6 +1172,12 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .as("a courier who sees only the order total collects 94 000, the customer has "
                         + "paid twice, and the tenant refunds")
                 .isEqualTo(82_000L);
+        assertThat(settlements.cashDueMinorIfSettled(TENANT, order))
+                .as("the non-throwing form the courier app reads answers the same figure")
+                .hasValue(82_000L);
+        assertThat(settlements.cashDueMinorIfSettled(TENANT, UUID.randomUUID()))
+                .as("an order with no settlement is an empty answer, not an exception that poisons the caller")
+                .isEmpty();
     }
 
     // ------------------------------------------------ ADR 0137: restating a planned settlement

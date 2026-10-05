@@ -54,6 +54,13 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
  * class, so the per-variant calls cross a proxy and really are separate
  * transactions.
  *
+ * <h2>Ending a stop gives back what a run wrote for it</h2>
+ *
+ * <p>A lift, a POS lift and an expiry each call {@link MaterialisedPositionRestorer} in the same
+ * transaction, before the event: a materialisation run (rollback switch three) turns a stop in force
+ * into a position boolean with no end of its own, and without this the boolean would outlive the
+ * stop it was written for.
+ *
  * <h2>Freeze, do not disable</h2>
  *
  * <p>{@code inventory.stops.creation_enabled = false} refuses a new {@code
@@ -80,6 +87,8 @@ public class AvailabilityStopService implements AvailabilityStopPort {
     private final AuditRecorder audit;
     private final java.time.Clock clock;
     private final ConfigurationResolver configuration;
+    private final StopReadSwitch readSwitch;
+    private final MaterialisedPositionRestorer restorer;
 
     public AvailabilityStopService(
             JdbcAvailabilityStopStore stops,
@@ -87,13 +96,16 @@ public class AvailabilityStopService implements AvailabilityStopPort {
             java.time.Clock clock,
             AuditRecorder audit,
             TenantRlsSession rls,
-            ConfigurationResolver configuration) {
+            ConfigurationResolver configuration,
+            MaterialisedPositionRestorer restorer) {
+        this.restorer = restorer;
         this.stops = stops;
         this.events = events;
         this.clock = clock;
         this.audit = audit;
         this.rls = rls;
         this.configuration = configuration;
+        this.readSwitch = new StopReadSwitch(configuration);
     }
 
     /**
@@ -252,6 +264,7 @@ public class AvailabilityStopService implements AvailabilityStopPort {
             throw new StaleStopException(expectedVersion, reread.version());
         }
         record(lifted.get(), "inventory.stop.lifted", current, capability, current.reasonCode(), actorSubject);
+        restorer.restoreAfter(lifted.get(), now);
         publish(lifted.get(), false, now);
         return new StopOutcome(lifted.get(), true);
     }
@@ -323,6 +336,7 @@ public class AvailabilityStopService implements AvailabilityStopPort {
                     source == StopSource.POS ? null : Capability.INVENTORY_ADJUST,
                     reasonCode,
                     actorSubject);
+            restorer.restoreAfter(row, now);
             publish(row, false, now);
         }
         return !lifted.isEmpty();
@@ -396,9 +410,13 @@ public class AvailabilityStopService implements AvailabilityStopPort {
      * Marks every stop whose end has passed as {@code EXPIRED}, writes the audit fact and
      * emits the event so the digest and the reconciler hear about it sooner.
      *
-     * <p>Not on any correctness path: a read evaluates {@code ends_at} itself, and the
-     * marketplace resync sweep evaluates it at its own {@code now}, so an expiry this never
-     * gets to still restores the dish within one resync interval (ADR 0141 Decision 5, 7).
+     * <p>Not on any correctness path for a stop that is only a row: a read evaluates {@code
+     * ends_at} itself, and the marketplace resync sweep evaluates it at its own {@code now}, so
+     * an expiry this never gets to still restores the dish within one resync interval (ADR 0141
+     * Decision 5, 7). The one exception is a timed stop a materialisation run wrote onto a
+     * position: the position has no end of its own, so it is given back here
+     * ({@link MaterialisedPositionRestorer}) and a sweeper that is down delays that, in the
+     * direction that sells nothing it should not.
      * Cross-tenant by design, through the ADR 0056 exempt role, like {@code
      * InventoryService.expireStaleReservations}.
      */
@@ -417,6 +435,7 @@ public class AvailabilityStopService implements AvailabilityStopPort {
                     .correlatedBy(row.id().toString())
                     .occurredAt(now)
                     .build());
+            restorer.restoreAfter(row, now);
             publish(row, false, now);
         }
         if (!expired.isEmpty()) {
@@ -465,6 +484,11 @@ public class AvailabilityStopService implements AvailabilityStopPort {
                     ResourceScope.brand(command.tenantId(), command.brandId()));
             if (Boolean.FALSE.equals(enabled)) {
                 throw new StopsFrozenException();
+            }
+            // Rollback switch three (ADR 0141): with stops no longer consulted, a new stop would
+            // sit on its row doing nothing while the operator believed the dish was off sale.
+            if (!readSwitch.readsEnabled(command.tenantId(), command.brandId())) {
+                throw new StopsFrozenException("Stops are switched off for this tenant; a new stop would be ignored");
             }
         }
     }
@@ -559,6 +583,10 @@ public class AvailabilityStopService implements AvailabilityStopPort {
     public static final class StopsFrozenException extends RuntimeException {
         public StopsFrozenException() {
             super("New stops are paused for this tenant");
+        }
+
+        public StopsFrozenException(String message) {
+            super(message);
         }
     }
 

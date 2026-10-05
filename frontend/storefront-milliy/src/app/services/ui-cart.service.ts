@@ -12,7 +12,7 @@ import type {
 } from '../types/cart.types';
 import {
   CartService,
-  modifierOptionIdsFromLineKey,
+  optionIdsOfLine,
   type CheckoutResult,
   type FulfillmentMode,
   type PlatformCart,
@@ -21,13 +21,16 @@ import {
 import { MenuService, type PublishedModifierGroup } from './menu.service';
 import {
   discountLines as discountLinesOf,
+  giftOfferGroups,
   noteLines as noteLinesOf,
   promoOutcomeKey as promoOutcomeKeyOf,
+  type GiftOfferGroup,
 } from './applied-promotions';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import type { ComboPickWire } from '../utils/combo-selection';
+import type { NestedModifierWire } from '../utils/modifier-selection';
 import { variantAvailability } from '../utils/item-availability';
 import { lineAmountMinor, portionStep, type PhysicalFacts } from '../utils/physical';
 
@@ -304,6 +307,24 @@ export class UiCartService {
   );
 
   /**
+   * Variant id to what the customer reads on it, for the variants the menu says can be ordered
+   * right now, as the basket was last projected.
+   */
+  private readonly offerableVariants = signal<
+    ReadonlyMap<string, { readonly name: string; readonly image: string | null }>
+  >(new Map());
+
+  /**
+   * The free gifts the cart could take up (ADR 0140): offers, never lines. Each is named from the
+   * menu, and a gift the menu does not carry or cannot sell right now is not offered. Nothing here
+   * has been added to the basket or discounted; {@link addGift} adds one through the ordinary cart
+   * call and the platform prices it free on the next price.
+   */
+  readonly giftOffers = computed<readonly GiftOfferGroup[]>(() =>
+    giftOfferGroups(this.priced()?.giftOffers, this.offerableVariants()),
+  );
+
+  /**
    * A preview of what delivery will cost, from `POST .../delivery-fee`
    * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
    * priced against a point rather than against the cart, so it is available
@@ -415,9 +436,13 @@ export class UiCartService {
       existing?.lines.map((line) => ({
         variantId: line.variantId,
         quantity: line.quantity,
-        modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+        modifierOptionIds: optionIdsOfLine(line),
         // ADR 0136: and a combo's picks, or its container would be put back with nothing chosen.
         ...(line.comboPicks && line.comboPicks.length > 0 ? { comboPicks: line.comboPicks } : {}),
+        // ... and the second-level answers, or the options that asked for them would be refused.
+        ...(line.nestedModifiers && line.nestedModifiers.length > 0
+          ? { nestedModifiers: line.nestedModifiers }
+          : {}),
       })) ?? [];
 
     this.fulfillmentMode.set(mode);
@@ -437,6 +462,7 @@ export class UiCartService {
           quantity: line.quantity,
           modifierOptionIds: line.modifierOptionIds,
           ...('comboPicks' in line ? { comboPicks: line.comboPicks } : {}),
+          ...('nestedModifiers' in line ? { nestedModifiers: line.nestedModifiers } : {}),
         });
       }
       await this.project(this.carts.cart());
@@ -478,6 +504,8 @@ export class UiCartService {
    * @param comboPicks ADR 0136: what the customer picked inside a combo, set exactly when
    *        `variantId` is a combo's container. Part of the line's identity, like the modifiers: the
    *        same combo with other picks is another line.
+   * @param nestedModifiers ADR 0136: the second-level answers, each under the first-level option
+   *        that opened it. Part of the line's identity as well.
    * @returns whether the platform took the line. On false, {@link errorKey}
    *          names why -- a sale-window or sold-out refusal, an expired basket,
    *          a dropped connection -- so the caller can say so instead of
@@ -489,6 +517,7 @@ export class UiCartService {
     note?: string,
     modifierOptionIds?: readonly string[],
     comboPicks?: readonly ComboPickWire[],
+    nestedModifiers?: readonly NestedModifierWire[],
   ): Promise<boolean> {
     this.updating.set(true);
     this.errorKey.set(null);
@@ -500,6 +529,7 @@ export class UiCartService {
         customerNote: note,
         modifierOptionIds,
         comboPicks,
+        nestedModifiers,
       });
       await this.project(cart);
       return true;
@@ -509,6 +539,41 @@ export class UiCartService {
     } finally {
       this.updating.set(false);
     }
+  }
+
+  /**
+   * Takes up a free gift the platform offered (ADR 0140): puts it in the basket through the
+   * ordinary line write, then prices again, so it is free because the platform priced it so and
+   * for no other reason.
+   *
+   * Adds only what is still missing from the rule's allowance. A line for the same variant that
+   * the basket already holds is topped up, not duplicated, and is written back whole -- its
+   * modifiers and picks -- because the platform's PUT replaces the line.
+   *
+   * @returns false, writing nothing, for a variant that is not on offer, so a stale button cannot
+   *          add a dish the platform no longer gives away; and false when the platform refused
+   *          the line, in which case {@link errorKey} says why.
+   */
+  async addGift(variantId: string): Promise<boolean> {
+    const group = this.giftOffers().find((candidate) =>
+      candidate.choices.some((choice) => choice.variantId === variantId),
+    );
+    if (!group) {
+      return false;
+    }
+    const held = this.items().find(
+      (item) =>
+        item.variant_id === variantId &&
+        item.modifierOptionIds.length === 0 &&
+        (item.comboPicks?.length ?? 0) === 0,
+    );
+    return this.add(
+      variantId,
+      tidy((held?.quantity ?? 0) + group.toAdd),
+      undefined,
+      held?.modifierOptionIds,
+      held?.comboPicks,
+    );
   }
 
   /**
@@ -535,8 +600,10 @@ export class UiCartService {
               variantId: item.variant_id,
               quantity,
               modifierOptionIds: item.modifierOptionIds,
-              // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+              // ADR 0136: resent whole, or a quantity change would strip a combo's picks
+              // and the second-level answers under the options.
               comboPicks: item.comboPicks,
+              nestedModifiers: item.nestedModifiers,
             });
       await this.project(cart);
     } catch (failure) {
@@ -784,6 +851,7 @@ export class UiCartService {
         physical: PhysicalFacts | null;
       }
     >();
+    const offerable = new Map<string, { name: string; image: string | null }>();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
@@ -795,8 +863,17 @@ export class UiCartService {
           onSaleNow: variant.onSaleNow !== false,
           physical: variant.physical ?? null,
         });
+        // A gift that cannot be ordered right now (sold out, stopped, outside its sale window)
+        // is not offered: adding it would only be refused.
+        if (variant.orderable !== false && variant.onSaleNow !== false) {
+          offerable.set(variant.variantId, {
+            name: product.name,
+            image: product.imageUrls[0] ?? null,
+          });
+        }
       }
     }
+    this.offerableVariants.set(offerable);
     const modifierOptionsById = new Map<
       string,
       { groupName: string; label: string; amountMinor: number | null }
@@ -842,9 +919,14 @@ export class UiCartService {
         if (!known) {
           return null;
         }
-        const modifierOptionIds = modifierOptionIdsFromLineKey(line.lineKey, line.variantId);
-        const modifiers: CartResponseModifierSelection[] = modifierOptionIds
-          .map((optionId) => {
+        const modifierOptionIds = optionIdsOfLine(line);
+        const nestedModifiers = line.nestedModifiers ?? [];
+        // The first-level choices, then the answers under them (each marked with its parent).
+        const modifiers: CartResponseModifierSelection[] = [
+          ...modifierOptionIds.map((optionId) => ({ optionId, parentOptionId: null })),
+          ...nestedModifiers,
+        ]
+          .map(({ optionId, parentOptionId }) => {
             const resolved = modifierOptionsById.get(optionId);
             return resolved
               ? {
@@ -852,6 +934,7 @@ export class UiCartService {
                   groupName: resolved.groupName,
                   label: resolved.label,
                   amountMinor: resolved.amountMinor,
+                  ...(parentOptionId ? { parentOptionId } : {}),
                 }
               : null;
           })
@@ -900,6 +983,7 @@ export class UiCartService {
           modifiers,
           comboPicks,
           comboComponents,
+          nestedModifiers,
         };
         return projected;
       })

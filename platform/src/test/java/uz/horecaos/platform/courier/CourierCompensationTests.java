@@ -1563,6 +1563,84 @@ class CourierCompensationTests {
     }
 
     @Test
+    @DisplayName("closing a settlement period fires a wired CASH_VARIANCE rule when the period carries a "
+            + "variance entry, and the entry it posts is stamped RULE (gap map row 3.4c)")
+    void settlementPeriodCloseFiresAWiredCashVarianceRule() {
+        // The threshold is a COUNT of the period's CASH_VARIANCE ledger entries
+        // (couriers.md §11, ADR 0108), not a shortfall amount -- so GTE 1 reads
+        // "any variance at all in the period".
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "CASH_SHORT_IN_PERIOD",
+                "PENALTY",
+                "CASH_VARIANCE",
+                "The bag came up short at least once in the settlement period",
+                new JdbcCourierStore.RuleConfig(
+                        -10_000, UZS, "GTE", 1, "SETTLEMENT_PERIOD", "SETTLEMENT_PERIOD_CLOSE"));
+
+        // A genuinely short handover, produced the way production produces one:
+        // a delivery on a shift, the shift closed, the courier declaring less
+        // than was collected and the cashier confirming what was counted.
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 4000, 90_000));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        CourierShiftService.CloseOutcome closed = shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        UUID handoverId = Objects.requireNonNull(closed.cashHandoverId());
+        cash.declare(TENANT, handoverId, courierId, 85_000, courier());
+        cash.confirm(TENANT, handoverId, 85_000, "SHORT_AT_COUNT", cashier(), "five thousand short");
+        assertThat(entriesOfType(LedgerEntryType.CASH_VARIANCE)).hasSize(1);
+        assertThat(entriesOfType(LedgerEntryType.PENALTY))
+                .as("nothing fires before the period closes: the rule's window is the period")
+                .isEmpty();
+
+        PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
+        settlement.close(TENANT, period.id(), manager(), "closing");
+
+        assertThat(entriesOfType(LedgerEntryType.PENALTY))
+                .filteredOn(entry -> "CASH_SHORT_IN_PERIOD".equals(entry.reasonCode()))
+                .as("the wired CASH_VARIANCE rule fired at settlement close")
+                .hasSize(1)
+                .allSatisfy(entry -> {
+                    assertThat(entry.amountMinor()).isEqualTo(-10_000);
+                    assertThat(entry.origin()).isEqualTo(AdjustmentOrigin.RULE);
+                });
+    }
+
+    @Test
+    @DisplayName("a wired CASH_VARIANCE rule does not fire for a period whose cash reconciled exactly")
+    void settlementPeriodCloseDoesNotFireACashVarianceRuleWhenNothingWasShort() {
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "CASH_SHORT_IN_PERIOD",
+                "PENALTY",
+                "CASH_VARIANCE",
+                "The bag came up short at least once in the settlement period",
+                new JdbcCourierStore.RuleConfig(
+                        -10_000, UZS, "GTE", 1, "SETTLEMENT_PERIOD", "SETTLEMENT_PERIOD_CLOSE"));
+
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 4000, 90_000));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        CourierShiftService.CloseOutcome closed = shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        UUID handoverId = Objects.requireNonNull(closed.cashHandoverId());
+        cash.declare(TENANT, handoverId, courierId, 90_000, courier());
+        cash.confirm(TENANT, handoverId, 90_000, null, cashier(), "counted");
+        assertThat(entriesOfType(LedgerEntryType.CASH_VARIANCE)).isEmpty();
+
+        PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
+        settlement.close(TENANT, period.id(), manager(), "closing");
+
+        assertThat(entriesOfType(LedgerEntryType.PENALTY))
+                .filteredOn(entry -> "CASH_SHORT_IN_PERIOD".equals(entry.reasonCode()))
+                .as("a count of zero variances does not satisfy GTE 1")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("a statement document that used tax language would be refused before it is hashed")
     void aStatementUsingTaxLanguageIsRefused() {
         assertThat(catchThrowable(

@@ -1,10 +1,17 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { CatalogApi } from '../../catalog/catalog-api';
+import { TaxProfile } from '../../catalog/catalog-domain';
+import { PricingApi } from '../../catalog/pricing-api';
+import { PaymentMethodView, PaymentMethodsApi } from '../payment-methods/payment-methods-api';
 import {
   FiscalCoverageSummary,
   FiscalizationApi,
@@ -65,6 +72,44 @@ const COVERAGE: FiscalCoverageSummary = {
   nodes: [{ nodeType: 'FEE', nodeId: 'fee-1', name: null, categoryName: null, locationCount: 0 }],
 };
 
+const VAT_PROFILE: TaxProfile = {
+  taxProfileId: 'tax-1',
+  jurisdictionCode: 'UZ',
+  mode: 'INCLUSIVE',
+  rateBasisPoints: 1200,
+  validFrom: '2026-01-01T00:00:00Z',
+  version: 1,
+};
+
+function method(
+  code: string,
+  displayName: string,
+  responsibility: PaymentMethodView['responsibility'],
+  status: PaymentMethodView['status'] = 'ACTIVE',
+): PaymentMethodView {
+  return {
+    id: `method-${code}`,
+    code,
+    displayName,
+    localizedNames: {},
+    responsibility,
+    settlesFromBalance: false,
+    status,
+    icon: null,
+    sortOrder: 0,
+    providerInstallationId: null,
+    contractReference: null,
+    version: 1,
+  };
+}
+
+const METHODS: readonly PaymentMethodView[] = [
+  method('CASH', 'Cash', 'OPERATOR'),
+  method('CLICK', 'Click', 'PARTNER'),
+  method('PAYME', 'Payme', 'PARTNER'),
+  method('EXPRESS24', 'Express24', 'MARKETPLACE', 'DISABLED'),
+];
+
 class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(SCOPE);
   readonly denied = signal(false);
@@ -97,6 +142,8 @@ describe('FiscalizationPage', () => {
     classifyDeliveryFee: ReturnType<typeof vi.fn>;
     backfillCodes: ReturnType<typeof vi.fn>;
   };
+  let taxProfiles: ReturnType<typeof vi.fn>;
+  let paymentMethods: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     api = {
@@ -127,10 +174,18 @@ describe('FiscalizationPage', () => {
       ),
     };
 
+    taxProfiles = vi.fn(() => of([VAT_PROFILE]));
+    paymentMethods = vi.fn().mockResolvedValue(METHODS);
+
     await TestBed.configureTestingModule({
       imports: [FiscalizationPage],
       providers: [
+        provideRouter([]),
         { provide: FiscalizationApi, useValue: api },
+        { provide: PricingApi, useValue: { taxProfiles } },
+        { provide: PaymentMethodsApi, useValue: { list: paymentMethods } },
+        // The official ИКПУ list has never been imported: every lookup answers with nothing.
+        { provide: CatalogApi, useValue: { searchMxikReference: () => of([]) } },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -340,7 +395,9 @@ describe('FiscalizationPage', () => {
     findButton('Classify delivery fee').click();
     fixture.detectChanges();
 
-    const mxikInput = fixture.nativeElement.querySelector('#delivery-fee-mxik') as HTMLInputElement;
+    const mxikInput = fixture.nativeElement.querySelector(
+      '[data-testid="delivery-fee-mxik"] input',
+    ) as HTMLInputElement;
     mxikInput.value = '10101001001000000';
     mxikInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -400,29 +457,32 @@ describe('FiscalizationPage', () => {
     }
 
     function type(testId: string, value: string): void {
-      const target = fixture.nativeElement.querySelector(
-        `[data-testid="${testId}"]`,
-      ) as HTMLInputElement;
+      const cell = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as HTMLElement;
+      const target =
+        cell instanceof HTMLInputElement ? cell : (cell.querySelector('input') as HTMLInputElement);
       target.value = value;
       target.dispatchEvent(new Event('input'));
       fixture.detectChanges();
     }
 
-    it('lists a dish short of a code in the editor and keeps it out of the read-only list', async () => {
+    it('lists a dish and a modifier option short of a code in the editor and keeps them out of the read-only list', async () => {
       await openClassification();
 
       const editorRows = [
         ...fixture.nativeElement.querySelectorAll('[data-testid="backfill-row"]'),
       ] as HTMLElement[];
-      expect(editorRows.map((row) => row.textContent)).toEqual([expect.stringContaining('Plov')]);
+      expect(editorRows.map((row) => row.textContent)).toEqual([
+        expect.stringContaining('Plov'),
+        expect.stringContaining('Cheese'),
+      ]);
 
-      const tableRows = [
-        ...fixture.nativeElement.querySelectorAll('table.table tbody tr'),
+      const listed = [
+        ...fixture.nativeElement.querySelectorAll('table.table:not(.vat) tbody tr'),
       ] as HTMLElement[];
-      const tableText = tableRows.map((row) => row.textContent).join('|');
-      expect(tableText).toContain('Cheese');
+      const tableText = listed.map((row) => row.textContent).join('|');
       expect(tableText).toContain('Samsa');
       expect(tableText).not.toContain('Plov');
+      expect(tableText).not.toContain('Cheese');
     });
 
     it('hides the read-only list entirely when the editor already shows every unclassified node', async () => {
@@ -434,7 +494,7 @@ describe('FiscalizationPage', () => {
       await flushMicrotasks();
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.querySelector('table.table')).toBeNull();
+      expect(fixture.nativeElement.querySelector('table.table:not(.vat)')).toBeNull();
       expect(text()).not.toContain('Everything is classified.');
     });
 
@@ -451,9 +511,172 @@ describe('FiscalizationPage', () => {
       fixture.detectChanges();
 
       expect(api.backfillCodes).toHaveBeenCalledWith(SCOPE, [
-        { nodeId: 'plov', mxikCode: '10706001001000000', packageCode: '1500316' },
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'plov',
+          mxikCode: '10706001001000000',
+          packageCode: '1500316',
+        },
       ]);
       expect(api.fiscalCoverage).toHaveBeenCalledTimes(2);
+    });
+
+    it('writes a modifier option through the same request as a dish', async () => {
+      await openClassification();
+
+      type('backfill-package-option-1', '1500316');
+      type('backfill-mxik-option-1', '10101001001000000');
+      (
+        fixture.nativeElement.querySelector('[data-testid="backfill-save"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.backfillCodes).toHaveBeenCalledWith(SCOPE, [
+        {
+          nodeType: 'MODIFIER_OPTION',
+          nodeId: 'option-1',
+          mxikCode: '10101001001000000',
+          packageCode: '1500316',
+        },
+      ]);
+    });
+  });
+
+  // -------------------------------------- read-only references on Tab 3 (settings.md §10.7)
+
+  describe('the read-only references on Tab 3', () => {
+    async function openClassification(): Promise<void> {
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    function byTestId(testId: string): HTMLElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${testId}"]`);
+    }
+
+    function normalised(testId: string): string {
+      return (byTestId(testId)?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    it('draws the VAT rate of each tax profile with the legal entities that point at it', async () => {
+      api.listLegalEntities.mockResolvedValue([
+        { ...ENTITY, taxProfileId: 'tax-1' },
+        { ...ENTITY, id: 'entity-2', code: 'SECOND', legalName: 'Second Co', taxProfileId: null },
+      ]);
+      fixture = TestBed.createComponent(FiscalizationPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      await openClassification();
+
+      expect(taxProfiles).toHaveBeenCalledWith(SCOPE);
+      const row = normalised('fiscal-vat-defaults');
+      expect(row).toContain('UZ');
+      expect(row).toContain('12 %');
+      expect(row).toContain('Inclusive');
+      expect(byTestId('fiscal-vat-entities')?.textContent?.trim()).toBe('Rayhon LLC');
+      expect(byTestId('fiscal-vat-link')?.getAttribute('href')).toBe('/catalog/prices/tax-profile');
+    });
+
+    it('names the legal entities whose profile is no longer in force, since a rate change supersedes the profile they chose', async () => {
+      api.listLegalEntities.mockResolvedValue([
+        { ...ENTITY, taxProfileId: 'tax-0' },
+        {
+          ...ENTITY,
+          id: 'entity-2',
+          code: 'SECOND',
+          legalName: 'Second Co',
+          taxProfileId: 'tax-1',
+        },
+      ]);
+      fixture = TestBed.createComponent(FiscalizationPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      await openClassification();
+
+      expect(byTestId('fiscal-vat-entities')?.textContent?.trim()).toBe('Second Co');
+      const stale = normalised('fiscal-vat-stale');
+      expect(stale).toContain('Rayhon LLC');
+      expect(stale).not.toContain('Second Co');
+    });
+
+    it('draws no superseded-profile line when every entity points at a profile in force, or at none', async () => {
+      api.listLegalEntities.mockResolvedValue([
+        { ...ENTITY, taxProfileId: 'tax-1' },
+        { ...ENTITY, id: 'entity-2', code: 'SECOND', legalName: 'Second Co', taxProfileId: null },
+      ]);
+      fixture = TestBed.createComponent(FiscalizationPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      await openClassification();
+
+      expect(byTestId('fiscal-vat-row')).not.toBeNull();
+      expect(byTestId('fiscal-vat-stale')).toBeNull();
+    });
+
+    it('says plainly when the brand has no tax profile, since every cart is refused without one', async () => {
+      taxProfiles.mockReturnValue(of([]));
+      await openClassification();
+
+      expect(byTestId('fiscal-vat-empty')).not.toBeNull();
+      expect(byTestId('fiscal-vat-row')).toBeNull();
+    });
+
+    it('draws a fractional rate as it is, never rounded', async () => {
+      taxProfiles.mockReturnValue(
+        of([{ ...VAT_PROFILE, rateBasisPoints: 1250, mode: 'EXCLUSIVE' }]),
+      );
+      await openClassification();
+
+      expect(normalised('fiscal-vat-defaults')).toContain('12.5 %');
+      expect(normalised('fiscal-vat-defaults')).toContain('Exclusive');
+    });
+
+    it('groups the registry’s payment methods by the responsibility each was registered under', async () => {
+      await openClassification();
+
+      expect(paymentMethods).toHaveBeenCalledWith(SCOPE);
+      expect(normalised('fiscal-resp-PARTNER')).toContain('Click');
+      expect(normalised('fiscal-resp-PARTNER')).toContain('Payme');
+      expect(normalised('fiscal-resp-OPERATOR')).toContain('Cash');
+      expect(normalised('fiscal-resp-PARTNER')).not.toContain('Cash');
+    });
+
+    it('draws every responsibility, an empty one included, and leaves a disabled method out', async () => {
+      await openClassification();
+
+      expect(byTestId('fiscal-resp-TERMINAL')).not.toBeNull();
+      expect(
+        byTestId('fiscal-resp-TERMINAL')?.querySelector('[data-testid="fiscal-resp-none"]'),
+      ).not.toBeNull();
+      expect(
+        byTestId('fiscal-resp-MARKETPLACE')?.querySelector('[data-testid="fiscal-resp-none"]'),
+      ).not.toBeNull();
+      expect(text()).not.toContain('Express24');
+      expect(byTestId('fiscal-resp-link')?.getAttribute('href')).toBe('/settings/payment-methods');
+    });
+
+    it('lets each reference fail on its own without taking the coverage down', async () => {
+      taxProfiles.mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
+      );
+      paymentMethods.mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, null));
+      await openClassification();
+
+      expect(byTestId('fiscal-vat-denied')).not.toBeNull();
+      expect(byTestId('fiscal-responsibility-failed')).not.toBeNull();
+      expect(text()).toContain('Unclassified: 1 of 3 items');
+    });
+
+    it('reads the references when the classification tab is opened, not before', async () => {
+      expect(taxProfiles).not.toHaveBeenCalled();
+      expect(paymentMethods).not.toHaveBeenCalled();
+
+      await openClassification();
+
+      expect(taxProfiles).toHaveBeenCalledTimes(1);
+      expect(paymentMethods).toHaveBeenCalledTimes(1);
     });
   });
 });

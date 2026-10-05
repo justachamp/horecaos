@@ -15,6 +15,7 @@ import uz.horecaos.platform.catalog.api.StopOverlayLookup;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.inventory.application.AvailabilityResolver;
+import uz.horecaos.platform.inventory.application.StopReadSwitch;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore.StopRow;
 
@@ -39,13 +40,26 @@ public class InventoryStopOverlayLookup implements StopOverlayLookup {
     private final ChannelOfferingLookup catalog;
     private final TenantRlsSession rls;
     private final Clock clock;
+    private final StopReadSwitch readSwitch;
 
+    /** A fixture built before the decommission existed: stops are always consulted. */
     public InventoryStopOverlayLookup(
             JdbcAvailabilityStopStore stops, ChannelOfferingLookup catalog, TenantRlsSession rls, Clock clock) {
+        this(stops, catalog, rls, clock, StopReadSwitch.alwaysOn());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryStopOverlayLookup(
+            JdbcAvailabilityStopStore stops,
+            ChannelOfferingLookup catalog,
+            TenantRlsSession rls,
+            Clock clock,
+            StopReadSwitch readSwitch) {
         this.stops = stops;
         this.catalog = catalog;
         this.rls = rls;
         this.clock = clock;
+        this.readSwitch = readSwitch;
     }
 
     @Override
@@ -56,6 +70,11 @@ public class InventoryStopOverlayLookup implements StopOverlayLookup {
             return Map.of();
         }
         rls.bindTenant(tenantId);
+        if (!readSwitch.readsEnabled(tenantId, brandId)) {
+            // Decommissioned (ADR 0141, rollback switch three): the list says what is sellable,
+            // and a stop that is no longer read sells nothing less.
+            return Map.of();
+        }
         Instant now = clock.instant();
         List<StopRow> inForce = stops.activeAtLocation(tenantId, brandId, locationId, now);
         // A MENU stop touches this branch only if some binding here points at its menu --
@@ -94,6 +113,9 @@ public class InventoryStopOverlayLookup implements StopOverlayLookup {
     @Transactional(readOnly = true)
     public Set<UUID> variantsStoppedOnEveryChannel(UUID tenantId, UUID brandId, UUID locationId) {
         rls.bindTenant(tenantId);
+        if (!readSwitch.readsEnabled(tenantId, brandId)) {
+            return Set.of();
+        }
         return stops.variantsStoppedEverywhereAt(tenantId, brandId, locationId, clock.instant());
     }
 }

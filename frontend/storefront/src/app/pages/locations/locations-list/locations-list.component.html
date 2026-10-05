@@ -1,6 +1,9 @@
 <div
   class="flex min-h-0 flex-1 flex-col bg-surface-base pt-2 text-text-primary"
-  style="padding-left: max(1rem, var(--safe-left, 0px)); padding-right: max(1rem, var(--safe-right, 0px));"
+  style="
+    padding-left: max(1rem, var(--safe-left, 0px));
+    padding-right: max(1rem, var(--safe-right, 0px));
+  "
 >
   <div class="mx-auto w-full max-w-[420px] min-h-0 flex-1 overflow-auto scrollbar-stable pb-28">
     <!-- Header -->
@@ -12,7 +15,12 @@
         [attr.aria-label]="'common.back' | t"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
       </button>
       <div class="flex flex-1 flex-col items-center gap-0.5 text-center">
@@ -26,7 +34,12 @@
         [attr.aria-label]="'locations.addAddress' | t"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 4v16m8-8H4"
+          />
         </svg>
       </button>
     </header>
@@ -95,7 +108,9 @@
                     <span class="font-semibold text-text-primary">{{ loc.name }}</span>
                   }
                   @if (loc.isDefault) {
-                    <span class="rounded bg-surface-raised-2 px-2 py-0.5 text-xs font-medium text-text-primary">
+                    <span
+                      class="rounded bg-surface-raised-2 px-2 py-0.5 text-xs font-medium text-text-primary"
+                    >
                       {{ 'common.default' | t }}
                     </span>
                   }
@@ -113,7 +128,9 @@
                       [attr.aria-label]="'common.save' | t"
                     >
                       @if (updatingId() === loc.id) {
-                        <span class="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent"></span>
+                        <span
+                          class="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent"
+                        ></span>
                       } @else {
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path
@@ -221,7 +238,11 @@
   @if (!loading() && !editMode() && locations().length > 0) {
     <div
       class="fixed left-1/2 z-40 w-full max-w-[420px] -translate-x-1/2 px-4 pt-2"
-      style="bottom: calc(5.5rem + var(--safe-bottom, 0px)); padding-left: max(1rem, var(--safe-left, 0px)); padding-right: max(1rem, var(--safe-right, 0px));"
+      style="
+        bottom: calc(5.5rem + var(--safe-bottom, 0px));
+        padding-left: max(1rem, var(--safe-left, 0px));
+        padding-right: max(1rem, var(--safe-right, 0px));
+      "
     >
       <button
         type="button"

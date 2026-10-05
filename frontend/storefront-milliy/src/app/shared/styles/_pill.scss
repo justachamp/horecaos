@@ -1,0 +1,26 @@
+/**
+ * The filled pill every call to action on the Milliy screens shares: a brand-coloured capsule that
+ * greys out while disabled. A rule that includes it adds only its own size (height, width,
+ * padding) and, where it differs, its font size or shadow.
+ *
+ * A mixin rather than a global class on purpose: an emulated-encapsulation component sheet
+ * outranks a global rule of the same weight, so a global `.pill` would lose to the page's own
+ * rules for the same element. The cost is that each sheet that includes it carries the bytes; a
+ * page that outgrows its stylesheet budget moves a region into a component, as the dine-in
+ * table's order bar did.
+ */
+@mixin button {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 13px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled {
+    background: var(--line-default);
+    color: var(--text-muted);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+}

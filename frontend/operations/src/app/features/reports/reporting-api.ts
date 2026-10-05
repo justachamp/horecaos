@@ -330,6 +330,35 @@ export interface VariantSalesListResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/**
+ * ADR 0136: one combo's sales in range — mirrors `ReportingController.ComboSalesRowResponse`.
+ * A combo is several ordinary lines sharing a selection, so `combosSold` counts one quantity per
+ * purchase while the money is summed over the purchase's component lines.
+ *
+ * @property purchases how many purchases those were (one purchase may be several combos)
+ * @property orders on how many completed orders
+ * @property deliveryCombos of `combosSold`, those on DELIVERY orders; null when none were
+ * @property pickupCombos of `combosSold`, those on PICKUP orders; null when none were
+ */
+export interface ComboSalesRowResponse {
+  readonly comboContainerVariantId: string;
+  readonly comboName: string;
+  readonly combosSold: number;
+  readonly purchases: number;
+  readonly orders: number;
+  readonly totalGrossSom: number;
+  readonly totalDiscountSom: number;
+  readonly totalNetSom: number;
+  readonly deliveryCombos: number | null;
+  readonly pickupCombos: number | null;
+}
+
+export interface ComboSalesListResponse {
+  readonly rows: readonly ComboSalesRowResponse[];
+  readonly maybeMore: boolean;
+  readonly provenance: ProvenanceResponse;
+}
+
 /** Row 7.7: server-side sort for {@link ReportingApi.variantSales} — mirrors `JdbcReportingStore.VariantSalesSort`. */
 export type VariantSalesSort = 'QUANTITY_DESC' | 'REVENUE_DESC' | 'NAME_ASC';
 
@@ -1078,6 +1107,33 @@ export class ReportingApi {
           afterRevenueSom: params.cursor?.afterRevenueSom,
           afterProductName: params.cursor?.afterProductName,
           afterVariantId: params.cursor?.afterVariantId,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /**
+   * ADR 0136: sales by combo container over the closed business days in range, completed orders
+   * only (`GET .../reporting/combo-sales`, `REPORTING_READ`). The same range and fulfilment filters
+   * as {@link variantSales}; a component sold on its own is not counted here and still appears
+   * there under its own name.
+   */
+  async comboSales(
+    tenantId: string,
+    params: RangeParams & {
+      readonly fulfilmentType?: readonly string[];
+      readonly limit?: number;
+    },
+  ): Promise<ComboSalesListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ComboSalesListResponse>(reportsPaths.comboSales(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          fulfilmentType: params.fulfilmentType,
+          limit: params.limit,
         },
       }),
     );

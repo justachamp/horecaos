@@ -52,18 +52,21 @@ describe('ORDER_STATUS_I18N_KEY: every real platform status resolves to an actua
   describe.each(['en', 'ru', 'uz'] as const)('%s.json', (locale) => {
     const dict = TRANSLATIONS[locale];
 
-    it.each(ALL_PLATFORM_STATUSES)('resolves %s to a real, non-empty translated string', (status) => {
-      const key = ORDER_STATUS_I18N_KEY[status];
-      const value = getNested(dict, key);
+    it.each(ALL_PLATFORM_STATUSES)(
+      'resolves %s to a real, non-empty translated string',
+      (status) => {
+        const key = ORDER_STATUS_I18N_KEY[status];
+        const value = getNested(dict, key);
 
-      expect(typeof value).toBe('string');
-      expect((value as string).trim().length).toBeGreaterThan(0);
-      // The exact defect this whole wave exists to fix: a raw i18n key left
-      // on screen because the lookup missed. Guard against the lookup
-      // resolving to the key path itself (which is what `TranslateService.get`
-      // returns when nothing is found).
-      expect(value).not.toBe(key);
-    });
+        expect(typeof value).toBe('string');
+        expect((value as string).trim().length).toBeGreaterThan(0);
+        // The exact defect this whole wave exists to fix: a raw i18n key left
+        // on screen because the lookup missed. Guard against the lookup
+        // resolving to the key path itself (which is what `TranslateService.get`
+        // returns when nothing is found).
+        expect(value).not.toBe(key);
+      },
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pricing.web;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -33,6 +34,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PromotionAuthoringService;
 import uz.horecaos.platform.pricing.application.PromotionEvaluator;
+import uz.horecaos.platform.pricing.application.PromotionRedemptionRevealService;
 import uz.horecaos.platform.pricing.application.PromotionSimulationService;
 import uz.horecaos.platform.pricing.application.PromotionValidator;
 import uz.horecaos.platform.pricing.application.QuoteService;
@@ -68,10 +70,15 @@ public class PromotionController {
 
     private final PromotionAuthoringService authoring;
     private final PromotionSimulationService simulation;
+    private final PromotionRedemptionRevealService reveal;
 
-    public PromotionController(PromotionAuthoringService authoring, PromotionSimulationService simulation) {
+    public PromotionController(
+            PromotionAuthoringService authoring,
+            PromotionSimulationService simulation,
+            PromotionRedemptionRevealService reveal) {
         this.authoring = authoring;
         this.simulation = simulation;
+        this.reveal = reveal;
     }
 
     // ------------------------------------------------------------------- reads
@@ -104,14 +111,38 @@ public class PromotionController {
     @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
     @Operation(
             summary = "The redemptions recorded against one promotion",
-            description = "Bounded, newest first, ids and amounts only: an account id and an order id, never "
-                    + "a name or a contact. One row per (order, promotion): an amended order moves its row in "
-                    + "place, so a redemption is never counted twice.")
+            description = "Bounded, newest first: the redemption's id, its order and its amounts, never the "
+                    + "customer behind it (customerAccountId is deprecated and always null). One row per "
+                    + "(order, promotion): an amended order moves its row in place, so a redemption is never "
+                    + "counted twice. This list is open to anyone who may read promotions and is not recorded, "
+                    + "so it names no customer: who redeemed it is answered only by the audited "
+                    + "customer-reveal below, which needs customer.read and a purpose and is recorded.")
     public ResponseEntity<List<RedemptionResponse>> redemptions(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID promotionId) {
         return ResponseEntity.ok(authoring.redemptions(tenantId, brandId, promotionId).stream()
                 .map(RedemptionResponse::of)
                 .toList());
+    }
+
+    @PostMapping("/{promotionId}/redemptions/{redemptionId}/customer-reveal")
+    @RequiresCapability(value = Capability.CUSTOMER_READ, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Who redeemed it: the customer account behind one redemption",
+            description = "The 7.9 report shows a customer only as the ADR 0029 pseudonym, which cannot be "
+                    + "walked back; the redemption's own id, which the report row carries, can. Needs "
+                    + "customer.read and a stated purpose, and writes a security audit fact targeted at the "
+                    + "customer account. Answers with the account id to open the customer card with, and "
+                    + "nothing about the person: a contact value stays behind the card's own "
+                    + "customer.pii.reveal. A guest order answers with no account. Works for an automatic "
+                    + "promotion's ledger row and for a promo code's redemption alike.")
+    public ResponseEntity<RedemptionCustomerResponse> revealCustomer(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID promotionId,
+            @PathVariable UUID redemptionId,
+            @Valid @RequestBody RevealCustomerBody body) {
+        return ResponseEntity.ok(RedemptionCustomerResponse.of(
+                this.reveal.reveal(tenantId, brandId, promotionId, redemptionId, body.purpose())));
     }
 
     // --------------------------------------------------------------- authoring
@@ -507,10 +538,22 @@ public class PromotionController {
             @Nullable UUID approvalRequestId,
             @Nullable PromotionResponse promotion) {}
 
+    /**
+     * One redemption, without its customer.
+     *
+     * @param customerAccountId always null. The list is read under {@code pricing.read}, and the account behind
+     *     a redemption is the linkage ADR 0029 withholds: only {@code customer-reveal} answers it, with
+     *     {@code customer.read}, a purpose and a security audit fact. The property stays in the v1 contract
+     *     because ADR 0031 allows no field to be removed within a major version.
+     */
     public record RedemptionResponse(
             UUID redemptionId,
             UUID orderId,
-            @Nullable UUID customerAccountId,
+
+            @Schema(deprecated = true, description = "Always null: who redeemed it is answered only by customer-reveal")
+            @Nullable
+            UUID customerAccountId,
+
             int definitionVersion,
             long discountMinor,
             long markupMinor,
@@ -521,12 +564,36 @@ public class PromotionController {
             return new RedemptionResponse(
                     row.id(),
                     row.orderId(),
-                    row.customerAccountId(),
+                    null,
                     row.definitionVersion(),
                     row.discountMinor(),
                     row.markupMinor(),
                     row.currency(),
                     row.status());
+        }
+    }
+
+    public record RevealCustomerBody(
+            @NotBlank @Size(max = 512) String purpose) {}
+
+    /**
+     * @param customerAccountId the account to open the customer card with; null for a guest order
+     * @param sourceKind {@code AUTOMATIC} or {@code COUPON}
+     */
+    public record RedemptionCustomerResponse(
+            UUID redemptionId,
+            UUID promotionId,
+            String sourceKind,
+            UUID orderId,
+            @Nullable UUID customerAccountId) {
+
+        static RedemptionCustomerResponse of(PromotionRedemptionRevealService.Revealed revealed) {
+            return new RedemptionCustomerResponse(
+                    revealed.redemptionId(),
+                    revealed.promotionId(),
+                    revealed.sourceKind(),
+                    revealed.orderId(),
+                    revealed.customerAccountId());
         }
     }
 

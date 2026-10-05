@@ -2,7 +2,6 @@ package uz.horecaos.platform.ordering.infrastructure.catalog;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -82,20 +81,30 @@ public class JdbcReorderMenu implements ReorderMenu {
         }
 
         Set<UUID> groupIds = new LinkedHashSet<>();
-        products.forEach(product -> groupIds.addAll(idList(product.content(), "modifierGroupIds")));
+        products.forEach(product -> {
+            groupIds.addAll(idList(product.content(), "modifierGroupIds"));
+            // ADR 0136: and the groups a variant carries of its own.
+            variantEntries(product.content()).forEach(variant -> groupIds.addAll(idList(variant, "modifierGroupIds")));
+        });
         Map<UUID, Set<UUID>> optionsByGroup = optionsOfGroups(publicationId.get(), groupIds);
 
         Map<UUID, VariantOffer> offers = new HashMap<>();
         for (ProductItem product : products) {
-            Set<UUID> offeredOptions = new LinkedHashSet<>();
+            Set<UUID> productOptions = new LinkedHashSet<>();
             for (UUID groupId : idList(product.content(), "modifierGroupIds")) {
-                offeredOptions.addAll(optionsByGroup.getOrDefault(groupId, Set.of()));
+                productOptions.addAll(optionsByGroup.getOrDefault(groupId, Set.of()));
             }
-            for (UUID variantId : publishedVariantsOf(product.content())) {
+            for (Map<String, Object> variant : variantEntries(product.content())) {
+                UUID variantId = UUID.fromString(String.valueOf(variant.get("variantId")));
                 String status = offeringStatus.get(variantId);
                 if (status == null) {
                     // Published by the brand, not offered by this location.
                     continue;
+                }
+                // The options this variant is offered: its product's, and its own groups'.
+                Set<UUID> offeredOptions = new LinkedHashSet<>(productOptions);
+                for (UUID groupId : idList(variant, "modifierGroupIds")) {
+                    offeredOptions.addAll(optionsByGroup.getOrDefault(groupId, Set.of()));
                 }
                 offers.put(
                         variantId,
@@ -103,6 +112,21 @@ public class JdbcReorderMenu implements ReorderMenu {
             }
         }
         return new Snapshot(offers);
+    }
+
+    /** The published entries of a product's variants. */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> variantEntries(Map<String, Object> content) {
+        if (!(content.get("variants") instanceof List<?> published)) {
+            return List.of();
+        }
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (Object element : published) {
+            if (element instanceof Map<?, ?> variant && variant.get("variantId") != null) {
+                entries.add((Map<String, Object>) variant);
+            }
+        }
+        return entries;
     }
 
     /** Sellable offering rows for the asked-about variants, HIDDEN excluded. */
@@ -189,19 +213,6 @@ public class JdbcReorderMenu implements ReorderMenu {
         for (Object element : published) {
             if (element instanceof Map<?, ?> option) {
                 ids.add(UUID.fromString(String.valueOf(option.get("optionId"))));
-            }
-        }
-        return ids;
-    }
-
-    private static Set<UUID> publishedVariantsOf(Map<String, Object> content) {
-        if (!(content.get("variants") instanceof List<?> published)) {
-            return Set.of();
-        }
-        Set<UUID> ids = new HashSet<>();
-        for (Object element : published) {
-            if (element instanceof Map<?, ?> variant) {
-                ids.add(UUID.fromString(String.valueOf(variant.get("variantId"))));
             }
         }
         return ids;

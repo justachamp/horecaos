@@ -78,15 +78,13 @@ class FakeOrdersService {
 
 class FakeReviewsService {
   myReviews = vi.fn(async () => ({ items: [] as ReviewResponse[], nextCursor: null }));
-  submit = vi.fn(
-    async (): Promise<ReviewResponse> => ({
-      id: 'r1',
-      orderId: 'o1',
-      rating: 5,
-      comment: null,
-      submittedAt: new Date().toISOString(),
-    }),
-  );
+  submit = vi.fn(async (): Promise<ReviewResponse> => ({
+    id: 'r1',
+    orderId: 'o1',
+    rating: 5,
+    comment: null,
+    submittedAt: new Date().toISOString(),
+  }));
 }
 
 async function setUp(
@@ -151,7 +149,15 @@ describe('ProfileComponent -- denied/empty states', () => {
     const { fixture } = await setUp((_p, orders, reviews) => {
       orders.getOrders.mockReturnValue(of([completedOrder('o1')]));
       reviews.myReviews.mockResolvedValue({
-        items: [{ id: 'r1', orderId: 'o1', rating: 4, comment: null, submittedAt: new Date().toISOString() }],
+        items: [
+          {
+            id: 'r1',
+            orderId: 'o1',
+            rating: 4,
+            comment: null,
+            submittedAt: new Date().toISOString(),
+          },
+        ],
         nextCursor: null,
       });
     });

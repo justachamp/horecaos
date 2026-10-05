@@ -1,9 +1,13 @@
 package uz.horecaos.platform.pricing.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -355,6 +359,43 @@ public class JdbcPricingStore {
                 })
                 .orElse(Map.of());
     }
+
+    /**
+     * The gift offers recorded when the quote was priced (ADR 0140): a firing {@code
+     * FREE_ITEM} rule, the gift variant, how many units it would give and whether the
+     * cart held the variant. Empty for a quote that priced none and for one priced before
+     * the offers were recorded.
+     */
+    public List<GiftOfferRow> findGiftOffers(UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT (calculation_document -> 'giftOffers')::text
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id AND (calculation_document -> 'giftOffers') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query(String.class)
+                .optional()
+                .map(json -> {
+                    List<Map<String, Object>> entries = objectMapper.readValue(
+                            json, new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                    List<GiftOfferRow> offers = new ArrayList<>();
+                    for (Map<String, Object> entry : entries) {
+                        offers.add(new GiftOfferRow(
+                                UUID.fromString(String.valueOf(entry.get("ruleId"))),
+                                UUID.fromString(String.valueOf(entry.get("variantId"))),
+                                new BigDecimal(String.valueOf(entry.get("quantity"))),
+                                Boolean.TRUE.equals(entry.get("inCart")),
+                                new BigDecimal(String.valueOf(entry.get("toAdd")))));
+                    }
+                    return List.copyOf(offers);
+                })
+                .orElse(List.of());
+    }
+
+    /** One recorded gift offer: see {@link #findGiftOffers}. */
+    public record GiftOfferRow(
+            UUID promotionId, UUID variantId, BigDecimal quantity, boolean inCart, BigDecimal toAdd) {}
 
     public Optional<QuoteRow> findQuote(UUID tenantId, UUID quoteId) {
         return jdbc.sql("""
@@ -1077,7 +1118,8 @@ public class JdbcPricingStore {
                        COALESCE(vt.name, pt.name, vtf.name, ptf.name, p.code) AS display_name,
                        first_category.id AS category_id, COALESCE(ct.name, ctf.name) AS category_name,
                        bp.amount_minor AS book_amount_minor, bp.version AS book_version,
-                       base.amount_minor AS base_amount_minor
+                       base.amount_minor AS base_amount_minor,
+                       pa.catchweight_quantum_grams AS catchweight_quantum_grams
                 FROM catalog.variants v
                 JOIN catalog.products p
                     ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
@@ -1108,6 +1150,9 @@ public class JdbcPricingStore {
                 LEFT JOIN catalog.translations ctf
                     ON ctf.entity_type = 'CATEGORY' AND ctf.entity_id = first_category.id
                        AND ctf.tenant_id = first_category.tenant_id AND ctf.locale = :fallbackLocale
+                LEFT JOIN catalog.variant_physical_attributes pa
+                    ON pa.variant_id = v.id AND pa.tenant_id = v.tenant_id AND pa.brand_id = v.brand_id
+                       AND pa.is_catchweight
                 LEFT JOIN pricing.prices bp
                     ON bp.price_book_id = :priceBookId AND bp.priceable_type = 'VARIANT'
                        AND bp.priceable_id = v.id
@@ -1146,8 +1191,40 @@ public class JdbcPricingStore {
                         row.getString("category_name"),
                         (Long) row.getObject("book_amount_minor"),
                         (Integer) row.getObject("book_version"),
-                        (Long) row.getObject("base_amount_minor")))
+                        (Long) row.getObject("base_amount_minor"),
+                        (Integer) row.getObject("catchweight_quantum_grams")))
                 .list();
+    }
+
+    /**
+     * The pricing quantum, in grams, of each of these variants that is sold by weight (ADR 0137):
+     * the price a book holds for one of them is per this many grams and not per unit, which is the
+     * one fact a price screen needs to word a figure correctly. A variant sold per unit or by the
+     * portion, or one with no physical block, is absent from the result.
+     *
+     * <p>Reads {@code catalog.variant_physical_attributes} directly for the reason {@link
+     * #priceBookMatrix} gives, and is scoped by tenant and brand so an id from another brand
+     * reads as a unit-priced variant rather than leaking its quantum.
+     */
+    public Map<UUID, Integer> catchweightQuanta(UUID tenantId, UUID brandId, Collection<UUID> variantIds) {
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Integer> quanta = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT variant_id, catchweight_quantum_grams
+                FROM catalog.variant_physical_attributes
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND is_catchweight AND variant_id IN (:variantIds)
+                ORDER BY variant_id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("variantIds", variantIds)
+                .query(row -> {
+                    quanta.put(row.getObject("variant_id", UUID.class), row.getInt("catchweight_quantum_grams"));
+                });
+        return quanta;
     }
 
     /** How many things this book currently prices. */
@@ -1338,6 +1415,8 @@ public class JdbcPricingStore {
      * without the other — both come off the same {@code pricing.prices} row);
      * {@code basePriceMinor} is independently nullable, since the base book
      * may price a variant this book has not, or not exist at all.
+     * {@code catchweightQuantumGrams} is set only for a variant sold by weight (ADR 0137): its
+     * price, in this book and in the base, is per that many grams.
      */
     public record MatrixRow(
             UUID variantId,
@@ -1347,7 +1426,8 @@ public class JdbcPricingStore {
             @Nullable String categoryName,
             @Nullable Long bookPriceMinor,
             @Nullable Integer bookVersion,
-            @Nullable Long basePriceMinor) {}
+            @Nullable Long basePriceMinor,
+            @Nullable Integer catchweightQuantumGrams) {}
 
     public record TaxProfileRow(UUID id, String mode, int rateBasisPoints, int version) {}
 

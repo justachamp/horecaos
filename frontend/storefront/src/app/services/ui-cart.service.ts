@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { APP_CONFIG } from '../core/config/app-config';
-import { reasonMessageKey } from '../core/api/problem-details';
+import { HorecaOSApiError, messageKeyFor, reasonMessageKey } from '../core/api/problem-details';
 import type {
   CartResponse,
   CartResponseComboComponent,
@@ -11,7 +11,7 @@ import type {
 } from '../types/cart.types';
 import {
   CartService,
-  modifierOptionIdsFromLineKey,
+  optionIdsOfLine,
   type CheckoutResult,
   type DeliveryCharge,
   type FulfillmentMode,
@@ -19,12 +19,20 @@ import {
   type PricedCart,
 } from './cart.service';
 import type { ComboPickWire } from '../utils/combo-selection';
+import type { NestedModifierWire } from '../utils/modifier-selection';
 import {
   MenuService,
   type PublishedCommentPreset,
   type PublishedModifierGroup,
 } from './menu.service';
-import { discountRowsFor, noteRowsFor, type PromotionRow } from './applied-promotions';
+import {
+  discountRowsFor,
+  giftOfferGroups,
+  noteRowsFor,
+  promoOutcomeKey as promoOutcomeKeyOf,
+  type GiftOfferGroup,
+  type PromotionRow,
+} from './applied-promotions';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
@@ -87,10 +95,11 @@ const UNRESOLVED = '—';
  *
  * <h2>Things the legacy screen showed that no longer exist</h2>
  *
- * A packaging charge, a promo code, and a vendor block with a name and opening
- * hours. None has a platform equivalent, and the branch's preparation time is
- * a serviceability answer rather than a cart field. They report zero or empty
- * rather than a number nobody computed.
+ * A packaging charge and a vendor block with a name and opening hours. Neither
+ * has a platform equivalent, and the branch's preparation time is a
+ * serviceability answer rather than a cart field. They report zero or empty
+ * rather than a number nobody computed. (A promo code used to be on this list;
+ * ADR 0072 gave it a real source, `PlatformCart.appliedPromoCode`.)
  *
  * The customer's note is write-only. A line reports whether one exists and never
  * what it says, because the text is personal data revealed only through an
@@ -247,6 +256,58 @@ export class UiCartService {
   });
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
+
+  /**
+   * The code on the cart: the server's own fact, as {@link project} last read it, never what
+   * {@link applyPromoCode} was last called with. Null when the cart carries none.
+   */
+  readonly appliedPromoCode = computed(() => this.cartData()?.promo_code ?? null);
+
+  /** Busy flag for the promo field alone, so applying a code does not grey out the whole basket. */
+  readonly promoBusy = signal(false);
+
+  /** The last promo refusal, as a customer-facing sentence -- never a raw code. */
+  readonly promoError = signal<string | null>(null);
+
+  /**
+   * What the typed code itself took off, apart from the offers that applied without it, from the
+   * platform's own breakdown. Null when the code took nothing off (it did not apply, or the offers
+   * beat it): the code's chip must not claim a saving that belongs to an automatic offer.
+   */
+  readonly promoCodeDiscountFormatted = computed(() => {
+    this.translate.current();
+    const amountMinor = (this.priced()?.appliedPromotions ?? [])
+      .filter((entry) => entry.source === 'PROMO_CODE' && entry.effect === 'DISCOUNT')
+      .reduce((sum, entry) => sum + entry.amountMinor, 0);
+    return amountMinor > 0 ? this.formatPrice(amountMinor) : null;
+  });
+
+  /**
+   * The sentence for a code that is on the cart and did not move the price ("your offers are
+   * already better"), from the platform's own verdict at the last price. Null when there is
+   * nothing to say, which includes a stale verdict about a code that is no longer on the cart.
+   */
+  readonly promoOutcomeKey = computed(() =>
+    this.appliedPromoCode() ? promoOutcomeKeyOf(this.priced()?.promoCodeOutcome) : null,
+  );
+
+  /**
+   * Variant id to what the customer reads on it, for the variants the menu says can be ordered
+   * right now, as the basket was last projected.
+   */
+  private readonly offerableVariants = signal<
+    ReadonlyMap<string, { readonly name: string; readonly image: string | null }>
+  >(new Map());
+
+  /**
+   * The free gifts the cart could take up (ADR 0140): offers, never lines. Each is named from the
+   * menu, and a gift the menu does not carry or cannot sell right now is not offered. Nothing here has been added to the
+   * basket or discounted; {@link addGift} adds one through the ordinary cart call and the platform
+   * prices it free on the next price.
+   */
+  readonly giftOffers = computed<readonly GiftOfferGroup[]>(() =>
+    giftOfferGroups(this.priced()?.giftOffers, this.offerableVariants()),
+  );
 
   /** Option id to what the customer reads on it (its name, else its code), read off the menu as the basket was last projected. */
   private readonly optionLabels = signal<ReadonlyMap<string, string>>(new Map());
@@ -410,13 +471,17 @@ export class UiCartService {
       existing?.lines.map((line) => ({
         variantId: line.variantId,
         quantity: line.quantity,
-        modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+        modifierOptionIds: optionIdsOfLine(line),
         // Row 2.1b: carried across the same as the modifiers above -- a mode
         // switch rebuilds every line from scratch and must not drop what the
         // customer already picked.
         commentPresetCodes: line.commentPresetCodes,
         // ADR 0136: and a combo's picks, or its container would be put back with nothing chosen.
         ...(line.comboPicks && line.comboPicks.length > 0 ? { comboPicks: line.comboPicks } : {}),
+        // ... and the second-level answers, or the options that asked for them would be refused.
+        ...(line.nestedModifiers && line.nestedModifiers.length > 0
+          ? { nestedModifiers: line.nestedModifiers }
+          : {}),
       })) ?? [];
 
     this.fulfillmentModeDefault.set(mode);
@@ -437,6 +502,7 @@ export class UiCartService {
           modifierOptionIds: line.modifierOptionIds,
           commentPresetCodes: line.commentPresetCodes,
           ...('comboPicks' in line ? { comboPicks: line.comboPicks } : {}),
+          ...('nestedModifiers' in line ? { nestedModifiers: line.nestedModifiers } : {}),
         });
       }
       await this.project(this.carts.cart());
@@ -484,6 +550,8 @@ export class UiCartService {
    * @param comboPicks ADR 0136: what the customer picked inside a combo, set exactly when
    *        `variantId` is a combo's container. Part of the line's identity, like the modifiers: the
    *        same combo with other picks is another line.
+   * @param nestedModifiers ADR 0136: the second-level answers, each under the first-level option
+   *        that opened it. Part of the line's identity as well.
    */
   async add(
     variantId: string,
@@ -492,6 +560,7 @@ export class UiCartService {
     modifierOptionIds?: readonly string[],
     commentPresetCodes?: readonly string[],
     comboPicks?: readonly ComboPickWire[],
+    nestedModifiers?: readonly NestedModifierWire[],
   ): Promise<void> {
     this.updating.set(true);
     this.error.set(null);
@@ -504,6 +573,7 @@ export class UiCartService {
         modifierOptionIds,
         commentPresetCodes,
         comboPicks,
+        nestedModifiers,
       });
       await this.project(cart);
     } catch {
@@ -539,8 +609,10 @@ export class UiCartService {
               quantity,
               modifierOptionIds: item.modifierOptionIds,
               commentPresetCodes: item.commentPresetCodes,
-              // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+              // ADR 0136: resent whole, or a quantity change would strip a combo's picks
+              // and the second-level answers under the options.
               comboPicks: item.comboPicks,
+              nestedModifiers: item.nestedModifiers,
             });
       await this.project(cart);
     } catch {
@@ -573,6 +645,91 @@ export class UiCartService {
     } finally {
       this.updating.set(false);
     }
+  }
+
+  /**
+   * Applies a promo code, ADR 0072.
+   *
+   * Never subtracts anything itself: it writes the code to the cart, then re-prices through
+   * {@link project} so the discount and the total are the platform's own answer. A refusal is
+   * translated to a customer-facing sentence keyed off `problem.reason`, never shown as the raw
+   * ADR 0031 code.
+   *
+   * @returns false on refusal, without touching the cart's existing state -- a customer who
+   *          typed a bad code keeps whatever was priced before.
+   */
+  async applyPromoCode(code: string): Promise<boolean> {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      return false;
+    }
+    this.promoBusy.set(true);
+    this.promoError.set(null);
+    try {
+      const cart = await this.carts.applyPromoCode(trimmed);
+      await this.project(cart);
+      return true;
+    } catch (failure) {
+      this.promoError.set(this.promoErrorMessage(failure));
+      return false;
+    } finally {
+      this.promoBusy.set(false);
+    }
+  }
+
+  /** Removes the applied promo code, then re-prices without it. */
+  async removePromoCode(): Promise<void> {
+    this.promoBusy.set(true);
+    this.promoError.set(null);
+    try {
+      const cart = await this.carts.removePromoCode();
+      await this.project(cart);
+    } catch (failure) {
+      this.promoError.set(this.promoErrorMessage(failure));
+    } finally {
+      this.promoBusy.set(false);
+    }
+  }
+
+  private promoErrorMessage(failure: unknown): string {
+    return this.translate.get(
+      failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'errors.generic',
+    );
+  }
+
+  /**
+   * Takes up a free gift the platform offered (ADR 0140): puts it in the basket through the
+   * ordinary line write, then prices again, so it is free because the platform priced it so and
+   * for no other reason.
+   *
+   * Adds only what is still missing from the rule's allowance. A line for the same variant that
+   * the basket already holds is topped up, not duplicated, and is written back whole -- its
+   * modifiers, presets and picks -- because the platform's PUT replaces the line.
+   *
+   * Does nothing for a variant that is not on offer, so a stale button cannot add a dish the
+   * platform no longer gives away.
+   */
+  async addGift(variantId: string): Promise<void> {
+    const group = this.giftOffers().find((candidate) =>
+      candidate.choices.some((choice) => choice.variantId === variantId),
+    );
+    if (!group) {
+      return;
+    }
+    const held = this.items().find(
+      (item) =>
+        item.variant_id === variantId &&
+        item.modifierOptionIds.length === 0 &&
+        (item.comboPicks?.length ?? 0) === 0,
+    );
+    await this.add(
+      variantId,
+      tidy((held?.quantity ?? 0) + group.toAdd),
+      undefined,
+      held?.modifierOptionIds,
+      held?.commentPresetCodes,
+      held?.comboPicks,
+    );
   }
 
   /** Prices the basket and binds the quote checkout will accept. */
@@ -765,6 +922,7 @@ export class UiCartService {
         physical: PhysicalFacts | null;
       }
     >();
+    const offerable = new Map<string, { name: string; image: string | null }>();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
@@ -774,8 +932,17 @@ export class UiCartService {
           commentPresets: product.commentPresets,
           physical: variant.physical ?? null,
         });
+        // A gift that cannot be ordered right now (sold out, stopped, outside its sale window)
+        // is not offered: adding it would only be refused.
+        if (variant.orderable !== false && variant.onSaleNow !== false) {
+          offerable.set(variant.variantId, {
+            name: product.name,
+            image: product.imageUrls[0] ?? null,
+          });
+        }
       }
     }
+    this.offerableVariants.set(offerable);
     const modifierOptionsById = new Map<
       string,
       { groupName: string; label: string; amountMinor: number | null }
@@ -821,9 +988,14 @@ export class UiCartService {
         if (!known) {
           return null;
         }
-        const modifierOptionIds = modifierOptionIdsFromLineKey(line.lineKey, line.variantId);
-        const modifiers: CartResponseModifierSelection[] = modifierOptionIds
-          .map((optionId) => {
+        const modifierOptionIds = optionIdsOfLine(line);
+        const nestedModifiers = line.nestedModifiers ?? [];
+        // The first-level choices, then the answers under them (each marked with its parent).
+        const modifiers: CartResponseModifierSelection[] = [
+          ...modifierOptionIds.map((optionId) => ({ optionId, parentOptionId: null })),
+          ...nestedModifiers,
+        ]
+          .map(({ optionId, parentOptionId }) => {
             const resolved = modifierOptionsById.get(optionId);
             return resolved
               ? {
@@ -831,6 +1003,7 @@ export class UiCartService {
                   groupName: resolved.groupName,
                   label: resolved.label,
                   amountMinor: resolved.amountMinor,
+                  ...(parentOptionId ? { parentOptionId } : {}),
                 }
               : null;
           })
@@ -884,6 +1057,7 @@ export class UiCartService {
           commentPresets,
           comboPicks,
           comboComponents,
+          nestedModifiers,
         };
         return projected;
       })
@@ -911,7 +1085,7 @@ export class UiCartService {
       delivery_distance: 0,
       delivery_date_display: null,
       delivery_time_display: null,
-      promo_code: null,
+      promo_code: cart.appliedPromoCode ?? null,
       delivery_duration: 0,
     });
   }

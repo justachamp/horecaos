@@ -70,8 +70,19 @@ class PlatformRoleTests {
             // (PartnerShiftController, @PartnerBound), so it is authorised by the
             // partner binding and belongs in no staff bundle either.
             Capability.MARKETPLACE_SHIFT_RECEIVE,
+            // Batch 18 (row 2.5a, ADR 0141 Phase 4): the aggregator polls a branch's
+            // availability on the same partner-bound principal (PartnerAvailabilityController).
+            Capability.MARKETPLACE_AVAILABILITY_PULL,
             Capability.COURIER_SHIFT_OPEN,
-            Capability.COURIER_SHIFT_BREAK);
+            Capability.COURIER_SHIFT_BREAK,
+            // Courier policy 3.9: the courier app's own answers to an offer and moves along a delivery,
+            // each held over the courier's own record only (CourierDeliveryController).
+            Capability.COURIER_DELIVERY_READ,
+            Capability.COURIER_OFFER_ACCEPT,
+            Capability.COURIER_OFFER_DECLINE,
+            Capability.COURIER_DELIVERY_ADVANCE,
+            Capability.COURIER_DELIVERY_PAYMENT_CONFIRM,
+            Capability.COURIER_DELIVERY_LOCATION_REVEAL);
 
     /**
      * ADR 0045: capabilities that are in no bundle because being in one is the

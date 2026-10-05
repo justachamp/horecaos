@@ -137,7 +137,13 @@
     },
     "offerDiscount": "Aksiya",
     "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
-    "surchargeNote": "Ustama {{amount}} hisobga olingan"
+    "surchargeNote": "Ustama {{amount}} hisobga olingan",
+    "giftOffer": {
+      "title": "Sizni sovg'a kutmoqda",
+      "choose": "Sovg'angizni tanlang",
+      "add": "Sovg'ani qo'shish: {{name}}",
+      "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
+    }
   },
   "checkout": {
     "title": "To'lov",
@@ -512,6 +518,9 @@
     "incomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
     "unavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
     "total": "Kombo narxi: {{price}}"
+  },
+  "nested": {
+    "for": "«{{option}}» uchun"
   },
   "physical": {
     "nutritionTitle": "Ozuqaviy qiymati",

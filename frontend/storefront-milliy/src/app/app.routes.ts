@@ -26,7 +26,8 @@ export const routes: Routes = [
     path: 'product/:productId',
     // `withComponentInputBinding` feeds the route param straight into the
     // component's required input, so the screen never reads the router itself.
-    loadComponent: () => import('./pages/details/details.component').then((m) => m.DetailsComponent),
+    loadComponent: () =>
+      import('./pages/details/details.component').then((m) => m.DetailsComponent),
   },
   // ADR 0047's table-QR flow. `:tableToken` is the one-time value a table's
   // printed code encodes -- DineInScanComponent spends it once, against
@@ -90,12 +91,14 @@ export const routes: Routes = [
   {
     path: 'profile',
     canActivate: [authGuard],
-    loadComponent: () => import('./pages/profile/profile.component').then((m) => m.ProfileComponent),
+    loadComponent: () =>
+      import('./pages/profile/profile.component').then((m) => m.ProfileComponent),
   },
   {
     path: 'referral',
     canActivate: [authGuard],
-    loadComponent: () => import('./pages/referral/referral.component').then((m) => m.ReferralComponent),
+    loadComponent: () =>
+      import('./pages/referral/referral.component').then((m) => m.ReferralComponent),
   },
   { path: '**', redirectTo: 'home' },
 ];

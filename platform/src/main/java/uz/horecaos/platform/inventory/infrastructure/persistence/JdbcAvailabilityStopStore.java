@@ -122,6 +122,22 @@ public class JdbcAvailabilityStopStore {
     }
 
     /**
+     * {@link #findById} that takes a share lock on the row: a lift or an expiry of it (an {@code
+     * UPDATE}) waits for the caller's transaction, and a caller that arrives after one waits for it
+     * and reads the row as it became. What lets a materialisation run and a lift agree on who went
+     * first -- a position written for a stop that was lifted a moment earlier would be nobody's to
+     * give back.
+     */
+    public Optional<StopRow> findByIdForShare(UUID tenantId, UUID stopId) {
+        return jdbc.sql("SELECT %s FROM inventory.availability_stops WHERE tenant_id = :tenantId AND id = :id FOR SHARE"
+                        .formatted(COLUMNS))
+                .param("tenantId", tenantId)
+                .param("id", stopId)
+                .query(JdbcAvailabilityStopStore::mapStop)
+                .optional();
+    }
+
+    /**
      * Every stop in force at {@code at} on any of these variants — the
      * resolver's single read. In force means {@code ACTIVE} and not past its
      * {@code ends_at}; a row whose end has passed but which the sweeper has not
@@ -139,6 +155,25 @@ public class JdbcAvailabilityStopStore {
                 """.formatted(COLUMNS))
                 .param("tenantId", tenantId)
                 .param("variantIds", variantIds.toArray(UUID[]::new))
+                .param("at", timestamp(at))
+                .query(JdbcAvailabilityStopStore::mapStop)
+                .list();
+    }
+
+    /**
+     * Every stop of the brand in force at {@code at}, whatever its scope or source: what a
+     * materialisation run (ADR 0141, rollback switch three) has to account for. Oldest first, so a
+     * run is deterministic and a re-run walks the stops in the same order.
+     */
+    public List<StopRow> activeForBrand(UUID tenantId, UUID brandId, Instant at) {
+        return jdbc.sql("""
+                SELECT %s FROM inventory.availability_stops
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND status = 'ACTIVE' AND (ends_at IS NULL OR ends_at > :at)
+                ORDER BY created_at, id
+                """.formatted(COLUMNS))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("at", timestamp(at))
                 .query(JdbcAvailabilityStopStore::mapStop)
                 .list();

@@ -732,6 +732,169 @@ function offline(): HorecaOSApiError {
   });
 }
 
+/** A cart line for `variantId`, as the platform reports it. */
+function lineOf(variantId: string, quantity = 1, extra: Record<string, unknown> = {}) {
+  return { lineKey: variantId, variantId, quantity, hasCustomerNote: false, ...extra };
+}
+
+/** A published product with one variant. */
+function productOf(
+  variantId: string,
+  name: string,
+  availability: { orderable?: boolean; onSaleNow?: boolean } = {},
+) {
+  return {
+    productId: `p-${variantId}`,
+    code: null,
+    name,
+    description: null,
+    mediaAssetIds: [],
+    imageUrls: [`/${variantId}.png`],
+    variants: [
+      {
+        variantId,
+        sku: null,
+        unitCode: null,
+        isDefault: true,
+        orderable: availability.orderable ?? true,
+        onSaleNow: availability.onSaleNow ?? true,
+        amountMinor: 10_000,
+        remainingQuantity: null,
+      },
+    ],
+    modifierGroupIds: [],
+  };
+}
+
+describe('UiCartService gift offers (ADR 0140: an offer, never a line)', () => {
+  const GIFT = {
+    ruleId: 'rule-1',
+    variantId: 'v-cola',
+    quantity: 1,
+    inCart: false,
+    toAdd: 1,
+  };
+
+  async function offered(
+    giftOffers: PricedCart['giftOffers'],
+    lines = [lineOf('v-known')],
+    products = [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola')],
+  ) {
+    const fakes = setUp();
+    const cart = baseCart({ lines });
+    fakes.carts.ensure.mockResolvedValue(cart);
+    fakes.carts.price.mockResolvedValue({ ...pricedFor(cart), giftOffers });
+    fakes.menu.menu.mockResolvedValue(emptyMenu({ products }));
+    await fakes.service.load();
+    return { ...fakes, cart };
+  }
+
+  it('offers the free gift by the name the menu gives it, and puts nothing in the basket', async () => {
+    const { service, carts } = await offered([GIFT]);
+
+    expect(service.giftOffers()).toEqual([
+      {
+        ruleId: 'rule-1',
+        toAdd: 1,
+        choices: [{ variantId: 'v-cola', name: 'Cola', image: '/v-cola.png', inCart: false }],
+      },
+    ]);
+    expect(service.items().map((item) => item.variant_id)).toEqual(['v-known']);
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing when the priced cart carries no offer', async () => {
+    const { service } = await offered(undefined);
+
+    expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('does not offer a gift the menu no longer carries', async () => {
+    const { service } = await offered([{ ...GIFT, variantId: 'v-gone' }]);
+
+    expect(service.giftOffers()).toEqual([]);
+  });
+
+  it('does not offer a gift that cannot be ordered right now, which adding would only get refused', async () => {
+    const soldOut = await offered(
+      [GIFT],
+      [lineOf('v-known')],
+      [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola', { orderable: false })],
+    );
+    expect(soldOut.service.giftOffers()).toEqual([]);
+    TestBed.resetTestingModule();
+
+    const outOfWindow = await offered(
+      [GIFT],
+      [lineOf('v-known')],
+      [productOf('v-known', 'Osh'), productOf('v-cola', 'Cola', { onSaleNow: false })],
+    );
+    expect(outOfWindow.service.giftOffers()).toEqual([]);
+  });
+
+  it('adds the gift through the normal cart call, then prices the cart again', async () => {
+    const { service, carts } = await offered([GIFT]);
+    const withGift = baseCart({ lines: [lineOf('v-known'), lineOf('v-cola')], version: 2 });
+    carts.putLine.mockResolvedValue(withGift);
+    carts.price.mockClear();
+    carts.price.mockResolvedValue({
+      ...pricedFor(withGift),
+      discountMinor: 10_000,
+      appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 10_000 }],
+      giftOffers: [{ ...GIFT, inCart: true, toAdd: 0 }],
+    });
+
+    const added = await service.addGift('v-cola');
+
+    expect(added).toBe(true);
+    expect(carts.putLine).toHaveBeenCalledTimes(1);
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({ variantId: 'v-cola', quantity: 1 });
+    expect(carts.price).toHaveBeenCalled();
+    // The platform priced it free; the offer is gone and the discount is its own figure.
+    expect(service.giftOffers()).toEqual([]);
+    expect(service.discountMinor()).toBe(10_000);
+  });
+
+  it('adds only what is still missing when the cart already holds part of the allowance', async () => {
+    const { service, carts } = await offered(
+      [{ ...GIFT, quantity: 3, inCart: true, toAdd: 2 }],
+      [lineOf('v-known'), lineOf('v-cola', 1)],
+    );
+    carts.putLine.mockResolvedValue(baseCart({ lines: [lineOf('v-cola', 3)] }));
+
+    await service.addGift('v-cola');
+
+    // One already there plus the two missing: the line is replaced by its new quantity.
+    expect(carts.putLine.mock.calls[0][0]).toMatchObject({ variantId: 'v-cola', quantity: 3 });
+  });
+
+  it('adds nothing for a variant that is not on offer', async () => {
+    const { service, carts } = await offered([GIFT]);
+
+    const added = await service.addGift('v-known');
+
+    expect(added).toBe(false);
+    expect(carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('says so, with the specific sentence, when the platform refuses the gift', async () => {
+    const { service, carts } = await offered([GIFT]);
+    carts.putLine.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'sold out',
+        problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'SOLD_OUT' },
+      }),
+    );
+
+    const added = await service.addGift('v-cola');
+
+    expect(added).toBe(false);
+    expect(service.errorKey()).toBe('errors.reason.itemUnavailable');
+  });
+});
+
 describe('UiCartService: every cart failure reaches the customer as the specific sentence', () => {
   it('add: a sale-window refusal returns false and names the sale window, not "something went wrong"', async () => {
     const { service, carts } = setUp();
@@ -1083,6 +1246,163 @@ describe('UiCartService project(): a refused pricing never renders as a zero tot
     expect(service.totalAmount()).toBe(service.formatPrice(1000));
     expect(service.subtotalFormatted()).toBe(service.formatPrice(1000));
     expect(service.priceRefusalKey()).toBeNull();
+  });
+});
+
+describe('UiCartService: second-level choices (ADR 0136)', () => {
+  const nested = [{ parentOptionId: 'o-chili', optionId: 'o-hot' }];
+  const hashedKey = 'v-1n0123456789abcd';
+
+  function sauceMenu(): PublishedMenu {
+    const option = (optionId: string, name: string, amountMinor: number) => ({
+      optionId,
+      code: name.toUpperCase(),
+      maximumQuantity: 1,
+      amountMinor,
+      name,
+    });
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p-1',
+          code: null,
+          name: 'Salad',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v-1',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              amountMinor: 20_000,
+              onSaleNow: true,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: ['g-sauce'],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-sauce',
+          code: 'SAUCE',
+          name: 'Sauce',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 2,
+          allowSameOptionMultipleTimes: false,
+          options: [option('o-chili', 'Chili', 1_000), option('o-garlic', 'Garlic', 0)],
+        },
+        {
+          modifierGroupId: 'g-heat',
+          code: 'HEAT',
+          name: 'Heat',
+          required: true,
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameOptionMultipleTimes: false,
+          options: [option('o-hot', 'Hot', 500), option('o-mild', 'Mild', 0)],
+        },
+      ],
+    });
+  }
+
+  function lineWithAnswers() {
+    return {
+      lineKey: hashedKey,
+      variantId: 'v-1',
+      quantity: 1,
+      hasCustomerNote: false,
+      modifierOptionIds: ['o-chili', 'o-garlic'],
+      nestedModifiers: nested,
+    };
+  }
+
+  it('shows the options a line holds from the cart’s echo of it, and the answers under them, named from the menu', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({ lines: [lineWithAnswers()] });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(sauceMenu());
+
+    await service.load();
+
+    const [item] = service.cartData()?.items ?? [];
+    // The key is a hash and spells nothing out: the options come from the echo.
+    expect(item.modifierOptionIds).toEqual(['o-chili', 'o-garlic']);
+    expect(item.nestedModifiers).toEqual(nested);
+    expect(item.modifiers.map((m) => [m.label, m.groupName, m.parentOptionId])).toEqual([
+      ['Chili', 'Sauce', undefined],
+      ['Garlic', 'Sauce', undefined],
+      ['Hot', 'Heat', 'o-chili'],
+    ]);
+  });
+
+  it('puts a line with its answers into the cart', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockResolvedValue(baseCart());
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.add('v-1', 1, undefined, ['o-chili'], undefined, nested);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variantId: 'v-1',
+        modifierOptionIds: ['o-chili'],
+        nestedModifiers: nested,
+      }),
+    );
+  });
+
+  it('resends the answers on a quantity change, or the change would strip them', async () => {
+    const { service, carts } = setUp();
+    carts.putLine.mockResolvedValue(baseCart());
+    const item: CartResponseItem = {
+      variant_id: 'v-1',
+      price: 20_000,
+      item_id: hashedKey,
+      name: 'Salad',
+      active: true,
+      image: null,
+      quantity: 1,
+      note: null,
+      modifierOptionIds: ['o-chili'],
+      modifiers: [],
+      nestedModifiers: nested,
+    };
+
+    await service.setQuantity(item, 3);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variantId: 'v-1',
+        quantity: 3,
+        modifierOptionIds: ['o-chili'],
+        nestedModifiers: nested,
+      }),
+    );
+  });
+
+  it('carries the options and the answers across a change of fulfilment mode', async () => {
+    const { service, carts, menu } = setUp();
+    carts.cart.set(baseCart({ lines: [lineWithAnswers()] }));
+    carts.create.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    carts.putLine.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.switchFulfillmentMode('PICKUP');
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variantId: 'v-1',
+        modifierOptionIds: ['o-chili', 'o-garlic'],
+        nestedModifiers: nested,
+      }),
+    );
   });
 });
 

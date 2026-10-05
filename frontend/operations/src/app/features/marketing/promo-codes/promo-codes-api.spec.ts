@@ -83,7 +83,6 @@ describe('PromoCodesApi', () => {
     request.flush([
       {
         redemptionId: 'r1',
-        customerAccountId: 'acct-1',
         orderId: 'order-1',
         status: 'REDEEMED',
         amountMinor: 5_000,

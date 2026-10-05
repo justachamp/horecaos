@@ -271,3 +271,85 @@ describe('NewOrderApi.deliveryFeeQuote', () => {
     });
   });
 });
+
+/**
+ * Gap map row 1.3e: the price the server would book, asked for before «Создать».
+ *
+ * `quote` is the opposite of `placeOrder` where idempotency is concerned: it writes nothing, so
+ * there is no effect for a lost response to duplicate, and holding one key for an unchanged
+ * request would replay a price that the basket has since outgrown.
+ */
+describe('NewOrderApi.quote', () => {
+  let api: NewOrderApi;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), NewOrderApi],
+    });
+    api = TestBed.inject(NewOrderApi);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  const QUOTE = {
+    currency: 'UZS',
+    subtotalMinor: 45_179,
+    discountMinor: 5_000,
+    feeMinor: 0,
+    taxMinor: 4_821,
+    totalMinor: 45_000,
+    deliveryOutcome: null,
+    deliveryShortfallMinor: null,
+    deliveryMinBasketMinor: null,
+    deliveryFreeFromMinor: null,
+    provisional: false,
+    lines: [
+      {
+        index: 0,
+        baseAmountMinor: 50_000,
+        finalAmountMinor: 50_000,
+        taxAmountMinor: 0,
+        provisional: false,
+      },
+    ],
+    discounts: [
+      { lineIndex: null, type: 'ORDER_DISCOUNT', code: 'OPERATOR10', amountMinor: 5_000 },
+    ],
+  };
+
+  it('posts the same body as placeOrder to the quote path and answers the server’s figures', async () => {
+    const answered = api.quote(SCOPE, { ...REQUEST, promoCode: 'OPERATOR10' });
+    const request = http.expectOne(`${BASE}/quote`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ ...REQUEST, promoCode: 'OPERATOR10' });
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    request.flush(QUOTE);
+
+    const quote = await answered;
+    expect(quote.totalMinor).toBe(45_000);
+    expect(quote.discountMinor).toBe(5_000);
+    expect(quote.discounts[0].code).toBe('OPERATOR10');
+  });
+
+  it('mints a fresh Idempotency-Key on every call, so a changed basket is never answered with an old price', () => {
+    void api.quote(SCOPE, REQUEST);
+    const first = http.expectOne(`${BASE}/quote`);
+    const firstKey = first.request.headers.get('Idempotency-Key');
+
+    void api.quote(SCOPE, REQUEST);
+    const second = http.expectOne(`${BASE}/quote`);
+
+    expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    first.flush(QUOTE);
+    second.flush(QUOTE);
+  });
+
+  it('sends the cash a customer will hand over with placeOrder, as the field the server reads', () => {
+    void api.placeOrder(SCOPE, { ...REQUEST, cashTenderedMinor: 60_000 });
+    const request = http.expectOne(BASE);
+
+    expect((request.request.body as PlaceOrderRequest).cashTenderedMinor).toBe(60_000);
+    request.flush({});
+  });
+});

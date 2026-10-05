@@ -280,6 +280,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог товар остановлено везде',
       'uz-Latn': 'Katalog mahsulot toʻxtatildi hammasida',
     },
+    'catalog.publication.rolled_back': {
+      en: 'Catalog rolled back to an earlier publication',
+      ru: 'Каталог возвращён к прежней публикации',
+      'uz-Latn': 'Katalog oldingi eʻlonga qaytarildi',
+    },
+    'catalog.published': {
+      en: 'Catalog published',
+      ru: 'Каталог опубликован',
+      'uz-Latn': 'Katalog eʻlon qilindi',
+    },
     'catalog.variantModifierGroup.attached': {
       en: 'Modifier group attached to a variant',
       ru: 'Группа модификаторов подключена к варианту',
@@ -299,6 +309,81 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Weight, portions and nutrition of a variant changed',
       ru: 'Изменены вес, порции и пищевая ценность варианта',
       'uz-Latn': 'Variantning ogʻirligi, porsiyalari va ozuqaviy qiymati oʻzgartirildi',
+    },
+    'channel.archived': {
+      en: 'Sales channel archived',
+      ru: 'Канал продаж архивирован',
+      'uz-Latn': 'Savdo kanali arxivlandi',
+    },
+    'channel.created': {
+      en: 'Sales channel created',
+      ru: 'Создан канал продаж',
+      'uz-Latn': 'Savdo kanali yaratildi',
+    },
+    'channel.deactivated': {
+      en: 'Sales channel deactivated',
+      ru: 'Канал продаж приостановлен',
+      'uz-Latn': 'Savdo kanali toʻxtatildi',
+    },
+    'channel.fulfillment_modes.replaced': {
+      en: 'Channel fulfilment modes changed',
+      ru: 'Изменены способы получения заказа в канале',
+      'uz-Latn': 'Kanalda buyurtmani olish usullari oʻzgartirildi',
+    },
+    'channel.hostname.challenge_rotated': {
+      en: 'Channel domain challenge reissued',
+      ru: 'Перевыдан код подтверждения домена канала',
+      'uz-Latn': 'Kanal domenini tasdiqlash kodi qayta berildi',
+    },
+    'channel.hostname.claimed': {
+      en: 'Channel address set',
+      ru: 'Задан адрес канала',
+      'uz-Latn': 'Kanal manzili belgilandi',
+    },
+    'channel.hostname.cleared': {
+      en: 'Channel address removed',
+      ru: 'Адрес канала удалён',
+      'uz-Latn': 'Kanal manzili olib tashlandi',
+    },
+    'channel.hostname.verified': {
+      en: 'Channel domain verified',
+      ru: 'Домен канала подтверждён',
+      'uz-Latn': 'Kanal domeni tasdiqlandi',
+    },
+    'channel.locations.replaced': {
+      en: 'Channel branches changed',
+      ru: 'Изменены филиалы канала',
+      'uz-Latn': 'Kanal filiallari oʻzgartirildi',
+    },
+    'channel.page.published': {
+      en: 'Channel page published',
+      ru: 'Опубликована страница канала',
+      'uz-Latn': 'Kanal sahifasi eʻlon qilindi',
+    },
+    'channel.payment_methods.replaced': {
+      en: 'Channel payment methods changed',
+      ru: 'Изменены способы оплаты канала',
+      'uz-Latn': 'Kanalning toʻlov usullari oʻzgartirildi',
+    },
+    'channel.presentation.updated': {
+      en: 'Channel search appearance edited',
+      ru: 'Изменено оформление канала в поиске',
+      'uz-Latn': 'Kanalning qidiruvdagi koʻrinishi tahrirlandi',
+    },
+    'channel.reactivated': {
+      en: 'Sales channel reactivated',
+      ru: 'Канал продаж возобновлён',
+      'uz-Latn': 'Savdo kanali qayta yoqildi',
+    },
+    'channel.social_links.replaced': {
+      en: 'Channel social links changed',
+      ru: 'Изменены ссылки на соцсети канала',
+      'uz-Latn': 'Kanalning ijtimoiy tarmoq havolalari oʻzgartirildi',
+    },
+    'channel.updated': {
+      en: 'Sales channel edited',
+      ru: 'Изменён канал продаж',
+      'uz-Latn': 'Savdo kanali tahrirlandi',
     },
     'commercial.entitlement_override.granted': {
       en: 'Commercial entitlement override granted',
@@ -505,6 +590,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер проверка соответствия раскрыто',
       'uz-Latn': 'Kuryer muvofiqlik ochib berildi',
     },
+    'courier.customer_location.revealed': {
+      en: 'Courier opened the customer’s location',
+      ru: 'Курьер открыл адрес клиента',
+      'uz-Latn': 'Kuryer mijoz manzilini ochdi',
+    },
+    'courier.delivery.advanced': {
+      en: 'Courier moved a delivery to its next step',
+      ru: 'Курьер перевёл доставку на следующий шаг',
+      'uz-Latn': 'Kuryer yetkazib berishni keyingi bosqichga oʻtkazdi',
+    },
+    'courier.delivery.payment_confirmed': {
+      en: 'Courier confirmed the cash collected',
+      ru: 'Курьер подтвердил полученные наличные',
+      'uz-Latn': 'Kuryer olingan naqd pulni tasdiqladi',
+    },
     'courier.engagement.opened': {
       en: 'Courier engagement opened',
       ru: 'Курьер привлечение открыто',
@@ -534,6 +634,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Courier group left',
       ru: 'Курьер группа вышел',
       'uz-Latn': 'Kuryer guruh chiqdi',
+    },
+    'courier.offer.accepted': {
+      en: 'Courier accepted an offer',
+      ru: 'Курьер принял предложение',
+      'uz-Latn': 'Kuryer taklifni qabul qildi',
+    },
+    'courier.offer.declined': {
+      en: 'Courier declined an offer',
+      ru: 'Курьер отклонил предложение',
+      'uz-Latn': 'Kuryer taklifni rad etdi',
     },
     'courier.payout.authorised': {
       en: 'Courier payout authorised',
@@ -870,6 +980,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Стоп блюда изменён',
       'uz-Latn': 'Taom stopi oʻzgartirildi',
     },
+    'inventory.stop_materialisation.acknowledged': {
+      en: 'Stop report acknowledged before stops are switched off',
+      ru: 'Отчёт по стопам принят перед отключением стопов',
+      'uz-Latn': 'Stoplar oʻchirilishidan oldin stop hisoboti qabul qilindi',
+    },
+    'inventory.stop_materialisation.run': {
+      en: 'Stops written onto positions and reported',
+      ru: 'Стопы записаны в остатки, составлен отчёт',
+      'uz-Latn': 'Stoplar qoldiqlarga yozildi va hisobot tuzildi',
+    },
     'kitchen.device.enrolled': {
       en: 'Kitchen device enrolled',
       ru: 'Кухня устройство зарегистрировано',
@@ -879,6 +999,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Kitchen device revoked',
       ru: 'Кухня устройство отозвано',
       'uz-Latn': 'Oshxona qurilma bekor qilindi',
+    },
+    'kitchen.routing_rule.created': {
+      en: 'Dish routing rule created',
+      ru: 'Создано правило маршрутизации блюд',
+      'uz-Latn': 'Taomlarni yoʻnaltirish qoidasi yaratildi',
+    },
+    'kitchen.routing_rule.updated': {
+      en: 'Dish routing rule changed',
+      ru: 'Изменено правило маршрутизации блюд',
+      'uz-Latn': 'Taomlarni yoʻnaltirish qoidasi oʻzgartirildi',
+    },
+    'kitchen.station.created': {
+      en: 'Kitchen station created',
+      ru: 'Создана станция кухни',
+      'uz-Latn': 'Oshxona stansiyasi yaratildi',
+    },
+    'kitchen.station_capacity.created': {
+      en: 'Station throughput ceiling added',
+      ru: 'Добавлен лимит пропускной способности станции',
+      'uz-Latn': 'Stansiya oʻtkazuvchanlik chegarasi qoʻshildi',
+    },
+    'kitchen.station_capacity.deleted': {
+      en: 'Station throughput ceiling removed',
+      ru: 'Удалён лимит пропускной способности станции',
+      'uz-Latn': 'Stansiya oʻtkazuvchanlik chegarasi olib tashlandi',
+    },
+    'kitchen.station_capacity.updated': {
+      en: 'Station throughput ceiling edited',
+      ru: 'Изменён лимит пропускной способности станции',
+      'uz-Latn': 'Stansiya oʻtkazuvchanlik chegarasi tahrirlandi',
     },
     'legal-entity.assigned': {
       en: 'Legal entity assigned',
@@ -910,6 +1060,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Баллы лояльности за заказ не начислены',
       'uz-Latn': 'Buyurtma uchun sodiqlik ballari hisoblanmadi',
     },
+    'loyalty.accrual_rule.activated': {
+      en: 'Loyalty accrual rule activated',
+      ru: 'Активировано правило начисления баллов',
+      'uz-Latn': 'Ballar hisoblash qoidasi faollashtirildi',
+    },
+    'loyalty.accrual_rule.drafted': {
+      en: 'Loyalty accrual rule drafted',
+      ru: 'Создан черновик правила начисления баллов',
+      'uz-Latn': 'Ballar hisoblash qoidasi qoralamasi yaratildi',
+    },
+    'loyalty.accrual_rule.retired': {
+      en: 'Loyalty accrual rule retired',
+      ru: 'Правило начисления баллов выведено из действия',
+      'uz-Latn': 'Ballar hisoblash qoidasi bekor qilindi',
+    },
+    'loyalty.redemption_policy.activated': {
+      en: 'Loyalty redemption policy activated',
+      ru: 'Активированы правила списания баллов',
+      'uz-Latn': 'Ballarni ishlatish qoidalari faollashtirildi',
+    },
+    'loyalty.redemption_policy.drafted': {
+      en: 'Loyalty redemption policy drafted',
+      ru: 'Создан черновик правил списания баллов',
+      'uz-Latn': 'Ballarni ishlatish qoidalari qoralamasi yaratildi',
+    },
+    'loyalty.redemption_policy.retired': {
+      en: 'Loyalty redemption policy retired',
+      ru: 'Правила списания баллов выведены из действия',
+      'uz-Latn': 'Ballarni ishlatish qoidalari bekor qilindi',
+    },
     'marketplace.handover.bypassed': {
       en: 'Marketplace handover bypassed',
       ru: 'Маркетплейс передача пропущено',
@@ -919,6 +1099,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Media asset ingested',
       ru: 'Медиа файл загружено',
       'uz-Latn': 'Media fayl yuklandi',
+    },
+    'notification.template.created': {
+      en: 'Notification template created',
+      ru: 'Создан шаблон уведомления',
+      'uz-Latn': 'Bildirishnoma shabloni yaratildi',
+    },
+    'notification.template.version_activated': {
+      en: 'Notification template version activated',
+      ru: 'Активирована версия шаблона уведомления',
+      'uz-Latn': 'Bildirishnoma shabloni versiyasi faollashtirildi',
+    },
+    'notification.template.version_added': {
+      en: 'Notification template wording saved as a new version',
+      ru: 'Текст шаблона уведомления сохранён как новая версия',
+      'uz-Latn': 'Bildirishnoma shabloni matni yangi versiya sifatida saqlandi',
     },
     'notifications.template.provider_review_recorded': {
       en: 'Notifications template provider review recorded',
@@ -950,6 +1145,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Записан вес весовой позиции, заказ пересчитан',
       'uz-Latn':
         'Ogʻirlik boʻyicha sotiladigan pozitsiya ogʻirligi yozildi, buyurtma qayta hisoblandi',
+    },
+    'ordering.order.promotion_requoted': {
+      en: 'Promotions of a scheduled order checked again, the order unchanged',
+      ru: 'Акции запланированного заказа проверены повторно, заказ не изменён',
+      'uz-Latn': 'Rejalashtirilgan buyurtma aksiyalari qayta tekshirildi, buyurtma oʻzgarmadi',
     },
     'ordering.outcome-reason.archived': {
       en: 'Order outcome reason retired',
@@ -1026,6 +1226,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Платёжная ссылка выставлена повторно',
       'uz-Latn': 'Toʻlov havolasi qayta chiqarildi',
     },
+    'payment.merchant_binding.activated': {
+      en: 'Merchant binding activated',
+      ru: 'Привязка мерчанта активирована',
+      'uz-Latn': 'Merchant bogʻlanishi faollashtirildi',
+    },
+    'payment.merchant_binding.archived': {
+      en: 'Merchant binding archived',
+      ru: 'Привязка мерчанта архивирована',
+      'uz-Latn': 'Merchant bogʻlanishi arxivlandi',
+    },
+    'payment.merchant_binding.registered': {
+      en: 'Merchant binding registered',
+      ru: 'Зарегистрирована привязка мерчанта',
+      'uz-Latn': 'Merchant bogʻlanishi roʻyxatdan oʻtkazildi',
+    },
+    'payment.merchant_binding.suspended': {
+      en: 'Merchant binding suspended',
+      ru: 'Привязка мерчанта приостановлена',
+      'uz-Latn': 'Merchant bogʻlanishi toʻxtatildi',
+    },
     'payment.merchant_binding_secret_rotated': {
       en: 'Payment merchant binding secret rotated',
       ru: 'Платёж продавец привязка секрет обновлено',
@@ -1091,10 +1311,30 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Акция создана как черновик',
       'uz-Latn': 'Aksiya qoralama sifatida yaratildi',
     },
+    'pricing.promotion.redemption.customer_revealed': {
+      en: 'Customer behind a promotion redemption viewed',
+      ru: 'Просмотрен клиент, применивший акцию',
+      'uz-Latn': 'Aksiyani qoʻllagan mijoz koʻrildi',
+    },
     'pricing.promotion.updated': {
       en: 'Promotion edited',
       ru: 'Акция изменена',
       'uz-Latn': 'Aksiya oʻzgartirildi',
+    },
+    'promo.code.activated': {
+      en: 'Promo code activated',
+      ru: 'Промокод активирован',
+      'uz-Latn': 'Promokod faollashtirildi',
+    },
+    'promo.code.drafted': {
+      en: 'Promo code drafted',
+      ru: 'Создан черновик промокода',
+      'uz-Latn': 'Promokod qoralamasi yaratildi',
+    },
+    'promo.code.retired': {
+      en: 'Promo code retired',
+      ru: 'Промокод выведен из обращения',
+      'uz-Latn': 'Promokod muomaladan chiqarildi',
     },
     'reference.public_holiday.added': {
       en: 'Reference public holiday added',
@@ -1105,6 +1345,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Reference public holiday removed',
       ru: 'Справочник публичный праздник удалено',
       'uz-Latn': 'Maʻlumotnoma ochiq bayram oʻchirildi',
+    },
+    'referral.program.activated': {
+      en: 'Referral program activated',
+      ru: 'Реферальная программа активирована',
+      'uz-Latn': 'Referal dasturi faollashtirildi',
+    },
+    'referral.program.drafted': {
+      en: 'Referral program drafted',
+      ru: 'Создан черновик реферальной программы',
+      'uz-Latn': 'Referal dasturi qoralamasi yaratildi',
+    },
+    'referral.program.retired': {
+      en: 'Referral program retired',
+      ru: 'Реферальная программа завершена',
+      'uz-Latn': 'Referal dasturi yakunlandi',
     },
     'report.export.completed': {
       en: 'Report export completed',

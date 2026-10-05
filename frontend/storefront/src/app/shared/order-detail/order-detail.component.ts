@@ -355,6 +355,17 @@ export class OrderDetailComponent implements OnInit {
             undefined,
             line.comboPicks,
           );
+        } else if (line.nestedModifiers && line.nestedModifiers.length > 0) {
+          // ... and a line with a second-level choice with its answers under their parent.
+          await this.cart.add(
+            line.variantId,
+            line.quantity,
+            undefined,
+            line.modifierOptionIds,
+            undefined,
+            undefined,
+            line.nestedModifiers,
+          );
         } else {
           await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
         }

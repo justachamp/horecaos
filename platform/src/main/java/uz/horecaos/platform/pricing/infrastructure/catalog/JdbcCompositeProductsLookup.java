@@ -21,12 +21,13 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 /**
  * Reads the composite-product facts a quote needs (ADR 0136).
  *
- * <p>From the authoring tables, restricted to rows that are {@code ACTIVE}: the
- * published snapshot carries no combo structure until a combo-aware publication
- * exists, and a quote already reads live prices from the price book and live names
- * from the draft, so the structure it prices is as current as the rest of what it
- * prices. Every query carries the tenant and the brand; none interpolates a caller's
- * text into SQL.
+ * <p>What a customer chooses within -- a combo's groups and components, the options of a
+ * group and the choices an option opens -- is read from the publication the quote is
+ * stamped with, so the rules enforced are the rules that were on screen and a combo edited
+ * and not republished prices the structure that was published. The hidden charges are the
+ * one live read: they are not a choice but a charge the server applies, and the authoring
+ * rows are where the operator switches one on or off. Every query carries the tenant and
+ * the brand; none interpolates a caller's text into SQL.
  *
  * <p>Attachments are read the way the catalog defines them: a product's attachments
  * with the variant's own laid over them, the variant's winning for the same group.
@@ -75,7 +76,7 @@ public class JdbcCompositeProductsLookup implements CompositeProductsLookup {
     }
 
     @Override
-    public ComboCatalog comboCatalog(UUID tenantId, UUID brandId, Set<UUID> variantIds) {
+    public ComboCatalog comboCatalog(UUID tenantId, UUID brandId, UUID publicationId, Set<UUID> variantIds) {
         if (variantIds.isEmpty()) {
             return ComboCatalog.empty();
         }
@@ -83,25 +84,40 @@ public class JdbcCompositeProductsLookup implements CompositeProductsLookup {
                 ComboGroupFact group,
                 @org.jspecify.annotations.Nullable ComboComponentFact component) {}
         List<Row> rows = jdbc.sql("""
-                SELECT g.id AS group_id, g.container_variant_id, g.minimum_selections, g.maximum_selections,
-                       g.allow_same_component_multiple_times, g.sort_order AS group_sort,
-                       c.id AS component_id, c.component_variant_id, c.default_quantity,
-                       c.sort_order AS component_sort
-                FROM catalog.combo_groups g
-                LEFT JOIN catalog.combo_components c
-                       ON c.combo_group_id = g.id AND c.tenant_id = g.tenant_id AND c.brand_id = g.brand_id
-                      AND c.status = 'ACTIVE'
-                      AND EXISTS (
-                          SELECT 1 FROM catalog.variants v
-                          WHERE v.id = c.component_variant_id AND v.tenant_id = c.tenant_id
-                            AND v.brand_id = c.brand_id AND v.status = 'ACTIVE')
-                WHERE g.tenant_id = :tenantId AND g.brand_id = :brandId AND g.status = 'ACTIVE'
-                  AND g.container_variant_id = ANY(:ids)
-                ORDER BY g.sort_order, g.id, c.sort_order, c.id
+                SELECT pi.entity_id AS group_id,
+                       (pi.immutable_content_json ->> 'containerVariantId')::uuid AS container_variant_id,
+                       COALESCE((pi.immutable_content_json ->> 'minimumSelections')::int, 0) AS minimum_selections,
+                       COALESCE((pi.immutable_content_json ->> 'maximumSelections')::int, 1) AS maximum_selections,
+                       COALESCE((pi.immutable_content_json ->> 'allowSameComponentMultipleTimes')::boolean, false)
+                           AS allow_same_component_multiple_times,
+                       COALESCE((pi.immutable_content_json ->> 'sortOrder')::int, 0) AS group_sort,
+                       (c.component ->> 'componentId')::uuid AS component_id,
+                       (c.component ->> 'variantId')::uuid AS component_variant_id,
+                       COALESCE((c.component ->> 'defaultQuantity')::int, 1) AS default_quantity,
+                       COALESCE((c.component ->> 'sortOrder')::int, 0) AS component_sort
+                FROM catalog.publication_items pi
+                LEFT JOIN LATERAL (
+                    SELECT e AS component
+                    FROM jsonb_array_elements(
+                             CASE WHEN jsonb_typeof(pi.immutable_content_json -> 'components') = 'array'
+                                  THEN pi.immutable_content_json -> 'components'
+                                  ELSE '[]'::jsonb END) AS e
+                    -- The one live check: a variant withdrawn since the publication is not offered.
+                    WHERE EXISTS (
+                        SELECT 1 FROM catalog.variants v
+                        WHERE v.id = (e ->> 'variantId')::uuid AND v.tenant_id = pi.tenant_id
+                          AND v.brand_id = pi.brand_id AND v.status = 'ACTIVE')
+                ) c ON true
+                WHERE pi.publication_id = :publicationId AND pi.tenant_id = :tenantId AND pi.brand_id = :brandId
+                  AND pi.entity_type = 'COMBO_GROUP'
+                  AND COALESCE(pi.immutable_content_json ->> 'status', 'ACTIVE') = 'ACTIVE'
+                  AND pi.immutable_content_json ->> 'containerVariantId' = ANY(:ids)
+                ORDER BY group_sort, group_id, component_sort, component_id
                 """)
+                .param("publicationId", publicationId)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param("ids", variantIds.toArray(UUID[]::new))
+                .param("ids", variantIds.stream().map(UUID::toString).toArray(String[]::new))
                 .query((row, number) -> {
                     UUID groupId = row.getObject("group_id", UUID.class);
                     ComboGroupFact group = new ComboGroupFact(
@@ -189,103 +205,141 @@ public class JdbcCompositeProductsLookup implements CompositeProductsLookup {
     }
 
     @Override
-    public NestedCatalog nestedCatalog(UUID tenantId, UUID brandId, Set<UUID> optionIds) {
+    public NestedCatalog nestedCatalog(UUID tenantId, UUID brandId, UUID publicationId, Set<UUID> optionIds) {
         if (optionIds.isEmpty()) {
             return NestedCatalog.empty();
         }
+        // The options a line names, with the choices each opens, as the publication states them.
+        // One row per (option, nested group); an option that opens nothing is one row with no group.
+        record OptionRow(
+                OptionFact option,
+                @org.jspecify.annotations.Nullable UUID nestedGroupId,
+                boolean required,
+                int minimum,
+                int maximum) {}
+        List<OptionRow> optionRows = jdbc.sql("""
+                SELECT (o.option ->> 'optionId')::uuid AS option_id,
+                       pi.entity_id AS group_id,
+                       (o.option ->> 'linkedVariantId')::uuid AS linked_variant_id,
+                       COALESCE((o.option ->> 'maximumQuantity')::int, 1) AS maximum_quantity,
+                       (ng.nested ->> 'groupId')::uuid AS nested_group_id,
+                       COALESCE((ng.nested ->> 'required')::boolean, false) AS nested_required,
+                       COALESCE((ng.nested ->> 'minimumSelections')::int, 0) AS nested_minimum,
+                       COALESCE((ng.nested ->> 'maximumSelections')::int, 1) AS nested_maximum
+                FROM catalog.publication_items pi
+                CROSS JOIN LATERAL (
+                    SELECT e AS option
+                    FROM jsonb_array_elements(
+                             CASE WHEN jsonb_typeof(pi.immutable_content_json -> 'options') = 'array'
+                                  THEN pi.immutable_content_json -> 'options'
+                                  ELSE '[]'::jsonb END) AS e
+                    WHERE e ->> 'optionId' = ANY(:ids) AND COALESCE(e ->> 'status', 'ACTIVE') = 'ACTIVE'
+                ) o
+                LEFT JOIN LATERAL (
+                    SELECT n AS nested, ordinality
+                    FROM jsonb_array_elements(
+                             CASE WHEN jsonb_typeof(o.option -> 'nestedGroups') = 'array'
+                                  THEN o.option -> 'nestedGroups'
+                                  ELSE '[]'::jsonb END) WITH ORDINALITY AS t(n, ordinality)
+                ) ng ON true
+                WHERE pi.publication_id = :publicationId AND pi.tenant_id = :tenantId AND pi.brand_id = :brandId
+                  AND pi.entity_type = 'MODIFIER_GROUP'
+                ORDER BY option_id, ng.ordinality
+                """)
+                .param("publicationId", publicationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", optionIds.stream().map(UUID::toString).toArray(String[]::new))
+                .query((row, number) -> new OptionRow(
+                        new OptionFact(
+                                row.getObject("option_id", UUID.class),
+                                row.getObject("group_id", UUID.class),
+                                row.getObject("linked_variant_id", UUID.class),
+                                row.getInt("maximum_quantity")),
+                        row.getObject("nested_group_id", UUID.class),
+                        row.getBoolean("nested_required"),
+                        row.getInt("nested_minimum"),
+                        row.getInt("nested_maximum")))
+                .list();
+
         Map<UUID, OptionFact> options = new LinkedHashMap<>();
-        jdbc.sql("""
-                SELECT id, modifier_group_id, linked_variant_id, maximum_quantity
-                FROM catalog.modifier_options
-                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = ANY(:ids) AND status = 'ACTIVE'
-                """)
-                .param("tenantId", tenantId)
-                .param("brandId", brandId)
-                .param("ids", optionIds.toArray(UUID[]::new))
-                .query((row, number) -> {
-                    UUID id = row.getObject("id", UUID.class);
-                    options.put(
-                            id,
-                            new OptionFact(
-                                    id,
-                                    row.getObject("modifier_group_id", UUID.class),
-                                    row.getObject("linked_variant_id", UUID.class),
-                                    row.getInt("maximum_quantity")));
-                    return id;
-                })
-                .list();
+        optionRows.forEach(row -> options.putIfAbsent(row.option().optionId(), row.option()));
 
-        Set<UUID> linkedVariants = new LinkedHashSet<>();
-        options.values().stream()
-                .map(OptionFact::linkedVariantId)
+        Set<UUID> nestedGroupIds = new LinkedHashSet<>();
+        optionRows.stream()
+                .map(OptionRow::nestedGroupId)
                 .filter(java.util.Objects::nonNull)
-                .forEach(linkedVariants::add);
-        if (linkedVariants.isEmpty()) {
+                .forEach(nestedGroupIds::add);
+        if (nestedGroupIds.isEmpty()) {
             return new NestedCatalog(options, Map.of());
         }
 
-        record GroupRow(
-                UUID variantId, UUID groupId, boolean required, int minimum, int maximum, boolean allowSameOption) {}
-        List<GroupRow> groupRows = jdbc.sql("""
-                WITH effective AS (%s)
-                SELECT e.variant_id, e.modifier_group_id,
-                       COALESCE(e.required_override, mg.is_required) AS required,
-                       COALESCE(e.minimum_override, mg.minimum_selections) AS minimum,
-                       COALESCE(e.maximum_override, mg.maximum_selections) AS maximum,
-                       mg.allow_same_option_multiple_times AS allow_same
-                FROM effective e
-                JOIN catalog.modifier_groups mg
-                  ON mg.id = e.modifier_group_id AND mg.tenant_id = :tenantId AND mg.brand_id = :brandId
-                 AND mg.status = 'ACTIVE'
-                WHERE e.visibility = 'VISIBLE'
-                ORDER BY e.variant_id, mg.id
-                """.formatted(EFFECTIVE_ATTACHMENTS))
-                .param("tenantId", tenantId)
-                .param("brandId", brandId)
-                .param("ids", linkedVariants.toArray(UUID[]::new))
-                .query((row, number) -> new GroupRow(
-                        row.getObject("variant_id", UUID.class),
-                        row.getObject("modifier_group_id", UUID.class),
-                        row.getBoolean("required"),
-                        row.getInt("minimum"),
-                        row.getInt("maximum"),
-                        row.getBoolean("allow_same")))
-                .list();
-        if (groupRows.isEmpty()) {
-            return new NestedCatalog(options, Map.of());
-        }
-
+        // What each nested group offers: the options it lists as active, and whether one may be
+        // taken twice. Those are the group's own, not the attachment's.
         Map<UUID, Set<UUID>> optionsOfGroup = new HashMap<>();
+        Map<UUID, Boolean> allowSameOption = new HashMap<>();
         jdbc.sql("""
-                SELECT modifier_group_id, id FROM catalog.modifier_options
-                WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND modifier_group_id = ANY(:groupIds) AND status = 'ACTIVE'
+                SELECT pi.entity_id AS group_id,
+                       COALESCE((pi.immutable_content_json ->> 'allowSameOptionMultipleTimes')::boolean, false)
+                           AS allow_same,
+                       (o.option ->> 'optionId')::uuid AS option_id
+                FROM catalog.publication_items pi
+                LEFT JOIN LATERAL (
+                    SELECT e AS option
+                    FROM jsonb_array_elements(
+                             CASE WHEN jsonb_typeof(pi.immutable_content_json -> 'options') = 'array'
+                                  THEN pi.immutable_content_json -> 'options'
+                                  ELSE '[]'::jsonb END) AS e
+                    WHERE COALESCE(e ->> 'status', 'ACTIVE') = 'ACTIVE'
+                ) o ON true
+                WHERE pi.publication_id = :publicationId AND pi.tenant_id = :tenantId AND pi.brand_id = :brandId
+                  AND pi.entity_type = 'MODIFIER_GROUP' AND pi.entity_id = ANY(:groupIds)
                 """)
+                .param("publicationId", publicationId)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param(
-                        "groupIds",
-                        groupRows.stream().map(GroupRow::groupId).distinct().toArray(UUID[]::new))
+                .param("groupIds", nestedGroupIds.toArray(UUID[]::new))
                 .query((row, number) -> {
-                    optionsOfGroup
-                            .computeIfAbsent(
-                                    row.getObject("modifier_group_id", UUID.class), key -> new LinkedHashSet<>())
-                            .add(row.getObject("id", UUID.class));
-                    return 0;
+                    UUID groupId = row.getObject("group_id", UUID.class);
+                    allowSameOption.put(groupId, row.getBoolean("allow_same"));
+                    optionsOfGroup.computeIfAbsent(groupId, key -> new LinkedHashSet<>());
+                    UUID optionId = row.getObject("option_id", UUID.class);
+                    if (optionId != null) {
+                        optionsOfGroup.get(groupId).add(optionId);
+                    }
+                    return groupId;
                 })
                 .list();
 
+        // Keyed by the variant the option links, which is what the selection rules look up. Two
+        // options linking one variant publish the same choices, so the first is enough.
         Map<UUID, List<NestedGroupFact>> byVariant = new LinkedHashMap<>();
-        for (GroupRow group : groupRows) {
-            byVariant
-                    .computeIfAbsent(group.variantId(), key -> new ArrayList<>())
-                    .add(new NestedGroupFact(
-                            group.groupId(),
-                            group.required(),
-                            group.minimum(),
-                            group.maximum(),
-                            group.allowSameOption(),
-                            optionsOfGroup.getOrDefault(group.groupId(), Set.of())));
+        for (OptionRow row : optionRows) {
+            UUID linkedVariant = row.option().linkedVariantId();
+            if (linkedVariant == null || row.nestedGroupId() == null || byVariant.containsKey(linkedVariant)) {
+                continue;
+            }
+            List<NestedGroupFact> groups = new ArrayList<>();
+            for (OptionRow other : optionRows) {
+                UUID groupId = other.nestedGroupId();
+                if (groupId == null
+                        || !row.option().optionId().equals(other.option().optionId())) {
+                    continue;
+                }
+                Boolean allowSame = allowSameOption.get(groupId);
+                // A group the publication does not carry cannot be chosen from.
+                if (allowSame == null) {
+                    continue;
+                }
+                groups.add(new NestedGroupFact(
+                        groupId,
+                        other.required(),
+                        other.minimum(),
+                        other.maximum(),
+                        allowSame,
+                        optionsOfGroup.getOrDefault(groupId, Set.of())));
+            }
+            byVariant.put(linkedVariant, List.copyOf(groups));
         }
         return new NestedCatalog(options, byVariant);
     }

@@ -137,7 +137,13 @@
     },
     "offerDiscount": "Акция",
     "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
-    "surchargeNote": "Включая наценку {{amount}}"
+    "surchargeNote": "Включая наценку {{amount}}",
+    "giftOffer": {
+      "title": "Вас ждёт подарок",
+      "choose": "Выберите подарок",
+      "add": "Добавить подарок: {{name}}",
+      "addMany": "Добавить подарок: {{name}} ×{{count}}"
+    }
   },
   "checkout": {
     "title": "Оплата",
@@ -512,6 +518,9 @@
     "incomplete": "Сделайте выбор в каждой обязательной группе выше, прежде чем добавить в корзину.",
     "unavailable": "Это комбо сейчас нельзя заказать.",
     "total": "Цена комбо: {{price}}"
+  },
+  "nested": {
+    "for": "Для «{{option}}»"
   },
   "physical": {
     "nutritionTitle": "Пищевая ценность",

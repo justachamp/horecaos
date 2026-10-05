@@ -478,6 +478,34 @@ public class ReportingController {
                 ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/combo-sales")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Sales by combo (ADR 0136): how many of each combo were sold, and for how much",
+            description = "One row per combo container over the closed business days in the range, straight "
+                    + "off reporting.fact_order_line. A combo is sold as several ordinary lines that share a "
+                    + "selection, and the container is never a line, so combosSold takes one quantity per "
+                    + "purchase (distinct combo_selection_id) while the money is the sum over the purchase's "
+                    + "component lines. Completed orders only: a combo on a cancelled or rejected order was "
+                    + "not sold. A component sold on its own is not counted here, and the same dish sold as "
+                    + "a component still appears in /variant-sales under its own name. maybeMore is true "
+                    + "when the bounded read came back full.")
+    public ResponseEntity<ComboSalesListResponse> comboSales(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) List<String> fulfilmentType,
+            @RequestParam(required = false) Integer limit) {
+
+        var result = queries.comboSales(
+                tenantId, from, to, orEmpty(locationId), orEmpty(fulfilmentType), clampVariantLimit(limit));
+        return ResponseEntity.ok(new ComboSalesListResponse(
+                result.rows().stream().map(ComboSalesRowResponse::of).toList(),
+                result.maybeMore(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
     @GetMapping("/abc-curve")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -1145,6 +1173,45 @@ public class ReportingController {
 
     public record VariantSalesListResponse(
             List<VariantSalesRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
+
+    /**
+     * One combo's summed sales in range.
+     *
+     * @param comboContainerVariantId the combo, by the container variant it is sold as
+     * @param combosSold how many combos were sold: one quantity per purchase, never per component line
+     * @param purchases how many purchases those were
+     * @param deliveryCombos of {@code combosSold}, those on DELIVERY orders; null when none were
+     * @param pickupCombos of {@code combosSold}, those on PICKUP orders; null when none were
+     */
+    public record ComboSalesRowResponse(
+            UUID comboContainerVariantId,
+            String comboName,
+            long combosSold,
+            long purchases,
+            long orders,
+            long totalGrossSom,
+            long totalDiscountSom,
+            long totalNetSom,
+            @Nullable Long deliveryCombos,
+            @Nullable Long pickupCombos) {
+
+        static ComboSalesRowResponse of(JdbcReportingStore.ComboSalesRow row) {
+            return new ComboSalesRowResponse(
+                    row.comboContainerVariantId(),
+                    row.comboName(),
+                    row.combosSold(),
+                    row.purchases(),
+                    row.orders(),
+                    row.totalGrossSom(),
+                    row.totalDiscountSom(),
+                    row.totalNetSom(),
+                    row.deliveryCombos(),
+                    row.pickupCombos());
+        }
+    }
+
+    public record ComboSalesListResponse(
+            List<ComboSalesRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
 
     /** X.19: one product's position on the ABC cumulative-revenue-share curve. */
     public record AbcCurveRowResponse(

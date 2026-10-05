@@ -9,11 +9,12 @@
  * every service.
  *
  * Several members below are therefore filled with zero or empty rather than a
- * number the platform computed: `packaging` and `promo_code` have no platform
- * equivalent at all, `delivery` is priced by its own endpoint against a
- * destination (ADR 0037), and `vendor` is a legacy block with nothing behind it.
- * They are kept so the templates compile and are documented here so nobody
- * reads a zero as a fact.
+ * number the platform computed: `packaging` has no platform equivalent at all,
+ * `delivery` is priced by its own endpoint against a destination (ADR 0037), and
+ * `vendor` is a legacy block with nothing behind it. They are kept so the
+ * templates compile and are documented here so nobody reads a zero as a fact.
+ * `promo_code` is the exception: ADR 0072 gave it a real platform source
+ * (`PlatformCart.appliedPromoCode`), and `UiCartService.project` fills it.
  */
 
 import type { PhysicalFacts } from '../utils/physical';
@@ -38,6 +39,8 @@ export interface CartResponseModifierSelection {
   readonly groupName: string;
   readonly label: string;
   readonly amountMinor: number | null;
+  /** ADR 0136: set on a second-level answer, naming the first-level option that opened it. */
+  readonly parentOptionId?: string;
 }
 
 /**
@@ -85,7 +88,8 @@ export interface CartResponseItem {
   physical?: PhysicalFacts | null;
   note: string | null;
   /**
-   * Decoded from the line's own key. Must be resent on every write to this
+   * The first-level options the line holds: the platform's own echo of them, else decoded from the
+   * line's own key. Must be resent on every write to this
    * line -- see `CartService.putLine` -- or a quantity change silently strips
    * whatever the customer chose.
    */
@@ -109,6 +113,12 @@ export interface CartResponseItem {
   comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
   /** The same picks, resolved against the menu for display; `price` is then what one combo costs. */
   comboComponents?: readonly CartResponseComboComponent[];
+  /**
+   * ADR 0136: the second-level answers, straight off the platform's `CartLineResponse`, each under
+   * the first-level option that opened it. Resent whole on every write to this line, like
+   * `modifierOptionIds`. Empty on most lines.
+   */
+  nestedModifiers?: readonly { readonly parentOptionId: string; readonly optionId: string }[];
 }
 
 /** Vendor from cart response */

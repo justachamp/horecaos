@@ -89,6 +89,14 @@ export function tabbableWithin(root: HTMLElement): readonly HTMLElement[] {
  */
 const openOverlays: OverlayBehaviour[] = [];
 
+/**
+ * Whether any overlay is open. The console's keyboard dispatcher stands down for the screen behind
+ * a dialog: `x` must not open a second confirm on top of the first.
+ */
+export function hasOpenOverlay(): boolean {
+  return openOverlays.length > 0;
+}
+
 let domIdSequence = 0;
 
 /**

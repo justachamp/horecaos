@@ -142,6 +142,8 @@ interface InternalDetails {
   step(by: number): void;
   selectVariant(variantId: string): void;
   addToCart(): Promise<void>;
+  toggleNested(parent: string, group: MenuItemModifierGroup, optionId: string): void;
+  nestedChosenIn(parent: string, groupId: string): readonly string[];
   setComboPicks(next: Readonly<Record<string, number>>): void;
   comboComplete(): boolean;
   comboUnavailable(): boolean;
@@ -790,5 +792,144 @@ describe('DetailsComponent -- portions and weighed items (ADR 0137)', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="physical-facts"]'),
     ).toBeNull();
+  });
+});
+
+/**
+ * ADR 0136: a portion's own groups, and the choices an option opens (the second level).
+ */
+describe('DetailsComponent -- portion groups and second-level choices (ADR 0136)', () => {
+  const heat = group({
+    id: 'heat',
+    name: 'Heat',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    options: [
+      { id: 'hot', label: 'Hot', amountMinor: null, maximumQuantity: 1 },
+      { id: 'mild', label: 'Mild', amountMinor: null, maximumQuantity: 1 },
+    ],
+  });
+  const sauces = group({
+    id: 'sauces',
+    name: 'Sauces',
+    maximumSelections: 2,
+    options: [
+      { id: 'chili', label: 'Chili', amountMinor: 1000, maximumQuantity: 1, nestedGroups: [heat] },
+      { id: 'garlic', label: 'Garlic', amountMinor: null, maximumQuantity: 1 },
+    ],
+  });
+
+  it('asks nothing under an option nobody chose, and asks its required group once it is chosen', async () => {
+    const { comp, fixture } = await setUp(product({ modifierGroups: [sauces] }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(comp.canAdd()).toBe(true);
+    expect(host.querySelector('app-nested-choices [data-testid="nested-group"]')).toBeNull();
+
+    comp.toggleOption(sauces, 'chili');
+    fixture.detectChanges();
+
+    expect(comp.canAdd()).toBe(false);
+    expect(host.querySelector('[data-testid="nested-group"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="details-missing"]')?.textContent).toContain('Heat');
+  });
+
+  it('sends the answers under their parent, with the first-level option that opened them', async () => {
+    const { comp, cart, fixture } = await setUp(product({ modifierGroups: [sauces] }));
+
+    comp.toggleOption(sauces, 'chili');
+    comp.toggleOption(sauces, 'garlic');
+    comp.toggleNested('chili', heat, 'hot');
+    fixture.detectChanges();
+    expect(comp.canAdd()).toBe(true);
+    await comp.addToCart();
+
+    expect(cart.add).toHaveBeenCalledWith('v1', 1, undefined, ['chili', 'garlic'], undefined, [
+      { parentOptionId: 'chili', optionId: 'hot' },
+    ]);
+  });
+
+  it('forgets the answers when the option that asked for them is taken back', async () => {
+    const { comp, cart } = await setUp(product({ modifierGroups: [sauces] }));
+
+    comp.toggleOption(sauces, 'chili');
+    comp.toggleNested('chili', heat, 'hot');
+    comp.toggleOption(sauces, 'chili');
+    expect(comp.nestedChosenIn('chili', 'heat')).toEqual([]);
+    await comp.addToCart();
+
+    expect(cart.add).toHaveBeenCalledWith('v1', 1, undefined, []);
+
+    comp.toggleOption(sauces, 'chili');
+    expect(comp.canAdd()).toBe(false);
+  });
+
+  it('holds a portion to its own groups: a size with a required group of its own is not addable plain', async () => {
+    const base = product();
+    const dips = group({ id: 'dips', name: 'Dips', required: true, maximumSelections: 1 });
+    const item = product({
+      modifierGroups: [],
+      variants: [base.variants[0], { ...base.variants[1], modifierGroups: [dips] }],
+    });
+    const { comp, cart, fixture } = await setUp(item);
+
+    expect(comp.canAdd()).toBe(true);
+
+    comp.selectVariant('v2');
+    fixture.detectChanges();
+    expect(comp.canAdd()).toBe(false);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Dips');
+
+    comp.toggleOption(dips, 'o1');
+    expect(comp.canAdd()).toBe(true);
+    await comp.addToCart();
+    expect(cart.add).toHaveBeenCalledWith('v2', 1, undefined, ['o1']);
+  });
+
+  it('drops what was chosen in a group the next portion is not offered, so it is never sent', async () => {
+    const base = product();
+    const dips = group({ id: 'dips', name: 'Dips', maximumSelections: 1 });
+    const item = product({
+      modifierGroups: [],
+      variants: [base.variants[0], { ...base.variants[1], modifierGroups: [dips] }],
+    });
+    const { comp, cart } = await setUp(item);
+
+    comp.selectVariant('v2');
+    comp.toggleOption(dips, 'o1');
+    comp.selectVariant('v1');
+    await comp.addToCart();
+
+    expect(cart.add).toHaveBeenCalledWith('v1', 1, undefined, []);
+  });
+
+  it('never asks a combo for modifiers or second-level choices: its choices are its components', async () => {
+    const lunchGroup: MenuItemComboGroup = {
+      id: 'main',
+      name: 'Main',
+      minimumSelections: 1,
+      maximumSelections: 1,
+      allowSameComponentMultipleTimes: false,
+      components: [
+        {
+          id: 'burger',
+          name: 'Burger',
+          variantName: null,
+          defaultQuantity: 1,
+          active: true,
+          amountMinor: 25_000,
+        },
+      ],
+    };
+    const { comp, fixture } = await setUp(
+      product({ modifierGroups: [sauces], comboGroups: [lunchGroup] }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="details-group-rule"]')).toBeNull();
+    expect(host.querySelector('app-nested-choices')).toBeNull();
+    comp.setComboPicks({ burger: 1 });
+    expect(comp.canAdd()).toBe(true);
   });
 });

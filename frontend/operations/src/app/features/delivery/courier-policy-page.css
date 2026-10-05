@@ -177,6 +177,7 @@
   box-sizing: border-box;
 }
 
+.form label.checkbox,
 .checkbox {
   display: flex;
   align-items: center;

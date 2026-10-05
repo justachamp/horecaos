@@ -118,9 +118,11 @@
           }
         </tbody>
       </table>
-      <p class="q-caption bucket-version">
-        {{ 'reports.branches.sla.version' | t: { version: slaBucketSetVersion } }}
-      </p>
+      @if (slaBucketSetVersion(); as version) {
+        <p class="q-caption bucket-version" data-testid="sla-bucket-version">
+          {{ 'reports.branches.sla.version' | t: { version: version } }}
+        </p>
+      }
 
       <h2 class="q-subhead channels-title">{{ 'reports.branches.channels.title' | t }}</h2>
       <table class="table channels-table">

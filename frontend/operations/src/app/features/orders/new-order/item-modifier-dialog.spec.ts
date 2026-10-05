@@ -62,10 +62,12 @@ const EXTRA_SPICY_PRESET: CommentPresetOption = {
 function render(
   groups: readonly MenuModifierGroup[],
   presets: readonly CommentPresetOption[] = [],
+  groupIndex: ReadonlyMap<string, MenuModifierGroup> = new Map(),
 ): ReturnType<typeof TestBed.createComponent<ItemModifierDialog>> {
   const fixture = TestBed.createComponent(ItemModifierDialog);
   fixture.componentRef.setInput('productName', 'Cheeseburger');
   fixture.componentRef.setInput('groups', groups);
+  fixture.componentRef.setInput('groupIndex', groupIndex);
   fixture.componentRef.setInput('presets', presets);
   fixture.componentRef.setInput('currency', 'UZS');
   fixture.detectChanges();
@@ -347,5 +349,147 @@ describe('ItemModifierDialog', () => {
     expect(confirmations[0].selections).toEqual([
       { optionId: 'o-cheese', code: 'CHEESE', name: 'Cheddar', quantity: 1, amountMinor: 3_000 },
     ]);
+  });
+
+  // ------------------------------------------------ ADR 0136: the choices an option opens
+
+  describe('the second level', () => {
+    const HEAT_GROUP: MenuModifierGroup = {
+      modifierGroupId: 'g-heat',
+      code: 'HEAT',
+      name: 'Heat',
+      required: false,
+      minimumSelections: 0,
+      maximumSelections: 3,
+      allowSameOptionMultipleTimes: false,
+      options: [
+        { optionId: 'o-hot', code: 'HOT', maximumQuantity: 1, amountMinor: 1_000, name: 'Hot' },
+        { optionId: 'o-mild', code: 'MILD', maximumQuantity: 1, amountMinor: 0, name: 'Mild' },
+      ],
+    };
+    const SAUCES_GROUP: MenuModifierGroup = {
+      modifierGroupId: 'g-sauce',
+      code: 'SAUCE',
+      name: 'Sauce',
+      required: false,
+      minimumSelections: 0,
+      maximumSelections: 2,
+      allowSameOptionMultipleTimes: false,
+      options: [
+        {
+          optionId: 'o-chili',
+          code: 'CHILI',
+          maximumQuantity: 1,
+          amountMinor: 2_000,
+          name: 'Chili',
+          // The rules published for the choices under this option: required, exactly one.
+          nestedGroups: [
+            {
+              modifierGroupId: 'g-heat',
+              required: true,
+              minimumSelections: 1,
+              maximumSelections: 1,
+            },
+          ],
+        },
+        {
+          optionId: 'o-garlic',
+          code: 'GARLIC',
+          maximumQuantity: 1,
+          amountMinor: 0,
+          name: 'Garlic',
+        },
+      ],
+    };
+    const INDEX = new Map([[HEAT_GROUP.modifierGroupId, HEAT_GROUP]]);
+
+    const tap = (fixture: ReturnType<typeof render>, testId: string, index: number): void => {
+      (fixture.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLInputElement>(`[data-testid="${testId}"]`)
+        [index].dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    };
+
+    it('asks nothing under an option nobody took, and asks its choices, with the published rules, once it is taken', () => {
+      const fixture = render([SAUCES_GROUP], [], INDEX);
+      const host: HTMLElement = fixture.nativeElement;
+
+      expect(host.querySelector('[data-testid="item-modifier-nested"]')).toBeNull();
+
+      tap(fixture, 'item-modifier-checkbox', 0); // chili
+      const nested = host.querySelector('[data-testid="item-modifier-nested"]');
+      expect(nested?.textContent).toContain('Chili');
+      expect(nested?.textContent).toContain('Heat');
+      // The rule published under the option replaces the shared group's own (exactly one, required).
+      expect(host.querySelectorAll('[data-testid="item-modifier-nested-radio"]')).toHaveLength(2);
+    });
+
+    it('holds confirm back until the required choice under a taken option is answered', () => {
+      const fixture = render([SAUCES_GROUP], [], INDEX);
+      const host: HTMLElement = fixture.nativeElement;
+      const confirmations: ModifierDialogConfirmation[] = [];
+      fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+
+      tap(fixture, 'item-modifier-checkbox', 0);
+      (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(confirmations).toEqual([]);
+      expect(host.querySelector('[data-testid="item-modifier-nested-error"]')).not.toBeNull();
+
+      tap(fixture, 'item-modifier-nested-radio', 0); // hot
+      (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(confirmations).toHaveLength(1);
+    });
+
+    it('confirms the answers beside the first-level picks, each marked with the option that asked', () => {
+      const fixture = render([SAUCES_GROUP], [], INDEX);
+      const host: HTMLElement = fixture.nativeElement;
+      const confirmations: ModifierDialogConfirmation[] = [];
+      fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+
+      tap(fixture, 'item-modifier-checkbox', 0);
+      tap(fixture, 'item-modifier-checkbox', 1);
+      tap(fixture, 'item-modifier-nested-radio', 0);
+      (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+
+      expect(confirmations[0].selections).toEqual([
+        { optionId: 'o-chili', code: 'CHILI', name: 'Chili', quantity: 1, amountMinor: 2_000 },
+        { optionId: 'o-garlic', code: 'GARLIC', name: 'Garlic', quantity: 1, amountMinor: 0 },
+        {
+          optionId: 'o-hot',
+          code: 'HOT',
+          name: 'Hot',
+          quantity: 1,
+          amountMinor: 1_000,
+          parentOptionId: 'o-chili',
+        },
+      ]);
+    });
+
+    it('forgets the answers when the option that asked for them is taken back', () => {
+      const fixture = render([SAUCES_GROUP], [], INDEX);
+      const host: HTMLElement = fixture.nativeElement;
+      const confirmations: ModifierDialogConfirmation[] = [];
+      fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+
+      tap(fixture, 'item-modifier-checkbox', 0);
+      tap(fixture, 'item-modifier-nested-radio', 0);
+      tap(fixture, 'item-modifier-checkbox', 0); // chili off
+      (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+
+      expect(confirmations[0].selections).toEqual([]);
+      expect(host.querySelector('[data-testid="item-modifier-nested"]')).toBeNull();
+    });
+
+    it('draws nothing for choices the menu does not carry, rather than guess them', () => {
+      const fixture = render([SAUCES_GROUP], [], new Map());
+      const host: HTMLElement = fixture.nativeElement;
+
+      tap(fixture, 'item-modifier-checkbox', 0);
+
+      expect(host.querySelector('[data-testid="item-modifier-nested"]')).toBeNull();
+    });
   });
 });

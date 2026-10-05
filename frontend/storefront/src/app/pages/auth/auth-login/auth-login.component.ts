@@ -2,8 +2,13 @@ import { Component, OnDestroy, signal, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription, from } from 'rxjs';
-import { CustomerOtp, OtpNumberRejectedError, OtpRateLimitedError,
-  OtpUndeliverableError, CustomerSignInUnavailableError } from '../../../core/session/customer-otp';
+import {
+  CustomerOtp,
+  OtpNumberRejectedError,
+  OtpRateLimitedError,
+  OtpUndeliverableError,
+  CustomerSignInUnavailableError,
+} from '../../../core/session/customer-otp';
 import {
   TelegramSignIn,
   TelegramSignInExpiredError,
@@ -266,12 +271,12 @@ export class AuthLoginComponent implements OnInit, OnDestroy {
     }
     if (failure instanceof OtpUndeliverableError) {
       return this.translate.get(
-        failure.permanent ? 'auth.errors.undeliverablePermanent' : 'auth.errors.undeliverable');
+        failure.permanent ? 'auth.errors.undeliverablePermanent' : 'auth.errors.undeliverable',
+      );
     }
     if (failure instanceof CustomerSignInUnavailableError) {
       return this.translate.get('auth.errors.unavailable');
     }
     return this.translate.get('errors.generic');
   }
-
 }

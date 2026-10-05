@@ -172,6 +172,10 @@ export interface MenuVariant {
   readonly orderable: boolean;
   readonly onSaleNow: boolean;
   readonly amountMinor: number | null;
+  /** ADR 0136: the groups this portion carries of its own, on top of its product's; absent or empty when it carries none. */
+  readonly modifierGroupIds?: readonly string[];
+  /** ADR 0136: the rules this portion holds the customer to for those groups, and for any of its product's it overrides; already the effective values. */
+  readonly modifierGroupPolicies?: readonly MenuModifierGroupPolicy[];
   /**
    * ADR 0137: what the variant physically is, as published. Absent for a fixed unit sold whole
    * (most of the menu). For a catchweight variant `amountMinor` is the price per
@@ -219,6 +223,12 @@ export interface MenuModifierOption {
   readonly amountMinor: number | null;
   /** What the customer reads, in the language the menu was asked in; absent when nobody named the option, and the code is shown. */
   readonly name?: string | null;
+  /**
+   * ADR 0136: the choices taking this option opens (it links a variant that carries groups of its
+   * own), with the rules in force for them. Each is also a group of the menu's `modifierGroups`.
+   * Absent or empty for an option that opens nothing.
+   */
+  readonly nestedGroups?: readonly MenuModifierGroupPolicy[];
 }
 
 // ------------------------------------------------------------ §5.6 placing it
@@ -235,6 +245,11 @@ export interface PlaceOrderLine {
   readonly modifierOptionIds: readonly string[];
   /** ADR 0136: set exactly when `variantId` is a combo's container; `quantity` then counts combos. */
   readonly comboPicks?: readonly ComboPick[];
+  /** ADR 0136: the second-level answers, each naming the first-level option that asked for it. */
+  readonly nestedModifiers?: readonly {
+    readonly parentOptionId: string;
+    readonly optionId: string;
+  }[];
   /** Row 2.1b: the coded presets the operator picked from the product's own offered subset. */
   readonly commentPresetCodes: readonly string[];
   readonly customerNote?: string | null;
@@ -297,6 +312,63 @@ export interface PlaceOrderRequest {
    * (`SESSION_NOT_LIVE`) instead of leaving a cooked order that is on no bill.
    */
   readonly dineInSessionId?: string | null;
+  /**
+   * Row 1.3e: for a `CASH` order, what the customer says they will hand over, in whole som. It is
+   * written to the order in the transaction that creates it, so «Сдача» is on the order from its
+   * first read; a figure short of the total still creates the order and answers the notice
+   * `CASH_TENDERED_INSUFFICIENT`. Absent or null when the operator did not enter one. Refused for
+   * any other payment method.
+   */
+  readonly cashTenderedMinor?: number | null;
+}
+
+// -------------------------------------------------------- §5.6 the server's price (row 1.3e)
+
+/** `OperationsOrderController.QuotedLineResponse` — one line of the basket, by its position in the request. */
+export interface QuotedLine {
+  readonly index: number;
+  /** Before any discount. */
+  readonly baseAmountMinor: number;
+  /** After the line's own discounts, tax included. */
+  readonly finalAmountMinor: number;
+  readonly taxAmountMinor: number;
+  /** True while the line is sold by weight: the figure is an estimate the weighing at handover replaces. */
+  readonly provisional: boolean;
+}
+
+/** `OperationsOrderController.QuotedDiscountResponse` — one reduction: a promotion, or a delivery-fee waiver. */
+export interface QuotedDiscount {
+  /** The line it landed on, or null for an order-level reduction. */
+  readonly lineIndex: number | null;
+  readonly type: string;
+  /** The promotion's own code, never what the operator typed. */
+  readonly code: string | null;
+  /** Positive. */
+  readonly amountMinor: number;
+}
+
+/**
+ * `OperationsOrderController.OrderQuoteResponse` — the price the server would book, from the same
+ * cart and pricing path Создать takes. `subtotalMinor` is gross of the discount, so
+ * `totalMinor = subtotalMinor + taxMinor + feeMinor - discountMinor`.
+ *
+ * @property deliveryOutcome null for an order that is not a delivery; otherwise how the fee
+ *   resolution ended. Anything but `RESOLVED` or `EXTERNALLY_PRICED` is a delivery checkout refuses.
+ */
+export interface OrderQuote {
+  readonly currency: string;
+  readonly subtotalMinor: number;
+  readonly discountMinor: number;
+  readonly feeMinor: number;
+  readonly taxMinor: number;
+  readonly totalMinor: number;
+  readonly deliveryOutcome: string | null;
+  readonly deliveryShortfallMinor: number | null;
+  readonly deliveryMinBasketMinor: number | null;
+  readonly deliveryFreeFromMinor: number | null;
+  readonly provisional: boolean;
+  readonly lines: readonly QuotedLine[];
+  readonly discounts: readonly QuotedDiscount[];
 }
 
 // -------------------------------------------------------- §5.4 branch resolution (row 1.3)
@@ -515,6 +587,26 @@ export class NewOrderApi {
       this.api
         .post<PlaceOrderRequest, PlaceOrderResult>(operationsPaths.orders(scope), intent)
         .pipe(tap(() => this.placeOrderIntents.forget('draft'))),
+    );
+  }
+
+  /**
+   * Row 1.3e — the price the server would book for this request, before it is placed: `POST
+   * .../orders/quote`, `ORDER_PLACE` at `LOCATION` scope. The same body as {@link placeOrder},
+   * run through the same cart and pricing path and undone, so the total shown beside «Создать»
+   * is the one the order is then booked at -- discount, delivery fee and tax included -- and
+   * not the menu arithmetic `computeBasketTotal` can do.
+   *
+   * Writes nothing and reserves nothing, so unlike {@link placeOrder} a fresh `Idempotency-Key`
+   * per call (the plain {@link command} helper) is exactly right: there is no effect for a lost
+   * response to duplicate, and a held key would replay a stale price.
+   */
+  quote(scope: LocationScope, request: PlaceOrderRequest): Promise<OrderQuote> {
+    return firstValueFrom(
+      this.api.post<PlaceOrderRequest, OrderQuote>(
+        `${operationsPaths.orders(scope)}/quote`,
+        command(request),
+      ),
     );
   }
 

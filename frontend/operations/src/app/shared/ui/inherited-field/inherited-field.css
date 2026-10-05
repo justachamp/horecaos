@@ -84,6 +84,7 @@
 
 .field__ladderRow {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   padding: 4px 6px;
@@ -95,6 +96,13 @@
   color: var(--q-success-text);
   border-radius: var(--q-radius);
   font-weight: 600;
+}
+
+/* Who changed it and when: a line of its own beneath the scope and outcome, never beside them. */
+.field__ladderWho {
+  flex-basis: 100%;
+  font-weight: 400;
+  color: var(--q-ink-muted);
 }
 
 .field__popoverDescribe {

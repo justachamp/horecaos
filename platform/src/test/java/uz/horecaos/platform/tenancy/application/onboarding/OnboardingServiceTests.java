@@ -981,6 +981,55 @@ class OnboardingServiceTests {
     }
 
     @Test
+    void anExpiringFindingIsTieredAsSuchAndDoesNotTurnTheDryRunRed() {
+        OnboardingReadinessCheck expiring = new OnboardingReadinessCheck() {
+            @Override
+            public String checkKey() {
+                return "ENDING_THING_VALIDATE";
+            }
+
+            @Override
+            public boolean advisory() {
+                return true;
+            }
+
+            @Override
+            public ReadinessSeverity severity() {
+                return ReadinessSeverity.EXPIRING;
+            }
+
+            @Override
+            public StepResult check(UUID tenantId) {
+                return StepResult.failedWithFindings(
+                        List.of(new StepResult.Finding("THING_ENDING", "The thing ends on Friday", null)));
+            }
+        };
+        OnboardingService checked = serviceWithReadinessChecks(expiring);
+        UUID runId = startRunWithSampleMenu(checked, false);
+
+        var outcome = checked.validate(TENANT, runId);
+
+        assertThat(outcome.checks())
+                .filteredOn(check -> "ENDING_THING_VALIDATE".equals(check.stepKey()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.severity()).isEqualTo(ReadinessSeverity.EXPIRING);
+                    assertThat(check.advisory()).isTrue();
+                });
+        assertThat(outcome.allPassed()).isTrue();
+    }
+
+    @Test
+    void aCheckThatOnlyAnswersAdvisoryStillGetsTheTwoTierDefault() {
+        assertThat(fakeCheck("A_VALIDATE", true, () -> StepResult.completed(Map.of(), null))
+                        .severity())
+                .isEqualTo(ReadinessSeverity.ADVISORY);
+        assertThat(fakeCheck("B_VALIDATE", false, () -> StepResult.completed(Map.of(), null))
+                        .severity())
+                .isEqualTo(ReadinessSeverity.BLOCKING);
+    }
+
+    @Test
     void aBlockingFindingStillTurnsTheDryRunRedBesideAnAdvisoryOne() {
         OnboardingService checked = serviceWithReadinessChecks(
                 fakeCheck(

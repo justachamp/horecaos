@@ -149,6 +149,23 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0141, rollback switch three (stop consulting stops -- the decommission). Declared
+     * identically in {@code inventory.api.InventoryConfigurationKeys}, where {@code
+     * AvailabilityResolver} reads it. Not tenant-visible: it is a decommission and not a setting
+     * (platform staff turn it, and the write is refused until the materialisation run's report was
+     * acknowledged -- see that class).
+     */
+    public static final ConfigurationKey<Boolean> INVENTORY_STOPS_READ_ENABLED = ConfigurationKey.of(
+                    "inventory.stops.read_enabled", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("inventory")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether stops are consulted at all. Turning it off is a decommission: it sells "
+                    + "every stopped dish again that a materialisation run could not land on a position, and "
+                    + "is refused (MATERIALISATION_REQUIRED) until the run's report was acknowledged.")
+            .build();
+
+    /**
      * ADR 0141, rollback switch two (suspend the reconciler), declared identically in {@code
      * integration.api.MarketplaceConfigurationKeys} — see that class for why the pair exists.
      */
@@ -336,6 +353,24 @@ public final class ConfigurationKeys {
                     + "Defaults to Telegram Gateway first (cheaper) with SMS as the reachability "
                     + "fallback; whichever channel is not tried first is still tried when the "
                     + "first is unconfigured or does not accept the message.")
+            .build();
+
+    /**
+     * Staff row 9.4: the row count above which a filtered customer export needs a second
+     * signature, declared identically in {@code customers.api.CustomerConfigurationKeys}, where
+     * it is consumed, for the reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}: this
+     * registry is internal to tenancy, and a reference the other way would make the modules
+     * cyclic. It replaces a deployment property, which stays as the default the consumer falls
+     * back to while a tenant has set nothing.
+     */
+    public static final ConfigurationKey<Integer> CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS = ConfigurationKey.of(
+                    "customers.pii_export_approval_threshold_rows", Integer.class)
+            .defaultValue(500)
+            .ownedBy("customers")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("A filtered customer export of more rows than this needs a second signature "
+                    + "when the tenant has published a customer.pii.export approval policy (ADR 0027).")
             .build();
 
     /**
@@ -666,6 +701,7 @@ public final class ConfigurationKeys {
             AUDIT_BUSINESS_RETENTION_DAYS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
+            CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
             FEATURE_SUPPORT_VISITS,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,
@@ -682,6 +718,7 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             CATALOG_USE_STOCK_LOGIC,
             INVENTORY_STOPS_CREATION_ENABLED,
+            INVENTORY_STOPS_READ_ENABLED,
             MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED,
             MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS,
             MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS,

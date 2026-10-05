@@ -2,10 +2,13 @@ package uz.horecaos.platform.ordering.infrastructure.catalog;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -79,16 +82,83 @@ public class JdbcCartMenuRules implements CartMenuRules {
         }
 
         Map<UUID, PhysicalRules> physical = physicalRules(product.get().content());
-        List<UUID> groupIds = idList(product.get().content(), "modifierGroupIds");
-        if (groupIds.isEmpty()) {
+        // ADR 0136: the groups this variant is offered with are its product's and the ones it
+        // carries of its own, and where a variant states its own rules for a group it replaces the
+        // product's. The cart holds the customer to what the menu showed for the variant they
+        // chose, not for the product's other sizes.
+        Map<String, Object> variantEntry = variantEntry(product.get().content(), variantId);
+        Set<UUID> offered = new LinkedHashSet<>(idList(product.get().content(), "modifierGroupIds"));
+        offered.addAll(idList(variantEntry, "modifierGroupIds"));
+        if (offered.isEmpty()) {
             return Optional.of(new ProductRules(product.get().entityId(), List.of(), physical));
         }
-        Map<UUID, Policy> policies = policies(product.get().content());
-        List<GroupRules> rules = groups(publicationId.get(), groupIds).stream()
+        Map<UUID, Policy> policies = new LinkedHashMap<>(policies(product.get().content()));
+        policies.putAll(policies(variantEntry));
+        List<GroupRules> rules = groups(publicationId.get(), List.copyOf(offered)).stream()
                 .map(group ->
                         policies.containsKey(group.groupId()) ? group.withPolicy(policies.get(group.groupId())) : group)
                 .toList();
         return Optional.of(new ProductRules(product.get().entityId(), rules, physical));
+    }
+
+    /**
+     * The physical rules of many variants from one read of the live publication (ADR 0137),
+     * instead of one containment search per variant: an amendment asks about every line it
+     * touches, and the console asks about every line of an order it shows.
+     *
+     * <p>Only the {@code physical} block of each requested variant is read, so none of the
+     * product's modifier groups are resolved. Same publication, same tenant and brand, same
+     * answer for a variant as {@link #forVariant} gives: a variant the publication does not
+     * carry, or carries without a block, is whole units.
+     */
+    @Override
+    public Map<UUID, PhysicalRules> physicalOf(
+            UUID tenantId, UUID brandId, String channelCode, Collection<UUID> variantIds) {
+        Map<UUID, PhysicalRules> byVariant = new LinkedHashMap<>();
+        variantIds.forEach(variantId -> byVariant.put(variantId, PhysicalRules.WHOLE_UNITS));
+        if (variantIds.isEmpty()) {
+            return byVariant;
+        }
+        Optional<UUID> publicationId = jdbc.sql("""
+                SELECT id FROM catalog.publications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND channel = :channel AND status = 'PUBLISHED'
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channel", channelCode)
+                .query(UUID.class)
+                .optional();
+        if (publicationId.isEmpty()) {
+            return byVariant;
+        }
+        // A CASE around the array, because the planner is free to run the set-returning function
+        // before it applies the entity_type filter, and a PRODUCT item published without variants
+        // must not turn the whole read into an error.
+        jdbc.sql("""
+                SELECT variant.value ->> 'variantId' AS variant_id,
+                       (variant.value -> 'physical')::text AS physical
+                FROM catalog.publication_items item
+                CROSS JOIN LATERAL jsonb_array_elements(
+                    CASE WHEN jsonb_typeof(item.immutable_content_json -> 'variants') = 'array'
+                         THEN item.immutable_content_json -> 'variants'
+                         ELSE '[]'::jsonb END) AS variant(value)
+                WHERE item.publication_id = :publicationId
+                  AND item.entity_type = 'PRODUCT'
+                  AND variant.value ->> 'variantId' = ANY(:ids)
+                """)
+                .param("publicationId", publicationId.get())
+                .param("ids", variantIds.stream().map(UUID::toString).toArray(String[]::new))
+                .query(row -> {
+                    String physical = row.getString("physical");
+                    if (physical != null) {
+                        Map<String, Object> block = readJson(physical);
+                        if (!block.isEmpty()) {
+                            byVariant.put(UUID.fromString(row.getString("variant_id")), physicalRulesOf(block));
+                        }
+                    }
+                });
+        return byVariant;
     }
 
     /**
@@ -113,6 +183,21 @@ public class JdbcCartMenuRules implements CartMenuRules {
         return byGroup;
     }
 
+    /** The published entry of one variant of the product, or an empty map when the product does not list it. */
+    private static Map<String, Object> variantEntry(Map<String, Object> content, UUID variantId) {
+        if (content.get("variants") instanceof List<?> variants) {
+            for (Object element : variants) {
+                if (element instanceof Map<?, ?> variant
+                        && variantId.toString().equals(String.valueOf(variant.get("variantId")))) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> typed = (Map<String, Object>) variant;
+                    return typed;
+                }
+            }
+        }
+        return Map.of();
+    }
+
     /**
      * Each of the product's variants that published a physical block (ADR 0137): whether
      * it is splittable and in what step. A variant without one is absent, which the rules
@@ -127,15 +212,17 @@ public class JdbcCartMenuRules implements CartMenuRules {
             if (!(element instanceof Map<?, ?> variant) || !(variant.get("physical") instanceof Map<?, ?> block)) {
                 continue;
             }
-            Object portion = block.get("portionSize");
-            byVariant.put(
-                    UUID.fromString(String.valueOf(variant.get("variantId"))),
-                    new PhysicalRules(
-                            Boolean.TRUE.equals(block.get("splittable")),
-                            portion instanceof Number number ? new BigDecimal(number.toString()) : null,
-                            Boolean.TRUE.equals(block.get("catchweight"))));
+            byVariant.put(UUID.fromString(String.valueOf(variant.get("variantId"))), physicalRulesOf(block));
         }
         return byVariant;
+    }
+
+    private static PhysicalRules physicalRulesOf(Map<?, ?> block) {
+        Object portion = block.get("portionSize");
+        return new PhysicalRules(
+                Boolean.TRUE.equals(block.get("splittable")),
+                portion instanceof Number number ? new BigDecimal(number.toString()) : null,
+                Boolean.TRUE.equals(block.get("catchweight")));
     }
 
     private List<GroupRules> groups(UUID publicationId, List<UUID> groupIds) {

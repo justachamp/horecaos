@@ -84,6 +84,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final Clock clock;
     private final ConfigurationResolver configuration;
     private final CompositeProductsLookup composites;
+    private final PromotionMetrics metrics;
 
     /**
      * A service that prices ordinary carts only: nothing it prices is a combo, nothing
@@ -113,7 +114,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 CompositeProductsLookup.none());
     }
 
-    @Autowired
+    /** A service nobody scrapes the promotion counters of: every caller that predates them. */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public QuoteService(
             JdbcPricingStore store,
@@ -125,6 +126,33 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             Clock clock,
             ConfigurationResolver configuration,
             CompositeProductsLookup composites) {
+        this(
+                store,
+                engine,
+                catalog,
+                channels,
+                deliveryFees,
+                promotionInputs,
+                clock,
+                configuration,
+                composites,
+                PromotionMetrics.none());
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public QuoteService(
+            JdbcPricingStore store,
+            PricingEngine engine,
+            CatalogPricingContext catalog,
+            SalesChannelLookup channels,
+            DeliveryFeePort deliveryFees,
+            PromotionInputResolver promotionInputs,
+            Clock clock,
+            ConfigurationResolver configuration,
+            CompositeProductsLookup composites,
+            PromotionMetrics metrics) {
+        this.metrics = metrics;
         this.store = store;
         this.engine = engine;
         this.catalog = catalog;
@@ -186,6 +214,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Priced priced = price(request, quoteId, now, null);
         var inputs = priced.inputs();
         var result = priced.result();
+        // Real quotes only: the simulator prices through the same engine and is not the platform pricing a basket.
+        metrics.evaluated(result.promotionTrace());
 
         Duration ttl = quoteTtl(request.tenantId(), request.brandId(), request.locationId());
         Quote quote = new Quote(
@@ -273,8 +303,10 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
 
         // ADR 0136. Everything composite is resolved here, before the engine runs, for
         // the reason the price book is: the engine stays a function of its inputs.
+        // The structure is the publication's, the one this quote is stamped with: a combo edited
+        // and not republished prices what the customer was shown.
         CompositeProductsLookup.ComboCatalog combos =
-                composites.comboCatalog(request.tenantId(), request.brandId(), lineVariantIds);
+                composites.comboCatalog(request.tenantId(), request.brandId(), publication, lineVariantIds);
 
         Set<UUID> pickedComponentIds = request.lines().stream()
                 .flatMap(line -> line.comboPicks().stream())
@@ -309,7 +341,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Set<UUID> selectedOptionIds = new HashSet<>(firstLevelOptionIds);
         selectedOptionIds.addAll(nestedOptionIds);
         CompositeProductsLookup.NestedCatalog nestedCatalog =
-                composites.nestedCatalog(request.tenantId(), request.brandId(), selectedOptionIds);
+                composites.nestedCatalog(request.tenantId(), request.brandId(), publication, selectedOptionIds);
 
         Set<UUID> modifierIds = new HashSet<>(selectedOptionIds);
         hiddenCharges.values().forEach(charges -> charges.forEach(charge -> modifierIds.add(charge.optionId())));
@@ -608,17 +640,24 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      */
     @Override
     @Transactional(readOnly = true)
-    public SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item) {
+    public SelectionCheck checkSelection(UUID tenantId, UUID brandId, String channelCode, PricingCommand.Item item) {
         QuoteRequest.Line line = lineOf(item);
-        CompositeProductsLookup.ComboCatalog combos =
-                composites.comboCatalog(tenantId, brandId, Set.of(item.variantId()));
+        // The channel's live menu, the one pricing will stamp the quote with. A channel with none
+        // sells no combo and offers no nested choice, so the facts are empty and any selection on
+        // a combo is refused by name; the missing menu itself is pricing's to report.
+        Optional<UUID> publication = catalog.activePublicationId(tenantId, brandId, channelCode);
+        CompositeProductsLookup.ComboCatalog combos = publication
+                .map(id -> composites.comboCatalog(tenantId, brandId, id, Set.of(item.variantId())))
+                .orElseGet(CompositeProductsLookup.ComboCatalog::empty);
 
         Set<UUID> optionIds = new HashSet<>(item.modifierOptionIds());
         item.nestedModifiers().forEach(nested -> {
             optionIds.add(nested.parentOptionId());
             optionIds.add(nested.optionId());
         });
-        CompositeProductsLookup.NestedCatalog nested = composites.nestedCatalog(tenantId, brandId, optionIds);
+        CompositeProductsLookup.NestedCatalog nested = publication
+                .map(id -> composites.nestedCatalog(tenantId, brandId, id, optionIds))
+                .orElseGet(CompositeProductsLookup.NestedCatalog::empty);
 
         var facts = new CompositePricing.CompositeInputs(
                 combos.groups(),
@@ -788,6 +827,23 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             if (!verdicts.isEmpty()) {
                 document.put("couponVerdicts", verdicts);
             }
+        }
+        // ADR 0140: the gifts a firing FREE_ITEM rule would price free, in the cart or not, so
+        // a storefront can offer adding one. Kept on the quote for the same reason as the
+        // verdicts above: an idempotent replay never runs the engine, and the offer has to
+        // survive a page reload. Quantities are strings, exact for a portion (0.5) as for 2.
+        if (!result.giftOffers().isEmpty()) {
+            List<Map<String, Object>> gifts = new ArrayList<>();
+            for (PromotionEvaluator.GiftOffer offer : result.giftOffers()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("ruleId", offer.promotionId().toString());
+                entry.put("variantId", offer.variantId().toString());
+                entry.put("quantity", offer.quantity().toPlainString());
+                entry.put("inCart", offer.inCart());
+                entry.put("toAdd", offer.toAdd().toPlainString());
+                gifts.add(entry);
+            }
+            document.put("giftOffers", gifts);
         }
         return document;
     }

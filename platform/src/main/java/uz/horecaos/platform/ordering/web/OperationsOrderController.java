@@ -11,7 +11,6 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -22,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +44,8 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService;
@@ -55,6 +57,7 @@ import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.MyWorkQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
+import uz.horecaos.platform.ordering.application.OperatorOrderQuoteService;
 import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
@@ -118,6 +121,7 @@ public class OperationsOrderController {
     private final AuthorizationService authorization;
     private final OrderCallProvenanceService callProvenance;
     private final OperatorOrderingService operatorOrdering;
+    private final OperatorOrderQuoteService operatorQuotes;
     private final OperatorCustomerLookupService customerLookup;
     private final OrderBulkActionService bulkActions;
     private final LiveBoardQueryService liveBoard;
@@ -160,6 +164,7 @@ public class OperationsOrderController {
             AuthorizationService authorization,
             OrderCallProvenanceService callProvenance,
             OperatorOrderingService operatorOrdering,
+            OperatorOrderQuoteService operatorQuotes,
             OperatorCustomerLookupService customerLookup,
             OrderBulkActionService bulkActions,
             LiveBoardQueryService liveBoard,
@@ -180,6 +185,7 @@ public class OperationsOrderController {
         this.authorization = authorization;
         this.callProvenance = callProvenance;
         this.operatorOrdering = operatorOrdering;
+        this.operatorQuotes = operatorQuotes;
         this.customerLookup = customerLookup;
         this.bulkActions = bulkActions;
         this.liveBoard = liveBoard;
@@ -536,7 +542,8 @@ public class OperationsOrderController {
                     body.proposedLocationId(),
                     body.overrideReasonCode(),
                     body.overrideNote(),
-                    body.dineInSessionId()));
+                    body.dineInSessionId(),
+                    body.cashTenderedMinor()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -563,6 +570,68 @@ public class OperationsOrderController {
             // Every version this handler passes to CartService is one it just
             // read back from the previous step in the same transaction, so a
             // concurrent editor is not a case this endpoint can reach.
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, impossible.getMessage());
+        } catch (CartPricingPort.PricingRefusedException unpriced) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    unpriced.getMessage(),
+                    Map.of("reason", unpriced.code(), "subjectId", String.valueOf(unpriced.subjectId())));
+        }
+    }
+
+    @PostMapping("/quote")
+    @RequiresCapability(value = Capability.ORDER_PLACE, scope = ScopeType.LOCATION)
+    @Idempotent
+    @Operation(
+            summary = "Price an order without placing it",
+            description = "Gap map row 1.3e. The same body as `POST .../orders`, run through the "
+                    + "same cart and the same PricingEngine path that Создать takes, and then "
+                    + "undone: the answer is the subtotal, the promotion discount, the delivery "
+                    + "fee, the tax and the total the order would be booked at, with the amount "
+                    + "of each line, so the New order screen can show the discounted price before "
+                    + "it is placed. Nothing is written -- no cart, no stored quote, no "
+                    + "redemption, no audit fact -- and nothing is reserved, so typing a promo "
+                    + "code to see what it is worth does not use one up. A rule the cart would "
+                    + "refuse on (an item out of stock, a promo code that does not apply, an "
+                    + "address outside every zone) is refused here with the same code. The "
+                    + "branch-override, pre-order and table fields of the body are accepted and "
+                    + "ignored: they decide where and when an order is placed, not what it costs. "
+                    + "A POST because the basket is a body; `ORDER_PLACE` because the answer is "
+                    + "a price for a customer's would-be order. Needs an `Idempotency-Key`, which "
+                    + "the screen mints fresh on every call.")
+    public ResponseEntity<OrderQuoteResponse> quoteOrder(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+            @Valid @RequestBody PlaceOrderRequest body) {
+        try {
+            var quote = operatorQuotes.quote(new OperatorOrderingService.PlaceOrderCommand(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    body.customerAccountId(),
+                    body.channelCode(),
+                    body.fulfillmentMode(),
+                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
+                    body.destination() == null ? null : body.destination().toDestination(),
+                    body.paymentMethodCode(),
+                    body.promoCode(),
+                    // Never reaches checkout, so the key names nothing; the command wants one.
+                    idempotencyKey,
+                    currentActor.get().subject(),
+                    null,
+                    body.requestedFor(),
+                    Boolean.TRUE.equals(body.overrideOutOfHours()),
+                    body.proposedLocationId(),
+                    body.overrideReasonCode(),
+                    body.overrideNote(),
+                    body.dineInSessionId(),
+                    body.cashTenderedMinor()));
+            return ResponseEntity.ok(OrderQuoteResponse.of(quote));
+        } catch (CartService.CartRefusedException refused) {
+            throw StorefrontOrderingController.refusal(refused);
+        } catch (CartService.StaleCartException impossible) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, impossible.getMessage());
         } catch (CartPricingPort.PricingRefusedException unpriced) {
             throw new ApiException(
@@ -797,6 +866,16 @@ public class OperationsOrderController {
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
         boolean presentablePayment = orderQuery.presentablePaymentFor(tenantId, detail.order());
+        // ADR 0137: the step a line may be amended in, asked only of an order that can still be
+        // amended -- a finished order has no use for it and the read costs a query on the menu.
+        Map<UUID, BigDecimal> portionSteps = detail.order().status().terminal()
+                ? Map.of()
+                : amendments.portionStepsOf(
+                        detail.order(),
+                        detail.lines().stream()
+                                .filter(line -> !line.line().isComboComponent())
+                                .map(line -> line.line().sourceVariantId())
+                                .collect(Collectors.toSet()));
         // Only a DINE_IN order can sit at a table; asking about a delivery or a pickup
         // would only spend a query on an answer that is always empty.
         OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
@@ -812,7 +891,8 @@ public class OperationsOrderController {
                         amendmentAwaitingOperator,
                         presentablePayment,
                         table,
-                        staffDirectory));
+                        staffDirectory,
+                        portionSteps));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -1537,7 +1617,12 @@ public class OperationsOrderController {
             UUID orderId,
             String itemStatus,
             @Nullable String itemProblemCode,
-            @Nullable Integer resultingOrderVersion) {
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "an order's version number; the name heuristic reads «resulTINg» as a tax number")
+            @Nullable
+            Integer resultingOrderVersion) {
 
         static BulkActionItemResponse of(OrderBulkActionService.BulkItemOutcome outcome) {
             return new BulkActionItemResponse(
@@ -1759,6 +1844,14 @@ public class OperationsOrderController {
      *                          dinein.session.manage} at the branch, because it
      *                          writes to the table's bill. Refused for any other
      *                          fulfilment mode
+     * @param cashTenderedMinor row 1.3e: for a {@code CASH} order, what the customer says
+     *                          they will hand over, in whole som. Boxed -- Jackson 3 refuses
+     *                          a missing primitive -- and optional. Recorded on the order in
+     *                          the transaction that creates it, so «Сдача» is there from the
+     *                          first read; an answer short of the total creates the order and
+     *                          returns the notice {@code CASH_TENDERED_INSUFFICIENT}. Refused
+     *                          for any other payment method. Changing it afterwards is the
+     *                          {@code SET_CASH_TENDERED} amendment
      */
     public record PlaceOrderRequest(
             @NotNull UUID customerAccountId,
@@ -1773,7 +1866,8 @@ public class OperationsOrderController {
             @Nullable UUID proposedLocationId,
             @Nullable @Size(max = 48) String overrideReasonCode,
             @Nullable @Size(max = 500) String overrideNote,
-            @Nullable UUID dineInSessionId) {}
+            @Nullable UUID dineInSessionId,
+            @Nullable @PositiveOrZero Long cashTenderedMinor) {}
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
@@ -1890,6 +1984,74 @@ public class OperationsOrderController {
             int version,
             String outcome,
             List<String> warnings) {}
+
+    /**
+     * The price an order would be booked at (row 1.3e), in integer minor units and a currency.
+     * {@code subtotalMinor} is gross of the discount: {@code totalMinor = subtotalMinor +
+     * taxMinor + feeMinor - discountMinor}.
+     *
+     * @param deliveryOutcome null for an order that is not a delivery; otherwise how the
+     *                        fee resolution ended. Anything but {@code RESOLVED} or {@code
+     *                        EXTERNALLY_PRICED} is a delivery checkout would refuse
+     * @param provisional     true while any line is sold by weight; the weighing at handover
+     *                        replaces the figure
+     * @param lines           one per line of the request, by {@code index}
+     * @param discounts       each reduction: a promotion on a line or the order, or a
+     *                        delivery-fee waiver
+     */
+    public record OrderQuoteResponse(
+            String currency,
+            long subtotalMinor,
+            long discountMinor,
+            long feeMinor,
+            long taxMinor,
+            long totalMinor,
+            @Nullable String deliveryOutcome,
+            @Nullable Long deliveryShortfallMinor,
+            @Nullable Long deliveryMinBasketMinor,
+            @Nullable Long deliveryFreeFromMinor,
+            boolean provisional,
+            List<QuotedLineResponse> lines,
+            List<QuotedDiscountResponse> discounts) {
+
+        static OrderQuoteResponse of(OperatorOrderQuoteService.OrderQuote quote) {
+            return new OrderQuoteResponse(
+                    quote.currency(),
+                    quote.subtotalMinor(),
+                    quote.discountMinor(),
+                    quote.feeMinor(),
+                    quote.taxMinor(),
+                    quote.totalMinor(),
+                    quote.deliveryOutcome(),
+                    quote.deliveryShortfallMinor(),
+                    quote.deliveryMinBasketMinor(),
+                    quote.deliveryFreeFromMinor(),
+                    quote.provisional(),
+                    quote.lines().stream()
+                            .map(line -> new QuotedLineResponse(
+                                    line.index(),
+                                    line.baseAmountMinor(),
+                                    line.finalAmountMinor(),
+                                    line.taxAmountMinor(),
+                                    line.provisional()))
+                            .toList(),
+                    quote.discounts().stream()
+                            .map(discount -> new QuotedDiscountResponse(
+                                    discount.lineIndex(), discount.type(), discount.code(), discount.amountMinor()))
+                            .toList());
+        }
+    }
+
+    /** One line of a quote, by its position in the request. */
+    public record QuotedLineResponse(
+            int index, long baseAmountMinor, long finalAmountMinor, long taxAmountMinor, boolean provisional) {}
+
+    /** One reduction in a quote. {@code code} is the promotion's own code, never what was typed. */
+    public record QuotedDiscountResponse(
+            @Nullable Integer lineIndex,
+            String type,
+            @Nullable String code,
+            long amountMinor) {}
 
     // ---------------------------------------------- manual aggregator order entry (ADR 0040)
 
@@ -2010,7 +2172,7 @@ public class OperationsOrderController {
      *                         agreement
      */
     public record AmendRequest(
-            @NotEmpty @Size(max = 10) List<AmendmentCommandRequest> commands,
+            @NotEmpty @Size(max = 10) List<@Valid AmendmentCommandRequest> commands,
             boolean applyImmediately,
             @NotBlank @Size(max = 64) String reasonCode) {}
 
@@ -2038,7 +2200,11 @@ public class OperationsOrderController {
             @jakarta.validation.Valid DeliveryAddressRequest deliveryAddress,
             @jakarta.validation.Valid @Size(max = 10) List<@jakarta.validation.Valid AddLineRequest> lines,
             UUID orderLineId,
-            @Positive Integer quantity) {
+            // ADR 0137: a decimal, because the line it targets may be a dish sold by the portion.
+            // Whether this line takes a fraction is the amendment's decision against the published
+            // menu, exactly as the cart's is; here it is only a positive amount the column can hold.
+            @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity) {
 
         OrderAmendmentService.AmendmentCommand toCommand() {
             return switch (type) {
@@ -2158,16 +2324,30 @@ public class OperationsOrderController {
      */
     public record AddLineRequest(
             @NotNull UUID variantId,
-            @Positive int quantity,
+            // ADR 0137: a decimal for a dish sold by the portion. Not "required" in the published
+            // contract, which declared a primitive here: a missing value is still refused, by
+            // validation, and the contract gate forbids making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 10) List<UUID> modifierOptionIds,
             @Size(max = 40) @Nullable List<@Valid ComboPickRequest> comboPicks) {
 
         /** Every request that predates ADR 0136's combos. */
         public AddLineRequest(UUID variantId, int quantity, List<UUID> modifierOptionIds) {
-            this(variantId, quantity, modifierOptionIds, null);
+            this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, null);
         }
 
         OrderAmendmentService.AmendmentCommand.LineRequest toLineRequest() {
+            if (quantity == null) {
+                // Bean Validation refuses this first; the check keeps a caller that skips validation from
+                // meeting a NullPointerException, which no handler turns into anything but a 500.
+                throw new IllegalArgumentException("Each ADD_LINES line carries its quantity");
+            }
             return new OrderAmendmentService.AmendmentCommand.LineRequest(
                     variantId,
                     quantity,
@@ -2809,7 +2989,8 @@ public class OperationsOrderController {
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
-                StaffDirectory staffDirectory) {
+                StaffDirectory staffDirectory,
+                Map<UUID, BigDecimal> portionSteps) {
             var order = detail.order();
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
@@ -2822,7 +3003,7 @@ public class OperationsOrderController {
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),
-                    lineResponses(detail),
+                    lineResponses(detail, portionSteps),
                     detail.warnings(),
                     order.currentRevision(),
                     order.createdByActorType(),
@@ -2875,7 +3056,8 @@ public class OperationsOrderController {
                     Objects.requireNonNull(line.comboQuantity()));
         }
 
-        private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {
+        private static List<LineResponse> lineResponses(
+                OrderQueryService.OrderDetail detail, Map<UUID, BigDecimal> portionSteps) {
             return detail.lines().stream()
                     .map(line -> new LineResponse(
                             line.line().lineNumber(),
@@ -2901,7 +3083,10 @@ public class OperationsOrderController {
                                     .map(m -> new AutoSelectedChargeResponse(
                                             m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
                                     .toList(),
-                            OrderLineCatchweightResponse.of(line.line())))
+                            OrderLineCatchweightResponse.of(line.line()),
+                            line.line().isComboComponent()
+                                    ? null
+                                    : portionSteps.get(line.line().sourceVariantId())))
                     .toList();
         }
     }
@@ -3148,7 +3333,11 @@ public class OperationsOrderController {
             // ADR 0137: present on a line sold by weight. provisional is true until the
             // kitchen has weighed it, and means finalAmountMinor was computed against
             // the nominal weight.
-            @Nullable OrderLineCatchweightResponse catchweight) {}
+            @Nullable OrderLineCatchweightResponse catchweight,
+            // ADR 0137: the step this line may be amended in, present only on a line of a splittable
+            // dish whose order can still be amended -- so a console offers 1,5 of a plov and never of
+            // a can. Absent means whole units; it is the published rule, not a property of the line.
+            @Nullable BigDecimal portionSize) {}
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}

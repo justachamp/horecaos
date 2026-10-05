@@ -2,7 +2,9 @@ package uz.horecaos.platform.tenancy.domain.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Outcome;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Source;
 import uz.horecaos.platform.tenancy.api.Resolved;
@@ -129,6 +132,54 @@ class ScopeResolutionTests {
                         org.assertj.core.groups.Tuple.tuple(ScopeType.LOCATION, Outcome.EXPLICIT_NULL_CONTINUED),
                         org.assertj.core.groups.Tuple.tuple(ScopeType.BRAND, Outcome.NOT_SET),
                         org.assertj.core.groups.Tuple.tuple(ScopeType.TENANT, Outcome.VALUE));
+    }
+
+    @Test
+    void everyLevelThatStoresARowCarriesItsProvenanceIntoTheTraceAndAnEmptyLevelCarriesNone() {
+        Instant changedAt = Instant.parse("2026-09-30T08:15:00Z");
+        Map<ScopeType, ScopedConfigurationRow> stored = new EnumMap<>(ScopeType.class);
+        stored.put(
+                ScopeType.LOCATION,
+                ScopedConfigurationRow.explicitNull(ScopeType.LOCATION)
+                        .withProvenance(new ResolutionTrace.Provenance(3, "subject-a", changedAt)));
+        stored.put(
+                ScopeType.TENANT,
+                ScopedConfigurationRow.of(ScopeType.TENANT, 200)
+                        .withProvenance(new ResolutionTrace.Provenance(7, "subject-b", changedAt.minusSeconds(60))));
+
+        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, stored);
+
+        List<ResolutionTrace.Level> levels = resolved.trace().inspectedLevels();
+        assertThat(levels)
+                .extracting(ResolutionTrace.Level::scopeType)
+                .containsExactly(ScopeType.LOCATION, ScopeType.BRAND, ScopeType.TENANT);
+        assertThat(levels.get(0).provenance())
+                .as(
+                        "an explicit null is a stored row too: someone deliberately removed the value, and the trace says who")
+                .isEqualTo(new ResolutionTrace.Provenance(3, "subject-a", changedAt));
+        assertThat(levels.get(1).provenance())
+                .as("no row at the brand, so there is nobody to name")
+                .isNull();
+        assertThat(levels.get(2).provenance())
+                .isEqualTo(new ResolutionTrace.Provenance(7, "subject-b", changedAt.minusSeconds(60)));
+    }
+
+    @Test
+    void aTerminatingExplicitNullStillSaysWhoRemovedTheValue() {
+        Instant changedAt = Instant.parse("2026-09-30T08:15:00Z");
+        Map<ScopeType, ScopedConfigurationRow> stored = new EnumMap<>(ScopeType.class);
+        stored.put(
+                ScopeType.BRAND,
+                ScopedConfigurationRow.explicitNull(ScopeType.BRAND)
+                        .withProvenance(new ResolutionTrace.Provenance(1, "subject-a", changedAt)));
+
+        Resolved<Integer> resolved = ScopeResolution.resolve(TERMINATING_KEY, LOCATION, stored);
+
+        assertThat(resolved.trace().inspectedLevels())
+                .filteredOn(level -> level.outcome() == Outcome.EXPLICIT_NULL_TERMINATED)
+                .singleElement()
+                .satisfies(level -> assertThat(level.provenance())
+                        .isEqualTo(new ResolutionTrace.Provenance(1, "subject-a", changedAt)));
     }
 
     @Test

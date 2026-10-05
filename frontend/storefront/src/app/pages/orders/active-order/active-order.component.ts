@@ -25,7 +25,7 @@ const POLL_INTERVAL_MS = 10_000;
   standalone: true,
   imports: [CommonModule, RouterLink, TranslatePipe],
   templateUrl: './active-order.component.html',
-  styleUrl: './active-order.component.scss'
+  styleUrl: './active-order.component.scss',
 })
 export class ActiveOrderComponent implements OnInit, OnDestroy {
   orders = signal<OrderItem[]>([]);
@@ -44,7 +44,7 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
 
   constructor(
     private ordersService: OrdersService,
-    private notification: NotificationService
+    private notification: NotificationService,
   ) {}
 
   ngOnInit(): void {
@@ -86,7 +86,7 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? err?.message ?? "Buyurtmalar yuklanmadi.");
+        this.error.set(err?.error?.message ?? err?.message ?? 'Buyurtmalar yuklanmadi.');
       },
     });
   }
@@ -151,7 +151,7 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.cancellingId.set(null);
-        this.cancelError.set(err?.error?.message ?? err?.message ?? "Buyurtma bekor qilinmadi.");
+        this.cancelError.set(err?.error?.message ?? err?.message ?? 'Buyurtma bekor qilinmadi.');
       },
     });
   }

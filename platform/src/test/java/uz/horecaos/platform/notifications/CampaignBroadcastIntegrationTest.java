@@ -88,6 +88,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcCampaig
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -180,7 +181,8 @@ class CampaignBroadcastIntegrationTest {
 
         notifications = new JdbcNotificationStore(jdbc);
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, objectMapper, clock, AuditTrail.discarding(), AuditTrail.actor("template-author"));
         AuditRecorder audit = new JdbcAuditRecorder(jdbc, objectMapper);
 
         JdbcCustomerStore customerStore = new JdbcCustomerStore(jdbc);

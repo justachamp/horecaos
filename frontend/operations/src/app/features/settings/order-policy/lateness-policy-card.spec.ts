@@ -180,6 +180,40 @@ describe('LatenessPolicyCard', () => {
     expect(button('Edit')).toBeTruthy();
   });
 
+  it('carries each authored level’s version, approver and time into the trace popover', async () => {
+    await render({
+      ...SET_AT_BRAND,
+      inspectedLevels: [
+        {
+          scopeType: 'BRAND',
+          outcome: 'VALUE',
+          version: 2,
+          approvedByName: 'A. Karimov',
+          validFrom: '2026-09-30T09:15:00Z',
+        },
+        {
+          scopeType: 'TENANT',
+          outcome: 'VALUE',
+          version: 1,
+          approvedByName: null,
+          validFrom: '2026-08-12T05:20:00Z',
+        },
+        { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
+      ],
+    });
+
+    (el().querySelector('button.field__chip') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const who = [...el().querySelectorAll('[data-testid="trace-who"]')].map((row) =>
+      row.textContent?.trim(),
+    );
+    expect(who).toEqual([
+      'Version 2 · A. Karimov · 30.09 14:15',
+      'Version 1 · a person with no staff record here · 12.08 10:20',
+    ]);
+  });
+
   it('never offers "revert to inherited": a published version is not withdrawn', async () => {
     await render(SET_AT_BRAND);
     expect(el().textContent).not.toContain('Revert to inherited');
@@ -312,6 +346,40 @@ describe('LatenessPolicyCard', () => {
     expect(api.publish.mock.calls[0][1].locationId).toBe(LOCATION_ID);
     // The location has authored nothing: the brand's version 2 is not its version.
     expect(api.publish.mock.calls[0][1].expectedVersion).toBeNull();
+  });
+
+  it('says a publication landed, at the scope the form was opened at, so the page can confirm it (row X.1)', async () => {
+    await render(SET_AT_BRAND);
+    const landed: unknown[] = [];
+    fixture.componentInstance.published.subscribe((where) => landed.push(where));
+    button('Edit').click();
+    fixture.detectChanges();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 3, policyVersion: 3 });
+    type('lateness-reason', 'a brand edit');
+
+    // The bar moves on while the request is in flight.
+    const publishing = button('Publish');
+    publishing.click();
+    fixture.componentRef.setInput('scopeType', 'LOCATION');
+    fixture.componentRef.setInput('locationId', LOCATION_ID);
+    await flush();
+
+    expect(landed).toEqual([{ scopeType: 'BRAND', brandId: BRAND_ID, locationId: null }]);
+  });
+
+  it('says nothing when the publication is refused', async () => {
+    await render(SET_AT_BRAND);
+    const landed: unknown[] = [];
+    fixture.componentInstance.published.subscribe((where) => landed.push(where));
+    button('Edit').click();
+    fixture.detectChanges();
+    api.publish.mockRejectedValue(new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, null));
+    type('lateness-reason', 'a brand edit');
+
+    button('Publish').click();
+    await flush();
+
+    expect(landed).toEqual([]);
   });
 
   it('keeps an open draft when only the scalar it defaults to changes, and still publishes against the version it was opened at', async () => {

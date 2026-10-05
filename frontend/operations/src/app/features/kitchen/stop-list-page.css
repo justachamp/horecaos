@@ -194,3 +194,14 @@
   font-size: var(--q-type-body-sm);
   line-height: 1;
 }
+
+.stop-list__explain {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+  text-decoration: underline;
+  cursor: pointer;
+}

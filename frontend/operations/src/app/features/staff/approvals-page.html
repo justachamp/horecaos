@@ -145,6 +145,13 @@
     }
   }
 
+  <p class="q-caption thresholds-link">
+    {{ 'thresholdsLead' | at }}
+    <a routerLink="/settings/approvals" data-testid="approvals-thresholds-link">{{
+      'thresholdsLink' | at
+    }}</a>
+  </p>
+
   <p class="q-caption access-check-link">
     {{ 'staff.approvals.accessCheckLead' | t }}
     <a routerLink="/staff/access-check">{{ 'staff.approvals.accessCheckLink' | t }}</a>

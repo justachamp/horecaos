@@ -11,7 +11,7 @@ import { NavigationHistoryService } from '../../services/navigation-history.serv
   standalone: true,
   imports: [CommonModule, RouterOutlet, TranslatePipe],
   templateUrl: './cart.component.html',
-  styleUrl: './cart.component.scss'
+  styleUrl: './cart.component.scss',
 })
 export class CartComponent {
   private readonly history = inject(NavigationHistoryService);

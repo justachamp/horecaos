@@ -29,6 +29,7 @@ import {
 import { OrderHandoverApi } from './order-handover-api';
 import { NewOrderApi } from './new-order/new-order-api';
 import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
+import { Toasts } from '../../shared/ui/toast';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
 import { OrderRevealApi } from './order-reveal-api';
@@ -575,6 +576,136 @@ describe('OrderDetailPane: approve/reject idempotency and the lost-race render',
 
     const callsAfter = get.mock.calls.filter((c: unknown[]) => c[0] === ORDER_PATH).length;
     expect(callsAfter).toBeGreaterThan(callsBefore);
+  });
+});
+
+/**
+ * Row `X.1`, the toast host: the pane confirmed a success by redrawing the order and said nothing, so an
+ * operator who looked away did not know it applied. The same sentence the board uses now says so; a
+ * refusal keeps its place in the notice band beside the order.
+ */
+describe('OrderDetailPane: an applied action is announced in the toast host', () => {
+  const messages = (): string[] =>
+    TestBed.inject(Toasts)
+      .visible()
+      .map((toast) => toast.message);
+
+  function appliedDecision() {
+    return vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CONFIRMED',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+  }
+
+  afterEach(() => TestBed.inject(Toasts).clear());
+
+  it('says an approval applied, with no order number and no customer data in the sentence', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      actionsApi: { approve: appliedDecision() },
+    });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+
+    expect(messages()).toEqual(['Order updated']);
+    expect(TestBed.inject(Toasts).visible()[0].tone).toBe('success');
+  });
+
+  it('says a state change applied', async () => {
+    const advance = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'PREPARING',
+        version: 4,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    const confirmed = detail({
+      summary: {
+        ...detail().summary,
+        status: 'CONFIRMED',
+        actions: [{ action: 'ADVANCE', targetStatus: 'PREPARING' }],
+      },
+    });
+    configure({ get: apiGet({ value: confirmed, version: 3 }), actionsApi: { advance } });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+
+    expect(messages()).toEqual(['Order updated']);
+  });
+
+  it('keeps a lost race as the inline notice, and raises no toast: nothing applied', async () => {
+    const approve = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 4,
+        applied: false,
+        effectiveDecisionId: 'someone-elses-decision',
+        effectiveAction: 'REJECT',
+      }),
+    );
+    configure({ get: apiGet({ value: detail(), version: 3 }), actionsApi: { approve } });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(messages()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-notice"]')?.textContent,
+    ).toContain('Already rejected');
+  });
+
+  it('keeps a refusal as the inline notice too', async () => {
+    const advance = vi
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () =>
+            new ApiError(
+              ApiErrorCode.STALE_VERSION,
+              409,
+              { status: 409, expected: 3, actual: 5 },
+              null,
+            ),
+        ),
+      );
+    const confirmed = detail({
+      summary: {
+        ...detail().summary,
+        status: 'CONFIRMED',
+        actions: [{ action: 'ADVANCE', targetStatus: 'PREPARING' }],
+      },
+    });
+    configure({ get: apiGet({ value: confirmed, version: 3 }), actionsApi: { advance } });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(messages()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-notice"]'),
+    ).not.toBeNull();
   });
 });
 
@@ -1924,6 +2055,165 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-1', 1, 'PHONE');
   });
 
+  describe('ADD_LINES of a combo (ADR 0136)', () => {
+    const LUNCH_MENU = {
+      publicationId: 'pub-1',
+      locale: 'en',
+      currency: 'UZS',
+      categories: [],
+      products: [],
+      modifierGroups: [],
+      comboGroups: [
+        {
+          comboGroupId: 'g-main',
+          containerVariantId: 'lunch-v',
+          code: 'MAIN',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          sortOrder: 0,
+          components: [
+            {
+              componentId: 'burger',
+              variantId: 'burger-v',
+              productId: null,
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              sortOrder: 0,
+              orderable: true,
+              amountMinor: 25_000,
+            },
+          ],
+        },
+      ],
+    };
+
+    const lunchSearch = () =>
+      vi.fn().mockResolvedValue({
+        items: [
+          {
+            variantId: 'lunch-v',
+            productName: 'Lunch box',
+            category: 'Combos',
+            available: true,
+            trackingMode: null,
+          },
+        ],
+        nextCursor: null,
+      });
+
+    async function openAndSearch(host: HTMLElement, fixture: Awaited<ReturnType<typeof render>>) {
+      (
+        host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+      )?.click();
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]') as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      const searchField = host.querySelector(
+        '[data-testid="q-combobox-input"]',
+      ) as HTMLInputElement;
+      vi.useFakeTimers();
+      searchField.value = 'Lunch';
+      searchField.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(250);
+      vi.useRealTimers();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      searchField.dispatchEvent(new Event('focus'));
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="q-combobox-option"]') as HTMLLIElement).click();
+      fixture.detectChanges();
+    }
+
+    it('reads the order channel menu, offers the combo picker, and sends the picks with the line', async () => {
+      const addLines = vi.fn().mockReturnValue(
+        of(
+          amendmentResult({
+            status: 'PRICED',
+            deltaTotalMinor: 25_000,
+            requiresApproval: false,
+            amendmentVersion: 1,
+          }),
+        ),
+      );
+      const menu = vi.fn().mockResolvedValue(LUNCH_MENU);
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: {
+              ...detail().summary,
+              status: 'CONFIRMED',
+              channelCode: 'CALL_CENTRE',
+              actions: [{ action: 'AMEND' }],
+            },
+          }),
+          version: 3,
+        }),
+        amendmentsApi: { addLines },
+        newOrderApi: { searchItems: lunchSearch(), menu },
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+
+      await openAndSearch(host, fixture);
+
+      // The menu the order was placed through, not the composer's channel.
+      expect(menu).toHaveBeenCalledWith(FAKE_SCOPE, 'CALL_CENTRE', 'en');
+      expect(host.querySelector('[data-testid="combo-picker-dialog"]')).not.toBeNull();
+
+      (host.querySelector('[data-testid="combo-dialog-radio"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="combo-dialog-confirm"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(addLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, [
+        {
+          variantId: 'lunch-v',
+          quantity: 1,
+          modifierOptionIds: [],
+          comboPicks: [{ componentId: 'burger', quantity: 1 }],
+        },
+      ]);
+    });
+
+    it('says combos cannot be offered when the menu cannot be read', async () => {
+      const menu = vi.fn().mockRejectedValue(new Error('offline'));
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: {
+              ...detail().summary,
+              status: 'CONFIRMED',
+              channelCode: 'CALL_CENTRE',
+              actions: [{ action: 'AMEND' }],
+            },
+          }),
+          version: 3,
+        }),
+        amendmentsApi: {},
+        newOrderApi: { searchItems: lunchSearch(), menu },
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+
+      await openAndSearch(host, fixture);
+
+      expect(
+        host.querySelector('[data-testid="order-add-lines-dialog-combos-unavailable"]'),
+      ).not.toBeNull();
+    });
+  });
+
   it('wires CHANGE_FULFILLMENT_TIME as a direct apply, no confirmation step', async () => {
     const changeFulfillmentTime = vi.fn().mockReturnValue(of(amendmentResult()));
     configure({
@@ -2269,6 +2559,41 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
     expect(
       fixture.nativeElement.querySelector('[data-testid="order-detail-courier-picker"]'),
     ).toBeNull();
+  });
+
+  it('announces an applied assignment in the toast host, and a refused one only in the notice band (row X.1)', async () => {
+    const assign = vi
+      .fn()
+      .mockResolvedValueOnce({ applied: true, planStatus: 'ASSIGNED', planVersion: 3 })
+      .mockResolvedValueOnce({
+        applied: false,
+        planStatus: 'ASSIGNED',
+        planVersion: 3,
+        reason: 'ALREADY_ASSIGNED',
+      });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+      couriersApi: { roster: () => Promise.resolve([roster()]) },
+      dispatchApi: { assign },
+    });
+    TestBed.inject(Toasts).clear();
+    const fixture = await render();
+
+    await pickCourier(fixture, 'K-014');
+    fixture.detectChanges();
+    expect(
+      TestBed.inject(Toasts)
+        .visible()
+        .map((toast) => toast.message),
+    ).toEqual(['Order updated']);
+
+    TestBed.inject(Toasts).clear();
+    await pickCourier(fixture, 'K-014');
+    fixture.detectChanges();
+    expect(TestBed.inject(Toasts).visible()).toEqual([]);
+    expect(fixture.nativeElement.textContent).toContain('ALREADY_ASSIGNED');
+    TestBed.inject(Toasts).clear();
   });
 
   it('surfaces a refused assign (ALREADY_ASSIGNED, a lost race) as a notice, never a thrown error', async () => {

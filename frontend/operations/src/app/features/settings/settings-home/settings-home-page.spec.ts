@@ -6,6 +6,7 @@ import { ConfigurationKeyView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { ShortcutRegistry } from '../../../shared/keyboard/shortcut-registry';
 import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationOutcome } from './readiness-api';
 import { SettingsHomePage } from './settings-home-page';
@@ -81,6 +82,12 @@ const PASSING: ValidationOutcome = {
     },
   ],
 };
+
+function slashKey(target: HTMLElement): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'target', { value: target });
+  return event;
+}
 
 describe('SettingsHomePage', () => {
   it('renders every P-tier screen and the moved Integrations screen as a tile', async () => {
@@ -618,6 +625,171 @@ describe('SettingsHomePage', () => {
     });
   });
 
+  describe('batch 18: tiers, count order, the three new conditions and live tile numbers (row 10.0)', () => {
+    type Check = ValidationOutcome['checks'][number];
+
+    const FORCED_CLOSED: Check = {
+      stepKey: 'LOCATION_FORCED_CLOSED_VALIDATE',
+      passed: false,
+      errorCode: 'LOCATION_FORCED_CLOSED_NO_EXPIRY',
+      detail:
+        'Location MAIN01 has been closed by hand for 4 days (reason FRYER_BROKEN) with no time set to reopen',
+      locationId: 'loc-1',
+      advisory: true,
+      severity: 'ADVISORY',
+    };
+    const NO_CHANNEL: Check = {
+      stepKey: 'LOCATION_CHANNEL_REACH_VALIDATE',
+      passed: false,
+      errorCode: 'LOCATION_NO_SALES_CHANNEL',
+      detail: 'Location MAIN01 is not switched on for any active sales channel',
+      locationId: 'loc-1',
+      advisory: false,
+      severity: 'BLOCKING',
+    };
+    const ENDING: Check = {
+      stepKey: 'FISCAL_ASSIGNMENT_EXPIRY_VALIDATE',
+      passed: false,
+      errorCode: 'LOCATION_FISCAL_ASSIGNMENT_ENDING',
+      detail:
+        'The fiscal assignment of location MAIN01 ends on 2026-10-14 (11 days) and no later assignment covers it',
+      locationId: 'loc-2',
+      advisory: true,
+      severity: 'EXPIRING',
+    };
+    const NO_PAYMENT: Check = {
+      stepKey: 'CHANNEL_PAYMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_PAYMENT_METHOD',
+      detail: 'Sales channel STOREFRONT has no enabled payment method',
+      locationId: null,
+      advisory: false,
+      severity: 'BLOCKING',
+    };
+
+    function outcomeOf(...checks: Check[]): ValidationOutcome {
+      return { allPassed: false, checks };
+    }
+
+    function rowsOf(fixture: ComponentFixture<SettingsHomePage>): HTMLElement[] {
+      return [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+    }
+
+    function tileOf(fixture: ComponentFixture<SettingsHomePage>, label: string): HTMLElement {
+      const tiles: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.tile')];
+      const tile = tiles.find(
+        (node) => node.querySelector('.tile__label')?.textContent?.trim() === label,
+      );
+      if (!tile) {
+        throw new Error(`no tile labelled ${label}`);
+      }
+      return tile;
+    }
+
+    it('says what a branch closed by hand with no end time means, and opens the branch', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(FORCED_CLOSED)) });
+
+      const row = rowsOf(fixture)[0];
+      expect(row.textContent).toContain('closed by hand and nothing says when it reopens');
+      expect(row.querySelector('a')?.getAttribute('href')).toBe('/settings/locations/loc-1');
+      expect(row.querySelector('.readiness__advisory')).not.toBeNull();
+    });
+
+    it('sends a branch no channel reaches to the sales-channels screen, not to the branch', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(NO_CHANNEL)) });
+
+      const row = rowsOf(fixture)[0];
+      expect(row.textContent).toContain('not switched on for any sales channel');
+      expect(row.querySelector('a')?.getAttribute('href')).toBe('/settings/sales-channels');
+      expect(row.querySelector('.readiness__advisory')).toBeNull();
+    });
+
+    it('lists blocking, then expiring, then advisory, and tags the middle tier', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(FORCED_CLOSED, ENDING, NO_CHANNEL)),
+      });
+
+      const rows = rowsOf(fixture);
+      expect(rows.map((row) => row.querySelector('a')?.getAttribute('href'))).toEqual([
+        '/settings/sales-channels',
+        '/settings/locations/loc-2',
+        '/settings/locations/loc-1',
+      ]);
+      expect(rows[1].classList.contains('readiness__row--expiring')).toBe(true);
+      expect(rows[1].querySelector('.readiness__expiring')?.textContent).toContain('Expiring');
+      expect(rows[1].querySelector('.readiness__advisory')).toBeNull();
+      expect(rows[0].querySelector('.readiness__expiring')).toBeNull();
+    });
+
+    it('lists the condition with the most offending items first within a tier', async () => {
+      const fixture = await render({
+        validate: () =>
+          Promise.resolve(
+            outcomeOf(
+              NO_PAYMENT,
+              NO_CHANNEL,
+              { ...NO_CHANNEL, locationId: 'loc-2', detail: 'Location B is not switched on' },
+              { ...NO_CHANNEL, locationId: 'loc-3', detail: 'Location C is not switched on' },
+            ),
+          ),
+      });
+
+      expect(rowsOf(fixture).map((row) => row.querySelector('a')?.getAttribute('href'))).toEqual([
+        '/settings/sales-channels',
+        '/settings/sales-channels',
+        '/settings/sales-channels',
+        '/settings/sales-channels',
+      ]);
+      const texts = rowsOf(fixture).map((row) => row.textContent ?? '');
+      expect(texts.slice(0, 3).every((text) => text.includes('not switched on'))).toBe(true);
+      expect(texts[3]).toContain('no payment method');
+    });
+
+    it('summarises the three counts above the list', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_CHANNEL, NO_PAYMENT, ENDING, FORCED_CLOSED)),
+      });
+
+      const text = fixture.nativeElement.querySelector(
+        '[data-testid="readiness-summary"]',
+      ).textContent;
+      expect(text).toContain('2 blocking');
+      expect(text).toContain('1 expiring');
+      expect(text).toContain('1 advisory');
+    });
+
+    it('carries the same numbers on the tiles the findings link to, and on no other', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_CHANNEL, NO_PAYMENT, ENDING, FORCED_CLOSED)),
+      });
+
+      const salesChannels = tileOf(fixture, 'Sales channels').querySelector(
+        '[data-testid="tile-numbers"]',
+      );
+      expect(salesChannels?.textContent).toContain('2 blocking');
+      expect(salesChannels?.textContent).not.toContain('expiring');
+
+      const locations = tileOf(fixture, 'Locations').querySelector('[data-testid="tile-numbers"]');
+      expect(locations?.textContent).toContain('1 expiring');
+      expect(locations?.textContent).toContain('1 advisory');
+      expect(locations?.textContent).not.toContain('blocking');
+
+      expect(
+        tileOf(fixture, 'Brand profile').querySelector('[data-testid="tile-numbers"]'),
+      ).toBeNull();
+      expect(
+        tileOf(fixture, 'Integrations').querySelector('[data-testid="tile-numbers"]'),
+      ).toBeNull();
+    });
+
+    it('shows no numbers anywhere when everything is set up', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+
+      expect(fixture.nativeElement.querySelector('[data-testid="tile-numbers"]')).toBeNull();
+      expect(fixture.nativeElement.querySelector('[data-testid="readiness-summary"]')).toBeNull();
+    });
+  });
+
   it('renders the denied state on a 403 from the readiness check', async () => {
     const fixture = await render({
       validate: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),
@@ -659,11 +831,39 @@ describe('SettingsHomePage', () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
     document.body.appendChild(fixture.nativeElement);
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    // The shell's one keydown listener hands the key to the registry; this drives that hand-off.
+    const handled = TestBed.inject(ShortcutRegistry).dispatch(
+      slashKey(fixture.nativeElement as HTMLElement),
+    );
 
+    expect(handled).toBe(true);
     expect(document.activeElement).toBe(searchInput(fixture));
 
     fixture.nativeElement.remove();
+  });
+
+  it('leaves "/" to a text field the operator is typing in', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+    document.body.appendChild(fixture.nativeElement);
+    const box = document.createElement('input');
+    document.body.appendChild(box);
+
+    expect(TestBed.inject(ShortcutRegistry).dispatch(slashKey(box))).toBe(false);
+
+    box.remove();
+    fixture.nativeElement.remove();
+  });
+
+  it('lists "/" on the cheat-sheet while the page is open, and not after', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+    const registry = TestBed.inject(ShortcutRegistry);
+
+    const scope = registry.scopes().find((candidate) => candidate.id === 'settings-home');
+    expect(scope?.title()).toBe('Settings');
+    expect(scope?.shortcuts.map((shortcut) => shortcut.label())).toEqual(['Find a setting']);
+
+    fixture.destroy();
+    expect(registry.scopes().some((candidate) => candidate.id === 'settings-home')).toBe(false);
   });
 
   // -------------------------------------------------- 10.0: the combobox half

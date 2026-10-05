@@ -20,16 +20,37 @@
       @if (findings().length === 0) {
         <p class="readiness__clear q-body-sm">{{ 'settings.home.readiness.allClear' | t }}</p>
       } @else {
+        <p class="readiness__summary q-caption" data-testid="readiness-summary">
+          @if (summary().blocking > 0) {
+            <span class="readiness__count readiness__count--blocking">{{
+              text('count.blocking', { count: summary().blocking })
+            }}</span>
+          }
+          @if (summary().expiring > 0) {
+            <span class="readiness__count readiness__count--expiring">{{
+              text('count.expiring', { count: summary().expiring })
+            }}</span>
+          }
+          @if (summary().advisory > 0) {
+            <span class="readiness__count readiness__count--advisory">{{
+              text('count.advisory', { count: summary().advisory })
+            }}</span>
+          }
+        </p>
         <ul class="readiness__list">
           @for (row of rows(); track row.key) {
             <li
               class="readiness__row q-body-sm"
+              [class.readiness__row--expiring]="isExpiring(row.finding)"
               [class.readiness__row--advisory]="isAdvisory(row.finding)"
             >
               @if (readinessLink(row.finding); as link) {
                 <a [routerLink]="link">{{ readinessMessage(row.finding) }}</a>
               } @else {
                 <span>{{ readinessMessage(row.finding) }}</span>
+              }
+              @if (isExpiring(row.finding)) {
+                <span class="readiness__expiring q-caption">{{ text('expiring') }}</span>
               }
               @if (isAdvisory(row.finding)) {
                 <span class="readiness__advisory q-caption">{{
@@ -75,6 +96,25 @@
           <span class="tile__description q-body-sm">{{ item.description | t }}</span>
           @if (!item.builtRoute) {
             <span class="tile__badge q-caption">{{ 'settings.home.notBuiltBadge' | t }}</span>
+          }
+          @if (countsFor(item.path); as counts) {
+            <span class="tile__numbers q-caption" data-testid="tile-numbers">
+              @if (counts.blocking > 0) {
+                <span class="tile__number tile__number--blocking">{{
+                  text('count.blocking', { count: counts.blocking })
+                }}</span>
+              }
+              @if (counts.expiring > 0) {
+                <span class="tile__number tile__number--expiring">{{
+                  text('count.expiring', { count: counts.expiring })
+                }}</span>
+              }
+              @if (counts.advisory > 0) {
+                <span class="tile__number tile__number--advisory">{{
+                  text('count.advisory', { count: counts.advisory })
+                }}</span>
+              }
+            </span>
           }
         </a>
       }

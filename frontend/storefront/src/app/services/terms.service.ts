@@ -55,7 +55,10 @@ export class TermsService {
   /** The document a customer should read right now, in the app's current language. */
   async current(): Promise<TermsDocument> {
     const response = await this.api.get<TermsResponse>(this.termsPath, {
-      query: { locale: toDocumentLocale(this.lang.langId()), brandName: this.config.brand.displayName },
+      query: {
+        locale: toDocumentLocale(this.lang.langId()),
+        brandName: this.config.brand.displayName,
+      },
       anonymous: true,
     });
     return {
@@ -76,7 +79,12 @@ export class TermsService {
     const response = await this.api.mutate<AcceptResponse, AcceptRequest>(
       'POST',
       `${this.termsPath}/accept`,
-      { body: { locale: toDocumentLocale(this.lang.langId()), brandName: this.config.brand.displayName } },
+      {
+        body: {
+          locale: toDocumentLocale(this.lang.langId()),
+          brandName: this.config.brand.displayName,
+        },
+      },
     );
     return response.version;
   }
@@ -89,11 +97,22 @@ export class TermsService {
    */
   async status(): Promise<AcceptanceStatus> {
     if (!this.session.isAuthenticated()) {
-      return { accepted: false, currentVersion: '', lastAcceptedVersion: null, lastAcceptedAt: null };
+      return {
+        accepted: false,
+        currentVersion: '',
+        lastAcceptedVersion: null,
+        lastAcceptedAt: null,
+      };
     }
-    const response = await this.api.get<AcceptanceStatusResponse>(`${this.termsPath}/acceptance-status`, {
-      query: { locale: toDocumentLocale(this.lang.langId()), brandName: this.config.brand.displayName },
-    });
+    const response = await this.api.get<AcceptanceStatusResponse>(
+      `${this.termsPath}/acceptance-status`,
+      {
+        query: {
+          locale: toDocumentLocale(this.lang.langId()),
+          brandName: this.config.brand.displayName,
+        },
+      },
+    );
     return {
       accepted: response.accepted,
       currentVersion: response.currentVersion,

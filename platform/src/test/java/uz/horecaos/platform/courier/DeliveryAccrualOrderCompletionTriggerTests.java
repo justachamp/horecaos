@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -654,6 +655,12 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         public long cashDueMinor(UUID tenantId, UUID orderId) {
             Long due = dueByOrder.get(orderId);
             return due == null ? 0L : due;
+        }
+
+        @Override
+        public OptionalLong cashDueMinorIfSettled(UUID tenantId, UUID orderId) {
+            Long due = dueByOrder.get(orderId);
+            return due == null ? OptionalLong.empty() : OptionalLong.of(due);
         }
     }
 

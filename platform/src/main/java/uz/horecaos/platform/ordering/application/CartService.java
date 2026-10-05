@@ -46,7 +46,6 @@ import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.tenancy.api.Serviceability;
 import uz.horecaos.platform.tenancy.api.ServiceabilityResolver;
-import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The server-side cart (ADR 0019).
@@ -272,8 +271,9 @@ public class CartService {
                     for (CartLineRow line : lines) {
                         List<ComboPick> picks = comboPicksOf(line);
                         List<NestedModifier> nested = nestedModifiersOf(line);
-                        if (!picks.isEmpty() || !nested.isEmpty()) {
-                            selections.put(line.lineKey(), new LineSelections(picks, nested));
+                        List<UUID> modifiers = modifierIdsOf(line);
+                        if (!picks.isEmpty() || !nested.isEmpty() || !modifiers.isEmpty()) {
+                            selections.put(line.lineKey(), new LineSelections(picks, nested, modifiers));
                         }
                     }
                     return new CartView(cart, lines, selections);
@@ -506,6 +506,7 @@ public class CartService {
         Set<UUID> sold = requireCompositeSelection(
                 tenantId,
                 brandId,
+                channelCodeOf(tenantId, cart),
                 new CartPricingPort.PricingCommand.Item(
                         lineKey,
                         variantId,
@@ -942,9 +943,10 @@ public class CartService {
         // as the schedule is re-checked, so a menu that moved under a combo is refused here and
         // by name. Stock is held on these variants at checkout, so this is the set to check.
         Set<UUID> soldVariants = new java.util.LinkedHashSet<>();
+        String selectionChannel = channelCodeOf(tenantId, cart);
         for (CartLineRow line : lines) {
             requireOnSaleNow(tenantId, cart, line.variantId(), priceNow);
-            Set<UUID> lineSold = requireCompositeSelection(tenantId, brandId, pricingItemOf(line));
+            Set<UUID> lineSold = requireCompositeSelection(tenantId, brandId, selectionChannel, pricingItemOf(line));
             for (UUID soldVariant : lineSold) {
                 if (!soldVariant.equals(line.variantId())) {
                     requireOnSaleNow(tenantId, cart, soldVariant, priceNow);
@@ -1387,9 +1389,10 @@ public class CartService {
      * Asks pricing whether this line's selection is one the catalog allows, and what it puts on
      * the order. Pricing owns the rules; the cart owns what it does with the answer.
      */
-    private Set<UUID> requireCompositeSelection(UUID tenantId, UUID brandId, CartPricingPort.PricingCommand.Item item) {
+    private Set<UUID> requireCompositeSelection(
+            UUID tenantId, UUID brandId, String channelCode, CartPricingPort.PricingCommand.Item item) {
         try {
-            return pricing.checkSelection(tenantId, brandId, item).soldVariantIds();
+            return pricing.checkSelection(tenantId, brandId, channelCode, item).soldVariantIds();
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new CartRefusedException(
                     refused.code(), java.util.Objects.requireNonNullElse(refused.getMessage(), refused.code()));
@@ -1504,6 +1507,14 @@ public class CartService {
         }
     }
 
+    /** The code of the cart's channel, whose live publication every menu rule is read from. */
+    private String channelCodeOf(UUID tenantId, CartRow cart) {
+        return channels.byId(tenantId, cart.channelId())
+                .orElseThrow(
+                        () -> new CartRefusedException("CHANNEL_NOT_REGISTERED", "The cart's channel no longer exists"))
+                .code();
+    }
+
     /**
      * Enforces what the published menu says about this product's modifier groups.
      *
@@ -1528,10 +1539,7 @@ public class CartService {
             List<UUID> modifierOptionIds,
             BigDecimal quantity) {
 
-        String channelCode = channels.byId(tenantId, cart.channelId())
-                .orElseThrow(
-                        () -> new CartRefusedException("CHANNEL_NOT_REGISTERED", "The cart's channel no longer exists"))
-                .code();
+        String channelCode = channelCodeOf(tenantId, cart);
 
         CartMenuRules.ProductRules rules =
                 menu.forVariant(tenantId, brandId, channelCode, variantId).orElse(null);
@@ -1601,22 +1609,9 @@ public class CartService {
      * dish is ordered in steps of 0.5" tells them what to type.
      */
     private static void requireQuantityAllowed(CartMenuRules.PhysicalRules physical, BigDecimal quantity) {
-        if (!Quantities.fitsColumn(quantity) || quantity.compareTo(MAX_CART_QUANTITY) > 0) {
-            throw new CartRefusedException(
-                    "QUANTITY_OUT_OF_RANGE",
-                    "A quantity is more than zero and at most %s, with at most %d fraction digits"
-                            .formatted(MAX_CART_QUANTITY.toPlainString(), Quantities.SCALE));
-        }
-        if (physical.accepts(quantity)) {
-            return;
-        }
-        if (physical.allowsFraction()) {
-            throw new CartRefusedException(
-                    "QUANTITY_NOT_A_PORTION",
-                    "This item is ordered in steps of %s"
-                            .formatted(Quantities.plain(Objects.requireNonNull(physical.portionSize()))));
-        }
-        throw new CartRefusedException("FRACTIONAL_QUANTITY_NOT_ALLOWED", "This item is only sold in whole units");
+        physical.refusalOf(quantity, MAX_CART_QUANTITY).ifPresent(refusal -> {
+            throw new CartRefusedException(refusal.code(), refusal.message());
+        });
     }
 
     private String modifiersJson(List<UUID> modifierOptionIds) {
@@ -1685,14 +1680,25 @@ public class CartService {
         }
     }
 
-    /** ADR 0136: the combo picks and second-level selections of one cart line, parsed. */
-    public record LineSelections(List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers) {
+    /**
+     * ADR 0136: the combo picks and second-level selections of one cart line, parsed, and the
+     * first-level options the line holds. A client keys a line by a short hash once it carries picks
+     * or a second-level choice, so the key no longer spells its options out; the cart says what they
+     * are, and any device that opens the cart can edit the line without guessing.
+     */
+    public record LineSelections(
+            List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers, List<UUID> modifierOptionIds) {
 
-        static final LineSelections NONE = new LineSelections(List.of(), List.of());
+        static final LineSelections NONE = new LineSelections(List.of(), List.of(), List.of());
 
         public LineSelections {
             comboPicks = List.copyOf(comboPicks);
             nestedModifiers = List.copyOf(nestedModifiers);
+            modifierOptionIds = List.copyOf(modifierOptionIds);
+        }
+
+        public LineSelections(List<ComboPick> comboPicks, List<NestedModifier> nestedModifiers) {
+            this(comboPicks, nestedModifiers, List.of());
         }
     }
 
