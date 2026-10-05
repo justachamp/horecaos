@@ -176,8 +176,8 @@ class MarketplaceAvailabilityReconcilerTests {
                 stopService);
         activity = new RecordingProviderActivityRecorder();
         alerts = new RecordingOperationsAlertPort();
-        MarketplaceOutbox outbox =
-                new MarketplaceOutbox(new JdbcOutboxStore(jdbc), JsonMapper.builder().build(), clock);
+        MarketplaceOutbox outbox = new MarketplaceOutbox(
+                new JdbcOutboxStore(jdbc), JsonMapper.builder().build(), clock);
         staleMonitor = new MarketplaceStaleChannelMonitor(
                 store, outbox, alerts, new SimpleMeterRegistry(), transactionManager, Duration.ofDays(1));
         MarketplaceAdapterRegistry registry =
@@ -1154,7 +1154,8 @@ class MarketplaceAvailabilityReconcilerTests {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("a confirmed push is published once, as the partner now holding the value, and a quiet tick publishes nothing")
+    @DisplayName(
+            "a confirmed push is published once, as the partner now holding the value, and a quiet tick publishes nothing")
     void aConfirmedPushIsPublishedOnce() throws Exception {
         World w = world();
 
@@ -1178,7 +1179,8 @@ class MarketplaceAvailabilityReconcilerTests {
                 .containsEntry("providerType", PROVIDER)
                 .containsEntry("externalItemId", "ext-A")
                 .containsEntry("available", true);
-        assertValidAgainstSchema("MarketplaceAvailabilityPushed", first.get(0).get("payload").toString());
+        assertValidAgainstSchema(
+                "MarketplaceAvailabilityPushed", String.valueOf(first.get(0).get("payload")));
 
         reconcile(w);
         clock.advance(Duration.ofMinutes(1));
@@ -1198,14 +1200,16 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
-    @DisplayName("only a success moves the belief: a refused connection and an unknown outcome publish nothing, the later success does")
+    @DisplayName(
+            "only a success moves the belief: a refused connection and an unknown outcome publish nothing, the later success does")
     void onlyASuccessIsAnnounced() {
         World w = world();
         partner.script(Scenario.CONNECTION_REFUSED, Scenario.TIMEOUT_AFTER_APPLY);
 
         reconcile(w);
         assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
-                .as("one item refused before anything was written, one answered by a timeout: neither is a confirmation")
+                .as(
+                        "one item refused before anything was written, one answered by a timeout: neither is a confirmation")
                 .isEmpty();
         assertThat(rowStates(w)).containsExactlyInAnyOrder("PENDING", "UNCERTAIN");
 
@@ -1218,7 +1222,8 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
-    @DisplayName("a resend that repeats what is already confirmed announces nothing; a resumption that forgot it announces again")
+    @DisplayName(
+            "a resend that repeats what is already confirmed announces nothing; a resumption that forgot it announces again")
     void aRepeatedValueIsNotAChange() {
         World w = world();
         reconcile(w);
@@ -1234,8 +1239,10 @@ class MarketplaceAvailabilityReconcilerTests {
         // Suspended, then resumed: every belief is withdrawn first and everything is resent once,
         // and each resend is the partner being known again to hold a value it was not known to.
         configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
         reconcile(w);
         configuration.put("marketplace.availability.reconcile_enabled", true);
+        build();
         reconcile(w);
 
         assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
@@ -1255,7 +1262,9 @@ class MarketplaceAvailabilityReconcilerTests {
                         WHERE binding_id = :b AND lease_owner IS NOT NULL
                         """)
                 .param("b", w.binding())
-                .param("until", java.time.OffsetDateTime.ofInstant(clock.instant().plusSeconds(600), ZoneOffset.UTC))
+                .param(
+                        "until",
+                        java.time.OffsetDateTime.ofInstant(clock.instant().plusSeconds(600), ZoneOffset.UTC))
                 .update();
 
         reconcile(w);
@@ -1270,6 +1279,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void aStaleChannelIsReportedOnce() throws Exception {
         World w = world();
         configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
         partner.script(refused(40));
 
         reconcile(w);
@@ -1293,7 +1303,8 @@ class MarketplaceAvailabilityReconcilerTests {
                 .containsEntry("providerType", PROVIDER)
                 .containsEntry("staleAfterSeconds", 600)
                 .containsEntry("unconfirmedItemCount", 2);
-        assertValidAgainstSchema("MarketplaceChannelWentStale", facts.get(0).get("payload").toString());
+        assertValidAgainstSchema(
+                "MarketplaceChannelWentStale", String.valueOf(facts.get(0).get("payload")));
         assertThat(alerts.calls()).singleElement().satisfies(call -> {
             assertThat(call.tenantId()).isEqualTo(w.tenant());
             assertThat(call.brandId()).isEqualTo(w.brand());
@@ -1321,6 +1332,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void twoReplicasReportOnce() {
         World w = world();
         configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
         partner.script(refused(10));
         reconcile(w);
         clock.advance(Duration.ofMinutes(20));
@@ -1339,6 +1351,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void aNewEpisodeIsAReportOfItsOwn() {
         World w = world();
         configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
         partner.script(refused(40));
         reconcile(w);
         clock.advance(Duration.ofMinutes(15));
@@ -1354,7 +1367,8 @@ class MarketplaceAvailabilityReconcilerTests {
                                 + "WHERE binding_id = :b")
                         .param("b", w.binding())
                         .query((row, number) -> row.getObject(1))
-                        .single())
+                        .list()
+                        .get(0))
                 .as("nothing unconfirmed past the bound: the episode ended")
                 .isNull();
 
@@ -1378,6 +1392,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void anUnmappedItemIsNotAStaleChannel() {
         World w = world();
         configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
         partner.script(Scenario.UNKNOWN_ITEM, Scenario.OK);
 
         reconcile(w);
@@ -1394,10 +1409,12 @@ class MarketplaceAvailabilityReconcilerTests {
     void nothingIsReportedWhereNothingIsAttempted() {
         World w = world();
         configuration.put("marketplace.availability.stale_after_seconds", 600);
+        build();
         partner.script(refused(10));
         reconcile(w);
 
         configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
         clock.advance(Duration.ofHours(2));
         reconcile(w);
 
@@ -1414,20 +1431,18 @@ class MarketplaceAvailabilityReconcilerTests {
 
         assertThat(variables.keySet())
                 .containsExactlyInAnyOrder("provider", "itemCount", "unconfirmedSince", "staleAfterMinutes");
-        assertThat(uz.horecaos.platform.iam.api.protection.ClassificationScanner.protectedFieldNames(
-                        variables.keySet()))
-                .isEmpty();
+        assertThat(variables.keySet())
+                .noneMatch(uz.horecaos.platform.iam.api.protection.ClassificationScanner::isProtectedName);
     }
 
     @Test
-    @DisplayName("every operations event class the code offers is admitted by the database check, MARKETPLACE_CHANNEL_STALE included")
+    @DisplayName(
+            "every operations event class the code offers is admitted by the database check, MARKETPLACE_CHANNEL_STALE included")
     void everyTelegramEventClassIsAdmittedByTheCheck() {
         String definition = jdbc.sql("""
                         SELECT pg_get_constraintdef(oid) FROM pg_constraint
                         WHERE conname = 'ck_telegram_binding_event_class'
-                        """)
-                .query(String.class)
-                .single();
+                        """).query(String.class).single();
 
         for (var eventClass : uz.horecaos.platform.integration.provider.telegram.TelegramEventClass.values()) {
             assertThat(definition).as("%s", eventClass).contains("'" + eventClass.name() + "'");
@@ -1452,15 +1467,12 @@ class MarketplaceAvailabilityReconcilerTests {
                         FROM integration.outbox_events
                         WHERE event_type = :type
                         ORDER BY created_at, event_id
-                        """)
-                .param("type", eventType)
-                .query()
-                .listOfRows();
+                        """).param("type", eventType).query().listOfRows();
     }
 
     private Map<String, Object> payload(Map<String, Object> outboxRow) {
         try {
-            return JsonMapper.builder().build().readValue(outboxRow.get("payload").toString(), Map.class);
+            return JsonMapper.builder().build().readValue(String.valueOf(outboxRow.get("payload")), Map.class);
         } catch (RuntimeException unreadable) {
             throw new AssertionError("The outbox payload is not JSON", unreadable);
         }
@@ -1485,10 +1497,13 @@ class MarketplaceAvailabilityReconcilerTests {
 
     private void assertValidAgainstSchema(String eventType, String payloadJson) throws Exception {
         var contract = uz.horecaos.platform.integration.events.EventCatalog.require(eventType, 1);
-        var factory = com.networknt.schema.JsonSchemaFactory.getInstance(com.networknt.schema.SpecVersion.VersionFlag.V202012);
+        var factory = com.networknt.schema.JsonSchemaFactory.getInstance(
+                com.networknt.schema.SpecVersion.VersionFlag.V202012);
         try (java.io.InputStream schemaStream =
                 getClass().getClassLoader().getResourceAsStream(contract.schemaPath())) {
-            assertThat(schemaStream).as("schema %s exists", contract.schemaPath()).isNotNull();
+            assertThat(schemaStream)
+                    .as("schema %s exists", contract.schemaPath())
+                    .isNotNull();
             var schema = factory.getSchema(
                     java.util.Objects.requireNonNull(schemaStream),
                     com.networknt.schema.SchemaValidatorsConfig.builder().build());
