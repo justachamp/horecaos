@@ -27,7 +27,13 @@
   `customer.read` and a purpose, a security audit fact on the customer account; the
   per-promotion redemption list still returns account ids unrecorded); and the test from a real
   checkout through a real day close to the report over HTTP
-  (`PromotionLifecycleHttpTests`). Not built: order-level markup and `SERVICE_CHARGE` (the
+  (`PromotionLifecycleHttpTests`). The front ends of the same batch: the main storefront takes
+  a promo code on the cart and on the confirmation step and says, from the platform's verdict,
+  when the offers that already apply beat the code; both storefronts offer the gift by the name
+  the menu gives it, with one tap that writes the line through the ordinary cart call (the gift
+  is free only because the next price says so, and a gift the menu cannot sell right now is not
+  offered); and the marketing report's redemption log has «show customer» for an operator
+  holding `customer.read`, which calls the reveal and opens the customer card. Not built: order-level markup and `SERVICE_CHARGE` (the
   open fiscal and legal input; markups are item-level only); named-customer targeting
   (needs a static audience) and a polygon geozone (a delivery-zone condition matches by
   zone id); an approval threshold on the value of a `FREE_ITEM` gift (activation approval
@@ -39,9 +45,8 @@
   rest, which need a grain: the fact carries no legal entity, which ADR 0038 requires of a
   money metric); benefit grants as a redemption fact source (`source_kind GRANT` exists
   with no producer); a customer-facing promotion title per locale (the storefronts show
-  kinds of benefit, never a promotion name); the "your offers are already better" message
-  on the main storefront, which has no code entry; and the screens that offer the gift,
-  show the re-quote and open the customer from a redemption row.
+  kinds of benefit, never a promotion name); and the console screen that shows an order's
+  re-quote findings and its re-check.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform owner)
