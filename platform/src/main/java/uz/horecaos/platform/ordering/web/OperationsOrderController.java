@@ -44,6 +44,8 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService;
@@ -1537,7 +1539,12 @@ public class OperationsOrderController {
             UUID orderId,
             String itemStatus,
             @Nullable String itemProblemCode,
-            @Nullable Integer resultingOrderVersion) {
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "an order's version number; the name heuristic reads «resulTINg» as a tax number")
+            @Nullable
+            Integer resultingOrderVersion) {
 
         static BulkActionItemResponse of(OrderBulkActionService.BulkItemOutcome outcome) {
             return new BulkActionItemResponse(

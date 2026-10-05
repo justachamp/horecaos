@@ -34,6 +34,8 @@ import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -1080,7 +1082,14 @@ public class StorefrontOrderingController {
             UUID variantId,
             BigDecimal quantity,
             // Row 2.1b: the coded presets this line currently carries.
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "codes from the tenant's own kitchen-instruction vocabulary, never free text")
             List<String> commentPresetCodes,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "whether a note exists, a flag; the note itself is revealed only with a purpose")
             boolean hasCustomerNote,
             // ADR 0136: what was picked inside a combo, empty on every other line.
             List<ComboPickResponse> comboPicks,

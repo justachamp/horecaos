@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -278,6 +279,57 @@ class IdempotentResponseClassificationTests {
     }
 
     @Test
+    @DisplayName("a list inside a record is read: a response holding a hundred addresses is not cleaner than one")
+    void theClassifierReadsThroughAListInsideARecord() {
+        assertThat(ResponseBodyProtection.classify(signature("batch"))).as("""
+                        Every list the scan met inside a record used to read as clean, because
+                        the component's erased class is List and not a record. A response
+                        assembled from rows is exactly what an operator screen is made of.""").contains(DataClass.PERSONAL);
+        assertThat(ResponseBodyProtection.classify(signature("tally")))
+                .as("a list of counts per status is still not personal data")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a generic page is classified by what it holds, not by being a page")
+    void aGenericPageIsReadWithItsArgument() {
+        assertThat(ResponseBodyProtection.classify(signature("pagedAddresses")))
+                .as("Page<SampleAddress> is a page of addresses; read as the bare Page it is clean")
+                .contains(DataClass.PERSONAL);
+        assertThat(ResponseBodyProtection.classify(signature("pagedOrders")))
+                .as("and a page of orders stays unclassified, or every list endpoint would need a key")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the three fields the stronger scan wrongly flagged are declared, and their responses stay clean")
+    void aVersionNumberIsNotATaxNumber() {
+        // «resulTINg» holds "tin", and "commentPresetCodes" / "hasCustomerNote" hold "comment" and
+        // "note": the name heuristic reads each as a person's data, and the stronger scan now sees them
+        // inside the lists that carry them. Left alone, every cart edit and every bulk order action
+        // would have stored its idempotent reply encrypted and paid a key lookup and a decrypt on
+        // each replay, for a number, a code and a flag.
+        List<String> misclassified = new ArrayList<>();
+        int inspected = 0;
+        for (Method handler : idempotentHandlers()) {
+            String name = nameOf(handler);
+            boolean aCartAnswer = name.startsWith("StorefrontOrderingController#")
+                    && String.valueOf(handler.getGenericReturnType()).contains("CartResponse");
+            if (aCartAnswer || name.equals("OperationsOrderController#bulkAction")) {
+                inspected++;
+                if (ResponseBodyProtection.classify(handler).isPresent()) {
+                    misclassified.add(name);
+                }
+            }
+        }
+
+        assertThat(inspected)
+                .as("the cart answers and the bulk action: if this reads zero the test is no longer looking")
+                .isGreaterThanOrEqualTo(10);
+        assertThat(misclassified).isEmpty();
+    }
+
+    @Test
     @DisplayName("a body-less response is scannable and carries nothing")
     void aVoidResponseIsUnderstood() {
         assertThat(ResponseBodyProtection.isScannable(signature("nothing"))).isTrue();
@@ -328,6 +380,22 @@ class IdempotentResponseClassificationTests {
         ResponseEntity<java.util.Map<String, Object>> opaque() {
             return null;
         }
+
+        ResponseEntity<SampleBatch> batch() {
+            return null;
+        }
+
+        ResponseEntity<SampleTally> tally() {
+            return null;
+        }
+
+        ResponseEntity<SamplePage<SampleAddress>> pagedAddresses() {
+            return null;
+        }
+
+        ResponseEntity<SamplePage<SampleOrder>> pagedOrders() {
+            return null;
+        }
     }
 
     private record SampleAddress(UUID addressId, String line1) {}
@@ -339,6 +407,12 @@ class IdempotentResponseClassificationTests {
 
             @Classified(value = DataClass.PERSONAL_SENSITIVE, reason = "an identity document")
             String documentNumber) {}
+
+    private record SampleBatch(UUID batchId, List<SampleAddress> entries) {}
+
+    private record SampleTally(UUID batchId, List<SampleOrder> orders) {}
+
+    private record SamplePage<T>(List<T> items, @Nullable String cursor) {}
 
     private static Method signature(String name) {
         for (Method method : Samples.class.getDeclaredMethods()) {
