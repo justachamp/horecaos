@@ -335,6 +335,7 @@
               [style.--q-sla-late]="lateColourFor(row)"
               [style.--q-sla-late-text]="lateColourFor(row)"
               tabindex="0"
+              [attr.data-order-id]="row.order.orderId"
               data-testid="order-row"
               (click)="openOrder(row.order.orderId, row.order.locationId)"
               (keydown.enter)="openOrder(row.order.orderId, row.order.locationId)"

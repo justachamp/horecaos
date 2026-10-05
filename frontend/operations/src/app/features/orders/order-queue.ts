@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
   Signal,
   computed,
@@ -28,6 +29,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
@@ -55,6 +57,7 @@ import {
 import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
+import { BoardKeyAction, OrderBoardKeys, orderBoardScope } from './order-board-shortcuts';
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
@@ -291,6 +294,8 @@ export class OrderQueue implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly shortcuts = inject(ShortcutRegistry);
   protected readonly filterState = inject(OrderQueueFilterState);
 
   protected readonly tabs = ORDER_TABS.map((id) => ORDER_TAB_DEFINITIONS[id]);
@@ -492,6 +497,10 @@ export class OrderQueue implements OnInit {
   private syncingUrlFromFilters = false;
 
   ngOnInit(): void {
+    // orders.md §2.12: the board is keyboard-first. Registered while the board is on screen, so the
+    // cheat-sheet over it names these keys and over any other screen does not.
+    this.shortcuts.register(orderBoardScope(this.boardKeys), this.destroyRef);
+
     const querySub = this.route.queryParamMap.subscribe((params) => {
       const tab = params.get('tab');
       const resolved = isOrderTabId(tab) ? tab : DEFAULT_ORDER_TAB;
@@ -586,6 +595,111 @@ export class OrderQueue implements OnInit {
   /** Also the manual refresh control (§1.6: "the legacy dashboard's `FaRepeat` button, which staff use"). */
   protected manualRefresh(): void {
     void this.refresh();
+  }
+
+  // --------------------------------------------------------------- §2.12 keyboard
+
+  /** Every focusable row, in table order. `data-order-id` is what ties a row to its order. */
+  private rowElements(): readonly HTMLElement[] {
+    return [...this.host.nativeElement.querySelectorAll<HTMLElement>('tr[data-order-id]')];
+  }
+
+  /** The row that has focus, or the row a focused control inside it (a checkbox, an action button) belongs to. */
+  private focusedRowElement(): HTMLElement | null {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.host.nativeElement.contains(active)) {
+      return null;
+    }
+    return active.closest<HTMLElement>('tr[data-order-id]');
+  }
+
+  /** The order the keyboard is pointing at: the focused row's. Null when focus is anywhere else. */
+  private focusedOrder(): OrderSummaryResponse | null {
+    const orderId = this.focusedRowElement()?.dataset['orderId'];
+    return orderId
+      ? (this.rows().find((row) => row.order.orderId === orderId)?.order ?? null)
+      : null;
+  }
+
+  /**
+   * The server-supplied action a key stands for on the focused order. `x` is the cancel dialog; an
+   * order still awaiting approval offers a refusal instead of a cancellation, and that is the dialog
+   * `x` opens for it.
+   */
+  private keyActionFor(
+    order: OrderSummaryResponse,
+    action: BoardKeyAction,
+  ): OrderActionResponse | null {
+    const offered = this.rowActions(order);
+    const find = (code: string): OrderActionResponse | null =>
+      offered.find((candidate) => candidate.action === code) ?? null;
+    return action === 'CANCEL' ? (find('CANCEL') ?? find('REJECT')) : find(action);
+  }
+
+  private readonly boardKeys: OrderBoardKeys = {
+    locale: () => this.i18n.locale(),
+    hasRows: () => this.visibleRows().length > 0,
+    menuOpen: () => this.openOverflowFor() !== null,
+    canAct: (action) => {
+      const order = this.focusedOrder();
+      return (
+        order !== null &&
+        !this.isRowBusy(order.orderId) &&
+        this.keyActionFor(order, action) !== null
+      );
+    },
+    canToggleSelection: () => this.canSelectOrders() && this.focusedOrder() !== null,
+    hasSelection: () => this.selectionCount() > 0,
+    searchField: () =>
+      this.host.nativeElement.querySelector<HTMLInputElement>(
+        '[data-testid="order-queue-filter-search"]',
+      ),
+    move: (delta) => this.moveRowFocus(delta),
+    act: (action, event) => {
+      const order = this.focusedOrder();
+      const offered = order ? this.keyActionFor(order, action) : null;
+      if (order && offered) {
+        this.onActionClick(order, offered, event);
+      }
+    },
+    toggleSelection: (event) => {
+      const order = this.focusedOrder();
+      if (order) {
+        this.toggleRowSelection(order.orderId, event);
+      }
+    },
+    selectTab: (position) => {
+      const tab = this.tabs[position - 1];
+      if (tab) {
+        this.selectTab(tab.id);
+      }
+    },
+    clearSelection: () => this.clearSelection(),
+    clearSearch: (field) => {
+      field.value = '';
+      this.onSearchInput('');
+      field.blur();
+    },
+    newOrder: () => void this.router.navigateByUrl('/orders/new'),
+    refresh: () => this.manualRefresh(),
+  };
+
+  /** `j`/`k` and the arrows: moves real focus, so Enter, Space and the action keys then act on that row. */
+  private moveRowFocus(delta: 1 | -1): void {
+    const rows = this.rowElements();
+    if (rows.length === 0) {
+      return;
+    }
+    const current = this.focusedRowElement();
+    const index = current ? rows.indexOf(current) : -1;
+    const target =
+      index < 0
+        ? delta === 1
+          ? 0
+          : rows.length - 1
+        : Math.min(rows.length - 1, Math.max(0, index + delta));
+    rows[target].focus();
+    rows[target].scrollIntoView?.({ block: 'nearest' });
   }
 
   /**
