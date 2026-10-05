@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -13,6 +14,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Assumptions;
@@ -39,7 +41,21 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
+import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
+import uz.horecaos.platform.fulfillment.domain.VersionStatus;
+import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
+import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
+import uz.horecaos.platform.fulfillment.domain.tariff.FeeSource;
+import uz.horecaos.platform.fulfillment.domain.tariff.TariffBand;
+import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.PlatformRole;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
@@ -96,6 +112,12 @@ class OrderAmendmentPromoDiscountHttpTests {
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The order board raises a realtime signal on the calling thread; against the dead broker above
+        // every one of them waits out the producer's ten-second metadata block.
+        registry.add("horecaos.realtime.signals.publish", () -> "false");
+        // A delivery order's address is envelope-encrypted from the customer's saved address to the
+        // order's snapshot, which needs the platform key.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -124,6 +146,9 @@ class OrderAmendmentPromoDiscountHttpTests {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private FieldProtection protection;
 
     private UUID burgerVariant;
 
@@ -247,6 +272,83 @@ class OrderAmendmentPromoDiscountHttpTests {
                 .isEqualTo(15_000L);
     }
 
+    @Test
+    @DisplayName("CHANGE_LINE_QUANTITY over HTTP keeps the promo-code discount, scales it to the larger basket "
+            + "and takes no second redemption")
+    void aQuantityIncreaseOverHttpKeepsThePromoCodeDiscount() throws Exception {
+        var coupon = authorPromoCode("QTY10");
+        UUID orderId = placePromoOrder("QTY10");
+        JsonNode placed = orderDetail(orderId);
+        assertThat(placed.get("summary").get("discountMinor").asLong()).isEqualTo(10_000L);
+        assertThat(placed.get("summary").get("totalMinor").asLong()).isEqualTo(90_000L);
+        UUID line = jdbc.sql("SELECT id FROM ordering.order_lines WHERE order_id = :id")
+                .param("id", orderId)
+                .query(UUID.class)
+                .single();
+
+        // Two burgers become three. Full price would be 150,000 - 90,000 = +60,000; with the 10% the
+        // customer already holds it is 150,000 - 15,000 - 90,000 = +45,000.
+        JsonNode preview = propose(orderId, placed, "amend-qty-http-1", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":3}""".formatted(line));
+        assertThat(preview.get("status").asText()).isEqualTo("PRICED");
+        assertThat(preview.get("deltaTotalMinor").asLong())
+                .as("what the operator is told to confirm with the customer")
+                .isEqualTo(45_000L);
+        confirm(orderId, preview, "amend-qty-http-confirm-1");
+
+        JsonNode amended = orderDetail(orderId);
+        assertThat(amended.get("summary").get("discountMinor").asLong()).isEqualTo(15_000L);
+        assertThat(amended.get("summary").get("totalMinor").asLong()).isEqualTo(135_000L);
+        assertReconciles(amended);
+        assertThat(consumedCount(coupon.couponId()))
+                .as("an amendment never takes a second redemption")
+                .isEqualTo(1);
+        assertThat(redeemedAmount(orderId))
+                .as("the redemption now stands for the discount the order carries")
+                .isEqualTo(15_000L);
+    }
+
+    @Test
+    @DisplayName("CHANGE_DELIVERY_ADDRESS over HTTP reprices the delivery fee and keeps the promo-code "
+            + "discount untouched; the code's one slot is not taken twice")
+    void anAddressChangeOverHttpKeepsThePromoCodeDiscount() throws Exception {
+        seedTwoDeliveryZones();
+        var coupon = authorPromoCode("ADDR10");
+        UUID orderId = placeDeliveryPromoOrder("ADDR10");
+
+        JsonNode placed = orderDetail(orderId);
+        assertThat(placed.get("summary").get("feeMinor").asLong())
+                .as("the near zone's flat fee")
+                .isEqualTo(NEAR_ZONE_FEE);
+        assertThat(placed.get("summary").get("discountMinor").asLong()).isEqualTo(10_000L);
+        assertThat(placed.get("summary").get("totalMinor").asLong()).isEqualTo(100_000L + NEAR_ZONE_FEE - 10_000L);
+        assertThat(consumedCount(coupon.couponId())).isEqualTo(1);
+
+        // The customer moves the delivery to the far zone: only the fee moves. Had the reprice dropped
+        // the code the operator would be told +10,000 for the fee and +10,000 for a discount lost.
+        JsonNode preview = propose(orderId, placed, "amend-addr-http-1", """
+                {"type":"CHANGE_DELIVERY_ADDRESS",\
+                "deliveryAddress":{"line1":"Far street 1","city":"Tashkent","latitude":%s,"longitude":%s},\
+                "recipientName":"Dilnoza","recipientPhone":"+998901112233"}""".formatted(FAR_LATITUDE, FAR_LONGITUDE));
+        assertThat(preview.get("status").asText()).isEqualTo("PRICED");
+        assertThat(preview.get("deltaTotalMinor").asLong())
+                .as("the fee difference alone: the discount the customer holds is kept")
+                .isEqualTo(FAR_ZONE_FEE - NEAR_ZONE_FEE);
+        confirm(orderId, preview, "amend-addr-http-confirm-1");
+
+        JsonNode amended = orderDetail(orderId);
+        assertThat(amended.get("summary").get("feeMinor").asLong()).isEqualTo(FAR_ZONE_FEE);
+        assertThat(amended.get("summary").get("discountMinor").asLong()).isEqualTo(10_000L);
+        assertThat(amended.get("summary").get("totalMinor").asLong()).isEqualTo(100_000L + FAR_ZONE_FEE - 10_000L);
+        assertReconciles(amended);
+        assertThat(consumedCount(coupon.couponId()))
+                .as("an amendment never takes a second redemption")
+                .isEqualTo(1);
+        assertThat(redeemedAmount(orderId))
+                .as("the discount is the same, so the redemption's amount is too")
+                .isEqualTo(10_000L);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow
@@ -299,6 +401,63 @@ class OrderAmendmentPromoDiscountHttpTests {
                 null,
                 false)));
         return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
+    }
+
+    /** Proposes one command at the order's current version and returns the priced preview. */
+    private JsonNode propose(UUID orderId, JsonNode detail, String idempotencyKey, String commandJson)
+            throws Exception {
+        MvcResult proposed = mvc.perform(post(orderPath(orderId) + "/amendments")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                        .header(
+                                "If-Match",
+                                "\"" + detail.get("summary").get("version").asInt() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commands\":[" + commandJson
+                                + "],\"applyImmediately\":false,\"reasonCode\":\"OPERATOR_EDIT\"}"))
+                .andReturn();
+        assertThat(proposed.getResponse().getStatus())
+                .as(proposed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(proposed.getResponse().getContentAsString());
+    }
+
+    /** The customer agrees on the phone; the confirmation applies the amendment. */
+    private void confirm(UUID orderId, JsonNode preview, String idempotencyKey) throws Exception {
+        MvcResult confirmed = mvc.perform(post(orderPath(orderId) + "/amendments/"
+                                + preview.get("amendmentId").asText() + "/confirmation")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                        .header(
+                                "If-Match",
+                                "\"" + preview.get("amendmentVersion").asInt() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"channel\":\"PHONE\"}"))
+                .andReturn();
+        assertThat(confirmed.getResponse().getStatus())
+                .as(confirmed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(JSON.readTree(confirmed.getResponse().getContentAsString())
+                        .get("status")
+                        .asText())
+                .isEqualTo("APPLIED");
+    }
+
+    /** ck_order_total_reconciles: total = subtotal + tax + fee - discount, the subtotal gross. */
+    private static void assertReconciles(JsonNode detail) {
+        JsonNode summary = detail.get("summary");
+        assertThat(detail.get("subtotalMinor").asLong()
+                        + detail.get("taxMinor").asLong()
+                        + summary.get("feeMinor").asLong()
+                        - summary.get("discountMinor").asLong())
+                .isEqualTo(summary.get("totalMinor").asLong());
+    }
+
+    private long redeemedAmount(UUID orderId) {
+        return jdbc.sql("SELECT amount_minor FROM pricing.coupon_redemptions WHERE order_id = :id")
+                .param("id", orderId)
+                .query(Long.class)
+                .single();
     }
 
     private int cartVersion(UUID cartId) {
@@ -355,6 +514,155 @@ class OrderAmendmentPromoDiscountHttpTests {
     private static RequestPostProcessor tokenFor(String subject) {
         return jwt().jwt(builder ->
                 builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
+    }
+
+    // ---------------------------------------------------------- delivery fixtures
+
+    private static final double BRANCH_LATITUDE = 41.311081;
+    private static final double BRANCH_LONGITUDE = 69.240562;
+    /** About 0.6 km north of the branch: inside the near zone. */
+    private static final double NEAR_LATITUDE = 41.3165;
+    /** About 6 km north of the branch: outside the near zone, inside the catch-all. */
+    private static final double FAR_LATITUDE = 41.365;
+
+    private static final double FAR_LONGITUDE = 69.240562;
+    private static final long NEAR_ZONE_FEE = 5_000L;
+    private static final long FAR_ZONE_FEE = 15_000L;
+
+    /**
+     * A pin on the branch, a 3 km circle at a flat 5,000 and a 10 km catch-all at a flat 15,000.
+     * The nearer zone outranks the wider one, so the address decides which fee the order pays.
+     */
+    private void seedTwoDeliveryZones() {
+        jdbc.sql("""
+                UPDATE tenant.locations
+                SET latitude = :latitude, longitude = :longitude, coordinate_source = 'MERCHANT_PIN'
+                WHERE id = :id
+                """)
+                .param("latitude", BRANCH_LATITUDE)
+                .param("longitude", BRANCH_LONGITUDE)
+                .param("id", LOCATION)
+                .update();
+        CurrentActor currentActor = () -> new AuthenticatedActor("amendment-zone-author", Set.of(), Map.of());
+        var zones = new ServiceZoneService(
+                new JdbcServiceZoneStore(jdbc), JSON, Clock.systemUTC(), fact -> {}, currentActor);
+        var tariffs = new DeliveryTariffService(
+                new JdbcDeliveryTariffStore(jdbc), Clock.systemUTC(), fact -> {}, currentActor);
+        UUID actor = UUID.randomUUID();
+
+        seedZone(zones, tariffs, actor, "FAR", 10_000, FAR_ZONE_FEE, 0);
+        seedZone(zones, tariffs, actor, "NEAR", 3_000, NEAR_ZONE_FEE, 1);
+    }
+
+    private void seedZone(
+            ServiceZoneService zones,
+            DeliveryTariffService tariffs,
+            UUID actor,
+            String code,
+            int radiusMeters,
+            long feeMinor,
+            int priority) {
+        UUID tariffId = tariffs.createTariff(TENANT, BRAND, "FLAT-" + code, "Flat " + code, false);
+        var drafted = tariffs.draftVersion(
+                TENANT,
+                BRAND,
+                new DeliveryTariff(
+                        tariffId,
+                        0,
+                        VersionStatus.DRAFT,
+                        "UZS",
+                        FeeSource.TARIFF,
+                        DistanceMode.RADIUS,
+                        13_000,
+                        null,
+                        radiusMeters,
+                        0L,
+                        null,
+                        List.of(new TariffBand(0, 0, radiusMeters, feeMinor, 0L)),
+                        List.of()),
+                actor);
+        tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), actor);
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, code, code, code);
+        var version = zones.draftCircleVersion(
+                new ServiceZoneService.NewVersion(
+                        TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, priority, "UZS", tariffId, null, null, actor),
+                LOCATION,
+                radiusMeters);
+        zones.activate(TENANT, BRAND, zoneId, version.version(), actor);
+        zones.bindLocation(TENANT, BRAND, zoneId, LOCATION);
+    }
+
+    /** One of the customer's own saved addresses, written the way the customers module writes it. */
+    private UUID insertAddress(double latitude, double longitude) {
+        UUID addressId = UUID.randomUUID();
+        String fields = protection
+                .protect(
+                        TENANT,
+                        DataClass.PERSONAL,
+                        new FieldProtection.RecordRef("customer.addresses", "encrypted_fields", addressId),
+                        JSON.writeValueAsString(Map.of("line1", "Amir Temur 12", "city", "Tashkent")))
+                .serialize();
+        String instructions = protection
+                .protect(
+                        TENANT,
+                        DataClass.PERSONAL,
+                        new FieldProtection.RecordRef(
+                                "customer.addresses", "delivery_instructions_encrypted", addressId),
+                        "Ring the top bell")
+                .serialize();
+        jdbc.sql("""
+                INSERT INTO customer.addresses (id, tenant_id, customer_account_id, label,
+                    encrypted_fields, delivery_instructions_encrypted, latitude, longitude,
+                    coordinate_source, status, version)
+                VALUES (:id, :tenantId, :accountId, 'Home', :fields, :instructions,
+                    :latitude, :longitude, 'CUSTOMER_PIN', 'ACTIVE', 1)
+                """)
+                .param("id", addressId)
+                .param("tenantId", TENANT)
+                .param("accountId", CUSTOMER)
+                .param("fields", fields)
+                .param("instructions", instructions)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
+                .update();
+        return addressId;
+    }
+
+    /** Two burgers at 50,000 with 10% off, delivered to the near zone, checked out through the customer's path. */
+    private UUID placeDeliveryPromoOrder(String code) {
+        UUID address = insertAddress(NEAR_LATITUDE, BRANCH_LONGITUDE);
+        UUID cart = tx(() ->
+                        carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.DELIVERY, CUSTOMER, null))
+                .cartId();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        tx(() -> carts.setDestination(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                new CartService.DestinationCommand(address, "Dilnoza", "+998901112233", null)));
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), code));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        var result = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                row.version(),
+                Objects.requireNonNull(row.pricingQuoteId(), "the cart was priced first"),
+                Objects.requireNonNull(row.pricingContextHash(), "the cart was priced first"),
+                "idem-amend-promo-http-delivery",
+                "CASH",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
     }
 
     // ------------------------------------------------------------------ seeds
