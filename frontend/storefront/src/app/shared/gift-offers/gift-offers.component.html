@@ -1,6 +1,6 @@
 @if (cart.giftOffers().length > 0) {
   <div class="flex flex-col gap-3" data-testid="gift-offers">
-    @for (offer of cart.giftOffers(); track offer.ruleId) {
+    @for (offer of cart.giftOffers(); track $index) {
       <section class="rounded-2xl bg-surface-raised px-4 py-4" data-testid="gift-offer">
         <p class="text-sm font-bold text-text-primary" data-testid="gift-offer-title">
           {{ (offer.choices.length > 1 ? 'cart.giftOffer.choose' : 'cart.giftOffer.title') | t }}

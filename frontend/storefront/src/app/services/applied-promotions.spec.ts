@@ -156,6 +156,18 @@ describe('giftOfferGroups (ADR 0140: an offer, never a line)', () => {
     ]);
   });
 
+  it('keeps apart two gifts of one rule that have different allowances', () => {
+    const groups = giftOfferGroups(
+      [offer({ quantity: 1, toAdd: 1 }), offer({ variantId: 'v-fanta', quantity: 2, toAdd: 2 })],
+      MENU,
+    );
+
+    expect(groups.map((group) => [group.ruleId, group.toAdd, group.choices[0].name])).toEqual([
+      ['rule-1', 1, 'Cola'],
+      ['rule-1', 2, 'Fanta'],
+    ]);
+  });
+
   it('offers nothing once the allowance is already in the cart: that is the discount line, not an offer', () => {
     expect(giftOfferGroups([offer({ inCart: true, toAdd: 0 })], MENU)).toEqual([]);
   });

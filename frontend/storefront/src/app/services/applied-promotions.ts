@@ -168,20 +168,23 @@ export function giftOfferGroups(
   offers: readonly GiftOffer[] | null | undefined,
   known: ReadonlyMap<string, { readonly name: string; readonly image: string | null }>,
 ): readonly GiftOfferGroup[] {
-  const groups = new Map<string, { toAdd: number; choices: GiftChoice[] }>();
+  const groups = new Map<string, { ruleId: string; toAdd: number; choices: GiftChoice[] }>();
   for (const offer of offers ?? []) {
     const gift = known.get(offer.variantId);
     if (offer.toAdd <= 0 || !gift) {
       continue;
     }
-    const group = groups.get(offer.ruleId) ?? { toAdd: offer.toAdd, choices: [] };
+    // One rule can hold more than one gift action, each with its own allowance: those are
+    // separate offers even though they share the rule's key.
+    const key = `${offer.ruleId}|${offer.quantity}|${offer.toAdd}`;
+    const group = groups.get(key) ?? { ruleId: offer.ruleId, toAdd: offer.toAdd, choices: [] };
     group.choices.push({
       variantId: offer.variantId,
       name: gift.name,
       image: gift.image,
       inCart: offer.inCart,
     });
-    groups.set(offer.ruleId, group);
+    groups.set(key, group);
   }
-  return [...groups].map(([ruleId, group]) => ({ ruleId, ...group }));
+  return [...groups.values()];
 }
