@@ -339,6 +339,24 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * Staff row 9.4: the row count above which a filtered customer export needs a second
+     * signature, declared identically in {@code customers.api.CustomerConfigurationKeys}, where
+     * it is consumed, for the reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}: this
+     * registry is internal to tenancy, and a reference the other way would make the modules
+     * cyclic. It replaces a deployment property, which stays as the default the consumer falls
+     * back to while a tenant has set nothing.
+     */
+    public static final ConfigurationKey<Integer> CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS = ConfigurationKey.of(
+                    "customers.pii_export_approval_threshold_rows", Integer.class)
+            .defaultValue(500)
+            .ownedBy("customers")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("A filtered customer export of more rows than this needs a second signature "
+                    + "when the tenant has published a customer.pii.export approval policy (ADR 0027).")
+            .build();
+
+    /**
      * ADR 0082: whether a tenant's operations app shows its administrators the
      * HorecaOS support visits to their account (ADR 0081), and lets them end
      * one. Off until turned on: the page is new, and the first tenants to see
@@ -666,6 +684,7 @@ public final class ConfigurationKeys {
             AUDIT_BUSINESS_RETENTION_DAYS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
+            CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
             FEATURE_SUPPORT_VISITS,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,

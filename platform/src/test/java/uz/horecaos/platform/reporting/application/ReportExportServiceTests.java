@@ -44,6 +44,7 @@ import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -125,6 +126,7 @@ class ReportExportServiceTests {
                         clock,
                         new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
                         objectMapper),
+                new FakeConfigurationResolver(),
                 500);
         CustomerDirectoryExportPort customerDirectory = new CustomerDirectoryExportAdapter(lists);
 

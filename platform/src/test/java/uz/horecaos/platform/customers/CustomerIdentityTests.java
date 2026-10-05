@@ -42,6 +42,7 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -150,6 +151,7 @@ class CustomerIdentityTests {
                 new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
                 utcMidnightBusinessDays(),
                 approvals,
+                new FakeConfigurationResolver(),
                 500);
     }
 
@@ -1725,6 +1727,7 @@ class CustomerIdentityTests {
                         movable,
                         new SimpleMeterRegistry(),
                         objectMapper),
+                new FakeConfigurationResolver(),
                 500);
 
         localIdentity.resolve(TENANT, BRAND_A, ISSUER, "subject-tashkent-boundary");
