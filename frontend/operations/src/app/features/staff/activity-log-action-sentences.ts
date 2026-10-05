@@ -280,6 +280,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог товар остановлено везде',
       'uz-Latn': 'Katalog mahsulot toʻxtatildi hammasida',
     },
+    'catalog.publication.rolled_back': {
+      en: 'Catalog rolled back to an earlier publication',
+      ru: 'Каталог возвращён к прежней публикации',
+      'uz-Latn': 'Katalog oldingi eʻlonga qaytarildi',
+    },
+    'catalog.published': {
+      en: 'Catalog published',
+      ru: 'Каталог опубликован',
+      'uz-Latn': 'Katalog eʻlon qilindi',
+    },
     'catalog.variantModifierGroup.attached': {
       en: 'Modifier group attached to a variant',
       ru: 'Группа модификаторов подключена к варианту',
@@ -955,6 +965,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Кухня устройство отозвано',
       'uz-Latn': 'Oshxona qurilma bekor qilindi',
     },
+    'kitchen.routing_rule.created': {
+      en: 'Dish routing rule created',
+      ru: 'Создано правило маршрутизации блюд',
+      'uz-Latn': 'Taomlarni yoʻnaltirish qoidasi yaratildi',
+    },
+    'kitchen.routing_rule.updated': {
+      en: 'Dish routing rule changed',
+      ru: 'Изменено правило маршрутизации блюд',
+      'uz-Latn': 'Taomlarni yoʻnaltirish qoidasi oʻzgartirildi',
+    },
+    'kitchen.station.created': {
+      en: 'Kitchen station created',
+      ru: 'Создана станция кухни',
+      'uz-Latn': 'Oshxona stansiyasi yaratildi',
+    },
+    'kitchen.station_capacity.created': {
+      en: 'Station throughput ceiling added',
+      ru: 'Добавлен лимит пропускной способности станции',
+      'uz-Latn': 'Stansiya oʻtkazuvchanlik chegarasi qoʻshildi',
+    },
+    'kitchen.station_capacity.deleted': {
+      en: 'Station throughput ceiling removed',
+      ru: 'Удалён лимит пропускной способности станции',
+      'uz-Latn': 'Stansiya oʻtkazuvchanlik chegarasi olib tashlandi',
+    },
+    'kitchen.station_capacity.updated': {
+      en: 'Station throughput ceiling edited',
+      ru: 'Изменён лимит пропускной способности станции',
+      'uz-Latn': 'Stansiya oʻtkazuvchanlik chegarasi tahrirlandi',
+    },
     'legal-entity.assigned': {
       en: 'Legal entity assigned',
       ru: 'Юридический юрлицо назначено',
@@ -1024,6 +1064,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Media asset ingested',
       ru: 'Медиа файл загружено',
       'uz-Latn': 'Media fayl yuklandi',
+    },
+    'notification.template.created': {
+      en: 'Notification template created',
+      ru: 'Создан шаблон уведомления',
+      'uz-Latn': 'Bildirishnoma shabloni yaratildi',
+    },
+    'notification.template.version_activated': {
+      en: 'Notification template version activated',
+      ru: 'Активирована версия шаблона уведомления',
+      'uz-Latn': 'Bildirishnoma shabloni versiyasi faollashtirildi',
+    },
+    'notification.template.version_added': {
+      en: 'Notification template wording saved as a new version',
+      ru: 'Текст шаблона уведомления сохранён как новая версия',
+      'uz-Latn': 'Bildirishnoma shabloni matni yangi versiya sifatida saqlandi',
     },
     'notifications.template.provider_review_recorded': {
       en: 'Notifications template provider review recorded',
@@ -1130,6 +1185,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Payment checkout re-issued',
       ru: 'Платёжная ссылка выставлена повторно',
       'uz-Latn': 'Toʻlov havolasi qayta chiqarildi',
+    },
+    'payment.merchant_binding.activated': {
+      en: 'Merchant binding activated',
+      ru: 'Привязка мерчанта активирована',
+      'uz-Latn': 'Merchant bogʻlanishi faollashtirildi',
+    },
+    'payment.merchant_binding.archived': {
+      en: 'Merchant binding archived',
+      ru: 'Привязка мерчанта архивирована',
+      'uz-Latn': 'Merchant bogʻlanishi arxivlandi',
+    },
+    'payment.merchant_binding.registered': {
+      en: 'Merchant binding registered',
+      ru: 'Зарегистрирована привязка мерчанта',
+      'uz-Latn': 'Merchant bogʻlanishi roʻyxatdan oʻtkazildi',
+    },
+    'payment.merchant_binding.suspended': {
+      en: 'Merchant binding suspended',
+      ru: 'Привязка мерчанта приостановлена',
+      'uz-Latn': 'Merchant bogʻlanishi toʻxtatildi',
     },
     'payment.merchant_binding_secret_rotated': {
       en: 'Payment merchant binding secret rotated',

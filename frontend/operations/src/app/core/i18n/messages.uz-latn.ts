@@ -900,6 +900,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',
   'settings.home.description.brandProfile':
     'Brend qanday nomlanadi va mijoz uni koʻradigan har joyda qanday koʻrinadi.',
+  'settings.home.description.approvals':
+    'Aksiya yoki yirik mijozlar eksporti ikkinchi imzoni kutadigan chegaralar.',
   'settings.home.description.locations':
     'Har bir filial: qayerda joylashgan, qachon ochiq, qanday fiskalizatsiya qiladi, nima sotadi.',
   'settings.home.description.salesChannels':

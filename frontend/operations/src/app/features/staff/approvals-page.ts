@@ -7,6 +7,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
+import { ApprovalTextPipe } from '../settings/approvals/approvals-texts';
 import { approvalActionLabelKey } from './approval-action-labels';
 import {
   ApprovalDecision,
@@ -56,7 +57,7 @@ const MAXIMUM_REASON_LENGTH = 1000;
  */
 @Component({
   selector: 'q-approvals-page',
-  imports: [TPipe, RouterLink],
+  imports: [TPipe, ApprovalTextPipe, RouterLink],
   templateUrl: './approvals-page.html',
   styleUrl: './approvals-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

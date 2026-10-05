@@ -886,6 +886,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.search.empty': 'Ничего не найдено по запросу «{query}».',
   'settings.home.description.brandProfile':
     'Как называется бренд и как он выглядит везде, где его видит клиент.',
+  'settings.home.description.approvals':
+    'Пороги, выше которых акция или крупная выгрузка клиентов ждёт второй подписи.',
   'settings.home.description.locations':
     'Каждый филиал: где он находится, когда открыт, как фискализирует, что продаёт.',
   'settings.home.description.salesChannels':

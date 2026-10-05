@@ -353,6 +353,16 @@ export const routes: Routes = [
               ),
           },
           {
+            // 9.4 (wave 18): the limits above which a promotion activation or a large
+            // customer export waits for a second signature -- see
+            // `approvals-settings-page.ts`'s own doc.
+            path: 'approvals',
+            loadComponent: () =>
+              import('./features/settings/approvals/approvals-settings-page').then(
+                (m) => m.ApprovalsSettingsPage,
+              ),
+          },
+          {
             // Row 2.1b: the tenant-wide coded kitchen-instruction vocabulary.
             // TENANT-only, like its `catalog` sibling above — see
             // `comment-presets-page.ts`'s own doc.

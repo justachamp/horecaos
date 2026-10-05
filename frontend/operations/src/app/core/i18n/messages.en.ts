@@ -923,6 +923,8 @@ export const messagesEn = {
   'settings.home.search.empty': 'No setting matches "{query}".',
   'settings.home.description.brandProfile':
     'What the brand is called and what it looks like everywhere a customer sees it.',
+  'settings.home.description.approvals':
+    'The limits above which a promotion or a large customer export waits for a second signature.',
   'settings.home.description.locations':
     'Every branch: where it is, when it is open, how it fiscalizes, what it sells through.',
   'settings.home.description.salesChannels':

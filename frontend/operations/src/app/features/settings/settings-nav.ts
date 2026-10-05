@@ -69,6 +69,16 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         builtRoute: true,
       },
       {
+        // Row 9.4: the limits above which a promotion or a large customer export waits for a
+        // second signature. The label is the worklist's own (`staff.shell.approvals`): both
+        // screens are «Согласования», and the central catalogue is in the eager bundle, so a
+        // string already there is not paid for twice.
+        path: 'approvals',
+        label: 'staff.shell.approvals',
+        description: 'settings.home.description.approvals',
+        builtRoute: true,
+      },
+      {
         path: 'catalog',
         label: 'settings.nav.catalogBaseSettings',
         description: 'settings.home.description.catalogBaseSettings',

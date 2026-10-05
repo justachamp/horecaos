@@ -45,6 +45,10 @@ export const CONFIGURATION_KEY_ROUTES: Readonly<Record<string, string>> = {
   'telemetry.track_retention_days': 'data-privacy',
   'courier.applicant_retention_months': 'data-privacy',
   'feature.support_visits': 'support-visits',
+  'pricing.promotion.approval.percentage_over_bp': 'approvals',
+  'pricing.promotion.approval.amount_over_minor': 'approvals',
+  'pricing.promotion.approval.always_for_markup': 'approvals',
+  'customers.pii_export_approval_threshold_rows': 'approvals',
 };
 
 /** One of reference-data-page.html's five sections (row 10.10), each now carrying its own `id`. */
