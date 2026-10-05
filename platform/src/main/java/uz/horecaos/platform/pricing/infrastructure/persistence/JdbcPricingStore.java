@@ -1,8 +1,10 @@
 package uz.horecaos.platform.pricing.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -355,6 +357,43 @@ public class JdbcPricingStore {
                 })
                 .orElse(Map.of());
     }
+
+    /**
+     * The gift offers recorded when the quote was priced (ADR 0140): a firing {@code
+     * FREE_ITEM} rule, the gift variant, how many units it would give and whether the
+     * cart held the variant. Empty for a quote that priced none and for one priced before
+     * the offers were recorded.
+     */
+    public List<GiftOfferRow> findGiftOffers(UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT (calculation_document -> 'giftOffers')::text
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id AND (calculation_document -> 'giftOffers') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query(String.class)
+                .optional()
+                .map(json -> {
+                    List<Map<String, Object>> entries = objectMapper.readValue(
+                            json, new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                    List<GiftOfferRow> offers = new ArrayList<>();
+                    for (Map<String, Object> entry : entries) {
+                        offers.add(new GiftOfferRow(
+                                UUID.fromString(String.valueOf(entry.get("ruleId"))),
+                                UUID.fromString(String.valueOf(entry.get("variantId"))),
+                                new BigDecimal(String.valueOf(entry.get("quantity"))),
+                                Boolean.TRUE.equals(entry.get("inCart")),
+                                new BigDecimal(String.valueOf(entry.get("toAdd")))));
+                    }
+                    return List.copyOf(offers);
+                })
+                .orElse(List.of());
+    }
+
+    /** One recorded gift offer: see {@link #findGiftOffers}. */
+    public record GiftOfferRow(
+            UUID promotionId, UUID variantId, BigDecimal quantity, boolean inCart, BigDecimal toAdd) {}
 
     public Optional<QuoteRow> findQuote(UUID tenantId, UUID quoteId) {
         return jdbc.sql("""

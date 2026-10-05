@@ -149,6 +149,12 @@
         }
       </div>
 
+      <!-- Free gifts a promotion offers (ADR 0140) and the promo-code entry (ADR 0072) -->
+      <div class="mt-4 flex flex-col gap-3">
+        <app-gift-offers />
+        <app-promo-code />
+      </div>
+
       <!-- Checkout: promo, payment, continue (matches app design) -->
       <div class="mt-4 rounded-t-[1.25rem] bg-surface-raised-2 px-1 pb-1 pt-4">
         @if (cart.fulfillmentMode() === 'DELIVERY') {

@@ -2,7 +2,10 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
+import { BrandScope } from '../../core/api/catalog-paths';
+import { command } from '../../core/api/idempotency';
 import { promoCodePaths } from '../../core/api/promo-codes-paths';
+import { promotionPaths } from '../../core/api/promotion-paths';
 import { reportsPaths } from '../../core/api/reports-paths';
 import { ProvenanceResponse } from './reporting-api';
 
@@ -98,6 +101,22 @@ export interface PromotionRedemptionLog {
 }
 
 /**
+ * Who redeemed it: the customer account behind one redemption, as the audited
+ * reveal answers it. Mirrors `PromotionController.RedemptionCustomerResponse`.
+ *
+ * It carries the account id and nothing about the person; a contact value stays
+ * behind the customer card's own `customer.pii.reveal`. `customerAccountId` is
+ * `null` for a guest order, which has no account to open.
+ */
+export interface RedemptionCustomer {
+  readonly redemptionId: string;
+  readonly promotionId: string;
+  readonly sourceKind: string;
+  readonly orderId: string;
+  readonly customerAccountId: string | null;
+}
+
+/**
  * Row 7.9's own read: `CustomerDiscountHistoryController`, tenant-scoped and
  * pricing-owned, so it does not fit `MarketingApi` (brand-scoped, ADR 0044)
  * or `CustomersApi` (the customer record's own module). Named after the
@@ -161,5 +180,28 @@ export class MarketingReportApi {
         }),
       )
     ).value;
+  }
+
+  /**
+   * 7.9, «who redeemed it»: resolves one row of the redemption log to the customer account it
+   * belongs to. Needs `customer.read` at the row's brand and a stated purpose, and the platform
+   * writes a security audit fact against the customer account, so the account's own access log
+   * shows who looked and why. A guest order answers with no account.
+   *
+   * Scoped by the *row's* brand and promotion, not the operator's current one: the log is read
+   * across the tenant and the reveal is authorized where the redemption happened.
+   */
+  async revealRedemptionCustomer(
+    scope: BrandScope,
+    promotionId: string,
+    redemptionId: string,
+    purpose: string,
+  ): Promise<RedemptionCustomer> {
+    return firstValueFrom(
+      this.api.post<{ readonly purpose: string }, RedemptionCustomer>(
+        promotionPaths.redemptionCustomerReveal(scope, promotionId, redemptionId),
+        command({ purpose }),
+      ),
+    );
   }
 }

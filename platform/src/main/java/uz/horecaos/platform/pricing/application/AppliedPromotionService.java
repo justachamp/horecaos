@@ -94,7 +94,11 @@ public class AppliedPromotionService implements AppliedPromotionPort {
         CouponOutcome outcome = presentedCouponCode == null || presentedCouponCode.isBlank()
                 ? null
                 : outcomeOf(quote, presentedCouponCode, appliedIds, gated);
-        return new AppliedPromotions(applied, outcome);
+        List<AppliedPromotions.GiftOffer> giftOffers = pricing.findGiftOffers(tenantId, quoteId).stream()
+                .map(row -> new AppliedPromotions.GiftOffer(
+                        row.promotionId(), row.variantId(), row.quantity(), row.inCart(), row.toAdd()))
+                .toList();
+        return new AppliedPromotions(applied, outcome, giftOffers);
     }
 
     private CouponOutcome outcomeOf(QuoteSnapshot quote, String code, Set<UUID> appliedIds, Set<UUID> gated) {

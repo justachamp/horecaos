@@ -3,6 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 
 import { CartComponent } from './cart.component';
+import type { GiftOfferGroup } from '../../services/applied-promotions';
 import {
   UiCartService,
   type HiddenChargeRow,
@@ -57,6 +58,10 @@ class FakeUiCartService {
   formatPrice = (value: number) => `${value} so'm`;
   hasProvisionalLines = () => false;
   lineAmount = vi.fn((item: CartResponseItem) => item.price * item.quantity);
+  /** ADR 0140: the free gifts on offer, and taking one up. */
+  readonly giftOffers = signal<readonly GiftOfferGroup[]>([]);
+  readonly updating = signal(false);
+  addGift = vi.fn(async (_variantId: string) => true);
 }
 
 async function setUp(fake = new FakeUiCartService()) {
@@ -461,5 +466,37 @@ describe('CartComponent -- portions and weighed items (ADR 0137)', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="cart-provisional-notice"]'),
     ).toBeNull();
+  });
+});
+
+describe('CartComponent: free gifts (ADR 0140)', () => {
+  it('offers the free gift the platform offered above the summary, and adds it through the cart', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    fake.giftOffers.set([
+      {
+        ruleId: 'rule-1',
+        toAdd: 1,
+        choices: [{ variantId: 'v-cola', name: 'Cola', image: null, inCart: false }],
+      },
+    ]);
+    const { fixture } = await setUp(fake);
+    const host = fixture.nativeElement as HTMLElement;
+
+    const offers = host.querySelector('[data-testid="gift-offers"]')!;
+    expect(offers.compareDocumentPosition(host.querySelector('.summary')!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    host.querySelector<HTMLButtonElement>('[data-testid="gift-offer-add"]')!.click();
+
+    expect(fake.addGift).toHaveBeenCalledWith('v-cola');
+  });
+
+  it('shows no gift block when nothing is on offer', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="gift-offers"]')).toBeNull();
   });
 });

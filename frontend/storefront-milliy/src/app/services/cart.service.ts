@@ -5,7 +5,7 @@ import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
-import type { AppliedPromotion, PromoCodeOutcome } from './applied-promotions';
+import type { AppliedPromotion, GiftOffer, PromoCodeOutcome } from './applied-promotions';
 
 /**
  * The platform cart, which is a different thing from the legacy one.
@@ -615,6 +615,11 @@ export interface PricedCart {
    * the cart carries no code.
    */
   readonly promoCodeOutcome?: PromoCodeOutcome | null;
+  /**
+   * ADR 0140. Free gifts a firing rule would price free once the cart holds them: offers, never
+   * lines. Pricing adds nothing; a screen offers to add the gift and prices the cart again.
+   */
+  readonly giftOffers?: readonly GiftOffer[];
 }
 
 /** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */

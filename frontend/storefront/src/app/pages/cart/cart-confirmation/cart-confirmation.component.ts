@@ -9,6 +9,8 @@ import { DeliverySelectionService } from '../../../services/delivery-selection.s
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { NotificationService } from '../../../services/notification.service';
+import { GiftOffersComponent } from '../../../shared/gift-offers/gift-offers.component';
+import { PromoCodeComponent } from '../../../shared/promo-code/promo-code.component';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
 import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
@@ -30,7 +32,7 @@ export interface PaymentOption {
   templateUrl: './cart-confirmation.component.html',
   styleUrl: './cart-confirmation.component.scss',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslatePipe],
+  imports: [CommonModule, FormsModule, TranslatePipe, GiftOffersComponent, PromoCodeComponent],
 })
 export class CartConfirmationComponent implements OnInit {
   showPaymentOptions = false;

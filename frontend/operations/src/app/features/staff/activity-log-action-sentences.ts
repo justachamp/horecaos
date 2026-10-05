@@ -1111,6 +1111,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn':
         'Ogʻirlik boʻyicha sotiladigan pozitsiya ogʻirligi yozildi, buyurtma qayta hisoblandi',
     },
+    'ordering.order.promotion_requoted': {
+      en: 'Promotions of a scheduled order checked again, the order unchanged',
+      ru: 'Акции запланированного заказа проверены повторно, заказ не изменён',
+      'uz-Latn': 'Rejalashtirilgan buyurtma aksiyalari qayta tekshirildi, buyurtma oʻzgarmadi',
+    },
     'ordering.outcome-reason.archived': {
       en: 'Order outcome reason retired',
       ru: 'Причина исхода заказа выведена из использования',
@@ -1270,6 +1275,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Promotion drafted',
       ru: 'Акция создана как черновик',
       'uz-Latn': 'Aksiya qoralama sifatida yaratildi',
+    },
+    'pricing.promotion.redemption.customer_revealed': {
+      en: 'Customer behind a promotion redemption viewed',
+      ru: 'Просмотрен клиент, применивший акцию',
+      'uz-Latn': 'Aksiyani qoʻllagan mijoz koʻrildi',
     },
     'pricing.promotion.updated': {
       en: 'Promotion edited',

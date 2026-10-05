@@ -9,6 +9,7 @@ import {
   type PromotionNote,
   type PromotionRow,
 } from '../../services/ui-cart.service';
+import type { GiftOfferGroup } from '../../services/applied-promotions';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { AddressBookService } from '../../services/address-book.service';
 import { PaymentSessionService } from '../../services/payment-session.service';
@@ -84,6 +85,10 @@ class FakeUiCartService {
   readonly fulfillmentMode = signal<FulfillmentMode>('DELIVERY');
   readonly promoBusy = signal(false);
   readonly promoError = signal<string | null>(null);
+  /** ADR 0140: the free gifts on offer, and taking one up. */
+  readonly giftOffers = signal<readonly GiftOfferGroup[]>([]);
+  readonly updating = signal(false);
+  addGift = vi.fn(async (_variantId: string) => true);
   readonly errorKey = signal<string | null>(null);
   readonly priceRefusalKey = signal<string | null>(null);
   orderComment = '';
@@ -370,6 +375,34 @@ describe('CheckoutComponent -- the payment method is part of the price (ADR 0140
     expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
     expect(cart.priceCart).not.toHaveBeenCalled();
     expect(cart.checkout).not.toHaveBeenCalled();
+  });
+});
+
+describe('CheckoutComponent -- free gifts (ADR 0140)', () => {
+  it('offers the free gift the platform offered, so one that depends on the payment method is not missed', async () => {
+    const { fixture, cart } = await setUp((c) =>
+      c.giftOffers.set([
+        {
+          ruleId: 'rule-1',
+          toAdd: 1,
+          choices: [{ variantId: 'v-cola', name: 'Cola', image: null, inCart: false }],
+        },
+      ]),
+    );
+
+    const add = fixture.nativeElement.querySelector(
+      '[data-testid="gift-offer-add"]',
+    ) as HTMLButtonElement;
+    expect(add.textContent).toContain('cart.giftOffer.add');
+    add.click();
+
+    expect(cart.addGift).toHaveBeenCalledWith('v-cola');
+  });
+
+  it('shows no gift block when nothing is on offer', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="gift-offers"]')).toBeNull();
   });
 });
 

@@ -1,0 +1,39 @@
+@if (cart.giftOffers().length > 0) {
+  <div class="offers" data-testid="gift-offers">
+    @for (offer of cart.giftOffers(); track $index) {
+      <section class="offer" data-testid="gift-offer">
+        <h3 class="offer__title" data-testid="gift-offer-title">
+          {{ (offer.choices.length > 1 ? 'cart.giftOffer.choose' : 'cart.giftOffer.title') | t }}
+        </h3>
+        @for (choice of offer.choices; track choice.variantId) {
+          <button
+            type="button"
+            class="offer__add"
+            data-testid="gift-offer-add"
+            [disabled]="cart.updating()"
+            (click)="add(choice.variantId)"
+          >
+            @if (choice.image) {
+              <span
+                class="offer__img"
+                aria-hidden="true"
+                [style.backgroundImage]="'url(' + choice.image + ')'"
+              ></span>
+            }
+            <span class="offer__label" data-testid="gift-offer-label">
+              @if (offer.toAdd === 1) {
+                {{ 'cart.giftOffer.add' | t: { name: choice.name } }}
+              } @else {
+                {{
+                  'cart.giftOffer.addMany'
+                    | t: { name: choice.name, count: quantityText(offer.toAdd) }
+                }}
+              }
+            </span>
+            <span class="offer__plus" aria-hidden="true">+</span>
+          </button>
+        }
+      </section>
+    }
+  </div>
+}

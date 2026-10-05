@@ -20,8 +20,10 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.pricing.api.AudienceMembershipPort;
 import uz.horecaos.platform.pricing.api.CustomerOrderHistoryPort;
+import uz.horecaos.platform.pricing.application.CompositeProductsLookup;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PromotionAuthoringService;
+import uz.horecaos.platform.pricing.application.PromotionMetrics;
 import uz.horecaos.platform.pricing.application.PromotionRedemptionService;
 import uz.horecaos.platform.pricing.application.PromotionSimulationService;
 import uz.horecaos.platform.pricing.application.QuoteService;
@@ -78,6 +80,9 @@ public final class PromotionDbFixture {
     public final JdbcPromoCodeStore promoCodeStore;
     public final JdbcPromotionStore promotionStore;
     public final QuoteService quotes;
+    /** The counters the quote path and the ledger write (ADR 0140, observability). */
+    public final PromotionMetrics metrics = PromotionMetrics.none();
+
     public final PromotionRedemptionService ledger;
     public final PromotionSimulationService simulation;
     public final PromotionAuthoringService authoring;
@@ -145,8 +150,10 @@ public final class PromotionDbFixture {
                 deliveryFees,
                 PromotionTestSupport.resolver(jdbc, promoCodeStore, history, audiencePort),
                 clock,
-                configuration);
-        ledger = new PromotionRedemptionService(promotionStore);
+                configuration,
+                CompositeProductsLookup.none(),
+                metrics);
+        ledger = new PromotionRedemptionService(promotionStore, metrics);
         simulation = new PromotionSimulationService(quotes, configuration, references, clock);
 
         approvals = new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(

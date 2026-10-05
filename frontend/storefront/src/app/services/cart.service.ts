@@ -5,7 +5,7 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
 import { type ComboPickWire, comboKeyHash } from '../utils/combo-selection';
-import type { AppliedPromotion } from './applied-promotions';
+import type { AppliedPromotion, GiftOffer, PromoCodeOutcome } from './applied-promotions';
 
 /**
  * The platform cart, which is a different thing from the legacy one.
@@ -247,6 +247,45 @@ export class CartService {
           recipientPhone: input.recipientPhone,
           deliveryNote: input.deliveryNote,
         },
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    );
+  }
+
+  /**
+   * Applies a promo code to the cart, replacing whatever was applied before.
+   *
+   * ADR 0072: this platform supports at most one applied code per cart, so a second code simply
+   * replaces the first rather than being refused. This call only records the code and clears the
+   * attached quote -- it does **not** compute or return a discount. The total moves only because
+   * {@link price} is asked again afterward, through the platform's own pricing pipeline; nothing
+   * here may be read as "the code was worth X" until that repricing happens.
+   *
+   * A refusal names why in `problem.reason` (`HorecaOSApiError`): `CODE_NOT_FOUND` (unknown code,
+   * `RESOURCE_NOT_FOUND`), or `CODE_NOT_ACTIVE`, `CODE_NOT_YET_ACTIVE`, `CODE_EXPIRED`,
+   * `REDEMPTION_LIMIT_REACHED`, `PER_CUSTOMER_LIMIT_REACHED` (a code that exists but is not
+   * usable right now, `RESOURCE_CONFLICT`). The minimum-basket, channel and location conditions
+   * are deliberately not checked here -- only at every price -- so this call accepting a code is
+   * not a promise it will discount anything.
+   */
+  async applyPromoCode(code: string): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>('POST', `${this.brandPath}/carts/${cart.cartId}/promo-code`, {
+        body: { code },
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    );
+  }
+
+  /**
+   * Removes the cart's applied promo code. Does nothing when none is applied.
+   * Clears any attached quote, the same as applying one does.
+   */
+  async removePromoCode(): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>('DELETE', `${this.brandPath}/carts/${cart.cartId}/promo-code`, {
         expectedVersion: version,
         idempotencyKey: newIdempotencyKey(),
       }),
@@ -509,6 +548,8 @@ export interface PlatformCart {
   readonly contextHash: string | null;
   readonly expiresAt: string | null;
   readonly lines: readonly PlatformCartLine[];
+  /** ADR 0072. Null (or absent) when no code is applied to this cart. */
+  readonly appliedPromoCode?: string | null;
   /** ADR 0140. The method the cart is priced under; null (or absent) until one is selected. */
   readonly paymentMethodCode?: string | null;
 }
@@ -575,6 +616,16 @@ export interface PricedCart {
    * and how much. Names no promotion. Absent from an answer that predates it.
    */
   readonly appliedPromotions?: readonly AppliedPromotion[];
+  /**
+   * ADR 0140. What became of the code on the cart: applied, beaten by offers that apply without
+   * it, not applicable to this basket, or no longer valid. Null when the cart carries no code.
+   */
+  readonly promoCodeOutcome?: PromoCodeOutcome | null;
+  /**
+   * ADR 0140. Free gifts a firing rule would price free once the cart holds them: offers, never
+   * lines. Pricing adds nothing; a screen offers to add the gift and prices the cart again.
+   */
+  readonly giftOffers?: readonly GiftOffer[];
 }
 
 /** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */

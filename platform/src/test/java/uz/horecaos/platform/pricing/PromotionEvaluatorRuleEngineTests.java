@@ -396,6 +396,200 @@ class PromotionEvaluatorRuleEngineTests {
         assertThat(seen).as("every ordering produced the same result").hasSize(1);
     }
 
+    // ------------------------------------------------------------ gift offers
+
+    @Test
+    @DisplayName("a firing FREE_ITEM rule whose gift is not in the cart offers it, and prices nothing")
+    void aGiftNotInTheCartIsOffered() {
+        Promotion promotion = freeCola(1, 1, "ONCE");
+
+        Outcome outcome = evaluator.evaluate(List.of(promotion), pizzaAndColas(1), clickContext(Set.of()), NOW);
+
+        assertThat(outcome.applied()).as("pricing never invents a line").isEmpty();
+        assertThat(outcome.totalDiscountMinor()).isZero();
+        assertThat(outcome.giftOffers())
+                .containsExactly(new PromotionEvaluator.GiftOffer(
+                        promotion.promotionId(),
+                        COLA_VARIANT,
+                        java.math.BigDecimal.ONE,
+                        false,
+                        java.math.BigDecimal.ONE));
+    }
+
+    @Test
+    @DisplayName("a gift already in the cart is the same offer, marked in the cart with nothing left to add")
+    void aGiftAlreadyInTheCartIsOfferedAsInCart() {
+        Promotion promotion = freeCola(1, 1, "ONCE");
+
+        Outcome outcome = evaluator.evaluate(List.of(promotion), pizzaAndColas(1, 1), clickContext(Set.of()), NOW);
+
+        assertThat(outcome.totalDiscountMinor()).isEqualTo(12_000L);
+        assertThat(outcome.giftOffers())
+                .containsExactly(new PromotionEvaluator.GiftOffer(
+                        promotion.promotionId(),
+                        COLA_VARIANT,
+                        java.math.BigDecimal.ONE,
+                        true,
+                        java.math.BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("a cart holding part of the allowance is offered the rest")
+    void aPartialGiftIsOfferedTheRemainder() {
+        Promotion promotion = freeCola(2, 1, "ONCE");
+
+        Outcome outcome = evaluator.evaluate(List.of(promotion), pizzaAndColas(1, 1), clickContext(Set.of()), NOW);
+
+        assertThat(outcome.totalDiscountMinor()).as("one Cola is free so far").isEqualTo(12_000L);
+        assertThat(outcome.giftOffers())
+                .containsExactly(new PromotionEvaluator.GiftOffer(
+                        promotion.promotionId(),
+                        COLA_VARIANT,
+                        java.math.BigDecimal.valueOf(2),
+                        true,
+                        java.math.BigDecimal.ONE));
+    }
+
+    @Test
+    @DisplayName("a gift split over lines counts once: the allowance is per rule, not per line")
+    void aGiftSplitOverLinesIsOneAllowance() {
+        Promotion promotion = freeCola(2, 1, "ONCE");
+
+        Outcome outcome = evaluator.evaluate(List.of(promotion), pizzaAndColas(1, 1, 1), clickContext(Set.of()), NOW);
+
+        assertThat(outcome.giftOffers()).hasSize(1);
+        assertThat(outcome.giftOffers().get(0).toAdd()).isEqualByComparingTo("0");
+        assertThat(outcome.giftOffers().get(0).inCart()).isTrue();
+    }
+
+    @Test
+    @DisplayName("PER_MULTIPLE offers only the whole multiples of the trigger the cart earned")
+    void perMultipleOffersTheEarnedMultiples() {
+        Promotion promotion = freeCola(3, 2, "PER_MULTIPLE");
+
+        Outcome five = evaluator.evaluate(List.of(promotion), pizzaAndColas(5), clickContext(Set.of()), NOW);
+        Outcome one = evaluator.evaluate(List.of(promotion), pizzaAndColas(1), clickContext(Set.of()), NOW);
+
+        assertThat(five.giftOffers())
+                .as("floor(5 / 2) = 2 earned, under the bound of 3")
+                .singleElement()
+                .satisfies(offer -> {
+                    assertThat(offer.quantity()).isEqualByComparingTo("2");
+                    assertThat(offer.toAdd()).isEqualByComparingTo("2");
+                });
+        assertThat(one.giftOffers())
+                .as("one pizza has not earned the first multiple, so there is nothing to offer")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a rule whose conditions do not hold offers nothing")
+    void aFailingConditionOffersNothing() {
+        Promotion promotion = freeCola(1, 1, "ONCE");
+        Basket noPizza = new Basket(
+                "UZS", List.of(new BasketLine("cola", COLA_VARIANT, COLA, Set.of(), 1, 12_000L, 12_000L)), 12_000L, 0L);
+
+        Outcome outcome = evaluator.evaluate(List.of(promotion), noPizza, clickContext(Set.of()), NOW);
+
+        assertThat(outcome.giftOffers()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a code-gated gift is offered only while its code is presented")
+    void aCodeGatedGiftIsOfferedOnlyWithItsCode() {
+        Promotion gated = asCoupon(freeCola(1, 1, "ONCE"));
+
+        Outcome without = evaluator.evaluate(List.of(gated), pizzaAndColas(1), clickContext(Set.of()), NOW);
+        Outcome with =
+                evaluator.evaluate(List.of(gated), pizzaAndColas(1), clickContext(Set.of(gated.promotionId())), NOW);
+
+        assertThat(without.giftOffers()).isEmpty();
+        assertThat(with.giftOffers())
+                .extracting(PromotionEvaluator.GiftOffer::promotionId)
+                .containsExactly(gated.promotionId());
+    }
+
+    @Test
+    @DisplayName("a gift rule that lost its group to a better offer is not offered: the gift would not be free")
+    void aRuleThatLostItsGroupIsNotOffered() {
+        Promotion gift = freeCola(1, 1, "ONCE");
+        Promotion bigger =
+                rule("BIGGER", Promotion.Scope.ITEM, "gift", false, 0, itemFixed(20_000L), category(PIZZA_CATEGORY));
+
+        Outcome outcome = evaluator.evaluate(List.of(gift, bigger), pizzaAndColas(1, 1), clickContext(Set.of()), NOW);
+
+        assertThat(traceOf(outcome, gift.promotionId()).verdict()).isEqualTo(Verdict.LOST_TO);
+        assertThat(outcome.giftOffers()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a rule naming several gift variants offers each, and one taken fills the allowance of all")
+    void severalGiftVariantsShareOneAllowance() {
+        UUID fanta = UUID.randomUUID();
+        Promotion promotion = rule(
+                "FREEDRINK",
+                Promotion.Scope.ITEM,
+                "gift",
+                false,
+                0,
+                new Action(
+                        1,
+                        Action.Type.FREE_ITEM,
+                        new Operands(Map.of(
+                                "variantIds", List.of(COLA_VARIANT.toString(), fanta.toString()), "quantity", 1L))),
+                category(PIZZA_CATEGORY));
+        BasketLine pizza =
+                new BasketLine("pizza", MARGHERITA_VARIANT, MARGHERITA, Set.of(PIZZA_CATEGORY), 1, 45_000L, 45_000L);
+        BasketLine fantaLine = new BasketLine("fanta", fanta, UUID.randomUUID(), Set.of(), 1, 10_000L, 10_000L);
+
+        Outcome outcome = evaluator.evaluate(
+                List.of(promotion),
+                new Basket("UZS", List.of(pizza, fantaLine), 55_000L, 0L),
+                clickContext(Set.of()),
+                NOW);
+
+        assertThat(outcome.giftOffers())
+                .extracting(
+                        PromotionEvaluator.GiftOffer::variantId,
+                        PromotionEvaluator.GiftOffer::inCart,
+                        offer -> offer.toAdd().signum())
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(fanta, true, 0),
+                        org.assertj.core.groups.Tuple.tuple(COLA_VARIANT, false, 0));
+    }
+
+    @Test
+    @DisplayName("the offers do not depend on the order the promotions or the lines arrive in")
+    void offersAreIndependentOfInputOrder() {
+        Promotion a = freeCola(1, 1, "ONCE");
+        Promotion b = rule(
+                "FREEPIZZA",
+                Promotion.Scope.ITEM,
+                "gift-b",
+                false,
+                0,
+                new Action(
+                        1,
+                        Action.Type.FREE_ITEM,
+                        new Operands(Map.of("variantIds", List.of(MARGHERITA_VARIANT.toString()), "quantity", 1L))),
+                new Condition(1, Condition.Type.SUBTOTAL_AT_LEAST, ops("amountMinor", 1L)));
+        BasketLine cola = new BasketLine("cola", COLA_VARIANT, COLA, Set.of(), 1, 12_000L, 12_000L);
+        BasketLine pizza =
+                new BasketLine("pizza", MARGHERITA_VARIANT, MARGHERITA, Set.of(PIZZA_CATEGORY), 1, 45_000L, 45_000L);
+
+        Set<String> seen = new java.util.HashSet<>();
+        List<Promotion> promotions = new ArrayList<>(List.of(a, b));
+        List<BasketLine> lines = new ArrayList<>(List.of(cola, pizza));
+        for (int round = 0; round < 6; round++) {
+            Collections.shuffle(promotions, new Random(round));
+            Collections.shuffle(lines, new Random(100 + round));
+            Outcome outcome =
+                    evaluator.evaluate(promotions, new Basket("UZS", lines, 57_000L, 0L), clickContext(Set.of()), NOW);
+            seen.add(outcome.giftOffers().toString());
+        }
+        assertThat(seen).hasSize(1);
+    }
+
     // -------------------------------------------------------- new conditions
 
     @Test

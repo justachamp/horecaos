@@ -133,7 +133,22 @@
     },
     "offerDiscount": "Акция",
     "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
-    "surchargeNote": "Включая наценку {{amount}}"
+    "surchargeNote": "Включая наценку {{amount}}",
+    "promoTitle": "Промокод",
+    "promoPlaceholder": "Введите код",
+    "promoApply": "Применить",
+    "promoRemove": "Убрать",
+    "promoApplied": "{{code}} применён",
+    "promoCodeLabel": "Код {{code}}",
+    "promoOffersBetter": "Ваши текущие акции выгоднее этого промокода, поэтому он не применён.",
+    "promoNotApplicable": "Этот промокод не подходит к этому заказу.",
+    "promoNoLongerValid": "Этот промокод больше не действует.",
+    "giftOffer": {
+      "title": "Вас ждёт подарок",
+      "choose": "Выберите подарок",
+      "add": "Добавить подарок: {{name}}",
+      "addMany": "Добавить подарок: {{name}} ×{{count}}"
+    }
   },
   "orders": {
     "title": "Заказы",

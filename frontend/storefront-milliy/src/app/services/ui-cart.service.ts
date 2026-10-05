@@ -21,8 +21,10 @@ import {
 import { MenuService, type PublishedModifierGroup } from './menu.service';
 import {
   discountLines as discountLinesOf,
+  giftOfferGroups,
   noteLines as noteLinesOf,
   promoOutcomeKey as promoOutcomeKeyOf,
+  type GiftOfferGroup,
 } from './applied-promotions';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
@@ -304,6 +306,24 @@ export class UiCartService {
   );
 
   /**
+   * Variant id to what the customer reads on it, for the variants the menu says can be ordered
+   * right now, as the basket was last projected.
+   */
+  private readonly offerableVariants = signal<
+    ReadonlyMap<string, { readonly name: string; readonly image: string | null }>
+  >(new Map());
+
+  /**
+   * The free gifts the cart could take up (ADR 0140): offers, never lines. Each is named from the
+   * menu, and a gift the menu does not carry or cannot sell right now is not offered. Nothing here
+   * has been added to the basket or discounted; {@link addGift} adds one through the ordinary cart
+   * call and the platform prices it free on the next price.
+   */
+  readonly giftOffers = computed<readonly GiftOfferGroup[]>(() =>
+    giftOfferGroups(this.priced()?.giftOffers, this.offerableVariants()),
+  );
+
+  /**
    * A preview of what delivery will cost, from `POST .../delivery-fee`
    * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
    * priced against a point rather than against the cart, so it is available
@@ -509,6 +529,41 @@ export class UiCartService {
     } finally {
       this.updating.set(false);
     }
+  }
+
+  /**
+   * Takes up a free gift the platform offered (ADR 0140): puts it in the basket through the
+   * ordinary line write, then prices again, so it is free because the platform priced it so and
+   * for no other reason.
+   *
+   * Adds only what is still missing from the rule's allowance. A line for the same variant that
+   * the basket already holds is topped up, not duplicated, and is written back whole -- its
+   * modifiers and picks -- because the platform's PUT replaces the line.
+   *
+   * @returns false, writing nothing, for a variant that is not on offer, so a stale button cannot
+   *          add a dish the platform no longer gives away; and false when the platform refused
+   *          the line, in which case {@link errorKey} says why.
+   */
+  async addGift(variantId: string): Promise<boolean> {
+    const group = this.giftOffers().find((candidate) =>
+      candidate.choices.some((choice) => choice.variantId === variantId),
+    );
+    if (!group) {
+      return false;
+    }
+    const held = this.items().find(
+      (item) =>
+        item.variant_id === variantId &&
+        item.modifierOptionIds.length === 0 &&
+        (item.comboPicks?.length ?? 0) === 0,
+    );
+    return this.add(
+      variantId,
+      tidy((held?.quantity ?? 0) + group.toAdd),
+      undefined,
+      held?.modifierOptionIds,
+      held?.comboPicks,
+    );
   }
 
   /**
@@ -784,6 +839,7 @@ export class UiCartService {
         physical: PhysicalFacts | null;
       }
     >();
+    const offerable = new Map<string, { name: string; image: string | null }>();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
@@ -795,8 +851,17 @@ export class UiCartService {
           onSaleNow: variant.onSaleNow !== false,
           physical: variant.physical ?? null,
         });
+        // A gift that cannot be ordered right now (sold out, stopped, outside its sale window)
+        // is not offered: adding it would only be refused.
+        if (variant.orderable !== false && variant.onSaleNow !== false) {
+          offerable.set(variant.variantId, {
+            name: product.name,
+            image: product.imageUrls[0] ?? null,
+          });
+        }
       }
     }
+    this.offerableVariants.set(offerable);
     const modifierOptionsById = new Map<
       string,
       { groupName: string; label: string; amountMinor: number | null }

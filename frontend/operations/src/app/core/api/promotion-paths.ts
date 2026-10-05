@@ -55,6 +55,15 @@ export const promotionPaths = {
     return `${this.one(scope, promotionId)}/redemptions`;
   },
 
+  /**
+   * `POST` with a purpose: who redeemed it (ADR 0140, ADR 0029). Resolves one row of the 7.9
+   * redemption log to its customer account, needs `customer.read` at the brand, and writes a
+   * security audit fact against the customer.
+   */
+  redemptionCustomerReveal(scope: BrandScope, promotionId: string, redemptionId: string): string {
+    return `${this.redemptions(scope, promotionId)}/${encodeURIComponent(redemptionId)}/customer-reveal`;
+  },
+
   /** `POST`, no writes: the real engine over a synthetic cart, with the decision trace. */
   simulate(scope: BrandScope): string {
     return `${this.base(scope)}/simulate`;

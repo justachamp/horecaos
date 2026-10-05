@@ -13,18 +13,40 @@
   the activation and suspension events (schemas and catalogue entries), the console
   authoring and simulator screens and the redemption report, and the storefront display of
   the kinds of benefit (a discount, a promo code, a delivery offer, a surcharge) with the
-  platform's own amounts. Not built: order-level markup and `SERVICE_CHARGE` (the open
-  fiscal and legal input; markups are item-level only); named-customer targeting (needs a
-  static audience) and a polygon geozone (a delivery-zone condition matches by zone id); an
-  approval threshold on the value of a `FREE_ITEM` gift (activation approval looks at
-  markup, percentage and fixed-amount thresholds); the delivery-fee threshold basis, which
-  no Accepted ADR decides (pre- or post-discount subtotal handed to the fee resolver);
-  the scheduled-order checkpoint re-quote; benefit grants as a redemption fact source
-  (`source_kind GRANT` exists with no producer); `promo.*` metrics; a customer-facing
-  promotion title per locale (the storefronts show kinds of benefit, never a promotion
-  name); the "your offers are already better" message on the main storefront, which has no
-  code entry; and an end-to-end test from a real checkout through a real day close to the
-  report.
+  platform's own amounts. Operations batch 18 (wave `w3-promotions-completion`) adds, on the
+  backend: the gift a firing `FREE_ITEM` rule would price free, offered on the priced cart
+  (`giftOffers`: the rule, the variant, the units, whether the cart holds it; pricing adds
+  no line); the scheduled-order checkpoint re-quote as evidence (`V0474`,
+  `ScheduledOrderRequoteService`, a sweep an hour before the promised time and an
+  operator's re-check, `GET` and `POST .../orders/{orderId}/promotion-requotes`): the live
+  basket priced again at the checkpoint, the promotions gained, dropped or changed recorded,
+  and the order untouched, because ADR 0019 requires acceptance or cancellation for a
+  customer-visible price change; the `horecaos.promo.*` operational counters (rules
+  evaluated, fired and refused with the verdict, redemptions claimed and refused; bounded
+  labels, no identifier); «who redeemed it» (`POST .../promotions/{promotionId}/redemptions/{redemptionId}/customer-reveal`,
+  `customer.read` and a purpose, a security audit fact on the customer account; the
+  per-promotion redemption list still returns account ids unrecorded); and the test from a real
+  checkout through a real day close to the report over HTTP
+  (`PromotionLifecycleHttpTests`). The front ends of the same batch: the main storefront takes
+  a promo code on the cart and on the confirmation step and says, from the platform's verdict,
+  when the offers that already apply beat the code; both storefronts offer the gift by the name
+  the menu gives it, with one tap that writes the line through the ordinary cart call (the gift
+  is free only because the next price says so, and a gift the menu cannot sell right now is not
+  offered); and the marketing report's redemption log has «show customer» for an operator
+  holding `customer.read`, which calls the reveal and opens the customer card. Not built: order-level markup and `SERVICE_CHARGE` (the
+  open fiscal and legal input; markups are item-level only); named-customer targeting
+  (needs a static audience) and a polygon geozone (a delivery-zone condition matches by
+  zone id); an approval threshold on the value of a `FREE_ITEM` gift (activation approval
+  looks at markup, percentage and fixed-amount thresholds); the delivery-fee threshold
+  basis, which no Accepted ADR decides (pre- or post-discount subtotal handed to the fee
+  resolver); what a changed scheduled-order re-quote leads to (the customer's acceptance
+  with its payment delta, or a cancellation) and the checkpoint instants, which ADR 0019
+  leaves open; the ADR 0043 reporting metrics named below (`promo.discount_som` and the
+  rest, which need a grain: the fact carries no legal entity, which ADR 0038 requires of a
+  money metric); benefit grants as a redemption fact source (`source_kind GRANT` exists
+  with no producer); a customer-facing promotion title per locale (the storefronts show
+  kinds of benefit, never a promotion name); and the console screen that shows an order's
+  re-quote findings and its re-check.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform owner)

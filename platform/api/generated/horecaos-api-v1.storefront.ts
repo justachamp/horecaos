@@ -262,6 +262,14 @@ export interface GeoPoint {
   longitude?: number;
 }
 
+export interface GiftOfferResponse {
+  inCart?: boolean;
+  quantity?: number;
+  ruleId?: string;
+  toAdd?: number;
+  variantId?: string;
+}
+
 export interface GrantResponse {
   expiresAt?: string;
   grant?: string;
@@ -565,6 +573,7 @@ export interface PricedCartResponse {
   discountMinor?: number;
   expiresAt?: string;
   feeMinor?: number;
+  giftOffers?: Array<GiftOfferResponse>;
   hiddenCharges?: Array<HiddenChargeResponse>;
   promoCodeOutcome?: string;
   quoteId?: string;

@@ -137,7 +137,13 @@
     },
     "offerDiscount": "Акция",
     "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
-    "surchargeNote": "Включая наценку {{amount}}"
+    "surchargeNote": "Включая наценку {{amount}}",
+    "giftOffer": {
+      "title": "Вас ждёт подарок",
+      "choose": "Выберите подарок",
+      "add": "Добавить подарок: {{name}}",
+      "addMany": "Добавить подарок: {{name}} ×{{count}}"
+    }
   },
   "checkout": {
     "title": "Оплата",

@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.configuration.Ids;
@@ -58,9 +59,17 @@ public class PromotionRedemptionService
     private static final Logger log = LoggerFactory.getLogger(PromotionRedemptionService.class);
 
     private final JdbcPromotionStore store;
+    private final PromotionMetrics metrics;
 
+    /** A service nobody scrapes the counters of: every caller that predates them. */
     public PromotionRedemptionService(JdbcPromotionStore store) {
+        this(store, PromotionMetrics.none());
+    }
+
+    @Autowired
+    public PromotionRedemptionService(JdbcPromotionStore store, PromotionMetrics metrics) {
         this.store = store;
+        this.metrics = metrics;
     }
 
     @Override
@@ -95,6 +104,7 @@ public class PromotionRedemptionService
             if (limited) {
                 if (!store.claimTotal(tenantId, brandId, amount.promotionId(), now)) {
                     giveBackEarlierClaims(tenantId, quoteId);
+                    metrics.redemptionRefused(PromotionMetrics.Source.AUTOMATIC, false);
                     return new Result(Result.Outcome.LIMIT_REACHED, amount.promotionId());
                 }
                 // A guest's per-customer cap is not enforced, as decided for coupons: there is no
@@ -104,6 +114,7 @@ public class PromotionRedemptionService
                             tenantId, brandId, amount.promotionId(), customerAccountId, perCustomer)) {
                         store.releaseTotal(tenantId, brandId, amount.promotionId());
                         giveBackEarlierClaims(tenantId, quoteId);
+                        metrics.redemptionRefused(PromotionMetrics.Source.AUTOMATIC, true);
                         return new Result(Result.Outcome.PER_CUSTOMER_LIMIT_REACHED, amount.promotionId());
                     }
                 }
@@ -123,6 +134,7 @@ public class PromotionRedemptionService
                             amount.markupMinor(),
                             amount.currency()),
                     now);
+            metrics.redemptionClaimed(PromotionMetrics.Source.AUTOMATIC);
         }
         return new Result(Result.Outcome.CLAIMED, null);
     }
