@@ -313,13 +313,56 @@ class DecimalAmendmentHttpTests {
         assertThat(refusalCode(orderId, "dec-refuse-3", changeQuantity(plov, "1.3")))
                 .as("1.3 is not a whole number of 0.5 portions")
                 .isEqualTo("QUANTITY_NOT_A_PORTION");
-        assertThat(refusalCode(orderId, "dec-refuse-4", changeQuantity(plov, "2.0001")))
-                .as("the column holds three fraction digits")
-                .isIn("QUANTITY_NOT_A_PORTION", "QUANTITY_OUT_OF_RANGE");
         assertThat(amendmentCount(orderId))
                 .as("a refused propose leaves no amendment row")
                 .isZero();
         assertThat(totalOf(orderId)).as("nothing was written").isEqualTo(totalBefore);
+    }
+
+    @Test
+    @DisplayName("a quantity the published contract bounds is a validation failure (400), not a service refusal: the "
+            + "constraints on the request's commands run, whatever the field")
+    void aQuantityOutsideThePublishedBoundsFailsValidation() throws Exception {
+        UUID orderId = placeOrder(Map.of("plov", plovVariant), "dec-amend-order-8");
+        UUID plov = lineIdOf(orderId, plovVariant);
+
+        for (String quantity : List.of("2.0001", "1000", "0", "-1", "0.0005")) {
+            JsonNode refused = amend(orderId, "dec-bound-change-" + quantity, changeQuantity(plov, quantity), 400);
+            assertThat(refused.path("code").asText(refused.toString()))
+                    .as("CHANGE_LINE_QUANTITY %s", quantity)
+                    .isEqualTo("VALIDATION_FAILED");
+            JsonNode refusedAdd = amend(orderId, "dec-bound-add-" + quantity, addLine(plovVariant, quantity), 400);
+            assertThat(refusedAdd.path("code").asText(refusedAdd.toString()))
+                    .as("ADD_LINES %s", quantity)
+                    .isEqualTo("VALIDATION_FAILED");
+        }
+        assertThat(amendmentCount(orderId)).as("nothing was proposed").isZero();
+    }
+
+    @Test
+    @DisplayName("an ADD_LINES line that omits its quantity is a validation failure (400), never a 500")
+    void aMissingAddLineQuantityFailsValidation() throws Exception {
+        UUID orderId = placeOrder(Map.of("plov", plovVariant), "dec-amend-order-9");
+
+        JsonNode refused = amend(orderId, "dec-missing-1", """
+                {"type":"ADD_LINES","lines":[{"variantId":"%s"}]}""".formatted(plovVariant), 400);
+
+        assertThat(refused.path("code").asText(refused.toString())).isEqualTo("VALIDATION_FAILED");
+        assertThat(amendmentCount(orderId)).isZero();
+    }
+
+    @Test
+    @DisplayName("a quantity with an absurd exponent is refused as invalid before anything expands it")
+    void anAbsurdExponentIsRefusedBeforeItIsExpanded() throws Exception {
+        UUID orderId = placeOrder(Map.of("plov", plovVariant), "dec-amend-order-10");
+        UUID plov = lineIdOf(orderId, plovVariant);
+
+        // Large enough that expanding it would be a visible cost, small enough that a build which
+        // still expands it fails this assertion instead of running out of memory.
+        JsonNode refused = amend(orderId, "dec-exp-1", changeQuantity(plov, "1e100000"), 400);
+
+        assertThat(refused.path("code").asText(refused.toString())).isEqualTo("VALIDATION_FAILED");
+        assertThat(amendmentCount(orderId)).isZero();
     }
 
     @Test

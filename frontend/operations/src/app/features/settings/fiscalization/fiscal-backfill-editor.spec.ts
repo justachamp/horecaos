@@ -832,6 +832,91 @@ describe('FiscalBackfillEditor', () => {
       expect(input('backfill-package-bare').value).toBe('1500777');
     });
 
+    it('drops the package code a first pick filled when a different ИКПУ is picked, and offers the new ones', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'milk', [MILK]);
+      choose('bare', 0);
+      expect(input('backfill-package-bare').value).toBe(PACKAGE_A);
+
+      await lookUp('bare', 'bread', [BREAD]);
+      choose('bare', 0);
+
+      expect(input('backfill-mxik-bare').value).toBe(MXIK_B);
+      expect(input('backfill-package-bare').value).toBe('');
+      expect(byId('backfill-package-suggestions-bare')?.textContent).toContain('1500175');
+      expect(byId('backfill-package-suggestions-bare')?.textContent).toContain('1500999');
+      await save();
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'bare', mxikCode: MXIK_B, packageCode: undefined },
+      ]);
+    });
+
+    it('replaces the package code a first pick filled with the one package code the second lists', async () => {
+      const PORTION: MxikReferenceRow = { ...MILK, code: MXIK_B, defaultPackageCodes: ['1500175'] };
+      await render([BARE]);
+      await lookUp('bare', 'milk', [MILK]);
+      choose('bare', 0);
+
+      await lookUp('bare', 'portion', [PORTION]);
+      choose('bare', 0);
+
+      expect(input('backfill-package-bare').value).toBe('1500175');
+      await save();
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'bare', mxikCode: MXIK_B, packageCode: '1500175' },
+      ]);
+    });
+
+    it('leaves a package code the operator typed alone when another ИКПУ is picked', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'milk', [MILK]);
+      choose('bare', 0);
+      type('backfill-package-bare', '1500777');
+
+      await lookUp('bare', 'bread', [BREAD]);
+      choose('bare', 0);
+
+      expect(input('backfill-package-bare').value).toBe('1500777');
+    });
+
+    it('drops the package code a pick filled when a different code is typed over the picked one', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'milk', [MILK]);
+      choose('bare', 0);
+      expect(input('backfill-package-bare').value).toBe(PACKAGE_A);
+
+      type('backfill-mxik-bare', MXIK_B);
+
+      expect(input('backfill-mxik-bare').value).toBe(MXIK_B);
+      expect(input('backfill-package-bare').value).toBe('');
+    });
+
+    it('drops a package code that was clicked from the first pick’s list when another ИКПУ is picked', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'bread', [BREAD]);
+      choose('bare', 0);
+      (byId('backfill-package-suggestion-bare-1500999') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(input('backfill-package-bare').value).toBe('1500999');
+
+      await lookUp('bare', 'milk', [MILK]);
+      choose('bare', 0);
+
+      expect(input('backfill-package-bare').value).toBe(PACKAGE_A);
+    });
+
+    it('keeps a package code pasted with a new ИКПУ, even when it equals the one the first pick filled', async () => {
+      await render([BARE]);
+      await lookUp('bare', 'milk', [MILK]);
+      choose('bare', 0);
+      expect(input('backfill-package-bare').value).toBe(PACKAGE_A);
+
+      paste('backfill-mxik-bare', `${MXIK_B}\t${PACKAGE_A}\n`);
+      // A paste of one row with a tab is a pair; the first cell is the ИКПУ.
+      expect(input('backfill-mxik-bare').value).toBe(MXIK_B);
+      expect(input('backfill-package-bare').value).toBe(PACKAGE_A);
+    });
+
     it('does not touch a package code the item already holds, or suggest over it', async () => {
       await render([variant('pkg-only', { packageCode: '1500777' })]);
       await lookUp('pkg-only', 'bread', [BREAD]);

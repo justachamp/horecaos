@@ -170,6 +170,25 @@ export class FiscalizationPage {
   );
 
   /**
+   * The legal entities whose chosen tax profile is no longer one of the brand's open ones.
+   *
+   * A pricing tax profile is superseded by a new row, with a new id, on every rate change, and a
+   * legal entity holds the id it was given with no foreign key behind it. After one change the
+   * entity matches no open profile, so the table above would show it nowhere and read as «no entity
+   * has a VAT treatment». The read lists open rows only, so these cannot be resolved to the profile
+   * that replaced theirs; they are named, and the owner re-selects.
+   */
+  protected readonly entitiesOnSupersededProfile = computed<readonly string[]>(() => {
+    if (this.taxProfilesState() !== 'ready') {
+      return [];
+    }
+    const open = new Set(this.taxProfiles().map((profile) => profile.taxProfileId));
+    return this.entities()
+      .filter((entity) => entity.taxProfileId !== null && !open.has(entity.taxProfileId))
+      .map((entity) => entity.shortName ?? entity.legalName);
+  });
+
+  /**
    * The registry of payment methods (10.6) grouped by the responsibility each was registered
    * under, in ADR 0038's order. Only a method that can still be tendered is listed: a disabled one
    * fiscalizes nothing. Every responsibility is drawn, an empty one included: «no method

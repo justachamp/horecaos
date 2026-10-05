@@ -773,6 +773,12 @@
                 }
               </tbody>
             </table>
+            @if (entitiesOnSupersededProfile().length > 0) {
+              <p class="q-body-sm warning" role="status" data-testid="fiscal-vat-stale">
+                {{ 'settings.fiscalization.vat.supersededProfile' | t }}
+                {{ entitiesOnSupersededProfile().join(', ') }}
+              </p>
+            }
           }
         }
         <a

@@ -579,6 +579,42 @@ describe('FiscalizationPage', () => {
       expect(byTestId('fiscal-vat-link')?.getAttribute('href')).toBe('/catalog/prices/tax-profile');
     });
 
+    it('names the legal entities whose profile is no longer in force, since a rate change supersedes the profile they chose', async () => {
+      api.listLegalEntities.mockResolvedValue([
+        { ...ENTITY, taxProfileId: 'tax-0' },
+        {
+          ...ENTITY,
+          id: 'entity-2',
+          code: 'SECOND',
+          legalName: 'Second Co',
+          taxProfileId: 'tax-1',
+        },
+      ]);
+      fixture = TestBed.createComponent(FiscalizationPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      await openClassification();
+
+      expect(byTestId('fiscal-vat-entities')?.textContent?.trim()).toBe('Second Co');
+      const stale = normalised('fiscal-vat-stale');
+      expect(stale).toContain('Rayhon LLC');
+      expect(stale).not.toContain('Second Co');
+    });
+
+    it('draws no superseded-profile line when every entity points at a profile in force, or at none', async () => {
+      api.listLegalEntities.mockResolvedValue([
+        { ...ENTITY, taxProfileId: 'tax-1' },
+        { ...ENTITY, id: 'entity-2', code: 'SECOND', legalName: 'Second Co', taxProfileId: null },
+      ]);
+      fixture = TestBed.createComponent(FiscalizationPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      await openClassification();
+
+      expect(byTestId('fiscal-vat-row')).not.toBeNull();
+      expect(byTestId('fiscal-vat-stale')).toBeNull();
+    });
+
     it('says plainly when the brand has no tax profile, since every cart is refused without one', async () => {
       taxProfiles.mockReturnValue(of([]));
       await openClassification();

@@ -66,6 +66,7 @@ import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.OrderAmendmentService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
@@ -144,6 +145,9 @@ class CatchweightAndDecimalOrderHttpTests {
 
     @Autowired
     private CartService carts;
+
+    @Autowired
+    private OrderAmendmentService amendmentService;
 
     @Autowired
     private CheckoutService checkout;
@@ -1027,6 +1031,109 @@ class CatchweightAndDecimalOrderHttpTests {
                 .isTrue();
     }
 
+    @Test
+    @DisplayName("an amendment cannot move a cash order holding a line sold by weight onto a method that takes the "
+            + "money first: it is the second door to the sale checkout shuts")
+    void anAmendmentCannotMoveAWeighedOrderOntoAProviderPayment() throws Exception {
+        enableProviderMethodOnTheStorefront("CLICK");
+        UUID weighed = placeOrder(Map.of("cake", cakeVariant), "weighed-amend-order");
+        long totalBefore = totalOf(weighed);
+
+        JsonNode refused = amendWith(
+                weighed,
+                "weighed-amend-click",
+                "{\"type\":\"CHANGE_PAYMENT_METHOD\",\"paymentMethodCode\":\"CLICK\"}",
+                409);
+
+        assertThat(refused.path("reasonCode").asText(refused.toString())).isEqualTo("WEIGHED_LINES_PAY_AT_HANDOVER");
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_amendments WHERE order_id = :id")
+                        .param("id", weighed)
+                        .query(Integer.class)
+                        .single())
+                .as("a refused propose leaves no amendment row")
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM payments.payment_intents WHERE order_id = :id "
+                                + "AND payment_method_code = 'CLICK'")
+                        .param("id", weighed)
+                        .query(Integer.class)
+                        .single())
+                .as("no provider intent was opened against the provisional total")
+                .isZero();
+        assertThat(totalOf(weighed)).isEqualTo(totalBefore);
+    }
+
+    @Test
+    @DisplayName("adding a line sold by weight in the same amendment that moves the order onto a provider payment is "
+            + "refused for the same reason, and the rule is about the basket, not the method")
+    void aWeighedLineAddedWithAProviderPaymentIsRefusedToo() throws Exception {
+        enableProviderMethodOnTheStorefront("CLICK");
+        UUID ordinary = placeOrder(Map.of("soda", sodaVariant), "ordinary-amend-order");
+
+        JsonNode refused = amendWith(
+                ordinary,
+                "weighed-added-click",
+                "{\"type\":\"CHANGE_PAYMENT_METHOD\",\"paymentMethodCode\":\"CLICK\"},"
+                        + "{\"type\":\"ADD_LINES\",\"lines\":[{\"variantId\":\"" + cakeVariant + "\",\"quantity\":1}]}",
+                409);
+        assertThat(refused.path("reasonCode").asText(refused.toString())).isEqualTo("WEIGHED_LINES_PAY_AT_HANDOVER");
+
+        // The rule is about the basket, not the method: without a weighed line the very same change is
+        // proposed (it meets the merchant-account precondition only when it is applied).
+        JsonNode proposed = amendWith(
+                ordinary,
+                "ordinary-click",
+                "{\"type\":\"CHANGE_PAYMENT_METHOD\",\"paymentMethodCode\":\"CLICK\"}",
+                200);
+        assertThat(proposed.path("status").asText(proposed.toString())).isEqualTo("PRICED");
+    }
+
+    @Test
+    @DisplayName("a method change proposed before the order held a weighed line is refused when it is applied, "
+            + "so a priced amendment cannot carry the sale past the rule")
+    void aProposedProviderPaymentIsRefusedAtApplyOnceTheOrderHoldsAWeighedLine() throws Exception {
+        enableProviderMethodOnTheStorefront("CLICK");
+        UUID order = placeOrder(Map.of("soda", sodaVariant), "stale-amend-order");
+        JsonNode priced = amendWith(
+                order, "stale-click", "{\"type\":\"CHANGE_PAYMENT_METHOD\",\"paymentMethodCode\":\"CLICK\"}", 200);
+        assertThat(priced.path("status").asText(priced.toString())).isEqualTo("PRICED");
+        // What an amendment priced before this rule existed meets: the live line is sold by weight.
+        jdbc.sql("""
+                UPDATE ordering.order_lines
+                SET catchweight_quantum_grams = 100, catchweight_nominal_grams = 500,
+                    catchweight_price_per_quantum_minor = 1000
+                WHERE order_id = :id AND revision_to IS NULL
+                """).param("id", order).update();
+
+        // Applied through the service, because the confirmation endpoint reports a refused apply as the
+        // amendment's current state and so would not say which rule refused it.
+        UUID amendmentId = UUID.fromString(priced.get("amendmentId").asText());
+        int orderVersion = version(order);
+        Throwable refused = catchThrowable(() -> tx(() -> amendmentService.apply(
+                TENANT, order, amendmentId, orderVersion, "USER", OPERATOR, "applied after confirmation", null)));
+
+        assertThat(refused).isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class);
+        assertThat(((OrderAmendmentService.AmendmentRefusedException) refused).code())
+                .isEqualTo("WEIGHED_LINES_PAY_AT_HANDOVER");
+        assertThat(jdbc.sql("SELECT count(*) FROM payments.payment_intents WHERE order_id = :id "
+                                + "AND payment_method_code = 'CLICK'")
+                        .param("id", order)
+                        .query(Integer.class)
+                        .single())
+                .as("no provider intent was opened against the provisional total")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a weighed order can still be amended in every way that keeps its money for the door")
+    void aWeighedOrderStillAcceptsAnAmendmentThatDoesNotTakeMoneyFirst() throws Exception {
+        UUID weighed = placeOrder(Map.of("cake", cakeVariant), "weighed-amend-note");
+
+        JsonNode accepted = amendWith(
+                weighed, "weighed-note", "{\"type\":\"CHANGE_PAYMENT_METHOD\",\"paymentMethodCode\":\"CASH\"}", 200);
+
+        assertThat(accepted.path("status").asText(accepted.toString())).isIn("PRICED", "APPLIED");
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private UUID placeOrder(Map<String, UUID> lines, String idempotencyKey) {
@@ -1034,6 +1141,21 @@ class CatchweightAndDecimalOrderHttpTests {
         lines.forEach((key, variant) -> putLine(cart, key, variant, "1"));
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
         return checkoutCart(cart, idempotencyKey);
+    }
+
+    private JsonNode amendWith(UUID orderId, String key, String commands, int expectedStatus) throws Exception {
+        MvcResult result = mvc.perform(post(orderPath(orderId) + "/amendments")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key)
+                        .header("If-Match", "\"" + version(orderId) + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commands\":[" + commands + "],\"applyImmediately\":false,"
+                                + "\"reasonCode\":\"OPERATOR_EDIT\"}"))
+                .andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as(result.getResponse().getContentAsString())
+                .isEqualTo(expectedStatus);
+        return JSON.readTree(result.getResponse().getContentAsString());
     }
 
     private UUID openCart() {
