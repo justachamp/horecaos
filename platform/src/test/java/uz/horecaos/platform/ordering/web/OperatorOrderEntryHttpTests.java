@@ -64,6 +64,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService;
+import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -760,24 +761,27 @@ class OperatorOrderEntryHttpTests {
     }
 
     private void activatePromoCode(String code, int basisPoints) {
-        var drafted = promoCodes.draft(
-                TENANT,
-                BRAND,
-                new PromoCodeAuthoringService.PromoCodeDraft(
-                        "Promo " + code,
-                        code,
-                        PromoCodeAuthoringService.DiscountShape.PERCENTAGE_OFF_ORDER,
-                        basisPoints,
-                        null,
-                        "UZS",
-                        0,
-                        List.of(),
-                        List.of(),
-                        null,
-                        100,
-                        null,
-                        null));
-        promoCodes.activate(TENANT, BRAND, drafted.couponId());
+        // The authoring service records who acted (ADR 0027); a fixture has no request, so it says who it is.
+        SignedInStaff.run("promo-author", () -> {
+            var drafted = promoCodes.draft(
+                    TENANT,
+                    BRAND,
+                    new PromoCodeAuthoringService.PromoCodeDraft(
+                            "Promo " + code,
+                            code,
+                            PromoCodeAuthoringService.DiscountShape.PERCENTAGE_OFF_ORDER,
+                            basisPoints,
+                            null,
+                            "UZS",
+                            0,
+                            List.of(),
+                            List.of(),
+                            null,
+                            100,
+                            null,
+                            null));
+            promoCodes.activate(TENANT, BRAND, drafted.couponId());
+        });
     }
 
     // ================================================================================ fixture

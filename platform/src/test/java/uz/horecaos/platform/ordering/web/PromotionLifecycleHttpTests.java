@@ -64,6 +64,7 @@ import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.PromotionDefinition;
 import uz.horecaos.platform.reporting.application.DayCloseService;
 import uz.horecaos.platform.reporting.application.SubjectPseudonym;
+import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
@@ -798,25 +799,28 @@ class PromotionLifecycleHttpTests {
 
     private uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow
             authorPromoCode(String code) {
-        var drafted = promoCodes.draft(
-                TENANT,
-                BRAND,
-                new PromoCodeDraft(
-                        "Promo " + code,
-                        code,
-                        DiscountShape.PERCENTAGE_OFF_ORDER,
-                        1_000,
-                        null,
-                        "UZS",
-                        0,
-                        List.of(),
-                        List.of(),
-                        5,
-                        5,
-                        null,
-                        null));
-        promoCodes.activate(TENANT, BRAND, drafted.couponId());
-        return drafted;
+        // The authoring service records who acted (ADR 0027); a fixture has no request, so it says who it is.
+        return SignedInStaff.call("promo-author", () -> {
+            var drafted = promoCodes.draft(
+                    TENANT,
+                    BRAND,
+                    new PromoCodeDraft(
+                            "Promo " + code,
+                            code,
+                            DiscountShape.PERCENTAGE_OFF_ORDER,
+                            1_000,
+                            null,
+                            "UZS",
+                            0,
+                            List.of(),
+                            List.of(),
+                            5,
+                            5,
+                            null,
+                            null));
+            promoCodes.activate(TENANT, BRAND, drafted.couponId());
+            return drafted;
+        });
     }
 
     // ------------------------------------------------------------------ helpers: orders
