@@ -654,6 +654,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.classification.empty': 'Всё классифицировано.',
   'settings.fiscalization.classification.notAnEditor':
     'Полная классификация отдельного блюда (единица, фискальное название, маркировка) правится в редакторе товаров. Эта вкладка показывает покрытие и массово заполняет ИКПУ и коды упаковки.',
+  'settings.fiscalization.vat.supersededProfile':
+    'Эти юридические лица ссылаются на налоговый профиль, который больше не действует (ставку изменили после его выбора), поэтому они не попали ни в одну строку выше. Откройте юридическое лицо и укажите действующий профиль:',
   'settings.fiscalization.classification.field.type': 'Тип',
   'settings.fiscalization.classification.field.name': 'Название',
   'settings.fiscalization.classification.field.category': 'Категория',

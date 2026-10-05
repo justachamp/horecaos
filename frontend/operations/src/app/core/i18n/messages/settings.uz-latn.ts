@@ -662,6 +662,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.classification.empty': 'Hammasi tasniflangan.',
   'settings.fiscalization.classification.notAnEditor':
     'Alohida taomning toʻliq tasnifi (oʻlchov birligi, fiskal nom, markirovka) mahsulot muharririda tahrirlanadi. Bu bandda qamrov koʻrsatiladi va IKPU hamda qadoq kodlari ommaviy toʻldiriladi.',
+  'settings.fiscalization.vat.supersededProfile':
+    'Bu yuridik shaxslar endi amalda boʻlmagan soliq profiliga ishora qiladi (profil tanlangandan soʻng stavka oʻzgartirilgan), shuning uchun ular yuqoridagi birorta qatorda koʻrinmaydi. Yuridik shaxsni oching va amaldagi profilni belgilang:',
   'settings.fiscalization.classification.field.type': 'Turi',
   'settings.fiscalization.classification.field.name': 'Nomi',
   'settings.fiscalization.classification.field.category': 'Toifasi',

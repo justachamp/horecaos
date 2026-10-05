@@ -655,6 +655,8 @@ export const settingsEn = {
   'settings.fiscalization.classification.empty': 'Everything is classified.',
   'settings.fiscalization.classification.notAnEditor':
     'A single dish’s full classification (unit, fiscal name, marking) is edited in the product editor. This tab reports coverage and fills in ИКПУ and package codes in bulk.',
+  'settings.fiscalization.vat.supersededProfile':
+    'These legal entities point at a tax profile that is no longer in force (its rate was changed after it was chosen), so they appear in no row above. Open the entity and set the profile in force:',
   'settings.fiscalization.classification.field.type': 'Type',
   'settings.fiscalization.classification.field.name': 'Name',
   'settings.fiscalization.classification.field.category': 'Category',
