@@ -84,6 +84,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final Clock clock;
     private final ConfigurationResolver configuration;
     private final CompositeProductsLookup composites;
+    private final PromotionMetrics metrics;
 
     /**
      * A service that prices ordinary carts only: nothing it prices is a combo, nothing
@@ -113,7 +114,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 CompositeProductsLookup.none());
     }
 
-    @Autowired
+    /** A service nobody scrapes the promotion counters of: every caller that predates them. */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public QuoteService(
             JdbcPricingStore store,
@@ -125,6 +126,33 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             Clock clock,
             ConfigurationResolver configuration,
             CompositeProductsLookup composites) {
+        this(
+                store,
+                engine,
+                catalog,
+                channels,
+                deliveryFees,
+                promotionInputs,
+                clock,
+                configuration,
+                composites,
+                PromotionMetrics.none());
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public QuoteService(
+            JdbcPricingStore store,
+            PricingEngine engine,
+            CatalogPricingContext catalog,
+            SalesChannelLookup channels,
+            DeliveryFeePort deliveryFees,
+            PromotionInputResolver promotionInputs,
+            Clock clock,
+            ConfigurationResolver configuration,
+            CompositeProductsLookup composites,
+            PromotionMetrics metrics) {
+        this.metrics = metrics;
         this.store = store;
         this.engine = engine;
         this.catalog = catalog;
@@ -186,6 +214,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Priced priced = price(request, quoteId, now, null);
         var inputs = priced.inputs();
         var result = priced.result();
+        // Real quotes only: the simulator prices through the same engine and is not the platform pricing a basket.
+        metrics.evaluated(result.promotionTrace());
 
         Duration ttl = quoteTtl(request.tenantId(), request.brandId(), request.locationId());
         Quote quote = new Quote(

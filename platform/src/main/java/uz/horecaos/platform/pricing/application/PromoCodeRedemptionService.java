@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
@@ -63,10 +64,18 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
 
     private final JdbcPromoCodeStore store;
     private final Clock clock;
+    private final PromotionMetrics metrics;
 
+    /** A service nobody scrapes the counters of: every caller that predates them. */
     public PromoCodeRedemptionService(JdbcPromoCodeStore store, Clock clock) {
+        this(store, clock, PromotionMetrics.none());
+    }
+
+    @Autowired
+    public PromoCodeRedemptionService(JdbcPromoCodeStore store, Clock clock, PromotionMetrics metrics) {
         this.store = store;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     @Override
@@ -91,6 +100,7 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
             // name for all three, and CheckoutReservationStep only needs to
             // know that the discount can no longer be honoured, not which of
             // the three reasons applied.
+            metrics.redemptionRefused(PromotionMetrics.Source.COUPON, false);
             return new RedemptionResult(Result.LIMIT_REACHED);
         }
 
@@ -108,6 +118,7 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
                     "Coupon {} refused for customer {}: per-customer limit reached",
                     coupon.couponId(),
                     customerAccountId);
+            metrics.redemptionRefused(PromotionMetrics.Source.COUPON, true);
             return new RedemptionResult(Result.PER_CUSTOMER_LIMIT_REACHED);
         }
 
@@ -123,6 +134,7 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
                 coupon.discountMinor(),
                 coupon.currency(),
                 now);
+        metrics.redemptionClaimed(PromotionMetrics.Source.COUPON);
         return new RedemptionResult(Result.REDEEMED);
     }
 
