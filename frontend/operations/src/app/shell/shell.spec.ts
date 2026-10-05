@@ -1,11 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { of } from 'rxjs';
+import { NEVER, Observable, Subject, of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 
 import { Shell } from './shell';
 import { ServiceStatus } from './service-status';
+import { ApiClient } from '../core/api/api-client';
 import { Auth } from '../core/auth/auth';
 import { BrandChoice } from '../core/auth/brand-choice';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
@@ -14,6 +15,7 @@ import { OwnProfile } from '../core/auth/own-profile';
 import { ScopeGrant } from '../core/auth/session-context';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
+import { RealtimeClient } from '../core/realtime/realtime-client';
 import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
 import { Toasts } from '../shared/ui/toast';
 import { NAV_ITEMS } from './navigation';
@@ -602,5 +604,130 @@ describe('Shell: the keyboard and the brand picker', () => {
 
       expect(probeCreated).toBe(1);
     });
+  });
+});
+
+/**
+ * A brand pick rebuilds the open screen at once, and that screen reads its location the moment it
+ * has awaited `CurrentLocation.ensureLoaded()`. The real `CurrentLocation` is used here (not the
+ * fake the specs above share) because the defect lived in how it answers in the gap between the
+ * pick and the new brand's branches arriving: it went on naming the previous brand's branch, so the
+ * screen loaded -- and later wrote to -- the brand the header no longer showed.
+ */
+describe('Shell: the location a screen rebuilt by a brand pick reads', () => {
+  const BRANDS = [
+    { id: 'b1', displayName: 'Rayhon' },
+    { id: 'b2', displayName: 'Evos' },
+  ];
+  let fixture: ComponentFixture<Shell>;
+  let evosBranches: Subject<{ value: LocationOption[] }>;
+  let seen: (LocationScope | null)[];
+  let probeLocation: CurrentLocation;
+
+  /** Only the three reads the brand path makes; the Evos branches are held back until the test releases them. */
+  class StubApi {
+    get(path: string): Observable<unknown> {
+      if (path === '/api/v1/session/context') {
+        return of({
+          value: {
+            subject: 'operator-1',
+            activeTenantId: 't1',
+            scopes: [
+              {
+                scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+                roleCode: 'tenant-owner',
+                capabilities: [],
+              },
+            ],
+          },
+        });
+      }
+      if (path === '/api/v1/operations/tenants/t1/brands') {
+        return of({ value: BRANDS });
+      }
+      if (path === '/api/v1/operations/tenants/t1/brands/b1/locations') {
+        return of({ value: [locationOption('l1', 'Chilanzar')] });
+      }
+      if (path === '/api/v1/operations/tenants/t1/brands/b2/locations') {
+        return evosBranches;
+      }
+      return NEVER;
+    }
+  }
+
+  @Component({ selector: 'q-probe', template: '<p>screen</p>' })
+  class Probe {
+    constructor() {
+      // What every location-scoped screen does first: wait for the location, then read it.
+      const location = inject(CurrentLocation);
+      probeLocation = location;
+      void location.ensureLoaded().then(() => seen.push(location.scope()));
+    }
+  }
+
+  beforeEach(async () => {
+    localStorage.removeItem('horecaos.operations.brandId');
+    localStorage.removeItem('horecaos.operations.locationId');
+    evosBranches = new Subject();
+    seen = [];
+    await TestBed.configureTestingModule({
+      imports: [Shell],
+      providers: [
+        provideRouter([{ path: '', component: Probe }]),
+        { provide: ApiClient, useValue: new StubApi() },
+        { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnProfile, useValue: new FakeOwnProfile() },
+        // The stream opens a real `fetch`; nothing here is about it.
+        { provide: RealtimeClient, useValue: { state: signal(null), onFrame: () => () => {} } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(Shell);
+    fixture.detectChanges();
+    TestBed.inject(Router).initialNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  });
+
+  afterEach(() => fixture.destroy());
+
+  async function pickEvos(): Promise<void> {
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="shell-brand-picker"]',
+    ) as HTMLSelectElement;
+    select.value = 'b2';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  it('starts on the first brand’s branch', () => {
+    expect(seen).toEqual([{ tenantId: 't1', brandId: 'b1', locationId: 'l1' }]);
+  });
+
+  it('waits for the picked brand’s branches instead of reading the previous brand’s', async () => {
+    await pickEvos();
+
+    // The screen built by the pick is waiting, and nothing it could read yet is Rayhon's.
+    expect(seen).toHaveLength(1);
+    expect(probeLocation.scope()).toBeNull();
+    expect(probeLocation.denied()).toBe(false);
+
+    evosBranches.next({ value: [locationOption('l9', 'Sergeli')] });
+    evosBranches.complete();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seen).toEqual([
+      { tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+      { tenantId: 't1', brandId: 'b2', locationId: 'l9' },
+    ]);
+  });
+
+  it('draws no location picker for the old brand’s branches while the new brand’s are being read', async () => {
+    await pickEvos();
+
+    expect(probeLocation.options()).toEqual([]);
   });
 });
