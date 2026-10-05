@@ -1105,6 +1105,28 @@ Each row carries a one-sentence consequence line, not a tooltip. A settings page
 effects are invisible produces support tickets shaped like *"why can't Alisher take this
 order"*.
 
+### Where each switch is enforced
+
+The courier app's own endpoints (`/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}`,
+`CourierDeliveryController`) are the one place a courier acts, so they are the one place these
+switches are read. Each refusal is a `422 UNPROCESSABLE_STATE` carrying a stable `reason`
+(`GateRefusal`); a client branches on the reason, never on the sentence.
+
+| Switch | Enforced at | Refusal |
+|---|---|---|
+| Acceptance GPS gate | `POST .../offers/{id}/accept`, measured against the branch within the accept radius | `GPS_POSITION_REQUIRED`, `GPS_ACCURACY_INSUFFICIENT`, `GPS_REFERENCE_UNAVAILABLE`, `TOO_FAR_FROM_PICKUP` |
+| Pickup / delivery GPS gate | `POST .../deliveries/{id}/advance`: arrival and pickup against the branch, handover against the customer's door, within the status-change radius | the same four, with `TOO_FAR_FROM_DROPOFF` at the door |
+| Show only kitchen-ready orders | `GET .../offers` (an unfinished order is not listed) and accept | `KITCHEN_NOT_READY` |
+| Reveal customer location | `POST .../offers/{id}/customer-location-reveals` (only when the tenant reveals before acceptance) and `POST .../deliveries/{id}/customer-location-reveals` (the carrier, while the delivery is live) | `LOCATION_NOT_YET_REVEALED` |
+| Post-delivery payment check | `POST .../deliveries/{id}/payment-confirmation`, then `advance` to `DELIVERED` | `PAYMENT_CONFIRMATION_REQUIRED`, `PAYMENT_AMOUNT_MISMATCH` |
+
+The position a courier sends is measured and discarded: it is in no response, no audit fact, no
+log and no table. Every reveal is a `SECURITY` audit fact naming the courier, the order and the
+offer or shipment, written before the address is read and never containing it; the address itself
+is an ADR 0029 reveal with a recorded purpose. The gate is a hard refusal in both directions, as the
+two radii imply; the "soft, records `GEO_UNVERIFIED`" mode ADR 0042 describes for the status steps is
+not a setting on this policy document and is not built.
+
 **Deliberately absent: courier billing mode.** Delever's master toggle enables a personal
 courier balance from which commissions are debited — a prepaid float the worker tops up.
 ADR 0042 rejects it: HorecaOS does not take deposits from workers, and a courier who cannot

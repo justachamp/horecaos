@@ -418,6 +418,10 @@ class JdbcAuthorizationServiceTests {
                 Capability.AUDIT_READ,
                 Capability.MIGRATION_READ,
                 Capability.COURIER_SHIFT_READ,
+                // Courier policy 3.9: a courier reading their own offers and deliveries. Held over their
+                // own record by relationship (ADR 0049), never through a role; it is on this list only
+                // because the action segment ends in read and a read is a decision somebody writes down.
+                Capability.COURIER_DELIVERY_READ,
                 Capability.COURIER_READ,
                 Capability.COURIER_RATECARD_READ,
                 Capability.COURIER_LEDGER_READ,

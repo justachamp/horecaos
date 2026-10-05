@@ -37,13 +37,28 @@ const OUTCOME_BASES = [
   'ORDER_DAMAGED',
 ] as const;
 
-/** Every basis {@link AdjustmentRuleEvaluator} on the platform actually reads. */
+/**
+ * Every basis {@link AdjustmentRuleEvaluator} on the platform actually reads.
+ *
+ * `CASH_VARIANCE` joined in gap map row 3.4c: the evaluator has counted a period's
+ * `CASH_VARIANCE` ledger entries at settlement close since batch 10, and a test now proves a
+ * wired rule on it fires, so the form no longer leaves it to a direct API call.
+ */
 const EVALUATED_BASES = new Set([
   'DELIVERED_VOLUME',
   'ON_TIME_RATE',
   'LATE_DELIVERY',
   'GEO_UNVERIFIED_RATE',
+  'CASH_VARIANCE',
 ]);
+
+/**
+ * Bases the evaluator reads over a settlement period only (couriers.md §11): a shift's own
+ * handover is one row, and "one variance in one shift" is a weaker signal than the period total,
+ * so a rule on one of these in a SHIFT window would never fire. The form pins the window and the
+ * trigger rather than letting an operator author a rule that is silently dead.
+ */
+const PERIOD_ONLY_BASES = new Set(['CASH_VARIANCE']);
 
 /**
  * IA 3.4 — Courier types & rates, and the bonus/penalty registry the same IA
@@ -662,6 +677,23 @@ export class CourierTypesRatesPage implements OnInit {
     return EVALUATED_BASES.has(basis);
   }
 
+  /** Whether the evaluator reads this basis over a settlement period only, never a shift. */
+  protected basisIsPeriodOnly(basis: string): boolean {
+    return PERIOD_ONLY_BASES.has(basis);
+  }
+
+  /**
+   * The outcome picker's change handler. Choosing a period-only basis pins the window and the
+   * trigger to the settlement period, so the rule the operator ends up with is one that fires.
+   */
+  protected chooseOutcomeBasis(basis: string): void {
+    this.newReasonOutcomeBasis.set(basis);
+    if (this.basisIsPeriodOnly(basis)) {
+      this.newReasonWindow.set('SETTLEMENT_PERIOD');
+      this.newReasonTrigger.set('SETTLEMENT_PERIOD_CLOSE');
+    }
+  }
+
   protected canCreateReason(): boolean {
     if (
       this.reasonSubmitting() ||
@@ -671,6 +703,14 @@ export class CourierTypesRatesPage implements OnInit {
       return false;
     }
     if (this.newReasonWired() && !this.basisIsEvaluated(this.newReasonOutcomeBasis())) {
+      return false;
+    }
+    if (
+      this.newReasonWired() &&
+      this.basisIsPeriodOnly(this.newReasonOutcomeBasis()) &&
+      (this.newReasonWindow() !== 'SETTLEMENT_PERIOD' ||
+        this.newReasonTrigger() !== 'SETTLEMENT_PERIOD_CLOSE')
+    ) {
       return false;
     }
     if (this.newReasonWired()) {

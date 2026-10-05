@@ -360,6 +360,115 @@ describe('CourierTypesRatesPage', () => {
     );
   });
 
+  it('wires a CASH_VARIANCE reason to a settlement-period rule, pinning the window and the trigger', async () => {
+    const createAdjustmentReason = vi.fn().mockResolvedValue({
+      reasonId: 'r2',
+      code: 'CASH_SHORT_IN_PERIOD',
+      kind: 'PENALTY',
+      outcomeBasis: 'CASH_VARIANCE',
+      displayName: 'Cash short in the period',
+      status: 'ACTIVE',
+      hasRule: true,
+      ruleAmountMinor: -10000,
+      ruleCurrency: 'UZS',
+      ruleComparator: 'GTE',
+      ruleThreshold: 1,
+      ruleWindow: 'SETTLEMENT_PERIOD',
+      ruleTrigger: 'SETTLEMENT_PERIOD_CLOSE',
+      ruleVersion: 1,
+    });
+    await render({
+      types: () => Promise.resolve([]),
+      rateCards: () => Promise.resolve([]),
+      adjustmentReasons: () => Promise.resolve([]),
+      createAdjustmentReason,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="rates-add-reason"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const textInputs = host.querySelectorAll('.rates__modal input[type="text"]');
+    (textInputs[0] as HTMLInputElement).value = 'cash_short_in_period';
+    textInputs[0].dispatchEvent(new Event('input'));
+    (textInputs[1] as HTMLInputElement).value = 'Cash short in the period';
+    textInputs[1].dispatchEvent(new Event('input'));
+
+    const basis = host.querySelector('[data-testid="new-reason-basis"]') as HTMLSelectElement;
+    basis.value = 'CASH_VARIANCE';
+    basis.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // The toggle is no longer disabled: the evaluator reads this basis at settlement close.
+    const wire = host.querySelector('[data-testid="new-reason-wire-toggle"]') as HTMLInputElement;
+    expect(wire.disabled).toBe(false);
+    wire.click();
+    fixture.detectChanges();
+
+    // And the operator cannot author a rule that would never fire: a SHIFT window is not read for
+    // this basis, so the window and the trigger are pinned to the settlement period.
+    expect(
+      (host.querySelector('[data-testid="new-reason-window"]') as HTMLSelectElement).value,
+    ).toBe('SETTLEMENT_PERIOD');
+    expect(
+      (host.querySelector('[data-testid="new-reason-window"]') as HTMLSelectElement).disabled,
+    ).toBe(true);
+    expect(
+      (host.querySelector('[data-testid="new-reason-trigger"]') as HTMLSelectElement).value,
+    ).toBe('SETTLEMENT_PERIOD_CLOSE');
+    expect(host.querySelector('[data-testid="new-reason-period-only-hint"]')).not.toBeNull();
+
+    const amount = host.querySelector('[data-testid="new-reason-amount"]') as HTMLInputElement;
+    amount.valueAsNumber = 10000;
+    amount.dispatchEvent(new Event('input'));
+    const threshold = host.querySelector(
+      '[data-testid="new-reason-threshold"]',
+    ) as HTMLInputElement;
+    threshold.valueAsNumber = 1;
+    threshold.dispatchEvent(new Event('input'));
+    const kind = host.querySelectorAll('.rates__modal select')[0] as HTMLSelectElement;
+    kind.value = 'PENALTY';
+    kind.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="rates-submit-reason"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(createAdjustmentReason).toHaveBeenCalledWith(
+      't1',
+      expect.objectContaining({
+        code: 'CASH_SHORT_IN_PERIOD',
+        kind: 'PENALTY',
+        outcomeBasis: 'CASH_VARIANCE',
+        ruleAmountMinor: -10000,
+        ruleWindow: 'SETTLEMENT_PERIOD',
+        ruleTrigger: 'SETTLEMENT_PERIOD_CLOSE',
+        ruleThreshold: 1,
+      }),
+    );
+  });
+
+  it('still refuses to wire the two outcomes no evaluator reads', async () => {
+    await render({
+      types: () => Promise.resolve([]),
+      rateCards: () => Promise.resolve([]),
+      adjustmentReasons: () => Promise.resolve([]),
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="rates-add-reason"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const basis = host.querySelector('[data-testid="new-reason-basis"]') as HTMLSelectElement;
+    for (const unread of ['ORDER_UNDELIVERED', 'ORDER_DAMAGED']) {
+      basis.value = unread;
+      basis.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(
+        (host.querySelector('[data-testid="new-reason-wire-toggle"]') as HTMLInputElement).disabled,
+      ).toBe(true);
+    }
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [CourierTypesRatesPage],
