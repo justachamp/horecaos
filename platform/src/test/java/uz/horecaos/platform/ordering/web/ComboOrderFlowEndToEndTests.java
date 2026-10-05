@@ -90,7 +90,9 @@ import uz.horecaos.platform.kitchen.application.KitchenStationService.NewRouting
 import uz.horecaos.platform.kitchen.application.KitchenStationService.NewStation;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
+import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.StationRole;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
 import uz.horecaos.platform.ordering.application.CartService;
@@ -1060,6 +1062,113 @@ class ComboOrderFlowEndToEndTests {
                 .containsEntry(colaVariant, 2)
                 .doesNotContainKey(lunchVariant);
         assertThat(reconciles(orderId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a combo added to an order whose ticket is already open reaches its stations, each component by its own variant")
+    void aComboAddedAfterTheTicketOpenedReachesItsStations() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "salad", saladVariant, 1, List.of());
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        assertThat(tickets.items(TENANT, ticket.id()))
+                .as("the ticket was built from the one salad the order held when it was confirmed")
+                .hasSize(1);
+
+        amend(orderId, "amend-add-combo-to-open-ticket", """
+                {"type":"ADD_LINES","lines":[{"variantId":"%s","quantity":2,"comboPicks":[
+                  {"componentId":"%s","quantity":1},{"componentId":"%s","quantity":1}]}]}""".formatted(lunchVariant, burgerInLunch.id(), colaInLunch.id()));
+
+        List<OrderLine> combo = orderLines(orderId).stream()
+                .filter(line -> line.selectionId() != null)
+                .toList();
+        List<TicketItemRow> items = tickets.items(TENANT, ticket.id());
+        assertThat(items).as("the salad's item and one item per added component").hasSize(3);
+        TicketItemRow burgerItem = itemFor(items, combo.get(0));
+        TicketItemRow colaItem = itemFor(items, combo.get(1));
+        assertThat(burgerItem.stationId()).as("the added burger goes to the grill").isEqualTo(grill);
+        assertThat(colaItem.stationId()).as("the added cola goes to the bar").isEqualTo(bar);
+        assertThat(burgerItem.quantity()).isEqualByComparingTo("2");
+        assertThat(colaItem.quantity()).isEqualByComparingTo("2");
+        assertThat(items.stream()
+                        .filter(item -> item.comboSelectionId() != null)
+                        .map(TicketItemRow::comboSelectionId)
+                        .distinct())
+                .as("they are one combo on the board, under the heading the order carries")
+                .containsExactly(combo.get(0).selectionId());
+        assertThat(items).extracting(TicketItemRow::status).containsOnly(TicketItemStatus.QUEUED);
+        assertThat(tickets.events(TENANT, ticket.id()))
+                .as("the board can say why these two appeared: the amendment, on the ticket's own timeline")
+                .filteredOn(event -> event.trigger().equals("ORDER_AMENDED"))
+                .extracting(JdbcKitchenStore.TicketEventRow::ticketItemId)
+                .containsExactlyInAnyOrder(burgerItem.id(), colaItem.id());
+    }
+
+    @Test
+    @DisplayName("growing a combo strikes what the kitchen has not made and credits what is already on the pass")
+    void growingAComboAfterTheTicketOpenedReplacesItsItems() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        List<OrderLine> before = orderLines(orderId);
+        TicketItemRow burgerBefore = itemFor(tickets.items(TENANT, ticket.id()), before.get(0));
+        TicketItemRow colaBefore = itemFor(tickets.items(TENANT, ticket.id()), before.get(1));
+        // The grill has already made the one burger the order held; the cola has not been started.
+        tickets.start(TENANT, burgerBefore.id(), "cook", null);
+        tickets.ready(TENANT, burgerBefore.id(), "cook", null);
+
+        amend(orderId, "amend-grow-combo-on-open-ticket", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":3}""".formatted(before.get(0).lineId()));
+
+        List<OrderLine> after = orderLines(orderId);
+        List<TicketItemRow> items = tickets.items(TENANT, ticket.id());
+        TicketItemRow burgerKept = items.stream()
+                .filter(item -> item.id().equals(burgerBefore.id()))
+                .findFirst()
+                .orElseThrow();
+        TicketItemRow colaStruck = items.stream()
+                .filter(item -> item.id().equals(colaBefore.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(burgerKept.status())
+                .as("a burger already on the pass is not unmade because the order grew")
+                .isEqualTo(TicketItemStatus.READY);
+        assertThat(colaStruck.status())
+                .as("the cola nobody started is replaced by the larger one")
+                .isEqualTo(TicketItemStatus.CANCELLED);
+        TicketItemRow burgerMore = itemFor(items, after.get(0));
+        TicketItemRow colaNew = itemFor(items, after.get(1));
+        assertThat(burgerMore.quantity())
+                .as("three burgers asked for, one already made: two more to cook")
+                .isEqualByComparingTo("2");
+        assertThat(burgerMore.stationId()).isEqualTo(grill);
+        assertThat(burgerMore.status()).isEqualTo(TicketItemStatus.QUEUED);
+        assertThat(colaNew.quantity()).isEqualByComparingTo("3");
+        assertThat(colaNew.stationId()).isEqualTo(bar);
+        assertThat(tickets.require(TENANT, ticket.id()).status())
+                .as("the ticket that was waiting only on the cola is not ready any more")
+                .isNotEqualTo(uz.horecaos.platform.kitchen.domain.TicketStatus.READY);
+    }
+
+    @Test
+    @DisplayName("an amendment that touches no line leaves the ticket as it was, and a replay adds nothing")
+    void anAmendmentThatChangesNoLineLeavesTheTicketAlone() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        var ticket = tickets.byOrder(TENANT, orderId).orElseThrow();
+        int itemsBefore = tickets.items(TENANT, ticket.id()).size();
+        int eventsBefore = tickets.events(TENANT, ticket.id()).size();
+
+        tx(() -> tickets.syncAmendedLines(TENANT, orderId));
+        tx(() -> tickets.syncAmendedLines(TENANT, orderId));
+
+        assertThat(tickets.items(TENANT, ticket.id())).hasSize(itemsBefore);
+        assertThat(tickets.events(TENANT, ticket.id())).hasSize(eventsBefore);
     }
 
     @Test
