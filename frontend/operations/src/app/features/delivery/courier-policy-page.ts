@@ -492,13 +492,32 @@ export class CourierPolicyPage implements OnInit {
 
   /**
    * A radius of zero accepts nothing (the backend refuses it too), so with the check on, both must
-   * be real distances. With it off the radii are not read at all and may hold anything.
+   * be real distances. With it off they are not read, so a bad one does not hold the publish
+   * hostage behind a box that is not on screen; {@link acceptRadiusForWrite} and
+   * {@link statusRadiusForWrite} keep it off the wire instead.
    */
   protected gpsRadiiAreValid(): boolean {
     if (!this.draftGpsVerificationEnabled()) {
       return true;
     }
     return this.draftGpsAcceptRadiusKm() > 0 && this.draftGpsStatusChangeRadiusMeters() >= 1;
+  }
+
+  /**
+   * The backend refuses a radius under one metre whether or not the gate is on, yet the radius
+   * boxes are only drawn while it is. A box cleared while the gate was on and then hidden by
+   * switching it off would otherwise reach the wire as a 400 about a field nobody can see. A
+   * radius that is not a real distance is therefore never sent: the policy's stored one stays.
+   * (With the gate on {@link gpsRadiiAreValid} has already refused to publish such a box.)
+   */
+  private acceptRadiusForWrite(current: CourierPolicyView): number {
+    const km = this.draftGpsAcceptRadiusKm();
+    return km > 0 ? CourierPolicyPage.metersFromKm(km) : current.gpsAcceptRadiusMeters;
+  }
+
+  private statusRadiusForWrite(current: CourierPolicyView): number {
+    const meters = this.draftGpsStatusChangeRadiusMeters();
+    return meters >= 1 ? meters : current.gpsStatusChangeRadiusMeters;
   }
 
   protected async publish(): Promise<void> {
@@ -520,8 +539,8 @@ export class CourierPolicyPage implements OnInit {
         graceSeconds: this.draftGraceSeconds(),
         confirmationPointRetentionDays: this.draftConfirmationPointRetentionDays(),
         gpsVerificationEnabled: this.draftGpsVerificationEnabled(),
-        gpsAcceptRadiusMeters: CourierPolicyPage.metersFromKm(this.draftGpsAcceptRadiusKm()),
-        gpsStatusChangeRadiusMeters: this.draftGpsStatusChangeRadiusMeters(),
+        gpsAcceptRadiusMeters: this.acceptRadiusForWrite(current),
+        gpsStatusChangeRadiusMeters: this.statusRadiusForWrite(current),
         onlineWithinMinutes: this.draftOnlineWithinMinutes(),
         kitchenReadyOnly: this.draftKitchenReadyOnly(),
         revealCustomerLocationTiming: this.draftRevealTiming(),

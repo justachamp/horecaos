@@ -14,6 +14,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -56,6 +57,7 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.payments.api.CashDueLookupPort;
+import uz.horecaos.platform.payments.settlement.OrderSettlementService;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
@@ -892,6 +894,65 @@ class CourierDeliveryEndpointTests {
     }
 
     @Test
+    @DisplayName("an order with no settlement row falls back to its total on the list, the accept and the hand-over,"
+            + " and none of them answers 500")
+    void anOrderWithNoSettlementFallsBackToItsTotal() throws Exception {
+        UUID offer = seedOffer(COURIER_ALISHER, "READY");
+
+        MvcResult accepted = accept(ALISHER, offer, 1, null);
+        assertThat(accepted.getResponse().getStatus())
+                .as("the lookup that found no settlement must not poison the accept's own transaction")
+                .isEqualTo(200);
+        assertThat(json(accepted).path("outcome").asText()).isEqualTo("ACCEPTED");
+        assertThat(json(accepted).path("delivery").path("cashDueMinor").asLong())
+                .as("nothing says what is due, so the courier is told the order total, never nothing")
+                .isEqualTo(20_000L);
+        UUID shipment = UUID.fromString(
+                json(accepted).path("delivery").path("shipmentId").asText());
+        assertThat(attemptStatus(offer)).isEqualTo("ACCEPTED");
+
+        MvcResult listed =
+                mvc.perform(get(BASE + "/deliveries").with(tokenFor(ALISHER))).andReturn();
+        assertThat(listed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(listed)).hasSize(1);
+        assertThat(json(listed).get(0).path("cashDueMinor").asLong()).isEqualTo(20_000L);
+
+        assertThat(advance(ALISHER, shipment, versionOf(shipment), "PICKED_UP", null)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        MvcResult delivered = advance(ALISHER, shipment, versionOf(shipment), "DELIVERED", null);
+        assertThat(delivered.getResponse().getStatus())
+                .as("with the check off, a missing settlement must not keep the delivery in PICKED_UP")
+                .isEqualTo(200);
+        assertThat(shipmentStatus(shipment)).isEqualTo("DELIVERED");
+    }
+
+    @Test
+    @DisplayName("with the payment check on, an order with no settlement row asks for its whole total in cash")
+    void aMissingSettlementWithTheCheckOnAsksForTheOrderTotal() throws Exception {
+        publishPolicy(Map.of("postDeliveryPaymentCheckRequired", true));
+        UUID shipment = pickedUpShipment(ALISHER, "READY", false);
+
+        JsonNode view = json(mvc.perform(get(BASE + "/deliveries/" + shipment).with(tokenFor(ALISHER)))
+                .andReturn());
+        assertThat(view.path("cashDueMinor").asLong()).isEqualTo(20_000L);
+        assertThat(view.path("paymentConfirmationRequired").asBoolean()).isTrue();
+
+        MvcResult early = advance(ALISHER, shipment, versionOf(shipment), "DELIVERED", null);
+        assertThat(early.getResponse().getStatus()).isEqualTo(422);
+        assertThat(reason(early)).isEqualTo("PAYMENT_CONFIRMATION_REQUIRED");
+
+        assertThat(confirmPayment(ALISHER, shipment, versionOf(shipment), 20_000L)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        MvcResult delivered = advance(ALISHER, shipment, versionOf(shipment), "DELIVERED", null);
+        assertThat(delivered.getResponse().getStatus()).isEqualTo(200);
+        assertThat(shipmentStatus(shipment)).isEqualTo("DELIVERED");
+    }
+
+    @Test
     @DisplayName("cash cannot be confirmed before the bag is picked up")
     void cashIsConfirmedAtTheDoorNotBefore() throws Exception {
         UUID offer = seedOffer(COURIER_ALISHER, "READY");
@@ -1494,21 +1555,33 @@ class CourierDeliveryEndpointTests {
     }
 
     /**
-     * What the settlement says is due in cash, per order. Unset orders throw, as the real lookup does
-     * for an order it holds no settlement for, so the order-total fallback is what a test sees unless
-     * it states a figure.
+     * What the settlement says is due in cash, per order. An order a test has not stated a figure for
+     * is answered by the real {@link OrderSettlementService}: the fixtures write no
+     * {@code payments.order_settlements} row, so it finds none, exactly as it does in production for
+     * an order that was never planned for settlement, and the order-total fallback is what a test
+     * sees. Standing in a plain throwing stub for that case hid the transaction the real lookup
+     * poisons when it throws.
      */
     static final class StubCashDue implements CashDueLookupPort {
 
         final Map<UUID, Long> byOrder = new ConcurrentHashMap<>();
 
+        private final OrderSettlementService settlement;
+
+        StubCashDue(OrderSettlementService settlement) {
+            this.settlement = settlement;
+        }
+
         @Override
         public long cashDueMinor(UUID tenantId, UUID orderId) {
             Long due = byOrder.get(orderId);
-            if (due == null) {
-                throw new IllegalStateException("No settlement for " + orderId);
-            }
-            return due;
+            return due != null ? due : settlement.cashDueMinor(tenantId, orderId);
+        }
+
+        @Override
+        public OptionalLong cashDueMinorIfSettled(UUID tenantId, UUID orderId) {
+            Long due = byOrder.get(orderId);
+            return due != null ? OptionalLong.of(due) : settlement.cashDueMinorIfSettled(tenantId, orderId);
         }
     }
 
@@ -1535,8 +1608,8 @@ class CourierDeliveryEndpointTests {
 
         @Bean
         @Primary
-        StubCashDue stubCashDue() {
-            return new StubCashDue();
+        StubCashDue stubCashDue(OrderSettlementService settlement) {
+            return new StubCashDue(settlement);
         }
 
         /**

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.payments.api;
 
+import java.util.OptionalLong;
 import java.util.UUID;
 
 /**
@@ -22,9 +23,24 @@ public interface CashDueLookupPort {
      *
      * <p>Throws rather than answering zero for an order this port cannot
      * find a settlement for — a caller must not read "I don't know" as "the
-     * customer owes nothing"; a caller that has a safe fallback for that
-     * case (an order total, most likely) is expected to catch and use it
-     * itself, the way {@code DeliveryAccrualOrderCompletionTrigger} does.
+     * customer owes nothing". <strong>Only a caller with no transaction of
+     * its own to protect may catch that and use a fallback</strong> (the
+     * after-commit {@code DeliveryAccrualOrderCompletionTrigger} does): the
+     * implementation is a transactional bean method, so when it throws into a
+     * caller's transaction it has already marked that transaction
+     * rollback-only, and the caller's catch cannot undo it. A caller inside a
+     * request transaction asks {@link #cashDueMinorIfSettled} instead.
      */
     long cashDueMinor(UUID tenantId, UUID orderId);
+
+    /**
+     * The same figure as {@link #cashDueMinor}, or empty for an order that
+     * has no settlement — answered, never thrown, so a caller inside its own
+     * transaction can fall back (to the order total, most likely) without the
+     * lookup having poisoned that transaction.
+     *
+     * <p>Empty means "I do not know", not "nothing is due"; zero is a real
+     * answer for an order whose tenders already hold all of it.
+     */
+    OptionalLong cashDueMinorIfSettled(UUID tenantId, UUID orderId);
 }
