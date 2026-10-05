@@ -462,6 +462,115 @@ class OperatorOrderEntryHttpTests {
                 .isZero();
     }
 
+    // ============================================== row 10.2d: ending the party the console seated
+
+    @Test
+    @DisplayName(
+            "a party with nothing on its bill is closed from the console, audited, and its table can be seated again")
+    void anEmptyPartyIsClosedAndItsTableFreed() throws Exception {
+        UUID t7 = createTable(LOCATION, hallSection, "T7");
+        SessionRow party = seat(LOCATION, t7);
+        JsonNode bill = sessionBill(party.id());
+        assertThat(bill.path("totalMinor").asLong())
+                .as("nothing owed, so a plain close")
+                .isZero();
+
+        MvcResult closed = moveParty(party, "state-actions", """
+                {"targetStatus":"CLOSED","reason":"Closed from the console: nothing was on the bill"}""");
+
+        assertThat(closed.getResponse().getStatus())
+                .as(closed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(JSON.readTree(closed.getResponse().getContentAsString())
+                        .path("status")
+                        .asText())
+                .isEqualTo("CLOSED");
+        var audit = jdbc.sql("""
+                        SELECT actor_subject, capability_used, reason FROM audit.audit_events
+                        WHERE action_code = 'dinein.session.closed' AND target_id = :id
+                        """).param("id", party.id()).query().singleRow();
+        assertThat(audit.get("actor_subject")).isEqualTo(MANAGER);
+        assertThat(audit.get("capability_used")).isEqualTo("dinein.session.manage");
+        assertThat(audit.get("reason")).asString().contains("nothing was on the bill");
+        assertThat(seat(LOCATION, t7).status())
+                .as("the table is free: a second party can be seated at it")
+                .isEqualTo(SessionStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("a party that left without paying is force-closed, and the unsettled amount is on the audit record")
+    void aWalkoutIsForceClosedWithTheUnsettledAmountAudited() throws Exception {
+        UUID t7 = createTable(LOCATION, hallSection, "T7");
+        SessionRow party = seat(LOCATION, t7);
+        place(dineInBody(party.id()), MANAGER, "walkout-order");
+        assertThat(sessionBill(party.id()).path("totalMinor").asLong())
+                .as("the bill the console reads before it offers a walkout")
+                .isEqualTo(BURGER);
+
+        MvcResult forced = moveParty(currentVersionOf(party), "force-closures", """
+                {"reasonCode":"WALKOUT","reason":"The guests left without paying; closed from the console"}""");
+
+        assertThat(forced.getResponse().getStatus())
+                .as(forced.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode answer = JSON.readTree(forced.getResponse().getContentAsString());
+        assertThat(answer.path("status").asText()).isEqualTo("FORCE_CLOSED");
+        assertThat(answer.path("closeReasonCode").asText()).isEqualTo("WALKOUT");
+        var audit = jdbc.sql("""
+                        SELECT actor_subject, capability_used, reason, change_document::text AS changed
+                        FROM audit.audit_events
+                        WHERE action_code = 'dinein.session.force-closed' AND target_id = :id
+                        """).param("id", party.id()).query().singleRow();
+        assertThat(audit.get("actor_subject")).isEqualTo(MANAGER);
+        assertThat(audit.get("capability_used")).isEqualTo("dinein.session.force_close");
+        assertThat(audit.get("reason")).asString().contains("left without paying");
+        assertThat(audit.get("changed"))
+                .asString()
+                .as("a manager answers for this number")
+                .contains("unsettledMinor")
+                .contains(String.valueOf(BURGER));
+    }
+
+    @Test
+    @DisplayName("closing a party that has something on its bill as an ordinary close records the bill as settled")
+    void anOrdinaryCloseSettlesTheBillAsItStands() throws Exception {
+        UUID t7 = createTable(LOCATION, hallSection, "T7");
+        SessionRow party = seat(LOCATION, t7);
+        place(dineInBody(party.id()), MANAGER, "paid-order");
+
+        MvcResult closed = moveParty(currentVersionOf(party), "state-actions", """
+                {"targetStatus":"CLOSED","reason":"Closed from the console: the guests paid the bill"}""");
+
+        assertThat(closed.getResponse().getStatus())
+                .as(closed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(JSON.readTree(closed.getResponse().getContentAsString())
+                        .path("settledTotalMinor")
+                        .asLong())
+                .as("what «Гости оплатили» asserts, and why the console names the amount before it sends this")
+                .isEqualTo(BURGER);
+    }
+
+    @Test
+    @DisplayName("a close made against a stale version closes nothing")
+    void aStaleCloseClosesNothing() throws Exception {
+        UUID t7 = createTable(LOCATION, hallSection, "T7");
+        SessionRow party = seat(LOCATION, t7);
+
+        MvcResult refused = mvc.perform(post(partyPath(party) + "/state-actions")
+                        .with(tokenFor(MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "close-" + UUID.randomUUID())
+                        .header("If-Match", "\"" + (party.version() + 7) + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetStatus\":\"CLOSED\",\"reason\":\"x\"}"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(409);
+        assertThat(sessionBill(party.id()).path("session").path("status").asText())
+                .as("the party is still seated")
+                .isEqualTo("OPEN");
+    }
+
     // ================================================================================ helpers
 
     private JsonNode quote(String body, String subject) throws Exception {
@@ -519,6 +628,25 @@ class OperatorOrderEntryHttpTests {
         }
         throw new AssertionError("order " + orderId + " is not on the board: "
                 + result.getResponse().getContentAsString());
+    }
+
+    private String partyPath(SessionRow party) {
+        return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + party.locationId()
+                + "/dine-in/sessions/" + party.id();
+    }
+
+    private SessionRow currentVersionOf(SessionRow party) {
+        return sessions.find(TENANT, party.id());
+    }
+
+    private MvcResult moveParty(SessionRow party, String endpoint, String body) throws Exception {
+        return mvc.perform(post(partyPath(party) + "/" + endpoint)
+                        .with(tokenFor(MANAGER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "move-" + UUID.randomUUID())
+                        .header("If-Match", "\"" + party.version() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andReturn();
     }
 
     private JsonNode sessionBill(UUID sessionId) throws Exception {
