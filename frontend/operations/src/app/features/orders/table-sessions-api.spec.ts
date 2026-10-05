@@ -377,6 +377,20 @@ describe('TableSessionsApi -- ending a party (gap map rows 1.3 and 10.2d)', () =
     expect((await closed).status).toBe('CLOSED');
   });
 
+  it('starts settling a party whose guests asked for the bill through the same endpoint, on its version', async () => {
+    const { api, http } = setUp();
+
+    const settling = firstValueFrom(api.startSettling(SCOPE, 's1', 'The guests paid', 6));
+    const request = http.expectOne(`${URL}/s1/state-actions`);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('If-Match')).toContain('6');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ targetStatus: 'SETTLING', reason: 'The guests paid' });
+    request.flush(session({ status: 'SETTLING', version: 7 }));
+    expect((await settling).version).toBe(7);
+  });
+
   it('closes a party that left without paying through force-closures, which is a different endpoint and body', async () => {
     const { api, http } = setUp();
 

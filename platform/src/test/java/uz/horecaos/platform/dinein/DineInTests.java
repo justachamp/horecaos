@@ -560,8 +560,11 @@ class DineInTests {
         assertThat(sessions.bill(TENANT, session.id()).totalMinor())
                 .as("87 000 whole som, not 870.00 of anything")
                 .isEqualTo(87_000L);
+        assertThat(currentVersion(session.id()))
+                .as("each round changed the bill, so each moved the version a close is conditional on")
+                .isEqualTo(session.version() + 3);
 
-        SessionRow asked = move(session.id(), SessionStatus.BILL_REQUESTED, session.version());
+        SessionRow asked = move(session.id(), SessionStatus.BILL_REQUESTED, currentVersion(session.id()));
         SessionRow settling = move(session.id(), SessionStatus.SETTLING, asked.version());
         SessionRow closed = move(session.id(), SessionStatus.CLOSED, settling.version());
 
@@ -583,7 +586,7 @@ class DineInTests {
         SessionRow session = openWalkIn(tableOne);
         addRound(session.id(), seedDineInOrder("D-010", 20_000));
 
-        SessionRow asked = move(session.id(), SessionStatus.BILL_REQUESTED, session.version());
+        SessionRow asked = move(session.id(), SessionStatus.BILL_REQUESTED, currentVersion(session.id()));
         SessionRow settling = move(session.id(), SessionStatus.SETTLING, asked.version());
         SessionRow reopened = move(session.id(), SessionStatus.OPEN, settling.version());
 
@@ -638,7 +641,7 @@ class DineInTests {
                 TENANT,
                 session.id(),
                 SessionStatus.FORCE_CLOSED,
-                session.version(),
+                currentVersion(session.id()),
                 "WALKOUT",
                 "duty-manager",
                 "Party left without paying"));
@@ -1339,6 +1342,11 @@ class DineInTests {
     private int addRound(UUID sessionId, UUID orderId) {
         return transactions.execute(
                 status -> sessions.addRound(TENANT, sessionId, orderId, null, "waiter", "Round fired"));
+    }
+
+    /** The version an operator who read the party just now would close it against. */
+    private int currentVersion(UUID sessionId) {
+        return sessions.find(TENANT, sessionId).version();
     }
 
     private SessionRow move(UUID sessionId, SessionStatus to, int expectedVersion) {

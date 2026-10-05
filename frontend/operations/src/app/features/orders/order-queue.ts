@@ -119,18 +119,15 @@ import {
  * not the accelerator below is connected. `RealtimeClient`'s own `ORDER_QUEUE`
  * signal shortens the *usual* wait to under a second; this interval is what
  * still runs the shift if it cannot.
+ *
+ * It is the same 10s for the board over every branch, brand stream open or not. That stream
+ * (like the branch one) is told only of an order's arrival and six status transitions
+ * (`OrderRealtimeSignalTrigger`): a move to PREPARING, READY or FULFILLING, a courier, an
+ * amendment or a payment change a row without a frame, so a board that took the stream for
+ * "everything" showed those rows up to a minute stale with nothing on screen to say so. The poll
+ * is the only thing that finds them.
  */
 const POLL_INTERVAL_MS = 10_000;
-
-/**
- * Row `1.1`: how often the poll still runs for a board over every branch **while its brand
- * stream is open**. The stream says when something changed, so the 10s poll has nothing left
- * to find; what remains is the net under a lost signal (signals have seconds of retention and
- * no replay, ADR 0032), and a minute of staleness is the most a lost one can cost. The moment
- * the stream is anything but open -- connecting, reconnecting, refused, never available -- the
- * poll is the 10s one again, because then it is the only thing keeping the board current.
- */
-const BRAND_STREAM_SAFETY_POLL_MS = 60_000;
 
 /**
  * The page size for one cursor request, first page and every `loadMore` page
@@ -568,9 +565,6 @@ export class OrderQueue implements OnInit {
     // fetch after its own async prerequisites resolve.
     startVisibilityPoll(
       () => {
-        if (this.brandStreamIsCurrent()) {
-          return;
-        }
         void this.refresh();
       },
       POLL_INTERVAL_MS,
@@ -832,25 +826,8 @@ export class OrderQueue implements OnInit {
     }
   }
 
-  /** When the board last asked the server for its first page, whatever asked. */
-  private lastRefreshAt = 0;
-
-  /**
-   * Whether the 10s poll can sit this tick out: the board reads every branch, the brand stream
-   * is open, and the board was refreshed within the safety interval. Anything else -- one
-   * branch, a stream that is not open, a board nobody has refreshed for a minute -- polls.
-   */
-  private brandStreamIsCurrent(): boolean {
-    return (
-      this.allBranchesActive() &&
-      this.brandStream.state() === 'open' &&
-      Date.now() - this.lastRefreshAt < BRAND_STREAM_SAFETY_POLL_MS
-    );
-  }
-
   /** The full reload path: tab switch, filter change, manual refresh, the 10s poll and every realtime frame. Always starts from the board's own first page. */
   private async refresh(): Promise<void> {
-    this.lastRefreshAt = Date.now();
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());

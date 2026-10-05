@@ -442,12 +442,17 @@ public class TableSessionService {
                     "That order is already on a bill",
                     Map.of("conflict", "ORDER_ALREADY_BILLED"));
         }
+        // The bill changed, so the session's version does: a close the operator confirmed
+        // against the bill as they read it must answer STALE_VERSION now that a round has
+        // joined it (the console's "Close table" relies on exactly that). A retry that
+        // landed earlier returned above and moves nothing.
+        int versionAfterRound = store.bumpVersionForRound(tenantId, sessionId, now);
 
         audit.record(AuditFact.of("dinein.session.round-added", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, session.brandId(), session.locationId()))
                 .target("dinein.table_session", sessionId)
-                .targetVersion((long) session.version())
+                .targetVersion((long) versionAfterRound)
                 .because(reason)
                 // Staff 9.3a: a freshly added round has no prior state.
                 .changed(ChangeDocuments.created(Map.of("orderId", orderId.toString(), "sequence", sequence)))
@@ -464,7 +469,7 @@ public class TableSessionService {
             // turn into a held table by starting a payment and abandoning it is the
             // denial the design exists to bound. A round still in flight is left to
             // the sweeper, which decides when the claim's own window ends.
-            confirmClaimOfRound(session, orderId, now);
+            confirmClaimOfRound(session, orderId, versionAfterRound, now);
         }
 
         return sequence;
@@ -481,19 +486,30 @@ public class TableSessionService {
         Instant now = clock.instant();
         boolean confirmed = store.confirmClaim(claim.tenantId(), claim.id(), claim.version(), "round:" + orderId, now);
         if (confirmed) {
-            auditClaimConfirmed(claim, "round:" + orderId, "A round the restaurant accepted is on the claim", now);
+            auditClaimConfirmed(
+                    claim,
+                    "round:" + orderId,
+                    "A round the restaurant accepted is on the claim",
+                    (long) claim.version() + 1,
+                    now);
         }
         return confirmed;
     }
 
     /**
      * Confirms a claim because an accepted round is on it. No version predicate: the
-     * conditional on "still live and unconfirmed" is the whole question, and the
-     * attach that got us here does not itself move the session's version.
+     * conditional on "still live and unconfirmed" is the whole question, and the attach
+     * that got us here has itself moved the version past the one {@code session} was read at
+     * ({@code versionAfterRound}), which is why that predicate would refuse our own write.
      */
-    private void confirmClaimOfRound(SessionRow session, UUID orderId, Instant now) {
+    private void confirmClaimOfRound(SessionRow session, UUID orderId, int versionAfterRound, Instant now) {
         if (store.confirmClaim(session.tenantId(), session.id(), null, "round:" + orderId, now)) {
-            auditClaimConfirmed(session, "round:" + orderId, "A round the restaurant accepted is on the claim", now);
+            auditClaimConfirmed(
+                    session,
+                    "round:" + orderId,
+                    "A round the restaurant accepted is on the claim",
+                    (long) versionAfterRound + 1,
+                    now);
         }
     }
 
@@ -699,7 +715,7 @@ public class TableSessionService {
         audit.record(fact.build());
 
         if (takesCharge) {
-            auditClaimConfirmed(session, actor.subject(), reason, now);
+            auditClaimConfirmed(session, actor.subject(), reason, (long) session.version() + 1, now);
         }
 
         // Closing a session ends its guests' access as well as its occupancy. The
@@ -738,7 +754,7 @@ public class TableSessionService {
         if (!store.confirmClaim(tenantId, sessionId, expectedVersion, actorSubject, now)) {
             throw ApiException.staleVersion(expectedVersion, session.version());
         }
-        auditClaimConfirmed(session, actorSubject, reason, now);
+        auditClaimConfirmed(session, actorSubject, reason, (long) session.version() + 1, now);
         return store.findSession(tenantId, sessionId).orElseThrow();
     }
 
@@ -795,7 +811,8 @@ public class TableSessionService {
         return closed;
     }
 
-    private void auditClaimConfirmed(SessionRow session, String confirmedBy, String reason, Instant now) {
+    private void auditClaimConfirmed(
+            SessionRow session, String confirmedBy, String reason, long targetVersion, Instant now) {
         metrics.confirmed();
         AuditFact.Builder fact = AuditFact.of("dinein.session.claim-confirmed", AuditClass.BUSINESS)
                 .by(
@@ -804,7 +821,7 @@ public class TableSessionService {
                                 : ActorRef.user(confirmedBy, null))
                 .at(ResourceScope.location(session.tenantId(), session.brandId(), session.locationId()))
                 .target("dinein.table_session", session.id())
-                .targetVersion((long) session.version() + 1)
+                .targetVersion(targetVersion)
                 .because(reason)
                 .changed(ChangeDocuments.diff(
                         Map.of("claim", "UNCONFIRMED"), Map.of("claim", "CONFIRMED", "confirmedBy", confirmedBy)))

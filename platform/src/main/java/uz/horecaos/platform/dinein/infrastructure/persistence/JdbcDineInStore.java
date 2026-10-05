@@ -1307,6 +1307,33 @@ public class JdbcDineInStore {
                 .single();
     }
 
+    /**
+     * Moves a session's version because a round joined its bill, and returns the version it
+     * now has.
+     *
+     * <p>The bill is the session's orders, so attaching one changes what a close settles. A
+     * party someone read at version {@code n} and is then asked to close "as read" is no longer
+     * the party that was read: {@code If-Match: n} has to stop matching, or the guard ADR 0031
+     * puts on a close guards nothing. Taken inside the transaction that attached the round, on
+     * the row {@link #lockSession} already holds, so a close racing the attach either loses
+     * its conditional {@code UPDATE} (the version moved) or finds the session closed and the
+     * attach is refused.
+     */
+    public int bumpVersionForRound(UUID tenantId, UUID sessionId, Instant now) {
+        return jdbc.sql("""
+                UPDATE dinein.table_sessions
+                   SET version = version + 1,
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id
+                RETURNING version
+                """)
+                .param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", sessionId)
+                .query((row, number) -> row.getInt("version"))
+                .single();
+    }
+
     public List<UUID> ordersInSession(UUID tenantId, UUID sessionId) {
         return jdbc.sql("""
                 SELECT order_id FROM dinein.session_orders

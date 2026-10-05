@@ -1004,7 +1004,12 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
       }
     });
 
-    it('sits out the ten-second poll while the brand stream is open, and polls again once a minute has passed', async () => {
+    // The brand stream signals an order's arrival and six status transitions
+    // (`OrderRealtimeSignalTrigger`): not PREPARING, READY, FULFILLING, an amendment, a payment
+    // or a courier change. A board that took the stream for "everything" left those rows up to a
+    // minute stale with nothing on screen to say so, so the poll stays what ADR 0045 makes it --
+    // the unconditional fallback -- whether or not the stream is open.
+    it('keeps polling every ten seconds with the brand stream open: the stream does not say every change', async () => {
       vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
       try {
         const realtime = fakeRealtime();
@@ -1014,16 +1019,13 @@ describe('OrderQueue: the brand-wide stream (gap map row 1.1, wave 18)', () => {
         realtime.brand.state.set('open');
         const before = boardCalls(h).length;
 
-        vi.advanceTimersByTime(30_000);
+        vi.advanceTimersByTime(10_000);
         await settle();
-        expect(
-          boardCalls(h),
-          'the stream is the notification; the poll has nothing to add',
-        ).toHaveLength(before);
+        expect(boardCalls(h), 'the first poll after the stream opened').toHaveLength(before + 1);
 
-        vi.advanceTimersByTime(40_000);
+        vi.advanceTimersByTime(10_000);
         await settle();
-        expect(boardCalls(h).length, 'the net under a lost signal').toBeGreaterThan(before);
+        expect(boardCalls(h), 'and the next, not a minute later').toHaveLength(before + 2);
       } finally {
         vi.useRealTimers();
       }
