@@ -77,6 +77,30 @@ export function isUnconfirmedClaim(session: SessionView): boolean {
   return session.origin === 'GUEST_QR' && session.confirmedAt === null;
 }
 
+/**
+ * Mirrors `TableSessionController.SessionDetailResponse`: a party and its running bill. The bill is
+ * summed from the orders on it on every read and never stored, so a read just before a close is the
+ * figure the close is then made against.
+ */
+export interface SessionDetailView {
+  readonly session: SessionView;
+  /** The orders (rounds) on the bill, in the order they were attached. */
+  readonly orderIds: readonly string[];
+  readonly currency: string;
+  /** Minor units: for UZS, a whole som. */
+  readonly totalMinor: number;
+  readonly roundCount: number;
+  readonly openRoundCount: number;
+}
+
+/**
+ * The reason code a walkout is closed under. ADR 0047 says a force-close names "a reason code from the
+ * tenant's registry", and no such registry exists yet (it is an open decision, reported rather than
+ * invented here): until it does, the console closes a party that left without paying under the one
+ * code the endpoint's own description names, and the operator's words go in the free-text reason.
+ */
+export const WALKOUT_REASON_CODE = 'WALKOUT';
+
 /** Mirrors `TableSessionController.RoundResponse`. */
 export interface RoundView {
   readonly sessionId: string;
@@ -86,14 +110,27 @@ export interface RoundView {
 }
 
 /**
+ * One session, and its sub-resources (`TableSessionController`): `GET` reads it with its running
+ * bill (`DINEIN_SESSION_READ`), `POST .../force-closures` is the walkout (`DINEIN_SESSION_FORCE_CLOSE`,
+ * a reason code, a reason and `If-Match`). Built here, from the shared list path, and not in
+ * `operations-paths.ts`: that object is in the initial bundle, which has no room to spare, and these
+ * two callers are lazy.
+ */
+function sessionPath(scope: LocationScope, sessionId: string): string {
+  return `${operationsPaths.dineInSessions(scope)}/${encodeURIComponent(sessionId)}`;
+}
+
+/**
  * `TableSessionController` (ADR 0047) — the staff side of a table visit.
  *
  * Callers: the reservations screen seats a booking (`open` with a
  * `reservationId`, W01); the floor plan's "Seat walk-in" opens one with none;
- * the New Order screen lists what is live and attaches a placed DINE_IN order as
- * a round, so an operator-keyed order shows its table at once. The one state-action
- * called is the release of a guest's unconfirmed claim (ADR 0143); the rest of
- * state-actions and force-closures stay uncalled: the running bill and settlement
+ * the New Order screen lists what is live and puts a DINE_IN order on a party's bill
+ * in the placement itself, so an operator-keyed order shows its table at once.
+ * `close` and `forceClose` end a party -- the New Order screen's picker and the floor
+ * plan close the party they seat through `q-party-close` -- and `release` is the same
+ * close, named for a guest's unconfirmed claim (ADR 0143). The rest of state-actions
+ * (asking for the bill, settling) stays uncalled: the running bill and settlement
  * screen is a different, unbuilt surface with no IA row of its own yet.
  */
 @Injectable({ providedIn: 'root' })
@@ -164,6 +201,36 @@ export class TableSessionsApi {
   }
 
   /**
+   * One party and its running bill (`DINEIN_SESSION_READ`). The bill is the sum of the orders on it,
+   * read now: the figure a close is made against.
+   */
+  detail(scope: LocationScope, sessionId: string): Observable<SessionDetailView> {
+    return this.api
+      .get<SessionDetailView>(sessionPath(scope, sessionId))
+      .pipe(map((result) => result.value));
+  }
+
+  /**
+   * Ends a party: `state-actions` to `CLOSED` (`DINEIN_SESSION_MANAGE`). The server settles the bill
+   * as it stands at this moment -- "paid, or opened in error and owing nothing" -- and frees the
+   * tables, so the caller names which of the two it is in `reason`. A party that left without paying
+   * is not this: it is {@link forceClose}, which has its own capability. Conditional on the
+   * session's version, like every other write to one.
+   */
+  close(
+    scope: LocationScope,
+    sessionId: string,
+    reason: string,
+    expectedVersion: number,
+  ): Observable<SessionView> {
+    return this.api.post<{ targetStatus: string; reason: string }, SessionView>(
+      operationsPaths.dineInSessionStateActions(scope, sessionId),
+      command({ targetStatus: 'CLOSED', reason }),
+      { expectedVersion },
+    );
+  }
+
+  /**
    * Gives a guest's unconfirmed claim back to the room by closing the session
    * (`DINEIN_SESSION_MANAGE`, `state-actions` to `CLOSED`) -- the override ADR 0143
    * keeps for staff beside the sweeper. Closing owes nothing and needs no force-close
@@ -175,9 +242,25 @@ export class TableSessionsApi {
     reason: string,
     expectedVersion: number,
   ): Observable<SessionView> {
-    return this.api.post<{ targetStatus: string; reason: string }, SessionView>(
-      operationsPaths.dineInSessionStateActions(scope, sessionId),
-      command({ targetStatus: 'CLOSED', reason }),
+    return this.close(scope, sessionId, reason, expectedVersion);
+  }
+
+  /**
+   * Closes a party that still owes money -- the walkout (`DINEIN_SESSION_FORCE_CLOSE`, its own
+   * capability, not the close above's). The server writes the unsettled amount into the audit record
+   * beside the actor and the reason, because an unpaid table that quietly disappears is how a shift's
+   * cash shortfall becomes unattributable (ADR 0047).
+   */
+  forceClose(
+    scope: LocationScope,
+    sessionId: string,
+    reasonCode: string,
+    reason: string,
+    expectedVersion: number,
+  ): Observable<SessionView> {
+    return this.api.post<{ reasonCode: string; reason: string }, SessionView>(
+      `${sessionPath(scope, sessionId)}/force-closures`,
+      command({ reasonCode, reason }),
       { expectedVersion },
     );
   }

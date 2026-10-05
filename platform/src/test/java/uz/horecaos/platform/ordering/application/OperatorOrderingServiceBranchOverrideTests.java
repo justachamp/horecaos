@@ -31,6 +31,7 @@ import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -73,11 +74,12 @@ class OperatorOrderingServiceBranchOverrideTests {
     private final BranchOverrideReasonQueryService overrideReasons = mock(BranchOverrideReasonQueryService.class);
     private final BranchResolutionQueryService branchResolution = mock(BranchResolutionQueryService.class);
     private final CustomerAddressBook addresses = mock(CustomerAddressBook.class);
+    private final JdbcOrderStore orders = mock(JdbcOrderStore.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
-    private final OperatorOrderingService service =
-            new OperatorOrderingService(carts, checkout, overrideReasons, branchResolution, addresses, audit, clock);
+    private final OperatorOrderingService service = new OperatorOrderingService(
+            carts, checkout, overrideReasons, branchResolution, addresses, orders, audit, clock);
 
     @Test
     void anOverrideThatCreatesTheOrderIsAuditedWithBeforeNullAfterTheChoice() {

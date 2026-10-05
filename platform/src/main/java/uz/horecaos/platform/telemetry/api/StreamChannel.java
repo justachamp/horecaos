@@ -47,9 +47,19 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  */
 public enum StreamChannel {
 
-    /** New and changed orders on a branch's queue. The highest-value channel. */
+    /**
+     * New and changed orders on a branch's queue. The highest-value channel.
+     *
+     * <p>Also carried at {@code BRAND} scope, for the board's «Все филиалы» mode (gap map row
+     * {@code 1.1}): a board that reads every branch of the brand in one statement must not have
+     * to poll for it. A change to an order is published twice by {@code ordering} -- once at its
+     * branch, once at its brand -- and a subscription matches exactly one of the two, so a
+     * brand-wide board hears every branch and a branch board hears only its own. The brand
+     * subscription is authorized at the brand ({@code order.read} granted there), never inferred
+     * from a branch grant.
+     */
     ORDER_QUEUE(
-            EnumSet.of(ScopeType.LOCATION),
+            EnumSet.of(ScopeType.LOCATION, ScopeType.BRAND),
             Capability.ORDER_READ,
             FrameClass.SIGNAL,
             "ordering.events",

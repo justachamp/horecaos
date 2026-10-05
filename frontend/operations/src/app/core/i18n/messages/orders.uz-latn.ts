@@ -790,4 +790,10 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.aggregator.deliveryTo': 'Yetkazish manzili: {customer}, {address}',
   'orders.newOrder.aggregator.deliveryMissing':
     '«Agregator buyurtmasi»ni oʻchiring, mijoz va yetkazish manzilini tanlang, keyin qayta yoqing',
+  'orders.party.choose.paid': 'Mehmonlar toʻladi',
+  'orders.party.choose.walkout': 'Mehmonlar toʻlamay ketdi',
+  'orders.party.confirm.title': '{tables} stolini yopasizmi?',
+  'orders.party.confirm.paid.body': '{amount} hisob toʻlangan deb yoziladi. Bekor qilib boʻlmaydi.',
+  'orders.party.confirm.walkout.body':
+    '{amount} toʻlanmagan deb yoziladi va audit jurnaliga tushadi.',
 };

@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -650,6 +651,7 @@ class CartCheckoutAndOrderTests {
                         clock),
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
+                orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock);
 
@@ -1022,6 +1024,7 @@ class CartCheckoutAndOrderTests {
                         clock),
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
+                orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock);
 
@@ -1079,6 +1082,265 @@ class CartCheckoutAndOrderTests {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.anyInt(),
                         org.mockito.ArgumentMatchers.eq("operator10"));
+    }
+
+    /**
+     * Gap map row {@code 1.3e}: the New order screen shows the price the server will book.
+     *
+     * <p>The quote is the real cart path run inside a transaction that is always rolled
+     * back, so what is asserted is the two halves of that sentence: the figure equals the
+     * order the same request is then booked as, line for line and column for column, and
+     * the quote itself left no row behind in any table it passed through.
+     */
+    @Test
+    @DisplayName("an operator quote shows the discounted price the order is then booked at, and keeps nothing")
+    void anOperatorQuoteMatchesTheBookedOrderAndKeepsNothing() {
+        activateOperatorPromoCode();
+        var quoting = operatorQuotes();
+        var command = operatorPickupCommand("operator10", null, "idem-operator-quoted");
+        var before = footprint();
+
+        var quote = quoting.quote(command);
+
+        assertThat(footprint())
+                .as("a quote leaves no cart, no stored quote, no audit fact and no event behind")
+                .isEqualTo(before);
+        assertThat(quote.currency()).isEqualTo("UZS");
+        assertThat(quote.discountMinor()).as("10% of the 50,000 line").isEqualTo(5_000L);
+        assertThat(quote.subtotalMinor()).as("gross of the discount").isEqualTo(45_179L);
+        assertThat(quote.taxMinor()).isEqualTo(4_821L);
+        assertThat(quote.feeMinor()).isZero();
+        assertThat(quote.totalMinor()).as("what the customer pays").isEqualTo(45_000L);
+        assertThat(quote.deliveryOutcome())
+                .as("a pickup is not priced as a delivery")
+                .isNull();
+        assertThat(quote.provisional()).isFalse();
+        assertThat(quote.lines()).singleElement().satisfies(line -> {
+            assertThat(line.index()).isZero();
+            assertThat(line.baseAmountMinor()).isEqualTo(50_000L);
+            assertThat(line.finalAmountMinor())
+                    .as("an order-level promotion is not spread over the lines: it is in the discounts")
+                    .isEqualTo(50_000L);
+        });
+        assertThat(quote.discounts()).singleElement().satisfies(discount -> {
+            assertThat(discount.type()).isEqualTo("ORDER_DISCOUNT");
+            assertThat(discount.amountMinor()).isEqualTo(5_000L);
+            assertThat(discount.lineIndex()).as("an order-level promotion").isNull();
+        });
+
+        var result = tx(() -> operatorOrdering.place(command));
+
+        assertThat(result.created()).isTrue();
+        var order = orderStore
+                .find(TENANT, Objects.requireNonNull(result.orderId()))
+                .orElseThrow();
+        assertThat(order.totalMinor()).isEqualTo(quote.totalMinor());
+        assertThat(order.subtotalMinor()).isEqualTo(quote.subtotalMinor());
+        assertThat(order.discountMinor()).isEqualTo(quote.discountMinor());
+        assertThat(order.taxMinor()).isEqualTo(quote.taxMinor());
+        assertThat(order.feeMinor()).isEqualTo(quote.feeMinor());
+    }
+
+    @Test
+    @DisplayName("a quote is refused for what the order would be refused for, and still keeps nothing")
+    void anOperatorQuoteIsRefusedForTheSameRulesAndKeepsNothing() {
+        var quoting = operatorQuotes();
+        var before = footprint();
+
+        assertThatThrownBy(() -> quoting.quote(operatorPickupCommand("NO-SUCH-CODE", null, "idem-quote-bad-code")))
+                .as("a promo code that does not apply is found out before Создать")
+                .isInstanceOf(CartService.CartRefusedException.class);
+        assertThatThrownBy(() -> quoting.quote(
+                        new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                                TENANT,
+                                BRAND,
+                                LOCATION,
+                                CUSTOMER,
+                                "STOREFRONT",
+                                FulfillmentMode.PICKUP,
+                                List.of(),
+                                null,
+                                "CASH",
+                                null,
+                                "idem-quote-empty",
+                                "operator-subject-9",
+                                null,
+                                null,
+                                false,
+                                null,
+                                null,
+                                null)))
+                .as("an empty basket is the same malformed request place refuses")
+                .isInstanceOf(ApiException.class);
+
+        assertThat(footprint()).isEqualTo(before);
+    }
+
+    /**
+     * Row {@code 1.3e}: «Сдача» is on the order from its first read. The tender is written in
+     * the transaction that creates the order, and a figure short of the total still creates the
+     * order and says so. One placement per test: a branch's live load is what the pickup resolver
+     * ranks by, so a second order at the same branch changes the branch it would propose.
+     */
+    @Test
+    @DisplayName("cash tendered at creation lands on the order, with no second amending call")
+    void cashTenderedAtCreationIsRecordedOnTheOrder() {
+        var created = tx(() -> operatorOrdering.place(operatorPickupCommand(null, 60_000L, "idem-tender-enough")));
+
+        assertThat(created.created()).isTrue();
+        UUID orderId = Objects.requireNonNull(created.orderId());
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(order.cashTenderedExpectedMinor())
+                .as("recorded with the order, not by a second amending call")
+                .isEqualTo(60_000L);
+        assertThat(order.totalMinor()).isEqualTo(50_000L);
+        assertThat(created.warnings()).doesNotContain("CASH_TENDERED_INSUFFICIENT");
+        assertThat(order.version())
+                .as("part of creating the order: it is not a revision, and takes no version")
+                .isEqualTo(created.orderVersion());
+    }
+
+    @Test
+    @DisplayName("a short cash tender still creates the order, and the answer carries the notice")
+    void aShortCashTenderIsANoticeNotARefusal() {
+        var result = tx(() -> operatorOrdering.place(operatorPickupCommand(null, 30_000L, "idem-tender-short")));
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.warnings()).contains("CASH_TENDERED_INSUFFICIENT");
+        assertThat(orderStore
+                        .find(TENANT, Objects.requireNonNull(result.orderId()))
+                        .orElseThrow()
+                        .cashTenderedExpectedMinor())
+                .as("the customer can hand over more; the figure is a hint, so it is kept as said")
+                .isEqualTo(30_000L);
+    }
+
+    @Test
+    @DisplayName("an order that names no tender has none")
+    void anOrderThatNamesNoTenderHasNone() {
+        var result = tx(() -> operatorOrdering.place(operatorPickupCommand(null, null, "idem-tender-none")));
+
+        assertThat(result.created()).isTrue();
+        assertThat(orderStore
+                        .find(TENANT, Objects.requireNonNull(result.orderId()))
+                        .orElseThrow()
+                        .cashTenderedExpectedMinor())
+                .isNull();
+        assertThat(result.warnings()).doesNotContain("CASH_TENDERED_INSUFFICIENT");
+    }
+
+    @Test
+    @DisplayName("the creation-time tender only fills an empty figure: an amended one is never overwritten")
+    void theCreationTimeTenderOnlyFillsAnEmptyFigure() {
+        var result = tx(() -> operatorOrdering.place(operatorPickupCommand(null, 60_000L, "idem-tender-first")));
+        UUID orderId = Objects.requireNonNull(result.orderId());
+        jdbc.sql("UPDATE ordering.orders SET cash_tendered_expected_minor = 100000 WHERE id = :id")
+                .param("id", orderId)
+                .update();
+
+        boolean written = orderStore.recordCashTenderedAtCreation(TENANT, orderId, 60_000L);
+
+        assertThat(written).isFalse();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().cashTenderedExpectedMinor())
+                .isEqualTo(100_000L);
+        assertThat(orderStore.recordCashTenderedAtCreation(UUID.randomUUID(), orderId, 1L))
+                .as("another tenant's call finds no order of its own")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("a cash tender on an order that is not paid in cash, or a negative one, creates nothing")
+    void cashTenderedIsRefusedForANonCashOrder() {
+        var before = footprint();
+
+        assertThatThrownBy(() -> tx(() ->
+                        operatorOrdering.place(operatorPickupCommand(null, 60_000L, "idem-tender-click", "CLICK"))))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(operatorPickupCommand(null, -1L, "idem-tender-neg"))))
+                .isInstanceOf(ApiException.class);
+
+        assertThat(footprint()).isEqualTo(before);
+    }
+
+    private uz.horecaos.platform.ordering.application.OperatorOrderQuoteService operatorQuotes() {
+        return new uz.horecaos.platform.ordering.application.OperatorOrderQuoteService(
+                operatorOrdering, new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
+    }
+
+    private uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand operatorPickupCommand(
+            @Nullable String promoCode, @Nullable Long cashTenderedMinor, String idempotencyKey) {
+        return operatorPickupCommand(promoCode, cashTenderedMinor, idempotencyKey, "CASH");
+    }
+
+    /** One burger at 50,000, a pickup, on the STOREFRONT channel the suite's operator tests use. */
+    private uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand operatorPickupCommand(
+            @Nullable String promoCode, @Nullable Long cashTenderedMinor, String idempotencyKey, String paymentMethod) {
+        return new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 1, List.of(), List.of(), null)),
+                null,
+                paymentMethod,
+                promoCode,
+                idempotencyKey,
+                "operator-subject-9",
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                cashTenderedMinor);
+    }
+
+    private void activateOperatorPromoCode() {
+        var promoCodeStore =
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore(jdbc, objectMapper);
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(promoCodeStore, clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo OPERATOR10",
+                        "OPERATOR10",
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_000,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        null,
+                        100,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+    }
+
+    /** Row counts of every table a priced cart, a booked order or its audit trail would write to. */
+    private List<Long> footprint() {
+        return Stream.of(
+                        "ordering.carts",
+                        "ordering.cart_lines",
+                        "ordering.orders",
+                        "ordering.order_lines",
+                        "pricing.quotes",
+                        "pricing.quote_lines",
+                        "pricing.quote_adjustments",
+                        "audit.audit_events",
+                        "integration.outbox_events",
+                        "inventory.reservations")
+                .map(table -> jdbc.sql("SELECT count(*) FROM " + table)
+                        .query(Long.class)
+                        .single())
+                .toList();
     }
 
     /**

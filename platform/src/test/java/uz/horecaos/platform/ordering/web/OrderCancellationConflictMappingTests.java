@@ -91,6 +91,7 @@ class OrderCancellationConflictMappingTests {
                 mock(AuthorizationService.class),
                 mock(OrderCallProvenanceService.class),
                 mock(OperatorOrderingService.class),
+                mock(uz.horecaos.platform.ordering.application.OperatorOrderQuoteService.class),
                 mock(OperatorCustomerLookupService.class),
                 mock(OrderBulkActionService.class),
                 mock(LiveBoardQueryService.class),

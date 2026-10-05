@@ -794,4 +794,11 @@ export const ordersEn = {
   'orders.newOrder.aggregator.deliveryTo': 'Delivers to: {customer}, {address}',
   'orders.newOrder.aggregator.deliveryMissing':
     'Uncheck “Aggregator order”, resolve the customer and pick a delivery address, then check it again',
+  'orders.party.choose.paid': 'The guests paid',
+  'orders.party.choose.walkout': 'The guests left without paying',
+  'orders.party.confirm.title': 'Close table {tables}?',
+  'orders.party.confirm.paid.body':
+    'The bill of {amount} is recorded as paid. This cannot be undone.',
+  'orders.party.confirm.walkout.body':
+    '{amount} is recorded as unpaid and goes to the audit trail.',
 } as const;

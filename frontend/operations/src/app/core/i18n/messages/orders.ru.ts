@@ -779,4 +779,10 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.aggregator.deliveryTo': 'Доставка: {customer}, {address}',
   'orders.newOrder.aggregator.deliveryMissing':
     'Снимите «Заказ агрегатора», выберите клиента и адрес доставки, затем включите снова',
+  'orders.party.choose.paid': 'Гости оплатили',
+  'orders.party.choose.walkout': 'Гости ушли без оплаты',
+  'orders.party.confirm.title': 'Закрыть стол {tables}?',
+  'orders.party.confirm.paid.body': 'Счёт {amount} будет записан как оплаченный. Отменить нельзя.',
+  'orders.party.confirm.walkout.body':
+    '{amount} будут записаны как неоплаченные и попадут в журнал аудита.',
 };

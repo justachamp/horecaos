@@ -432,6 +432,16 @@
                         }
                       </div>
                     }
+                    <!-- Row 10.2d: a party seated from here, from a booking or from New order is
+                         closed from here too; it used to stay occupied until an API call freed it. -->
+                    @if (closablePartyAt(table); as party) {
+                      <q-party-close
+                        [scope]="scope()"
+                        [session]="party"
+                        (closed)="onPartyClosed($event)"
+                        (stale)="onPartyStale()"
+                      />
+                    }
                   } @else {
                     @if (isBookedSoon(table)) {
                       <p class="q-body-sm seat__warning" data-testid="floorplan-seat-booked-soon">

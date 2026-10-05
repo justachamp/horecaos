@@ -42,6 +42,7 @@ class SseStreamRegistryTests {
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID BRANCH = UUID.randomUUID();
+    private static final UUID BRAND = UUID.randomUUID();
     private static final Instant NOON = Instant.parse("2026-08-23T07:00:00Z");
     private static final String DISPATCHER = "keycloak-subject-dispatcher";
 
@@ -132,6 +133,70 @@ class SseStreamRegistryTests {
         assertThat(sink.frames)
                 .as("the scope key is a routing key and never an authorization decision")
                 .isEmpty();
+    }
+
+    // ------------------------------------------------------------ the brand-wide queue (row 1.1)
+
+    @Test
+    @DisplayName("a brand-wide board hears a change at the brand scope, and a branch board does not hear it twice")
+    void aBrandSubscriptionHearsTheBrandSignalAndABranchSubscriptionDoesNot() {
+        RecordingSink brandBoard = new RecordingSink();
+        RecordingSink branchBoard = new RecordingSink();
+        registry.open(
+                TENANT,
+                DISPATCHER,
+                Set.of(new Subscription(StreamChannel.ORDER_QUEUE, ScopeKey.brand(BRAND))),
+                brandBoard,
+                NOON.plusSeconds(600),
+                null);
+        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), branchBoard, NOON.plusSeconds(600), null);
+
+        // What OrderRealtimeSignalTrigger publishes for one change: the branch and the brand.
+        registry.onSignal(orderQueueSignal(NOON));
+        registry.onSignal(RealtimeSignal.of(
+                TENANT, StreamChannel.ORDER_QUEUE, ScopeKey.brand(BRAND), "Order", UUID.randomUUID(), 2L, NOON));
+        registry.tick(NOON.plusSeconds(1));
+
+        assertThat(brandBoard.eventsNamed("signal"))
+                .as("the brand-wide board is told once, at its own scope")
+                .hasSize(1);
+        assertThat(brandBoard.frames.getLast().data()).contains("\"scope\":\"BRAND:" + BRAND + "\"");
+        assertThat(branchBoard.eventsNamed("signal"))
+                .as("a branch board hears its branch's change once, not the brand's copy of it")
+                .hasSize(1);
+        assertThat(branchBoard.frames.getLast().data()).contains("\"scope\":\"LOCATION:" + BRANCH + "\"");
+    }
+
+    @Test
+    @DisplayName("another brand's change never reaches a brand-wide board, and neither does another tenant's")
+    void aBrandSubscriptionIsNotWokenByAnotherBrandOrTenant() {
+        registry.open(
+                TENANT,
+                DISPATCHER,
+                Set.of(new Subscription(StreamChannel.ORDER_QUEUE, ScopeKey.brand(BRAND))),
+                sink,
+                NOON.plusSeconds(600),
+                null);
+
+        registry.onSignal(RealtimeSignal.of(
+                TENANT,
+                StreamChannel.ORDER_QUEUE,
+                ScopeKey.brand(UUID.randomUUID()),
+                "Order",
+                UUID.randomUUID(),
+                1L,
+                NOON));
+        registry.onSignal(RealtimeSignal.of(
+                UUID.randomUUID(),
+                StreamChannel.ORDER_QUEUE,
+                ScopeKey.brand(BRAND),
+                "Order",
+                UUID.randomUUID(),
+                1L,
+                NOON));
+        registry.tick(NOON.plusSeconds(1));
+
+        assertThat(sink.frames).isEmpty();
     }
 
     @Test

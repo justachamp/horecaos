@@ -148,6 +148,43 @@ class TelemetryDecisionTests {
         assertThat(StreamChannel.find("order_queue")).contains(StreamChannel.ORDER_QUEUE);
     }
 
+    @Test
+    @DisplayName("the order queue is carried at a branch and at a brand, and a signal is built to match")
+    void theOrderQueueIsCarriedAtBranchAndBrand() {
+        assertThat(StreamChannel.ORDER_QUEUE.isSubscribableAt(ScopeType.LOCATION))
+                .isTrue();
+        assertThat(StreamChannel.ORDER_QUEUE.isSubscribableAt(ScopeType.BRAND))
+                .as("row 1.1: the brand-wide board must not have to poll")
+                .isTrue();
+        assertThat(StreamChannel.ORDER_QUEUE.isSubscribableAt(ScopeType.TENANT))
+                .as("a tenant-wide order stream would cross brands, which no screen reads")
+                .isFalse();
+        assertThat(StreamChannel.ORDER_DETAIL.isSubscribableAt(ScopeType.BRAND))
+                .as("one order's detail stays a branch signal")
+                .isFalse();
+
+        UUID brand = UUID.randomUUID();
+        RealtimeSignal signal = RealtimeSignal.of(
+                UUID.randomUUID(),
+                StreamChannel.ORDER_QUEUE,
+                ScopeKey.brand(brand),
+                "Order",
+                UUID.randomUUID(),
+                3L,
+                Instant.parse("2026-10-05T09:00:00Z"));
+        assertThat(signal.subscription())
+                .isEqualTo(new RealtimeSignal.Subscription(StreamChannel.ORDER_QUEUE, ScopeKey.brand(brand)));
+        assertThatThrownBy(() -> RealtimeSignal.of(
+                        UUID.randomUUID(),
+                        StreamChannel.ORDER_DETAIL,
+                        ScopeKey.brand(brand),
+                        "Order",
+                        UUID.randomUUID(),
+                        3L,
+                        Instant.parse("2026-10-05T09:00:00Z")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     // ------------------------------------------------------------ capability placement
 
     @Test

@@ -5,6 +5,7 @@ import {
   OnInit,
   Signal,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -25,7 +26,8 @@ import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { RealtimeClient } from '../../core/realtime/realtime-client';
+import { BrandOrderStream } from '../../core/realtime/brand-order-stream';
+import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
@@ -116,6 +118,16 @@ import {
  * still runs the shift if it cannot.
  */
 const POLL_INTERVAL_MS = 10_000;
+
+/**
+ * Row `1.1`: how often the poll still runs for a board over every branch **while its brand
+ * stream is open**. The stream says when something changed, so the 10s poll has nothing left
+ * to find; what remains is the net under a lost signal (signals have seconds of retention and
+ * no replay, ADR 0032), and a minute of staleness is the most a lost one can cost. The moment
+ * the stream is anything but open -- connecting, reconnecting, refused, never available -- the
+ * poll is the 10s one again, because then it is the only thing keeping the board current.
+ */
+const BRAND_STREAM_SAFETY_POLL_MS = 60_000;
 
 /**
  * The page size for one cursor request, first page and every `loadMore` page
@@ -286,6 +298,7 @@ export class OrderQueue implements OnInit {
   private readonly crmLogApi = inject(OrderCrmLogApi);
   private readonly serviceStatus = inject(ServiceStatus);
   protected readonly realtime = inject(RealtimeClient);
+  private readonly brandStream = inject(BrandOrderStream);
   private readonly toasts = inject(Toasts);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
@@ -364,6 +377,19 @@ export class OrderQueue implements OnInit {
   protected readonly allBranchesActive = computed(
     () => this.canViewAllBranches() && this.filters().allBranches,
   );
+
+  /**
+   * Row 1.1: a board over every branch listens on the brand's own stream, opened only while that
+   * mode is on screen and closed the moment the operator goes back to one branch (or leaves).
+   * Without it the mode would hear only the operator's own branch. A field, not part of
+   * `ngOnInit`: an effect needs the injection context a field initialiser has.
+   */
+  private readonly brandStreamWatch = effect((onCleanup) => {
+    if (!this.allBranchesActive()) {
+      return;
+    }
+    onCleanup(this.brandStream.watch());
+  });
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
   /** «Фискализация» (wave 16, gap map `1.1c`): `ATTENTION` first, then `fiscal.fiscal_documents`' own statuses. */
   protected readonly fiscalStatusOptions: readonly string[] = [
@@ -531,31 +557,54 @@ export class OrderQueue implements OnInit {
     // §1.6's own fallback, extracted — see `visibility-poll.ts`'s doc.
     // `immediate: false` because {@link start} below does the real first
     // fetch after its own async prerequisites resolve.
-    startVisibilityPoll(() => void this.refresh(), POLL_INTERVAL_MS, this.destroyRef, {
-      immediate: false,
-    });
+    startVisibilityPoll(
+      () => {
+        if (this.brandStreamIsCurrent()) {
+          return;
+        }
+        void this.refresh();
+      },
+      POLL_INTERVAL_MS,
+      this.destroyRef,
+      { immediate: false },
+    );
 
     // The accelerator: `ORDER_QUEUE` and `COUNTERS` both change when this
     // board's rows or tab badges do, so either one is worth an immediate
     // re-fetch rather than waiting up to `POLL_INTERVAL_MS` for the poll
-    // above to notice. Every frame on this connection is filtered by scope
-    // already (`RealtimeClient` reconnects on the operator's own branch);
-    // this only additionally checks the channel, since the same connection
-    // also carries `ORDER_DETAIL` and `DISPATCH_BOARD` frames this screen
-    // does not care about.
-    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+    // above to notice. A frame is taken from one stream, never both: the
+    // operator's own branch is in the branch stream and the brand stream
+    // alike, so taking both would fetch twice for every change there. A
+    // `resync` carries no scope and means "everything may have changed",
+    // so it always counts.
+    const onFrame = (frame: RealtimeFrame): void => {
+      if (frame.kind === 'resync') {
+        void this.refresh();
+        return;
+      }
+      // With the brand stream open, a board over every branch takes its frames and ignores the
+      // branch stream's (the operator's own branch is in both). With it down, the branch
+      // stream's are still better than nothing -- they are what the mode heard before the brand
+      // stream existed -- so they count.
+      const fromBrandStream = frame.scope.startsWith('BRAND:');
+      const wantsBrandStream = this.allBranchesActive() && this.brandStream.state() === 'open';
+      if (fromBrandStream !== wantsBrandStream) {
+        return;
+      }
       if (
         (frame.kind === 'signal' && frame.channel === 'order_queue') ||
-        (frame.kind === 'snapshot' && frame.channel === 'counters') ||
-        frame.kind === 'resync'
+        (frame.kind === 'snapshot' && frame.channel === 'counters')
       ) {
         void this.refresh();
       }
-    });
+    };
+    const unsubscribeRealtime = this.realtime.onFrame(onFrame);
+    const unsubscribeBrand = this.brandStream.onFrame(onFrame);
 
     this.destroyRef.onDestroy(() => {
       querySub.unsubscribe();
       unsubscribeRealtime();
+      unsubscribeBrand();
       if (this.searchDebounceHandle !== null) {
         clearTimeout(this.searchDebounceHandle);
       }
@@ -669,8 +718,25 @@ export class OrderQueue implements OnInit {
     }
   }
 
+  /** When the board last asked the server for its first page, whatever asked. */
+  private lastRefreshAt = 0;
+
+  /**
+   * Whether the 10s poll can sit this tick out: the board reads every branch, the brand stream
+   * is open, and the board was refreshed within the safety interval. Anything else -- one
+   * branch, a stream that is not open, a board nobody has refreshed for a minute -- polls.
+   */
+  private brandStreamIsCurrent(): boolean {
+    return (
+      this.allBranchesActive() &&
+      this.brandStream.state() === 'open' &&
+      Date.now() - this.lastRefreshAt < BRAND_STREAM_SAFETY_POLL_MS
+    );
+  }
+
   /** The full reload path: tab switch, filter change, manual refresh, the 10s poll and every realtime frame. Always starts from the board's own first page. */
   private async refresh(): Promise<void> {
+    this.lastRefreshAt = Date.now();
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());

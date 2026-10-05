@@ -55,6 +55,7 @@ import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.MyWorkQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
+import uz.horecaos.platform.ordering.application.OperatorOrderQuoteService;
 import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
@@ -118,6 +119,7 @@ public class OperationsOrderController {
     private final AuthorizationService authorization;
     private final OrderCallProvenanceService callProvenance;
     private final OperatorOrderingService operatorOrdering;
+    private final OperatorOrderQuoteService operatorQuotes;
     private final OperatorCustomerLookupService customerLookup;
     private final OrderBulkActionService bulkActions;
     private final LiveBoardQueryService liveBoard;
@@ -160,6 +162,7 @@ public class OperationsOrderController {
             AuthorizationService authorization,
             OrderCallProvenanceService callProvenance,
             OperatorOrderingService operatorOrdering,
+            OperatorOrderQuoteService operatorQuotes,
             OperatorCustomerLookupService customerLookup,
             OrderBulkActionService bulkActions,
             LiveBoardQueryService liveBoard,
@@ -180,6 +183,7 @@ public class OperationsOrderController {
         this.authorization = authorization;
         this.callProvenance = callProvenance;
         this.operatorOrdering = operatorOrdering;
+        this.operatorQuotes = operatorQuotes;
         this.customerLookup = customerLookup;
         this.bulkActions = bulkActions;
         this.liveBoard = liveBoard;
@@ -536,7 +540,8 @@ public class OperationsOrderController {
                     body.proposedLocationId(),
                     body.overrideReasonCode(),
                     body.overrideNote(),
-                    body.dineInSessionId()));
+                    body.dineInSessionId(),
+                    body.cashTenderedMinor()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -563,6 +568,68 @@ public class OperationsOrderController {
             // Every version this handler passes to CartService is one it just
             // read back from the previous step in the same transaction, so a
             // concurrent editor is not a case this endpoint can reach.
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, impossible.getMessage());
+        } catch (CartPricingPort.PricingRefusedException unpriced) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    unpriced.getMessage(),
+                    Map.of("reason", unpriced.code(), "subjectId", String.valueOf(unpriced.subjectId())));
+        }
+    }
+
+    @PostMapping("/quote")
+    @RequiresCapability(value = Capability.ORDER_PLACE, scope = ScopeType.LOCATION)
+    @Idempotent
+    @Operation(
+            summary = "Price an order without placing it",
+            description = "Gap map row 1.3e. The same body as `POST .../orders`, run through the "
+                    + "same cart and the same PricingEngine path that Создать takes, and then "
+                    + "undone: the answer is the subtotal, the promotion discount, the delivery "
+                    + "fee, the tax and the total the order would be booked at, with the amount "
+                    + "of each line, so the New order screen can show the discounted price before "
+                    + "it is placed. Nothing is written -- no cart, no stored quote, no "
+                    + "redemption, no audit fact -- and nothing is reserved, so typing a promo "
+                    + "code to see what it is worth does not use one up. A rule the cart would "
+                    + "refuse on (an item out of stock, a promo code that does not apply, an "
+                    + "address outside every zone) is refused here with the same code. The "
+                    + "branch-override, pre-order and table fields of the body are accepted and "
+                    + "ignored: they decide where and when an order is placed, not what it costs. "
+                    + "A POST because the basket is a body; `ORDER_PLACE` because the answer is "
+                    + "a price for a customer's would-be order. Needs an `Idempotency-Key`, which "
+                    + "the screen mints fresh on every call.")
+    public ResponseEntity<OrderQuoteResponse> quoteOrder(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+            @Valid @RequestBody PlaceOrderRequest body) {
+        try {
+            var quote = operatorQuotes.quote(new OperatorOrderingService.PlaceOrderCommand(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    body.customerAccountId(),
+                    body.channelCode(),
+                    body.fulfillmentMode(),
+                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
+                    body.destination() == null ? null : body.destination().toDestination(),
+                    body.paymentMethodCode(),
+                    body.promoCode(),
+                    // Never reaches checkout, so the key names nothing; the command wants one.
+                    idempotencyKey,
+                    currentActor.get().subject(),
+                    null,
+                    body.requestedFor(),
+                    Boolean.TRUE.equals(body.overrideOutOfHours()),
+                    body.proposedLocationId(),
+                    body.overrideReasonCode(),
+                    body.overrideNote(),
+                    body.dineInSessionId(),
+                    body.cashTenderedMinor()));
+            return ResponseEntity.ok(OrderQuoteResponse.of(quote));
+        } catch (CartService.CartRefusedException refused) {
+            throw StorefrontOrderingController.refusal(refused);
+        } catch (CartService.StaleCartException impossible) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, impossible.getMessage());
         } catch (CartPricingPort.PricingRefusedException unpriced) {
             throw new ApiException(
@@ -1759,6 +1826,14 @@ public class OperationsOrderController {
      *                          dinein.session.manage} at the branch, because it
      *                          writes to the table's bill. Refused for any other
      *                          fulfilment mode
+     * @param cashTenderedMinor row 1.3e: for a {@code CASH} order, what the customer says
+     *                          they will hand over, in whole som. Boxed -- Jackson 3 refuses
+     *                          a missing primitive -- and optional. Recorded on the order in
+     *                          the transaction that creates it, so «Сдача» is there from the
+     *                          first read; an answer short of the total creates the order and
+     *                          returns the notice {@code CASH_TENDERED_INSUFFICIENT}. Refused
+     *                          for any other payment method. Changing it afterwards is the
+     *                          {@code SET_CASH_TENDERED} amendment
      */
     public record PlaceOrderRequest(
             @NotNull UUID customerAccountId,
@@ -1773,7 +1848,8 @@ public class OperationsOrderController {
             @Nullable UUID proposedLocationId,
             @Nullable @Size(max = 48) String overrideReasonCode,
             @Nullable @Size(max = 500) String overrideNote,
-            @Nullable UUID dineInSessionId) {}
+            @Nullable UUID dineInSessionId,
+            @Nullable @PositiveOrZero Long cashTenderedMinor) {}
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
@@ -1890,6 +1966,74 @@ public class OperationsOrderController {
             int version,
             String outcome,
             List<String> warnings) {}
+
+    /**
+     * The price an order would be booked at (row 1.3e), in integer minor units and a currency.
+     * {@code subtotalMinor} is gross of the discount: {@code totalMinor = subtotalMinor +
+     * taxMinor + feeMinor - discountMinor}.
+     *
+     * @param deliveryOutcome null for an order that is not a delivery; otherwise how the
+     *                        fee resolution ended. Anything but {@code RESOLVED} or {@code
+     *                        EXTERNALLY_PRICED} is a delivery checkout would refuse
+     * @param provisional     true while any line is sold by weight; the weighing at handover
+     *                        replaces the figure
+     * @param lines           one per line of the request, by {@code index}
+     * @param discounts       each reduction: a promotion on a line or the order, or a
+     *                        delivery-fee waiver
+     */
+    public record OrderQuoteResponse(
+            String currency,
+            long subtotalMinor,
+            long discountMinor,
+            long feeMinor,
+            long taxMinor,
+            long totalMinor,
+            @Nullable String deliveryOutcome,
+            @Nullable Long deliveryShortfallMinor,
+            @Nullable Long deliveryMinBasketMinor,
+            @Nullable Long deliveryFreeFromMinor,
+            boolean provisional,
+            List<QuotedLineResponse> lines,
+            List<QuotedDiscountResponse> discounts) {
+
+        static OrderQuoteResponse of(OperatorOrderQuoteService.OrderQuote quote) {
+            return new OrderQuoteResponse(
+                    quote.currency(),
+                    quote.subtotalMinor(),
+                    quote.discountMinor(),
+                    quote.feeMinor(),
+                    quote.taxMinor(),
+                    quote.totalMinor(),
+                    quote.deliveryOutcome(),
+                    quote.deliveryShortfallMinor(),
+                    quote.deliveryMinBasketMinor(),
+                    quote.deliveryFreeFromMinor(),
+                    quote.provisional(),
+                    quote.lines().stream()
+                            .map(line -> new QuotedLineResponse(
+                                    line.index(),
+                                    line.baseAmountMinor(),
+                                    line.finalAmountMinor(),
+                                    line.taxAmountMinor(),
+                                    line.provisional()))
+                            .toList(),
+                    quote.discounts().stream()
+                            .map(discount -> new QuotedDiscountResponse(
+                                    discount.lineIndex(), discount.type(), discount.code(), discount.amountMinor()))
+                            .toList());
+        }
+    }
+
+    /** One line of a quote, by its position in the request. */
+    public record QuotedLineResponse(
+            int index, long baseAmountMinor, long finalAmountMinor, long taxAmountMinor, boolean provisional) {}
+
+    /** One reduction in a quote. {@code code} is the promotion's own code, never what was typed. */
+    public record QuotedDiscountResponse(
+            @Nullable Integer lineIndex,
+            String type,
+            @Nullable String code,
+            long amountMinor) {}
 
     // ---------------------------------------------- manual aggregator order entry (ADR 0040)
 
