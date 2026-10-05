@@ -49,6 +49,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPreset
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -129,7 +130,8 @@ class CompositeMenuTransportTests {
                 new CatalogValidator(),
                 new CatalogSnapshotLoader(store, (tenantId, assets) -> true, live, LOCALE),
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.discarding());
         storefront = new StorefrontCatalogQuery(
                 store,
                 live,

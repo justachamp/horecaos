@@ -25,6 +25,7 @@ import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.TemplateRow;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
@@ -67,7 +68,11 @@ class TemplateVariantResolutionTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE notifications.templates CASCADE").update();
         templates = new NotificationTemplateService(
-                new JdbcTemplateStore(jdbc), JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
+                new JdbcTemplateStore(jdbc),
+                JsonMapper.builder().build(),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                AuditTrail.discarding(),
+                AuditTrail.actor("template-author"));
 
         tenantId = UUID.randomUUID();
         brandId = UUID.randomUUID();

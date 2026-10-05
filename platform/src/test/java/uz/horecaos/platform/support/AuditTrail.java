@@ -28,6 +28,15 @@ public final class AuditTrail {
         return new JdbcAuditRecorder(jdbc, JSON);
     }
 
+    /**
+     * A recorder that keeps nothing, for a test about something other than the audit trail whose
+     * subject now needs one to be built. The facts themselves are asserted, against a real
+     * recorder, in the test that is about them.
+     */
+    public static AuditRecorder discarding() {
+        return fact -> {};
+    }
+
     /** A signed-in staff member with the given subject, the shape {@code JwtCurrentActor} answers with. */
     public static CurrentActor actor(String subject) {
         return () -> new AuthenticatedActor(subject, Set.of("tenant-admin"), Map.of());

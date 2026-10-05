@@ -39,6 +39,7 @@ import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
@@ -127,7 +128,8 @@ class StorefrontCatalogQueryTests {
                 new CatalogValidator(),
                 loader,
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.discarding());
         menuStore = new JdbcMenuStore(jdbc);
         tenantContext = new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc);
         commentPresetStore = new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc);
@@ -902,7 +904,8 @@ class StorefrontCatalogQueryTests {
                 new CatalogValidator(),
                 loader,
                 new JdbcSalesChannelStore(jdbc),
-                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
+                AuditTrail.discarding());
     }
 
     @Test

@@ -700,7 +700,8 @@ class OnboardingFullRunIntegrationTests {
                         new uz.horecaos.platform.catalog.application.CatalogValidator(),
                         snapshots,
                         channels,
-                        CLOCK),
+                        CLOCK,
+                        uz.horecaos.platform.support.AuditTrail.discarding()),
                 "uz");
         var samplePricing = new uz.horecaos.platform.pricing.application.SampleMenuPricing(
                 new uz.horecaos.platform.pricing.application.PriceAuthoringService(
