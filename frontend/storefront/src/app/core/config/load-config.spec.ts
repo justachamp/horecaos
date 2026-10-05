@@ -1,7 +1,7 @@
 import { ConfigUnavailableError, loadAppConfig, NEUTRAL_BRAND } from './load-config';
 
 const VALID_BRAND = {
-  displayName: "Tandir House",
+  displayName: 'Tandir House',
   logoUrl: 'https://cdn.example.com/tandir-house/logo.svg',
   theme: {
     accent: '#c0392b',

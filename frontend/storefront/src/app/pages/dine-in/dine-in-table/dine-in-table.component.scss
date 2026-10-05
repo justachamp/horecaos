@@ -1,3 +1,38 @@
+/* Looks that several rules below share. Sass emits each placeholder once, ahead of every rule that
+   follows, so a rule that extends one can still override any of its declarations. */
+%card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+}
+
+%panel {
+  @extend %card;
+  border-radius: 12px;
+}
+
+%muted {
+  color: var(--text-muted);
+}
+
+%muted-small {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+%accent-fill {
+  background: var(--brand-accent);
+  color: #fff;
+}
+
+%spread {
+  display: flex;
+  justify-content: space-between;
+}
+
+%dimmed-when-disabled:disabled {
+  opacity: 0.5;
+}
+
 .table {
   padding: 16px 16px 96px;
   max-width: 720px;
@@ -16,16 +51,15 @@
 }
 
 .table__body {
-  color: var(--text-muted);
+  @extend %muted;
   margin-bottom: 16px;
 }
 
 .table__home {
+  @extend %accent-fill;
   display: inline-block;
   padding: 10px 20px;
   border-radius: 10px;
-  background: var(--brand-accent);
-  color: #fff;
   text-decoration: none;
   font-weight: 600;
 }
@@ -35,8 +69,7 @@
 }
 
 .table__branch {
-  color: var(--text-muted);
-  font-size: 13px;
+  @extend %muted-small;
   margin: 0;
 }
 
@@ -47,9 +80,7 @@
 }
 
 .table__notice {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  @extend %panel;
   padding: 12px 14px;
   margin-bottom: 16px;
   font-size: 14px;
@@ -58,9 +89,7 @@
 
 /* The invitation to sit down at a free table (ADR 0143). */
 .table__sit {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  @extend %panel;
   padding: 14px;
   margin-bottom: 16px;
 }
@@ -72,15 +101,13 @@
 }
 
 .table__sit-hint {
-  color: var(--text-muted);
-  font-size: 13px;
+  @extend %muted-small;
   margin: 0 0 12px;
 }
 
 .table__sit-party {
-  display: flex;
+  @extend %spread;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -92,7 +119,7 @@
 
 .table__loading,
 .table__empty-menu {
-  color: var(--text-muted);
+  @extend %muted;
   text-align: center;
   padding: 32px 0;
 }
@@ -108,9 +135,8 @@
 }
 
 .table__item {
-  display: flex;
+  @extend %spread;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border-default);
@@ -122,8 +148,7 @@
 }
 
 .table__item-description {
-  color: var(--text-muted);
-  font-size: 13px;
+  @extend %muted-small;
   margin: 2px 0;
 }
 
@@ -133,16 +158,11 @@
 }
 
 .table__add {
+  @extend %accent-fill, %dimmed-when-disabled;
   padding: 8px 16px;
   border-radius: 8px;
   border: none;
-  background: var(--brand-accent);
-  color: #fff;
   font-weight: 600;
-}
-
-.table__add:disabled {
-  opacity: 0.5;
 }
 
 .table__stepper {
@@ -152,11 +172,10 @@
 }
 
 .table__step {
+  @extend %card;
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: var(--surface-raised);
   color: var(--text-primary);
   font-size: 18px;
   line-height: 1;
@@ -169,18 +188,16 @@
 }
 
 .table__cart {
+  @extend %card;
   position: sticky;
   bottom: 0;
   margin-top: 16px;
   padding: 14px;
   border-radius: 14px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
 }
 
 .table__cart-summary {
-  display: flex;
-  justify-content: space-between;
+  @extend %spread;
   font-weight: 700;
   margin-bottom: 10px;
 }
@@ -193,10 +210,9 @@
 }
 
 .table__payment-option {
+  @extend %card;
   padding: 8px 14px;
   border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: var(--surface-raised);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -210,29 +226,34 @@
 .table__checkout,
 .table__signin,
 .table__ask-for-bill {
+  @extend %accent-fill;
   width: 100%;
   padding: 12px;
   border-radius: 10px;
   border: none;
-  background: var(--brand-accent);
-  color: #fff;
   font-weight: 700;
 }
 
-.table__checkout:disabled {
-  opacity: 0.5;
+.table__checkout {
+  @extend %dimmed-when-disabled;
+}
+
+/* Emitted after the filled-button rule above on purpose: .table__ask-for-bill is in both. */
+%outline-accent {
+  background: transparent;
+  border: 1px solid var(--brand-accent);
+  color: var(--brand-accent);
 }
 
 .table__checkout-error {
-  color: #d64545;
   font-size: 13px;
+  color: #d64545;
   margin: 0 0 10px;
 }
 
 .table__pending {
-  background: var(--surface-raised);
-  border: 1px solid var(--brand-accent);
-  border-radius: 12px;
+  @extend %panel;
+  border-color: var(--brand-accent);
   padding: 12px 14px;
   margin: 14px 0 0;
 }
@@ -250,17 +271,11 @@
 }
 
 .table__pending-retry {
+  @extend %outline-accent, %dimmed-when-disabled;
   width: 100%;
   padding: 10px;
   border-radius: 10px;
-  border: 1px solid var(--brand-accent);
-  background: transparent;
-  color: var(--brand-accent);
   font-weight: 700;
-}
-
-.table__pending-retry:disabled {
-  opacity: 0.5;
 }
 
 .table__bill {
@@ -270,8 +285,7 @@
 }
 
 .table__bill-title {
-  color: var(--text-muted);
-  font-size: 13px;
+  @extend %muted-small;
   margin: 0;
 }
 
@@ -282,15 +296,12 @@
 }
 
 .table__bill-rounds {
-  color: var(--text-muted);
-  font-size: 13px;
+  @extend %muted-small;
   margin: 0 0 10px;
 }
 
 .table__ask-for-bill {
-  background: transparent;
-  border: 1px solid var(--brand-accent);
-  color: var(--brand-accent);
+  @extend %outline-accent;
 }
 
 /* ADR 0136: a combo's choices under its menu row, the basket lines with a combo's parts beneath, and
@@ -310,17 +321,15 @@
 }
 
 .table__line-parts {
+  @extend %muted-small;
   list-style: none;
   margin: 2px 0 6px;
   padding-left: 14px;
-  color: var(--text-muted);
-  font-size: 13px;
 }
 
 .table__hidden {
+  @extend %muted-small;
   margin: 8px 0;
-  font-size: 13px;
-  color: var(--text-muted);
 }
 
 .table__hidden-title {
@@ -328,8 +337,7 @@
 }
 
 .table__hidden-row {
-  display: flex;
-  justify-content: space-between;
+  @extend %spread;
   margin: 0;
   color: var(--text-primary);
 }

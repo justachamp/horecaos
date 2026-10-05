@@ -9,7 +9,7 @@ import { TranslatePipe } from '../translate/translate.pipe';
   standalone: true,
   imports: [RouterLink, TranslatePipe],
   templateUrl: './bottom-nav.component.html',
-  styleUrl: './bottom-nav.component.scss'
+  styleUrl: './bottom-nav.component.scss',
 })
 export class BottomNavComponent implements OnInit {
   readonly cart = inject(UiCartService);

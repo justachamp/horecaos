@@ -1,0 +1,104 @@
+@use '../../../../shared/styles/pill';
+
+:host {
+  display: contents;
+}
+
+/* The order bar rides above the tab bar, like the delivery basket's call to action. */
+.order {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 96px;
+  padding: 14px 24px 0;
+  background: linear-gradient(rgba(255, 255, 255, 0), var(--surface-page) 34%);
+}
+
+.order__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font: 600 13px/1.3 var(--font-ui);
+  color: var(--text-secondary);
+}
+
+.order__total {
+  font: 800 20px/1 var(--font-display);
+  color: var(--text-primary);
+}
+
+.order__methods {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.order__method {
+  height: 38px;
+  padding: 0 16px;
+  border: 1.5px solid var(--line-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-base);
+  color: var(--text-secondary);
+  font: 600 13px/1 var(--font-display);
+  cursor: pointer;
+
+  &.is-active {
+    border-color: var(--brand-accent-deep);
+    background: var(--surface-accent-wash);
+    color: var(--brand-accent-deep);
+  }
+}
+
+.order__clear {
+  margin: 8px 0 0;
+  height: 36px;
+  padding: 0 16px;
+  border: 1.5px solid var(--status-error);
+  border-radius: var(--radius-pill);
+  background: var(--surface-base);
+  color: var(--status-error);
+  font: 600 13px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.order__error {
+  margin: 10px 24px 0;
+  color: var(--status-error);
+  font: 500 13px/1.5 var(--font-ui);
+}
+
+.order__cta {
+  @include pill.button;
+  margin-top: 12px;
+  width: 100%;
+  height: 58px;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 16px 30px -14px rgba(149, 203, 56, 0.9);
+}
+
+/* ADR 0136: a charge the server added to the basket by itself, itemised and already in the total. */
+.order__hidden {
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font: 400 13px/1.4 var(--font-ui);
+}
+
+.order__hidden-title {
+  margin: 0 0 2px;
+}
+
+.order__hidden-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--text-primary);
+}

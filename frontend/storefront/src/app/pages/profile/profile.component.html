@@ -12,11 +12,7 @@
           aria-hidden="true"
         >
           @if (avatarUrl()) {
-            <img
-              [src]="avatarUrl()"
-              alt=""
-              class="h-full w-full object-cover"
-            />
+            <img [src]="avatarUrl()" alt="" class="h-full w-full object-cover" />
           } @else {
             <svg
               xmlns="http://www.w3.org/2000/svg"

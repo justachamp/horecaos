@@ -24,7 +24,13 @@ class FakeTelegramSignInApi {
 }
 
 function apiError(status: number, code: ErrorCode, retryAfterSeconds?: number): HorecaOSApiError {
-  return new HorecaOSApiError({ status, code, detail: 'x', problem: { status, code }, retryAfterSeconds });
+  return new HorecaOSApiError({
+    status,
+    code,
+    detail: 'x',
+    problem: { status, code },
+    retryAfterSeconds,
+  });
 }
 
 function setUp(): { signIn: TelegramSignIn; api: FakeTelegramSignInApi } {
@@ -110,12 +116,15 @@ describe('TelegramSignIn.pollOnce', () => {
     expect(session.isAuthenticated()).toBe(false);
   });
 
-  it.each(['EXPIRED', 'ALREADY_CLAIMED'] as const)('%s -> TelegramSignInExpiredError', async (status) => {
-    const { signIn, api } = setUp();
-    api.poll.mockResolvedValue({ status } satisfies TelegramSignInPollResult);
+  it.each(['EXPIRED', 'ALREADY_CLAIMED'] as const)(
+    '%s -> TelegramSignInExpiredError',
+    async (status) => {
+      const { signIn, api } = setUp();
+      api.poll.mockResolvedValue({ status } satisfies TelegramSignInPollResult);
 
-    await expect(signIn.pollOnce('abc123')).rejects.toBeInstanceOf(TelegramSignInExpiredError);
-  });
+      await expect(signIn.pollOnce('abc123')).rejects.toBeInstanceOf(TelegramSignInExpiredError);
+    },
+  );
 
   it('a 404 from the poll call itself is also TelegramSignInExpiredError', async () => {
     const { signIn, api } = setUp();

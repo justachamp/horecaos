@@ -4,6 +4,6 @@ import { CART_ROUTES } from './cart.routes';
 
 @NgModule({
   imports: [RouterModule.forChild(CART_ROUTES)],
-  exports: [RouterModule]
+  exports: [RouterModule],
 })
 export class CartModule {}

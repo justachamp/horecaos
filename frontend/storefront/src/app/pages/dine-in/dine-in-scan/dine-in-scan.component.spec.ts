@@ -30,7 +30,9 @@ function setUp(tableToken: string | null) {
       {
         provide: ActivatedRoute,
         useValue: {
-          snapshot: { paramMap: { get: (key: string) => (key === 'tableToken' ? tableToken : null) } },
+          snapshot: {
+            paramMap: { get: (key: string) => (key === 'tableToken' ? tableToken : null) },
+          },
         },
       },
       { provide: DineInService, useValue: dineIn },

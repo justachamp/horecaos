@@ -356,6 +356,37 @@ class RealTreeTests(unittest.TestCase):
         mean = sum(loads) / len(loads)
         self.assertLessEqual(max(loads) / mean, 1.10, f"unbalanced shards: {loads}")
 
+    def test_no_source_file_with_junit_tests_hides_from_the_surefire_name_patterns(self) -> None:
+        # The partition enumerates what Surefire's default name patterns select.
+        # A class with real tests under another name (FooIT, FooSpec, FooCheck)
+        # is outside that enumeration: no shard names it and Surefire's include
+        # file skips it, so it would run nowhere and fail nowhere. The tree has
+        # none today; this keeps it so.
+        discovered = {c.rel for c in self.classes}
+        annotation = re.compile(r"@(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b")
+        hidden = [
+            path.relative_to(st.TEST_ROOT).as_posix()
+            for path in sorted(st.TEST_ROOT.rglob("*.java"))
+            if path.relative_to(st.TEST_ROOT).as_posix() not in discovered
+            and annotation.search(path.read_text(encoding="utf-8"))
+        ]
+        self.assertEqual([], hidden, "test classes outside Surefire's default name patterns never run in CI")
+
+    def test_the_integration_test_classes_are_each_assigned_to_a_shard(self) -> None:
+        # `FooIntegrationTest` ends in `Test`, so it is inside Surefire's defaults
+        # even though the bulk of the suite is `*Tests`. Pin that for the telegram,
+        # voice, conversations and sendpulse classes, which were once suspected of
+        # sitting outside the enumeration.
+        integration = {c.fqcn for c in self.classes if c.fqcn.endswith("IntegrationTest")}
+        self.assertGreaterEqual(len(integration), 8)
+        plan = st.plan(self.classes, st.workflow_shard_count(WORKFLOW), self.durations, self.gate)
+        scheduled = {c.fqcn for shard in plan.shards for c in shard} | {c.fqcn for c in plan.gate}
+        self.assertEqual(set(), integration - scheduled)
+        for shard in plan.shards:
+            lines = set(st.includes_lines(shard))
+            for fqcn in integration & {c.fqcn for c in shard}:
+                self.assertIn(fqcn.replace(".", "/") + ".java", lines)
+
     def test_the_gate_classes_exist(self) -> None:
         names = {c.fqcn for c in self.classes}
         self.assertTrue(self.gate)

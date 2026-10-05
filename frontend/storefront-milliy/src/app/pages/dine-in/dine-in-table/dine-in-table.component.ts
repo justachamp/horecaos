@@ -50,6 +50,7 @@ import { variantAvailability } from '../../../utils/item-availability';
 import { type ComboPicks, comboValid } from '../../../utils/combo-selection';
 import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
 import { portionStep } from '../../../utils/physical';
+import { DineInOrderBarComponent } from './order-bar/dine-in-order-bar.component';
 
 /** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
 const CLAIM_CLOCK_MS = 15_000;
@@ -89,13 +90,6 @@ const STALE_QUOTE_REASONS: ReadonlySet<string> = new Set([
   'PRICE_CHANGED',
   'CART_VERSION_STALE',
 ]);
-
-/** The payment codes this deployment has a label for; any other shows its own code. */
-const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
-  CASH: 'cart.cash',
-  CLICK: 'cart.click',
-  PAYME: 'cart.payme',
-};
 
 /**
  * The table screen: `/dine-in/table`, resumed from the admission
@@ -170,6 +164,7 @@ const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
   standalone: true,
   imports: [
     ChosenLinesComponent,
+    DineInOrderBarComponent,
     MenuGridComponent,
     ModifierPickerComponent,
     RouterLink,
@@ -1135,10 +1130,6 @@ export class DineInTableComponent implements OnInit {
   protected signIn(): void {
     this.returnDestination.remember(THIS_SCREEN);
     void this.router.navigate(['/auth', 'login']);
-  }
-
-  protected paymentLabelKey(code: string): string | null {
-    return PAYMENT_LABEL_KEYS[code] ?? null;
   }
 
   /** The platform's total for the basket, or a dash while it holds no price -- never a zero. */

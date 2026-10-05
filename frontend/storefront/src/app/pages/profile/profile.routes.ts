@@ -13,7 +13,7 @@ import { authGuard } from '../../guards/auth.guard';
 export const PROFILE_ROUTES: Routes = [
   {
     path: '',
-    component: ProfileComponent
+    component: ProfileComponent,
   },
   // Account-only: ProfileDetailsComponent reads and writes /me
   // unconditionally and has no guest state to fall back to (unlike
@@ -22,7 +22,7 @@ export const PROFILE_ROUTES: Routes = [
   {
     path: 'details',
     component: ProfileDetailsComponent,
-    canActivate: [authGuard]
+    canActivate: [authGuard],
   },
   // Gated the same way: favourites is a customer's own list at /me/favourites,
   // ownership-authorised and not on the public browse surface. The profile
@@ -31,31 +31,31 @@ export const PROFILE_ROUTES: Routes = [
   {
     path: 'favorites',
     component: ProfileFavoritesComponent,
-    canActivate: [authGuard, favouritesEnabledGuard]
+    canActivate: [authGuard, favouritesEnabledGuard],
   },
   {
     path: 'locations',
     redirectTo: '/locations/list',
-    pathMatch: 'full'
+    pathMatch: 'full',
   },
   {
     path: 'language',
-    component: ProfileLanguageComponent
+    component: ProfileLanguageComponent,
   },
   {
     path: 'faq',
-    component: ProfileFaqComponent
+    component: ProfileFaqComponent,
   },
   {
     path: 'support',
-    component: ProfileSupportComponent
+    component: ProfileSupportComponent,
   },
   {
     path: 'telegram',
-    component: ProfileTelegramComponent
+    component: ProfileTelegramComponent,
   },
   {
     path: 'invite',
-    component: ProfileInviteComponent
-  }
+    component: ProfileInviteComponent,
+  },
 ];

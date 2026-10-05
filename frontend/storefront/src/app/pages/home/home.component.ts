@@ -68,8 +68,16 @@ function persistMode(mode: UiMode): void {
   standalone: true,
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
-  imports: [CommonModule, SectionHeaderComponent, FoodCarouselComponent, FoodCardComponent, TopBarComponent, CartHintBadgeComponent, TranslatePipe],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  imports: [
+    CommonModule,
+    SectionHeaderComponent,
+    FoodCarouselComponent,
+    FoodCardComponent,
+    TopBarComponent,
+    CartHintBadgeComponent,
+    TranslatePipe,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HomeComponent implements OnInit {
   private readonly menuService = inject(MenuService);
@@ -222,9 +230,7 @@ export class HomeComponent implements OnInit {
       return;
     }
 
-    void modesReady
-      .then(() => this.cartService.load())
-      .then(() => this.syncDeliveryModeFromCart());
+    void modesReady.then(() => this.cartService.load()).then(() => this.syncDeliveryModeFromCart());
     // Only the address id survives a reload, so the top bar would report "no
     // address" over a choice the customer already made until the row is read
     // back. Authenticated-only for the same reason as the reads around it: the
@@ -261,20 +267,20 @@ export class HomeComponent implements OnInit {
 
     this.categories = (menu.category_items ?? []).map((ci) => ({
       id: ci.id,
-      label: ci.name
+      label: ci.name,
     }));
 
     /** Ommabop! uses different items to avoid duplicating the first popular section */
     this.popularItems =
-      populars.length > 1
-        ? (populars[1].items ?? [])
-        : (menu.category_items?.[0]?.items ?? []);
+      populars.length > 1 ? (populars[1].items ?? []) : (menu.category_items?.[0]?.items ?? []);
 
-    this.menuCategoryItems.set((menu.category_items ?? []).map((ci) => ({
-      id: ci.id,
-      name: ci.name,
-      items: ci.items ?? []
-    })));
+    this.menuCategoryItems.set(
+      (menu.category_items ?? []).map((ci) => ({
+        id: ci.id,
+        name: ci.name,
+        items: ci.items ?? [],
+      })),
+    );
   }
 
   selectCategoryForNav(cat: { id: string; label: string }): void {
@@ -342,7 +348,8 @@ export class HomeComponent implements OnInit {
    * than overwriting an explicit, unsaved tab click with a stale echo.
    */
   private syncDeliveryModeFromCart(): void {
-    const cartMode: UiMode = this.cartService.fulfillmentMode() === 'PICKUP' ? 'pickup' : 'delivery';
+    const cartMode: UiMode =
+      this.cartService.fulfillmentMode() === 'PICKUP' ? 'pickup' : 'delivery';
     if (cartMode === this.deliveryMode()) {
       return;
     }

@@ -7,9 +7,9 @@ import { CurrentLocation } from '../core/auth/current-location';
 import { LatenessPolicyApi } from '../core/lateness-policy-api';
 import { LatenessPolicyTracker } from '../core/lateness-policy-tracker';
 import { RealtimeClient } from '../core/realtime/realtime-client';
-import { OrderCountsResponse } from '../features/orders/order-detail';
+import type { OrderCountsResponse } from '../features/orders/order-detail';
 import { OrderSeverityInput, computeOrderSeverity } from '../features/orders/order-severity';
-import { OrderSummaryResponse } from '../features/orders/order-summary';
+import type { OrderSummaryResponse } from '../features/orders/order-summary';
 
 /**
  * Every status a fresh non-terminal count includes — `JdbcOrderStore.counts`'s

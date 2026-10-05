@@ -6,7 +6,10 @@
   padding: 14px 24px 4px;
 }
 
-.head__brand { font: 800 22px/1.1 var(--font-display); letter-spacing: -0.02em; }
+.head__brand {
+  font: 800 22px/1.1 var(--font-display);
+  letter-spacing: -0.02em;
+}
 
 .head__bell {
   width: 44px;
@@ -33,7 +36,11 @@
   font: 400 14px/1 var(--font-ui);
 }
 
-.state { padding: 32px 24px; color: var(--text-muted); font: 400 14px/1.5 var(--font-ui); }
+.state {
+  padding: 32px 24px;
+  color: var(--text-muted);
+  font: 400 14px/1.5 var(--font-ui);
+}
 
 .btn {
   margin-top: 12px;

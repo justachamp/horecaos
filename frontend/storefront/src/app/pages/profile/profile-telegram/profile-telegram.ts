@@ -19,7 +19,11 @@ import { OrdersService } from '../../../services/orders.service';
 import { TelegramLinkService } from '../../../services/telegram-link.service';
 import type { TelegramLinkCode } from '../../../core/api/telegram-link-api';
 import { Session } from '../../../core/auth/session';
-import { HorecaOSApiError, isUnauthenticated, messageKeyFor } from '../../../core/api/problem-details';
+import {
+  HorecaOSApiError,
+  isUnauthenticated,
+  messageKeyFor,
+} from '../../../core/api/problem-details';
 
 /**
  * How often the status is re-read while a minted code is outstanding and this

@@ -13,7 +13,7 @@ import { OrdersService, type ApiOrder } from '../../../services/orders.service';
   standalone: true,
   imports: [CommonModule, RouterLink, TranslatePipe],
   templateUrl: './cancelled-order.component.html',
-  styleUrl: './cancelled-order.component.scss'
+  styleUrl: './cancelled-order.component.scss',
 })
 export class CancelledOrderComponent implements OnInit, OnDestroy {
   orders = signal<OrderItem[]>([]);
@@ -49,7 +49,7 @@ export class CancelledOrderComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? err?.message ?? "Buyurtmalar yuklanmadi.");
+        this.error.set(err?.error?.message ?? err?.message ?? 'Buyurtmalar yuklanmadi.');
       },
     });
   }

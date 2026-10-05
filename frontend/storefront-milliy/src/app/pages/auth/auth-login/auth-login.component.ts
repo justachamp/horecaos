@@ -54,7 +54,9 @@ export class AuthLoginComponent {
   protected readonly errorKey = signal<string | null>(null);
 
   /** `90 123 45 67`, the digits grouped for reading. */
-  protected readonly national = computed(() => formatUzPhone(this.phone()).replace(/^\+998\s?/, ''));
+  protected readonly national = computed(() =>
+    formatUzPhone(this.phone()).replace(/^\+998\s?/, ''),
+  );
 
   protected readonly canContinue = computed(() => toE164(this.phone()) !== null && !this.loading());
 

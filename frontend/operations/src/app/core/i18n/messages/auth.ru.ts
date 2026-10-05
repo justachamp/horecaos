@@ -1,0 +1,88 @@
+import type { AreaMessages } from '../message-areas';
+import type { authEn } from './auth.en';
+
+/**
+ * Russian messages of the `auth` area (namespaces `login`, `invite`, `forgotPassword`,
+ * `resetPassword`).
+ *
+ * Typed against `authEn`: a key missing here, or one that does not exist there, is a
+ * compile error. `../messages.en.ts` documents the layout.
+ */
+export const authRu: AreaMessages<typeof authEn> = {
+  'login.title': 'Вход',
+  'login.username': 'Имя пользователя или email',
+  'login.password': 'Пароль',
+  'login.submit': 'Войти',
+  'login.submitting': 'Выполняется вход…',
+  'login.invalidCredentials': 'Неверное имя пользователя или пароль.',
+  'invite.loading': 'Проверяем приглашение…',
+  'invite.title': 'Настройте учётную запись',
+  'invite.lead': '{tenant} работает в HorecaOS, и вы — его владелец.',
+  'invite.leadStaff': '{tenant} пригласил вас на должность «{job}».',
+  'invite.sentTo': 'Приглашение отправлено на {email}',
+  'invite.firstName': 'Имя',
+  'invite.lastName': 'Фамилия',
+  'invite.password': 'Пароль',
+  'invite.passwordRule': 'Не короче {count} символов и не совпадает с вашим email.',
+  'invite.confirm': 'Повторите пароль',
+  'invite.mismatch': 'Пароли не совпадают.',
+  'invite.submit': 'Сохранить и войти',
+  'invite.submitting': 'Сохраняем…',
+  'invite.signingIn': 'Учётная запись готова. Выполняем вход…',
+  'invite.invalid.title': 'Эта ссылка недействительна',
+  'invite.invalid.body':
+    'Возможно, ею уже воспользовались или её заменило новое приглашение. Если вы уже задали пароль, войдите.',
+  'invite.expired.title': 'Срок действия ссылки истёк',
+  'invite.expired.body':
+    'Ссылка из приглашения действует 72 часа. Попросите команду HorecaOS отправить новую.',
+  'invite.toSignIn': 'Перейти ко входу',
+  'invite.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',
+  'invite.policy.notEmail': 'Пароль не должен совпадать с вашим email.',
+  'invite.policy.history': 'Выберите пароль, который вы не использовали недавно.',
+  'invite.policy.other': 'Пароль не подходит под правила. Выберите другой.',
+  'invite.failed': 'Не удалось настроить учётную запись. Попробуйте ещё раз чуть позже.',
+
+  'login.forgotPassword': 'Забыли пароль?',
+
+  'forgotPassword.title': 'Восстановление пароля',
+  'forgotPassword.lead': 'Введите имя пользователя или email — мы отправим ссылку.',
+  'forgotPassword.login': 'Имя пользователя или email',
+  'forgotPassword.submit': 'Отправить ссылку',
+  'forgotPassword.submitting': 'Отправляем…',
+  'forgotPassword.sent.title': 'Проверьте почту',
+  'forgotPassword.sent.body':
+    'Если учётная запись существует, письмо уже в пути. Ссылка действует 60 минут.',
+  'forgotPassword.toSignIn': 'Вернуться ко входу',
+  'forgotPassword.failed': 'Не удалось отправить запрос. Попробуйте ещё раз чуть позже.',
+
+  'resetPassword.loading': 'Проверяем ссылку…',
+  'resetPassword.title': 'Задайте новый пароль',
+  'resetPassword.forAccount': 'Для {account}',
+  'resetPassword.password': 'Новый пароль',
+  'resetPassword.passwordRule': 'Не короче {count} символов и не совпадает с вашим email.',
+  'resetPassword.confirm': 'Повторите пароль',
+  'resetPassword.mismatch': 'Пароли не совпадают.',
+  'resetPassword.submit': 'Сохранить пароль',
+  'resetPassword.submitting': 'Сохраняем…',
+  'resetPassword.done.title': 'Пароль сохранён',
+  'resetPassword.done.body': 'Все остальные сеансы завершены. Войдите с новым паролем.',
+  'resetPassword.doneSessionsNotEnded.title': 'Пароль сохранён, но другие сеансы ещё активны',
+  'resetPassword.doneSessionsNotEnded.body':
+    'Новый пароль работает. Завершить остальные сеансы не удалось — выйдите из аккаунта на всех других устройствах, а если это невозможно, обратитесь в поддержку.',
+  'resetPassword.invalid.title': 'Эта ссылка недействительна',
+  'resetPassword.invalid.body':
+    'Возможно, ею уже воспользовались или её заменил новый запрос. Запросите новую.',
+  'resetPassword.expired.title': 'Срок действия ссылки истёк',
+  'resetPassword.expired.body': 'Ссылка для сброса действует 60 минут. Запросите новую.',
+  'resetPassword.retry.title': 'Не удалось проверить ссылку',
+  'resetPassword.retry.body':
+    'Это сбой связи с HorecaOS, а не проблема со ссылкой. Она ещё действует — попробуйте ещё раз.',
+  'resetPassword.retry.action': 'Попробовать снова',
+  'resetPassword.askAgain': 'Запросить новую ссылку',
+  'resetPassword.toSignIn': 'Перейти ко входу',
+  'resetPassword.policy.length': 'Пароль слишком короткий: нужно не меньше 12 символов.',
+  'resetPassword.policy.notEmail': 'Пароль не должен совпадать с вашим email.',
+  'resetPassword.policy.history': 'Выберите пароль, который вы не использовали недавно.',
+  'resetPassword.policy.other': 'Пароль не подходит под правила. Выберите другой.',
+  'resetPassword.failed': 'Не удалось сохранить пароль. Попробуйте ещё раз чуть позже.',
+};

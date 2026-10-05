@@ -7,11 +7,7 @@ import { HomeComponent } from './home.component';
 import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
 import { TranslateService } from '../../services/translate.service';
-import type {
-  CustomerUiResponse,
-  MenuItem,
-  MenuItemVariant,
-} from '../../types/home.types';
+import type { CustomerUiResponse, MenuItem, MenuItemVariant } from '../../types/home.types';
 
 const CONFIG: AppConfig = {
   apiBaseUrl: '/api/v1',
@@ -58,7 +54,9 @@ function item(id: string, name: string, variants: MenuItemVariant[] = [variant()
   };
 }
 
-function response(categories: { id: string; name: string; items: MenuItem[] }[]): CustomerUiResponse {
+function response(
+  categories: { id: string; name: string; items: MenuItem[] }[],
+): CustomerUiResponse {
   return {
     category: null,
     offer: null,
@@ -112,8 +110,8 @@ async function setUp(menu: CustomerUiResponse) {
 }
 
 function cardFor(host: HTMLElement, name: string): HTMLElement {
-  const card = Array.from(host.querySelectorAll<HTMLElement>('[data-testid="dish-card"]')).find((el) =>
-    el.textContent?.includes(name),
+  const card = Array.from(host.querySelectorAll<HTMLElement>('[data-testid="dish-card"]')).find(
+    (el) => el.textContent?.includes(name),
   );
   if (!card) {
     throw new Error(`no card for ${name}`);
@@ -137,7 +135,9 @@ describe('HomeComponent -- the menu grid', () => {
   });
 
   it('shows a normal dish with no badge at all', async () => {
-    const { host } = await setUp(response([{ id: 'c1', name: 'Osh', items: [item('p1', 'Toshkent oshi')] }]));
+    const { host } = await setUp(
+      response([{ id: 'c1', name: 'Osh', items: [item('p1', 'Toshkent oshi')] }]),
+    );
     const card = cardFor(host, 'Toshkent oshi');
 
     expect(card.querySelector('[data-testid="dish-sold-out"]')).toBeNull();
@@ -157,7 +157,9 @@ describe('HomeComponent -- the menu grid', () => {
     );
     const card = cardFor(host, 'Toshkent oshi');
 
-    expect(card.querySelector('[data-testid="dish-sold-out"]')?.textContent).toContain('dish.soldOut');
+    expect(card.querySelector('[data-testid="dish-sold-out"]')?.textContent).toContain(
+      'dish.soldOut',
+    );
     expect(card.querySelector('[data-testid="dish-out-of-window"]')).toBeNull();
     expect(card.classList).toContain('is-unavailable');
     // Still a link: the customer may read the dish, the page refuses the add.
@@ -170,11 +172,11 @@ describe('HomeComponent -- the menu grid', () => {
         {
           id: 'c1',
           name: 'Nonushta',
-          items: [item('p1', 'Sut bilan bo\'tqa', [variant({ onSaleNow: false })])],
+          items: [item('p1', "Sut bilan bo'tqa", [variant({ onSaleNow: false })])],
         },
       ]),
     );
-    const card = cardFor(host, 'bo\'tqa');
+    const card = cardFor(host, "bo'tqa");
 
     expect(card.querySelector('[data-testid="dish-out-of-window"]')?.textContent).toContain(
       'dish.outOfSaleWindow',
@@ -217,7 +219,9 @@ describe('HomeComponent -- the menu grid', () => {
     );
     const card = cardFor(host, 'Toshkent oshi');
 
-    expect(card.querySelector('[data-testid="dish-low-stock"]')?.textContent).toContain('"count":3');
+    expect(card.querySelector('[data-testid="dish-low-stock"]')?.textContent).toContain(
+      '"count":3',
+    );
   });
 
   it('shows no low-stock count on a dish that has already sold out', async () => {
@@ -231,7 +235,9 @@ describe('HomeComponent -- the menu grid', () => {
       ]),
     );
 
-    expect(cardFor(host, 'Toshkent oshi').querySelector('[data-testid="dish-low-stock"]')).toBeNull();
+    expect(
+      cardFor(host, 'Toshkent oshi').querySelector('[data-testid="dish-low-stock"]'),
+    ).toBeNull();
   });
 
   it('filters the grid to the chosen category, and back to all of them', async () => {

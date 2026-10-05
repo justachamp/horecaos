@@ -18,14 +18,20 @@
     <!-- Brand mark: the tenant's own logo, or its name as text when none is configured. -->
     <div class="mb-2 mt-22 flex w-full shrink justify-center px-2">
       @if (brand.logoUrl; as logoUrl) {
-        <img [src]="logoUrl" [alt]="brand.displayName" class="h-auto w-full max-w-full object-contain" />
+        <img
+          [src]="logoUrl"
+          [alt]="brand.displayName"
+          class="h-auto w-full max-w-full object-contain"
+        />
       } @else {
         <span class="text-3xl font-bold text-text-primary">{{ brand.displayName }}</span>
       }
     </div>
 
     <!-- Slogan: two lines, bold white -->
-    <p class="mt-6 max-w-[280px] text-center text-lg font-bold leading-snug text-text-primary sm:text-xl">
+    <p
+      class="mt-6 max-w-[280px] text-center text-lg font-bold leading-snug text-text-primary sm:text-xl"
+    >
       {{ 'auth.slogan' | t }}
     </p>
     <div class="mt-6 w-full bg-surface-base px-4 pb-2 pt-1">
@@ -86,9 +92,13 @@
           >
             {{ 'auth.telegramOpenInTelegram' | t }}
           </a>
-          <p class="mt-3 text-center text-xs text-zinc-400">{{ 'auth.telegramExpiryNotice' | t }}</p>
+          <p class="mt-3 text-center text-xs text-zinc-400">
+            {{ 'auth.telegramExpiryNotice' | t }}
+          </p>
           <div class="flex items-center justify-center gap-2 py-2">
-            <span class="h-4 w-4 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+            <span
+              class="h-4 w-4 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+            ></span>
             <span class="text-xs text-zinc-400">{{ 'auth.telegramWaiting' | t }}</span>
           </div>
           @if (telegramError()) {
@@ -128,7 +138,9 @@
     </div>
   </div>
 
-  <p class="mt-auto pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-center text-xs text-zinc-500">
+  <p
+    class="mt-auto pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-center text-xs text-zinc-500"
+  >
     {{ 'common.version' | t }} {{ appVersion() }}
   </p>
 </div>

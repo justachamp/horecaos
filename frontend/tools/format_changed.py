@@ -3,14 +3,14 @@
 
 What it is for
 --------------
-The prettier gate for the apps whose tree is not prettier-clean yet. `operations` was
-reformatted in one commit, so CI runs the plain `npm run format:check` for it and this
-script is only a local shortcut there. `control-plane`, `storefront` and `storefront-milliy`
-each have on the order of a hundred files that predate their prettier config, and a blanket
-reformat while other branches are open would conflict with every one of them; for those three
-CI runs this script instead, so the ratchet is: a file a change adds or edits must be
-prettier-clean. Once nothing is in flight, reformat an app in one commit, switch its CI step
-to `npm run format:check`, and stop calling this script for it.
+The prettier gate for the apps whose tree is not prettier-clean yet. `operations`,
+`storefront` and `storefront-milliy` were each reformatted in one commit, so CI runs the plain
+`npm run format:check` for them and this script is only a local shortcut there. `control-plane`
+still has on the order of a hundred files that predate its prettier config, and a blanket
+reformat while other branches are open would conflict with every one of them; for it CI runs
+this script instead, so the ratchet is: a file a change adds or edits must be prettier-clean.
+Once nothing is in flight, reformat the app in one commit, switch its CI step to
+`npm run format:check`, and stop calling this script for it.
 
 What "touched" means
 --------------------

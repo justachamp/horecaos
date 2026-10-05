@@ -17,10 +17,17 @@
   @if (permissionState() === 'granted') {
     <!-- Search bar -->
     <div class="relative shrink-0 px-4 pb-3 mb-4">
-      <div class="flex items-center gap-3 rounded-xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent">
+      <div
+        class="flex items-center gap-3 rounded-xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent"
+      >
         <span class="shrink-0 text-zinc-400" aria-hidden="true">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
         </span>
         <input
@@ -32,7 +39,9 @@
           class="min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-zinc-500 focus:outline-none"
         />
         @if (searchLoading()) {
-          <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+          <span
+            class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+          ></span>
         }
       </div>
       @if (showDropdown() && suggestions().length > 0) {
@@ -48,7 +57,12 @@
             >
               <span class="shrink-0 text-brand-accent">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                  />
                 </svg>
               </span>
               <span class="min-w-0 flex-1 truncate">{{ s.address }}</span>
@@ -68,11 +82,28 @@
         [attr.aria-label]="'locations.showMyLocation' | t"
       >
         @if (gettingLocation()) {
-          <span class="h-5 w-5 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+          <span
+            class="h-5 w-5 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+          ></span>
         } @else {
-          <svg class="h-5 w-5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg
+            class="h-5 w-5 text-brand-accent"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+            />
           </svg>
         }
       </button>
@@ -94,9 +125,13 @@
         </ya-map>
       </div>
       @if (loading()) {
-        <div class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-surface-base/90">
+        <div
+          class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-surface-base/90"
+        >
           <p class="text-sm text-zinc-400">{{ 'locations.resolving' | t }}</p>
-          <span class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+          <span
+            class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+          ></span>
         </div>
       }
     </div>
@@ -109,18 +144,32 @@
       @if (resolvingAddress()) {
         <div class="flex items-center gap-3 py-5">
           <span class="text-sm text-zinc-400">{{ 'locations.resolving' | t }}</span>
-          <span class="h-5 w-5 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+          <span
+            class="h-5 w-5 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+          ></span>
         </div>
       } @else {
         <div class="flex items-start gap-4 py-5 px-1">
           <span class="shrink-0 text-brand-accent">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
             </svg>
           </span>
           <div class="min-w-0 flex-1 space-y-2">
-            <p class="text-base font-semibold leading-snug text-text-primary">{{ address() || ('locations.selectAddress' | t) }}</p>
+            <p class="text-base font-semibold leading-snug text-text-primary">
+              {{ address() || ('locations.selectAddress' | t) }}
+            </p>
             @if (coordsText()) {
               <p class="text-sm text-zinc-400">
                 {{ 'locations.coordinates' | t }} {{ coordsText() }}
@@ -143,7 +192,12 @@
         class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-raised-2"
         aria-hidden="true"
       >
-        <svg class="h-10 w-10 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="h-10 w-10 text-brand-accent"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -184,7 +238,9 @@
   } @else {
     <div class="flex flex-1 flex-col items-center justify-center gap-4 py-24">
       <p class="text-sm text-zinc-400">{{ 'locations.resolving' | t }}</p>
-      <span class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+      <span
+        class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+      ></span>
     </div>
   }
 </div>

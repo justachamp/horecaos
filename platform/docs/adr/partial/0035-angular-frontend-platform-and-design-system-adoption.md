@@ -99,6 +99,28 @@
   catalogues had been 386 kB of the control-plane's 643 kB initial bundle; it
   is now 443 kB against the 500 kB warning. No decision changes: the model was
   the operations console's, and this is the second application to adopt it.
+
+  As of 2026-10-03 (batch 18, w9-frontend-hygiene), the operations console's
+  loading model went from "one locale, one chunk" to "one locale and one
+  feature area, one chunk". `ru`'s catalogue was still the bulk of the initial
+  bundle (the default locale loads eagerly) -- 831.38 kB against an 832 kB
+  error budget, every message-adding wave raising it by a kilobyte. The 5,915
+  keys are now laid out as `core/i18n/messages/<area>.<locale>.ts`, an area
+  being a set of key namespaces (`message-areas.ts`: `core`, `orders`,
+  `settings`, `catalog`, ...). Only `ru`'s `core` area -- the shell, the shared
+  widgets and the error messages, 371 keys -- is in the initial bundle; a route
+  declares the areas it shows (`canActivate: [messagesGuard('orders')]`) and the
+  router waits for those chunks, a language switch loads the areas already in
+  use before it swaps, and a key read before its area was asked for renders its
+  raw key and loads the area. The build-time guarantee is unchanged (every
+  locale's area module is typed against the English one, `messages.en.ts` still
+  derives `MessageKey`), and a check in the unit-test run
+  (`tools/i18n/areas.mjs`) fails a route that names a key of an area nothing on
+  its way declares. The measured initial total dropped from 831.38 kB to
+  373.96 kB, and `angular.json`'s `maximumError` was reset to 434 kB (measured
+  plus 60 kB) with a 400 kB warning. No decision changes: the runtime-switchable
+  locales, the type-checked completeness and `t()` staying synchronous are all
+  as decided; this is the loading model, refined.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22 (amended; the 2026-08-21 decision stands except where restated below)
 - Deciders: Ayubkhon Abbosov (platform architecture, product owner)

@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
+import { messagesGuard } from './core/i18n/messages.guard';
 import { NAV_ITEMS } from './shell/navigation';
 
 /**
@@ -24,10 +25,19 @@ import { NAV_ITEMS } from './shell/navigation';
  * signed-in operator holds no capability for. Neither guard is what
  * authorizes anything: the server does that (ADR 0025), on every request,
  * whether or not either guard ran.
+ *
+ * `messagesGuard` is not an access guard: it is a route's promise that the
+ * message areas it shows (`core/i18n/message-areas.ts`) are in memory before it
+ * draws. A declaration covers the route's children; a child that needs more
+ * than its parent adds its own. `core` is always there. `npm run i18n:areas`
+ * lists what every route needs against what it declares, and the check that
+ * runs with `npm run i18n:dead:test` fails the build when a route names a key
+ * of an area that nothing on its way declares.
  */
 export const routes: Routes = [
   {
     path: 'login',
+    canActivate: [messagesGuard('auth')],
     // Outside the shell and outside the guard (ADR 0062): guarding the page
     // that signs somebody in would refuse to render it to exactly the
     // visitor it exists for.
@@ -37,6 +47,7 @@ export const routes: Routes = [
     // ADR 0097: an invited owner setting up their account. Outside the guard
     // for the same reason as /login -- the visitor has no password yet.
     path: 'invite',
+    canActivate: [messagesGuard('auth')],
     loadComponent: () => import('./features/auth/invite-page').then((m) => m.InvitePage),
   },
   {
@@ -44,12 +55,14 @@ export const routes: Routes = [
     // the three routes above it are -- somebody who cannot sign in has no
     // session to present, and this is the page they came for.
     path: 'forgot-password',
+    canActivate: [messagesGuard('auth')],
     loadComponent: () =>
       import('./features/auth/forgot-password-page').then((m) => m.ForgotPasswordPage),
   },
   {
     // ADR 0098: the emailed link lands here, with the token in the fragment.
     path: 'reset-password',
+    canActivate: [messagesGuard('auth')],
     loadComponent: () =>
       import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
@@ -64,6 +77,7 @@ export const routes: Routes = [
     // its own ADR 0079 credential (`device/device-session.ts`) — never the
     // staff Keycloak session `authGuard` checks, so this route carries none.
     path: 'device',
+    canActivate: [messagesGuard('device')],
     loadComponent: () => import('./device/device-shell').then((m) => m.DeviceShell),
   },
   {
@@ -84,6 +98,7 @@ export const routes: Routes = [
       },
       {
         path: 'today',
+        canActivate: [messagesGuard('today', 'orders')],
         loadComponent: () => import('./features/today/today-page').then((m) => m.TodayPage),
       },
       {
@@ -97,6 +112,7 @@ export const routes: Routes = [
         // reason — nesting it there would put it a capability check away
         // from the person it exists for.
         path: 'my-profile',
+        canActivate: [messagesGuard('staff')],
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },
@@ -108,10 +124,12 @@ export const routes: Routes = [
       // see `my-work-page.ts`'s own doc for the boundary.
       {
         path: 'today/my-work',
+        canActivate: [messagesGuard('today', 'staff')],
         loadComponent: () => import('./features/today/my-work-page').then((m) => m.MyWorkPage),
       },
       {
         path: 'orders',
+        canActivate: [messagesGuard('orders')],
         loadComponent: () => import('./features/orders/orders-page').then((m) => m.OrdersPage),
         children: [
           // Taking an order docks beside the queue like any other detail, which
@@ -127,6 +145,7 @@ export const routes: Routes = [
             // rows) are `P14`'s — see `new-order-page.ts`'s own doc for the
             // exact line.
             path: 'new',
+            canActivate: [messagesGuard('customers')],
             loadComponent: () =>
               import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
@@ -161,6 +180,7 @@ export const routes: Routes = [
           // keeps it deep-linkable and back-button-correct at the same time.
           {
             path: ':orderId',
+            canActivate: [messagesGuard('finance', 'delivery')],
             loadComponent: () =>
               import('./features/orders/order-detail-pane').then((m) => m.OrderDetailPane),
           },
@@ -179,6 +199,7 @@ export const routes: Routes = [
         // array in order, and `CustomersPage`'s own `:accountId` child would
         // otherwise swallow any of the three literal segments as an account id.
         path: 'customers',
+        canActivate: [messagesGuard('customers')],
         loadComponent: () =>
           import('./features/customers/customers-shell').then((m) => m.CustomersShell),
         children: [
@@ -249,6 +270,7 @@ export const routes: Routes = [
       },
       {
         path: 'inbox',
+        canActivate: [messagesGuard('inbox', 'orders')],
         loadComponent: () => import('./features/inbox/inbox-page').then((m) => m.InboxPage),
         children: [
           // Docks beside the list rather than replacing it — same reasoning
@@ -270,6 +292,7 @@ export const routes: Routes = [
         // section, not a greyed-out link. payment-methods (wave P33) is real
         // now.
         path: 'settings',
+        canActivate: [messagesGuard('settings')],
         loadComponent: () =>
           import('./features/settings/settings-shell').then((m) => m.SettingsShell),
         children: [
@@ -295,6 +318,7 @@ export const routes: Routes = [
             children: [
               {
                 path: ':locationId',
+                canActivate: [messagesGuard('staff')],
                 loadComponent: () =>
                   import('./features/settings/locations/location-detail-pane').then(
                     (m) => m.LocationDetailPane,
@@ -336,6 +360,7 @@ export const routes: Routes = [
           },
           {
             path: 'order-policy',
+            canActivate: [messagesGuard('delivery')],
             loadComponent: () =>
               import('./features/settings/order-policy/order-policy-page').then(
                 (m) => m.OrderPolicyPage,
@@ -437,6 +462,7 @@ export const routes: Routes = [
         // `:subjectId` child, which would otherwise swallow the literal
         // segment "roles" as if it were a principal subject.
         path: 'staff',
+        canActivate: [messagesGuard('staff')],
         loadComponent: () => import('./features/staff/staff-shell').then((m) => m.StaffShell),
         children: [
           {
@@ -476,6 +502,7 @@ export const routes: Routes = [
             children: [
               {
                 path: ':subjectId',
+                canActivate: [messagesGuard('orders')],
                 loadComponent: () =>
                   import('./features/staff/staff-member-detail-pane').then(
                     (m) => m.StaffMemberDetailPane,
@@ -489,6 +516,7 @@ export const routes: Routes = [
         // Finance (IA §8): 8.1/8.2 (tier P, wave 34) plus all four tier-2
         // rows (wave 39) — see `finance-shell.ts`'s own doc.
         path: 'finance',
+        canActivate: [messagesGuard('finance')],
         loadComponent: () => import('./features/finance/finance-shell').then((m) => m.FinanceShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'payments' },
@@ -545,6 +573,7 @@ export const routes: Routes = [
         // nor service. See `marketing-shell.ts`'s own doc. (6.1 and 6.2 have
         // both since: ADR 0140 and ADR 0072.)
         path: 'marketing',
+        canActivate: [messagesGuard('marketing')],
         loadComponent: () =>
           import('./features/marketing/marketing-shell').then((m) => m.MarketingShell),
         children: [
@@ -642,6 +671,7 @@ export const routes: Routes = [
       },
       {
         path: 'catalog',
+        canActivate: [messagesGuard('catalog')],
         loadComponent: () => import('./features/catalog/catalog-shell').then((m) => m.CatalogShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'products' },
@@ -759,6 +789,7 @@ export const routes: Routes = [
         // from its own tier-3 spec — see `demand-forecast-page.ts`. 7.10
         // stays off this rail entirely.
         path: 'statistics',
+        canActivate: [messagesGuard('reports')],
         loadComponent: () => import('./features/reports/reports-shell').then((m) => m.ReportsShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'overview' },
@@ -837,6 +868,7 @@ export const routes: Routes = [
           // ADR 0023 holds — see `marketing-report-page.ts`'s own doc.
           {
             path: 'marketing',
+            canActivate: [messagesGuard('marketing', 'customers')],
             loadComponent: () =>
               import('./features/reports/marketing-report-page').then((m) => m.MarketingReportPage),
           },
@@ -880,6 +912,7 @@ export const routes: Routes = [
       // (`catalog-shell.ts`) entirely rather than rendering inside it.
       {
         path: 'catalog/products/:productId',
+        canActivate: [messagesGuard('catalog')],
         loadComponent: () =>
           import('./features/catalog/product-editor-page').then((m) => m.ProductEditorPage),
       },
@@ -887,11 +920,13 @@ export const routes: Routes = [
         // IA §2: 2.1 Kitchen queue (KDS) and 2.5 Stop list, the section's two
         // P-tier screens — same sub-nav-over-a-routed-child shape as `catalog`.
         path: 'kitchen',
+        canActivate: [messagesGuard('kitchen')],
         loadComponent: () => import('./features/kitchen/kitchen-shell').then((m) => m.KitchenShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'queue' },
           {
             path: 'queue',
+            canActivate: [messagesGuard('orders')],
             loadComponent: () =>
               import('./features/kitchen/kitchen-queue-page').then((m) => m.KitchenQueuePage),
           },
@@ -901,6 +936,7 @@ export const routes: Routes = [
           },
           {
             path: 'expo',
+            canActivate: [messagesGuard('orders')],
             loadComponent: () => import('./features/kitchen/expo-page').then((m) => m.ExpoPage),
           },
           {
@@ -937,12 +973,14 @@ export const routes: Routes = [
         // and 3.8 Dispatch rules are built. 3.3 Couriers is its own
         // top-level route below, per `navigation.ts`'s existing rail grouping.
         path: 'delivery',
+        canActivate: [messagesGuard('delivery')],
         loadComponent: () =>
           import('./features/delivery/delivery-shell').then((m) => m.DeliveryShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'dispatch' },
           {
             path: 'dispatch',
+            canActivate: [messagesGuard('couriers', 'orders')],
             loadComponent: () =>
               import('./features/delivery/dispatch-board-page').then((m) => m.DispatchBoardPage),
           },
@@ -1010,6 +1048,7 @@ export const routes: Routes = [
         // IA §3.3: the in-house roster. A single page, not a shell — unlike
         // Kitchen/Delivery there is only one P-tier screen here.
         path: 'couriers',
+        canActivate: [messagesGuard('couriers', 'delivery')],
         loadComponent: () =>
           import('./features/couriers/couriers-page').then((m) => m.CouriersPage),
       },
@@ -1030,7 +1069,7 @@ export const routes: Routes = [
   {
     path: 'wallboard',
     loadComponent: () => import('./wallboard-shell/wallboard-shell').then((m) => m.WallboardShell),
-    canActivate: [authGuard],
+    canActivate: [authGuard, messagesGuard('wallboard', 'orders')],
   },
   // Rows 2.1/2.4 (ADR 0045, ADR 0041 rollout step 4): the KDS touch shell and
   // the VDU wall, hosted like the wallboard above — same reasoning, same
@@ -1041,13 +1080,13 @@ export const routes: Routes = [
     path: 'wallboard/kitchen',
     loadComponent: () =>
       import('./wallboard-shell/wallboard-kitchen-page').then((m) => m.WallboardKitchenPage),
-    canActivate: [authGuard],
+    canActivate: [authGuard, messagesGuard('wallboard', 'kitchen')],
   },
   {
     path: 'wallboard/vdu',
     loadComponent: () =>
       import('./wallboard-shell/wallboard-vdu-page').then((m) => m.WallboardVduPage),
-    canActivate: [authGuard],
+    canActivate: [authGuard, messagesGuard('wallboard', 'kitchen')],
   },
 ];
 

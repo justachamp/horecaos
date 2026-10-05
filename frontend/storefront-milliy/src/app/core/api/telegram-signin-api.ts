@@ -39,7 +39,9 @@ export class TelegramSignInApi {
    * `token` is present if and only if `status === 'SIGNED_IN'`.
    */
   poll(code: string): Promise<TelegramSignInPollResult> {
-    return this.api.get<TelegramSignInPollResult>(`${this.telegramPath}/sign-in-codes/${encodeURIComponent(code)}`);
+    return this.api.get<TelegramSignInPollResult>(
+      `${this.telegramPath}/sign-in-codes/${encodeURIComponent(code)}`,
+    );
   }
 }
 

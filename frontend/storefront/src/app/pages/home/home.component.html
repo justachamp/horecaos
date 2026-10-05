@@ -63,91 +63,91 @@
          mode: PICKUP is a real, orderable mode and must not hide the menu
          the way a "coming soon" placeholder used to. -->
     @if (offerData(); as offer) {
-        <section class="grid grid-cols-[3fr_2fr] gap-3">
-          @if (offer.items.length > 0) {
-            <a
-              class="relative block w-full min-w-0 aspect-video overflow-hidden rounded-2xl bg-surface-raised bg-cover bg-center bg-no-repeat"
-              [style.background-image]="
-                'url(' + (offer.items[0].image) + ')'
-              "
-            >
-            </a>
-          }
-          <div
-            class="min-w-0 h-full min-h-0 overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat"
-            style="background-image: url('/assets/home-promo.jpg')"
-          ></div>
+      <section class="grid grid-cols-[3fr_2fr] gap-3">
+        @if (offer.items.length > 0) {
+          <a
+            class="relative block w-full min-w-0 aspect-video overflow-hidden rounded-2xl bg-surface-raised bg-cover bg-center bg-no-repeat"
+            [style.background-image]="'url(' + offer.items[0].image + ')'"
+          >
+          </a>
+        }
+        <div
+          class="min-w-0 h-full min-h-0 overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat"
+          style="background-image: url('/assets/home-promo.jpg')"
+        ></div>
+      </section>
+    }
+
+    <section class="space-y-3">
+      <h2 class="text-lg font-semibold">{{ 'home.welcome' | t }}</h2>
+      <div
+        class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-accent-deep to-brand-accent p-4 text-white"
+      >
+        <p class="text-sm font-semibold">{{ 'home.welcomeSubtitle' | t: { brand: brandName } }}</p>
+        <div class="absolute right-4 top-2 h-16 w-16 rounded-full bg-white/40"></div>
+      </div>
+    </section>
+
+    <div
+      class="flex items-center gap-3 rounded-2xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent"
+    >
+      <span class="shrink-0 text-text-primary" aria-hidden="true">
+        <svg
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+      </span>
+      <input
+        type="search"
+        [placeholder]="'home.search' | t"
+        (focus)="goToSearch()"
+        class="min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-zinc-500 focus:outline-none"
+      />
+      <span class="h-5 w-px shrink-0 bg-zinc-600" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="flex shrink-0 items-center justify-center text-text-primary transition-opacity hover:opacity-80"
+        [attr.aria-label]="'common.filter' | t"
+      >
+        <svg
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <nav class="space-y-4">
+      @for (popular of populars; track popular.id) {
+        <section>
+          <a class="mb-2 block text-lg font-semibold text-text-primary">
+            {{ popular.name }}
+          </a>
+          <app-food-carousel [items]="popular.items"></app-food-carousel>
         </section>
       }
+    </nav>
 
-      <section class="space-y-3">
-        <h2 class="text-lg font-semibold">{{ 'home.welcome' | t }}</h2>
-        <div
-          class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-accent-deep to-brand-accent p-4 text-white"
-        >
-          <p class="text-sm font-semibold">{{ 'home.welcomeSubtitle' | t: { brand: brandName } }}</p>
-          <div class="absolute right-4 top-2 h-16 w-16 rounded-full bg-white/40"></div>
-        </div>
-      </section>
-
-      <div class="flex items-center gap-3 rounded-2xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent">
-        <span class="shrink-0 text-text-primary" aria-hidden="true">
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </span>
-        <input
-          type="search"
-          [placeholder]="'home.search' | t"
-          (focus)="goToSearch()"
-          class="min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-zinc-500 focus:outline-none"
-        />
-        <span class="h-5 w-px shrink-0 bg-zinc-600" aria-hidden="true"></span>
-        <button
-          type="button"
-          class="flex shrink-0 items-center justify-center text-text-primary transition-opacity hover:opacity-80"
-          [attr.aria-label]="'common.filter' | t"
-        >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-            />
-          </svg>
-        </button>
-      </div>
-
-      <nav class="space-y-4">
-        @for (popular of populars; track popular.id) {
-          <section>
-            <a class="mb-2 block text-lg font-semibold text-text-primary">
-              {{ popular.name }}
-            </a>
-            <app-food-carousel [items]="popular.items"></app-food-carousel>
-          </section>
-        }
-      </nav>
-
-      <!-- <div class="flex items-center justify-between">
+    <!-- <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-text-primary">Ommabop! 👌</h2>
       </div>
       <div class="grid grid-cols-2 gap-4 justify-items-center">
@@ -158,58 +158,61 @@
   </div>
 
   <div class="mt-6">
-      <div #menuSection class="sticky top-0 z-20 bg-surface-base shadow-[0_12px_16px_var(--surface-base)]">
-        <div class="mx-auto max-w-[420px] space-y-3 px-4 pb-3 pt-2">
-          <app-section-header [title]="'home.menu' | t" actionLabel=""></app-section-header>
-          <div class="flex gap-2 overflow-x-auto no-scrollbar">
+    <div
+      #menuSection
+      class="sticky top-0 z-20 bg-surface-base shadow-[0_12px_16px_var(--surface-base)]"
+    >
+      <div class="mx-auto max-w-[420px] space-y-3 px-4 pb-3 pt-2">
+        <app-section-header [title]="'home.menu' | t" actionLabel=""></app-section-header>
+        <div class="flex gap-2 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            (click)="selectCategory(null)"
+            class="whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-colors"
+            [class.bg-brand-accent]="selectedCategoryId() === null"
+            [class.text-white]="selectedCategoryId() === null"
+            [class.border]="selectedCategoryId() !== null"
+            [class.border-zinc-700]="selectedCategoryId() !== null"
+            [class.text-zinc-300]="selectedCategoryId() !== null"
+          >
+            {{ 'home.all' | t }}
+          </button>
+          @for (cat of categories; track cat.id) {
             <button
               type="button"
-              (click)="selectCategory(null)"
-              class="whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-colors"
-              [class.bg-brand-accent]="selectedCategoryId() === null"
-              [class.text-white]="selectedCategoryId() === null"
-              [class.border]="selectedCategoryId() !== null"
-              [class.border-zinc-700]="selectedCategoryId() !== null"
-              [class.text-zinc-300]="selectedCategoryId() !== null"
+              (click)="selectCategory(cat.id)"
+              class="whitespace-nowrap rounded-full px-4 py-2 text-xs transition-colors"
+              [class.bg-brand-accent]="selectedCategoryId() === cat.id"
+              [class.font-semibold]="selectedCategoryId() === cat.id"
+              [class.text-white]="selectedCategoryId() === cat.id"
+              [class.border]="selectedCategoryId() !== cat.id"
+              [class.border-zinc-700]="selectedCategoryId() !== cat.id"
+              [class.text-zinc-300]="selectedCategoryId() !== cat.id"
             >
-              {{ 'home.all' | t }}
+              {{ cat.label }}
             </button>
-            @for (cat of categories; track cat.id) {
-              <button
-                type="button"
-                (click)="selectCategory(cat.id)"
-                class="whitespace-nowrap rounded-full px-4 py-2 text-xs transition-colors"
-                [class.bg-brand-accent]="selectedCategoryId() === cat.id"
-                [class.font-semibold]="selectedCategoryId() === cat.id"
-                [class.text-white]="selectedCategoryId() === cat.id"
-                [class.border]="selectedCategoryId() !== cat.id"
-                [class.border-zinc-700]="selectedCategoryId() !== cat.id"
-                [class.text-zinc-300]="selectedCategoryId() !== cat.id"
-              >
-                {{ cat.label }}
-              </button>
-            }
-          </div>
+          }
         </div>
       </div>
+    </div>
 
-      <div class="mx-auto mt-6 flex max-w-[420px] flex-col gap-6 px-4">
-        @for (section of filteredSections(); track section.id) {
-          <section class="space-y-3">
-            <app-section-header
-              [title]="section.name"
-              [actionLabel]="'home.all' | t"
-              [actionRouterLink]="['/category']"
-              [actionCategory]="{ id: section.id, name: section.name }"
-            />
-            <div class="flex flex-col">
-              @for (item of section.items; track item.id) {
-                <app-food-card [item]="item"></app-food-card>
-              }
-            </div>
-          </section>
-        }
-      </div>
+    <div class="mx-auto mt-6 flex max-w-[420px] flex-col gap-6 px-4">
+      @for (section of filteredSections(); track section.id) {
+        <section class="space-y-3">
+          <app-section-header
+            [title]="section.name"
+            [actionLabel]="'home.all' | t"
+            [actionRouterLink]="['/category']"
+            [actionCategory]="{ id: section.id, name: section.name }"
+          />
+          <div class="flex flex-col">
+            @for (item of section.items; track item.id) {
+              <app-food-card [item]="item"></app-food-card>
+            }
+          </div>
+        </section>
+      }
+    </div>
   </div>
   @if (hasCartItems()) {
     <div class="position-relative">

@@ -19,7 +19,7 @@ import { NavigationHistoryService } from './services/navigation-history.service'
     TelegramMiniAppHeaderComponent,
   ],
   templateUrl: './app.html',
-  styleUrl: './app.scss'
+  styleUrl: './app.scss',
 })
 export class App implements OnInit {
   showBottomNav: boolean;
@@ -35,7 +35,12 @@ export class App implements OnInit {
   protected readonly isTelegram = () => this.telegramWebapp.isTelegram;
 
   private static shouldShowBottomNav(url: string): boolean {
-    return !url.startsWith('/product') && !url.startsWith('/auth') && !url.startsWith('/terms') && !url.startsWith('/search');
+    return (
+      !url.startsWith('/product') &&
+      !url.startsWith('/auth') &&
+      !url.startsWith('/terms') &&
+      !url.startsWith('/search')
+    );
   }
 
   private static shouldResetScrollOnNavigate(url: string): boolean {
@@ -44,14 +49,12 @@ export class App implements OnInit {
 
   constructor() {
     this.showBottomNav = App.shouldShowBottomNav(this.router.url);
-    this.router.events
-      .pipe(filter((event) => event instanceof NavigationEnd))
-      .subscribe(() => {
-        this.showBottomNav = App.shouldShowBottomNav(this.router.url);
-        if (App.shouldResetScrollOnNavigate(this.router.url) && !this.shouldKeepHomeMenuScroll()) {
-          this.scrollToTop();
-        }
-      });
+    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe(() => {
+      this.showBottomNav = App.shouldShowBottomNav(this.router.url);
+      if (App.shouldResetScrollOnNavigate(this.router.url) && !this.shouldKeepHomeMenuScroll()) {
+        this.scrollToTop();
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -63,8 +66,7 @@ export class App implements OnInit {
 
   private shouldKeepHomeMenuScroll(): boolean {
     const state = this.router.lastSuccessfulNavigation()?.extras.state as
-      | { scrollToMenyu?: boolean }
-      | undefined;
+      { scrollToMenyu?: boolean } | undefined;
     return this.router.url.startsWith('/home') && !!state?.scrollToMenyu;
   }
 

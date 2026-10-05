@@ -3,7 +3,9 @@
 </header>
 
 @switch (state()) {
-  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('loading') {
+    <p class="state">{{ 'common.loading' | t }}</p>
+  }
   @case ('error') {
     <div class="state">
       <p>{{ 'profile.loadError' | t }}</p>
@@ -31,8 +33,15 @@
               [placeholder]="'profile.lastNamePlaceholder' | t"
             />
             <div class="edit-form__actions">
-              <button type="button" class="pill-btn" (click)="cancelEdit()">{{ 'common.close' | t }}</button>
-              <button type="button" class="pill-btn pill-btn--accent" [disabled]="savingName()" (click)="saveName()">
+              <button type="button" class="pill-btn" (click)="cancelEdit()">
+                {{ 'common.close' | t }}
+              </button>
+              <button
+                type="button"
+                class="pill-btn pill-btn--accent"
+                [disabled]="savingName()"
+                (click)="saveName()"
+              >
                 {{ (savingName() ? 'common.saving' : 'common.save') | t }}
               </button>
             </div>
@@ -40,7 +49,9 @@
         }
       </div>
       @if (!editing()) {
-        <button type="button" class="pill-btn" (click)="startEdit()">{{ 'profile.editAction' | t }}</button>
+        <button type="button" class="pill-btn" (click)="startEdit()">
+          {{ 'profile.editAction' | t }}
+        </button>
       }
     </section>
 

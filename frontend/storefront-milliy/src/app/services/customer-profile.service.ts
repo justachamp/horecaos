@@ -95,7 +95,10 @@ export class CustomerProfileService {
     const names = splitName(existing.displayName);
     const first = changes.firstName ?? names.first;
     const last = changes.lastName ?? names.last;
-    const displayName = [first, last].map((part) => part.trim()).filter(Boolean).join(' ');
+    const displayName = [first, last]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(' ');
 
     const updated = await this.api.updateProfile({
       expectedVersion: existing.version,

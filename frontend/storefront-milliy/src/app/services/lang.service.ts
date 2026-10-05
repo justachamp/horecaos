@@ -6,7 +6,7 @@ const LANG_KEY = 'lang';
 export const LANG_LABELS: Record<string, string> = {
   ru: 'Русский',
   uz: "O'zbek",
-  en: 'English'
+  en: 'English',
 };
 
 @Injectable({ providedIn: 'root' })

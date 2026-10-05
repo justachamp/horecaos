@@ -12,7 +12,7 @@ export const LOCATIONS_ROUTES: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'list' },
       { path: 'list', component: LocationsListComponent },
       { path: 'add', component: LocationsAddComponent },
-      { path: 'save', component: LocationsSaveComponent }
-    ]
-  }
+      { path: 'save', component: LocationsSaveComponent },
+    ],
+  },
 ];

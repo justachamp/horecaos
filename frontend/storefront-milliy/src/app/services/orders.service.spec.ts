@@ -214,14 +214,17 @@ describe('OrdersService: cancel action reflects the real state-machine guard', (
     expect(detail.actions).toContain('cancel');
   });
 
-  it.each(NOT_CANCELLABLE)('offers no cancel on an order detail read at status %s', async (status) => {
-    const { service, api } = setUp();
-    api.get.mockResolvedValue(orderResponse('o1', 1, status));
+  it.each(NOT_CANCELLABLE)(
+    'offers no cancel on an order detail read at status %s',
+    async (status) => {
+      const { service, api } = setUp();
+      api.get.mockResolvedValue(orderResponse('o1', 1, status));
 
-    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+      const detail = await firstValueFrom(service.getOrderDetail('o1'));
 
-    expect(detail.actions).not.toContain('cancel');
-  });
+      expect(detail.actions).not.toContain('cancel');
+    },
+  );
 });
 
 describe('OrdersService.cancelOrder (single retry)', () => {

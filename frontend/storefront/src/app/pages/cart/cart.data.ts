@@ -19,7 +19,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "32 000 so'm",
     originalPrice: "44 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '2',
@@ -28,7 +28,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "32 000 so'm",
     originalPrice: "44 000 so'm",
-    discountPercent: 30
+    discountPercent: 30,
   },
   {
     id: '3',
@@ -37,7 +37,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '4',
@@ -46,7 +46,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '5',
@@ -55,7 +55,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '6',
@@ -64,7 +64,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '7',
@@ -73,7 +73,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '8',
@@ -82,7 +82,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '9',
@@ -91,7 +91,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '10',
@@ -100,7 +100,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '11',
@@ -109,7 +109,7 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
+    discountPercent: 20,
   },
   {
     id: '12',
@@ -118,6 +118,6 @@ export const MOCK_CART_ITEMS: CartItem[] = [
     quantity: 2,
     currentPrice: "25 000 so'm",
     originalPrice: "35 000 so'm",
-    discountPercent: 20
-  }
+    discountPercent: 20,
+  },
 ];

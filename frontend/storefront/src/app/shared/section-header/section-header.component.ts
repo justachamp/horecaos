@@ -6,7 +6,7 @@ import { RouterLink } from '@angular/router';
   selector: 'app-section-header',
   imports: [CommonModule, RouterLink],
   templateUrl: './section-header.component.html',
-  styleUrl: './section-header.component.scss'
+  styleUrl: './section-header.component.scss',
 })
 export class SectionHeaderComponent {
   readonly title = input.required<string>();

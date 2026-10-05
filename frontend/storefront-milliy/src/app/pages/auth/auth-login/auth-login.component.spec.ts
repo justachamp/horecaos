@@ -83,14 +83,14 @@ const CHALLENGE = {
 };
 
 describe('AuthLoginComponent -- the sign-in a guest at a table is sent to', () => {
-  it('shows the deployment\'s own name when it has no mark', () => {
+  it("shows the deployment's own name when it has no mark", () => {
     const { host } = setUp();
 
     expect(host.textContent).toContain('Test Brand');
     expect(host.querySelector('img')).toBeNull();
   });
 
-  it('shows the deployment\'s mark when it has one', () => {
+  it("shows the deployment's mark when it has one", () => {
     const { host } = setUp({ ...TEST_BRAND, logoUrl: 'https://cdn.example/logo.png' });
 
     expect(host.querySelector('img')?.getAttribute('src')).toBe('https://cdn.example/logo.png');
@@ -183,7 +183,11 @@ describe('AuthLoginComponent -- the sign-in a guest at a table is sent to', () =
   it.each([
     ['a number no code can reach', new OtpNumberRejectedError(), 'auth.errors.numberRejected'],
     ['a rate limit', new OtpRateLimitedError(30), 'auth.errors.rateLimited'],
-    ['a transient delivery failure', new OtpUndeliverableError('GATEWAY_DOWN'), 'auth.errors.undeliverable'],
+    [
+      'a transient delivery failure',
+      new OtpUndeliverableError('GATEWAY_DOWN'),
+      'auth.errors.undeliverable',
+    ],
     [
       'a number that opted out',
       new OtpUndeliverableError('SMS_RECEIVER_BLACKLISTED'),

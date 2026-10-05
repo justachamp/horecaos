@@ -27,7 +27,9 @@
   </div>
 
   @if (failure(); as problem) {
-    <p class="auth__error" role="alert" data-testid="auth-error">{{ problem.key | t: problem.params }}</p>
+    <p class="auth__error" role="alert" data-testid="auth-error">
+      {{ problem.key | t: problem.params }}
+    </p>
   }
 
   @if (showResend()) {
