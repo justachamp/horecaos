@@ -271,6 +271,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.changeQuantity.line': 'Pozitsiya',
   'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
   'orders.dialog.changeQuantity.comboOption': '{name} (kombo: {count})',
+  'orders.dialog.changeQuantity.step': 'Buyurtma {step} porsiyalarda qilinadi',
 
   'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
   'orders.dialog.changeAddress.city': 'Shahar',
@@ -2896,6 +2897,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.priceList.assign.validFrom': 'Boshlanish sanasi',
   'catalog.priceList.assign.validUntil': 'Tugash sanasi',
 
+  'catalog.price.perQuantum': '{quantum} uchun',
   'catalog.priceMatrix.title': 'Narxlar matritsasi',
   'catalog.priceMatrix.back': 'Prays-buklar roʻyxatiga',
   'catalog.priceMatrix.loading': 'Matritsa yuklanmoqda',

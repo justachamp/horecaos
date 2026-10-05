@@ -283,6 +283,7 @@ export const messagesEn = {
   'orders.dialog.changeQuantity.line': 'Item',
   'orders.dialog.changeQuantity.newQuantity': 'New quantity (at least {min})',
   'orders.dialog.changeQuantity.comboOption': '{name} (combos: {count})',
+  'orders.dialog.changeQuantity.step': 'Ordered in steps of {step}',
 
   'orders.dialog.changeAddress.line2': 'Address line 2',
   'orders.dialog.changeAddress.city': 'City',
@@ -2899,6 +2900,7 @@ export const messagesEn = {
   'catalog.priceList.assign.validFrom': 'Valid from',
   'catalog.priceList.assign.validUntil': 'Valid until',
 
+  'catalog.price.perQuantum': 'per {quantum}',
   'catalog.priceMatrix.title': 'Price matrix',
   'catalog.priceMatrix.back': 'Back to price books',
   'catalog.priceMatrix.loading': 'Loading the matrix',

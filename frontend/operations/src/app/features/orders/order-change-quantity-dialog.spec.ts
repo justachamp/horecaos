@@ -228,5 +228,97 @@ describe('OrderChangeQuantityDialog', () => {
 
       expect(host.querySelector('option')?.textContent).toContain('0.5');
     });
+
+    describe('with a published portion size', () => {
+      const quantityInput = (host: HTMLElement): HTMLInputElement =>
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-quantity"]',
+        ) as HTMLInputElement;
+      const confirmButton = (host: HTMLElement): HTMLButtonElement =>
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-confirm"]',
+        ) as HTMLButtonElement;
+      const type = (fixture: ReturnType<typeof render>['fixture'], value: string): void => {
+        const input = quantityInput(fixture.nativeElement);
+        input.value = value;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      };
+
+      it('starts a splittable line one portion above its quantity and steps by the portion', () => {
+        const { fixture } = render([line({ lineId: 'plov', quantity: 1, portionSize: 0.5 })]);
+        const host: HTMLElement = fixture.nativeElement;
+
+        expect(quantityInput(host).value).toBe('1.5');
+        expect(Number(quantityInput(host).min)).toBe(1.5);
+        expect(Number(quantityInput(host).step)).toBe(0.5);
+        expect(
+          host.querySelector('[data-testid="order-change-quantity-dialog-step"]')?.textContent,
+        ).toContain('0.5');
+      });
+
+      it('sends a decimal quantity for a splittable line, as a number and not as text', () => {
+        const { fixture } = render([line({ lineId: 'plov', quantity: 1, portionSize: 0.5 })]);
+        const submissions: QuantitySubmission[] = [];
+        fixture.componentInstance.confirm.subscribe((value) => submissions.push(value));
+
+        type(fixture, '2.5');
+        confirmButton(fixture.nativeElement).click();
+
+        expect(submissions).toEqual([{ orderLineId: 'plov', quantity: 2.5 }]);
+      });
+
+      it('refuses a quantity that is not a whole number of portions, and says what to type', () => {
+        const { fixture } = render([line({ lineId: 'plov', quantity: 1, portionSize: 0.5 })]);
+        const host: HTMLElement = fixture.nativeElement;
+
+        type(fixture, '1.7');
+
+        expect(confirmButton(host).disabled).toBe(true);
+        const hint = host.querySelector('[data-testid="order-change-quantity-dialog-step"]');
+        expect(hint?.getAttribute('role')).toBe('alert');
+        expect(hint?.textContent).toContain('0.5');
+
+        type(fixture, '2');
+        expect(confirmButton(host).disabled).toBe(false);
+      });
+
+      it('does not take a decimal for a line the menu sells in whole units', () => {
+        const { fixture } = render([line({ lineId: 'soda', quantity: 2 })]);
+        const host: HTMLElement = fixture.nativeElement;
+        const submissions: QuantitySubmission[] = [];
+        fixture.componentInstance.confirm.subscribe((value) => submissions.push(value));
+
+        type(fixture, '3.5');
+        confirmButton(host).click();
+
+        expect(host.querySelector('[data-testid="order-change-quantity-dialog-step"]')).toBeNull();
+        expect(submissions).toEqual([{ orderLineId: 'soda', quantity: 3 }]);
+      });
+
+      it('moves a line that holds an in-between quantity to the next portion', () => {
+        const { fixture } = render([line({ lineId: 'plov', quantity: 1.3, portionSize: 0.5 })]);
+
+        expect(quantityInput(fixture.nativeElement).value).toBe('1.5');
+      });
+
+      it('follows the line the operator picks: portion step for the plov, whole units for the soda', () => {
+        const { fixture } = render([
+          line({ lineId: 'plov', productName: 'Plov', quantity: 1, portionSize: 0.5 }),
+          line({ lineId: 'soda', productName: 'Soda', quantity: 2 }),
+        ]);
+        const host: HTMLElement = fixture.nativeElement;
+        const select = host.querySelector(
+          '[data-testid="order-change-quantity-dialog-line"]',
+        ) as HTMLSelectElement;
+
+        select.value = 'soda';
+        select.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+
+        expect(quantityInput(host).value).toBe('3');
+        expect(host.querySelector('[data-testid="order-change-quantity-dialog-step"]')).toBeNull();
+      });
+    });
   });
 });

@@ -31,6 +31,12 @@ export interface OrderLine {
    * weight and the order cannot leave the pass; a weighing replaces it.
    */
   readonly catchweight?: OrderLineCatchweight | null;
+  /**
+   * ADR 0137: the step this line may be amended in — the published portion size of a splittable
+   * dish — present only while the order can still be amended. Absent means whole units, whatever
+   * `quantity` currently holds: it is the menu's rule and not a property of the line.
+   */
+  readonly portionSize?: number | null;
   readonly modifiers: readonly string[];
   /**
    * Row 2.1b: the coded kitchen-instruction presets this line was checked

@@ -269,6 +269,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.changeQuantity.line': 'Позиция',
   'orders.dialog.changeQuantity.newQuantity': 'Новое количество (не менее {min})',
   'orders.dialog.changeQuantity.comboOption': '{name} (комбо: {count})',
+  'orders.dialog.changeQuantity.step': 'Заказывается порциями по {step}',
 
   'orders.dialog.changeAddress.line2': 'Адрес, строка 2',
   'orders.dialog.changeAddress.city': 'Город',
@@ -2860,6 +2861,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.priceList.assign.validFrom': 'Действует с',
   'catalog.priceList.assign.validUntil': 'Действует до',
 
+  'catalog.price.perQuantum': 'за {quantum}',
   'catalog.priceMatrix.title': 'Матрица цен',
   'catalog.priceMatrix.back': 'К списку прайс-листов',
   'catalog.priceMatrix.loading': 'Загрузка матрицы',
