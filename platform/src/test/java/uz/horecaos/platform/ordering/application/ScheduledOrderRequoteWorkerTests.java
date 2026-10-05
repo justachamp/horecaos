@@ -9,6 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.sql.SQLException;
+import java.sql.SQLTransientConnectionException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,6 +20,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionTimedOutException;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderRequoteStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderRequoteStore.DueOrder;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderRequoteStore.Finding;
@@ -71,6 +78,57 @@ class ScheduledOrderRequoteWorkerTests {
                 .isEqualTo(2);
         verify(service).recordFailure(TENANT, broken, NOW);
         verify(service, never()).recordFailure(eq(TENANT), eq(fine), any());
+    }
+
+    @Test
+    @DisplayName("a transient failure is not recorded as a pricing refusal: the order stays due and the next sweep"
+            + " tries it again")
+    void aTransientFailureLeavesTheOrderDue() {
+        when(store.dueForCheckpoint(NOW, LEAD.toSeconds(), 50))
+                .thenReturn(List.of(new DueOrder(TENANT, broken), new DueOrder(TENANT, fine)));
+        when(service.requoteAtCheckpoint(TENANT, broken, NOW))
+                .thenThrow(new CannotCreateTransactionException("Connection is not available, request timed out"));
+        when(service.requoteAtCheckpoint(TENANT, fine, NOW)).thenReturn(Optional.of(mock(Finding.class)));
+
+        assertThat(worker.sweepOnce(NOW))
+                .as("only the order that was judged counts, and the sweep carries on past the one that was not")
+                .isEqualTo(1);
+
+        verify(service, never()).recordFailure(any(), any(), any());
+        verify(service).requoteAtCheckpoint(TENANT, fine, NOW);
+    }
+
+    @Test
+    @DisplayName("every kind of transient database failure leaves the order due, however deeply it is wrapped")
+    void transientFailuresAreRecognisedThroughTheirCauses() {
+        for (RuntimeException transientFailure : List.<RuntimeException>of(
+                new QueryTimeoutException("statement timed out"),
+                new CannotAcquireLockException("deadlock detected"),
+                new CannotGetJdbcConnectionException("no connection", new SQLException("pool exhausted")),
+                new TransactionTimedOutException("transaction timed out"),
+                new IllegalStateException(
+                        "pricing failed", new RuntimeException("wrapped", new QueryTimeoutException("cancelled"))),
+                new IllegalStateException("pricing failed", new SQLTransientConnectionException("connect timeout")))) {
+            when(store.dueForCheckpoint(NOW, LEAD.toSeconds(), 50)).thenReturn(List.of(new DueOrder(TENANT, broken)));
+            // doThrow, not when(): a repeated when() calls the stubbed method, which throws the last round's failure.
+            doThrow(transientFailure).when(service).requoteAtCheckpoint(TENANT, broken, NOW);
+
+            assertThat(worker.sweepOnce(NOW)).as(transientFailure.toString()).isZero();
+        }
+
+        verify(service, never()).recordFailure(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a failure that is not transient is still recorded, once, so a broken order is not retried for ever")
+    void aPermanentFailureIsStillRecorded() {
+        when(store.dueForCheckpoint(NOW, LEAD.toSeconds(), 50)).thenReturn(List.of(new DueOrder(TENANT, broken)));
+        when(service.requoteAtCheckpoint(TENANT, broken, NOW))
+                .thenThrow(new IllegalStateException("The quote behind an order's revision is gone"));
+
+        assertThat(worker.sweepOnce(NOW)).isEqualTo(1);
+
+        verify(service).recordFailure(TENANT, broken, NOW);
     }
 
     @Test

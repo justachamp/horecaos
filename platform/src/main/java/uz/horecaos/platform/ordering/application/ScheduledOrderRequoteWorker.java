@@ -1,5 +1,7 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.sql.SQLRecoverableException;
+import java.sql.SQLTransientException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -7,8 +9,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionTimedOutException;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderRequoteStore;
 
 /**
@@ -17,9 +23,15 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderRequote
  *
  * <p>The checkpoint is the order's promised time less {@code lead}: one hour by default, a
  * provisional operational figure and not a tenant policy, because ADR 0019 leaves the checkpoint
- * instants of a scheduled order open. Each order is re-quoted once. An order the sweep could not
- * price is recorded as such rather than retried for ever, and the sweep is safe to run on every
- * node: the finding is unique per order, so the node that loses a race writes nothing.
+ * instants of a scheduled order open. Each order is re-quoted once. An order that fails for a
+ * reason of its own is recorded as one the sweep could not price rather than retried for ever; an
+ * order that fails because the database was briefly unavailable (a timed-out connection, a
+ * deadlock, a cancelled statement) is not: that is no statement about the order, and the single
+ * checkpoint finding must not be spent on it, so the order stays due and the next sweep tries it
+ * again. The retries are bounded by the window itself: an order is swept only until its promised
+ * time, so one that the database could not serve before then simply has no checkpoint finding,
+ * which is the true statement. The sweep is safe to run on every node: the finding is unique per
+ * order, so the node that loses a race writes nothing.
  *
  * <p>Polling PostgreSQL, like the kitchen's release sweep, because an in-memory timer is lost on
  * every restart and a checkpoint that never ran is a price nobody re-checked.
@@ -32,6 +44,9 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderRequote
 public class ScheduledOrderRequoteWorker {
 
     private static final Logger log = LoggerFactory.getLogger(ScheduledOrderRequoteWorker.class);
+
+    /** How far down a cause chain {@link #isTransient} looks; a chain this deep is a loop or noise. */
+    private static final int MAXIMUM_CAUSE_DEPTH = 10;
 
     private final ScheduledOrderRequoteService requotes;
     private final JdbcOrderRequoteStore store;
@@ -83,6 +98,15 @@ public class ScheduledOrderRequoteWorker {
             } catch (RuntimeException failure) {
                 // The order's id and the failure's class, never its message: a pricing or
                 // decryption message can carry an address or a name (ADR 0029).
+                if (isTransient(failure)) {
+                    // Nothing is recorded: the checkpoint finding is the order's one, and a pool that
+                    // timed out says nothing about whether the order can be priced.
+                    log.warn(
+                            "Order {} could not be re-quoted at its checkpoint and stays due: {}",
+                            due.orderId(),
+                            failure.getClass().getSimpleName());
+                    continue;
+                }
                 log.error(
                         "Order {} could not be re-quoted at its checkpoint: {}",
                         due.orderId(),
@@ -99,5 +123,27 @@ public class ScheduledOrderRequoteWorker {
             }
         }
         return judged;
+    }
+
+    /**
+     * Whether the failure, or anything it wraps, is the database being briefly unavailable rather
+     * than something wrong with the order: a connection that could not be had in time, a deadlock
+     * or lock timeout, a cancelled statement, a transaction that could not start. These come out of
+     * pricing wrapped in whatever the layers above made of them, so the whole cause chain is read.
+     */
+    static boolean isTransient(Throwable failure) {
+        Throwable cause = failure;
+        for (int depth = 0; cause != null && depth < MAXIMUM_CAUSE_DEPTH; depth++) {
+            if (cause instanceof TransientDataAccessException
+                    || cause instanceof DataAccessResourceFailureException
+                    || cause instanceof CannotCreateTransactionException
+                    || cause instanceof TransactionTimedOutException
+                    || cause instanceof SQLTransientException
+                    || cause instanceof SQLRecoverableException) {
+                return true;
+            }
+            cause = cause.getCause() == cause ? null : cause.getCause();
+        }
+        return false;
     }
 }
