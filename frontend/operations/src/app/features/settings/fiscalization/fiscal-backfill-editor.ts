@@ -183,6 +183,12 @@ export class FiscalBackfillEditor {
   /** The reference row chosen for a node's ИКПУ, kept for the package codes it lists. */
   private readonly picks = signal<ReadonlyMap<string, MxikReferenceRow>>(new Map());
   private readonly problems = signal<ReadonlyMap<string, RowProblem>>(new Map());
+  /**
+   * The package code in a node's open cell that came from the reference row picked for its ИКПУ
+   * (filled because it was the only one, or clicked from the list), as against one the operator typed.
+   * It belongs to that pick: choosing or typing a different ИКПУ takes it back, where a typed one stays.
+   */
+  private readonly derivedPackages = signal<ReadonlyMap<string, string>>(new Map());
 
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -261,6 +267,12 @@ export class FiscalBackfillEditor {
 
   protected onInput(nodeId: string, column: BackfillColumn, raw: string): void {
     this.edits.update((current) => this.withCell(current, nodeId, column, raw));
+    if (column === 'pkg') {
+      // Typed into: whatever the cell holds now is the operator's own.
+      this.releasePackage(nodeId);
+    } else {
+      this.withdrawDerivedPackage(nodeId, normalize(raw));
+    }
     this.forget(nodeId);
   }
 
@@ -268,7 +280,9 @@ export class FiscalBackfillEditor {
    * The operator chose a row of the ИКПУ reference for this node (its code is already in the cell).
    * The reference lists the package codes the good is sold in: exactly one is filled into an open
    * package cell, several are offered as a choice beside it, and none leaves the cell to be typed.
-   * A package cell that already holds a code, stored or typed, is not touched.
+   * A package cell that already holds a code, stored or typed, is not touched. One a previous pick
+   * filled was taken back when the cell's ИКПУ changed (see {@link withdrawDerivedPackage}), which
+   * happens before this runs, so it counts as open here.
    */
   protected onMxikPicked(nodeId: string, reference: MxikReferenceRow): void {
     this.picks.update((current) => new Map(current).set(nodeId, reference));
@@ -276,13 +290,15 @@ export class FiscalBackfillEditor {
     if (!row || row.pkgStored || row.pkg !== '' || reference.defaultPackageCodes.length !== 1) {
       return;
     }
-    this.edits.update((current) =>
-      this.withCell(current, nodeId, 'pkg', reference.defaultPackageCodes[0]),
-    );
+    const code = reference.defaultPackageCodes[0];
+    this.edits.update((current) => this.withCell(current, nodeId, 'pkg', code));
+    this.derivedPackages.update((current) => new Map(current).set(nodeId, code));
   }
 
   protected usePackageCode(nodeId: string, code: string): void {
     this.edits.update((current) => this.withCell(current, nodeId, 'pkg', code));
+    // Chosen from the picked reference's own list, so it belongs to that pick like a filled one.
+    this.derivedPackages.update((current) => new Map(current).set(nodeId, code));
     this.forget(nodeId);
   }
 
@@ -305,6 +321,7 @@ export class FiscalBackfillEditor {
     const firstColumn = columns.indexOf(column);
     const rows = this.rows();
     const touched: string[] = [];
+    const pasted: { nodeId: string; column: BackfillColumn; value: string }[] = [];
     let skipped = 0;
     this.edits.update((current) => {
       let next = current;
@@ -327,11 +344,20 @@ export class FiscalBackfillEditor {
             skipped++;
           }
           next = this.withCell(next, row.nodeId, target, cell);
+          pasted.push({ nodeId: row.nodeId, column: target, value });
         });
       });
       return next;
     });
     this.pasteSkipped.set(skipped);
+    // A pasted package code is the operator's own, and is settled first so that a row whose ИКПУ
+    // and package code arrive together does not have the new package code taken back with the old pick's.
+    pasted
+      .filter((cell) => cell.column === 'pkg')
+      .forEach((cell) => this.releasePackage(cell.nodeId));
+    pasted
+      .filter((cell) => cell.column === 'mxik')
+      .forEach((cell) => this.withdrawDerivedPackage(cell.nodeId, cell.value));
     touched.forEach((id) => this.forget(id));
   }
 
@@ -351,6 +377,7 @@ export class FiscalBackfillEditor {
   protected discard(): void {
     this.edits.set(new Map());
     this.picks.set(new Map());
+    this.derivedPackages.set(new Map());
     this.epoch.update((value) => value + 1);
     this.problems.set(new Map());
     this.saveError.set(null);
@@ -389,6 +416,7 @@ export class FiscalBackfillEditor {
             counts[status === 'CLASSIFIED' ? 'saved' : 'unchanged']++;
             problems.delete(row.nodeId);
             this.edits.update((current) => this.without(current, row.nodeId));
+            this.releasePackage(row.nodeId);
             applied = true;
           } else if (status === 'NOT_FOUND') {
             counts.notFound++;
@@ -536,6 +564,35 @@ export class FiscalBackfillEditor {
     const next = new Map(current);
     next.delete(nodeId);
     return next;
+  }
+
+  /** The package code in this node's cell is the operator's own from here on: no pick takes it back. */
+  private releasePackage(nodeId: string): void {
+    if (this.derivedPackages().has(nodeId)) {
+      this.derivedPackages.update((current) => {
+        const next = new Map(current);
+        next.delete(nodeId);
+        return next;
+      });
+    }
+  }
+
+  /**
+   * The cell's ИКПУ is now {@code mxik}. A package code that came from the reference row picked for an
+   * earlier ИКПУ no longer belongs beside it, so it is taken back; a code the operator typed is left
+   * alone. Choosing a reference row writes its code before it announces the pick, so the new row's own
+   * package code, if it lists exactly one, is filled afterwards by {@link onMxikPicked}.
+   */
+  private withdrawDerivedPackage(nodeId: string, mxik: string): void {
+    const derived = this.derivedPackages().get(nodeId);
+    if (derived === undefined || this.picks().get(nodeId)?.code === mxik) {
+      return;
+    }
+    this.releasePackage(nodeId);
+    const current = this.rows().find((row) => row.nodeId === nodeId);
+    if (current && current.pkg === derived) {
+      this.edits.update((edits) => this.withCell(edits, nodeId, 'pkg', ''));
+    }
   }
 
   /** A row the operator touches again is no longer «not saved». */
