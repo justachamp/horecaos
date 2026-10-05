@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
@@ -379,6 +379,25 @@ describe('DineInTablePicker', () => {
         host.querySelector('[data-testid="new-order-table-free-select"]')?.textContent,
         'the table the party freed is now one to seat',
       ).toContain('T7');
+    });
+
+    it('clears the pick the moment the close is made, before the room has been read again', async () => {
+      const host = await render([party()], [table()], ['DINEIN_SESSION_MANAGE']);
+      sessionsApi.detail.mockReturnValue(of(emptyBill('ses-1')));
+      sessionsApi.close.mockReturnValue(of(party({ status: 'CLOSED', version: 6 })));
+      (host.querySelector('[data-testid="new-order-table-session"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(picks.at(-1)).toEqual({ sessionId: 'ses-1', tables: 'T7' });
+      // The re-read of the room never answers: whatever the screen does, it does without it.
+      sessionsApi.live.mockReturnValue(new Observable<readonly SessionView[]>(() => undefined));
+
+      await closeFirstParty(host);
+
+      expect(
+        picks.at(-1),
+        'a Создать pressed while the room is being re-read would put an order on a party that has left',
+      ).toBeNull();
+      expect(rows(host), 'and the party is gone from the list at once').toEqual([]);
     });
 
     it('closing a party that was not chosen leaves the chosen one chosen', async () => {
