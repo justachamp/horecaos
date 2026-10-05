@@ -10,8 +10,6 @@ import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -79,8 +77,6 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 @Service
 public class CourierDeliveryService {
-
-    private static final Logger log = LoggerFactory.getLogger(CourierDeliveryService.class);
 
     /** The ADR 0029 purpose a reveal states while the courier still only holds an offer. */
     static final String PURPOSE_OFFER = "COURIER_LOCATION_BEFORE_ACCEPT";
@@ -508,20 +504,23 @@ public class CourierDeliveryService {
 
     /**
      * What the courier is to collect at the door. Nothing for an order the platform already holds
-     * the money for. When the settlement cannot be read the order total stands in, the same
-     * fallback {@code DeliveryAccrualOrderCompletionTrigger} makes: a courier is never told
-     * "nothing is due" because a lookup failed.
+     * the money for. When no settlement exists the order total stands in, the same fallback
+     * {@code DeliveryAccrualOrderCompletionTrigger} makes: a courier is never told "nothing is due"
+     * because a lookup found nothing.
+     *
+     * <p>The fallback is read from an answer, not caught from a throw. The lookup is a transactional
+     * bean method, and one that throws into this request's transaction marks it rollback-only
+     * before a {@code catch} here could run: the accept, the advance and the delivery list would
+     * each have rolled back their own work and answered 500. Any failure the lookup cannot answer
+     * (the database itself) is a real failure and propagates.
      */
     private long cashDueMinor(Where where, Job job) {
         if (job.prepaid()) {
             return 0L;
         }
-        try {
-            return Math.max(0L, cashDue.cashDueMinor(where.tenantId(), job.orderId()));
-        } catch (RuntimeException failure) {
-            log.warn("Could not read the cash due for order {}; falling back to the order total", job.orderId());
-            return job.orderTotalMinor();
-        }
+        return Math.max(
+                0L,
+                cashDue.cashDueMinorIfSettled(where.tenantId(), job.orderId()).orElse(job.orderTotalMinor()));
     }
 
     /**
