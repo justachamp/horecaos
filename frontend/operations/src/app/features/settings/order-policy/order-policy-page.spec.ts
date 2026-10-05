@@ -705,6 +705,55 @@ describe('OrderPolicyPage', () => {
       expect(messages()).toEqual(['Order acceptance — new version published for brand “Rayhon”']);
     });
 
+    // Card 1 is written at a brand or a branch, never tenant-wide (`OrderPolicyApi.publish` takes a
+    // brand and an optional branch), so with the bar at the company-wide level the toast must name
+    // where the version really went. «For the whole company» would be the mistake §1.3 exists to prevent.
+    async function publishCard1(): Promise<void> {
+      (fixture.nativeElement.querySelector('.card .primary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const reason = fixture.nativeElement.querySelector('#policy-reason') as HTMLInputElement;
+      reason.value = 'Peak hours';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      clickPublish();
+      await flushMicrotasks();
+    }
+
+    it('names the brand Card 1 landed on, not the company, while the bar is at the company-wide level', async () => {
+      settingsScope.level.set('TENANT');
+      settingsScope.target.set({ level: 'TENANT', name: null });
+      fixture.detectChanges();
+      // The level change re-reads the cards; the edit button is back once that has settled.
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      await publishCard1();
+
+      expect(messages()).toEqual(['Order acceptance — new version published for brand “Rayhon”']);
+      expect(policyApi.publish).toHaveBeenCalledWith(TENANT_ID, BRAND_ID, null, expect.anything());
+    });
+
+    it('names the branch Card 1 landed on while the bar is at the company-wide level with a branch in the query', async () => {
+      settingsScope.level.set('TENANT');
+      settingsScope.target.set({ level: 'TENANT', name: null });
+      settingsScope.locationId.set('loc-1');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      await publishCard1();
+
+      expect(messages()).toEqual([
+        'Order acceptance — new version published for branch “Chilanzar”',
+      ]);
+      expect(policyApi.publish).toHaveBeenCalledWith(
+        TENANT_ID,
+        BRAND_ID,
+        'loc-1',
+        expect.anything(),
+      );
+    });
+
     it('names the setting, its new value and the level when a field is overridden', async () => {
       const row = fixture.nativeElement.querySelectorAll('.field-row')[3] as HTMLElement;
       (row.querySelector('.field__action') as HTMLButtonElement).click();

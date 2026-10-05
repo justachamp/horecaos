@@ -391,9 +391,13 @@ export class OrderPolicyPage {
     }
     this.saving.set(true);
     this.saveError.set(null);
-    const target = this.scope.target();
+    // Named from what is written, not from the bar's level: the acceptance policy is published at a
+    // brand or at a branch (`OrderPolicyApi.publish`), so with the bar at the company-wide level the
+    // version still lands on the brand -- and the toast must not tell the owner every brand has it.
+    const locationId = this.scope.locationId();
+    const target = this.scope.targetFor(locationId ? 'LOCATION' : 'BRAND', brandId, locationId);
     try {
-      const updated = await this.policyApi.publish(tenantId, brandId, this.scope.locationId(), {
+      const updated = await this.policyApi.publish(tenantId, brandId, locationId, {
         mode: this.draftMode(),
         approvalChannel: this.draftApprovalChannel(),
         approvalTimeoutSeconds: this.draftTimeoutSeconds(),
