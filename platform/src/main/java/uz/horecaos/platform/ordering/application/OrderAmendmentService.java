@@ -266,6 +266,7 @@ public class OrderAmendmentService {
         // second charge or a second reservation.
         DecodedAmendment decoded = decode(typedPayloadsOfIssued(command.commands()));
         requireOrderableQuantities(order, decoded.basket());
+        requireWeighedLinesStayAtHandover(order, decoded, orders.lines(tenantId, orderId));
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
         UUID quoteId = null;
@@ -547,6 +548,9 @@ public class OrderAmendmentService {
 
         String paymentProjectionPatch = null;
         if (decoded.paymentMethodCode() != null) {
+            // Asked again here: a priced amendment outlives the call that priced it, and this is the
+            // statement that opens the provider intent.
+            requireWeighedLinesStayAtHandover(order, decoded, liveLines);
             paymentProjectionPatch = applyPaymentMethodChange(tenantId, order, amendment, decoded.paymentMethodCode());
             fiscalCorrectionRequired = true;
         }
@@ -1361,6 +1365,44 @@ public class OrderAmendmentService {
                     physical.getOrDefault(added.variantId(), CartMenuRules.PhysicalRules.WHOLE_UNITS),
                     added.quantity(),
                     maximum);
+        }
+    }
+
+    /**
+     * ADR 0137: an order holding a line sold by weight is paid at handover, never in advance.
+     *
+     * <p>Checkout refuses a provider payment for such a basket ({@code WEIGHED_LINES_PAY_AT_HANDOVER}),
+     * because the line is priced at its nominal weight and corrected at the scale, and a total a provider
+     * has already taken cannot follow the correction. Changing the payment method of a live order is the
+     * second door to the same sale, so it is shut by the same rule: a method that takes the money first
+     * is refused when the order holds a weighed line, or the same amendment adds one. Whether the sale is
+     * ever allowed, with the difference refunded or topped up at the door, is ADR 0153, which is Proposed
+     * and not built here.
+     *
+     * @param liveLines the order's lines as they stand, before this amendment
+     */
+    private void requireWeighedLinesStayAtHandover(
+            OrderRow order, DecodedAmendment decoded, List<OrderLineRow> liveLines) {
+        String method = decoded.paymentMethodCode();
+        if (method == null
+                || CASH_METHOD_CODE.equalsIgnoreCase(method)
+                || !payments.takesMoneyBeforeHandover(order.tenantId(), method)) {
+            return;
+        }
+        boolean weighed = liveLines.stream().anyMatch(OrderLineRow::catchweight);
+        if (!weighed && !decoded.basket().addedLines().isEmpty()) {
+            Set<UUID> added = new HashSet<>();
+            decoded.basket().addedLines().forEach(line -> added.add(line.variantId()));
+            weighed = menu.physicalOf(order.tenantId(), order.brandId(), order.channelCode(), added).values().stream()
+                    .anyMatch(CartMenuRules.PhysicalRules::catchweight);
+        }
+        if (weighed) {
+            throw new AmendmentRefusedException(
+                    "WEIGHED_LINES_PAY_AT_HANDOVER",
+                    "This order has an item sold by weight, whose final price is set at handover, so it "
+                            + "cannot be paid with "
+                            + method
+                            + " in advance");
         }
     }
 
