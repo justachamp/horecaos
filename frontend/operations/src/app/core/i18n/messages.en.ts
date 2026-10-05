@@ -3184,6 +3184,30 @@ export const messagesEn = {
   'kitchen.stopList.propagation.pending':
     '{name}: {count} items not confirmed since {since} — update in the partner portal',
   'kitchen.stopList.propagation.inSync': '{name}: in sync',
+  'kitchen.stopList.explainer.open': 'Why?',
+  'kitchen.stopList.explainer.title': 'Why can’t I sell this?',
+  'kitchen.stopList.explainer.channel': 'On channel',
+  'kitchen.stopList.explainer.anyChannel':
+    'No channel in particular (only stops on every channel apply)',
+  'kitchen.stopList.explainer.loading': 'Checking…',
+  'kitchen.stopList.explainer.denied': 'No access to this dish’s availability here',
+  'kitchen.stopList.explainer.sellable': 'It can be sold here now.',
+  'kitchen.stopList.explainer.notSellable': 'It cannot be sold here now.',
+  'kitchen.stopList.explainer.reasons': 'Why',
+  'kitchen.stopList.explainer.reason.onStop': 'A stop covers it',
+  'kitchen.stopList.explainer.reason.soldOut': 'It is sold out here',
+  'kitchen.stopList.explainer.reason.channelStopped':
+    'What is left is at or below this channel’s cut-off',
+  'kitchen.stopList.explainer.reason.notStocked': 'It is not stocked at this branch',
+  'kitchen.stopList.explainer.reason.unknown': 'Other reason ({code})',
+  'kitchen.stopList.explainer.stops': 'Stops that cover it',
+  'kitchen.stopList.explainer.noStops': 'No stop covers it.',
+  'kitchen.stopList.explainer.ignored': 'ignored — stops are switched off',
+  'kitchen.stopList.explainer.stopsOff':
+    'Stops are switched off for this company, so none of them is read. A dish sells unless its position says otherwise.',
+  'kitchen.stopList.explainer.union':
+    'Every stop that covers a dish applies together. A branch cannot override a brand-wide stop.',
+  'kitchen.stopList.explainer.close': 'Close',
 
   // Capacity & buffer settings (2.6) — wave 43
   'kitchen.capacity.title': 'Capacity & buffer settings',

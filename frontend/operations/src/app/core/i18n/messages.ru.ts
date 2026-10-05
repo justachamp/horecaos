@@ -3146,6 +3146,29 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.stopList.propagation.pending':
     '{name}: {count} позиций не подтверждены с {since} — обновите в партнёрском кабинете',
   'kitchen.stopList.propagation.inSync': '{name}: синхронизировано',
+  'kitchen.stopList.explainer.open': 'Почему?',
+  'kitchen.stopList.explainer.title': 'Почему нельзя продать?',
+  'kitchen.stopList.explainer.channel': 'В канале',
+  'kitchen.stopList.explainer.anyChannel': 'Без канала (действуют только стопы на всех каналах)',
+  'kitchen.stopList.explainer.loading': 'Проверяем…',
+  'kitchen.stopList.explainer.denied': 'Нет доступа к наличию этого блюда здесь',
+  'kitchen.stopList.explainer.sellable': 'Сейчас здесь его можно продавать.',
+  'kitchen.stopList.explainer.notSellable': 'Сейчас здесь его нельзя продавать.',
+  'kitchen.stopList.explainer.reasons': 'Причина',
+  'kitchen.stopList.explainer.reason.onStop': 'На него действует стоп',
+  'kitchen.stopList.explainer.reason.soldOut': 'Здесь оно закончилось',
+  'kitchen.stopList.explainer.reason.channelStopped':
+    'Остаток не больше порога, заданного для этого канала',
+  'kitchen.stopList.explainer.reason.notStocked': 'В этом филиале его нет в учёте',
+  'kitchen.stopList.explainer.reason.unknown': 'Другая причина ({code})',
+  'kitchen.stopList.explainer.stops': 'Стопы, которые на него действуют',
+  'kitchen.stopList.explainer.noStops': 'Ни один стоп на него не действует.',
+  'kitchen.stopList.explainer.ignored': 'не учитывается — стопы отключены',
+  'kitchen.stopList.explainer.stopsOff':
+    'Для этой компании стопы отключены, поэтому ни один из них не учитывается. Блюдо продаётся, если его остаток не говорит обратного.',
+  'kitchen.stopList.explainer.union':
+    'Все стопы, которые касаются блюда, действуют вместе. Филиал не может отменить стоп всего бренда.',
+  'kitchen.stopList.explainer.close': 'Закрыть',
 
   // Мощность и настройки буфера (2.6) — волна 43
   'kitchen.capacity.title': 'Мощность и настройки буфера',

@@ -64,6 +64,41 @@ export interface StopGestureResponse {
   readonly items: readonly StopItemOutcome[];
 }
 
+/**
+ * A stop as the explainer lists it. Mirrors `InventoryStopController.StopResponse`. `ignored` is
+ * true once stops have been switched off for the company (ADR 0141, rollback switch three): the
+ * row is still there and nothing reads it.
+ */
+export interface ExplainedStop {
+  readonly id: string;
+  readonly variantId: string;
+  readonly scopeType: StopScope;
+  readonly locationId?: string | null;
+  readonly menuId?: string | null;
+  readonly channelId?: string | null;
+  readonly source: StopSourceName;
+  readonly reasonCode: string;
+  readonly endsAt?: string | null;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly version: number;
+  readonly ignored?: boolean;
+}
+
+/**
+ * "Why can't I sell this?" for one dish at this branch (ADR 0141 Decision 1). Mirrors
+ * `InventoryStopController.ExplanationResponse`: whether it sells, the reasons (`ON_STOP`,
+ * `SOLD_OUT`, `CHANNEL_STOPPED`, `NOT_STOCKED_AT_LOCATION`) and every stop that covers it, not
+ * the first. `stopsConsulted` is false once stops are switched off, which is why `stops` is then
+ * empty even though some may exist.
+ */
+export interface AvailabilityExplanation {
+  readonly sellable: boolean;
+  readonly reasons: readonly string[];
+  readonly stops: readonly ExplainedStop[];
+  readonly stopsConsulted?: boolean;
+}
+
 export type PropagationMode = 'AUTOMATIC' | 'MANUAL' | 'SUSPENDED';
 
 /** Mirrors `MarketplacePropagationController.ItemResponse`. */
@@ -144,6 +179,31 @@ export class StopsApi {
         expectedVersion: stop.version,
       }),
     );
+  }
+
+  /**
+   * Why a dish can or cannot be sold at this branch, on one channel (by its code) or on none.
+   * With no channel only the stops that cover every channel apply, which the dialog says.
+   * Tolerates a body without the lists.
+   */
+  async explain(
+    scope: LocationScope,
+    variantId: string,
+    channelCode?: string,
+  ): Promise<AvailabilityExplanation> {
+    const result = await firstValueFrom(
+      this.api.get<Partial<AvailabilityExplanation>>(
+        operationsPaths.inventoryAvailabilityExplanation(scope, variantId),
+        { params: channelCode ? { channel: channelCode } : {} },
+      ),
+    );
+    const body = result.value ?? {};
+    return {
+      sellable: body.sellable === true,
+      reasons: Array.isArray(body.reasons) ? body.reasons : [],
+      stops: Array.isArray(body.stops) ? body.stops : [],
+      stopsConsulted: body.stopsConsulted !== false,
+    };
   }
 
   /** What each connected marketplace has and has not been told. Tolerates a body without bindings. */

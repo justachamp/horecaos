@@ -3185,6 +3185,30 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.stopList.propagation.pending':
     '{name}: {count} ta pozitsiya {since} dan beri tasdiqlanmagan — hamkor kabinetida yangilang',
   'kitchen.stopList.propagation.inSync': '{name}: sinxronlashgan',
+  'kitchen.stopList.explainer.open': 'Nega?',
+  'kitchen.stopList.explainer.title': 'Nega sotib boʻlmaydi?',
+  'kitchen.stopList.explainer.channel': 'Kanalda',
+  'kitchen.stopList.explainer.anyChannel':
+    'Kanalsiz (faqat barcha kanallardagi stoplar amal qiladi)',
+  'kitchen.stopList.explainer.loading': 'Tekshirilmoqda…',
+  'kitchen.stopList.explainer.denied': 'Bu taomning bu yerdagi mavjudligiga ruxsat yoʻq',
+  'kitchen.stopList.explainer.sellable': 'Hozir buni bu yerda sotish mumkin.',
+  'kitchen.stopList.explainer.notSellable': 'Hozir buni bu yerda sotib boʻlmaydi.',
+  'kitchen.stopList.explainer.reasons': 'Sabab',
+  'kitchen.stopList.explainer.reason.onStop': 'Unga stop amal qiladi',
+  'kitchen.stopList.explainer.reason.soldOut': 'Bu yerda u tugagan',
+  'kitchen.stopList.explainer.reason.channelStopped':
+    'Qolgan miqdor bu kanal uchun belgilangan chegaradan oshmaydi',
+  'kitchen.stopList.explainer.reason.notStocked': 'Bu filialda u hisobda yoʻq',
+  'kitchen.stopList.explainer.reason.unknown': 'Boshqa sabab ({code})',
+  'kitchen.stopList.explainer.stops': 'Unga amal qiladigan stoplar',
+  'kitchen.stopList.explainer.noStops': 'Unga hech qanday stop amal qilmaydi.',
+  'kitchen.stopList.explainer.ignored': 'hisobga olinmaydi — stoplar oʻchirilgan',
+  'kitchen.stopList.explainer.stopsOff':
+    'Bu kompaniya uchun stoplar oʻchirilgan, shuning uchun ularning hech biri hisobga olinmaydi. Taom, qoldigʻi aksini koʻrsatmasa, sotiladi.',
+  'kitchen.stopList.explainer.union':
+    'Taomga tegishli barcha stoplar birga amal qiladi. Filial butun brend stopini bekor qila olmaydi.',
+  'kitchen.stopList.explainer.close': 'Yopish',
 
   // Sigʻim va bufer sozlamalari (2.6) — 43-toʻlqin
   'kitchen.capacity.title': 'Sigʻim va bufer sozlamalari',

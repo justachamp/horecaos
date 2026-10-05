@@ -78,6 +78,14 @@
 
   <q-stop-propagation-banner [refreshKey]="propagationKey()" />
 
+  @if (explaining(); as target) {
+    <q-stop-explainer-dialog
+      [variantId]="target.variantId"
+      [productName]="target.productName"
+      (closed)="closeExplainer()"
+    />
+  }
+
   @if (notice(); as message) {
     <div class="stop-list__notice-band" role="alert">
       <span class="q-body-sm">{{ message }}</span>
@@ -133,6 +141,16 @@
             <span class="status-badge status-badge--onStop">{{
               'kitchen.stopList.status.onStop' | t
             }}</span>
+          }
+          @if (canExplain(item)) {
+            <button
+              type="button"
+              class="stop-list__explain"
+              (click)="openExplainer(item)"
+              data-testid="stop-list-explain"
+            >
+              {{ 'kitchen.stopList.explainer.open' | t }}
+            </button>
           }
         </ng-template>
         <ng-template qCell="scope" let-item>
