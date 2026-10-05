@@ -381,6 +381,7 @@ export interface MenuModifierOption {
   code?: string;
   maximumQuantity?: number;
   name?: string;
+  nestedGroups?: Array<MenuModifierGroupPolicy>;
   optionId?: string;
 }
 
@@ -401,6 +402,8 @@ export interface MenuProduct {
 export interface MenuVariant {
   amountMinor?: number;
   isDefault?: boolean;
+  modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;

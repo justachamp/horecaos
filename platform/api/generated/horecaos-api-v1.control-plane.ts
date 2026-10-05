@@ -1838,6 +1838,7 @@ export interface MenuModifierOption {
   code?: string;
   maximumQuantity?: number;
   name?: string;
+  nestedGroups?: Array<MenuModifierGroupPolicy>;
   optionId?: string;
 }
 

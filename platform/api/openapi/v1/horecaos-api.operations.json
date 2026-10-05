@@ -3580,6 +3580,67 @@
         },
         "type" : "object"
       },
+      "ComboSalesListResponse" : {
+        "properties" : {
+          "maybeMore" : {
+            "type" : "boolean"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboSalesRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ComboSalesRowResponse" : {
+        "properties" : {
+          "comboContainerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "comboName" : {
+            "type" : "string"
+          },
+          "combosSold" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "deliveryCombos" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "orders" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pickupCombos" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "purchases" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalDiscountSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalGrossSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalNetSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CommentPresetChip" : {
         "properties" : {
           "code" : {
@@ -46426,6 +46487,80 @@
         },
         "summary" : "The most recently computed run over this exact window, if any",
         "tags" : [ "Product classification" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/combo-sales" : {
+      "get" : {
+        "description" : "One row per combo container over the closed business days in the range, straight off reporting.fact_order_line. A combo is sold as several ordinary lines that share a selection, and the container is never a line, so combosSold takes one quantity per purchase (distinct combo_selection_id) while the money is the sum over the purchase's component lines. Completed orders only: a combo on a cancelled or rejected order was not sold. A component sold on its own is not counted here, and the same dish sold as a component still appears in /variant-sales under its own name. maybeMore is true when the bounded read came back full.",
+        "operationId" : "comboSales",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "fulfilmentType",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComboSalesListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sales by combo (ADR 0136): how many of each combo were sold, and for how much",
+        "tags" : [ "Reporting" ]
       }
     },
     "/api/v1/tenants/{tenantId}/reporting/couriers/external-delivery-cost" : {

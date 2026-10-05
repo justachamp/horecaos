@@ -1113,6 +1113,12 @@
           "name" : {
             "type" : "string"
           },
+          "nestedGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
+            },
+            "type" : "array"
+          },
           "optionId" : {
             "format" : "uuid",
             "type" : "string"
@@ -1190,6 +1196,19 @@
           },
           "isDefault" : {
             "type" : "boolean"
+          },
+          "modifierGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modifierGroupPolicies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
+            },
+            "type" : "array"
           },
           "onSaleNow" : {
             "type" : "boolean"

@@ -5780,6 +5780,12 @@
           "name" : {
             "type" : "string"
           },
+          "nestedGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
+            },
+            "type" : "array"
+          },
           "optionId" : {
             "format" : "uuid",
             "type" : "string"
