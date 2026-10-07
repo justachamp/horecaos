@@ -38,7 +38,7 @@
 
 /* The station a wall is configured to show, named in the room's own language (ADR 0151). */
 .wv__station {
-  margin-left: 16px;
+  margin-inline-start: 16px;
   font-weight: 400;
   opacity: 0.85;
 }

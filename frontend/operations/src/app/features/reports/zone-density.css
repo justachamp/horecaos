@@ -12,7 +12,7 @@
 .density__table th,
 .density__table td {
   padding: 6px 12px;
-  text-align: left;
+  text-align: start;
   font-size: var(--q-type-body-sm);
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -23,7 +23,7 @@
 }
 
 .density__num {
-  text-align: right !important;
+  text-align: end !important;
 }
 
 .density__row--outside td {

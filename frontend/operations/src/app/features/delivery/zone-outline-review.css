@@ -28,7 +28,7 @@
 .review__corners th,
 .review__corners td {
   padding: 2px 8px;
-  text-align: left;
+  text-align: start;
   font-size: var(--q-type-caption);
 }
 

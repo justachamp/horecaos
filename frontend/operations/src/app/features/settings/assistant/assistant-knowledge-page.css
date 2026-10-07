@@ -169,7 +169,7 @@
 .counter {
   margin: 4px 0 0;
   color: var(--q-ink-subtle);
-  text-align: right;
+  text-align: end;
 }
 
 .counter--over {

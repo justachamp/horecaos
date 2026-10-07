@@ -28,7 +28,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
@@ -41,11 +41,11 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .actions {
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }
 

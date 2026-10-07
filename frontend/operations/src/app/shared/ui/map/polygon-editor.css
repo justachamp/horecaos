@@ -43,7 +43,7 @@
 }
 
 .q-polygon-editor__corners th {
-  padding-right: 12px;
+  padding-inline-end: 12px;
   text-align: start;
   font-weight: normal;
   color: var(--q-ink-subtle);
