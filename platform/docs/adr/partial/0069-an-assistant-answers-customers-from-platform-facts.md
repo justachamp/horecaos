@@ -26,11 +26,23 @@
   `/operations/tenants/{id}/(brands/{id}/)assistant/knowledge` behind
   `assistant.knowledge.manage` (append-only versions, `If-Match`), usage is read at
   `/assistant/usage`, and the golden-set suite (`golden-set.psv`, 100% floor) runs in
-  the ordinary test shards. Not built: order assembly (stage two — the module has no
-  dependency on a cart, a checkout or a payment, and a test keeps it so), the
-  operations-console knowledge authoring screen, the ADR 0043 day-close usage fact
-  (the ledger is the source it will read), a per-tenant provider account, and any
-  verification against a live provider account (the owner holds none yet).
+  the ordinary test shards. The operations console surfaces it (Settings > Chat
+  assistant): the operator inbox draws an assistant message as its own author, marks a
+  conversation the assistant is answering (`assistantActive`, decided in one place by
+  `ConversationState.machineAnswers`), offers "take over" on an `IDLE` conversation it
+  has spoken in (the same takeover call, refused for one nobody answered), and says why
+  a message was answered as it was (`/brands/{id}/assistant/turns/{turnId}`, ids and
+  kinds of fact, no words, under `assistant.read`); the settings card holds the
+  per-brand switch, the month's spend against the ceiling (shown, not edited: the
+  ceiling caps what HorecaOS pays the processor, so `assistant.monthly_spend_ceiling_usd_cents`
+  stays a platform key), and the tenant's own first-answer wording per language
+  (`assistant.disclosure_text_{en,ru,uz}`, tenant-visible, 500 characters, blank keeps
+  the platform's wording and never switches the sentence off); a notes screen authors,
+  versions and retires knowledge entries. Not built: order assembly (stage two — the module has no
+  dependency on a cart, a checkout or a payment, and a test keeps it so), the ADR 0043
+  day-close usage fact (the ledger is the source it will read), a per-tenant provider
+  account, a tenant-editable ceiling (no record decides who may raise or lower it), and
+  any verification against a live provider account (the owner holds none yet).
 - Date proposed: 2026-09-05
 - Date decided: 2026-10-07
 - Deciders: platform owner (direction and the open inputs below), Claude (architecture)
@@ -265,7 +277,7 @@ continue to work unchanged, because the assistant was never in their path.
 
 - [x] `assistant` module skeleton, `AssistantModelPort`, fake adapter (the fake is test-only)
 - [x] Knowledge store, versions, authoring endpoints and capability
-- [ ] Operations console: knowledge authoring screen (IA row to be assigned)
+- [x] Operations console: knowledge authoring screen, the switch and wording card, and the inbox surfaces (IA row to be assigned)
 - [x] Retrieval and grounding for price, availability, branches, hours, coverage
 - [x] Customer order-state answering, bound to ADR 0063 proven identity
 - [x] Refusal and escalation into the ADR 0059 inbox, with ADR 0064 presence

@@ -372,6 +372,11 @@ class AssistantControllersEndpointTests {
         assertThat(fresh.get("providerConfigured").asBoolean())
                 .as("no provider key is stored yet")
                 .isFalse();
+        assertThat(fresh.get("defaultDisclosure").get("ru").asString())
+                .as("the settings card shows the platform's own wording beside the tenant's, from one source")
+                .contains("автоматический помощник");
+        assertThat(fresh.get("defaultDisclosure").get("en").asString()).contains("automated assistant");
+        assertThat(fresh.get("defaultDisclosure").get("uz").asString()).contains("avtomatik yordamchiman");
 
         Instant now = Instant.now();
         insertTurn("ANSWERED", 24_000_000L, 1_000, 100, now.minus(Duration.ofSeconds(5)), false);

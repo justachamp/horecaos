@@ -5,11 +5,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.assistant.api.AssistantModelPort;
+import uz.horecaos.platform.assistant.domain.CustomerWording;
 import uz.horecaos.platform.assistant.infrastructure.persistence.JdbcKnowledgeStore;
 import uz.horecaos.platform.assistant.infrastructure.persistence.JdbcTurnStore;
 import uz.horecaos.platform.assistant.infrastructure.persistence.JdbcTurnStore.UsageRow;
@@ -71,7 +75,21 @@ public class AssistantUsageService {
                 settings.entitled(tenantId),
                 settings.switchedOnForTenant(tenantId),
                 port != null && port.configured(),
-                knowledge.countPublished(tenantId));
+                knowledge.countPublished(tenantId),
+                defaultDisclosure());
+    }
+
+    /**
+     * The platform's own first-answer wording by reply language -- what a tenant that has written none
+     * says, read from the one place the assistant reads it so the settings screen cannot show a
+     * sentence the assistant does not say.
+     */
+    private static Map<String, String> defaultDisclosure() {
+        Map<String, String> wording = new LinkedHashMap<>();
+        for (String locale : List.of("en", "ru", "uz")) {
+            wording.put(locale, CustomerWording.disclosure(locale));
+        }
+        return Map.copyOf(wording);
     }
 
     /**
@@ -85,6 +103,7 @@ public class AssistantUsageService {
      *                 assistant dark
      * @param switchedOn whether {@code assistant.enabled} is on at tenant scope (a brand may still differ)
      * @param providerConfigured whether the platform has a model provider to call at all
+     * @param defaultDisclosure the platform's own wording ahead of a first answer, by reply language
      */
     public record Report(
             String month,
@@ -103,5 +122,6 @@ public class AssistantUsageService {
             boolean entitled,
             boolean switchedOn,
             boolean providerConfigured,
-            long publishedKnowledgeEntries) {}
+            long publishedKnowledgeEntries,
+            Map<String, String> defaultDisclosure) {}
 }

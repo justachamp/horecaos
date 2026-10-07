@@ -3,6 +3,7 @@ package uz.horecaos.platform.assistant.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +36,9 @@ public class AssistantUsageController {
             summary = "The assistant's month so far",
             description = "Calendar month in UTC. Spend is in millionths of a US dollar (one cent is "
                     + "10000); the ceiling is in US cents. ceilingReached is true exactly when the "
-                    + "assistant is refusing for that reason.")
+                    + "assistant is refusing for that reason. defaultDisclosure is the platform's own "
+                    + "wording ahead of a first answer, by reply language: what a tenant that has "
+                    + "written none says.")
     UsageResponse usage(@PathVariable UUID tenantId) {
         return UsageResponse.of(usage.report(tenantId));
     }
@@ -57,7 +60,8 @@ public class AssistantUsageController {
             boolean entitled,
             boolean switchedOn,
             boolean providerConfigured,
-            long publishedKnowledgeEntries) {
+            long publishedKnowledgeEntries,
+            Map<String, String> defaultDisclosure) {
 
         static UsageResponse of(AssistantUsageService.Report report) {
             return new UsageResponse(
@@ -77,7 +81,8 @@ public class AssistantUsageController {
                     report.entitled(),
                     report.switchedOn(),
                     report.providerConfigured(),
-                    report.publishedKnowledgeEntries());
+                    report.publishedKnowledgeEntries(),
+                    report.defaultDisclosure());
         }
     }
 }

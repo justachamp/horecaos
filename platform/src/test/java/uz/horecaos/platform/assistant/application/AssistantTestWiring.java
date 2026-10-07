@@ -23,8 +23,12 @@ public final class AssistantTestWiring {
 
     private final AssistantFixture fixture;
 
+    /** The service the engine currently asks; replaced when a test changes what the settings resolve to. */
+    private volatile ConversationParticipant current;
+
     public AssistantTestWiring(JdbcClient jdbc, Instant start) {
         this.fixture = new AssistantFixture(jdbc, start);
+        this.current = fixture.service;
     }
 
     /** Creates the tenant, brand and two branches the wiring answers about. */
@@ -33,8 +37,22 @@ public final class AssistantTestWiring {
         return this;
     }
 
+    /**
+     * A participant that always forwards to the current service, so a test can change a setting after
+     * the engine has been wired and the engine still asks the service that reads it.
+     */
     public ConversationParticipant participant() {
-        return fixture.service;
+        return new ConversationParticipant() {
+            @Override
+            public boolean willingToParticipate(UUID tenantId, UUID brandId) {
+                return current.willingToParticipate(tenantId, brandId);
+            }
+
+            @Override
+            public Outcome offer(Turn turn) {
+                return current.offer(turn);
+            }
+        };
     }
 
     public UUID tenantId() {
@@ -71,6 +89,20 @@ public final class AssistantTestWiring {
 
     public AssistantTestWiring someoneIsOnline(boolean online) {
         fixture.presence.someoneOnline = online;
+        return this;
+    }
+
+    /** The per-tenant switch, {@code assistant.enabled}: what a settings card writes. */
+    public AssistantTestWiring switchedOn(boolean on) {
+        fixture.configuration.put("assistant.enabled", on);
+        current = fixture.rebuild();
+        return this;
+    }
+
+    /** What the tenant has worded as its first-answer sentence in one language, as the settings card writes it. */
+    public AssistantTestWiring disclosureReads(String locale, String text) {
+        fixture.configuration.put("assistant.disclosure_text_" + locale, text);
+        current = fixture.rebuild();
         return this;
     }
 

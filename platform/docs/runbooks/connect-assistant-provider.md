@@ -24,7 +24,10 @@ Nothing in this runbook is needed for any other part of the platform to work.
   cannot answer it). The assistant discloses in its first reply of every
   conversation that it is automated and that an external AI service processes the
   question, and asks the customer not to send personal details -- that wording is
-  `CustomerWording.disclosure` and is a default, not legal advice.
+  `CustomerWording.disclosure` and is a default, not legal advice. A tenant words
+  its own, per language, on the operations console (Settings > Chat assistant >
+  What customers are told first; the keys `assistant.disclosure_text_{en,ru,uz}`);
+  blank keeps the default and a tenant can replace the sentence but never remove it.
 
 ## 1. Store the key
 
@@ -63,7 +66,9 @@ Both are needed, and neither is on by default.
    read true for every tenant until enforcement is raised; the next step is what
    holds the assistant dark today.
 2. **The switch** `assistant.enabled = true` at the pilot tenant's scope (or one
-   brand's), through the control plane's configuration screen.
+   brand's). The tenant's owner or administrator does this on the operations
+   console (Settings > Chat assistant); the control plane's configuration screen
+   can too.
 
 Stage one is **read-only answering**: the assistant assembles no cart and never
 completes an order -- the module has no dependency on a cart, a checkout or a
@@ -73,7 +78,9 @@ days: every refusal and every escalation lands there with its history.
 ## 3. Cost: what bounds it
 
 - `assistant.monthly_spend_ceiling_usd_cents` (default 2 500, i.e. $25) per
-  tenant per calendar month (UTC). Reaching it hands customers to a person with
+  tenant per calendar month (UTC). It is the platform's to set and is not a key a
+  tenant can read or write: the operations console shows the tenant its month's
+  spend against it and says to ask support to change it. Reaching it hands customers to a person with
   the stable reason `SPEND_CEILING`; **0 pauses the assistant for that tenant**.
   Concurrent turns can overshoot by the cost of those in flight.
 - `assistant.conversation_turn_cap` (default 20 per conversation per day).

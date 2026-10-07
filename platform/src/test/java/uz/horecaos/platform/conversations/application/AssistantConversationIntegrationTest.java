@@ -317,6 +317,54 @@ class AssistantConversationIntegrationTest {
     }
 
     @Test
+    @DisplayName(
+            "the tenant's switch decides at the bot: off, the chat is what it was before the assistant existed; turned on, the next message is answered with no restart")
+    void theSwitchDecidesAtTheBot() {
+        UUID installationId = seedTelegramInstallation(tenant(), brand());
+        entitlements.entitle(tenant());
+        long chat = 77_008L;
+
+        assistant.switchedOn(false);
+        updateHandler.handle(installation(installationId, tenant()), privateTextUpdate(1, chat, "Сколько стоит плов?"));
+        assertThat(bot.messagesSentTo(chat)).isEmpty();
+        assertThat(conversations.find(
+                        tenant(), brand(), uz.horecaos.platform.conversations.api.ChannelKind.TELEGRAM, chat))
+                .as("a switched-off assistant does not even open a conversation")
+                .isEmpty();
+        assertThat(assistant.model().calls()).isZero();
+
+        assistant.switchedOn(true);
+        updateHandler.handle(installation(installationId, tenant()), privateTextUpdate(2, chat, "Сколько стоит плов?"));
+        assertThat(bot.messagesSentTo(chat)).hasSize(1);
+        assertThat(bot.messagesSentTo(chat).get(0)).contains("45 000 сум");
+
+        assistant.switchedOn(false);
+        updateHandler.handle(installation(installationId, tenant()), privateTextUpdate(3, chat, "Сколько стоит плов?"));
+        assertThat(bot.messagesSentTo(chat))
+                .as("switched off again, the very next message is not answered")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "the tenant's own disclosure is what the customer hears first in the bot, in the customer's language, once")
+    void theTenantsOwnWordsAreWhatTheCustomerHears() {
+        UUID installationId = seedTelegramInstallation(tenant(), brand());
+        entitlements.entitle(tenant());
+        assistant.disclosureReads("ru", "Вам отвечает наш бот.");
+        long chat = 77_009L;
+
+        updateHandler.handle(installation(installationId, tenant()), privateTextUpdate(1, chat, "Сколько стоит плов?"));
+        updateHandler.handle(installation(installationId, tenant()), privateTextUpdate(2, chat, "А плов сколько?"));
+
+        List<String> said = bot.messagesSentTo(chat);
+        assertThat(said).hasSize(2);
+        assertThat(said.get(0)).startsWith("Вам отвечает наш бот.").contains("45 000 сум");
+        assertThat(said.get(0)).doesNotContain("автоматический помощник");
+        assertThat(said.get(1)).doesNotContain("Вам отвечает наш бот.");
+    }
+
+    @Test
     @DisplayName("a redelivered update never makes the assistant answer, or spend, twice")
     void aRedeliveredUpdateIsAnsweredOnce() {
         UUID installationId = seedTelegramInstallation(tenant(), brand());
