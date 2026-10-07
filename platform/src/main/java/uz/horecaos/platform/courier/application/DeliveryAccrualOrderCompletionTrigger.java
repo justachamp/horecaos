@@ -23,14 +23,16 @@ import uz.horecaos.platform.web.api.ApiException;
  * {@code CASH_COLLECTED} ledger entry were never written on a real tenant,
  * which is also why Finance's cash worklist reads permanently empty.
  *
- * <p><strong>Order completion, not a courier "delivered" tap, is where
- * "delivered" is known today.</strong> No courier-facing surface exists yet
- * to capture a real pickup or delivery event, so this listens for the one
- * fact the console already produces: an operator (or an automated rule)
- * moving a delivery order from {@code FULFILLING} to {@code COMPLETED}. See
- * ADR 0125 for why this is the deliberate, documented interim path rather
- * than a shortcut, and for the {@code kitchen_handover_at}/{@code
- * geoUnverified} gaps it leaves open until a real capture exists.
+ * <p><strong>Order completion is what triggers an accrual; the courier app is
+ * what dates it.</strong> This listens for the one fact every delivery
+ * produces: an operator (or an automated rule) moving a delivery order from
+ * {@code FULFILLING} to {@code COMPLETED}. When the courier app (gap map 3.9)
+ * captured the pickup and the delivery, the accrual is dated and judged on
+ * those instants -- the kitchen handover is the courier's «picked up», the
+ * delivery is the courier's «delivered» -- and when it captured nothing the
+ * completion stands in for the delivery and the handover stays unknown. See
+ * ADR 0125 for why completion is still the trigger, and for the {@code
+ * geoUnverified} gap that remains until a position check is recorded.
  *
  * <p><strong>{@link TransactionPhase#AFTER_COMMIT}, unlike {@code
  * loyalty.OrderCompletionAccrualTrigger}.</strong> {@code recordDelivery} is
@@ -156,19 +158,25 @@ public class DeliveryAccrualOrderCompletionTrigger {
                     internal.distanceMeters(),
                     mapDistanceSource(internal.distanceSourceName()),
                     internal.acceptedAt(),
-                    completed.completedAt(),
+                    // The shipment's own instant: the courier's tap when the courier app
+                    // captured one, this event's completedAt otherwise (see
+                    // DeliveryCompletionPort#closeInternalShipment). An operator's «completed»
+                    // that comes hours after the courier handed the order over must not turn an
+                    // on-time delivery into a late one.
+                    internal.deliveredAt(),
                     internal.promisedDeliveryEnd(),
                     // null: let CourierAccrualService resolve the tenant's own
                     // grace policy rather than this trigger inventing one.
                     null,
                     ON_TIME_POLICY_VERSION,
-                    // No real pickup capture exists yet -- see ADR 0125's
-                    // negative consequences. Left null rather than guessed:
-                    // OnTimeEvaluator treats a null handover as "no excuse
-                    // recorded" and falls through to LATE, which is the
-                    // honest answer when the platform does not actually know
-                    // when the kitchen handed the bag over.
-                    null,
+                    // The courier app's «picked up» tap is the real capture ADR 0125's
+                    // negative consequences were waiting for: the moment the bag left the
+                    // kitchen. Null when nothing was captured -- an order completed with no
+                    // courier-app trail -- and never guessed: OnTimeEvaluator treats a null
+                    // handover as "no excuse recorded" and falls through to LATE, which is the
+                    // honest answer when the platform does not know when the kitchen handed the
+                    // bag over.
+                    internal.pickedUpAt(),
                     internal.pickupWindowEnd(),
                     Math.max(0L, cashToCollectMinor),
                     // No geo-confirmation capture exists yet either. true

@@ -145,15 +145,19 @@ public class ReportingController {
                     + "amount per payment method, from tenders that reached SETTLED or REVERSED. "
                     + "\"overview\" folds every branch into one row per method and legal entity "
                     + "(ADR 0038: never across two, since this is money); \"byLocation\" keeps the "
-                    + "branch split so 7.3b's cash reconciliation can answer from the same read.")
+                    + "branch split so 7.3b's cash reconciliation can answer from the same read. "
+                    + "legalEntityId narrows both to one taxpayer; paymentMethodCode narrows both to "
+                    + "the named methods.")
     public ResponseEntity<PaymentMixResponse> paymentMix(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
-            @RequestParam(required = false) List<String> paymentMethodCode) {
+            @RequestParam(required = false) List<String> paymentMethodCode,
+            @RequestParam(required = false) List<UUID> legalEntityId) {
 
-        var result = queries.paymentMix(tenantId, from, to, orEmpty(locationId), orEmpty(paymentMethodCode));
+        var result = queries.paymentMix(
+                tenantId, from, to, orEmpty(locationId), orEmpty(paymentMethodCode), orEmpty(legalEntityId));
         return ResponseEntity.ok(new PaymentMixResponse(
                 result.overview().stream().map(PaymentMixRowResponse::of).toList(),
                 result.byLocation().stream().map(PaymentMixRowResponse::of).toList(),

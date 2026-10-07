@@ -57,17 +57,17 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
 
         ShipmentRow row = found.get();
         if (!"DELIVERED".equals(row.status())) {
-            if (!markDelivered(tenantId, row.id(), deliveredAt)) {
-                // Lost a race with another closer of the same shipment -- most
-                // likely a replayed OrderCompleted, an ordinary at-least-once
-                // event. Re-read rather than trust the value raced against.
-                found = findLiveShipment(tenantId, orderId);
-                if (found.isEmpty() || !"DELIVERED".equals(found.get().status())) {
-                    // Cancelled out from under us between the two reads.
-                    return Optional.empty();
-                }
-                row = found.get();
+            // Either this call closes the shipment or it lost a race with another closer of the
+            // same one -- most likely a replayed OrderCompleted, an ordinary at-least-once event.
+            // Both read what is now stored rather than trust the value written or raced against:
+            // the stored instant is not always the one passed in (see markDelivered).
+            markDelivered(tenantId, row.id(), deliveredAt);
+            found = findLiveShipment(tenantId, orderId);
+            if (found.isEmpty() || !"DELIVERED".equals(found.get().status())) {
+                // Cancelled out from under us between the two reads.
+                return Optional.empty();
             }
+            row = found.get();
         }
 
         ShipmentRow closed = row;
@@ -79,6 +79,10 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
                         closed.id(),
                         attempt.id(),
                         attempt.acceptedAt(),
+                        // ck_shipment_delivered_pair makes this non-null once DELIVERED; the fallback
+                        // is only for a row this adapter did not write and the constraint did not see.
+                        closed.deliveredAt() == null ? deliveredAt : closed.deliveredAt(),
+                        closed.pickedUpAt(),
                         closed.distanceMeters() == null ? 0 : closed.distanceMeters(),
                         closed.distanceSource(),
                         closed.promisedDeliveryEnd(),
@@ -90,7 +94,7 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
     private Optional<ShipmentRow> findLiveShipment(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT s.id, s.status, s.source_type, s.courier_id, s.brand_id, s.location_id,
-                       p.distance_meters, p.distance_source, p.promised_delivery_end, p.pickup_window_end,
+                       s.picked_up_at, s.delivered_at, p.distance_meters, p.distance_source, p.promised_delivery_end, p.pickup_window_end,
                        o.payment_status_projection
                   FROM fulfillment.shipments s
                   JOIN fulfillment.delivery_plans p
@@ -108,6 +112,8 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
                         row.getObject("courier_id", UUID.class),
                         Objects.requireNonNull(row.getObject("brand_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        instant(row, "picked_up_at"),
+                        instant(row, "delivered_at"),
                         (Integer) row.getObject("distance_meters"),
                         row.getString("distance_source"),
                         instant(row, "promised_delivery_end"),
@@ -120,10 +126,19 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
         return "AUTHORIZED".equals(paymentStatusProjection) || "CAPTURED".equals(paymentStatusProjection);
     }
 
+    /**
+     * The compare-and-set to {@code DELIVERED}. Never earlier than the courier's own pickup:
+     * {@code ck_shipment_order_of_events} refuses a delivery that precedes it, and an order an
+     * operator completes before the courier tapped «picked up» (the two are not ordered by
+     * anything) must close the shipment all the same rather than fail the whole accrual.
+     */
     private boolean markDelivered(UUID tenantId, UUID shipmentId, Instant deliveredAt) {
         return jdbc.sql("""
                 UPDATE fulfillment.shipments
-                   SET status = 'DELIVERED', delivered_at = :deliveredAt, version = version + 1
+                   SET status = 'DELIVERED',
+                       delivered_at = GREATEST(CAST(:deliveredAt AS timestamptz),
+                                               COALESCE(picked_up_at, CAST(:deliveredAt AS timestamptz))),
+                       version = version + 1
                  WHERE tenant_id = :tenantId AND id = :shipmentId
                    AND status <> 'DELIVERED' AND status <> 'CANCELLED'
                 """)
@@ -165,6 +180,8 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
             @Nullable UUID courierId,
             UUID brandId,
             UUID locationId,
+            @Nullable Instant pickedUpAt,
+            @Nullable Instant deliveredAt,
             @Nullable Integer distanceMeters,
             @Nullable String distanceSource,
             @Nullable Instant promisedDeliveryEnd,

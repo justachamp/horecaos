@@ -613,6 +613,7 @@ class BranchLeaderboardReportingTests {
                 locationId,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                UUID.randomUUID(),
                 1_000,
                 "HAVERSINE_FACTORED",
                 "ON_TIME",

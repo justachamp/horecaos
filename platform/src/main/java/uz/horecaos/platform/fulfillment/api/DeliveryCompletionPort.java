@@ -67,10 +67,14 @@ public interface DeliveryCompletionPort {
      * {@code DeliveryOrderPort} already gives for its own four empty cases.
      *
      * @param deliveredAt the instant the order finished — {@code
-     *                     OrderCompleted.completedAt()} in production, so the
-     *                     shipment's {@code delivered_at} and the accrual's
-     *                     {@code deliveredAt} are the same instant rather than
-     *                     two clock reads a few milliseconds apart
+     *                     OrderCompleted.completedAt()} in production. It is
+     *                     what the shipment is stamped with only when nobody
+     *                     recorded a delivery before: a courier who tapped
+     *                     «delivered» in the app (gap map 3.9) already wrote
+     *                     the real instant, and the operator's «completed» can
+     *                     come hours later. The answer's own {@link
+     *                     InternalDelivery#deliveredAt()} is the one instant
+     *                     the shipment and the accrual then share
      */
     Optional<InternalDelivery> closeInternalShipment(UUID tenantId, UUID orderId, Instant deliveredAt);
 
@@ -78,6 +82,17 @@ public interface DeliveryCompletionPort {
      * What {@code fulfillment} knows about one internal delivery, at the
      * moment it closed.
      *
+     * @param deliveredAt     when the delivery happened, as the shipment now
+     *                        records it: the courier's own tap when the courier
+     *                        app captured one, otherwise the instant {@link
+     *                        #closeInternalShipment} was told. The accrual is
+     *                        priced and judged on time against this, never
+     *                        against a later «completed»
+     * @param pickedUpAt      when the courier collected the bag, as the courier
+     *                        app captured it ({@code shipments.picked_up_at});
+     *                        null when nothing was captured, which is a gap and
+     *                        never a guess. This is the kitchen handover ADR
+     *                        0042's on-time rule judges a late delivery by
      * @param acceptedAt      when the courier accepted the offer (ADR 0014) —
      *                        the instant {@code CourierAccrualService}
      *                        resolves the rate card at, snapshotted here
@@ -118,6 +133,8 @@ public interface DeliveryCompletionPort {
             UUID shipmentId,
             UUID assignmentAttemptId,
             Instant acceptedAt,
+            Instant deliveredAt,
+            @Nullable Instant pickedUpAt,
             int distanceMeters,
             @Nullable String distanceSourceName,
             @Nullable Instant promisedDeliveryEnd,
