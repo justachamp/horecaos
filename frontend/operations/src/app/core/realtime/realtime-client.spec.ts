@@ -312,4 +312,40 @@ describe('RealtimeClient', () => {
     const secondUrl = fetchMock.mock.calls[1][0] as string;
     expect(secondUrl).toContain('/locations/l2/');
   });
+
+  it('closes the stream when the operator loses the location, and opens another only once there is one', async () => {
+    fetchMock.mockResolvedValue(openResponse());
+    const scope = signal<LocationScope | null>(SCOPE);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CurrentLocation, useValue: { scope } },
+        { provide: StaffTokenStore, useValue: { accessToken: () => 'access-token-1' } },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (capability: Capability) => capability === 'ORDER_READ' },
+        },
+      ],
+    });
+    const client = TestBed.inject(RealtimeClient);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.state()).toBe('open');
+    const firstStream = (fetchMock.mock.calls[0][1] as RequestInit).signal as AbortSignal;
+    expect(firstStream.aborted).toBe(false);
+
+    scope.set(null);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The open stream is abandoned, the state reads «connecting» again, and nothing retries on its
+    // own: with no location there is no stream to ask for.
+    expect(firstStream.aborted).toBe(true);
+    expect(client.state()).toBe('connecting');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    scope.set({ tenantId: 't1', brandId: 'b1', locationId: 'l2' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0] as string).toContain('/locations/l2/');
+    expect(client.state()).toBe('open');
+  });
 });
