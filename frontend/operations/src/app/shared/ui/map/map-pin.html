@@ -40,7 +40,7 @@
         data-testid="q-map-pin-longitude"
       />
     </label>
-    @if (editable() && position()) {
+    @if (editable() && removable() && position()) {
       <button
         type="button"
         class="q-map-pin__remove q-caption"

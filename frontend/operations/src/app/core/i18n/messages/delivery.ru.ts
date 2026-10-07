@@ -735,4 +735,55 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Включено: курьер не может отметить заказ с оплатой наличными доставленным, пока не введёт собранную сумму и она не совпадёт с причитающейся. Заказы, уже оплаченные онлайн, это не затрагивает.',
   'delivery.policy.consequence.gpsVerificationEnabled':
     'Включено: принятие предложения отклоняется, если курьер дальше от филиала, чем радиус принятия; прибытие, получение и передача заказа отклоняются, если курьер дальше от филиала или от двери клиента, чем радиус смены статуса. Выключено: позиция не проверяется и даже не читается.',
+  'delivery.zones.draft.shape': 'Форма',
+  'delivery.zones.draft.shape.CIRCLE': 'Круг вокруг филиала',
+  'delivery.zones.draft.shape.POLYGON': 'Нарисовать на карте',
+  'delivery.zones.draft.polygonHint':
+    'Нарисуйте контур зоны по углам. Сохранение лишь создаёт черновик новой версии: на стоимость доставки он не влияет, пока версию не просмотрели на карте и не включили.',
+  'delivery.zones.draft.polygonEmpty': 'Чтобы сохранить контур, нарисуйте не меньше трёх углов.',
+  'delivery.zones.draft.fromVersion':
+    'За основу взят контур версии {version}. Сохранение создаёт новую версию; версия {version} остаётся как есть.',
+  'delivery.zones.draft.polygonRegionBox':
+    'На карте показан прямоугольник региона: угол вне него активировать нельзя.',
+  'delivery.zones.version.showOnMap': 'Показать на карте',
+  'delivery.zones.version.editOutline': 'Править контур',
+  'delivery.zones.map.notEditable':
+    'В этой версии есть отверстия или несколько частей, которые редактор контура бы упростил. Нарисуйте новый контур.',
+  'delivery.zones.map.outlineFailed': 'Не удалось прочитать контур этой версии.',
+  'delivery.zones.review.title': 'Проверьте зону {code}, версия {version}, на карте',
+  'delivery.zones.review.mapLabel': 'Контур зоны {code}',
+  'delivery.zones.review.loading': 'Читаем контур…',
+  'delivery.zones.review.loadFailed':
+    'Контур не удалось прочитать, поэтому версию сейчас нельзя проверить. Закройте окно и повторите.',
+  'delivery.zones.review.verdict.INSIDE': 'Контур находится внутри своего региона.',
+  'delivery.zones.review.verdict.OUTSIDE':
+    'Контур не лежит внутри своего региона. Активация будет отклонена; проверьте его положение на карте.',
+  'delivery.zones.review.verdict.LIKELY_SWAPPED':
+    'Контур вне своего региона, но оказался бы внутри, если поменять широту и долготу местами. Вероятно, координаты записаны наоборот; не включайте его.',
+  'delivery.zones.review.verdict.NO_REGION':
+    'Для зоны не задан регион, поэтому сверить контур не с чем, кроме вашего взгляда.',
+  'delivery.zones.review.tariff': 'Тариф: {tariff}',
+  'delivery.zones.review.noTariff': 'К зоне не привязан тариф: действует тариф филиала.',
+  'delivery.zones.review.simplified':
+    'В этой фигуре есть отверстия или несколько частей. На карте нарисован только внешний контур каждой части.',
+  'delivery.zones.review.corners': 'Углов: {count}',
+  'delivery.zones.review.moreCorners': '…и ещё углов: {count}.',
+  'delivery.zones.review.confirm.map':
+    'Я посмотрел(а) контур на карте: он там, где должна быть эта зона.',
+  'delivery.zones.review.confirm.noMap':
+    'Карты здесь нет. Я сверил(а) координаты углов с источником: они там, где должна быть эта зона.',
+  'delivery.zones.review.activate': 'Включить версию {version}',
+  'delivery.zones.review.close': 'Закрыть',
+  'delivery.zoneImport.column.map': 'На карте',
+  'delivery.zoneImport.preview.show': 'Показать',
+  'delivery.zoneImport.preview.unreadable': 'Не GeoJSON-полигон: нарисовать нельзя',
+  'delivery.zoneImport.preview.title': 'Строка {ref} на карте рядом с источником',
+  'delivery.zoneImport.preview.mapLabel': 'Контур строки {ref}',
+  'delivery.zoneImport.preview.sourceHeading': 'Углы: как записано в файле и как прочитано',
+  'delivery.zoneImport.preview.inFile': 'В файле [долгота, широта]',
+  'delivery.zoneImport.preview.readAs': 'Прочитано как широта, долгота',
+  'delivery.zoneImport.preview.close': 'Закрыть просмотр',
+  'delivery.zoneImport.review.action': 'Проверить и включить',
+  'delivery.zoneImport.live': 'Включена',
+  'delivery.zoneImport.activatedToast': 'Зона {code}, версия {version}, включена.',
 };

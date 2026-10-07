@@ -7,6 +7,7 @@ import {
   PinHandle,
   PinOptions,
   PolygonHandle,
+  PolygonLook,
   PolygonOptions,
   RectangleHandle,
   RectangleOptions,
@@ -56,6 +57,7 @@ interface YGeoObject {
   geometry: YGeometry;
   events: YEventManager;
   options: { set(key: string, value: unknown): unknown };
+  properties?: { set(key: string, value: unknown): unknown };
   editor?: {
     startEditing(): unknown;
     stopEditing(): unknown;
@@ -91,7 +93,20 @@ export const YANDEX_SCRIPT_ORIGIN = 'https://api-maps.yandex.ru';
 const SCRIPT_TIMEOUT_MS = 15_000;
 
 const OVERLAY_STROKE = '#1f5fd6';
-const OVERLAY_FILL = '#1f5fd633';
+const OVERLAY_FILL = '#1f5fd6';
+/** An outline with nothing to say about it is lightly filled; an area with an intensity runs from here up. */
+const PLAIN_FILL_OPACITY = 0.2;
+const MIN_FILL_OPACITY = 0.08;
+const MAX_FILL_OPACITY = 0.65;
+
+/** 0 to 1 onto a fill opacity a person can still read the map through. Out-of-range values are clamped, not trusted. */
+export function fillOpacityOf(intensity: number | null | undefined): number {
+  if (intensity === null || intensity === undefined || !Number.isFinite(intensity)) {
+    return PLAIN_FILL_OPACITY;
+  }
+  const clamped = Math.min(1, Math.max(0, intensity));
+  return MIN_FILL_OPACITY + clamped * (MAX_FILL_OPACITY - MIN_FILL_OPACITY);
+}
 
 function ymapsGlobal(): Ymaps | undefined {
   return (window as unknown as { ymaps?: Ymaps }).ymaps;
@@ -211,9 +226,10 @@ class YandexMapHandle implements MapHandle {
   addPolygon(options: PolygonOptions): PolygonHandle {
     const polygon = new this.ymaps.Polygon(
       [options.ring.map(toYandex)],
-      {},
+      { hintContent: options.label ?? '' },
       {
         fillColor: OVERLAY_FILL,
+        fillOpacity: fillOpacityOf(options.intensity),
         strokeColor: OVERLAY_STROKE,
         strokeWidth: 2,
         editorMaxPoints: 200,
@@ -229,7 +245,12 @@ class YandexMapHandle implements MapHandle {
     const rectangle = new this.ymaps.Rectangle(
       [toYandex(options.bounds.southWest), toYandex(options.bounds.northEast)],
       {},
-      { fillColor: OVERLAY_FILL, strokeColor: OVERLAY_STROKE, strokeWidth: 2 },
+      {
+        fillColor: OVERLAY_FILL,
+        fillOpacity: PLAIN_FILL_OPACITY,
+        strokeColor: OVERLAY_STROKE,
+        strokeWidth: 2,
+      },
     );
     this.map.geoObjects.add(rectangle);
     const handle = new YandexRectangle(this.map, rectangle);
@@ -318,6 +339,15 @@ class YandexPolygon implements PolygonHandle {
       this.polygon.editor?.startEditing();
     } else {
       this.polygon.editor?.stopEditing();
+    }
+  }
+
+  setLook(look: PolygonLook): void {
+    if (look.intensity !== undefined) {
+      this.polygon.options.set('fillOpacity', fillOpacityOf(look.intensity));
+    }
+    if (look.label !== undefined) {
+      this.polygon.properties?.set('hintContent', look.label ?? '');
     }
   }
 

@@ -1,0 +1,45 @@
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review__error {
+  color: var(--q-error-text);
+}
+
+.review__verdict {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+}
+
+.review__verdict[data-verdict='OUTSIDE'],
+.review__verdict[data-verdict='LIKELY_SWAPPED'] {
+  border: 1px solid var(--q-error-text);
+}
+
+.review__corners {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.review__corners th,
+.review__corners td {
+  padding: 2px 8px;
+  text-align: left;
+  font-size: var(--q-type-caption);
+}
+
+.review__confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.review__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

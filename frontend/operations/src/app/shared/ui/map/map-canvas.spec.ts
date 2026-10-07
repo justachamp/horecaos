@@ -184,6 +184,32 @@ describe('MapCanvas (ADR 0145, row X.4)', () => {
     });
   });
 
+  it('draws an area’s intensity and label, and restyles it in place when the numbers change (row 7.10)', async () => {
+    const ring = [at(41.3, 69.2), at(41.3, 69.3), at(41.4, 69.25)];
+    const fixture = create({
+      areas: [{ id: 'zone-1', ring, intensity: 0.9, label: 'Центр: 42' }],
+    });
+    await settle(fixture);
+    const [zone] = provider.map.livePolygons;
+    expect(zone.intensity).toBe(0.9);
+    expect(zone.label).toBe('Центр: 42');
+
+    fixture.componentRef.setInput('areas', [
+      { id: 'zone-1', ring, intensity: 0.2, label: 'Центр: 8' },
+    ]);
+    await settle(fixture);
+
+    expect(provider.map.livePolygons).toEqual([zone]);
+    expect(zone.intensity).toBe(0.2);
+    expect(zone.label).toBe('Центр: 8');
+
+    // An area given no intensity is a plain outline again: nothing keeps the old fill alive.
+    fixture.componentRef.setInput('areas', [{ id: 'zone-1', ring }]);
+    await settle(fixture);
+    expect(zone.intensity).toBeNull();
+    expect(zone.label).toBeNull();
+  });
+
   it('destroys the map with the component, and never builds one for a component already gone', async () => {
     const fixture = create();
     await settle(fixture);

@@ -224,6 +224,31 @@ describe('AddressPicker (ADR 0145, row X.4)', () => {
       });
     });
 
+    it('carries the provider’s district along, so the host can offer it and the person can overwrite it', async () => {
+      geo.resolutions = {
+        status: 'ANSWERED',
+        value: [
+          result({
+            components: {
+              country: 'UZ',
+              locality: 'Ташкент',
+              district: 'Юнусабад',
+              street: 'Fixture ko‘chasi',
+              house: '12',
+              formatted: SUGGESTION.fullText,
+            },
+          }),
+        ],
+      };
+      const fixture = create();
+      await pass(fixture);
+      await search(fixture, 'fixt');
+      await choose(fixture);
+
+      expect(picked.at(-1)?.components.district).toBe('Юнусабад');
+      expect(picked.at(-1)?.components.locality).toBe('Ташкент');
+    });
+
     it('emits the point, as the operator’s pin, once they press "Use this point"', async () => {
       const fixture = create();
       await pass(fixture);
@@ -394,6 +419,7 @@ describe('AddressPicker (ADR 0145, row X.4)', () => {
         street: 'Saved ko‘cha',
         house: '3',
         locality: 'Ташкент',
+        district: 'Чиланзар',
         entrance: '1',
         floor: null,
         flat: '9',

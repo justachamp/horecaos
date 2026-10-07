@@ -4,6 +4,7 @@ import {
   YANDEX_SCRIPT_ORIGIN,
   Ymaps,
   YandexMapProvider,
+  fillOpacityOf,
   fromYandex,
   loadYandexScript,
   toYandex,
@@ -55,6 +56,10 @@ class FakeObject {
     values: new Map<string, unknown>(),
     set: (k: string, v: unknown) => void this.options.values.set(k, v),
   };
+  readonly hint = {
+    values: new Map<string, unknown>(),
+    set: (k: string, v: unknown) => void this.hint.values.set(k, v),
+  };
   readonly editor = {
     calls: [] as string[],
     startEditing() {
@@ -70,12 +75,14 @@ class FakeObject {
       this.calls.push('stopDrawing');
     },
   };
+  readonly properties: { set(key: string, value: unknown): unknown };
   constructor(
     coordinates: unknown,
-    readonly properties: object | undefined,
+    readonly initialProperties: Record<string, unknown> | undefined,
     readonly initialOptions: Record<string, unknown> | undefined,
   ) {
     this.geometry = new FakeGeometry(coordinates);
+    this.properties = this.hint;
   }
 }
 
@@ -246,6 +253,32 @@ describe('YandexMapProvider', () => {
       object.geometry.events.fire('change');
 
       expect(edits).toEqual([[at(41.3, 69.2), at(41.3, 69.3), at(41.4, 69.3), at(41.45, 69.25)]]);
+    });
+
+    it('turns an area’s intensity into a fill a person can still read the map through, and its label into a hint', () => {
+      const ring = [at(41.3, 69.2), at(41.3, 69.3), at(41.4, 69.3)];
+      const plain = handle.addPolygon({ ring, editable: false });
+      const strong = handle.addPolygon({ ring, editable: false, intensity: 1, label: 'Центр: 42' });
+      const [plainObject, strongObject] = maps[0].added;
+
+      expect(plainObject.initialOptions?.['fillOpacity']).toBe(fillOpacityOf(null));
+      expect(strongObject.initialOptions?.['fillOpacity']).toBe(fillOpacityOf(1));
+      expect(strongObject.initialProperties?.['hintContent']).toBe('Центр: 42');
+      expect(fillOpacityOf(1)).toBeGreaterThan(fillOpacityOf(0.5));
+      expect(fillOpacityOf(0.5)).toBeGreaterThan(fillOpacityOf(0));
+      expect(fillOpacityOf(1)).toBeLessThan(1);
+
+      strong.setLook({ intensity: 0, label: 'Центр: 0' });
+      expect(strongObject.options.values.get('fillOpacity')).toBe(fillOpacityOf(0));
+      expect(strongObject.hint.values.get('hintContent')).toBe('Центр: 0');
+      plain.setLook({ intensity: null });
+      expect(plainObject.options.values.get('fillOpacity')).toBe(fillOpacityOf(null));
+    });
+
+    it('never trusts an intensity outside 0 to 1, or one that is not a number', () => {
+      expect(fillOpacityOf(7)).toBe(fillOpacityOf(1));
+      expect(fillOpacityOf(-3)).toBe(fillOpacityOf(0));
+      expect(fillOpacityOf(Number.NaN)).toBe(fillOpacityOf(null));
     });
 
     it('does not report its own writes as a person’s edits, which would loop forever', () => {

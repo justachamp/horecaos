@@ -52,6 +52,8 @@ export interface AddressParts {
   readonly street: string | null;
   readonly house: string | null;
   readonly locality: string | null;
+  /** The provider's district for the point, when it names one; the person may overwrite it in the host's own field. */
+  readonly district: string | null;
   readonly entrance: string | null;
   readonly floor: string | null;
   readonly flat: string | null;
@@ -133,6 +135,7 @@ export class AddressPicker {
     landmark: '',
   });
   private readonly locality = signal<string | null>(null);
+  private readonly district = signal<string | null>(null);
 
   protected readonly attribution = computed(() => {
     const config = this.configuration.config();
@@ -175,6 +178,7 @@ export class AddressPicker {
         this.query.set(start.components.formatted);
         this.chosen = start.components.formatted;
         this.locality.set(start.components.locality);
+        this.district.set(start.components.district);
         this.parts.set({
           street: start.components.street ?? '',
           house: start.components.house ?? '',
@@ -263,6 +267,7 @@ export class AddressPicker {
       return;
     }
     this.locality.set(best.components.locality);
+    this.district.set(best.components.district);
     this.parts.update((current) => ({
       ...current,
       street: best.components.street ?? current.street,
@@ -324,6 +329,7 @@ export class AddressPicker {
         street: blankToNull(parts.street),
         house: blankToNull(parts.house),
         locality: this.locality(),
+        district: this.district(),
         entrance: blankToNull(parts.entrance),
         floor: blankToNull(parts.floor),
         flat: blankToNull(parts.flat),

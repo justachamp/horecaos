@@ -741,4 +741,55 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Yoqilgan: kuryer naqd pulli buyurtmani, olingan pulni kiritmaguncha va u toʻlanishi kerak boʻlgan summaga mos kelmaguncha, yetkazilgan deb belgilay olmaydi. Onlayn toʻlangan buyurtmalarga bu taʻsir qilmaydi.',
   'delivery.policy.consequence.gpsVerificationEnabled':
     'Yoqilgan: kuryer filialdan qabul radiusidan uzoqroq boʻlsa, taklifni qabul qilish rad etiladi; yetib borish, olish va topshirish kuryer filialdan yoki mijoz eshigidan holat radiusidan uzoqroq boʻlsa rad etiladi. Oʻchirilgan: joylashuv tekshirilmaydi va oʻqilmaydi ham.',
+  'delivery.zones.draft.shape': 'Shakl',
+  'delivery.zones.draft.shape.CIRCLE': 'Filial atrofidagi doira',
+  'delivery.zones.draft.shape.POLYGON': 'Xaritada chizish',
+  'delivery.zones.draft.polygonHint':
+    'Zona konturini burchak-burchak chizing. Saqlash faqat yangi versiya qoralamasini yaratadi: versiya xaritada koʻrib chiqilib, yoqilmaguncha yetkazib berish narxiga taʼsir qilmaydi.',
+  'delivery.zones.draft.polygonEmpty': 'Konturni saqlash uchun kamida uchta burchak chizing.',
+  'delivery.zones.draft.fromVersion':
+    'Asos sifatida {version}-versiya konturi olindi. Saqlash yangi versiya yaratadi; {version}-versiya oʻzgarishsiz qoladi.',
+  'delivery.zones.draft.polygonRegionBox':
+    'Xaritada hudud toʻrtburchagi koʻrsatilgan: undan tashqaridagi burchakni faollashtirib boʻlmaydi.',
+  'delivery.zones.version.showOnMap': 'Xaritada koʻrsatish',
+  'delivery.zones.version.editOutline': 'Konturni tahrirlash',
+  'delivery.zones.map.notEditable':
+    'Bu versiyada teshiklar yoki bir necha qism bor, kontur tahrirlagichi ularni soddalashtirib yuborardi. Yangi kontur chizing.',
+  'delivery.zones.map.outlineFailed': 'Bu versiya konturini oʻqib boʻlmadi.',
+  'delivery.zones.review.title': '{code} zonasi, {version}-versiyani xaritada tekshiring',
+  'delivery.zones.review.mapLabel': '{code} zonasi konturi',
+  'delivery.zones.review.loading': 'Kontur oʻqilmoqda…',
+  'delivery.zones.review.loadFailed':
+    'Konturni oʻqib boʻlmadi, shuning uchun versiyani hozir tekshirib boʻlmaydi. Oynani yopib, qayta urinib koʻring.',
+  'delivery.zones.review.verdict.INSIDE': 'Kontur oʻz hududi ichida joylashgan.',
+  'delivery.zones.review.verdict.OUTSIDE':
+    'Kontur oʻz hududi ichida emas. Faollashtirish rad etiladi; uning xaritadagi joyini tekshiring.',
+  'delivery.zones.review.verdict.LIKELY_SWAPPED':
+    'Kontur oʻz hududidan tashqarida, ammo kenglik va uzunlik oʻrni almashtirilsa ichida boʻlardi. Koordinatalar teskari yozilgan boʻlishi mumkin; uni yoqmang.',
+  'delivery.zones.review.verdict.NO_REGION':
+    'Zona uchun hudud belgilanmagan, shuning uchun konturni oʻz koʻzingizdan boshqa narsa bilan tekshirib boʻlmaydi.',
+  'delivery.zones.review.tariff': 'Tarif: {tariff}',
+  'delivery.zones.review.noTariff': 'Zonaga tarif biriktirilmagan: filial tarifi amal qiladi.',
+  'delivery.zones.review.simplified':
+    'Bu shaklda teshiklar yoki bir necha qism bor. Xaritada har bir qismning faqat tashqi konturi chizilgan.',
+  'delivery.zones.review.corners': 'Burchaklar: {count}',
+  'delivery.zones.review.moreCorners': '…va yana {count} ta burchak.',
+  'delivery.zones.review.confirm.map':
+    'Men konturni xaritada koʻrdim: u zona boʻlishi kerak joyda.',
+  'delivery.zones.review.confirm.noMap':
+    'Bu yerda xarita yoʻq. Men burchak koordinatalarini manba bilan solishtirdim: ular zona boʻlishi kerak joyda.',
+  'delivery.zones.review.activate': '{version}-versiyani yoqish',
+  'delivery.zones.review.close': 'Yopish',
+  'delivery.zoneImport.column.map': 'Xaritada',
+  'delivery.zoneImport.preview.show': 'Koʻrsatish',
+  'delivery.zoneImport.preview.unreadable': 'Poligon GeoJSON emas: chizib boʻlmaydi',
+  'delivery.zoneImport.preview.title': '{ref}-qator xaritada, manba yonida',
+  'delivery.zoneImport.preview.mapLabel': '{ref}-qator konturi',
+  'delivery.zoneImport.preview.sourceHeading': 'Burchaklar: faylda yozilganidek va oʻqilganidek',
+  'delivery.zoneImport.preview.inFile': 'Faylda [uzunlik, kenglik]',
+  'delivery.zoneImport.preview.readAs': 'Kenglik, uzunlik sifatida oʻqildi',
+  'delivery.zoneImport.preview.close': 'Koʻrib chiqishni yopish',
+  'delivery.zoneImport.review.action': 'Tekshirish va yoqish',
+  'delivery.zoneImport.live': 'Yoqilgan',
+  'delivery.zoneImport.activatedToast': '{code} zonasi, {version}-versiya yoqildi.',
 };

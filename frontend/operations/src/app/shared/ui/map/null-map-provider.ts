@@ -10,6 +10,7 @@ import {
   PinHandle,
   PinOptions,
   PolygonHandle,
+  PolygonLook,
   PolygonOptions,
   RectangleHandle,
   RectangleOptions,
@@ -194,6 +195,8 @@ export class NullPin implements PinHandle {
 export class NullPolygon implements PolygonHandle {
   ring: readonly LatLng[];
   editable: boolean;
+  intensity: number | null;
+  label: string | null;
   drawing = false;
   removed = false;
 
@@ -202,10 +205,21 @@ export class NullPolygon implements PolygonHandle {
   constructor(options: PolygonOptions) {
     this.ring = options.ring;
     this.editable = options.editable;
+    this.intensity = options.intensity ?? null;
+    this.label = options.label ?? null;
   }
 
   setRing(ring: readonly LatLng[]): void {
     this.ring = ring;
+  }
+
+  setLook(look: PolygonLook): void {
+    if (look.intensity !== undefined) {
+      this.intensity = look.intensity;
+    }
+    if (look.label !== undefined) {
+      this.label = look.label;
+    }
   }
 
   setEditable(editable: boolean): void {

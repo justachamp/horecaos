@@ -40,6 +40,13 @@ export interface MapMarker {
 export interface MapArea {
   readonly id: string;
   readonly ring: readonly LatLng[];
+  /**
+   * 0 to 1, for a view where the fill carries a number (the order-density view, row `7.10`). Left
+   * out, the area is a plain outline. The scale is the screen's to choose; the canvas only draws it.
+   */
+  readonly intensity?: number | null;
+  /** Already translated, or tenant data; shown when the area is hovered. */
+  readonly label?: string | null;
 }
 
 /**
@@ -221,8 +228,17 @@ export class MapCanvas {
       const existing = this.outlines.get(area.id);
       if (existing) {
         existing.setRing(area.ring);
+        existing.setLook({ intensity: area.intensity ?? null, label: area.label ?? null });
       } else {
-        this.outlines.set(area.id, map.addPolygon({ ring: area.ring, editable: false }));
+        this.outlines.set(
+          area.id,
+          map.addPolygon({
+            ring: area.ring,
+            editable: false,
+            intensity: area.intensity,
+            label: area.label,
+          }),
+        );
       }
     }
   }

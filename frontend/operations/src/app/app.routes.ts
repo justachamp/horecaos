@@ -1008,7 +1008,9 @@ export const routes: Routes = [
               import('./features/delivery/live-map-page').then((m) => m.LiveMapPage),
           },
           {
+            // ADR 0145: zones are drawn on a map and activated after a look at it.
             path: 'zones',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
           },
@@ -1017,6 +1019,7 @@ export const routes: Routes = [
             // its own top-level tab (delivery-shell.ts's own doc names this
             // as sharing the 3.6 shell).
             path: 'zones/import',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/geozone-batch-import-page').then(
                 (m) => m.GeozoneBatchImportPage,

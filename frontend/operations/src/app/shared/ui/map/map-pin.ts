@@ -51,6 +51,12 @@ export class MapPin {
   readonly center = input.required<LatLng>();
   readonly region = input<MapBounds | null>(null);
   readonly editable = input(true, { transform: booleanAttribute });
+  /**
+   * Whether the person may take the pin away. A branch's pin is not removable: a branch without a
+   * point cannot originate a zone or be measured from (ADR 0037), so the screen that edits one
+   * offers moving it and never deleting it.
+   */
+  readonly removable = input(true, { transform: booleanAttribute });
   /** The zoom when there is a pin to look at. */
   readonly zoom = input(16);
   readonly label = input<string | null>(null);
@@ -137,6 +143,11 @@ export class MapPin {
     const latitude = parseCoordinate(this.latitudeText());
     const longitude = parseCoordinate(this.longitudeText());
     if (latitude === null && longitude === null) {
+      if (!this.removable()) {
+        // Emptying both fields of a pin that may not be taken away is a mistake to say, not a removal.
+        this.invalid.set(true);
+        return;
+      }
       this.remove();
       return;
     }

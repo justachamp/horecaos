@@ -50,7 +50,23 @@ export interface PinHandle {
   remove(): void;
 }
 
-export interface PolygonOptions {
+/**
+ * How a polygon looks, for the overlays that carry a meaning beyond "here is an outline" (the
+ * order-density view, row `7.10`). Both are optional and both are display only: a polygon being
+ * edited is never given an intensity.
+ */
+export interface PolygonLook {
+  /**
+   * 0 (faint) to 1 (strong): how much of something this area has. A choropleth is the same shape
+   * drawn with a fill that tells the difference, so the vendor adapter turns this into a fill
+   * opacity and no component names a colour.
+   */
+  readonly intensity?: number | null;
+  /** Already translated, or tenant data; the hint shown when the area is hovered. */
+  readonly label?: string | null;
+}
+
+export interface PolygonOptions extends PolygonLook {
   /** The outline, open: the last corner is not repeated as the first. */
   readonly ring: readonly LatLng[];
   readonly editable: boolean;
@@ -59,6 +75,8 @@ export interface PolygonOptions {
 export interface PolygonHandle {
   setRing(ring: readonly LatLng[]): void;
   setEditable(editable: boolean): void;
+  /** Restyles a display-only outline; a field left out keeps what it had. */
+  setLook(look: PolygonLook): void;
   /** Lets the person click corners onto the map. Ends when {@link stopDrawing} is called. */
   startDrawing(): void;
   stopDrawing(): void;

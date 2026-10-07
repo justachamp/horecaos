@@ -204,4 +204,25 @@ describe('MapPin (ADR 0145, row X.4)', () => {
 
     expect(emitted).toEqual([at(41.3, 69.2)]);
   });
+
+  it('moves a pin that may not be taken away, but never removes it (a branch needs a point)', async () => {
+    const fixture = create({ position: at(41.3111, 69.2797), removable: false });
+    await settle(fixture);
+
+    expect(exists(fixture, 'q-map-pin-remove')).toBe(false);
+
+    // Dragging and typing still move it. (The host here never feeds a drag back in, so the
+    // longitude field still shows where the pin was first placed.)
+    provider.map.livePins[0].simulateDrag(at(41.32, 69.28));
+    type(field(fixture, 'q-map-pin-latitude'), '41.33');
+    await settle(fixture);
+    expect(emitted).toEqual([at(41.32, 69.28), at(41.33, 69.2797)]);
+
+    // Emptying both fields is a mistake to be told about, not a removal to be reported.
+    type(field(fixture, 'q-map-pin-latitude'), '');
+    type(field(fixture, 'q-map-pin-longitude'), '');
+    await settle(fixture);
+    expect(emitted).toHaveLength(2);
+    expect(exists(fixture, 'q-map-pin-invalid')).toBe(true);
+  });
 });

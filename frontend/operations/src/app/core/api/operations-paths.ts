@@ -56,6 +56,15 @@ export const operationsPaths = {
   },
 
   /**
+   * `POST`: opens today's delivery orders of this branch as map points (rows `7.10a`, `3.1`; ADR 0145
+   * decision 8). A dispatcher-scope reveal with a stated purpose and one audit fact, never a
+   * reporting fact. Mutation: key required.
+   */
+  orderMapPointReveals(scope: LocationScope): string {
+    return `${this.orders(scope)}/map-point-reveals`;
+  },
+
+  /**
    * The order board (orders.md §2.4, ADR 0102, wave P07) — the branch's
    * orders, filtered in the database and cursor-paged, superseding {@link
    * orders} for any caller that needs a filter this console's toolbar offers

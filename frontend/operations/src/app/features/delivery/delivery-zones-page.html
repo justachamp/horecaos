@@ -178,12 +178,29 @@
                                 {{ (version.areaSquareMeters / 1000000).toFixed(1) }}
                               </td>
                               <td class="zones__action-col">
+                                <button
+                                  type="button"
+                                  data-testid="zone-show-on-map"
+                                  (click)="openReview(zone, version, 'view')"
+                                >
+                                  {{ 'delivery.zones.version.showOnMap' | t }}
+                                </button>
+                                @if (version.shapeKind === 'POLYGON') {
+                                  <button
+                                    type="button"
+                                    data-testid="zone-edit-outline"
+                                    [disabled]="busyZoneId() === zone.zoneId"
+                                    (click)="editOutline(zone, version)"
+                                  >
+                                    {{ 'delivery.zones.version.editOutline' | t }}
+                                  </button>
+                                }
                                 @if (version.status === 'DRAFT') {
                                   <button
                                     type="button"
                                     data-testid="zone-activate"
                                     [disabled]="busyZoneId() === zone.zoneId"
-                                    (click)="activate(zone, version.version)"
+                                    (click)="openReview(zone, version, 'activate')"
                                   >
                                     {{ 'delivery.zones.activate.action' | t }}
                                   </button>
@@ -325,29 +342,67 @@
 
   @if (draftingZone(); as zone) {
     <div class="q-modal-backdrop" (click)="closeDraftForm()">
-      <div class="q-modal" (click)="$event.stopPropagation()">
+      <div
+        class="q-modal"
+        [class.zones__map-modal]="draftShape() === 'POLYGON'"
+        (click)="$event.stopPropagation()"
+      >
         <h2 class="q-subhead">{{ 'delivery.zones.draft.title' | t: { code: zone.code } }}</h2>
         <p class="q-caption">{{ 'delivery.zones.draft.hint' | t }}</p>
         <label class="q-field">
-          <span class="q-caption">{{ 'delivery.zones.draft.origin' | t }}</span>
+          <span class="q-caption">{{ 'delivery.zones.draft.shape' | t }}</span>
           <select
-            data-testid="zone-origin-select"
-            [value]="draftOriginLocationId()"
-            (change)="draftOriginLocationId.set($any($event.target).value)"
+            data-testid="zone-shape-select"
+            [value]="draftShape()"
+            (change)="setDraftShape($any($event.target).value)"
           >
-            @for (branch of branchOptions(); track branch.id) {
-              <option [value]="branch.id">{{ branch.displayName }}</option>
-            }
+            <option value="CIRCLE">{{ 'delivery.zones.draft.shape.CIRCLE' | t }}</option>
+            <option value="POLYGON">{{ 'delivery.zones.draft.shape.POLYGON' | t }}</option>
           </select>
         </label>
-        <label class="q-field">
-          <span class="q-caption">{{ 'delivery.zones.draft.radius' | t }}</span>
-          <input
-            type="number"
-            [value]="draftRadiusMeters()"
-            (input)="draftRadiusMeters.set(+$any($event.target).value)"
+        @if (draftShape() === 'POLYGON') {
+          <p class="q-caption" data-testid="zone-polygon-hint">
+            {{ 'delivery.zones.draft.polygonHint' | t }}
+          </p>
+          @if (draftFromVersion(); as from) {
+            <p class="q-caption" data-testid="zone-polygon-from">
+              {{ 'delivery.zones.draft.fromVersion' | t: { version: from } }}
+            </p>
+          }
+          <q-polygon-editor
+            [ring]="draftRing()"
+            [center]="draftCentre()"
+            [region]="draftRegionBounds()"
+            (ringChange)="onRingChange($event)"
+            (problemsChange)="onRingProblems($event)"
           />
-        </label>
+          @if (draftRing().length < 3) {
+            <p class="q-caption" data-testid="zone-polygon-empty">
+              {{ 'delivery.zones.draft.polygonEmpty' | t }}
+            </p>
+          }
+        } @else {
+          <label class="q-field">
+            <span class="q-caption">{{ 'delivery.zones.draft.origin' | t }}</span>
+            <select
+              data-testid="zone-origin-select"
+              [value]="draftOriginLocationId()"
+              (change)="draftOriginLocationId.set($any($event.target).value)"
+            >
+              @for (branch of branchOptions(); track branch.id) {
+                <option [value]="branch.id">{{ branch.displayName }}</option>
+              }
+            </select>
+          </label>
+          <label class="q-field">
+            <span class="q-caption">{{ 'delivery.zones.draft.radius' | t }}</span>
+            <input
+              type="number"
+              [value]="draftRadiusMeters()"
+              (input)="draftRadiusMeters.set(+$any($event.target).value)"
+            />
+          </label>
+        }
         <label class="q-field">
           <span class="q-caption">{{ 'delivery.zones.draft.priority' | t }}</span>
           <input
@@ -444,6 +499,36 @@
             {{ 'delivery.zones.draft.submit' | t }}
           </button>
         </div>
+      </div>
+    </div>
+  }
+
+  @if (reviewing(); as review) {
+    <div class="q-modal-backdrop" (click)="closeReview()">
+      <div
+        class="q-modal zones__map-modal"
+        (click)="$event.stopPropagation()"
+        data-testid="zone-review-dialog"
+      >
+        @if (brandScope(); as scope) {
+          <q-zone-outline-review
+            [scope]="scope"
+            [zoneId]="review.zone.zoneId"
+            [version]="review.version"
+            [zoneCode]="review.zone.code"
+            [region]="reviewRegionBounds()"
+            [tariff]="reviewTariff()"
+            [mode]="review.mode"
+            [busy]="busyZoneId() === review.zone.zoneId"
+            (activate)="confirmActivation()"
+            (closed)="closeReview()"
+          />
+        }
+        @if (rowError(); as error) {
+          <p class="q-modal__error q-body-sm" role="alert" data-testid="zone-review-error">
+            {{ error }}
+          </p>
+        }
       </div>
     </div>
   }
