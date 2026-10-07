@@ -342,6 +342,21 @@ class OsrmRoadDistanceAdapterTests {
     }
 
     @Test
+    @DisplayName("a dataset tag the fee row cannot hold is not used: a failed insert would be a failed quote")
+    void aDatasetTagTooLongForTheFeeRowIsNotUsed() {
+        String tooLong = "2026-10-01-" + "x".repeat(OsrmProperties.MAX_DATASET_VERSION_LENGTH);
+
+        assertThat(adapter(OsrmProperties.enabledWith(tooLong)).measure(BRANCH, DOORSTEP, installation))
+                .isEmpty();
+        assertThat(engine.hits()).isZero();
+        // At the limit it is used: the column is varchar(32), and 32 characters fit.
+        String atTheLimit = "x".repeat(OsrmProperties.MAX_DATASET_VERSION_LENGTH);
+        assertThat(adapter(OsrmProperties.enabledWith(atTheLimit)).measure(BRANCH, DOORSTEP, installation))
+                .map(RoadRoute::datasetVersion)
+                .contains(atTheLimit);
+    }
+
+    @Test
     @DisplayName("a tariff with no routing installation, or one that is not the routing engine, is never answered")
     void onlyARoutingInstallationIsAnswered() {
         jdbc.sql("""

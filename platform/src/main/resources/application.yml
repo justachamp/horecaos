@@ -134,6 +134,22 @@ horecaos:
     # exchange staff credentials with Keycloak. Same base-url/realm as above --
     # this is not a second Keycloak, just a second client on it.
     staff-login-client-id: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_ID:horecaos-staff-login}
+  routing:
+    osrm:
+      # ADR 0147. The platform's own road-distance engine, behind the ROAD delivery
+      # tariffs. Off by default everywhere, which is also the rollback: with it off every
+      # ROAD fee prices from the straight line times the tariff's detour factor and says
+      # RADIUS_FALLBACK. Switched on only on a deployment that runs deploy/compose.production.yml's
+      # `routing` profile (the engine and its dataset), and the dataset version is that
+      # profile's image tag: it is recorded on every fee the engine measures, so an enabled
+      # engine with no dataset version, or one longer than the fee row's 32 characters,
+      # answers nothing and logs why at start.
+      enabled: ${HORECAOS_ROUTING_OSRM_ENABLED:false}
+      dataset-version: ${HORECAOS_ROUTING_OSRM_DATASET_VERSION:}
+      # The whole exchange, body included. ADR 0147 gives the checkout path 500 ms.
+      timeout: ${HORECAOS_ROUTING_OSRM_TIMEOUT:500ms}
+      # How far from a road a coordinate may be and still count as on the network.
+      snap-radius-meters: ${HORECAOS_ROUTING_OSRM_SNAP_RADIUS_METERS:1000}
   iam:
     # ADR 0025 fresh-deployment bootstrap (PlatformAdminBootstrapReconciler).
     # A comma-separated list of Keycloak subject ids that must hold the

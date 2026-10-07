@@ -112,12 +112,14 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         this.breaker = registry.circuitBreaker(PROVIDER);
         ProviderCircuitMetrics.bind(registry, meters, "routing", clock);
 
-        if (properties.enabled() && properties.datasetVersion() == null) {
+        if (properties.enabled() && !properties.datasetVersionUsable()) {
             // Loud once, at start, and never a refusal to start: ADR 0147 puts routing
             // behind a fallback precisely so that nothing here can stop a checkout.
-            log.error("horecaos.routing.osrm.enabled is true but horecaos.routing.osrm.dataset-version is "
-                    + "not set; the engine is treated as not answering, because a fee must name the map "
-                    + "that measured it");
+            log.error(
+                    "horecaos.routing.osrm.enabled is true but horecaos.routing.osrm.dataset-version is "
+                            + "not set, or is longer than {} characters; the engine is treated as not answering, "
+                            + "because a fee must name the map that measured it and a fee cannot record a longer name",
+                    OsrmProperties.MAX_DATASET_VERSION_LENGTH);
         }
         registerDatasetAge(properties.datasetVersion(), clock);
     }
@@ -147,12 +149,21 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         }
 
         long started = System.nanoTime();
-        ProviderOutcome outcome = http.getWithSensitivePath(
-                new ProviderCall(installation.get().baseUrl(), "", null, properties.timeout()),
-                pathFor(origin, destination),
-                LOG_LABEL,
-                Map.of(),
-                OsrmRoadDistanceAdapter::interpretBody);
+        ProviderOutcome outcome;
+        try {
+            outcome = http.getWithSensitivePath(
+                    new ProviderCall(installation.get().baseUrl(), "", null, properties.timeout()),
+                    pathFor(origin, destination),
+                    LOG_LABEL,
+                    Map.of(),
+                    OsrmRoadDistanceAdapter::interpretBody);
+        } catch (RuntimeException failure) {
+            // The client classifies every failure it expects, so this is a defect. The permit
+            // taken above is returned as a fault: a half-open breaker holds three, and one
+            // leaked by an exception would leave it waiting for a probe that never reports.
+            breaker.onError(System.nanoTime() - started, TimeUnit.NANOSECONDS, new EngineFault(null));
+            throw failure;
+        }
         long elapsed = System.nanoTime() - started;
 
         return switch (outcome.status()) {

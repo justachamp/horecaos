@@ -58,8 +58,20 @@ public record OsrmProperties(
         return new OsrmProperties(true, datasetVersion, Duration.ofMillis(500), 1_000, 10, Duration.ofSeconds(30));
     }
 
+    /**
+     * The longest dataset tag a fee can record: {@code delivery_fee_resolutions.routing_dataset_version}
+     * is {@code varchar(32)}, and a tag the column cannot hold would fail the fee's own insert,
+     * which is a failed quote for a routing problem.
+     */
+    public static final int MAX_DATASET_VERSION_LENGTH = 32;
+
+    /** Whether the tag can be written on a fee: named, and short enough for its column. */
+    public boolean datasetVersionUsable() {
+        return datasetVersion != null && datasetVersion.length() <= MAX_DATASET_VERSION_LENGTH;
+    }
+
     /** Whether this deployment can answer a route at all: switched on, and told which map it holds. */
     public boolean answering() {
-        return enabled && datasetVersion != null;
+        return enabled && datasetVersionUsable();
     }
 }

@@ -264,6 +264,20 @@ public class ProviderInstallationController {
     ResponseEntity<Map<String, Object>> install(
             @PathVariable UUID tenantId, @Valid @RequestBody InstallRequest request) {
 
+        if (request.category() == ProviderCategory.ROUTING) {
+            // ADR 0147: the platform's routing engine is keyless and platform-run, so its
+            // installation is created for the tenant by choosing "use platform routing" on
+            // a ROAD delivery tariff, in that draft's own transaction and idempotently. This
+            // door would let a tenant pre-create one under the platform installation's own
+            // account reference and leave "use platform routing" returning a DRAFT row the
+            // adapter will never answer for. A routing engine with credentials (the hosted
+            // API ADR 0147 names as its second adapter) opens this door when it exists.
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A routing installation is created by choosing \"use platform routing\" on a ROAD "
+                            + "delivery tariff, not through this door");
+        }
+
         // Category alone used to be the whole check, so a request could name any
         // environment approved for the category regardless of which provider it
         // actually belonged to — a Telegram install naming the SMS gateway's own
