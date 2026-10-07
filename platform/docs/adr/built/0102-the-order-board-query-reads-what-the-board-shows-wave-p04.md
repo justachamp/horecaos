@@ -1,13 +1,15 @@
 # ADR 0102: The order board query reads what the board shows
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `GET /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders/board` is the new paged read: a cursor-paginated `Page<OrderSummaryResponse>` filterable by period, status, channel code, fulfilment mode, courier, payment method code, creating actor and external reference. `OrderSummaryResponse` grew from eleven fields to twenty-three, which the released `GET .../orders` returns too — that operation is frozen and marked deprecated rather than changed, because its bare-array response is published in v1 and `OpenApiContractTests` refuses to change it; `GET .../orders/counts` takes the same period; `JdbcOrderStore.listForLocation(OrderListQuery, …)` is the one query behind both, keyset on `(created_at, id)` with the filter set fingerprinted into the cursor; the process-attention level is a correlated subquery over `ordering.order_process_states`, the courier and payment-method filters are `EXISTS` subqueries over `fulfillment.shipments` and `payments.payment_intents`, and `reference` matches the order's own `public_order_number` or any row of `ordering.order_external_references`, both in one normalised form. Covered by `OrderBoardQueryTests` and `CursorTests`. No migration; every index the filters need already exists. Not built by this decision: the derived `LATE`/`AT_RISK` levels of orders.md §2.7, the tenant-wide reference *search* of §2.8, the courier's name and the branch name on the row, and the signed cursor ADR 0031 asks for
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0019, ADR 0025, ADR 0029, ADR 0031, ADR 0036, ADR 0039, ADR 0040
 - Supersedes / Superseded by: —
 - Open inputs: whether the board's default period should be the business date rather than "everything" once a tenant has a year of orders (platform owner); whether a tenant-wide order search — the endpoint orders.md §2.8's aggregator lookup actually needs — is a `TENANT`-scoped capability of its own or a widening of `ORDER_READ` (platform owner, with the operations spec's author); the covering index the eventual filter mix wants (platform owner, once a pilot tenant's real filter usage is observable)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0153: Weighed orders paid through a provider
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — the interim rule is built, the real answer is
   not. A line sold by weight (ADR 0137) is checked out at its nominal weight and
   corrected at the scale. `CatchweightReconciliationService.reconcile` refuses a
@@ -17,7 +17,7 @@
   checks out (storefront, operator, bot). Nothing takes an incremental charge, gives
   back a partial refund, or holds an amount and captures a smaller one.
 - Date proposed: 2026-10-03
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (fix wave 17, finding on weighed orders paid through
   a provider); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0013, ADR 0018, ADR 0039, ADR 0046, ADR 0137
@@ -37,6 +37,8 @@
   - **The fiscal consequence** (legal, ADR 0038's owner). A receipt is built for the
     amount that was taken; one corrected afterwards is a correction document. Proposed
     default: out of scope here, as ADR 0137 left it.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

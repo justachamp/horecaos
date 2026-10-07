@@ -1,13 +1,15 @@
 # ADR 0105: `actions[]` is a capability array, not a status array
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — `OrderActionsPolicy.availableFor(status, mode, grantedCapabilities)` is built and tested: every one of the original four codes (`APPROVE`, `REJECT`, `ADVANCE`, `CANCEL`) is now gated on the same `Capability` the corresponding mutating endpoint declares, read once per request from `AuthorizationService` and threaded through both the list and the detail read. `AMEND`'s gate (`ORDER_AMEND` plus `canAmend(status)`) is built the same way but is deliberately held behind `OrderActionsPolicy.AMEND_EMISSION_ENABLED` (currently `false`) and not yet emitted: the console has no translated label or working handler for it (`order-actions.ts`'s `ORDER_ACTION_CODES` still lists four values on purpose, and its unhandled-code fallback renders the raw string `"AMEND"` in every locale, which is not an acceptable button for a real operator to see) — wave `P10` ships the amendment client and flips the constant on. `COMPLETE`, `RESOLVE`, `ASSIGN_COURIER` and `ISSUE_INVOICE` are declared in `OrderActionCode` — so the wire contract names them now — but are not yet emitted by the policy either: each needs state (a fulfilment-mode-aware completion reason, a specific amendment's confirmation state, a courier assignment path, an invoice-issue endpoint) that does not exist yet or that this status/mode/capability signature cannot carry. The frontend's read-only overflow item (`Открыть`, `Копировать номер`) ships client-only and does not wait on any of that.
 - Date proposed: 2026-09-12
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0019, ADR 0039
 - Supersedes / Superseded by: —
 - Open inputs: whether backward status transitions (IA row 1.1h) reuse this policy directly or sit behind a separate override policy — ADR 0019 amendment, wave `P41` (platform owner); which `Capability` each of `COMPLETE` (wave `P09`), `ASSIGN_COURIER` (wave `P11`) and `ISSUE_INVOICE` (wave `P12`) should declare once its endpoint exists — this record reserves the codes and does not commit a capability for any of them (platform owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

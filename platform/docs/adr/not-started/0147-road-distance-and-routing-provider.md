@@ -1,6 +1,6 @@
 # ADR 0147: Road distance and routing provider
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no routing provider exists and a `ROAD`
   tariff prices as if it were a `RADIUS` one. `DeliveryRoutingConfiguration`
   registers a `RoadDistancePort` that answers empty on every call, on purpose
@@ -25,7 +25,7 @@
   value in `ordering.orders.promise_travel_minutes` for a delivery order —
   `CheckoutOrderWriter` passes `null`, "travel is null rather than zero".
 - Date proposed: 2026-10-01
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
   decides
 - Depends on: ADR 0007, ADR 0014, ADR 0015, ADR 0026, ADR 0030, ADR 0033,
@@ -63,6 +63,8 @@
 
 **To accept as written:** say "accept 0147". Every open input above is then
 closed on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

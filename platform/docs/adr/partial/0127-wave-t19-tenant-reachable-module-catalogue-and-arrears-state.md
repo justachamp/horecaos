@@ -1,13 +1,15 @@
 # ADR 0127: A tenant browses and buys its own modules, and reads its own arrears state
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — `COMMERCIAL_MODULE_READ`/`COMMERCIAL_ARREARS_READ` exist and are composed into `TENANT_OWNER`/`TENANT_FINANCE`; `CommercialOperationsController.modulesOnSale`/`.modulesHeld`/`.purchaseModule` and `ArrearsController.tenantArrears` are built, capability-enforced, and covered by `CommercialSelfServiceEndpointTests` (positive, missing-capability, and cross-tenant refusal for all four). `frontend/operations`'s `subscription-page` renders the catalogue with inline purchase behind a `q-confirm-dialog` (batch 15) and the restricted-feature banner, covered by `subscription-page.spec.ts`. As of the 2026-09-30 status note below, a tenant can also end a module it bought itself: `CommercialOperationsController.endPurchasedModule` (`COMMERCIAL_SUBSCRIPTION_MANAGE`, `ScopeType.TENANT`), V0442's `tenant_modules.acquired_via`, a "Your modules" table with a confirmed End on the subscription page, covered by `CommercialSelfServiceEndpointTests`, `TenantModuleAcquisitionTests` and `subscription-page.spec.ts`. Not built: a way to undo a purchase without paying for the month it was made in — ADR 0087 and ADR 0088 prorate nothing, so ending a self-purchase stops the module from the next statement month on but still bills the month it ends in, and a grace window that voids an immediate undo would be a decision of its own
 - Date proposed: 2026-09-14
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025 (capabilities), ADR 0087 (sellable modules), ADR 0088 (statements), ADR 0089 (arrears)
 - Supersedes / Superseded by: —
 - Open inputs: none — every choice below reuses an existing, already-decided mechanism (the ADR 0025 capability model, `ModuleCatalogService.add`'s existing rules, the ADR 0089 arrears lifecycle); the platform owner's acceptance of this record is the only outstanding step
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

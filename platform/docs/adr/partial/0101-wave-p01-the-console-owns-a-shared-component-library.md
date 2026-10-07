@@ -1,6 +1,6 @@
 # ADR 0101: The operations console owns its shared component library, in-app and un-barrelled
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — wave `P01` creates
   `frontend/operations/src/app/shared/ui/` and the eleven primitives this
   record names (`q-modal`, `q-drawer`, `q-confirm-dialog`, `q-action-menu`,
@@ -34,7 +34,7 @@
   Not built: the second half of this decision — publishing the library as a
   package the control plane and the storefronts can consume.
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of
   2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0035, ADR 0052
@@ -44,6 +44,8 @@
   this is ADR 0035's own open input, still open, and this record deliberately
   does not close it); whether `@angular/cdk` enters the console at all, which
   wave `P03` decides when it needs virtual scrolling (platform owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

@@ -1,13 +1,15 @@
 # ADR 0107: A tenant's own calendar, the boundary it feeds, and the SLA buckets that stay the platform's to set
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `OperationsOrderOutcomeReasonController` (edit, `allowedFulfillmentModes`, moved off control-plane), `BusinessCalendarController`/`BusinessCalendarService`/`JdbcBusinessCalendarStore` (weekend, tenant holidays, boundary editor over `BusinessDayService.setBoundary`, gated by `ApprovalAction.REPORTING_BUSINESS_DAY_BOUNDARY_CHANGE`), `ReportingController.slaBucketSet` (tenant-readable version card), `BranchTagController`/`BranchTagService`/`JdbcBranchTagStore` (registry, archive, location × tag assignment), `V0256`–`V0258`, and `reference-data-page.ts`'s edit dialog, calendar card, SLA card and tag matrix, plus `provenance-banner.ts` surfacing `businessDayStart`. Not built: automatic `tenant.service_schedule_exceptions` creation from a holiday (settings.md says "offer", never "silently create" — deferred rather than half-built), and any recut *execution* triggered from this screen — a boundary change marks `recut_completed_through` null and leaves the recut to `DayCloseService`
 - Date proposed: 2026-09-12
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0027, ADR 0029, ADR 0031, ADR 0039, ADR 0043, ADR 0050, ADR 0057, ADR 0090
 - Supersedes / Superseded by: —
 - Open inputs: Delever's forecast-window default of 09:00→09:00 for the business-day boundary — the matrix records this as open, and this wave answers "can a tenant set its own boundary" rather than "what should the platform default to" (platform owner); whether a boundary change should default to `REQUIRE_CONFIGURED_POLICY` rather than `ALLOW_WITHOUT_APPROVAL` once real tenants have used it (platform owner, per ADR 0050's own revisit discipline — see the alternatives table below); whether a holiday entry should gain the "offer to create schedule exceptions" flow settings.md names, and who owns designing that offer so it never becomes a silent side effect (platform owner / whoever takes 10.2's Hours tab next)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

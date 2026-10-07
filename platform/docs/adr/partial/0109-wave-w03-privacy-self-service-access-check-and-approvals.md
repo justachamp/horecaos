@@ -1,13 +1,15 @@
 # ADR 0109: Tenant self-service for privacy, access checks, and approval history
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — see status line detail below
 - Date proposed: 2026-09-12
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025 (capabilities), ADR 0027 (audit and approvals), ADR 0029 (PII protection), ADR 0030 (configuration and policy resolution), ADR 0021 (entitlements)
 - Supersedes / Superseded by: —
 - Open inputs: see table below
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

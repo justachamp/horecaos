@@ -1,6 +1,6 @@
 # ADR 0146: SMS gateway contract
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no SMS leaves the platform for any purpose
   other than a customer's sign-in code, and nothing records whether any SMS
   arrived. What exists is two unrelated paths and a table nothing fills.
@@ -30,7 +30,7 @@
   V0204/V0208), consent and suppression (ADR 0020, ADR 0044), the segment
   estimator (`SmsSegments`), quiet hours.
 - Date proposed: 2026-10-01
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
   decides
 - Depends on: ADR 0005, ADR 0007, ADR 0020, ADR 0026, ADR 0028, ADR 0029,
@@ -78,6 +78,8 @@
 
 **To accept as written:** say "accept 0146". Every open input above is then
 closed on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

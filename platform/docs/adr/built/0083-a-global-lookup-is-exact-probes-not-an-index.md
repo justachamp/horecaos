@@ -1,13 +1,15 @@
 # ADR 0083: A global lookup is exact probes, not an index
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `JdbcGlobalLookup` and `GET /control-plane/lookup` with value-first indexes (V0197), tested against the migrated schema; the control-plane global lookup screen. Finding a customer by phone number is not built
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0029, ADR 0056
 - Supersedes / Superseded by: —
 - Open inputs: whether support may find a customer by phone across tenants, which would be a search of protected data needing its own record — owner Ayubkhon Abbosov
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

@@ -1,13 +1,15 @@
 # ADR 0082: A feature flag is a boolean configuration key
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `ConfigurationKeys.featureFlags()` and the first flag, `feature.support_visits`; `FeatureFlagController`'s rollout view and per-tenant read, tested against PostgreSQL; the control-plane feature-flag screen; the operations app's flag reader and the settings page it gates
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0027, ADR 0030
 - Supersedes / Superseded by: —
 - Open inputs: whether percentage rollout is wanted before tenants number in the hundreds — owner Ayubkhon Abbosov. Nothing built here depends on the answer
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

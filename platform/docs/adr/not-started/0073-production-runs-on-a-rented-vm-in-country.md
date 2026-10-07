@@ -1,6 +1,6 @@
 # ADR 0073: Production runs on a rented machine in Uzbekistan, not on hardware we own
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — **2026-09-25:** this record's Decision
   and Specification sections below describe removing MinIO once the rented
   provider's own S3-compatible storage is confirmed (still an open input).
@@ -13,7 +13,7 @@
   "RustFS is removed," and the object-storage line item in its Implementation
   checklist is otherwise unchanged.
 - Date proposed: 2026-09-05
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: platform owner (direction and the open inputs below), Claude (architecture)
 - Depends on: 0001, 0010, 0023, 0028, 0029, 0033, 0056, 0057
 - Supersedes / Superseded by: Supersedes ADR 0034 and ADR 0061
@@ -28,6 +28,8 @@
   support-response terms (owner); where off-provider backups land, with this
   record's own proposal below (owner); whether the colocated hardware is
   retired, kept as a warm spare, or repurposed as that backup target (owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

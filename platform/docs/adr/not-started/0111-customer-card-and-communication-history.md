@@ -1,6 +1,6 @@
 # ADR 0111: A guest has one card, and every contact with them is history
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — the `customers` module already builds most of the
   foundation this record organizes (identity resolution, contact points, consent,
   blacklist, erasure, favourites — see Context), and the `notifications` module already
@@ -11,7 +11,7 @@
   `marketing` and `reviews` for the customer card. `grep -a -ril lead` over
   `platform/src/main/java` finds no domain type named `Lead` anywhere in the tree.
 - Date proposed: 2026-09-13
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of
   2026-09-13 ("write a new ADR for campaign management and CRM (customer card); do a
   similar architecture for these"); Ayubkhon Abbosov (platform owner) decides
@@ -37,6 +37,8 @@
     payments → onboarding): a lead pipeline and call-centre queue are mature-CRM
     features this record does not itself rank against the pilot's build order
     (platform owner).
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

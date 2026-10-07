@@ -1,6 +1,6 @@
 # ADR 0134: Persisted ABC/XYZ product classification as its own run, not a projected fact
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — the persisted run (schema, service,
   endpoints, Java tests), the product report's own defect fix (7.7:
   `Категория`, `СТОП`, filter-bar reactivity, the DINE_IN disclosure), and the
@@ -10,7 +10,7 @@
   `reporting.classification.run` can request a run over a valid window and
   read it back from the console today.
 - Date proposed: 2026-09-15
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
   of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0043
@@ -22,6 +22,8 @@
   (platform owner); whether a classification run needs a retention/pruning
   policy once real tenants accumulate months of on-demand runs (platform
   owner, no volume evidence yet to size it against)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

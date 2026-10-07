@@ -1,13 +1,15 @@
 # ADR 0081: Support enters a tenant through a time-boxed, reasoned session
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `iam.support_sessions` (V0196), the `support-session-view` and `support-session-assist` roles, `SupportSessionService`, `SupportSessionController` and the audit listener, tested against PostgreSQL; the control-plane support-session screen (open, end, history, a link into operations) and the operations app's support banner and explicit-tenant entry
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-10 to finish the control plane's remaining waves; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0027, ADR 0056, ADR 0062, ADR 0078
 - Supersedes / Superseded by: —
 - Open inputs: whether the two access levels and the four-hour ceiling are the right ones — owner Ayubkhon Abbosov. Work proceeds without the answer because the owner asked for the wave to be built overnight, and every limit is a constant or a CHECK a later record can move without a data change
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

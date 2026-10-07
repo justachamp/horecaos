@@ -1,13 +1,15 @@
 # ADR 0097: HorecaOS sends its own email, and invites a tenant owner itself
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — the `mail` module over SMTP with its password from the secrets manager, V0210's `tenant.owner_invitations`, `OwnerInvitationService` and `OwnerInvitationRelay`, the owner step queueing an invitation for an account with no password, `StaffInvitationController`'s inspect and accept over `KeycloakStaffAccounts`, the owner email encrypted in the onboarding input, the control plane's invitation panel with resend and the operations console's `/invite` page, and, from ADR 0100, each invitation's append-only history (`tenant.owner_invitation_events`) shown as a timeline on that panel plus the cross-tenant overview `GET /api/v1/control-plane/owner-invitations` behind `/tenants/invitations` and the address-free `GET /api/v1/control-plane/owner-invitations/waiting` behind the tenant directory's owner column, tested in `SmtpPlatformMailerTests` against Mailpit, `OwnerInvitationFlowTests`, `OwnerInvitationOverviewTests`, `OwnerInvitationControllerEndpointTests`, `TenantOwnerLinkOrInviteTests` and against the live realm in `KeycloakOrganizationIntegrationTests`. Nothing is delivered until a provider's settings and the domain's DNS records exist (runbook `platform-email.md`); none are configured yet
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: the platform owner decided on 2026-09-11 that the platform sends email over SMTP through a hosted provider, and that HorecaOS, not Keycloak, sends the owner's invitation and hosts the page where they set their password. The structure below was proposed by Claude on those answers; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0008, ADR 0009, ADR 0028, ADR 0029, ADR 0062
 - Supersedes / Superseded by: —
 - Open inputs: which sending provider, and the sending domain's SPF, DKIM and DMARC records on horecaos.uz (platform owner); counsel's confirmation that a hosted provider outside Uzbekistan may process staff email addresses under the amended ZRU-547 (legal)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

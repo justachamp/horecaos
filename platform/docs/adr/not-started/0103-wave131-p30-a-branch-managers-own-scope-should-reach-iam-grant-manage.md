@@ -1,6 +1,6 @@
 # ADR 0103: A branch manager's own scope should reach `iam.grant.manage`
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — this record raises the question row
   `9.1` of the operations gap map names; it changes nothing in `PlatformRole`
   or `GrantController` on its own. Wave P30 (`wave131-p30`) built the
@@ -9,7 +9,7 @@
   `brand-manager`, because the server genuinely refuses them today — and
   recorded the limit here rather than working around it in the frontend.
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
   of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025
@@ -22,6 +22,8 @@
   owner has not made (platform owner); whether narrowing this way reopens
   ADR 0025's closed "no tenant-defined roles in v1" input, which a narrower
   capability might not need to (security / platform owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

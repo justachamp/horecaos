@@ -1,6 +1,6 @@
 # ADR 0131: The export centre's job queue, capability split, and artifact storage
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — `reporting.report_exports` (V0355), the
   two capabilities, `ReportExportService`/`ReportExportWorker`, `POST
   .../reporting/exports`, `GET .../reporting/reports/{id}`, `GET
@@ -8,7 +8,7 @@
   are tested end to end for one report (`CUSTOMER_DIRECTORY`). No second
   report is wired yet — see Consequences.
 - Date proposed: 2026-09-15
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
   of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0043, ADR 0029, ADR 0025, ADR 0010, ADR 0027
@@ -21,6 +21,8 @@
   key namespace (platform owner / infra); whether Excel/CSV should ever mean
   a real `.xlsx` binary rather than a CSV Excel opens (platform owner —
   no product signal either way was available)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0114: Manual aggregator order entry — write path and binding resolution
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — `AggregatorOrderIntakeService` and
   `JdbcAggregatorOrderStore` (both in `ordering`) exist and are covered by
   `AggregatorOrderIntakeServiceTests`: given an `AGGREGATOR`-system-type
@@ -36,7 +36,7 @@
   written for a manual entry regardless of fulfilment mode (see
   Consequences and the two open inputs below, both still open).
 - Date proposed: 2026-09-14
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
   of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0040, ADR 0026, ADR 0036, ADR 0025
@@ -53,6 +53,8 @@
     binding" means nothing is dispatching a courier automatically; a tenant
     that separately arranges for the aggregator's own courier to collect a
     manually recorded order has no way to say so)
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
+
 ## Context
 
 Row `1.3g` (gap map, wave P14): "When an aggregator phones an order through

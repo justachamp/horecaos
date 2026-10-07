@@ -1,9 +1,9 @@
 # ADR 0069: An assistant answers customers — grounded in platform facts, never in model memory
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started
 - Date proposed: 2026-09-05
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: platform owner (direction and the open inputs below), Claude (architecture)
 - Depends on: 0016, 0018, 0019, 0020, 0021, 0025, 0026, 0027, 0028, 0029, 0031, 0033, 0036, 0039, 0043, 0058, 0059, 0063, 0064
 - Supersedes / Superseded by: —
@@ -14,6 +14,8 @@
   message text to a third-party processor is acceptable under each tenant's own
   obligations, and what a tenant must disclose to its customers (owner, with
   legal advice this record does not attempt to give)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0099: A new tenant can be onboarded with a sample menu it did not write
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — `SAMPLE_MENU_PUBLISH` exists as decided:
   optional, `CONFIGURING`, sequence 4, materialised `SKIPPED`/`NOT_REQUESTED`
   when a run did not ask for it. The handler is
@@ -22,7 +22,7 @@
   first brand only, so a tenant with two brands still fails catalogue readiness
   on the second.
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11 ("while onboarding a new tenant ask whether to create a sample menu and publish it to see that all works on our side, later tenant can make their own menu when they fully ready"); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0008, ADR 0016, ADR 0017, ADR 0018, ADR 0021, ADR 0036, ADR 0038, ADR 0060
 - Supersedes / Superseded by: —
@@ -31,6 +31,8 @@
   (platform owner); whether the sample menu should ever be shown to a real
   customer on a live storefront domain, or only reached by the tenant's own
   staff and the platform's verification (platform owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

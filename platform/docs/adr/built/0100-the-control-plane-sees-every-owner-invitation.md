@@ -1,13 +1,15 @@
 # ADR 0100: The control plane sees every owner invitation
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Built — V0215's `tenant.owner_invitation_events` written by `OwnerInvitationService` and `OwnerInvitationRelay` in the same transaction as the state change each row records, and only when that guarded write matched the attempt it names; `JdbcOwnerInvitationEventStore` reads it; `OwnerInvitationView` carries `recipient` and `timeline`; `GET /api/v1/control-plane/owner-invitations` lists every unarchived tenant with an invitation or a linked owner, filterable, including the never-invited tenant as `NONE`; the recipient is read live from Keycloak and revealed only to `TENANT_ONBOARDING_MANAGE`, one `tenant.owner_invitation.recipient_revealed` fact per call that carries a recipient; `GET /api/v1/control-plane/owner-invitations/waiting` answers the same question without one — `{tenantId, state}` per unarchived tenant, no identity-provider read, no reveal — and is what the tenant directory's owner column asks; the control plane has the `/tenants/invitations` screen with its rail entry, the timeline on the onboarding panel and that column. Covered by `OwnerInvitationFlowTests`, `OwnerInvitationOverviewTests`, `OwnerInvitationControllerEndpointTests` and the three Angular specs. No retention job trims the events table
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0009, ADR 0025, ADR 0027, ADR 0029, ADR 0031, ADR 0097
 - Supersedes / Superseded by: —
 - Open inputs: whether an operator's view of a staff address needs a retention period on the reveal facts beyond ADR 0027's own (platform owner, with legal); whether the overview should reach archived tenants once the first tenant is archived (platform owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

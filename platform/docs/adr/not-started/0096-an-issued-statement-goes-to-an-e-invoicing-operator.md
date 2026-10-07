@@ -1,13 +1,15 @@
 # ADR 0096: An issued statement goes to an e-invoicing operator
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — statements export as CSV only
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: the platform owner decided on 2026-09-11 that issued statements go to the accountant as CSV and to the Didox and Faktura.uz e-invoicing operators; the structure below was proposed by Claude on that answer; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0007, ADR 0026, ADR 0028, ADR 0088
 - Supersedes / Superseded by: —
 - Open inputs: HorecaOS's accounts and API access with Didox and with Faktura.uz, and each operator's API documentation (finance, operations); the product classification code and VAT rate for each statement line kind (finance); which operator each tenant receives on, where a tenant uses only one (finance)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 

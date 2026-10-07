@@ -1,13 +1,15 @@
 # ADR 0098: A staff member who forgot their password asks for a reset
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — the whole flow is built and tested: `iam.password_resets` (V0213) with the request cooldown in its upsert, the relay and its email in uz/ru/en, `findSubjectIdByLogin`/`findByLogin`/`setPassword`/`logoutEverywhere` over Keycloak, three endpoints on each staff prefix, and both consoles' sign-in link, request page and reset page. What is missing is not code: ADR 0097's open input is still open, so no deployment has a mail provider and nothing has actually been delivered to a staff member. Resets queue and wait, and the requester sees the same answer as everyone else
 - Date proposed: 2026-09-11
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0028, ADR 0029, ADR 0033, ADR 0062, ADR 0097
 - Supersedes / Superseded by: —
 - Open inputs: whether a reset should also clear an account's outstanding Keycloak required actions, or leave an account that was never set up to the ADR 0097 invitation instead (platform owner); whether sixty minutes is the right link lifetime for an operator working a shift, or whether it should be shorter on the control plane than on operations (platform owner)
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
 ## Context
 
