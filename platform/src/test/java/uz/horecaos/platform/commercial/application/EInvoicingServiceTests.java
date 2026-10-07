@@ -936,6 +936,7 @@ class EInvoicingServiceTests {
 
         clock.advance(Duration.ofMinutes(30));
         didox.states.clear();
+        didox.asked.clear();
         // Asked in this order: the interrupted attempt first (never asked, so first in line), then the open one.
         didox.states.add(EInvoiceStateOutcome.NotFound::new);
         didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-2", EInvoiceOperatorState.SIGNED, "2"));
