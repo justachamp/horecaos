@@ -27,6 +27,8 @@ import uz.horecaos.platform.commercial.domain.PlatformCardInstallation;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -193,7 +195,12 @@ public class CommercialBillingSetupController {
             @Nullable String environmentCode,
             String displayName,
             String status,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "Whether a secret reference is bound -- a flag, never the reference or the secret")
             boolean secretConfigured,
+
             @Nullable String externalAccountReference,
             Map<String, Object> configuration,
             long version,

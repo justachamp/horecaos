@@ -30,6 +30,8 @@ import uz.horecaos.platform.commercial.domain.StatementEInvoice;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiMoney;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -302,7 +304,12 @@ public class CommercialEInvoicingController {
             String displayName,
             String status,
             boolean connected,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "Whether a secret reference is bound -- a flag, never the reference or the secret")
             boolean secretBound,
+
             List<String> missing,
             boolean adapterWired,
             String adapterVersion,

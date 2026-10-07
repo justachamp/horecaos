@@ -104,6 +104,12 @@ class IdempotentResponseClassificationTests {
             // A grant id, and whether a revocation changed anything.
             "GrantController#grant",
             "GrantController#revoke",
+            // ADR 0103: the same two answers from the routes a branch or brand manager's own
+            // grant covers -- a grant id, and whether a revocation changed anything.
+            "ScopedGrantController#grantAtLocation",
+            "ScopedGrantController#revokeAtLocation",
+            "ScopedGrantController#grantInBrand",
+            "ScopedGrantController#revokeInBrand",
             // Audience export: customer account identifiers and no attribute of
             // them. ADR 0032's rule exactly -- an id travels, the person does not.
             "OperationsMarketingController#export",
