@@ -35,10 +35,13 @@ import org.jspecify.annotations.Nullable;
  * nothing depending back on {@code courier}.
  *
  * <p>{@code closeInternalShipment} both answers the question and closes the
- * loop: it is also where {@code fulfillment.shipments} finally learns a
- * delivery happened, because nothing else does — see the class doc on
- * {@code courier.application.DeliveryAccrualOrderCompletionTrigger} for why
- * order completion is where "delivered" is known today.
+ * loop: it is also where a shipment nobody closed in the courier app learns
+ * its delivery happened. A courier who tapped «picked up» and «delivered» in
+ * the app (gap map 3.9) has already written both instants, and the answer
+ * carries them; when the app captured nothing the order's completion stands in
+ * for the delivery and the pickup stays unknown. See the class doc on {@code
+ * courier.application.DeliveryAccrualOrderCompletionTrigger} for why order
+ * completion is still what triggers the accrual.
  *
  * <p>{@code fulfillment.infrastructure.sourcing.JdbcDeliveryCompletionAdapter}
  * implements this, within {@code fulfillment} itself.

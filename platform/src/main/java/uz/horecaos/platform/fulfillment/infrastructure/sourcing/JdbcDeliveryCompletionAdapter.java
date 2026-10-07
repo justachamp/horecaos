@@ -94,7 +94,8 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
     private Optional<ShipmentRow> findLiveShipment(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT s.id, s.status, s.source_type, s.courier_id, s.brand_id, s.location_id,
-                       s.picked_up_at, s.delivered_at, p.distance_meters, p.distance_source, p.promised_delivery_end, p.pickup_window_end,
+                       s.picked_up_at, s.delivered_at,
+                       p.distance_meters, p.distance_source, p.promised_delivery_end, p.pickup_window_end,
                        o.payment_status_projection
                   FROM fulfillment.shipments s
                   JOIN fulfillment.delivery_plans p
