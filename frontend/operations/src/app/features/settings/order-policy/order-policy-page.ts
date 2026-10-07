@@ -63,6 +63,9 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 0,
     max: 23,
+    // Stored, read by nothing (the trading day follows the reporting calendar): the screen says so.
+    hintKey: 'settings.orderPolicy.notApplied.hint',
+    hintWhileEditing: true,
   },
   {
     code: 'ordering.average_order_minutes',
@@ -71,7 +74,7 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     min: 1,
     max: 600,
     // Stored, read by nothing (ADR 0150 decision 5): the screen says so until a record names a reader.
-    hintKey: 'settings.orderPolicy.averageOrderMinutes.hint',
+    hintKey: 'settings.orderPolicy.notApplied.hint',
     hintWhileEditing: true,
   },
   {
@@ -80,7 +83,7 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 600,
-    hintKey: 'settings.orderPolicy.maximumOrderMinutes.hint',
+    hintKey: 'settings.orderPolicy.notApplied.hint',
     hintWhileEditing: true,
   },
   {
@@ -123,6 +126,8 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     min: 0,
     max: 100,
     step: 0.1,
+    hintKey: 'settings.orderPolicy.notApplied.hint',
+    hintWhileEditing: true,
   },
   {
     code: 'ordering.routing_poll_interval_minutes',
@@ -130,6 +135,8 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 120,
+    hintKey: 'settings.orderPolicy.notApplied.hint',
+    hintWhileEditing: true,
   },
 ];
 

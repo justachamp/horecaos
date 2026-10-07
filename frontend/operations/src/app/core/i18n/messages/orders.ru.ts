@@ -244,7 +244,7 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.weigh.result.unchanged': 'Записано: {weight}. Сумма заказа не изменилась.',
   'orders.weigh.result.same': 'Уже записано: {weight}. Ничего не изменилось.',
   'orders.weigh.error.paymentTaken':
-    'Вес нельзя записать: заказ уже оплачен онлайн, а этот вес изменил бы его сумму. Доплата или возврат разницы пока недоступны.',
+    'Вес нельзя записать: заказ уже оплачен онлайн, а этот вес изменил бы его сумму. Весовые позиции нельзя оплатить онлайн: это решено, а не отложено. Попросите менеджера отменить заказ и вернуть деньги.',
   'orders.weigh.error.notWeighable': 'Заказ уже ушёл с раздачи: вес больше нельзя менять.',
   'orders.weigh.error.priceChanged':
     'Цена в меню изменилась после оформления заказа, поэтому вес не применён. Обратитесь к менеджеру.',
@@ -675,7 +675,7 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.basket.remove': 'Удалить',
   'orders.newOrder.basket.weighed': '≈ {weight}, точный вес при выдаче',
   'orders.newOrder.order.totalProvisional':
-    'В сумме есть весовые позиции: это оценка, точная сумма — после взвешивания при выдаче',
+    'В сумме есть весовые позиции: это оценка, точная сумма — после взвешивания при выдаче, поэтому заказ оплачивается при выдаче. Онлайн-оплата для весовых позиций недоступна',
   'orders.newOrder.basket.notePlaceholder': 'Комментарий кухне',
   'orders.newOrder.basket.unavailable': 'Больше не доступно — удалите, чтобы продолжить',
   'orders.newOrder.order.title': 'Заказ',

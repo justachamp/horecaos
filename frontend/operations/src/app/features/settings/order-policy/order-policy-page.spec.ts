@@ -375,6 +375,9 @@ describe('OrderPolicyPage', () => {
   const AVERAGE_ROW = 1;
   const MAXIMUM_ROW = 2;
   const LATE_THRESHOLD_ROW = 3;
+  const MINIMUM_ROW = 6;
+  const VAT_ROW = 7;
+  const ROUTING_ROW = 8;
 
   it('words the late-order scalar for the orders it governs, and says it is read', () => {
     const row = rowAt(LATE_THRESHOLD_ROW);
@@ -396,11 +399,13 @@ describe('OrderPolicyPage', () => {
     expect(rowAt(LATE_THRESHOLD_ROW).textContent).not.toContain('Not applied yet');
   });
 
-  it('says «Not applied yet» on the average and maximum order time, which nothing reads, beside and while editing', () => {
+  it('says «Not applied yet» on every card 2 field nothing reads, beside the value and while editing (ADR 0150)', () => {
+    // Business day start, average, maximum, VAT rate and routing poll interval: stored, inherited, read by nothing.
+    for (const row of [0, AVERAGE_ROW, MAXIMUM_ROW, VAT_ROW, ROUTING_ROW]) {
+      expect(rowAt(row).textContent, `row ${row}`).toContain('Not applied yet');
+    }
     expect(rowAt(AVERAGE_ROW).textContent).toContain('Average order time (minutes)');
-    expect(rowAt(AVERAGE_ROW).textContent).toContain('Not applied yet');
     expect(rowAt(MAXIMUM_ROW).textContent).toContain('Maximum order time (minutes)');
-    expect(rowAt(MAXIMUM_ROW).textContent).toContain('Not applied yet');
 
     (rowAt(AVERAGE_ROW).querySelector('.field__action') as HTMLButtonElement).click();
     fixture.detectChanges();
@@ -410,8 +415,12 @@ describe('OrderPolicyPage', () => {
 
   it('puts no such note on the scalars that are applied', () => {
     expect(rowAt(AT_RISK_ROW).textContent).not.toContain('Not applied yet');
-    expect(rowAt(0).textContent).not.toContain('Not applied yet');
     expect(rowAt(LATE_THRESHOLD_ROW).textContent).not.toContain('Not applied yet');
+    expect(rowAt(LATE_COLOUR_ROW).textContent).not.toContain('Not applied yet');
+    expect(
+      rowAt(MINIMUM_ROW).textContent,
+      'the minimum order amount is read at checkout',
+    ).not.toContain('Not applied yet');
   });
 
   it('sets the at-risk threshold at the scope bar’s scope, sending the version it read as the concurrency check', async () => {

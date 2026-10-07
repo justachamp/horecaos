@@ -480,10 +480,8 @@ export const settingsEn = {
   'settings.orderPolicy.card5.title': 'Operator order entry',
   'settings.orderPolicy.field.businessDayStartHour': 'Business day starts at (hour)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
-  'settings.orderPolicy.averageOrderMinutes.hint':
-    'Not applied yet: nothing reads this number, so changing it changes nothing.',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
-  'settings.orderPolicy.maximumOrderMinutes.hint':
+  'settings.orderPolicy.notApplied.hint':
     'Not applied yet: nothing reads this number, so changing it changes nothing.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'An order with no promised time is late after (minutes)',

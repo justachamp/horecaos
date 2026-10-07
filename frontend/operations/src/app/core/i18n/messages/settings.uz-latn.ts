@@ -483,10 +483,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.card5.title': 'Operator tomonidan buyurtma kiritish',
   'settings.orderPolicy.field.businessDayStartHour': 'Ish kuni boshlanishi (soat)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.averageOrderMinutes.hint':
-    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish hech narsani oʻzgartirmaydi.',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.maximumOrderMinutes.hint':
+  'settings.orderPolicy.notApplied.hint':
     'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish hech narsani oʻzgartirmaydi.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'Belgilangan vaqti yoʻq buyurtma kechikadi (daqiqa)',

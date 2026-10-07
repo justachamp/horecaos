@@ -479,10 +479,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.card5.title': 'Оформление заказа оператором',
   'settings.orderPolicy.field.businessDayStartHour': 'Начало торгового дня (час)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
-  'settings.orderPolicy.averageOrderMinutes.hint':
-    'Пока не применяется: это значение нигде не используется, поэтому его изменение ничего не меняет.',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
-  'settings.orderPolicy.maximumOrderMinutes.hint':
+  'settings.orderPolicy.notApplied.hint':
     'Пока не применяется: это значение нигде не используется, поэтому его изменение ничего не меняет.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'Заказ без обещанного времени опаздывает через (минуты)',
