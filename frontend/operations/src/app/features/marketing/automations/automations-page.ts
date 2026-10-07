@@ -21,6 +21,9 @@ import {
 import { RuleSimulator, SimulatedRule } from '../../../shared/ui/rule-simulator';
 import { MarketingChannel } from '../../customers/segments/segments-api';
 import { describeApiError } from '../../orders/order-errors';
+import { WiringSentence, viewOf, wiringSentence } from '../channel-wiring';
+import { ChannelView, MarketingApi } from '../marketing-api';
+import { refusalLabelKey } from '../refusal-explainer';
 import { AUTOMATION_CONDITION_CATALOGUE, simulatedAutomationRule } from './automation-conditions';
 import {
   AUTOMATION_TRIGGER_CONFIG_KEY,
@@ -44,12 +47,20 @@ import {
  * refusal shows up here rather than being hidden behind a toggle that always
  * looks like it worked.
  *
- * **Four trigger kinds, not five.** `AutomationTriggerType`'s own doc names
- * why `LATE_ORDER_APOLOGY` (ADR 0044 states it "deliberately absent", pending
- * the still-`Proposed` ADR 0112) is not offered here — this form cannot
- * create a rule of a kind the server would refuse to keep firing.
- * `CASHBACK_CHANGE` is offered (batch 12): it has no cooldown-days default of
- * its own reason the way BIRTHDAY's 365 does, so it shares INACTIVITY's.
+ * **Five trigger kinds: every one the server has.** `LATE_ORDER_APOLOGY` was
+ * "deliberately absent" under ADR 0044 until ADR 0112 reconciled it with ADR
+ * 0013's remedies, and is offered now on those terms: words and never a
+ * benefit (the request has no field to state one), once per order, held back
+ * thirty minutes so support gets first refusal, and cancelled when a remedy is
+ * recorded. It has no cooldown to ask for, because once per order is its guard,
+ * so the form does not ask for a number nothing reads. `CASHBACK_CHANGE` has no
+ * cooldown-days default of its own reason the way BIRTHDAY's 365 does, so it
+ * shares INACTIVITY's.
+ *
+ * **A channel with no delivery path is shown as not connected, with the reason.**
+ * Arming a rule on one is refused by the server; saying so in the channel list
+ * is kinder than saying so after the toggle. The wiring is read best-effort: a
+ * read that fails leaves every channel selectable, as it always was.
  *
  * **Priority is q-rule-list's own drag/keyboard reorder**, persisted through
  * one whole-set `PUT .../automations/reorder` call — the same contract
@@ -74,6 +85,7 @@ import {
 })
 export class AutomationsPage implements OnInit {
   private readonly api = inject(AutomationsApi);
+  private readonly marketing = inject(MarketingApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
 
@@ -90,6 +102,7 @@ export class AutomationsPage implements OnInit {
     'INACTIVITY',
     'CART_ABANDONMENT',
     'CASHBACK_CHANGE',
+    'LATE_ORDER_APOLOGY',
   ];
   protected readonly channels: readonly MarketingChannel[] = [
     'MESSAGING_APP',
@@ -97,6 +110,9 @@ export class AutomationsPage implements OnInit {
     'EMAIL',
     'PUSH',
   ];
+
+  /** What the server says each channel can carry for this brand; empty when it could not be read. */
+  protected readonly channelViews = signal<readonly ChannelView[]>([]);
 
   // --------------------------------------------------------------- create form
 
@@ -110,6 +126,29 @@ export class AutomationsPage implements OnInit {
   protected readonly formTemplateKey = signal('');
   protected readonly formConfigValue = signal(0);
   protected readonly formCooldownDays = signal(30);
+
+  /** The apology is once per order, so the form asks for no cooldown and sends the smallest valid one. */
+  protected readonly formIsApology = computed(
+    () => this.formTriggerType() === 'LATE_ORDER_APOLOGY',
+  );
+
+  /** Each channel the form lists, whether it can be picked, and why not. */
+  protected readonly channelOptions = computed(() =>
+    this.channels.map((channel) => {
+      const view = viewOf(this.channelViews(), channel);
+      const wired = view?.isWired ?? true;
+      return {
+        channel,
+        wired,
+        sentence: wired ? null : wiringSentence(channel, view?.notWiredReason ?? null),
+      };
+    }),
+  );
+
+  /** Why the channel currently chosen cannot deliver, or null when it can (or nobody knows). */
+  protected readonly formChannelUnwired = computed<WiringSentence | null>(
+    () => this.channelOptions().find((o) => o.channel === this.formChannel())?.sentence ?? null,
+  );
 
   // ------------------------------------------------------------- run history
 
@@ -166,6 +205,12 @@ export class AutomationsPage implements OnInit {
     } finally {
       this.loading.set(false);
     }
+    // Best-effort and after the list is on screen: the wiring only decorates the channel picker.
+    try {
+      this.channelViews.set(await this.marketing.listChannels(scope));
+    } catch {
+      this.channelViews.set([]);
+    }
   }
 
   // ---------------------------------------------------------------- rendering
@@ -183,6 +228,13 @@ export class AutomationsPage implements OnInit {
   protected ruleDescription(rule: AutomationRuleView): string {
     const trigger = this.i18n.t(this.triggerLabelKey(rule.triggerType));
     const channel = this.i18n.t(`marketing.channel.${rule.channel}` as MessageKey);
+    if (rule.triggerType === 'LATE_ORDER_APOLOGY') {
+      return this.i18n.t('marketing.automations.rule.description.LATE_ORDER_APOLOGY', {
+        trigger,
+        channel,
+        configValue: this.configValueOf(rule),
+      });
+    }
     return this.i18n.t('marketing.automations.rule.description', {
       trigger,
       channel,
@@ -193,6 +245,12 @@ export class AutomationsPage implements OnInit {
 
   /** What the simulator shows a matching rule doing — already translated, as it requires. */
   private ruleOutcome(rule: AutomationRuleView): string {
+    if (rule.triggerType === 'LATE_ORDER_APOLOGY') {
+      return this.i18n.t('marketing.automations.preview.outcome.LATE_ORDER_APOLOGY', {
+        template: rule.templateKey,
+        channel: this.i18n.t(`marketing.channel.${rule.channel}` as MessageKey),
+      });
+    }
     return this.i18n.t('marketing.automations.preview.outcome', {
       template: rule.templateKey,
       channel: this.i18n.t(`marketing.channel.${rule.channel}` as MessageKey),
@@ -270,7 +328,11 @@ export class AutomationsPage implements OnInit {
   protected openForm(): void {
     this.formName.set('');
     this.formTriggerType.set('BIRTHDAY');
-    this.formChannel.set('MESSAGING_APP');
+    // The first channel that can deliver, so a brand whose Telegram is not set up does not open on
+    // a choice it cannot arm.
+    this.formChannel.set(
+      this.channelOptions().find((option) => option.wired)?.channel ?? 'MESSAGING_APP',
+    );
     this.formConsentPurpose.set('MARKETING_PROMOTIONS');
     this.formTemplateKey.set('');
     this.formConfigValue.set(this.defaultConfigValue('BIRTHDAY'));
@@ -286,7 +348,9 @@ export class AutomationsPage implements OnInit {
   protected onTriggerTypeChange(triggerType: AutomationTriggerKind): void {
     this.formTriggerType.set(triggerType);
     this.formConfigValue.set(this.defaultConfigValue(triggerType));
-    this.formCooldownDays.set(triggerType === 'BIRTHDAY' ? 365 : 30);
+    this.formCooldownDays.set(
+      triggerType === 'BIRTHDAY' ? 365 : triggerType === 'LATE_ORDER_APOLOGY' ? 1 : 30,
+    );
   }
 
   private defaultConfigValue(triggerType: AutomationTriggerKind): number {
@@ -298,6 +362,11 @@ export class AutomationsPage implements OnInit {
     }
     if (triggerType === 'CART_ABANDONMENT') {
       return 2;
+    }
+    if (triggerType === 'LATE_ORDER_APOLOGY') {
+      // Half an hour late: past the point a guest has stopped calling it "about on time", and
+      // exactly the settle delay the sweep waits before it considers an order at all.
+      return 30;
     }
     // CASHBACK_CHANGE's minimumChangeMinor: 1 000 so'm, small enough that a
     // typical accrual or redemption clears it, large enough that a rounding
@@ -333,7 +402,7 @@ export class AutomationsPage implements OnInit {
         triggerConfig: {
           [AUTOMATION_TRIGGER_CONFIG_KEY[this.formTriggerType()]]: this.formConfigValue(),
         },
-        cooldownDays: this.formCooldownDays(),
+        cooldownDays: this.formIsApology() ? 1 : this.formCooldownDays(),
       };
       await this.api.create(scope, request);
       this.showForm.set(false);
@@ -371,6 +440,21 @@ export class AutomationsPage implements OnInit {
 
   protected runStatusLabelKey(status: string): MessageKey {
     return `marketing.automations.runStatus.${status}` as MessageKey;
+  }
+
+  /** A refusal reason in words; a code this build does not know is shown as written. */
+  protected refusalLabel(reason: string): string {
+    const key = refusalLabelKey(reason);
+    return key ? this.i18n.t(key) : reason;
+  }
+
+  /**
+   * The sentence behind a run: what the engine recorded for a refusal, or why a firing was
+   * cancelled. Both are English, written for whoever reads the audit trail, and free of any
+   * contact value.
+   */
+  protected runDetail(run: AutomationRunView): string | null {
+    return run.refusalDetail ?? run.cancelledReason ?? null;
   }
 
   // ------------------------------------------------------------- preview (X.25)

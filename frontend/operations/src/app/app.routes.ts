@@ -659,11 +659,11 @@ export const routes: Routes = [
               },
             ],
           },
-          // 6.5 Automations (gap-map row 6.5, ADR 0044 Triggers): unattended
-          // BIRTHDAY, INACTIVITY and CART_ABANDONMENT rules through the new
-          // `AutomationRuleController` — `q-rule-list`'s first live
-          // consumer (row `X.25`). CASHBACK_CHANGE and LATE_ORDER_APOLOGY
-          // are not offered — see `AutomationTriggerType`'s own doc.
+          // 6.5 Automations (gap-map row 6.5, ADR 0044 Triggers, ADR 0112): unattended
+          // BIRTHDAY, INACTIVITY, CART_ABANDONMENT, CASHBACK_CHANGE and
+          // LATE_ORDER_APOLOGY rules through `AutomationRuleController` —
+          // `q-rule-list`'s first live consumer (row `X.25`). See
+          // `AutomationTriggerType`'s own doc for what an apology is and is not.
           {
             path: 'automations',
             loadComponent: () =>

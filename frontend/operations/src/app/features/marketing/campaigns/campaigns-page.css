@@ -263,3 +263,7 @@
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
 }
+
+.row-kind {
+  color: var(--q-ink-muted);
+}

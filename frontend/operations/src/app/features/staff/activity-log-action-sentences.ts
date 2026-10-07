@@ -74,6 +74,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Маркетинг кампания возобновлено',
       'uz-Latn': 'Marketing kampaniya davom ettirildi',
     },
+    MARKETING_CONTACT_POLICY_REMOVED: {
+      en: 'Marketing contact rule removed',
+      ru: 'Правило политики контактов удалено',
+      'uz-Latn': 'Aloqa siyosati qoidasi olib tashlandi',
+    },
+    MARKETING_CONTACT_POLICY_SET: {
+      en: 'Marketing contact rule set',
+      ru: 'Правило политики контактов задано',
+      'uz-Latn': 'Aloqa siyosati qoidasi belgilandi',
+    },
     MARKETING_COURIER_BROADCAST_DRAFTED: {
       en: 'Marketing courier broadcast drafted',
       ru: 'Маркетинг курьер рассылка черновик сохранён',
@@ -98,6 +108,46 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Marketing link minted',
       ru: 'Маркетинг ссылка создано',
       'uz-Latn': 'Marketing havola yaratildi',
+    },
+    MARKETING_OFFER_CREATED: {
+      en: 'Marketing offer drafted',
+      ru: 'Предложение маркетинга создано как черновик',
+      'uz-Latn': 'Marketing taklifi qoralama sifatida yaratildi',
+    },
+    MARKETING_OFFER_PUBLISHED: {
+      en: 'Marketing offer published',
+      ru: 'Предложение маркетинга опубликовано',
+      'uz-Latn': 'Marketing taklifi eʻlon qilindi',
+    },
+    MARKETING_OFFER_RETIRED: {
+      en: 'Marketing offer retired',
+      ru: 'Предложение маркетинга снято',
+      'uz-Latn': 'Marketing taklifi bekor qilindi',
+    },
+    MARKETING_OFFER_REWRITTEN: {
+      en: 'Marketing offer draft rewritten',
+      ru: 'Черновик предложения маркетинга переписан',
+      'uz-Latn': 'Marketing taklifi qoralamasi qayta yozildi',
+    },
+    MARKETING_OFFER_VERSION_CREATED: {
+      en: 'Marketing offer new version drafted',
+      ru: 'Создана новая версия предложения маркетинга',
+      'uz-Latn': 'Marketing taklifining yangi versiyasi yaratildi',
+    },
+    MARKETING_SCENARIO_DRAFTED: {
+      en: 'Marketing scenario drafted',
+      ru: 'Сценарий маркетинга создан как черновик',
+      'uz-Latn': 'Marketing ssenariysi qoralama sifatida yaratildi',
+    },
+    MARKETING_SCENARIO_REVISED: {
+      en: 'Marketing scenario revised, new version drafted',
+      ru: 'Сценарий маркетинга пересмотрен, создана новая версия',
+      'uz-Latn': 'Marketing ssenariysi qayta koʻrib chiqildi, yangi versiya yaratildi',
+    },
+    MARKETING_SCENARIO_STEPS_REPLACED: {
+      en: 'Marketing scenario steps replaced',
+      ru: 'Шаги сценария маркетинга заменены',
+      'uz-Latn': 'Marketing ssenariysi qadamlari almashtirildi',
     },
     MARKETING_SUPPRESSION_LIFTED: {
       en: 'Marketing suppression lifted',

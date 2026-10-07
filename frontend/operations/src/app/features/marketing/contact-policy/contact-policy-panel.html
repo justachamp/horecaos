@@ -1,0 +1,324 @@
+<div class="policy">
+  <header class="policy__head">
+    <p class="q-body-sm policy__intro">{{ 'marketing.contactPolicy.intro' | t }}</p>
+    @if (!loading() && !denied() && policy()) {
+      <button type="button" class="policy__create" data-testid="policy-create" (click)="openNew()">
+        {{ 'marketing.contactPolicy.create' | t }}
+      </button>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="policy__skeleton" [attr.aria-label]="'marketing.campaigns.loading' | t"></div>
+  } @else if (denied()) {
+    <p class="q-body-sm" data-testid="policy-denied">{{ 'marketing.contactPolicy.denied' | t }}</p>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="policy__band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="policy__band" role="alert" data-testid="policy-action-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (policy(); as current) {
+      <section class="policy__section" data-testid="policy-bounds">
+        <h3 class="q-emphasis">{{ 'marketing.contactPolicy.bounds.title' | t }}</h3>
+        <p class="q-caption policy__note">{{ 'marketing.contactPolicy.bounds.hint' | t }}</p>
+        <dl class="policy__facts">
+          <dt>{{ 'marketing.contactPolicy.bounds.quiet' | t }}</dt>
+          <dd class="q-tnum">
+            {{
+              'marketing.contactPolicy.bounds.quietValue'
+                | t
+                  : {
+                      start: clock(current.platform.quietHoursStartNoLaterThan),
+                      end: clock(current.platform.quietHoursEndNoEarlierThan),
+                    }
+            }}
+          </dd>
+          <dt>{{ 'marketing.contactPolicy.period.DAILY' | t }}</dt>
+          <dd class="q-tnum">{{ current.platform.dailyCapCeiling }}</dd>
+          <dt>{{ 'marketing.contactPolicy.period.WEEKLY' | t }}</dt>
+          <dd class="q-tnum">{{ current.platform.weeklyCapCeiling }}</dd>
+          <dt>{{ 'marketing.contactPolicy.period.ROLLING_7D' | t }}</dt>
+          <dd class="q-tnum">{{ current.platform.rolling7DayCapCeiling }}</dd>
+          <dt>{{ 'marketing.contactPolicy.period.ROLLING_30D' | t }}</dt>
+          <dd class="q-tnum">{{ current.platform.rolling30DayCapCeiling }}</dd>
+        </dl>
+      </section>
+
+      <section class="policy__section" data-testid="policy-overrides">
+        <h3 class="q-emphasis">{{ 'marketing.contactPolicy.overrides.title' | t }}</h3>
+        @if (current.overrides.length === 0) {
+          <p class="q-body-sm" data-testid="policy-overrides-empty">
+            {{ 'marketing.contactPolicy.overrides.empty' | t }}
+          </p>
+        } @else {
+          <table class="policy__table">
+            <thead>
+              <tr>
+                <th>{{ 'marketing.contactPolicy.column.channel' | t }}</th>
+                <th>{{ 'marketing.contactPolicy.column.purpose' | t }}</th>
+                <th>{{ 'marketing.contactPolicy.column.period' | t }}</th>
+                <th>{{ 'marketing.contactPolicy.column.cap' | t }}</th>
+                <th>{{ 'marketing.contactPolicy.column.quiet' | t }}</th>
+                <th>{{ 'marketing.contactPolicy.column.reason' | t }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (
+                override of current.overrides;
+                track override.channel + override.campaignPurpose + override.period
+              ) {
+                <tr data-testid="policy-override-row">
+                  <td>{{ channelKey(override.channel) | t }}</td>
+                  <td>{{ override.campaignPurpose }}</td>
+                  <td>{{ periodKey(override.period) | t }}</td>
+                  <td class="q-tnum">{{ override.capCount ?? '—' }}</td>
+                  <td class="q-tnum">{{ quietWindow(override) ?? '—' }}</td>
+                  <td>{{ override.statedReason }}</td>
+                  <td class="policy__actions">
+                    <button
+                      type="button"
+                      data-testid="policy-replace"
+                      (click)="openReplace(override)"
+                    >
+                      {{ 'marketing.contactPolicy.action.replace' | t }}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="policy-remove"
+                      [disabled]="acting()"
+                      (click)="askRemove(override)"
+                    >
+                      {{ 'marketing.contactPolicy.action.remove' | t }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    }
+
+    @if (defaults(); as values) {
+      <section class="policy__section" data-testid="policy-defaults">
+        <h3 class="q-emphasis">{{ 'marketing.contactPolicy.defaults.title' | t }}</h3>
+        <p class="q-caption policy__note">{{ 'marketing.contactPolicy.defaults.hint' | t }}</p>
+        <dl class="policy__facts">
+          <dt>{{ 'marketing.contactPolicy.defaults.priority' | t }}</dt>
+          <dd>
+            @if (values.channelPriorityOrder.length === 0) {
+              {{ 'marketing.contactPolicy.defaults.priorityNone' | t }}
+            } @else {
+              {{ values.channelPriorityOrder.join(' › ') }}
+            }
+          </dd>
+          <dt>{{ 'marketing.contactPolicy.defaults.inAppCap' | t }}</dt>
+          <dd class="q-tnum">{{ values.inAppShowCapPerDay }}</dd>
+          <dt>{{ 'marketing.contactPolicy.defaults.controlGroup' | t }}</dt>
+          <dd class="q-tnum">{{ values.controlGroupPercentDefault }}%</dd>
+        </dl>
+      </section>
+    }
+
+    <section class="policy__section" data-testid="policy-explainer">
+      <h3 class="q-emphasis">{{ 'marketing.contactPolicy.explainer.title' | t }}</h3>
+      <p class="q-caption policy__note">{{ 'marketing.contactPolicy.explainer.hint' | t }}</p>
+      <ul class="policy__reasons">
+        @for (explanation of explanations; track explanation.reason) {
+          <li data-testid="policy-explainer-reason" [attr.data-reason]="explanation.reason">
+            <div class="q-emphasis">{{ explanation.labelKey | t }}</div>
+            <div class="q-caption policy__effect">
+              {{ effectKeys[explanation.effect] | t }}
+              @if (explanation.governedByContactPolicy) {
+                · {{ 'marketing.contactPolicy.explainer.governed' | t }}
+              }
+            </div>
+            <p class="q-body-sm">{{ explanation.meaningKey | t }}</p>
+            <p class="q-caption">{{ explanation.remedyKey | t }}</p>
+          </li>
+        }
+      </ul>
+      <p class="q-caption policy__note">{{ 'marketing.contactPolicy.explainer.quiet' | t }}</p>
+    </section>
+  }
+</div>
+
+@if (formOpen()) {
+  <q-drawer
+    [title]="
+      (formIsReplacement()
+        ? 'marketing.contactPolicy.form.title.replace'
+        : 'marketing.contactPolicy.form.title.create'
+      ) | t
+    "
+    [dismissible]="!formSubmitting()"
+    (dismiss)="closeForm()"
+  >
+    <p class="q-caption policy__note">{{ 'marketing.contactPolicy.form.tightenOnly' | t }}</p>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.contactPolicy.column.channel' | t }}</span>
+      <select
+        data-testid="policy-form-channel"
+        [disabled]="formIsReplacement()"
+        [value]="formChannel()"
+        (change)="formChannel.set($any($event.target).value)"
+      >
+        @for (channel of channels; track channel) {
+          <option [value]="channel" [selected]="channel === formChannel()">
+            {{ channelKey(channel) | t }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.contactPolicy.column.purpose' | t }}</span>
+      <input
+        type="text"
+        maxlength="64"
+        data-testid="policy-form-purpose"
+        [disabled]="formIsReplacement()"
+        [value]="formPurpose()"
+        (input)="formPurpose.set($any($event.target).value)"
+      />
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.contactPolicy.column.period' | t }}</span>
+      <select
+        data-testid="policy-form-period"
+        [disabled]="formIsReplacement()"
+        [value]="formPeriod()"
+        (change)="formPeriod.set($any($event.target).value)"
+      >
+        @for (period of periods; track period) {
+          <option [value]="period" [selected]="period === formPeriod()">
+            {{ periodKey(period) | t }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">
+        {{ 'marketing.contactPolicy.form.cap' | t: { ceiling: formCeiling() ?? '—' } }}
+      </span>
+      <input
+        type="number"
+        min="0"
+        data-testid="policy-form-cap"
+        [value]="formCap() ?? ''"
+        (input)="onCapInput($any($event.target).value)"
+      />
+    </label>
+
+    <div class="policy__pair">
+      <label class="q-field">
+        <span class="q-caption">{{ 'marketing.contactPolicy.form.quietStart' | t }}</span>
+        <input
+          type="time"
+          data-testid="policy-form-quiet-start"
+          [value]="formQuietStart()"
+          (input)="formQuietStart.set($any($event.target).value)"
+        />
+      </label>
+      <label class="q-field">
+        <span class="q-caption">{{ 'marketing.contactPolicy.form.quietEnd' | t }}</span>
+        <input
+          type="time"
+          data-testid="policy-form-quiet-end"
+          [value]="formQuietEnd()"
+          (input)="formQuietEnd.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.contactPolicy.form.reason' | t }}</span>
+      <input
+        type="text"
+        maxlength="500"
+        data-testid="policy-form-reason"
+        [value]="formReason()"
+        (input)="formReason.set($any($event.target).value)"
+      />
+    </label>
+
+    @if (formError(); as error) {
+      <p class="q-body-sm policy__error" role="alert" data-testid="policy-form-error">
+        {{ error }}
+      </p>
+    } @else if (formProblem(); as problem) {
+      <p class="q-caption policy__note" data-testid="policy-form-problem">
+        {{ problemText(problem) }}
+      </p>
+    }
+
+    <ng-container qDrawerActions>
+      <button type="button" class="policy__btn" [disabled]="formSubmitting()" (click)="closeForm()">
+        {{ 'marketing.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="policy__btn policy__btn--primary"
+        data-testid="policy-form-submit"
+        [disabled]="formSubmitting() || formProblem() !== null"
+        (click)="submitForm()"
+      >
+        {{ 'marketing.contactPolicy.form.submit' | t }}
+      </button>
+    </ng-container>
+  </q-drawer>
+}
+
+@if (removing(); as override) {
+  <q-modal
+    [title]="'marketing.contactPolicy.remove.title' | t"
+    [dismissible]="!acting()"
+    (dismiss)="removing.set(null)"
+  >
+    <p class="q-body-sm">
+      {{
+        'marketing.contactPolicy.remove.body'
+          | t
+            : {
+                channel: (channelKey(override.channel) | t),
+                period: (periodKey(override.period) | t),
+              }
+      }}
+    </p>
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.contactPolicy.remove.reason' | t }}</span>
+      <input
+        type="text"
+        maxlength="500"
+        data-testid="policy-remove-reason"
+        [value]="removeReason()"
+        (input)="removeReason.set($any($event.target).value)"
+      />
+    </label>
+    <ng-container qModalActions>
+      <button type="button" class="policy__btn" [disabled]="acting()" (click)="removing.set(null)">
+        {{ 'marketing.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="policy__btn policy__btn--primary"
+        data-testid="policy-remove-confirm"
+        [disabled]="acting() || removeReason().trim() === ''"
+        (click)="confirmRemove()"
+      >
+        {{ 'marketing.contactPolicy.action.remove' | t }}
+      </button>
+    </ng-container>
+  </q-modal>
+}
