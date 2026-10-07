@@ -1424,4 +1424,46 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.assistant.notes.scope.LOCATION.unnamed': 'Один филиал',
   'settings.assistant.notes.status.PUBLISHED': 'Действует',
   'settings.assistant.notes.status.RETIRED': 'Снята',
+  'settings.nav.storefrontApps': 'Приложения витрин',
+  'settings.home.description.storefrontApps':
+    'Выберите, какие витрины могут принимать заказы от имени бренда, и отзовите любую в любой момент.',
+  'settings.storefrontApps.title': 'Приложения витрин',
+  'settings.storefrontApps.lead':
+    'Витрина — это приложение, которое показывает ваше меню и принимает заказы от имени бренда. Разрешите её — и она сможет обслуживать бренд; отзовите — и она остановится при следующем запросе. Заказы, цены и клиенты остаются теми же, какую бы витрину вы ни выбрали.',
+  'settings.storefrontApps.loading': 'Загружаем витрины…',
+  'settings.storefrontApps.empty': 'Пока нет приложений витрин, из которых можно выбирать.',
+  'settings.storefrontApps.noBrands':
+    'В этом аккаунте нет бренда, для которого можно выбрать витрину.',
+  'settings.storefrontApps.brandPicker.label': 'Бренд',
+  'settings.storefrontApps.by': 'Разработчик: {vendor}',
+  'settings.storefrontApps.firstParty': 'сделано HorecaOS',
+  'settings.storefrontApps.clientType.public': 'Работает в браузере покупателя',
+  'settings.storefrontApps.clientType.confidential': 'Работает на сервере разработчика',
+  'settings.storefrontApps.clientType.publicNote':
+    'У неё нет секрета, потому что браузер не может его хранить. HorecaOS знает, какая витрина обращается, и может её остановить, но не может доказать, кто за ней стоит.',
+  'settings.storefrontApps.clientType.confidentialNote':
+    'Она подтверждает себя секретом, который есть только на её сервере.',
+  'settings.storefrontApps.conformance.label': 'Проверка соответствия',
+  'settings.storefrontApps.conformance.passed': 'пройдена',
+  'settings.storefrontApps.conformance.failed': 'не пройдена',
+  'settings.storefrontApps.conformance.expired': 'устарела: контракт платформы изменился',
+  'settings.storefrontApps.conformance.notRun': 'ещё не проводилась',
+  'settings.storefrontApps.notActive':
+    'HorecaOS приостановила или отозвала это приложение. Пока это не изменится, оно не может обслуживать ни один бренд.',
+  'settings.storefrontApps.standing.authorised': 'Разрешено',
+  'settings.storefrontApps.standing.revoked': 'Отозвано',
+  'settings.storefrontApps.standing.notAuthorised': 'Не разрешено',
+  'settings.storefrontApps.authorise': 'Разрешить',
+  'settings.storefrontApps.revoke': 'Отозвать',
+  'settings.storefrontApps.cancel': 'Отмена',
+  'settings.storefrontApps.reason': 'Зачем вы это делаете (запишется в журнал аудита)',
+  'settings.storefrontApps.confirm.authorise':
+    'Эта витрина сможет показывать меню бренда и принимать заказы от его имени.',
+  'settings.storefrontApps.confirm.revoke':
+    'Эта витрина перестанет обслуживать бренд при следующем запросе.',
+  'settings.storefrontApps.authorised': '«{name}» разрешено.',
+  'settings.storefrontApps.revoked':
+    '«{name}» отозвано: оно больше не может обслуживать этот бренд.',
+  'settings.storefrontApps.denied':
+    'Приложения витрин выбирают только владелец и администраторы аккаунта.',
 };

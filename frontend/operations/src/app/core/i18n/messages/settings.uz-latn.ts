@@ -1441,4 +1441,45 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.assistant.notes.scope.LOCATION.unnamed': 'Bitta filial',
   'settings.assistant.notes.status.PUBLISHED': 'Amalda',
   'settings.assistant.notes.status.RETIRED': 'Olib tashlangan',
+  'settings.nav.storefrontApps': 'Vitrina ilovalari',
+  'settings.home.description.storefrontApps':
+    'Qaysi vitrinalar brend nomidan buyurtma qabul qilishini tanlang va istalgan vaqtda birini chaqirib oling.',
+  'settings.storefrontApps.title': 'Vitrina ilovalari',
+  'settings.storefrontApps.lead':
+    'Vitrina — menyuingizni koʻrsatadigan va brend nomidan buyurtma qabul qiladigan ilova. Unga ruxsat bering — u brendga xizmat qila oladi; chaqirib oling — u keyingi soʻrovdayoq toʻxtaydi. Qaysi vitrinani tanlamang, buyurtmalar, narxlar va mijozlar oʻzgarmaydi.',
+  'settings.storefrontApps.loading': 'Vitrinalar yuklanmoqda…',
+  'settings.storefrontApps.empty': 'Tanlash uchun hozircha vitrina ilovalari yoʻq.',
+  'settings.storefrontApps.noBrands': 'Bu hisobda vitrina tanlash uchun brend yoʻq.',
+  'settings.storefrontApps.brandPicker.label': 'Brend',
+  'settings.storefrontApps.by': 'Ishlab chiqaruvchi: {vendor}',
+  'settings.storefrontApps.firstParty': 'HorecaOS tomonidan yaratilgan',
+  'settings.storefrontApps.clientType.public': 'Xaridorning brauzerida ishlaydi',
+  'settings.storefrontApps.clientType.confidential': 'Ishlab chiqaruvchining serverida ishlaydi',
+  'settings.storefrontApps.clientType.publicNote':
+    'Unda sir yoʻq, chunki brauzer uni saqlay olmaydi. HorecaOS qaysi vitrina murojaat qilayotganini biladi va uni toʻxtata oladi, lekin uning ortida kim turganini isbotlay olmaydi.',
+  'settings.storefrontApps.clientType.confidentialNote':
+    'U oʻzini faqat oʻz serverida mavjud sir bilan tasdiqlaydi.',
+  'settings.storefrontApps.conformance.label': 'Muvofiqlik tekshiruvi',
+  'settings.storefrontApps.conformance.passed': 'oʻtgan',
+  'settings.storefrontApps.conformance.failed': 'oʻtmagan',
+  'settings.storefrontApps.conformance.expired': 'eskirgan: platforma shartnomasi oʻzgargan',
+  'settings.storefrontApps.conformance.notRun': 'hali oʻtkazilmagan',
+  'settings.storefrontApps.notActive':
+    'HorecaOS bu ilovani toʻxtatgan yoki chaqirib olgan. Bu oʻzgarmaguncha u hech bir brendga xizmat qila olmaydi.',
+  'settings.storefrontApps.standing.authorised': 'Ruxsat berilgan',
+  'settings.storefrontApps.standing.revoked': 'Chaqirib olingan',
+  'settings.storefrontApps.standing.notAuthorised': 'Ruxsat berilmagan',
+  'settings.storefrontApps.authorise': 'Ruxsat berish',
+  'settings.storefrontApps.revoke': 'Chaqirib olish',
+  'settings.storefrontApps.cancel': 'Bekor qilish',
+  'settings.storefrontApps.reason': 'Buni nima uchun qilyapsiz (audit jurnaliga yoziladi)',
+  'settings.storefrontApps.confirm.authorise':
+    'Bu vitrina brendning menyusini koʻrsata oladi va uning nomidan buyurtma qabul qila oladi.',
+  'settings.storefrontApps.confirm.revoke':
+    'Bu vitrina keyingi soʻrovdayoq brendga xizmat qilishni toʻxtatadi.',
+  'settings.storefrontApps.authorised': '«{name}» ilovasiga ruxsat berildi.',
+  'settings.storefrontApps.revoked':
+    '«{name}» chaqirib olindi: u endi bu brendga xizmat qila olmaydi.',
+  'settings.storefrontApps.denied':
+    'Vitrina ilovalarini faqat hisob egasi va administratorlar tanlay oladi.',
 };

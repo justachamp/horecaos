@@ -39,6 +39,24 @@ public enum ErrorCode {
      */
     SESSION_EXPIRED(HttpStatus.UNAUTHORIZED, "Session expired"),
 
+    /**
+     * ADR 0070: a storefront request carried no app identity, at a time when the
+     * platform requires one. Distinct from {@link #UNAUTHENTICATED}, which is about
+     * the customer: the app tier says <em>which storefront</em> is asking, the
+     * session says which customer, and a vendor whose app is missing its header
+     * must be told that, not told to sign a customer in.
+     */
+    APP_IDENTITY_REQUIRED(HttpStatus.UNAUTHORIZED, "App identity required"),
+
+    /** ADR 0070: the app id names no registered storefront app, or is not an id at all. */
+    APP_UNREGISTERED(HttpStatus.UNAUTHORIZED, "App not registered"),
+
+    /**
+     * ADR 0070: a confidential app presented no secret, or one that does not match.
+     * Never says which, so a guess learns nothing about how close it was.
+     */
+    APP_SECRET_INVALID(HttpStatus.UNAUTHORIZED, "App secret missing or invalid"),
+
     /** ADR 0025: the principal lacks the required capability at the required scope. */
     INSUFFICIENT_CAPABILITY(HttpStatus.FORBIDDEN, "Insufficient capability"),
 
@@ -50,6 +68,24 @@ public enum ErrorCode {
     ENTITLEMENT_REQUIRED(HttpStatus.FORBIDDEN, "Entitlement required"),
 
     TENANT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "Tenant access denied"),
+
+    /**
+     * ADR 0070: the app is suspended or retired by the platform, for every tenant at
+     * once. Distinct from {@link #APP_REVOKED}, which is one brand's own decision.
+     */
+    APP_SUSPENDED(HttpStatus.FORBIDDEN, "App suspended"),
+
+    /** ADR 0070: a registered app that this tenant's brand has never authorised. */
+    APP_NOT_AUTHORISED(HttpStatus.FORBIDDEN, "App not authorised"),
+
+    /** ADR 0070: this tenant's brand authorised the app once and has since withdrawn it. */
+    APP_REVOKED(HttpStatus.FORBIDDEN, "App authorisation revoked"),
+
+    /**
+     * ADR 0070: a public client's request came from an origin its registration does
+     * not list. The only protection a browser-only client has, so it is refused by name.
+     */
+    APP_ORIGIN_MISMATCH(HttpStatus.FORBIDDEN, "App origin not allowed"),
 
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
 

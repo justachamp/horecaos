@@ -14,6 +14,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import uz.horecaos.platform.customers.infrastructure.security.CustomerSessionAuthenticationFilter;
 import uz.horecaos.platform.customers.infrastructure.security.CustomerSessionBearerTokenResolver;
 import uz.horecaos.platform.observability.LocalMetricsScrapeMatcher;
+import uz.horecaos.platform.storefrontapps.infrastructure.web.StorefrontAppIdentityFilter;
 
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
@@ -29,15 +30,24 @@ public class SecurityConfiguration {
      * without it the resource server would grab a customer token first, hand it to
      * the JWT decoder, and answer a signed-in customer with a complaint about a
      * malformed token.
+     *
+     * <p>ADR 0070: {@code appIdentity} runs before both. A storefront request names the app
+     * that is asking in addition to the customer's session, and it is checked first, on the
+     * {@code permitAll} browse paths as much as the authenticated ones — those paths are
+     * anonymous for the <em>customer</em> and were never meant to be anonymous for the
+     * <em>app</em>. The filter looks only at {@code /api/v1/storefront/**}, so no other
+     * surface's behaviour changes.
      */
     @Bean
     SecurityFilterChain apiSecurity(
             HttpSecurity http,
             LocalMetricsScrapeMatcher localMetricsScrape,
             CustomerSessionAuthenticationFilter customerSessions,
+            StorefrontAppIdentityFilter appIdentity,
             CustomerSessionBearerTokenResolver bearerTokenResolver)
             throws Exception {
         return http.addFilterBefore(customerSessions, BearerTokenAuthenticationFilter.class)
+                .addFilterBefore(appIdentity, CustomerSessionAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize

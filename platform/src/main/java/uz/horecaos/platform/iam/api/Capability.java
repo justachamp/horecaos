@@ -979,6 +979,36 @@ public enum Capability {
     PARTNER_API_CLIENT_MANAGE("partner.api-client.manage", "partner", "api-client.manage"),
 
     /**
+     * ADR 0070: the platform's own registry of storefront apps — registering one,
+     * changing its name and origins, suspending or retiring it, rotating a
+     * confidential client's secret, and recording what the conformance suite said.
+     *
+     * <p>Platform staff only, and held by no tenant bundle. An app is registered
+     * once and then authorised by many tenants, so changing its registration
+     * changes what every one of them is serving: suspending it stops it for all of
+     * them in a request, and editing its origin allowlist decides who may speak as
+     * it. That is the platform's decision to make, not any one tenant's, which is
+     * the same reasoning that keeps {@link #COMMERCIAL_PLAN_MANAGE} off every tenant
+     * role.
+     */
+    STOREFRONT_APP_REGISTRY_MANAGE("storefront-app.registry.manage", "storefront-app", "registry.manage"),
+
+    /**
+     * ADR 0070: a tenant's own choice of storefront — authorising a registered app
+     * to serve one of its brands, and withdrawing that authorisation.
+     *
+     * <p>Held at {@code BRAND} scope and above by the owner and the administrator.
+     * Deliberately not folded into {@link #INTEGRATION_INSTALLATION_MANAGE}: that
+     * capability configures how the platform calls <em>out</em> to a provider, while
+     * this one decides whose software may call <em>in</em> as the brand's own
+     * storefront — the same blast-radius argument that keeps
+     * {@link #PARTNER_API_CLIENT_MANAGE} separate from it. A tenant's storefront
+     * choice is data, not a deployment (ADR 0070), and revoking it takes effect on
+     * the next request.
+     */
+    STOREFRONT_APP_AUTHORISE("storefront-app.authorise", "storefront-app", "authorise"),
+
+    /**
      * ADR 0058: issuing a short-lived {@code /link <code>} for the Telegram
      * group-linking handshake.
      *

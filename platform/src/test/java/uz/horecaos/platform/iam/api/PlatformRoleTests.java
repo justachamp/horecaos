@@ -53,7 +53,11 @@ class PlatformRoleTests {
             Capability.MIGRATION_RUN_EXECUTE,
             Capability.MIGRATION_CUTOVER_APPROVE,
             Capability.MIGRATION_QUARANTINE_RESOLVE,
-            Capability.CONTROL_PLANE_ALERT_RAISE);
+            Capability.CONTROL_PLANE_ALERT_RAISE,
+            // ADR 0070: the storefront app registry is the platform's own. One
+            // registration is authorised by many tenants, so suspending it or
+            // editing its origins changes what all of them serve at once.
+            Capability.STOREFRONT_APP_REGISTRY_MANAGE);
 
     /**
      * ADR 0049 operations authorised by a typed non-staff relationship rather

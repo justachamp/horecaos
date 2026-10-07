@@ -124,6 +124,15 @@ horecaos:
         enabled: ${HORECAOS_IDEMPOTENCY_PURGE_ENABLED:true}
         initial-delay: ${HORECAOS_IDEMPOTENCY_PURGE_INITIAL_DELAY:PT5M}
         interval: ${HORECAOS_IDEMPOTENCY_PURGE_INTERVAL:PT1H}
+  storefront:
+    app-identity:
+      # ADR 0070's rollout. false (the default, stage one): the app id header is
+      # checked wherever it is sent, and a request without it still works but is
+      # counted as unattributed. true (stage three): a storefront request without
+      # it is refused by name, which is only safe once the unattributed count has
+      # been zero for a stated period. Rollback at any stage is setting this back
+      # to false; nothing else depends on it having been true.
+      required: ${HORECAOS_STOREFRONT_APP_IDENTITY_REQUIRED:false}
   keycloak:
     # ADR 0009 administration. The provisioning client secret is resolved from
     # the ADR 0028 manager at call time, so rotation needs no restart.

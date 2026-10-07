@@ -483,6 +483,15 @@ export const routes: Routes = [
               ),
           },
           {
+            // 10.15 Storefront apps (ADR 0070): the tenant's own choice of storefront, with its
+            // own brand picker for the reason `terms` has one.
+            path: 'storefront-apps',
+            loadComponent: () =>
+              import('./features/settings/storefront-apps/storefront-apps-page').then(
+                (m) => m.StorefrontAppsPage,
+              ),
+          },
+          {
             path: 'reference-data',
             loadComponent: () =>
               import('./features/settings/reference-data/reference-data-page').then(

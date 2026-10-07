@@ -51,7 +51,7 @@ A grouped left rail, not an alphabetical list. Group headings are nouns a restau
 | **Продажи / Selling** | 10.4 Sales channels · 10.5 Channel setup · 10.3 Order policy · 10.13 Delivery policy |
 | **Деньги и налоги / Money and tax** | 10.6 Payment methods · 10.7 Fiscalization · 10.14 Printing & receipts |
 | **Сообщения / Messages** | 10.9 Notifications |
-| **Подключения / Connections** | 10.8 Integrations |
+| **Подключения / Connections** | 10.8 Integrations · 10.15 Storefront apps |
 | **Справочники / Reference** | 10.10 Reference data · 10.11 Data & privacy |
 
 Numbers 10.1–10.11 are the IA's. 10.12–10.14 are added here: language/locale, delivery policy and
@@ -1505,3 +1505,27 @@ Named precisely, with the owning decision. Everything not listed here is built a
 Tenant-editable order statuses · a second brand registry under catalog · a third geometry layer ·
 a global road-vs-radius toggle · per-module v1/v2 flags · an expiring prepaid wallet · AI-generated
 ИКПУ · a receipt-template designer · kiosk hardware provisioning.
+
+---
+
+## 10.15 Storefront apps
+
+**What it is for.** A tenant's own choice of storefront (ADR 0070): which of the platform's
+registered storefront apps may show this brand's menu and take orders as it. The platform
+registers an app once (control plane IA 3.6); this screen is where a brand authorises one and
+withdraws it again. A tenant's storefront choice is data, not a deployment.
+
+**Layout.** A brand picker (shown only with more than one brand, tenant-scoped for the reason
+10.12's terms page documents), then one card per registered app that is not retired: its name and
+vendor, whether it runs in the customer's browser or on its vendor's server (said in plain words,
+and for a browser app that HorecaOS can attribute and stop it but cannot prove who is behind it),
+the conformance check's result, and the brand's standing with it: *Not authorised*, *Authorised* or
+*Revoked*.
+
+**Actions.** *Authorise* (also for an app the brand revoked earlier) and *Revoke*, each asking for a
+reason that the audit log keeps under the operator's name. Revoking sends the authorisation version
+the list was read at and takes effect on the app's next storefront request; a stale version reloads
+the list rather than overwriting. An app HorecaOS has suspended or retired cannot be authorised, and
+the card says why.
+
+**Capability.** `STOREFRONT_APP_AUTHORISE`, held by the owner and the administrator, `BRAND` scope.

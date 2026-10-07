@@ -136,6 +136,14 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
      */
     private void storeResponse(UUID recordId, int status, String body, HandlerMethod handler, @Nullable UUID tenantId) {
 
+        if (handler.hasMethodAnnotation(OneTimeResponse.class)) {
+            // A secret shown once is kept nowhere, encrypted or otherwise: the record bars a second
+            // execution and a retry is told why it cannot be shown again. A rejection carries no
+            // secret and is kept as for any other endpoint.
+            idempotency.complete(recordId, status, status < 300 ? null : body, false);
+            return;
+        }
+
         Optional<DataClass> classification = responseProtection.classificationOf(handler);
         if (classification.isEmpty()) {
             idempotency.complete(recordId, status, body, false);
@@ -296,6 +304,13 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
             HandlerMethod handler,
             @Nullable UUID tenantId)
             throws IOException {
+
+        if (handler.hasMethodAnnotation(OneTimeResponse.class) && replay.responseStatus() < 300) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This request already ran. Its response carried a secret that is shown once and is not kept, "
+                            + "so it cannot be replayed; rotate to mint another.");
+        }
 
         String body = replay.responseBody() == null ? "" : replay.responseBody();
         if (replay.responseBodyProtected()) {

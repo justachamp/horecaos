@@ -64,6 +64,10 @@ path "horecaos/data/@ENVIRONMENT@/provider_marketplace/*" {
   capabilities = ["create", "update", "read"]
 }
 
+path "horecaos/data/@ENVIRONMENT@/provider_storefront_app/*" {
+  capabilities = ["create", "update", "read"]
+}
+
 # Metadata read is needed for nothing the application does today. It is granted
 # so that `bao kv get` from an operator shell using this same role behaves, and
 # so that a future rotation check can compare versions without a second

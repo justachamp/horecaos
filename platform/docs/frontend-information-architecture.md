@@ -54,6 +54,7 @@ platform blue, dense tables, never a tenant accent.
 | 3.3 | Installations explorer | Every `(tenant, provider, branch)` installation with credential status, last successful sync, error rate. **Owns:** the per-branch installation model at platform scope; last-inbound-order watermark; silent-skip detection. | P |
 | 3.4 | Contracts & versions | Adapter versions, event/schema contract versions, deprecations, consumer compatibility (ADR 0032). | 2 |
 | 3.5 | Sandbox & contract tests | Run an adapter against recorded provider fixtures before rollout (ADR 0007). | 2 |
+| 3.6 | Storefront apps | The platform's registry of who may build a storefront against the published contract (ADR 0070): public (browser, origin-allowlisted, attributable and revocable, not authenticated) and confidential (server, secret shown once) clients; where each is installed; suspend, retire, rotate; the conformance suite's result against the contract being served. The tenant's own choice is operations 10.15 (Settings → Connections). | 2 |
 
 ## 4. Integration operations
 | # | Screen | Purpose & owned features | Tier |
