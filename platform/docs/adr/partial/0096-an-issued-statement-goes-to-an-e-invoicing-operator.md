@@ -1,7 +1,7 @@
 # ADR 0096: An issued statement goes to an e-invoicing operator
 
 - Decision status: Accepted
-- Implementation status: Not started — statements export as CSV only
+- Implementation status: Partial — built and tested against fakes, never run against an operator: V0516's platform installations (`commercial.einvoicing_installations`, seeded unbound for Didox and Faktura.uz), the classification code and VAT rate per statement line kind (`commercial.einvoicing_line_classifications`, every row provisional until finance confirms it), and the sent-document record (`commercial.statement_einvoices`, never holding signature material); the `EInvoicingOperator` port with `DidoxEInvoicingOperator` and `FakturaEInvoicingOperator` behind the `einvoicing.operator-api.v1` Camel route (`docs/routes/einvoicing-operator-api.md`, `docs/providers/didox.md`, `docs/providers/faktura-uz.md`); `EInvoicingService`'s send per statement by staff (the attempt is written before the operator is called, one live invoice per statement across both operators, an uncertain send resolved by asking and never by sending again), its state refresh and a fifteen-minute sweep, the audit of each act, `CommercialEInvoicingController` under `commercial.einvoice.send` and `commercial.einvoicing.manage`, and the control plane's E-invoicing screen. Not built: HorecaOS has no account with either operator, so both installations are unbound, the screen says so and nothing has been sent to a real operator; the adapters are written from Faktura.uz's published Swagger and Didox's partner SDK, and each answer shape and status mapping is unverified against a live account; the classification codes, VAT rates and contract reference are engineering's provisional defaults, flagged for finance; state callbacks (the state is polled); signing and cancelling, which stay in the operator's own product
 - Date proposed: 2026-09-11
 - Date decided: 2026-10-07
 - Deciders: the platform owner decided on 2026-09-11 that issued statements go to the accountant as CSV and to the Didox and Faktura.uz e-invoicing operators; the structure below was proposed by Claude on that answer; Ayubkhon Abbosov (platform owner) decides
@@ -69,10 +69,10 @@ Per operator, behind its installation; removing the installation stops sending.
 ## Implementation checklist
 
 - [ ] Operator accounts and documentation
-- [ ] Port and the sent-document record
-- [ ] Didox adapter
-- [ ] Faktura.uz adapter
-- [ ] Control-plane send action and state
+- [x] Port and the sent-document record
+- [x] Didox adapter (against a fake; no account)
+- [x] Faktura.uz adapter (against a fake; no account)
+- [x] Control-plane send action and state
 
 ## Exit criteria
 

@@ -1397,6 +1397,31 @@ public enum Capability {
     COMMERCIAL_CARD_MANAGE("commercial.card.manage", "commercial", "card.manage"),
 
     /**
+     * ADR 0096: sending an issued statement to an e-invoicing operator (Didox or
+     * Faktura.uz) as an electronic invoice, and asking the operator what became of
+     * a document already sent.
+     *
+     * <p>HorecaOS staff only, like {@link #COMMERCIAL_STATEMENT_ISSUE}: HorecaOS is
+     * the seller on the invoice, and a tenant that could send or resend its own
+     * would be deciding what HorecaOS invoices it. Sending is a deliberate act per
+     * statement, never automatic at issue (ADR 0096, accepted trade-off).
+     */
+    COMMERCIAL_EINVOICE_SEND("commercial.einvoice.send", "commercial", "einvoice.send"),
+
+    /**
+     * ADR 0096: HorecaOS's own accounts with the e-invoicing operators (their
+     * platform installations and secret references), and the classification code
+     * and VAT rate each statement line kind is invoiced under.
+     *
+     * <p>HorecaOS staff only and separate from {@link #COMMERCIAL_EINVOICE_SEND}:
+     * connecting an operator account or confirming a tax treatment is finance's
+     * decision, and the person who may press "send" is not thereby the person
+     * who may repoint the account the invoice goes out through. Reading the
+     * configuration is {@link #COMMERCIAL_USAGE_READ} at platform scope.
+     */
+    COMMERCIAL_EINVOICING_MANAGE("commercial.einvoicing.manage", "commercial", "einvoicing.manage"),
+
+    /**
      * ADR 0046: reading a customer's points balance, their movements, and the
      * brand's outstanding liability.
      *

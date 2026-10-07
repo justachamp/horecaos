@@ -62,6 +62,20 @@ public enum SecretCategory {
      */
     PROVIDER_STOREFRONT_APP,
 
+    /**
+     * ADR 0096: HorecaOS's own account with an e-invoicing operator (Didox,
+     * Faktura.uz) -- the platform is the seller on every invoice it sends, so
+     * this credential is the platform's, not any tenant's.
+     *
+     * <p>Platform-owned: an operator puts the value there with {@code bao kv put}
+     * (ADR 0028, "every secret outside a provider installation ... is still
+     * manual") and the platform installation stores only the reference.
+     * Deliberately not {@link #tenantWritable()}: no tenant action may ever
+     * overwrite the account HorecaOS invoices its tenants through. The value is
+     * one JSON object of the operator's own login fields, never logged.
+     */
+    PROVIDER_EINVOICING,
+
     /** Keycloak service-account credentials, per ADR 0009. */
     IDENTITY_ADMIN,
 

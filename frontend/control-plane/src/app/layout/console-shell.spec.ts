@@ -107,7 +107,7 @@ describe('ConsoleShell', () => {
       ]),
     );
     fixture.detectChanges();
-    expect(railLabels()).toHaveLength(40);
+    expect(railLabels()).toHaveLength(41);
   });
 
   it('names the operator in the rail', () => {

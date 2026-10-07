@@ -197,6 +197,13 @@ export const SECTIONS: readonly Section[] = [
     group: 'nav.group.commerce',
     capability: 'COMMERCIAL_USAGE_READ',
   },
+  {
+    id: 'einvoicing',
+    labelKey: 'nav.einvoicing',
+    route: '/commerce/einvoicing',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_USAGE_READ',
+  },
 
   // IA §6 Compliance & fiscal
   {

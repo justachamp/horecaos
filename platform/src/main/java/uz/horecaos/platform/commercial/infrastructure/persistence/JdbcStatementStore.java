@@ -101,6 +101,26 @@ public class JdbcStatementStore {
                 == 1;
     }
 
+    /**
+     * Whether an e-invoicing operator holds, or may hold, an invoice made from this
+     * statement (ADR 0096). Such a statement is not voided from underneath its invoice:
+     * the invoice is cancelled at the operator first. {@code V0516}'s trigger refuses the
+     * same thing at the database; this is the question asked first so the answer can say why.
+     */
+    public boolean hasLiveEInvoice(UUID tenantId, UUID id) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM commercial.statement_einvoices
+                             WHERE tenant_id = :tenantId AND statement_id = :id
+                               AND delivery IN ('PENDING', 'SUBMITTED', 'UNCERTAIN')
+                               AND (operator_state IS NULL OR operator_state NOT IN ('REFUSED', 'CANCELLED')))
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .query(Boolean.class)
+                .single());
+    }
+
     /** Every statement the tenant has been issued, newest month first, without lines. */
     public List<Statement> list(UUID tenantId) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId ORDER BY period_key DESC, issued_at DESC")

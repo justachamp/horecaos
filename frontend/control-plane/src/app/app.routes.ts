@@ -237,6 +237,11 @@ export const routes: Routes = [
         canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
         loadComponent: () => import('./features/commerce/dunning').then((m) => m.Dunning),
       },
+      {
+        path: 'commerce/einvoicing',
+        canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
+        loadComponent: () => import('./features/commerce/e-invoicing').then((m) => m.EInvoicing),
+      },
 
       // IA §6 Compliance & fiscal
       {

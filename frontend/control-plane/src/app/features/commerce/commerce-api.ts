@@ -232,6 +232,130 @@ export interface StatementView {
   readonly lines: readonly StatementLineView[];
 }
 
+// ------------------------------------------------- e-invoicing (ADR 0096)
+
+/** The operators an issued statement can be sent to. */
+export const EINVOICING_OPERATORS = ['DIDOX', 'FAKTURA_UZ'] as const;
+
+/** The line kinds a statement can carry, and so the kinds that have a classification. */
+export const EINVOICING_LINE_KINDS = [
+  'PLAN',
+  'MODULE',
+  'OVERAGE',
+  'EARLY_EXIT',
+  'DEPOSIT',
+] as const;
+
+/**
+ * HorecaOS's own account with one operator. `connected` is the one fact that
+ * matters; `missing` says what is still needed while it is false. The secret
+ * reference is never returned: only whether one is bound.
+ */
+export interface EInvoicingAccountView {
+  readonly installationId: string;
+  readonly provider: 'DIDOX' | 'FAKTURA_UZ' | (string & {});
+  readonly displayName: string;
+  readonly status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | (string & {});
+  readonly connected: boolean;
+  readonly secretBound: boolean;
+  readonly missing: readonly string[];
+  readonly adapterWired: boolean;
+  readonly adapterVersion: string;
+  readonly environmentCode: string;
+  readonly baseUrl: string | null;
+  readonly production: boolean;
+  readonly config: Readonly<Record<string, string>>;
+  readonly version: number;
+  readonly updatedBy: string;
+  readonly updatedAt: string;
+}
+
+/** What one kind of statement line is invoiced as; provisional until finance confirms it. */
+export interface EInvoicingClassificationView {
+  readonly lineKind: string;
+  readonly itemLabel: string;
+  readonly catalogCode: string;
+  readonly catalogName: string;
+  readonly packageCode: string;
+  readonly packageName: string;
+  readonly vatRateBp: number;
+  readonly provisional: boolean;
+  readonly confirmedBy: string | null;
+  readonly confirmedAt: string | null;
+  readonly version: number;
+  readonly updatedBy: string;
+  readonly updatedAt: string;
+}
+
+export interface EInvoiceLineView {
+  readonly lineNumber: number;
+  readonly name: string;
+  readonly classificationCode: string;
+  readonly quantity: number;
+  readonly unitPrice: Money;
+  readonly net: Money;
+  readonly vatRateBp: number;
+  readonly vat: Money;
+  readonly gross: Money;
+}
+
+/** One attempt to send a statement to an operator, and what the operator reports of it. */
+export interface EInvoiceView {
+  readonly einvoiceId: string;
+  readonly statementId: string;
+  readonly tenantId: string;
+  readonly provider: string;
+  readonly documentNumber: string;
+  readonly documentDate: string;
+  readonly buyerLegalEntityId: string;
+  readonly buyerName: string;
+  readonly buyerTaxpayerNumber: string;
+  readonly sellerTaxpayerNumber: string;
+  readonly net: Money;
+  readonly vat: Money;
+  readonly total: Money;
+  readonly classificationProvisional: boolean;
+  readonly delivery: 'PENDING' | 'SUBMITTED' | 'FAILED' | 'UNCERTAIN' | (string & {});
+  readonly failureCode: string | null;
+  readonly failureDetail: string | null;
+  readonly operatorDocumentId: string | null;
+  readonly operatorState: 'DRAFT' | 'SENT' | 'SIGNED' | 'REFUSED' | 'CANCELLED' | 'UNKNOWN' | null;
+  readonly operatorStatus: string | null;
+  readonly stateCheckedAt: string | null;
+  readonly stateChangedAt: string | null;
+  readonly live: boolean;
+  readonly sendReason: string;
+  readonly sentBy: string;
+  readonly createdAt: string;
+  readonly version: number;
+  readonly lines: readonly EInvoiceLineView[] | null;
+}
+
+/** The fields an account is saved with: the reference to its login, and the seller's public identity. */
+export interface EInvoicingAccountUpdate {
+  readonly displayName: string;
+  readonly secretReference: string | null;
+  readonly config: Readonly<Record<string, string>>;
+  readonly reason: string;
+}
+
+export interface EInvoicingClassificationUpdate {
+  readonly itemLabel: string;
+  readonly catalogCode: string;
+  readonly catalogName: string;
+  readonly packageCode: string;
+  readonly packageName: string;
+  readonly vatRateBp: number;
+  readonly confirmed: boolean;
+  readonly reason: string;
+}
+
+export interface EInvoiceSendRequest {
+  readonly provider: string;
+  readonly legalEntityId: string | null;
+  readonly reason: string;
+}
+
 /** A tenant's two balances and how it is collected (ADR 0095). */
 export interface WalletOverviewView {
   readonly paidBalance: Money;
@@ -962,6 +1086,120 @@ export class CommerceApi {
       this.api.post<CardInstallationView>(
         `/api/v1/platform-admin/commercial/billing/card-installations/${installationId}/suspension`,
         { expectedVersion, reason },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------- e-invoicing
+
+  /** HorecaOS's own accounts with the operators, bound or not. */
+  async einvoicingAccounts(): Promise<EInvoicingAccountView[]> {
+    return firstValueFrom(
+      this.api.get<EInvoicingAccountView[]>('/api/v1/control-plane/einvoicing/installations'),
+    );
+  }
+
+  async saveEInvoicingAccount(
+    installationId: string,
+    version: number,
+    request: EInvoicingAccountUpdate,
+  ): Promise<EInvoicingAccountView> {
+    return firstValueFrom(
+      this.api.put<EInvoicingAccountView>(
+        `/api/v1/platform-admin/commercial/einvoicing/installations/${installationId}`,
+        request,
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  async activateEInvoicingAccount(
+    installationId: string,
+    version: number,
+    reason: string,
+  ): Promise<EInvoicingAccountView> {
+    return firstValueFrom(
+      this.api.post<EInvoicingAccountView>(
+        `/api/v1/platform-admin/commercial/einvoicing/installations/${installationId}/activation`,
+        { reason },
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  async suspendEInvoicingAccount(
+    installationId: string,
+    version: number,
+    reason: string,
+  ): Promise<EInvoicingAccountView> {
+    return firstValueFrom(
+      this.api.post<EInvoicingAccountView>(
+        `/api/v1/platform-admin/commercial/einvoicing/installations/${installationId}/suspension`,
+        { reason },
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  async einvoicingClassifications(): Promise<EInvoicingClassificationView[]> {
+    return firstValueFrom(
+      this.api.get<EInvoicingClassificationView[]>(
+        '/api/v1/control-plane/einvoicing/line-classifications',
+      ),
+    );
+  }
+
+  async saveEInvoicingClassification(
+    lineKind: string,
+    version: number,
+    request: EInvoicingClassificationUpdate,
+  ): Promise<EInvoicingClassificationView> {
+    return firstValueFrom(
+      this.api.put<EInvoicingClassificationView>(
+        `/api/v1/platform-admin/commercial/einvoicing/line-classifications/${lineKind}`,
+        request,
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  /** Every attempt to send one of the tenant's statements, newest first. */
+  async tenantEInvoices(tenantId: string): Promise<EInvoiceView[]> {
+    return firstValueFrom(
+      this.api.get<EInvoiceView[]>(`/api/v1/control-plane/tenants/${tenantId}/einvoices`),
+    );
+  }
+
+  /** One attempt with the document that was sent, line by line. */
+  async eInvoice(tenantId: string, einvoiceId: string): Promise<EInvoiceView> {
+    return firstValueFrom(
+      this.api.get<EInvoiceView>(
+        `/api/v1/control-plane/tenants/${tenantId}/einvoices/${einvoiceId}`,
+      ),
+    );
+  }
+
+  async sendEInvoice(
+    tenantId: string,
+    statementId: string,
+    request: EInvoiceSendRequest,
+  ): Promise<EInvoiceView> {
+    return firstValueFrom(
+      this.api.post<EInvoiceView>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/statements/${statementId}/einvoices`,
+        request,
+      ),
+    );
+  }
+
+  async refreshEInvoice(
+    tenantId: string,
+    einvoiceId: string,
+  ): Promise<{ readonly einvoice: EInvoiceView; readonly unavailableCode: string | null }> {
+    return firstValueFrom(
+      this.api.post<{ readonly einvoice: EInvoiceView; readonly unavailableCode: string | null }>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/einvoices/${einvoiceId}/state-refresh`,
+        {},
       ),
     );
   }

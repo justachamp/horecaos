@@ -145,7 +145,7 @@ class WalletTests {
         jdbc.sql("""
                 TRUNCATE TABLE commercial.wallet_entries, commercial.tenant_billing,
                     commercial.card_charge_attempts,
-                    commercial.statement_lines, commercial.statements, commercial.subscriptions,
+                    commercial.statement_einvoices, commercial.statement_lines, commercial.statements, commercial.subscriptions,
                     commercial.usage_events, commercial.usage_aggregates, commercial.usage_adjustments,
                     commercial.entitlement_overrides, commercial.tenant_modules, commercial.modules,
                     commercial.plan_entitlements, commercial.plan_versions, commercial.plans CASCADE

@@ -4,12 +4,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -49,6 +51,9 @@ public class ProviderHttpClient {
     private static final Logger log = LoggerFactory.getLogger(ProviderHttpClient.class);
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
+    /** The key the HTTP status is held under when the caller asked to hear a non-2xx status as an answer. */
+    public static final String STATUS_KEY = "$status";
 
     /**
      * The most of a provider's answer this client will hold in memory.
@@ -202,6 +207,21 @@ public class ProviderHttpClient {
     }
 
     /**
+     * A GET whose answers include some non-2xx statuses the caller wants to read as
+     * answers: {@code 404} to "do you hold this document" says it does not, which is
+     * information rather than a fault, and {@link ProviderOutcome} cannot otherwise tell a
+     * 404 from any other 4xx. The status arrives in the parsed map under {@link #STATUS_KEY}.
+     */
+    public ProviderOutcome getAccepting(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
+            Set<Integer> acceptedStatuses,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        return exchange(call, "GET", path, headers, null, "application/json", acceptedStatuses, onSuccess);
+    }
+
+    /**
      * A bodyless DELETE.
      *
      * <p>Here because Click expresses two operations as DELETE that other partners
@@ -239,6 +259,34 @@ public class ProviderHttpClient {
         return exchange(call, "GET", path, "", operation, headers, null, onSuccess);
     }
 
+    /**
+     * A form-encoded POST, for the provider whose token endpoint takes {@code
+     * application/x-www-form-urlencoded} and nothing else (Faktura.uz's OAuth password
+     * grant, ADR 0096). The values are percent-encoded here; the body is never logged,
+     * because a token request carries the account's password.
+     */
+    public ProviderOutcome postForm(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
+            Map<String, String> form,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        String encoded = form.entrySet().stream()
+                .map(field -> URLEncoder.encode(field.getKey(), StandardCharsets.UTF_8)
+                        + "="
+                        + URLEncoder.encode(field.getValue(), StandardCharsets.UTF_8))
+                .collect(Collectors.joining("&"));
+        return exchange(
+                call,
+                "POST",
+                path,
+                headers,
+                encoded.getBytes(StandardCharsets.UTF_8),
+                "application/x-www-form-urlencoded",
+                Set.of(),
+                onSuccess);
+    }
+
     private ProviderOutcome exchange(
             ProviderCall call,
             String method,
@@ -248,19 +296,36 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        byte[] payload;
+        try {
+            payload = body == null ? null : objectMapper.writeValueAsBytes(body);
+        } catch (RuntimeException failure) {
+            return classifier.classify(failure, false);
+        }
+        return exchange(call, method, path, headers, payload, "application/json", Set.of(), onSuccess);
+    }
+
+    private ProviderOutcome exchange(
+            ProviderCall call,
+            String method,
+            String path,
+            Map<String, String> headers,
+            byte @Nullable [] payload,
+            String contentType,
+            Set<Integer> acceptedStatuses,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
 
         try {
-            byte[] payload = body == null ? new byte[0] : objectMapper.writeValueAsBytes(body);
             Duration deadline = call.timeout() == null ? Duration.ofSeconds(30) : call.timeout();
 
             HttpRequest.Builder request = HttpRequest.newBuilder()
                     .uri(URI.create(call.baseUrl() + path + query))
                     .timeout(deadline)
-                    .header("Content-Type", "application/json")
+                    .header("Content-Type", contentType)
                     .header("Accept", "application/json")
                     .method(
                             method,
-                            body == null
+                            payload == null
                                     ? HttpRequest.BodyPublishers.noBody()
                                     : HttpRequest.BodyPublishers.ofByteArray(payload));
             headers.forEach(request::header);
@@ -268,7 +333,7 @@ public class ProviderHttpClient {
             BoundedBody collected = new BoundedBody();
             HttpResponse<Void> response = send(request.build(), collected, deadline);
 
-            return handle(response, collected, onSuccess);
+            return handle(response, collected, acceptedStatuses, onSuccess);
 
         } catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
@@ -368,10 +433,29 @@ public class ProviderHttpClient {
      * that difference is a second courier.
      */
     private ProviderOutcome handle(
-            HttpResponse<Void> response, BoundedBody body, Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+            HttpResponse<Void> response,
+            BoundedBody body,
+            Set<Integer> acceptedStatuses,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
 
         int status = response.statusCode();
         byte[] raw = body.bytes();
+
+        if (acceptedStatuses.contains(status)) {
+            // A status the caller asked to hear as an ANSWER rather than a failure -- "no such
+            // document" to a lookup is the answer, not a fault -- handed over with the status
+            // under STATUS_KEY and whatever body could be read. The body may well not be JSON.
+            Map<String, Object> answer = new java.util.LinkedHashMap<>();
+            try {
+                if (raw.length > 0 && !body.truncated()) {
+                    answer.putAll(parse(raw));
+                }
+            } catch (RuntimeException notJson) {
+                // Not worth failing an answer over: the status is the answer.
+            }
+            answer.put(STATUS_KEY, status);
+            return onSuccess.apply(answer);
+        }
 
         if (status >= 200 && status < 300) {
             if (body.truncated()) {
@@ -383,8 +467,7 @@ public class ProviderHttpClient {
                 // answered and we cannot say what it said.
                 throw new IllegalStateException("Provider response exceeded " + MAX_RESPONSE_BYTES + " bytes");
             }
-            Map<String, Object> parsed = raw.length == 0 ? Map.of() : objectMapper.readValue(raw, MAP_TYPE);
-            return onSuccess.apply(parsed);
+            return onSuccess.apply(raw.length == 0 ? Map.of() : parse(raw));
         }
 
         // Delegated rather than decided here. This method used to carry its own
@@ -396,6 +479,15 @@ public class ProviderHttpClient {
                 status,
                 describeFailure(raw, body.truncated()),
                 retryAfter(response).orElse(null));
+    }
+
+    /**
+     * A JSON object as a map. Anything else -- an array, a scalar, HTML -- is unreadable, and for a
+     * call that may have acted that is {@code UNCERTAIN}: an adapter that expects an object and
+     * is answered with an array has not been told what happened (see Noor's unreadable-200 test).
+     */
+    private Map<String, Object> parse(byte[] raw) {
+        return objectMapper.readValue(raw, MAP_TYPE);
     }
 
     /**
