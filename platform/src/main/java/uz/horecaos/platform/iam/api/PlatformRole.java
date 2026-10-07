@@ -351,6 +351,11 @@ public enum PlatformRole {
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_TEMPLATE_ACTIVATE,
                     NOTIFICATION_ROUTING_MANAGE,
+                    // ADR 0069: the answers the grounded assistant may give in the tenant's
+                    // name are tenant content like the menu (CATALOG_AUTHOR above), held by
+                    // the same roles. Reading its usage and spend rides the same pair.
+                    ASSISTANT_READ,
+                    ASSISTANT_KNOWLEDGE_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
@@ -577,6 +582,11 @@ public enum PlatformRole {
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_TEMPLATE_ACTIVATE,
                     NOTIFICATION_ROUTING_MANAGE,
+                    // ADR 0069: the answers the grounded assistant may give in the tenant's
+                    // name are tenant content like the menu (CATALOG_AUTHOR above), held by
+                    // the same roles. Reading its usage and spend rides the same pair.
+                    ASSISTANT_READ,
+                    ASSISTANT_KNOWLEDGE_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
@@ -752,6 +762,11 @@ public enum PlatformRole {
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_ROUTING_MANAGE,
+                    // ADR 0069: the answers the grounded assistant may give in the tenant's
+                    // name are tenant content like the menu (CATALOG_AUTHOR above), held by
+                    // the same roles. Reading its usage and spend rides the same pair.
+                    ASSISTANT_READ,
+                    ASSISTANT_KNOWLEDGE_MANAGE,
                     REPORTING_READ,
                     // T14/ADR 0134: which products to promote, discount or take off
                     // the menu is exactly this role's own call (CATALOG_AUTHOR,

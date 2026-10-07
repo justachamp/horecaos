@@ -77,5 +77,20 @@ public enum ProviderCategory {
      */
     ROUTING,
 
+    /**
+     * ADR 0069: the language-model provider behind the grounded assistant. The
+     * first adapter is Anthropic's Messages API.
+     *
+     * <p>Platform-held rather than tenant-held: the model provider is a
+     * processor the tenant did not choose, so the platform owns the one
+     * account and its credential is an ADR 0028 reference named in
+     * configuration ({@code horecaos.assistant.provider.secret-reference}),
+     * not a per-tenant secret a tenant types in. The category still exists
+     * so the approved endpoint comes from {@code
+     * integration.provider_environments} like every other provider's
+     * (ADR 0026) rather than from a URL in a property.
+     */
+    ASSISTANT,
+
     OTHER
 }

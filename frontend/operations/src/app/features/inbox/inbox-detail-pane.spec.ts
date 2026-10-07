@@ -8,6 +8,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { InboxApi } from './inbox-api';
 import { InboxDetailPane } from './inbox-detail-pane';
 import {
+  AssistantTurnResponse,
   ConversationDetailResponse,
   ConversationMessageResponse,
   ConversationResponse,
@@ -28,6 +29,8 @@ function conversation(overrides: Partial<ConversationResponse> = {}): Conversati
     customerAccountId: null,
     state: 'HANDED_TO_OPERATOR',
     assignedTo: 'operator-1',
+    assistantActive: false,
+    assistantInvolved: false,
     updatedAt: '2026-09-01T09:00:00Z',
     version: 3,
     ...overrides,
@@ -59,6 +62,7 @@ function configure(options: {
   detail?: ReturnType<typeof vi.fn>;
   reply?: ReturnType<typeof vi.fn>;
   takeover?: ReturnType<typeof vi.fn>;
+  assistantTurn?: ReturnType<typeof vi.fn>;
   returnToFlow?: ReturnType<typeof vi.fn>;
   close?: ReturnType<typeof vi.fn>;
   scope?: typeof FAKE_SCOPE | null;
@@ -81,6 +85,7 @@ function configure(options: {
             vi.fn().mockReturnValue(of({ value: detailOf(conversation()), version: 3 })),
           reply: options.reply ?? vi.fn(),
           takeover: options.takeover ?? vi.fn(),
+          assistantTurn: options.assistantTurn ?? vi.fn(),
           returnToFlow: options.returnToFlow ?? vi.fn(),
           close: options.close ?? vi.fn(),
         },
@@ -363,5 +368,374 @@ describe('InboxDetailPane: not-found and denied', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="inbox-detail-denied"]'),
     ).not.toBeNull();
+  });
+});
+
+function assistantTurn(overrides: Partial<AssistantTurnResponse> = {}): AssistantTurnResponse {
+  return {
+    turnId: 'turn-1',
+    occurredAt: '2026-09-01T09:00:05Z',
+    locale: 'ru',
+    questionKinds: ['KNOWLEDGE', 'PRICE'],
+    outcome: 'ANSWERED',
+    refusalReason: null,
+    modelId: 'claude-sonnet-5-5',
+    servedFromCache: false,
+    facts: [
+      { id: 'f1', kind: 'PRICE', cited: true },
+      { id: 'f2', kind: 'KNOWLEDGE', cited: false },
+    ],
+    knowledgeVersions: [{ entryId: 'entry-1', version: 3 }],
+    ...overrides,
+  };
+}
+
+/** An IDLE conversation the assistant has been answering: no flow run, nobody holding it (ADR 0069). */
+function assistantConversation(
+  overrides: Partial<ConversationResponse> = {},
+): ConversationResponse {
+  return conversation({
+    state: 'IDLE',
+    assignedTo: null,
+    assistantActive: true,
+    assistantInvolved: true,
+    ...overrides,
+  });
+}
+
+const ASSISTANT_THREAD = [
+  message({ messageId: 'm1', direction: 'INBOUND', body: 'How much is plov?' }),
+  message({
+    messageId: 'm2',
+    direction: 'ASSISTANT',
+    body: 'Plov is 45 000 so’m.',
+    assistantTurnId: 'turn-1',
+  }),
+];
+
+describe('InboxDetailPane: the assistant (ADR 0069)', () => {
+  it('draws an assistant message as its own author, not as the flow, and distinct from the operator', async () => {
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const rows = host.querySelectorAll('.pane__message');
+    expect(rows.length).toBe(2);
+    expect(rows[1].textContent).toContain('Assistant');
+    expect(rows[1].textContent).not.toContain('Flow');
+    expect(rows[1].className).toContain('pane__message--assistant');
+    expect(rows[1].className).not.toContain('pane__message--operator');
+    expect(rows[0].className).not.toContain('pane__message--assistant');
+  });
+
+  it('says the assistant is answering and offers to take over from it, though the conversation is IDLE', async () => {
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(
+      host.querySelector('[data-testid="inbox-detail-assistant-banner"]')?.textContent,
+    ).toContain('Assistant answering');
+    const takeover = host.querySelector('[data-testid="inbox-detail-takeover"]');
+    expect(takeover?.textContent).toContain('Take over from the assistant');
+    expect(host.querySelector('[data-testid="inbox-reply-input"]')).toBeNull();
+  });
+
+  it('takes the conversation over from the assistant with the version it read, and the banner goes', async () => {
+    const detailFn = vi.fn().mockReturnValue(
+      of({
+        value: detailOf(assistantConversation({ version: 7 }), ASSISTANT_THREAD),
+        version: 7,
+      }),
+    );
+    const takeover = vi.fn().mockReturnValue(
+      of(
+        conversation({
+          state: 'HANDED_TO_OPERATOR',
+          assistantActive: false,
+          assistantInvolved: true,
+          assignedTo: 'operator-9',
+          version: 8,
+        }),
+      ),
+    );
+    configure({ detail: detailFn, takeover });
+    const fixture = await render();
+
+    fixture.nativeElement.querySelector('[data-testid="inbox-detail-takeover"]').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(takeover).toHaveBeenCalledWith(FAKE_SCOPE, 'conv-1', 7);
+    expect(host.querySelector('[data-testid="inbox-detail-assistant-banner"]')).toBeNull();
+    expect(host.querySelector('[data-testid="inbox-detail-assistant-involved"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="inbox-reply-input"]')).not.toBeNull();
+  });
+
+  it('says only that the assistant answered earlier once a person holds the conversation', async () => {
+    configure({
+      detail: vi.fn().mockReturnValue(
+        of({
+          value: detailOf(
+            conversation({ state: 'HANDED_TO_OPERATOR', assistantInvolved: true }),
+            ASSISTANT_THREAD,
+          ),
+          version: 3,
+        }),
+      ),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="inbox-detail-assistant-banner"]')).toBeNull();
+    expect(
+      host.querySelector('[data-testid="inbox-detail-assistant-involved"]')?.textContent,
+    ).toContain('answered earlier');
+    expect(host.querySelector('[data-testid="inbox-detail-takeover"]')).toBeNull();
+  });
+
+  it('offers no take-over for an IDLE conversation nobody has been answering', async () => {
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(of({ value: detailOf(conversation({ state: 'IDLE' })), version: 3 })),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="inbox-detail-takeover"]')).toBeNull();
+    expect(host.querySelector('[data-testid="inbox-detail-assistant-banner"]')).toBeNull();
+  });
+
+  it('keeps the plain wording on a flow takeover', async () => {
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(conversation({ state: 'FLOW_ACTIVE' })), version: 3 }),
+        ),
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="inbox-detail-takeover"]')?.textContent,
+    ).toContain('Take over');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="inbox-detail-takeover"]')?.textContent,
+    ).not.toContain('assistant');
+  });
+
+  it('says why an answer was given: how the turn ended, the facts it stood on, which the reply cited, and the notes used', async () => {
+    const turnFn = vi.fn().mockReturnValue(of({ value: assistantTurn(), version: null }));
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+      assistantTurn: turnFn,
+    });
+    const fixture = await render();
+
+    fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(turnFn).toHaveBeenCalledWith(FAKE_SCOPE, 'turn-1');
+    const detail = host.querySelector('[data-testid="inbox-assistant-why-detail"]');
+    expect(detail?.textContent).toContain('Answered from retrieved facts');
+    expect(detail?.textContent).toContain('Price');
+    expect(detail?.textContent).toContain('used in the reply');
+    expect(detail?.textContent).toContain('Your note');
+    expect(detail?.textContent).toContain('note, version 3');
+    // Only the first fact was cited, so "used in the reply" appears once.
+    expect(detail?.textContent?.split('used in the reply').length).toBe(2);
+  });
+
+  it('closes the disclosure on a second click and reads the turn only once', async () => {
+    const turnFn = vi.fn().mockReturnValue(of({ value: assistantTurn(), version: null }));
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+      assistantTurn: turnFn,
+    });
+    const fixture = await render();
+    const toggle = (): void =>
+      fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]').click();
+
+    toggle();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why-detail"]'),
+    ).not.toBeNull();
+
+    toggle();
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why-detail"]'),
+    ).toBeNull();
+    expect(turnFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a refused turn was refused, and why', async () => {
+    const turnFn = vi.fn().mockReturnValue(
+      of({
+        value: assistantTurn({
+          outcome: 'REFUSED',
+          refusalReason: 'NO_GROUNDING',
+          facts: [],
+          knowledgeVersions: [],
+        }),
+        version: null,
+      }),
+    );
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+      assistantTurn: turnFn,
+    });
+    const fixture = await render();
+
+    fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const text = fixture.nativeElement.querySelector(
+      '[data-testid="inbox-assistant-why-detail"]',
+    )?.textContent;
+
+    expect(text).toContain('handed over to a person');
+    expect(text).toContain('Nothing in the menu, branches or notes answered the question');
+    expect(text).toContain('No facts were retrieved');
+  });
+
+  it('renders a value it has not learned as the wire value rather than blanking the row', async () => {
+    const turnFn = vi.fn().mockReturnValue(
+      of({
+        value: assistantTurn({
+          outcome: 'DEFERRED',
+          refusalReason: 'SOMETHING_NEW',
+          facts: [{ id: 'f9', kind: 'WEATHER', cited: false }],
+          knowledgeVersions: [],
+        }),
+        version: null,
+      }),
+    );
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+      assistantTurn: turnFn,
+    });
+    const fixture = await render();
+
+    fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const text = fixture.nativeElement.querySelector(
+      '[data-testid="inbox-assistant-why-detail"]',
+    )?.textContent;
+
+    expect(text).toContain('DEFERRED');
+    expect(text).toContain('SOMETHING_NEW');
+    expect(text).toContain('WEATHER');
+  });
+
+  it('says so when the operator’s role cannot read assistant turns, without treating it as a broken screen', async () => {
+    const turnFn = vi
+      .fn()
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
+      );
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+      assistantTurn: turnFn,
+    });
+    const fixture = await render();
+
+    fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why-denied"]')
+        ?.textContent,
+    ).toContain('Your role cannot see how the assistant answered');
+    expect(fixture.nativeElement.querySelector('[data-testid="inbox-detail-error"]')).toBeNull();
+  });
+
+  it('says it could not load on any other failure', async () => {
+    const turnFn = vi
+      .fn()
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, null)),
+      );
+    configure({
+      detail: vi
+        .fn()
+        .mockReturnValue(
+          of({ value: detailOf(assistantConversation(), ASSISTANT_THREAD), version: 3 }),
+        ),
+      assistantTurn: turnFn,
+    });
+    const fixture = await render();
+
+    fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why-detail"]')
+        ?.textContent,
+    ).toContain('Could not load how the assistant answered');
+  });
+
+  it('offers "why" only on a message that carries a turn id', async () => {
+    configure({
+      detail: vi.fn().mockReturnValue(
+        of({
+          value: detailOf(assistantConversation(), [
+            message({ messageId: 'm1', direction: 'INBOUND' }),
+            message({ messageId: 'm2', direction: 'OUTBOUND', body: 'Welcome!' }),
+            message({
+              messageId: 'm3',
+              direction: 'OPERATOR',
+              body: 'Hello',
+              actorPrincipalId: 'operator-1',
+            }),
+          ]),
+          version: 3,
+        }),
+      ),
+    });
+    const fixture = await render();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="inbox-assistant-why"]')).toBeNull();
   });
 });

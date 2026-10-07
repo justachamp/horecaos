@@ -1,7 +1,48 @@
 # ADR 0069: An assistant answers customers — grounded in platform facts, never in model memory
 
 - Decision status: Accepted
-- Implementation status: Not started
+- Implementation status: Partial — stage one (read-only answering) is built behind a
+  plan entitlement and a per-tenant switch, both off, and takes no turns until the
+  owner stores a provider key. `assistant.application.AssistantTurnService` is a
+  `conversations.api.ConversationParticipant` (the engine offers it text no flow
+  consumed, never in a conversation a person holds); it classifies the question
+  (`QuestionClassifier`, ru/uz/en), retrieves facts through each owning module's api
+  (`MenuSearchPort` over the storefront's own menu, `BranchDirectory`, the one
+  serviceability resolver, ADR 0037 coverage for a shared location,
+  `CustomerBotOrderingPort.latestOrder` only for the proved account, the tenant's
+  versioned knowledge entries), asks `AssistantModelPort` to compose from them, and
+  sends nothing `GroundingVerifier` does not prove (every cited fact retrieved, every
+  figure in a cited fact; a price equals the checkout quote's —
+  `AssistantQuotedPriceMatchesCheckoutTests`). Refusal on empty retrieval, the
+  per-tenant monthly spend ceiling (`assistant.turns` ledger, integer micro-dollars),
+  the per-conversation turn cap, rate limits, a person-only topic filter and the
+  handoff as a change of author (`ASSISTANT` message direction, V0512) with
+  truthful operator presence are each tested, as is `PiiEgressGuard` (the request
+  type refuses unredacted text) and the cross-tenant knowledge probe. The first
+  adapter is Anthropic's Messages API (`claude-sonnet-5-5` by default, configurable),
+  platform-held behind an ADR 0028 reference and the approved `anthropic-production`
+  environment of the new `ASSISTANT` provider category; a deterministic fake provider
+  and a fake provider socket prove the port. Knowledge entries are authored through
+  `/operations/tenants/{id}/(brands/{id}/)assistant/knowledge` behind
+  `assistant.knowledge.manage` (append-only versions, `If-Match`), usage is read at
+  `/assistant/usage`, and the golden-set suite (`golden-set.psv`, 100% floor) runs in
+  the ordinary test shards. The operations console surfaces it (Settings > Chat
+  assistant): the operator inbox draws an assistant message as its own author, marks a
+  conversation the assistant is answering (`assistantActive`, decided in one place by
+  `ConversationState.machineAnswers`), offers "take over" on an `IDLE` conversation it
+  has spoken in (the same takeover call, refused for one nobody answered), and says why
+  a message was answered as it was (`/brands/{id}/assistant/turns/{turnId}`, ids and
+  kinds of fact, no words, under `assistant.read`); the settings card holds the
+  per-brand switch, the month's spend against the ceiling (shown, not edited: the
+  ceiling caps what HorecaOS pays the processor, so `assistant.monthly_spend_ceiling_usd_cents`
+  stays a platform key), and the tenant's own first-answer wording per language
+  (`assistant.disclosure_text_{en,ru,uz}`, tenant-visible, 500 characters, blank keeps
+  the platform's wording and never switches the sentence off); a notes screen authors,
+  versions and retires knowledge entries. Not built: order assembly (stage two — the module has no
+  dependency on a cart, a checkout or a payment, and a test keeps it so), the ADR 0043
+  day-close usage fact (the ledger is the source it will read), a per-tenant provider
+  account, a tenant-editable ceiling (no record decides who may raise or lower it), and
+  any verification against a live provider account (the owner holds none yet).
 - Date proposed: 2026-09-05
 - Date decided: 2026-10-07
 - Deciders: platform owner (direction and the open inputs below), Claude (architecture)
@@ -234,17 +275,17 @@ continue to work unchanged, because the assistant was never in their path.
 
 ## Implementation checklist
 
-- [ ] `assistant` module skeleton, `AssistantModelPort`, fake adapter
-- [ ] Knowledge store, versions, authoring endpoints and capability
-- [ ] Operations console: knowledge authoring screen (IA row to be assigned)
-- [ ] Retrieval and grounding for price, availability, branches, hours, coverage
-- [ ] Customer order-state answering, bound to ADR 0063 proven identity
-- [ ] Refusal and escalation into the ADR 0059 inbox, with ADR 0064 presence
-- [ ] First provider adapter under an `ASSISTANT` installation category
-- [ ] PII egress guard and its test
-- [ ] Entitlement gate, budget ceilings, turn caps, cache
-- [ ] ADR 0027 audit facts and ADR 0043 usage facts
-- [ ] Golden-set eval suite and its CI floor
+- [x] `assistant` module skeleton, `AssistantModelPort`, fake adapter (the fake is test-only)
+- [x] Knowledge store, versions, authoring endpoints and capability
+- [x] Operations console: knowledge authoring screen, the switch and wording card, and the inbox surfaces (IA row to be assigned)
+- [x] Retrieval and grounding for price, availability, branches, hours, coverage
+- [x] Customer order-state answering, bound to ADR 0063 proven identity
+- [x] Refusal and escalation into the ADR 0059 inbox, with ADR 0064 presence
+- [x] First provider adapter under an `ASSISTANT` installation category (platform-held; unverified against a live account)
+- [x] PII egress guard and its test
+- [x] Entitlement gate, budget ceilings, turn caps, cache
+- [ ] ADR 0027 audit facts and ADR 0043 usage facts (audit facts built; the ADR 0043 day-close fact is not)
+- [x] Golden-set eval suite and its CI floor
 - [ ] Order assembly through existing cart/checkout, with assistant provenance
 
 ## Exit criteria

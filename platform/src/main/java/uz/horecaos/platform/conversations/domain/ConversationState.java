@@ -11,5 +11,16 @@ public enum ConversationState {
     IDLE,
     FLOW_ACTIVE,
     HANDED_TO_OPERATOR,
-    CLOSED
+    CLOSED;
+
+    /**
+     * Whether, in this state, the customer's next message is answered by a machine --
+     * the flow engine or, since ADR 0069, a participant such as the assistant --
+     * rather than by a person or by nobody. The one definition of "somebody could still
+     * take this over from the machine": the inbox's «assistant is answering» marker and
+     * the takeover rule both read it.
+     */
+    public boolean machineAnswers() {
+        return this == IDLE || this == FLOW_ACTIVE;
+    }
 }

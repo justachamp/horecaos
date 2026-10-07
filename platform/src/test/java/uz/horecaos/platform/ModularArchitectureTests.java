@@ -15,6 +15,7 @@ class ModularArchitectureTests {
 
     /** Domain modules. Integration is excluded: it is where the adapters belong. */
     private static final List<String> DOMAIN_MODULES = List.of(
+            "assistant",
             "audit",
             "catalog",
             "commercial",

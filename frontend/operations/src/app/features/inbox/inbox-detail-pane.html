@@ -54,6 +54,16 @@
           {{ 'inbox.customer.unlinked' | t }}
         }
       </p>
+      @if (detail.assistantActive) {
+        <p class="pane__assistant-banner q-body-sm" data-testid="inbox-detail-assistant-banner">
+          <strong>{{ 'inbox.assistant.active' | t }}.</strong>
+          {{ 'inbox.assistant.banner' | t }}
+        </p>
+      } @else if (detail.assistantInvolved) {
+        <p class="q-caption pane__assistant-involved" data-testid="inbox-detail-assistant-involved">
+          {{ 'inbox.assistant.involved' | t }}
+        </p>
+      }
 
       <div class="pane__actions">
         @if (canTakeOver()) {
@@ -64,7 +74,7 @@
             (click)="takeover()"
             data-testid="inbox-detail-takeover"
           >
-            {{ 'inbox.action.takeover' | t }}
+            {{ takeoverLabelKey() | t }}
           </button>
         }
         @if (canReturnToFlow()) {
@@ -102,6 +112,7 @@
               class="pane__message"
               [class.pane__message--inbound]="message.direction === 'INBOUND'"
               [class.pane__message--operator]="message.direction === 'OPERATOR'"
+              [class.pane__message--assistant]="message.direction === 'ASSISTANT'"
               [attr.data-testid]="'inbox-message-' + message.direction"
             >
               <div class="pane__message-meta q-caption">
@@ -109,6 +120,82 @@
                 <span>{{ formatOccurredAt(message.occurredAt) }}</span>
               </div>
               <p class="q-body-sm pane__message-body">{{ message.body }}</p>
+              @if (message.assistantTurnId) {
+                <button
+                  type="button"
+                  class="pane__why-toggle q-caption"
+                  [attr.aria-expanded]="turnViewOf(message) !== null"
+                  (click)="toggleWhy(message)"
+                  data-testid="inbox-assistant-why"
+                >
+                  {{
+                    (turnViewOf(message) ? 'inbox.assistant.why.hide' : 'inbox.assistant.why') | t
+                  }}
+                </button>
+                @if (turnViewOf(message); as view) {
+                  <div class="pane__why q-body-sm" data-testid="inbox-assistant-why-detail">
+                    @switch (view.status) {
+                      @case ('loading') {
+                        <p>{{ 'inbox.assistant.why.loading' | t }}</p>
+                      }
+                      @case ('denied') {
+                        <p data-testid="inbox-assistant-why-denied">
+                          {{ 'inbox.assistant.why.denied' | t }}
+                        </p>
+                      }
+                      @case ('error') {
+                        <p role="alert">{{ 'inbox.assistant.why.error' | t }}</p>
+                      }
+                      @case ('ready') {
+                        @if (view.status === 'ready') {
+                          <p data-testid="inbox-assistant-why-outcome">
+                            {{ outcomeLabel(view.turn.outcome) }}
+                            @if (view.turn.refusalReason; as reason) {
+                              <span class="pane__why-reason"> — {{ reasonLabel(reason) }}</span>
+                            }
+                          </p>
+                          @if (view.turn.facts.length > 0) {
+                            <p class="q-caption pane__why-heading">
+                              {{ 'inbox.assistant.why.facts' | t }}
+                            </p>
+                            <ul class="pane__why-facts">
+                              @for (fact of view.turn.facts; track fact.id) {
+                                <li>
+                                  {{ factLabel(fact.kind) }}
+                                  @if (fact.cited) {
+                                    <span class="q-caption pane__why-cited">
+                                      ({{ 'inbox.assistant.why.cited' | t }})</span
+                                    >
+                                  }
+                                </li>
+                              }
+                            </ul>
+                          } @else {
+                            <p class="q-caption">{{ 'inbox.assistant.why.facts.none' | t }}</p>
+                          }
+                          @if (view.turn.knowledgeVersions.length > 0) {
+                            <p class="q-caption pane__why-heading">
+                              {{ 'inbox.assistant.why.notes' | t }}
+                            </p>
+                            <ul class="pane__why-facts">
+                              @for (note of view.turn.knowledgeVersions; track note.entryId) {
+                                <li>
+                                  {{
+                                    'inbox.assistant.why.noteVersion' | t: { version: note.version }
+                                  }}
+                                </li>
+                              }
+                            </ul>
+                          }
+                          @if (view.turn.servedFromCache) {
+                            <p class="q-caption">{{ 'inbox.assistant.why.cached' | t }}</p>
+                          }
+                        }
+                      }
+                    }
+                  </div>
+                }
+              }
             </li>
           }
         </ol>

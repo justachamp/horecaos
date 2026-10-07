@@ -1,0 +1,164 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 720px;
+}
+
+.note {
+  color: var(--q-ink-muted);
+  margin: 12px 0 0;
+}
+
+.card {
+  margin-top: 24px;
+  max-width: 640px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+}
+
+.field-row {
+  margin-top: 16px;
+}
+
+.hint {
+  margin: 4px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+.notice {
+  margin-top: 12px;
+  padding: 8px 12px;
+  color: var(--q-ink-muted);
+  background: var(--q-surface-2);
+  border-radius: var(--q-radius);
+}
+
+.stats {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.stats dt {
+  color: var(--q-ink-muted);
+}
+
+.stats dd {
+  margin: 2px 0 0;
+}
+
+.spend {
+  margin: 16px 0 0;
+}
+
+.spend .q-caption {
+  display: block;
+  color: var(--q-ink-muted);
+}
+
+.notes {
+  margin: 16px 0 0;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.form {
+  margin-top: 12px;
+}
+
+.form label {
+  display: block;
+  color: var(--q-ink-muted);
+  margin-top: 12px;
+}
+
+.form label:first-child {
+  margin-top: 0;
+}
+
+.field.q-body {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.field.text {
+  height: auto;
+  padding: 8px 12px;
+  font-family: var(--q-font-sans);
+  resize: vertical;
+}
+
+.counter {
+  margin: 4px 0 0;
+  color: var(--q-ink-subtle);
+  text-align: right;
+}
+
+.counter--over {
+  color: var(--q-error-text);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+  color: var(--q-ink);
+}
+
+.form__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}

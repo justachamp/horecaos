@@ -179,6 +179,18 @@ export class InboxList implements OnInit {
       : null;
   }
 
+  /**
+   * The pill's overlay: «needs reply» outranks «assistant answering». An overlay is a fact about the
+   * conversation that is not its state (ADR 0101) — and a conversation the assistant is answering is
+   * still `IDLE` or `FLOW_ACTIVE`, whose word the pill keeps.
+   */
+  protected overlayLabel(row: ConversationSummaryResponse): string | null {
+    if (row.needsReply) {
+      return this.i18n.t('inbox.needsReply');
+    }
+    return row.assistantActive ? this.i18n.t('inbox.assistant.active') : null;
+  }
+
   protected emptyMessage(): string {
     return this.i18n.t('inbox.list.empty');
   }
