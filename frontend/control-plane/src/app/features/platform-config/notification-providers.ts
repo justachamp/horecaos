@@ -6,7 +6,13 @@ import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MessageKey } from '../../core/i18n/messages.en';
-import { Gateway, NotificationProvidersApi, REVIEW_STATES, Sender, TemplateReview } from './notification-providers-api';
+import {
+  Gateway,
+  NotificationProvidersApi,
+  REVIEW_STATES,
+  Sender,
+  TemplateReview,
+} from './notification-providers-api';
 
 /**
  * IA 8.4 Notification providers & template moderation -- the messaging

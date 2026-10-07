@@ -9,7 +9,10 @@ import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { ru } from '../../core/i18n/messages.ru';
 import { GlobalLookup, LookupHit } from './global-lookup';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 describe('GlobalLookup', () => {
   let fixture: ComponentFixture<GlobalLookup>;
@@ -19,7 +22,10 @@ describe('GlobalLookup', () => {
   async function create(query: string | null, hits: LookupHit[], mayReveal = false): Promise<void> {
     get = vi.fn().mockReturnValue(of(hits));
     post = vi.fn().mockReturnValue(
-      of({ tenantsSearched: 3, matches: [{ tenantId: 'tenant-2', tenantName: 'Somsa', accountId: 'acc-9' }] }),
+      of({
+        tenantsSearched: 3,
+        matches: [{ tenantId: 'tenant-2', tenantName: 'Somsa', accountId: 'acc-9' }],
+      }),
     );
     await TestBed.configureTestingModule({
       imports: [GlobalLookup],
@@ -27,10 +33,15 @@ describe('GlobalLookup', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: ApiClient, useValue: { get, post } },
-        { provide: SessionContextService, useValue: { has: () => mayReveal, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => mayReveal, current: () => ({ subject: 'me' }) },
+        },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap(query === null ? {} : { q: query }) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap(query === null ? {} : { q: query }) },
+          },
         },
       ],
     }).compileComponents();
@@ -51,14 +62,25 @@ describe('GlobalLookup', () => {
         matchedOn: 'ORDER_NUMBER',
         label: '№ 1042 · Chilonzor · COMPLETED',
       },
-      { type: 'COURIER', id: 'courier-1', tenantId: 'tenant-2', tenantName: 'Somsa', matchedOn: 'COURIER_REFERENCE', label: 'C-1042 · ACTIVE' },
+      {
+        type: 'COURIER',
+        id: 'courier-1',
+        tenantId: 'tenant-2',
+        tenantName: 'Somsa',
+        matchedOn: 'COURIER_REFERENCE',
+        label: 'C-1042 · ACTIVE',
+      },
     ]);
 
     expect(get).toHaveBeenCalledWith('/api/v1/control-plane/lookup', { query: { q: '1042' } });
-    const rows = Array.from(fixture.nativeElement.querySelectorAll('.hits tbody tr')) as HTMLElement[];
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('.hits tbody tr'),
+    ) as HTMLElement[];
     expect(rows[0].textContent).toContain(ru['globalLookup.type.ORDER']);
     expect(rows[0].textContent).toContain(ru['globalLookup.matched.ORDER_NUMBER']);
-    expect((rows[0].querySelector('a') as HTMLAnchorElement).getAttribute('href')).toBe('/tenants/tenant-1');
+    expect((rows[0].querySelector('a') as HTMLAnchorElement).getAttribute('href')).toBe(
+      '/tenants/tenant-1',
+    );
     expect(rows[1].textContent).toContain(ru['globalLookup.type.COURIER']);
   });
 
@@ -77,7 +99,9 @@ describe('GlobalLookup', () => {
     reason.value = 'caller asked about a refund';
     reason.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    (fixture.nativeElement.querySelector('.phoneForm button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.phoneForm button[type="submit"]') as HTMLButtonElement
+    ).click();
     await fixture.whenStable();
     await new Promise((resolve) => setTimeout(resolve));
     fixture.detectChanges();
@@ -87,7 +111,9 @@ describe('GlobalLookup', () => {
       reason: 'caller asked about a refund',
     });
     expect(get).not.toHaveBeenCalled();
-    expect((fixture.nativeElement.querySelector('[data-account="acc-9"]') as HTMLElement).textContent).toContain('Somsa');
+    expect(
+      (fixture.nativeElement.querySelector('[data-account="acc-9"]') as HTMLElement).textContent,
+    ).toContain('Somsa');
 
     TestBed.resetTestingModule();
     await create(null, [], false);

@@ -5,14 +5,21 @@
   <label class="field">
     <span class="q-caption">{{ i18n.t('webhookDeliveries.provider') }}</span>
     <select class="q-body-sm" name="provider" (change)="chooseProvider($any($event.target).value)">
-      <option value="" [selected]="provider() === ''">{{ i18n.t('webhookDeliveries.allProviders') }}</option>
+      <option value="" [selected]="provider() === ''">
+        {{ i18n.t('webhookDeliveries.allProviders') }}
+      </option>
       @for (p of providers; track p) {
         <option [value]="p" [selected]="p === provider()">{{ p }}</option>
       }
     </select>
   </label>
   <label class="q-body-sm check">
-    <input type="checkbox" name="invalidOnly" [checked]="invalidOnly()" (change)="chooseInvalidOnly($any($event.target).checked)" />
+    <input
+      type="checkbox"
+      name="invalidOnly"
+      [checked]="invalidOnly()"
+      (change)="chooseInvalidOnly($any($event.target).checked)"
+    />
     {{ i18n.t('webhookDeliveries.invalidOnly') }}
   </label>
 </div>
@@ -25,7 +32,9 @@
   <p class="q-body-sm state">{{ i18n.t('webhookDeliveries.empty') }}</p>
 } @else {
   @if (invalidCount() > 0 && !invalidOnly()) {
-    <p class="q-body-sm warning">{{ i18n.t('webhookDeliveries.invalidWarning', { count: invalidCount() }) }}</p>
+    <p class="q-body-sm warning">
+      {{ i18n.t('webhookDeliveries.invalidWarning', { count: invalidCount() }) }}
+    </p>
   }
   <div class="scroll">
     <table class="table deliveries">
@@ -43,7 +52,9 @@
         @for (d of deliveries(); track d.id) {
           <tr [class.invalid]="!d.signatureValid">
             <td class="q-body-sm">{{ i18n.dateTime(asDate(d.receivedAt)) }}</td>
-            <td class="q-body-sm"><a [routerLink]="['/tenants', d.tenantId]">{{ d.tenantName }}</a></td>
+            <td class="q-body-sm">
+              <a [routerLink]="['/tenants', d.tenantId]">{{ d.tenantName }}</a>
+            </td>
             <td class="q-body-sm q-tnum">{{ d.kind }}</td>
             <td class="q-body-sm q-tnum">
               {{ d.providerReference }}
@@ -51,7 +62,15 @@
                 <span class="q-caption muted"> · {{ i18n.t('webhookDeliveries.unmatched') }}</span>
               }
             </td>
-            <td class="q-body-sm">{{ i18n.t(d.signatureValid ? 'webhookDeliveries.signature.valid' : 'webhookDeliveries.signature.invalid') }}</td>
+            <td class="q-body-sm">
+              {{
+                i18n.t(
+                  d.signatureValid
+                    ? 'webhookDeliveries.signature.valid'
+                    : 'webhookDeliveries.signature.invalid'
+                )
+              }}
+            </td>
             <td class="q-body-sm q-tnum">{{ d.responseCode }}</td>
           </tr>
         }

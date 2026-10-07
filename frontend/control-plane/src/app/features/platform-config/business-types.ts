@@ -41,7 +41,9 @@ export class BusinessTypes {
   protected readonly actionMessage = signal<string | null>(null);
 
   protected readonly shown = computed(() =>
-    this.filter() === '' ? this.tenants() : this.tenants().filter((tenant) => tenant.businessType === this.filter()),
+    this.filter() === ''
+      ? this.tenants()
+      : this.tenants().filter((tenant) => tenant.businessType === this.filter()),
   );
 
   constructor() {
@@ -52,7 +54,10 @@ export class BusinessTypes {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      const [types, residency] = await Promise.all([this.api.businessTypes(), this.api.residency()]);
+      const [types, residency] = await Promise.all([
+        this.api.businessTypes(),
+        this.api.residency(),
+      ]);
       this.types.set(types);
       this.tenants.set(residency.tenants);
     } catch (error) {
@@ -89,7 +94,10 @@ export class BusinessTypes {
       await this.api.setBusinessType(tenant.tenantId, this.nextType(), reason);
       this.editing.set(null);
       this.actionMessage.set(
-        this.i18n.t('businessTypes.saved', { tenant: tenant.displayName, type: this.i18n.t(this.typeKey(this.nextType())) }),
+        this.i18n.t('businessTypes.saved', {
+          tenant: tenant.displayName,
+          type: this.i18n.t(this.typeKey(this.nextType())),
+        }),
       );
       await this.load();
     } catch (error) {

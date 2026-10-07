@@ -131,7 +131,10 @@ export class ProvidersApi {
     );
   }
 
-  async listInstallations(cursor: string | null = null, limit = 50): Promise<Page<PlatformInstallationView>> {
+  async listInstallations(
+    cursor: string | null = null,
+    limit = 50,
+  ): Promise<Page<PlatformInstallationView>> {
     return firstValueFrom(
       this.api.getPage<PlatformInstallationView>('/api/v1/control-plane/installations', {
         cursor,
@@ -149,12 +152,19 @@ export class ProvidersApi {
 
   async bindings(tenantId: string, installationId: string): Promise<BindingView[]> {
     return firstValueFrom(
-      this.api.get<BindingView[]>(`/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings`),
+      this.api.get<BindingView[]>(
+        `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings`,
+      ),
     );
   }
 
   /** Refused until the installation has passed a connection check. */
-  async activateBinding(tenantId: string, installationId: string, bindingId: string, reason: string): Promise<{ changed: boolean }> {
+  async activateBinding(
+    tenantId: string,
+    installationId: string,
+    bindingId: string,
+    reason: string,
+  ): Promise<{ changed: boolean }> {
     return firstValueFrom(
       this.api.post<{ changed: boolean }>(
         `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings/${bindingId}/activate`,
@@ -164,7 +174,12 @@ export class ProvidersApi {
   }
 
   /** The rollback path: the place returns to a manual process; mappings and evidence stay. */
-  async suspendBinding(tenantId: string, installationId: string, bindingId: string, reason: string): Promise<{ changed: boolean }> {
+  async suspendBinding(
+    tenantId: string,
+    installationId: string,
+    bindingId: string,
+    reason: string,
+  ): Promise<{ changed: boolean }> {
     return firstValueFrom(
       this.api.post<{ changed: boolean }>(
         `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/bindings/${bindingId}/suspend`,
@@ -178,13 +193,19 @@ export class ProvidersApi {
    * through its sync-run path, because what a POS credential can do depends on
    * the staff user it acts as.
    */
-  async checkConnection(tenantId: string, installation: Pick<PlatformInstallationView, 'id' | 'category' | 'providerType'>): Promise<ConnectionCheck> {
+  async checkConnection(
+    tenantId: string,
+    installation: Pick<PlatformInstallationView, 'id' | 'category' | 'providerType'>,
+  ): Promise<ConnectionCheck> {
     return firstValueFrom(
       installation.category === 'POS'
-        ? this.api.post<ConnectionCheck>(`/api/v1/control-plane/tenants/${tenantId}/pos-sync-runs/capability-reconciliation`, {
-            installationId: installation.id,
-            providerType: installation.providerType,
-          })
+        ? this.api.post<ConnectionCheck>(
+            `/api/v1/control-plane/tenants/${tenantId}/pos-sync-runs/capability-reconciliation`,
+            {
+              installationId: installation.id,
+              providerType: installation.providerType,
+            },
+          )
         : this.api.post<ConnectionCheck>(
             `/api/v1/control-plane/tenants/${tenantId}/integrations/${installation.id}/capability-reconciliation`,
             {},
@@ -195,20 +216,30 @@ export class ProvidersApi {
   // ------------------------------------------------------------ installing on a tenant's behalf
 
   async environments(): Promise<ProviderEnvironment[]> {
-    return firstValueFrom(this.api.get<ProviderEnvironment[]>('/api/v1/control-plane/provider-environments'));
+    return firstValueFrom(
+      this.api.get<ProviderEnvironment[]>('/api/v1/control-plane/provider-environments'),
+    );
   }
 
   /**
    * Writes a credential through the write-only door and returns only the
    * reference it was filed under. The value is never stored or returned.
    */
-  async writeCredential(tenantId: string, category: string, providerType: string, value: string): Promise<string> {
+  async writeCredential(
+    tenantId: string,
+    category: string,
+    providerType: string,
+    value: string,
+  ): Promise<string> {
     const response = await firstValueFrom(
-      this.api.post<{ reference: string }>(`/api/v1/control-plane/tenants/${tenantId}/integrations/secrets`, {
-        category: SECRET_CATEGORY[category],
-        providerType,
-        value,
-      }),
+      this.api.post<{ reference: string }>(
+        `/api/v1/control-plane/tenants/${tenantId}/integrations/secrets`,
+        {
+          category: SECRET_CATEGORY[category],
+          providerType,
+          value,
+        },
+      ),
     );
     return response.reference;
   }
@@ -252,7 +283,12 @@ export class ProvidersApi {
   }
 
   /** Replaces the credential through the write-only door; only references come back. */
-  async rotateCredential(tenantId: string, installationId: string, value: string, reason: string): Promise<void> {
+  async rotateCredential(
+    tenantId: string,
+    installationId: string,
+    value: string,
+    reason: string,
+  ): Promise<void> {
     await firstValueFrom(
       this.api.post<unknown>(
         `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/secret-rotations/value`,
@@ -262,7 +298,10 @@ export class ProvidersApi {
   }
 
   /** Clopos only: whether a clerk still accepts each exported order at the till. */
-  async cloposSettings(tenantId: string, installationId: string): Promise<{ requireClerkApproval: boolean }> {
+  async cloposSettings(
+    tenantId: string,
+    installationId: string,
+  ): Promise<{ requireClerkApproval: boolean }> {
     return firstValueFrom(
       this.api.get<{ requireClerkApproval: boolean }>(
         `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/settings`,
@@ -270,16 +309,25 @@ export class ProvidersApi {
     );
   }
 
-  async setCloposSettings(tenantId: string, installationId: string, requireClerkApproval: boolean): Promise<void> {
+  async setCloposSettings(
+    tenantId: string,
+    installationId: string,
+    requireClerkApproval: boolean,
+  ): Promise<void> {
     await firstValueFrom(
-      this.api.post<unknown>(`/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/settings`, {
-        requireClerkApproval,
-      }),
+      this.api.post<unknown>(
+        `/api/v1/control-plane/tenants/${tenantId}/integrations/${installationId}/settings`,
+        {
+          requireClerkApproval,
+        },
+      ),
     );
   }
 
   /** The tenant's credentials older than the rotation interval, oldest first. */
-  async credentialsDue(tenantId: string): Promise<{ rotationIntervalDays: number; credentials: DueCredential[] }> {
+  async credentialsDue(
+    tenantId: string,
+  ): Promise<{ rotationIntervalDays: number; credentials: DueCredential[] }> {
     return firstValueFrom(
       this.api.get<{ rotationIntervalDays: number; credentials: DueCredential[] }>(
         `/api/v1/control-plane/tenants/${tenantId}/credentials-due`,
@@ -288,6 +336,8 @@ export class ProvidersApi {
   }
 
   async adapterVersions(): Promise<AdapterVersionView[]> {
-    return firstValueFrom(this.api.get<AdapterVersionView[]>('/api/v1/control-plane/adapter-versions'));
+    return firstValueFrom(
+      this.api.get<AdapterVersionView[]>('/api/v1/control-plane/adapter-versions'),
+    );
   }
 }

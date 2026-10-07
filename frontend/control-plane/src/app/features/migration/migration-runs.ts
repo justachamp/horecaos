@@ -78,7 +78,11 @@ export class MigrationRuns {
   protected readonly capabilities = MIGRATION_CAPABILITIES;
   protected readonly runTypes = RUN_TYPES;
   protected readonly resolutionCodes = RESOLUTION_CODES;
-  protected readonly finishStatuses: readonly Exclude<RunStatus, 'RUNNING'>[] = ['COMPLETED', 'FAILED', 'CANCELLED'];
+  protected readonly finishStatuses: readonly Exclude<RunStatus, 'RUNNING'>[] = [
+    'COMPLETED',
+    'FAILED',
+    'CANCELLED',
+  ];
 
   protected readonly loading = signal(true);
   protected readonly loadError = signal<string | null>(null);
@@ -89,7 +93,9 @@ export class MigrationRuns {
   // ---------------------------------------------------------------- programs
   protected readonly programs = signal<readonly ProgramView[]>([]);
   protected readonly programId = signal('');
-  protected readonly program = computed(() => this.programs().find((p) => p.id === this.programId()) ?? null);
+  protected readonly program = computed(
+    () => this.programs().find((p) => p.id === this.programId()) ?? null,
+  );
   protected readonly programMove = signal<ProgramStatus | null>(null);
   protected readonly programReason = signal('');
 
@@ -103,7 +109,9 @@ export class MigrationRuns {
   // ---------------------------------------------------------------- scopes
   protected readonly scopes = signal<readonly ScopeView[]>([]);
   protected readonly scopeId = signal<string | null>(null);
-  protected readonly scope = computed(() => this.scopes().find((s) => s.id === this.scopeId()) ?? null);
+  protected readonly scope = computed(
+    () => this.scopes().find((s) => s.id === this.scopeId()) ?? null,
+  );
 
   protected readonly openingScope = signal(false);
   protected readonly scopeTenantId = signal(this.directory.selected());
@@ -145,7 +153,8 @@ export class MigrationRuns {
     try {
       const page = await this.api.listPrograms();
       this.programs.set(page.items);
-      const chosen = page.items.find((p) => p.id === select) ?? (page.items.length === 1 ? page.items[0] : null);
+      const chosen =
+        page.items.find((p) => p.id === select) ?? (page.items.length === 1 ? page.items[0] : null);
       if (chosen && chosen.id !== this.programId()) {
         await this.chooseProgram(chosen.id);
       }
@@ -224,7 +233,9 @@ export class MigrationRuns {
       this.programMove.set(null);
       this.programReason.set('');
       await this.loadPrograms(program.id);
-      return this.i18n.t('migrationRuns.program.moved', { status: this.i18n.t(programStatusKey(to)) });
+      return this.i18n.t('migrationRuns.program.moved', {
+        status: this.i18n.t(programStatusKey(to)),
+      });
     });
   }
 
@@ -245,7 +256,9 @@ export class MigrationRuns {
     this.scopeBrandId.set(brandId);
     this.scopeLocationId.set('');
     this.locations.set(
-      brandId.length > 0 ? await this.tenantsApi.getLocations(this.scopeTenantId(), brandId).catch(() => []) : [],
+      brandId.length > 0
+        ? await this.tenantsApi.getLocations(this.scopeTenantId(), brandId).catch(() => [])
+        : [],
     );
   }
 
@@ -307,7 +320,10 @@ export class MigrationRuns {
       return;
     }
     try {
-      const [runs, quarantine] = await Promise.all([this.api.listRuns(scope), this.api.openQuarantine(scope)]);
+      const [runs, quarantine] = await Promise.all([
+        this.api.listRuns(scope),
+        this.api.openQuarantine(scope),
+      ]);
       this.runs.set(runs.items);
       this.quarantine.set(quarantine.items);
     } catch (error) {
@@ -319,7 +335,9 @@ export class MigrationRuns {
     if (scope.locationId !== null) {
       return this.i18n.t('migrationRuns.place.location');
     }
-    return scope.brandId !== null ? this.i18n.t('migrationRuns.place.brand') : this.i18n.t('migrationRuns.place.tenant');
+    return scope.brandId !== null
+      ? this.i18n.t('migrationRuns.place.brand')
+      : this.i18n.t('migrationRuns.place.tenant');
   }
 
   protected isHeld(scope: ScopeView): boolean {
@@ -343,7 +361,9 @@ export class MigrationRuns {
       if (kind === 'cutover') {
         return false;
       }
-      return kind === 'rollback' ? this.session.has('MIGRATION_CUTOVER_APPROVE') : this.session.has('MIGRATION_SCOPE_MANAGE');
+      return kind === 'rollback'
+        ? this.session.has('MIGRATION_CUTOVER_APPROVE')
+        : this.session.has('MIGRATION_SCOPE_MANAGE');
     });
   }
 
@@ -418,7 +438,9 @@ export class MigrationRuns {
       });
       this.runReason.set('');
       await this.loadScopeDetail();
-      return this.i18n.t('migrationRuns.run.startedDone', { type: this.i18n.t(runTypeKey(this.runType())) });
+      return this.i18n.t('migrationRuns.run.startedDone', {
+        type: this.i18n.t(runTypeKey(this.runType())),
+      });
     });
   }
 
@@ -454,7 +476,9 @@ export class MigrationRuns {
       );
       this.finishing.set(null);
       await this.loadScopeDetail();
-      return this.i18n.t('migrationRuns.run.finished', { status: this.i18n.t(runStatusKey(this.finishStatus())) });
+      return this.i18n.t('migrationRuns.run.finished', {
+        status: this.i18n.t(runStatusKey(this.finishStatus())),
+      });
     });
   }
 
@@ -488,7 +512,10 @@ export class MigrationRuns {
       this.actionMessage.set(await write());
     } catch (error) {
       this.actionError.set(this.i18n.describe(error as ApiError));
-      if ((error as ApiError).code === 'STALE_VERSION' || (error as ApiError).code === 'RESOURCE_CONFLICT') {
+      if (
+        (error as ApiError).code === 'STALE_VERSION' ||
+        (error as ApiError).code === 'RESOURCE_CONFLICT'
+      ) {
         await this.loadScopes();
       }
     } finally {

@@ -48,7 +48,9 @@ export class NotificationProvidersApi {
 
   async registry(): Promise<{ gateways: Gateway[]; senders: Sender[] }> {
     return firstValueFrom(
-      this.api.get<{ gateways: Gateway[]; senders: Sender[] }>('/api/v1/control-plane/notification-providers'),
+      this.api.get<{ gateways: Gateway[]; senders: Sender[] }>(
+        '/api/v1/control-plane/notification-providers',
+      ),
     );
   }
 

@@ -19,7 +19,9 @@
     <p class="q-body-sm state">{{ i18n.t('tenantIssueQueue.empty') }}</p>
   } @else {
     <section class="panel posExports">
-      <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.pos.title') }} ({{ posExports().length }})</h2>
+      <h2 class="q-subhead">
+        {{ i18n.t('tenantIssueQueue.pos.title') }} ({{ posExports().length }})
+      </h2>
       @if (posExports().length === 0) {
         <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.pos.empty') }}</p>
       } @else {
@@ -47,12 +49,25 @@
                   <td class="q-body-sm">
                     @if (session.has('POS_EXPORT_RESOLVE')) {
                       @if (row.state === 'UNCERTAIN') {
-                        <button type="button" class="secondary askPos" [disabled]="busy()" (click)="askPos(row)">
+                        <button
+                          type="button"
+                          class="secondary askPos"
+                          [disabled]="busy()"
+                          (click)="askPos(row)"
+                        >
                           {{ i18n.t('tenantIssueQueue.pos.ask') }}
                         </button>
                       } @else {
-                        <button type="button" class="secondary decideToggle" (click)="openDecision(row)">
-                          {{ deciding() === row.exportId ? i18n.t('common.cancel') : i18n.t('tenantIssueQueue.pos.decide') }}
+                        <button
+                          type="button"
+                          class="secondary decideToggle"
+                          (click)="openDecision(row)"
+                        >
+                          {{
+                            deciding() === row.exportId
+                              ? i18n.t('common.cancel')
+                              : i18n.t('tenantIssueQueue.pos.decide')
+                          }}
                         </button>
                       }
                     }
@@ -63,14 +78,22 @@
                     <td colspan="6">
                       <div class="decision">
                         @if (candidates().length === 0) {
-                          <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.pos.noCandidates') }}</p>
+                          <p class="q-body-sm muted">
+                            {{ i18n.t('tenantIssueQueue.pos.noCandidates') }}
+                          </p>
                         } @else {
-                          <p class="q-caption muted">{{ i18n.t('tenantIssueQueue.pos.candidatesLead') }}</p>
+                          <p class="q-caption muted">
+                            {{ i18n.t('tenantIssueQueue.pos.candidatesLead') }}
+                          </p>
                           <table class="innerTable candidates">
                             <thead>
                               <tr>
-                                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.posOrder') }}</th>
-                                <th class="q-caption">{{ i18n.t('tenantIssueQueue.pos.evidence') }}</th>
+                                <th class="q-caption">
+                                  {{ i18n.t('tenantIssueQueue.pos.posOrder') }}
+                                </th>
+                                <th class="q-caption">
+                                  {{ i18n.t('tenantIssueQueue.pos.evidence') }}
+                                </th>
                                 <th class="q-caption"></th>
                               </tr>
                             </thead>
@@ -85,13 +108,24 @@
                                   </td>
                                   <td class="q-body-sm">
                                     @if (candidate.correlationEchoed) {
-                                      <strong>{{ i18n.t('tenantIssueQueue.pos.match.reference') }}</strong>
+                                      <strong>{{
+                                        i18n.t('tenantIssueQueue.pos.match.reference')
+                                      }}</strong>
                                     } @else {
                                       {{ i18n.t('tenantIssueQueue.pos.resembles') }}:
-                                      @if (candidate.phoneMatches) { {{ i18n.t('tenantIssueQueue.pos.match.phone') }} }
-                                      @if (candidate.fingerprintMatches) { · {{ i18n.t('tenantIssueQueue.pos.match.basket') }} }
+                                      @if (candidate.phoneMatches) {
+                                        {{ i18n.t('tenantIssueQueue.pos.match.phone') }}
+                                      }
+                                      @if (candidate.fingerprintMatches) {
+                                        · {{ i18n.t('tenantIssueQueue.pos.match.basket') }}
+                                      }
                                       @if (candidate.timeDeltaSeconds !== null) {
-                                        · {{ i18n.t('tenantIssueQueue.pos.match.time', { seconds: candidate.timeDeltaSeconds }) }}
+                                        ·
+                                        {{
+                                          i18n.t('tenantIssueQueue.pos.match.time', {
+                                            seconds: candidate.timeDeltaSeconds,
+                                          })
+                                        }}
                                       }
                                     }
                                   </td>
@@ -99,7 +133,10 @@
                                     <button
                                       type="button"
                                       class="secondary useCandidate"
-                                      (click)="decision.set('LANDED'); landedAs.set(candidate.externalOrderId)"
+                                      (click)="
+                                        decision.set('LANDED');
+                                        landedAs.set(candidate.externalOrderId)
+                                      "
                                     >
                                       {{ i18n.t('tenantIssueQueue.pos.thisOne') }}
                                     </button>
@@ -111,7 +148,9 @@
                         }
 
                         <fieldset class="choices">
-                          <legend class="q-caption">{{ i18n.t('tenantIssueQueue.pos.whatHappened') }}</legend>
+                          <legend class="q-caption">
+                            {{ i18n.t('tenantIssueQueue.pos.whatHappened') }}
+                          </legend>
                           @for (option of decisions; track option) {
                             <label class="q-body-sm choice">
                               <input
@@ -127,8 +166,15 @@
                         </fieldset>
                         @if (decision() === 'LANDED') {
                           <label class="field">
-                            <span class="q-caption">{{ i18n.t('tenantIssueQueue.pos.landedAs') }}</span>
-                            <input class="q-body-sm q-tnum" name="landedAs" [value]="landedAs()" (input)="landedAs.set($any($event.target).value)" />
+                            <span class="q-caption">{{
+                              i18n.t('tenantIssueQueue.pos.landedAs')
+                            }}</span>
+                            <input
+                              class="q-body-sm q-tnum"
+                              name="landedAs"
+                              [value]="landedAs()"
+                              (input)="landedAs.set($any($event.target).value)"
+                            />
                           </label>
                         }
                         <div class="inlineForm">
@@ -139,7 +185,12 @@
                             [value]="reason()"
                             (input)="reason.set($any($event.target).value)"
                           />
-                          <button type="button" class="confirmDecision" [disabled]="!canDecide()" (click)="decide(row)">
+                          <button
+                            type="button"
+                            class="confirmDecision"
+                            [disabled]="!canDecide()"
+                            (click)="decide(row)"
+                          >
                             {{ i18n.t('tenantIssueQueue.pos.confirm') }}
                           </button>
                         </div>
@@ -155,7 +206,9 @@
     </section>
 
     <section class="panel">
-      <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.deadLetters.title') }} ({{ deadLetters().length }})</h2>
+      <h2 class="q-subhead">
+        {{ i18n.t('tenantIssueQueue.deadLetters.title') }} ({{ deadLetters().length }})
+      </h2>
       @if (deadLetters().length === 0) {
         <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.deadLetters.empty') }}</p>
       } @else {
@@ -180,11 +233,15 @@
           </tbody>
         </table>
       }
-      <a class="q-body-sm" [routerLink]="['/integration-ops/dead-letters']">{{ i18n.t('tenantIssueQueue.deadLetters.fullScreen') }}</a>
+      <a class="q-body-sm" [routerLink]="['/integration-ops/dead-letters']">{{
+        i18n.t('tenantIssueQueue.deadLetters.fullScreen')
+      }}</a>
     </section>
 
     <section class="panel">
-      <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.fiscal.title') }} ({{ blockedDocuments().length }})</h2>
+      <h2 class="q-subhead">
+        {{ i18n.t('tenantIssueQueue.fiscal.title') }} ({{ blockedDocuments().length }})
+      </h2>
       @if (blockedDocuments().length === 0) {
         <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.fiscal.empty') }}</p>
       } @else {
@@ -209,12 +266,18 @@
           </tbody>
         </table>
       }
-      <a class="q-body-sm" [routerLink]="['/compliance/fiscalization']">{{ i18n.t('tenantIssueQueue.fiscal.fullScreen') }}</a>
+      <a class="q-body-sm" [routerLink]="['/compliance/fiscalization']">{{
+        i18n.t('tenantIssueQueue.fiscal.fullScreen')
+      }}</a>
     </section>
 
     <section class="panel credentials">
-      <h2 class="q-subhead">{{ i18n.t('tenantIssueQueue.credentials.title') }} ({{ credentialsDue().length }})</h2>
-      <p class="q-caption muted">{{ i18n.t('tenantIssueQueue.credentials.rule', { days: rotationDays() }) }}</p>
+      <h2 class="q-subhead">
+        {{ i18n.t('tenantIssueQueue.credentials.title') }} ({{ credentialsDue().length }})
+      </h2>
+      <p class="q-caption muted">
+        {{ i18n.t('tenantIssueQueue.credentials.rule', { days: rotationDays() }) }}
+      </p>
       @if (credentialsDue().length === 0) {
         <p class="q-body-sm muted">{{ i18n.t('tenantIssueQueue.credentials.empty') }}</p>
       } @else {
@@ -223,12 +286,18 @@
             <li class="q-body-sm" [attr.data-credential]="credential.id">
               <strong>{{ credential.providerType }}</strong> · {{ credential.label }}
               <span class="q-caption muted">
-                {{ credential.lastRotatedAt ? i18n.t('tenantIssueQueue.credentials.rotated', { days: credential.daysOld }) : i18n.t('tenantIssueQueue.credentials.never', { days: credential.daysOld }) }}
+                {{
+                  credential.lastRotatedAt
+                    ? i18n.t('tenantIssueQueue.credentials.rotated', { days: credential.daysOld })
+                    : i18n.t('tenantIssueQueue.credentials.never', { days: credential.daysOld })
+                }}
               </span>
             </li>
           }
         </ul>
-        <a class="q-body-sm" [routerLink]="['/providers/installations']">{{ i18n.t('tenantIssueQueue.credentials.replace') }}</a>
+        <a class="q-body-sm" [routerLink]="['/providers/installations']">{{
+          i18n.t('tenantIssueQueue.credentials.replace')
+        }}</a>
       }
     </section>
   }

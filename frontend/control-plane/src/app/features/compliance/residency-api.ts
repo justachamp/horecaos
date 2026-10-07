@@ -71,7 +71,11 @@ export class ResidencyApi {
   }
 
   /** The first call raises the approval; the same call after it is approved makes the change. */
-  async changeCountry(tenantId: string, countryCode: string, reason: string): Promise<CountryChangeView> {
+  async changeCountry(
+    tenantId: string,
+    countryCode: string,
+    reason: string,
+  ): Promise<CountryChangeView> {
     return firstValueFrom(
       this.api.post<CountryChangeView>(`/api/v1/control-plane/tenants/${tenantId}/country-change`, {
         countryCode,
@@ -86,12 +90,17 @@ export class ResidencyApi {
 
   async setBusinessType(tenantId: string, businessType: string, reason: string): Promise<void> {
     await firstValueFrom(
-      this.api.put<void>(`/api/v1/control-plane/tenants/${tenantId}/business-type`, { businessType, reason }),
+      this.api.put<void>(`/api/v1/control-plane/tenants/${tenantId}/business-type`, {
+        businessType,
+        reason,
+      }),
     );
   }
 
   async platformApprovals(): Promise<PlatformPendingApproval[]> {
-    return firstValueFrom(this.api.get<PlatformPendingApproval[]>('/api/v1/control-plane/approval-requests'));
+    return firstValueFrom(
+      this.api.get<PlatformPendingApproval[]>('/api/v1/control-plane/approval-requests'),
+    );
   }
 
   /**

@@ -9,7 +9,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { MigrationApi, ProgramView, QuarantineItemView, RunView, ScopeView } from './migration-api';
 import { MigrationRuns } from './migration-runs';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const PROGRAM: ProgramView = {
   id: 'program-1',
@@ -111,7 +114,10 @@ describe('MigrationRuns', () => {
             getBrands: vi.fn().mockResolvedValue([]),
           },
         },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(MigrationRuns);
@@ -159,21 +165,33 @@ describe('MigrationRuns', () => {
     await set('input[name="moveReason"]', 'backfill finished overnight');
     el<HTMLButtonElement>('.moveForm button[type="submit"]').click();
     await settle();
-    expect(api.advanceScope).toHaveBeenCalledWith(expect.objectContaining({ id: 'scope-1', version: 7 }), 'CATCHING_UP', 'backfill finished overnight');
+    expect(api.advanceScope).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'scope-1', version: 7 }),
+      'CATCHING_UP',
+      'backfill finished overnight',
+    );
 
     await set('select[name="moveTarget"]', 'PAUSED', 'change');
     await set('input[name="moveReason"]', 'legacy maintenance window');
     el<HTMLButtonElement>('.moveForm button[type="submit"]').click();
     await settle();
-    expect(api.suspendScope).toHaveBeenCalledWith(expect.objectContaining({ id: 'scope-1' }), 'PAUSED', 'legacy maintenance window');
+    expect(api.suspendScope).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'scope-1' }),
+      'PAUSED',
+      'legacy maintenance window',
+    );
     expect(api.advanceScope).toHaveBeenCalledTimes(1);
   });
 
   it('leaves taking ownership to the cutover checklist', async () => {
-    await create([scope({ state: 'CUTOVER_READY', nextStates: ['CANARY', 'TARGET_OWNED', 'PAUSED'] })]);
+    await create([
+      scope({ state: 'CUTOVER_READY', nextStates: ['CANARY', 'TARGET_OWNED', 'PAUSED'] }),
+    ]);
     await openScope();
 
-    const options = Array.from(el<HTMLSelectElement>('select[name="moveTarget"]').options).map((o) => o.value);
+    const options = Array.from(el<HTMLSelectElement>('select[name="moveTarget"]').options).map(
+      (o) => o.value,
+    );
     expect(options).not.toContain('TARGET_OWNED');
     expect(fixture.nativeElement.textContent).toContain(ru['migrationRuns.move.toCutover']);
   });
@@ -187,7 +205,10 @@ describe('MigrationRuns', () => {
     el<HTMLButtonElement>('button.resume').click();
     await settle();
 
-    expect(api.resumeScope).toHaveBeenCalledWith(expect.objectContaining({ id: 'scope-1' }), 'window over');
+    expect(api.resumeScope).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'scope-1' }),
+      'window over',
+    );
   });
 
   it('ends a running run with a reason, and refuses a checksum that is not one', async () => {
@@ -205,7 +226,13 @@ describe('MigrationRuns', () => {
     submit.click();
     await settle();
 
-    expect(api.finishRun).toHaveBeenCalledWith('tenant-1', RUN, 'COMPLETED', 'backfill complete', 'a'.repeat(64));
+    expect(api.finishRun).toHaveBeenCalledWith(
+      'tenant-1',
+      RUN,
+      'COMPLETED',
+      'backfill complete',
+      'a'.repeat(64),
+    );
   });
 
   it('settles a held-back row with how it was settled and why', async () => {

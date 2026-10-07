@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { UnknownCurrencyError, formatAmount, groupDigits, parseAmount, parseSignedAmount } from './money';
+import {
+  UnknownCurrencyError,
+  formatAmount,
+  groupDigits,
+  parseAmount,
+  parseSignedAmount,
+} from './money';
 
 /**
  * The regression this file exists for is the first test.

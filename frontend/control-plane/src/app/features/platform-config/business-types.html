@@ -15,15 +15,28 @@
 } @else {
   <div class="types">
     @for (type of types(); track type.code) {
-      <button type="button" class="type" [class.active]="filter() === type.code" [attr.data-type]="type.code" (click)="filter.set(filter() === type.code ? '' : type.code)">
+      <button
+        type="button"
+        class="type"
+        [class.active]="filter() === type.code"
+        [attr.data-type]="type.code"
+        (click)="filter.set(filter() === type.code ? '' : type.code)"
+      >
         <strong class="q-body-sm">{{ i18n.t(typeKey(type.code)) }}</strong>
         <span class="q-caption muted">
           @for (handover of type.handovers; track handover; let last = $last) {
-            {{ i18n.t(handoverKey(handover)) }}@if (!last) {, }
+            {{ i18n.t(handoverKey(handover)) }}
+            @if (!last) {
+              ,
+            }
           }
         </span>
-        <span class="q-caption muted">{{ i18n.t(type.kitchenDisplay ? 'businessTypes.kitchen' : 'businessTypes.noKitchen') }}</span>
-        <span class="q-caption q-tnum count">{{ i18n.t('residency.tenantCount', { count: type.tenants }) }}</span>
+        <span class="q-caption muted">{{
+          i18n.t(type.kitchenDisplay ? 'businessTypes.kitchen' : 'businessTypes.noKitchen')
+        }}</span>
+        <span class="q-caption q-tnum count">{{
+          i18n.t('residency.tenantCount', { count: type.tenants })
+        }}</span>
       </button>
     }
   </div>
@@ -41,11 +54,15 @@
       <tbody>
         @for (tenant of shown(); track tenant.tenantId) {
           <tr [attr.data-tenant]="tenant.tenantId">
-            <td class="q-body-sm"><a [routerLink]="['/tenants', tenant.tenantId]">{{ tenant.displayName }}</a></td>
+            <td class="q-body-sm">
+              <a [routerLink]="['/tenants', tenant.tenantId]">{{ tenant.displayName }}</a>
+            </td>
             <td class="q-body-sm">{{ i18n.t(typeKey(tenant.businessType)) }}</td>
             <td class="q-body-sm">
               @if (session.has('TENANT_WRITE')) {
-                <button type="button" class="editToggle" (click)="open(tenant)">{{ i18n.t('businessTypes.change') }}</button>
+                <button type="button" class="editToggle" (click)="open(tenant)">
+                  {{ i18n.t('businessTypes.change') }}
+                </button>
               }
             </td>
           </tr>
@@ -53,19 +70,42 @@
             <tr>
               <td colspan="3">
                 <div class="changeForm">
-                  <select class="q-body-sm" name="businessType" (change)="nextType.set($any($event.target).value)">
+                  <select
+                    class="q-body-sm"
+                    name="businessType"
+                    (change)="nextType.set($any($event.target).value)"
+                  >
                     @for (type of types(); track type.code) {
-                      <option [value]="type.code" [selected]="type.code === nextType()">{{ i18n.t(typeKey(type.code)) }}</option>
+                      <option [value]="type.code" [selected]="type.code === nextType()">
+                        {{ i18n.t(typeKey(type.code)) }}
+                      </option>
                     }
                   </select>
-                  <input class="q-body-sm" name="typeReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
-                  <button type="button" class="confirmChange confirmType" [disabled]="busy() || reason().trim().length === 0 || nextType() === tenant.businessType" (click)="save(tenant)">{{ i18n.t('businessTypes.save') }}</button>
+                  <input
+                    class="q-body-sm"
+                    name="typeReason"
+                    [placeholder]="i18n.t('common.reason')"
+                    [value]="reason()"
+                    (input)="reason.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="confirmChange confirmType"
+                    [disabled]="
+                      busy() || reason().trim().length === 0 || nextType() === tenant.businessType
+                    "
+                    (click)="save(tenant)"
+                  >
+                    {{ i18n.t('businessTypes.save') }}
+                  </button>
                 </div>
               </td>
             </tr>
           }
         } @empty {
-          <tr><td colspan="3" class="q-body-sm muted">{{ i18n.t('businessTypes.none') }}</td></tr>
+          <tr>
+            <td colspan="3" class="q-body-sm muted">{{ i18n.t('businessTypes.none') }}</td>
+          </tr>
         }
       </tbody>
     </table>
