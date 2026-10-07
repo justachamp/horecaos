@@ -34,7 +34,7 @@ public class DeliveryRoutingConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(RoadDistancePort.class)
-    RoadDistancePort unboundRoadDistancePort() {
+    public RoadDistancePort unboundRoadDistancePort() {
         return new RoadDistancePort() {
             @Override
             public Optional<RoadRoute> route(GeoPoint origin, GeoPoint destination, @Nullable UUID installationId) {

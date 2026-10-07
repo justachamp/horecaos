@@ -32,15 +32,19 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
+import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.fulfillment.api.RoadDistancePort;
+import uz.horecaos.platform.fulfillment.api.RoadRoute;
 import uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
+import uz.horecaos.platform.fulfillment.domain.DeliveryFeeResolution;
 import uz.horecaos.platform.fulfillment.domain.LegacyDeliveryOracle;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
 import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
+import uz.horecaos.platform.fulfillment.domain.tariff.DistanceSource;
 import uz.horecaos.platform.fulfillment.domain.tariff.FeeSource;
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffBand;
@@ -113,6 +117,8 @@ class DeliveryFeeResolutionTests {
     private ServiceZoneService zones;
     private DeliveryTariffService tariffs;
     private DeliveryFeeResolver resolver;
+    private ScriptedRouting routing;
+    private SimpleMeterRegistry meters;
     private QuoteService quotes;
 
     private UUID locatedBranch;
@@ -167,8 +173,10 @@ class DeliveryFeeResolutionTests {
         resolutionStore = new JdbcDeliveryFeeResolutionStore(jdbc, mapper);
         zones = new ServiceZoneService(zoneStore, mapper, clock, NO_OP_AUDIT, TEST_ACTOR);
         tariffs = new DeliveryTariffService(tariffStore, clock, NO_OP_AUDIT, TEST_ACTOR);
-        resolver = new DeliveryFeeResolver(
-                zoneStore, tariffStore, resolutionStore, unboundRouting(), new SimpleMeterRegistry());
+        // Answers nothing until a test scripts it, which is the production default.
+        routing = new ScriptedRouting();
+        meters = new SimpleMeterRegistry();
+        resolver = new DeliveryFeeResolver(zoneStore, tariffStore, resolutionStore, routing, meters);
         var promoCodeStore = new JdbcPromoCodeStore(jdbc, mapper);
         quotes = new QuoteService(
                 new JdbcPricingStore(jdbc, mapper),
@@ -932,6 +940,201 @@ class DeliveryFeeResolutionTests {
         assertThat(resolution.finalFeeMinor()).isEqualTo(6_000L);
     }
 
+    @Test
+    @DisplayName("a ROAD tariff with a working port prices the road and records who measured it, and on which map")
+    void aRoadTariffRecordsTheRouteThatMeasuredIt() {
+        UUID roadTariff = seedRoadTariff("ROAD-OK", 15_000, List.of(new TariffBand(0, 0, 15_000, 0L, 2_000L)));
+        activeCircleZone("CITY", 8_000, 0, roadTariff, null, null);
+        routing.answers(new RoadRoute(4_300, 610, "osrm", "2026-10-01"));
+
+        var resolution =
+                resolver.resolve(query(locatedBranch, NEARBY, 0L, NOON)).outcome();
+        assertThat(resolution).isEqualTo(DeliveryFeeOutcome.RESOLVED);
+
+        var row = latestResolutionRow();
+        assertThat(row.get("distance_source")).isEqualTo("ROAD");
+        assertThat(row.get("distance_meters")).isEqualTo(4_300);
+        assertThat(row.get("routing_provider")).isEqualTo("osrm");
+        assertThat(row.get("routing_seconds")).isEqualTo(610);
+        // The dataset is on the row, not only in the cache or the log: a refresh moves
+        // fees without anyone editing a tariff, and this is what explains it.
+        assertThat(row.get("routing_dataset_version")).isEqualTo("2026-10-01");
+        // 4,300 m is five started kilometres at 2,000 each.
+        assertThat(row.get("final_fee_minor")).isEqualTo(10_000L);
+        assertThat(meters.counter("horecaos.delivery.distance.road_measurements", "mode", "ROAD")
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meters.find("horecaos.delivery.distance.fallbacks").counter())
+                .as("a measured fee is not a fallback")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("the same address prices differently by road than by straight line, and each says which")
+    void roadAndStraightLinePriceTheSameAddressDifferently() {
+        // Bands that put the 1.8 km straight line and the 2.3 km road in different tiers,
+        // which is the whole reason a tariff asks for ROAD: the fee follows the road. Bands
+        // accumulate (V0032), so the second tier's 4,000 is on top of the first's 5,000.
+        List<TariffBand> bands =
+                List.of(new TariffBand(0, 0, 2_000, 5_000L, 0L), new TariffBand(1, 2_000, 15_000, 4_000L, 0L));
+        UUID straight = seedTariff("STRAIGHT", 15_000, bands, List.of(), null);
+        UUID road = seedRoadTariff("ROAD-BANDS", 15_000, bands);
+        routing.answers(new RoadRoute(2_300, 330, "osrm", "2026-10-01"));
+
+        activeCircleZone("CITY", 8_000, 0, straight, null, null);
+        var byStraightLine = resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON));
+        // A zone of higher priority over the same ground, bound to the ROAD tariff: the
+        // address and the bands are unchanged, and only the way distance is measured differs.
+        activeCircleZone("CITY-BY-ROAD", 8_000, 5, road, null, null);
+        var byRoad = resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON));
+
+        assertThat(byStraightLine.finalFeeMinor()).isEqualTo(5_000L);
+        assertThat(byStraightLine.distanceSource()).isEqualTo(DistanceSource.RADIUS);
+        assertThat(byStraightLine.distanceMeters()).isBetween(1_700, 1_900);
+        assertThat(byRoad.finalFeeMinor()).isEqualTo(9_000L);
+        assertThat(byRoad.distanceSource()).isEqualTo(DistanceSource.ROAD);
+        assertThat(byRoad.distanceMeters()).isEqualTo(2_300);
+        assertThat(byRoad.routingDatasetVersion()).isEqualTo("2026-10-01");
+        assertThat(byRoad.routingSeconds()).isEqualTo(330);
+        // The simulator's evidence carries the same, so what is seen before activation
+        // is what will be recorded after it.
+        assertThat(byRoad.evidence())
+                .containsEntry("distanceSource", "ROAD")
+                .containsEntry("routingDatasetVersion", "2026-10-01")
+                .containsEntry("routingSecondsFreeFlow", 330);
+        assertThat(byStraightLine.routingDatasetVersion()).isNull();
+        assertThat(byStraightLine.evidence()).doesNotContainKey("routingDatasetVersion");
+    }
+
+    @Test
+    @DisplayName("a road longer than the tariff's reach is refused by road, even when the straight line is inside it")
+    void theReachIsMeasuredByRoadToo() {
+        UUID roadTariff = seedRoadTariff("ROAD-SHORT", 2_000, List.of(new TariffBand(0, 0, 2_000, 5_000L, 0L)));
+        activeCircleZone("CITY", 8_000, 0, roadTariff, null, null);
+        // The straight line is about 1.8 km and fits; the road is 2.4 km and does not.
+        routing.answers(new RoadRoute(2_400, 300, "osrm", "2026-10-01"));
+
+        var resolution = resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON));
+
+        assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.BEYOND_MAX_DISTANCE);
+        assertThat(resolution.distanceMeters()).isEqualTo(2_400);
+        // A refusal says what it measured and by what, like a success does: "why did this
+        // address get no delivery" is asked as often as "why was it this much".
+        assertThat(resolution.distanceSource()).isEqualTo(DistanceSource.ROAD);
+        assertThat(resolution.routingDatasetVersion()).isEqualTo("2026-10-01");
+    }
+
+    @Test
+    @DisplayName("a fee that fell back names no dataset and no travel time, because no map measured it")
+    void aFallbackNamesNoDataset() {
+        UUID roadTariff = seedRoadTariff("ROAD-DOWN", 15_000, List.of(new TariffBand(0, 0, 15_000, 0L, 2_000L)));
+        activeCircleZone("CITY", 8_000, 0, roadTariff, null, null);
+
+        resolver.resolve(query(locatedBranch, NEARBY, 0L, NOON));
+
+        var row = latestResolutionRow();
+        assertThat(row.get("distance_source")).isEqualTo("RADIUS_FALLBACK");
+        assertThat(row.get("routing_dataset_version")).isNull();
+        assertThat(row.get("routing_seconds")).isNull();
+        assertThat(row.get("routing_provider")).isNull();
+        assertThat(meters.counter("horecaos.delivery.distance.fallbacks", "mode", "ROAD")
+                        .count())
+                .isEqualTo(1.0);
+        // Every ROAD measurement is counted, so a fallback rate has a denominator.
+        assertThat(meters.counter("horecaos.delivery.distance.road_measurements", "mode", "ROAD")
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("a RADIUS tariff never asks the routing port, however ready it is")
+    void aRadiusTariffNeverAsksRouting() {
+        activeCircleZone("CITY", 8_000, 0, cityTariff, null, null);
+        routing.answers(new RoadRoute(9_999, 999, "osrm", "2026-10-01"));
+
+        var resolution = resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON));
+
+        assertThat(resolution.distanceSource()).isEqualTo(DistanceSource.RADIUS);
+        assertThat(resolution.finalFeeMinor()).isEqualTo(10_000L);
+        assertThat(routing.calls()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "the database refuses a fee that claims a dataset it was not measured by, and a road fee that names none")
+    void theDatabaseHoldsTheRoutingEvidenceTogether() {
+        // A fallback attributed to a map that never saw it is a fee defended by a lie.
+        var claimsAMap = catchThrowable(() ->
+                resolutionStore.insert(resolutionRow(DistanceSource.RADIUS_FALLBACK, null, 2_336, "2026-10-01", 300)));
+        var roadWithoutAMap = catchThrowable(
+                () -> resolutionStore.insert(resolutionRow(DistanceSource.ROAD, "osrm", 2_300, null, null)));
+        var halfAnAnswer = catchThrowable(
+                () -> resolutionStore.insert(resolutionRow(DistanceSource.ROAD, "osrm", 2_300, "2026-10-01", null)));
+
+        assertThat(claimsAMap).hasMessageContaining("ck_fee_resolution_routing_evidence");
+        assertThat(roadWithoutAMap).hasMessageContaining("ck_fee_resolution_routing_evidence");
+        assertThat(halfAnAnswer).hasMessageContaining("ck_fee_resolution_routing_evidence");
+
+        // And the whole thing is accepted: the constraint refuses the lie, not the fact.
+        resolutionStore.insert(resolutionRow(DistanceSource.ROAD, "osrm", 2_300, "2026-10-01", 330));
+        resolutionStore.insert(resolutionRow(DistanceSource.RADIUS, null, 1_800, null, null));
+    }
+
+    @Test
+    @DisplayName(
+            "the dataset is not in the charge's hash: a refresh re-measures the next quote and never edits an issued one")
+    void theDatasetIsNotInTheContextHash() {
+        var measuredByOctober = chargeMeasuredBy("2026-10-01");
+        var measuredByNovember = chargeMeasuredBy("2026-11-01");
+
+        // The same metres and the same fee under two maps is the same charge to a
+        // quote. What differs is the label, which explains two quotes, not prices one.
+        assertThat(measuredByNovember.canonicalForm()).isEqualTo(measuredByOctober.canonicalForm());
+        assertThat(measuredByNovember.routingDatasetVersion()).isNotEqualTo(measuredByOctober.routingDatasetVersion());
+    }
+
+    @Test
+    @DisplayName(
+            "a quote issued before a dataset refresh is accepted at the fee it was issued with; the next quote measures the new map")
+    void anIssuedQuoteKeepsItsFeeAcrossARefresh() {
+        List<TariffBand> bands =
+                List.of(new TariffBand(0, 0, 2_000, 5_000L, 0L), new TariffBand(1, 2_000, 15_000, 4_000L, 0L));
+        UUID roadTariff = seedRoadTariff("ROAD-REFRESH", 15_000, bands);
+        activeCircleZone("CITY", 8_000, 0, roadTariff, null, null);
+        seedCatalogAndPrices();
+
+        routing.answers(new RoadRoute(1_900, 280, "osrm", "2026-10-01"));
+        Quote issued = quotes.quote(deliveredCart(1));
+
+        // The monthly refresh lands overnight, and the same address is now 2,300 m by road.
+        routing.answers(new RoadRoute(2_300, 330, "osrm", "2026-11-01"));
+
+        var acceptance = quotes.acceptQuote(TENANT, issued.quoteId(), issued.contextHash());
+        Quote next = quotes.quote(deliveredCart(1));
+
+        assertThat(acceptance.outcome()).isEqualTo(uz.horecaos.platform.pricing.api.QuoteAcceptance.Outcome.ACCEPTED);
+        assertThat(acceptance.totalMinor()).isEqualTo(issued.total().minor());
+        assertThat(issued.fees().minor()).isEqualTo(5_000L);
+        assertThat(next.fees().minor())
+                .as("the next quote is measured against the new map")
+                .isEqualTo(9_000L);
+        assertThat(next.contextHash()).isNotEqualTo(issued.contextHash());
+
+        // Each quote's own evidence names the map that priced it.
+        assertThat(resolutionStore
+                        .latestForQuote(TENANT, issued.quoteId())
+                        .orElseThrow()
+                        .routingDatasetVersion())
+                .isEqualTo("2026-10-01");
+        assertThat(resolutionStore
+                        .latestForQuote(TENANT, next.quoteId())
+                        .orElseThrow()
+                        .routingDatasetVersion())
+                .isEqualTo("2026-11-01");
+        assertThat(quoteEvidence(issued.quoteId())).containsEntry("deliveryRoutingDatasetVersion", "2026-10-01");
+        assertThat(quoteEvidence(next.quoteId())).containsEntry("deliveryRoutingDatasetVersion", "2026-11-01");
+    }
+
     // ------------------------------------------------- parity with the legacy
 
     @Test
@@ -1111,6 +1314,129 @@ class DeliveryFeeResolutionTests {
                         List.of())),
                 null,
                 new QuoteRequest.Delivery(NEARBY, PricingAuthority.HORECAOS));
+    }
+
+    /** Whatever a test says routing answers, counting how often it was asked. Empty until told otherwise. */
+    private static final class ScriptedRouting implements RoadDistancePort {
+
+        private @Nullable RoadRoute answer;
+        private int calls;
+
+        void answers(@Nullable RoadRoute route) {
+            this.answer = route;
+        }
+
+        int calls() {
+            return calls;
+        }
+
+        @Override
+        public Optional<RoadRoute> route(GeoPoint origin, GeoPoint destination, @Nullable UUID installationId) {
+            calls++;
+            return Optional.ofNullable(answer);
+        }
+    }
+
+    /** A ROAD tariff, bound to a routing installation, activated. */
+    private UUID seedRoadTariff(String code, int maxDistanceMeters, List<TariffBand> bands) {
+        UUID installation = seedRoutingInstallation();
+        UUID tariffId = tariffs.createTariff(TENANT, BRAND, code, code, false);
+        DeliveryTariff road = new DeliveryTariff(
+                tariffId,
+                0,
+                VersionStatus.DRAFT,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.ROAD,
+                13_000,
+                installation,
+                maxDistanceMeters,
+                0L,
+                40_000L,
+                bands,
+                List.of());
+        var drafted = tariffs.draftVersion(TENANT, BRAND, road, ACTOR);
+        tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), ACTOR);
+        return tariffId;
+    }
+
+    /** The newest stored resolution, as its own columns. */
+    private Map<String, Object> latestResolutionRow() {
+        return jdbc.sql("""
+                SELECT distance_source, distance_meters, routing_provider, routing_seconds,
+                       routing_dataset_version, final_fee_minor
+                  FROM fulfillment.delivery_fee_resolutions
+                 WHERE tenant_id = :tenantId
+                 ORDER BY created_at DESC, id
+                 LIMIT 1
+                """).param("tenantId", TENANT).query().singleRow();
+    }
+
+    private Map<String, Object> quoteEvidence(UUID quoteId) {
+        String document = jdbc.sql("SELECT calculation_document::text FROM pricing.quotes WHERE id = :id")
+                .param("id", quoteId)
+                .query(String.class)
+                .single();
+        return JsonMapper.builder().build().readValue(document, new tools.jackson.core.type.TypeReference<>() {});
+    }
+
+    private ResolvedDeliveryCharge chargeMeasuredBy(String dataset) {
+        return new ResolvedDeliveryCharge(
+                DeliveryFeeOutcome.RESOLVED,
+                "UZS",
+                9_000L,
+                0L,
+                null,
+                null,
+                UUID.fromString("018f9c10-1000-7000-8000-000000000001"),
+                1,
+                UUID.fromString("018f9c10-1000-7000-8000-000000000002"),
+                1,
+                1,
+                null,
+                2_300,
+                "ROAD",
+                "ROAD",
+                dataset,
+                List.of());
+    }
+
+    /** A stored resolution with the given routing evidence and nothing else of interest. */
+    private DeliveryFeeResolution resolutionRow(
+            DistanceSource source,
+            @Nullable String provider,
+            int meters,
+            @Nullable String dataset,
+            @Nullable Integer seconds) {
+        return new DeliveryFeeResolution(
+                UUID.randomUUID(),
+                TENANT,
+                null,
+                locatedBranch,
+                DeliveryFeeOutcome.BEYOND_MAX_DISTANCE,
+                "BEYOND_TARIFF_MAX_DISTANCE",
+                "UZS",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                meters,
+                source == DistanceSource.RADIUS ? DistanceMode.RADIUS : DistanceMode.ROAD,
+                source,
+                provider,
+                seconds,
+                dataset,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                Map.of());
     }
 
     private static RoadDistancePort unboundRouting() {
