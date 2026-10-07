@@ -180,6 +180,13 @@ public class SecurityConfiguration {
                                 // would protect. See StorefrontAnalyticsConfigController's
                                 // own doc comment.
                                 "/api/v1/storefront/tenants/*/brands/*/analytics",
+                                // ADR 0149: which languages exist and where each is live. A
+                                // read of code, not of a table -- the same answer for every
+                                // tenant and every visitor, naming nobody -- and wanted before
+                                // an account exists, because the language picker is the first
+                                // thing a storefront paints. The staff surfaces' twins stay
+                                // behind a session.
+                                "/api/v1/storefront/locales",
                                 // ADR 0047: the guest's own running bill. Outside
                                 // the resource server's principal model on purpose
                                 // — see the POST pair below — and authorised by the
@@ -369,6 +376,22 @@ public class SecurityConfiguration {
                                 HttpMethod.DELETE,
                                 "/api/v1/control-plane/auth/sessions/current",
                                 "/api/v1/operations/auth/sessions/current")
+                        .permitAll()
+                        // ADR 0148: enrolling a second factor, on both staff prefixes. The two
+                        // POSTs authenticate their caller themselves, by a session when there is
+                        // one and otherwise by the enrolment ticket a refused sign-in carried:
+                        // the account a rule has just locked out of the console has no session to
+                        // present, which is exactly who needs these. Both re-prove the current
+                        // password, so a ticket alone enrols nothing, and a ticket is sealed to the
+                        // one account it was issued for and the one purpose. An invalid bearer is
+                        // still refused here, as everywhere on this chain. The list and the removal
+                        // of an authenticator are not opened: they need a session.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/control-plane/auth/mfa/enrolments",
+                                "/api/v1/control-plane/auth/mfa/enrolments/confirm",
+                                "/api/v1/operations/auth/mfa/enrolments",
+                                "/api/v1/operations/auth/mfa/enrolments/confirm")
                         .permitAll()
                         // ADR 0097: an invited owner setting up their account. They have
                         // no password yet, so there is no session to authenticate with;

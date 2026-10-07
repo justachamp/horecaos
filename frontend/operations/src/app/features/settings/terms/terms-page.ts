@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
-import { I18n, LOCALES } from '../../../core/i18n/i18n';
+import { I18n } from '../../../core/i18n/i18n';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { resolveLocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { RichText, RichTextBlockKindLabels } from '../../../shared/ui/rich-text';
@@ -86,6 +87,7 @@ export class TermsPage {
   private readonly brandsApi = inject(BrandProfileApi);
   private readonly api = inject(TermsApi);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly state = signal<PageState>('loading');
   protected readonly loadErrorText = signal<string | null>(null);
@@ -111,7 +113,10 @@ export class TermsPage {
 
   /** The picked brand's own languages (row 10.12): default first, the platform triple when it has chosen none. */
   private readonly localeSet = computed(() =>
-    resolveLocaleSet(this.brands().find((brand) => brand.id === this.selectedBrandId())?.locales),
+    resolveLocaleSet(
+      this.brands().find((brand) => brand.id === this.selectedBrandId())?.locales,
+      this.registry,
+    ),
   );
   protected readonly locales = computed(() => this.localeSet().locales);
 
@@ -206,9 +211,11 @@ export class TermsPage {
   protected previewLocales(preview: TermsVersionView): readonly string[] {
     const present = Object.keys(preview.contentsByLocale);
     const offered = new Set<string>(this.locales());
-    const known: readonly string[] = LOCALES;
+    // The registry's order, over every language it declares: a version can carry text in a language
+    // the registry has since stopped offering, and that text is still a document someone may read.
+    const known = this.registry.fallbackOrder();
     return [
-      ...LOCALES.filter((locale) => offered.has(locale) || present.includes(locale)),
+      ...known.filter((locale) => offered.has(locale) || present.includes(locale)),
       ...present.filter((locale) => !known.includes(locale)),
     ];
   }

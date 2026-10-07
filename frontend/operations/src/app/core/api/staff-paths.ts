@@ -165,6 +165,24 @@ export const staffPaths = {
     return `${this.members(tenantId)}/${enc(memberId)}`;
   },
 
+  /**
+   * `StaffMfaAdministrationController` (ADR 0148) -- whether the person holds a second factor,
+   * and its reset. Read and reset are two capabilities (`iam.staff.mfa.read`, `.reset`) at tenant
+   * scope; the reset carries the member's version in `If-Match` and a reason.
+   */
+  memberMfa(tenantId: string, memberId: string): string {
+    return `${this.member(tenantId, memberId)}/mfa`;
+  },
+
+  memberMfaReset(tenantId: string, memberId: string): string {
+    return `${this.memberMfa(tenantId, memberId)}/resets`;
+  },
+
+  /** The staff list's «Способ входа» column, for the whole tenant, in one call. */
+  mfaSummary(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/mfa-summary`;
+  },
+
   /** `StaffMemberController.endEmployment` -- sets ENDED and revokes every job in the same act. */
   memberEndEmployment(tenantId: string, memberId: string): string {
     return `${this.member(tenantId, memberId)}/end-employment`;

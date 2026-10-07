@@ -55,4 +55,31 @@ public class StaffLoginKeycloakConfiguration {
 
         return new StaffDirectGrantClient(client, realm, clientId, clientSecret, secrets, clock);
     }
+
+    /**
+     * ADR 0148: the password-only client asked first on every sign-in. A plain client for the same
+     * reason as the one above, and with the same timeouts: it is on a person's own sign-in.
+     */
+    @Bean
+    StaffPasswordCheckClient staffPasswordCheckClient(
+            SecretResolver secrets,
+            @Value("${horecaos.keycloak.base-url:http://localhost:8081}") String baseUrl,
+            @Value("${horecaos.keycloak.realm:horecaos}") String realm,
+            @Value("${horecaos.keycloak.staff-password-check-client-id:horecaos-staff-password-check}") String clientId,
+            @Value("${horecaos.environment:local}") String environment) {
+
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+
+        RestClient client = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
+                .build();
+
+        SecretReference clientSecret = new SecretReference(
+                environment, SecretCategory.IDENTITY_ADMIN, "keycloak", "staff-password-check-secret");
+
+        return new StaffPasswordCheckClient(client, realm, clientId, clientSecret, secrets);
+    }
 }

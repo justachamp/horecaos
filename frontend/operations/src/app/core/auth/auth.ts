@@ -108,12 +108,32 @@ export class Auth {
     return this.state();
   }
 
-  /** Exchanges credentials for a session. Throws `ApiError` on refusal — the sign-in page reads `error.code`. */
-  async signIn(username: string, password: string): Promise<void> {
-    const body: StaffSignInRequest = { username, password };
+  /**
+   * Exchanges credentials for a session. Throws `ApiError` on refusal — the sign-in page reads
+   * `error.code`.
+   *
+   * **The second step (ADR 0148).** `otp` is the code from an authenticator app and is sent only
+   * when there is one: the platform answers a first attempt from an enrolled account with
+   * `MFA_REQUIRED`, and the page then asks for the code and calls this again with it.
+   *
+   * @returns whether the platform offers the person enrolment now (its `PROMPT` phase), so the
+   *   page can say so once and carry on; the session is signed in either way
+   */
+  async signIn(username: string, password: string, otp?: string): Promise<boolean> {
+    const body: StaffSignInRequest =
+      otp === undefined ? { username, password } : { username, password, otp };
     const session = await firstValueFrom(
       this.api.post<StaffSignInRequest, StaffSessionResponse>(SIGN_IN_PATH, command(body)),
     );
+    this.applySession(session);
+    return session.mfaEnrolmentOffered === true;
+  }
+
+  /**
+   * Takes a session the platform issued some other way than `/auth/sessions` — the one an
+   * enrolment begun from a ticket hands back when its first code is confirmed (ADR 0148).
+   */
+  adoptSession(session: StaffSessionResponse): void {
     this.applySession(session);
   }
 

@@ -137,7 +137,22 @@ public enum CacheRegistry {
             "routing.road_routes",
             Duration.ofHours(24),
             50_000,
-            "none: the dataset version is part of the key, so a new dataset misses every entry");
+            "none: the dataset version is part of the key, so a new dataset misses every entry"),
+
+    /**
+     * ADR 0148: the authenticators a staff account holds at Keycloak, keyed by subject, for the
+     * staff list's «Способ входа» column and the person card.
+     *
+     * <p>Sixty seconds, evicted by every enrolment, removal and reset the platform performs. It
+     * holds ids, labels and dates and never a secret, because the identity provider returns none.
+     * Nothing decides on it: a sign-in asks Keycloak, and the requirement is evaluated from the
+     * grant tables, fresh.
+     */
+    IAM_STAFF_MFA_CREDENTIALS(
+            "iam.staff_mfa_credentials",
+            Duration.ofSeconds(60),
+            5_000,
+            "StaffMfaService (evicted on every enrolment, removal and reset)");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

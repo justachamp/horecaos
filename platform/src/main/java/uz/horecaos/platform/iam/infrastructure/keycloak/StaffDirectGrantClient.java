@@ -88,11 +88,29 @@ public final class StaffDirectGrantClient {
 
     /** Resource-owner password credentials: the one place a staff password reaches Keycloak. */
     public TokenOutcome signIn(String username, String password) {
+        return signIn(username, password, null);
+    }
+
+    /**
+     * The same grant with a one-time code (ADR 0148). Keycloak's direct-grant flow reads the
+     * extra {@code totp} form parameter for an account that holds an OTP credential, and ignores
+     * it for one that does not. A missing code and a wrong code are both {@code invalid_grant}
+     * "Invalid user credentials" -- the grant can carry a code but cannot ask for one, which is
+     * why the caller must have confirmed the password by another route before it tells the two
+     * apart (StaffAuthService).
+     *
+     * <p>The code is a form field and nothing else: it never reaches a log, a message or an
+     * exception here.
+     */
+    public TokenOutcome signIn(String username, String password, @Nullable String otp) {
         MultiValueMap<String, String> form = clientForm();
         form.add("grant_type", "password");
         form.add("username", username);
         form.add("password", password);
         form.add("scope", SCOPE);
+        if (otp != null) {
+            form.add("totp", otp);
+        }
         return exchange(form);
     }
 
@@ -176,7 +194,7 @@ public final class StaffDirectGrantClient {
         return refreshSeconds > 0 ? now.plusSeconds(refreshSeconds) : null;
     }
 
-    private static TokenOutcome.FailureReason classify(Map<String, Object> body) {
+    static TokenOutcome.FailureReason classify(Map<String, Object> body) {
         String description =
                 String.valueOf(body.getOrDefault("error_description", "")).toLowerCase(Locale.ROOT);
         if (description.contains(ACCOUNT_NOT_FULLY_SET_UP)) {
@@ -189,7 +207,7 @@ public final class StaffDirectGrantClient {
         return TokenOutcome.FailureReason.INVALID_CREDENTIALS;
     }
 
-    private static Map<String, Object> bodyOf(HttpClientErrorException exception) {
+    static Map<String, Object> bodyOf(HttpClientErrorException exception) {
         try {
             Map<String, Object> body = exception.getResponseBodyAs(JSON_OBJECT);
             return body == null ? Map.of() : body;
@@ -200,7 +218,7 @@ public final class StaffDirectGrantClient {
         }
     }
 
-    private static long seconds(Map<String, Object> body, String key, long fallback) {
+    static long seconds(Map<String, Object> body, String key, long fallback) {
         return body.get(key) instanceof Number number ? number.longValue() : fallback;
     }
 

@@ -49,6 +49,8 @@ import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.RejectReasonDirectory;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.RateLimiter;
@@ -710,12 +712,7 @@ public class TelegramUpdateHandler {
     /** {@code ru}/{@code uz-Latn}/{@code en} label lookup, same fallback order {@link TelegramBotMessages#pick} uses. */
     private String rejectReasonLabel(RejectReasonDirectory.Option option) {
         Map<String, String> labels = option.labelsByLocale();
-        String resolved =
-                switch (defaultLocale == null ? "" : defaultLocale.toLowerCase(Locale.ROOT)) {
-                    case "uz-latn", "uz" -> labels.get("uz-Latn");
-                    case "en" -> labels.get("en");
-                    default -> labels.get("ru");
-                };
+        String resolved = labels.get(PlatformLocales.resolve(defaultLocale, Tier.MESSAGES));
         return resolved != null ? resolved : option.code();
     }
 

@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
 import { messagesGuard } from './core/i18n/messages.guard';
+import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { NAV_ITEMS } from './shell/navigation';
 
 /**
@@ -44,6 +45,17 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
+    // ADR 0148: an account the platform requires a second factor of, and that holds none,
+    // lands here from a refused sign-in. Outside the guard for the reason /login is: the
+    // platform revoked the session it had just issued, so there is none to guard on. What
+    // opens the page is the enrolment ticket held in memory (MfaTicket), and without one it
+    // says so and points back at /login.
+    path: 'enrol-second-factor',
+    canActivate: [messagesGuard('auth')],
+    loadComponent: () =>
+      import('./features/auth/enrol-second-factor-page').then((m) => m.EnrolSecondFactorPage),
+  },
+  {
     // ADR 0097: an invited owner setting up their account. Outside the guard
     // for the same reason as /login -- the visitor has no password yet.
     path: 'invite',
@@ -83,7 +95,9 @@ export const routes: Routes = [
   {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
-    canActivate: [authGuard],
+    // The registry is read before anything beneath the shell draws (ADR 0149): the editors under it
+    // read the languages a brand may choose, a template needs and the catalog stores synchronously.
+    canActivate: [authGuard, platformLocalesGuard],
     canActivateChild: [capabilityGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'today' },
@@ -112,7 +126,9 @@ export const routes: Routes = [
         // reason — nesting it there would put it a capability check away
         // from the person it exists for.
         path: 'my-profile',
-        canActivate: [messagesGuard('staff')],
+        // `auth` as well: the «Второй фактор» card shares its enrolment form (and its words,
+        // namespace `mfa`) with the page a refused sign-in sends an account to (ADR 0148).
+        canActivate: [messagesGuard('staff', 'auth')],
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },

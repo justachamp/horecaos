@@ -16,11 +16,18 @@ export interface StaffSessionResponse {
   readonly accessTokenExpiresAt: string;
   readonly refreshTokenExpiresAt?: string;
   readonly tokenType: string;
+  /**
+   * ADR 0148: the account holds no second factor and the platform rule is in its `PROMPT` phase.
+   * Absent from an older server, which means "not offered".
+   */
+  readonly mfaEnrolmentOffered?: boolean;
 }
 
 export interface StaffSignInRequest {
   readonly username: string;
   readonly password: string;
+  /** ADR 0148: the six-digit code from an authenticator app; left out of a first attempt. */
+  readonly otp?: string;
 }
 
 export interface StaffRefreshRequest {

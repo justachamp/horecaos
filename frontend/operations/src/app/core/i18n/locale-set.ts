@@ -4,25 +4,30 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../api/api-client';
 import { settingsPaths } from '../api/settings-paths';
 import { CurrentBrand } from '../auth/current-brand';
-import { DEFAULT_LOCALE, LOCALES, Locale } from './i18n';
+import { LOCALES } from './i18n';
+import { PlatformLocales } from './platform-locales';
 
 /** One locale a brand has chosen to support, and whether it is the default. */
 export interface LocaleOption {
-  readonly locale: Locale;
+  /**
+   * A BCP 47 tag of a language the brand's content can be in (the registry's content tier), not the
+   * console's own `Locale`: a brand may author in a language this build has no staff catalogue for.
+   */
+  readonly locale: string;
   readonly isDefault: boolean;
 }
 
 /** The one field this module reads from `OperationsBrandController.get`'s `BrandView`. */
 interface BrandLocalesView {
-  readonly locales: readonly { readonly locale: Locale; readonly isDefault: boolean }[];
+  readonly locales: readonly { readonly locale: string; readonly isDefault: boolean }[];
 }
 
 /** A brand's supported-language set as an editor consumes it, with the platform fallback already applied. */
 export interface ResolvedLocaleSet {
-  /** Default first; the platform's `ru`/`uz-Latn`/`en` triple when the brand has chosen none. */
-  readonly locales: readonly Locale[];
+  /** Default first; every language live in the registry's content tier when the brand has chosen none. */
+  readonly locales: readonly string[];
   /** The brand's own default, or the platform default when it has chosen none. */
-  readonly defaultLocale: Locale;
+  readonly defaultLocale: string;
   /** Whether the brand has chosen its own set, as opposed to sitting on the platform fallback. */
   readonly isConfigured: boolean;
 }
@@ -41,13 +46,21 @@ export interface ResolvedLocaleSet {
  */
 export function resolveLocaleSet(
   configured:
-    readonly { readonly locale: Locale; readonly isDefault: boolean }[] | null | undefined,
+    readonly { readonly locale: string; readonly isDefault: boolean }[] | null | undefined,
+  registry: PlatformLocales,
 ): ResolvedLocaleSet {
-  const options = orderDefaultFirst(configured ?? []);
+  const options = orderDefaultFirst(configured ?? [], registry);
   const own = options.find((option) => option.isDefault);
+  const content = registry.active('CONTENT');
   return {
-    locales: options.length > 0 ? options.map((option) => option.locale) : LOCALES,
-    defaultLocale: own ? own.locale : DEFAULT_LOCALE,
+    // The registry's content tier; before it has been read, the languages this build has catalogues for.
+    locales:
+      options.length > 0
+        ? options.map((option) => option.locale)
+        : content.length > 0
+          ? content
+          : LOCALES,
+    defaultLocale: own ? own.locale : registry.fallback(),
     isConfigured: options.length > 0,
   };
 }
@@ -80,21 +93,22 @@ export function resolveLocaleSet(
 export class LocaleSet {
   private readonly api = inject(ApiClient);
   private readonly currentBrand = inject(CurrentBrand);
+  private readonly registry = inject(PlatformLocales);
 
   /** `null` before load settles; `[]` once settled but the brand has configured nothing (or resolution failed). */
   private readonly configured = signal<readonly LocaleOption[] | null>(null);
 
-  private readonly resolved = computed(() => resolveLocaleSet(this.configured()));
+  private readonly resolved = computed(() => resolveLocaleSet(this.configured(), this.registry));
 
   /**
    * The brand's own supported locales, default first — or, unconfigured (or
    * before load settles), the platform's full `ru`/`uz-Latn`/`en` triple,
    * `ru` first.
    */
-  readonly locales: Signal<readonly Locale[]> = computed(() => this.resolved().locales);
+  readonly locales: Signal<readonly string[]> = computed(() => this.resolved().locales);
 
   /** The brand's own chosen default, or the platform default when unconfigured. */
-  readonly defaultLocale: Signal<Locale> = computed(() => this.resolved().defaultLocale);
+  readonly defaultLocale: Signal<string> = computed(() => this.resolved().defaultLocale);
 
   /** Whether the brand has chosen its own set, as opposed to still sitting on the platform fallback. */
   readonly isConfigured: Signal<boolean> = computed(() => this.resolved().isConfigured);
@@ -110,7 +124,7 @@ export class LocaleSet {
   }
 
   /** Whether the brand's set (or, unconfigured, the platform triple) includes this locale. */
-  supports(locale: Locale): boolean {
+  supports(locale: string): boolean {
     return this.locales().includes(locale);
   }
 
@@ -125,7 +139,7 @@ export class LocaleSet {
       const result = await firstValueFrom(
         this.api.get<BrandLocalesView>(settingsPaths.brand({ ...scope, locationId: '' })),
       );
-      this.configured.set(orderDefaultFirst(result.value.locales ?? []));
+      this.configured.set(orderDefaultFirst(result.value.locales ?? [], this.registry));
     } catch {
       this.configured.set([]);
     }
@@ -134,12 +148,16 @@ export class LocaleSet {
 
 /** The default locale first, then the rest in the platform's own canonical order. */
 function orderDefaultFirst(
-  options: readonly { readonly locale: Locale; readonly isDefault: boolean }[],
+  options: readonly { readonly locale: string; readonly isDefault: boolean }[],
+  registry: PlatformLocales,
 ): readonly LocaleOption[] {
+  const order = registry.fallbackOrder();
+  // A tag the registry does not know sorts after every one it does, then by tag: stable and total.
+  const rank = (tag: string): number => (order.includes(tag) ? order.indexOf(tag) : order.length);
   return [...options].sort((a, b) => {
     if (a.isDefault !== b.isDefault) {
       return a.isDefault ? -1 : 1;
     }
-    return LOCALES.indexOf(a.locale) - LOCALES.indexOf(b.locale);
+    return rank(a.locale) - rank(b.locale) || a.locale.localeCompare(b.locale);
   });
 }

@@ -28,6 +28,10 @@ path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/staff-login-secret" {
   capabilities = ["create", "update", "read"]
 }
 
+path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/staff-password-check-secret" {
+  capabilities = ["create", "update", "read"]
+}
+
 path "horecaos/data/@ENVIRONMENT@/identity_admin/keycloak/device-provisioning-secret" {
   capabilities = ["create", "update", "read"]
 }

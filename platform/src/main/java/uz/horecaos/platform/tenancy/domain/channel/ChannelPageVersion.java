@@ -11,7 +11,7 @@ import java.util.UUID;
  * field for field and reason for reason: publishing never touches this row,
  * it inserts the next {@code version}.
  *
- * @param contentsByLocale keyed by {@link ChannelPageLocale#tag()}; a tenant
+ * @param contentsByLocale keyed by {@code PlatformLocale#tag()}; a tenant
  *                         may publish fewer than all three languages, and a
  *                         locale absent here has no translation — the
  *                         storefront answers "not available in this

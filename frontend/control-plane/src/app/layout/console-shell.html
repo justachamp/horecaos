@@ -42,7 +42,7 @@
       <!-- A language switch is three words, not a dropdown. Three is few
            enough that a select costs a click and gains nothing. -->
       <div class="locales" role="group" [attr.aria-label]="i18n.t('shell.locale')">
-        @for (locale of locales; track locale) {
+        @for (locale of locales(); track locale) {
           <button
             class="q-caption locale"
             type="button"

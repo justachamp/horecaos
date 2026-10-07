@@ -167,4 +167,36 @@ describe('StaffMembersApi', () => {
 
     expect((await promise).hasPhoto).toBe(true);
   });
+
+  // ------------------------------------------------------------------------- ADR 0148
+
+  it('reads a person’s second factor, and the whole tenant’s in one call for the list column', async () => {
+    const one = api.mfa('t1', 'm1');
+    http.expectOne(url(`${MEMBERS}/m1/mfa`)).flush({
+      enrolled: true,
+      authenticators: [{ id: 'c1', label: 'phone', createdAt: '2026-10-01T10:00:00Z' }],
+      requirement: 'REQUIRED',
+    });
+    expect(await one).toMatchObject({ enrolled: true, requirement: 'REQUIRED' });
+
+    const all = api.mfaSummary('t1');
+    http.expectOne(url('/api/v1/operations/tenants/t1/staff/mfa-summary')).flush({
+      members: [{ memberId: 'm1', state: 'KNOWN', enrolled: true, authenticators: 1 }],
+    });
+    expect(await all).toEqual([
+      { memberId: 'm1', state: 'KNOWN', enrolled: true, authenticators: 1 },
+    ]);
+  });
+
+  it('resets a second factor with the reason in the body and the card’s version in If-Match', async () => {
+    const promise = api.resetMfa('t1', 'm1', 'Lost phone', 4);
+    const request = http.expectOne(url(`${MEMBERS}/m1/mfa/resets`));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ reason: 'Lost phone' });
+    expect(request.request.headers.get('If-Match')).toBe('W/"4"');
+    expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
+    request.flush({ authenticatorsRemoved: 1, sessionsEnded: true, personNotified: true });
+
+    expect(await promise).toMatchObject({ authenticatorsRemoved: 1 });
+  });
 });

@@ -126,6 +126,26 @@ class OwnerInvitationFlowTests {
     }
 
     @Test
+    @DisplayName("asked for in a bare uz, which older clients still send, the invitation and its history say uz-Latn")
+    void aBareUzIsStoredAsTheTag() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "uz", UUID.randomUUID());
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+
+        assertThat(invitations.inspect(token).locale())
+                .as("the link's own page reads the language back, and it is the tag (ADR 0149)")
+                .isEqualTo("uz-Latn");
+        assertThat(timeline().getFirst().locale())
+                .as("the history says what the row says")
+                .isEqualTo("uz-Latn");
+
+        invitations.resend(tenantId, "UZ-latn", ONBOARDER, "asked in another casing", "corr");
+        assertThat(timeline().getLast().locale())
+                .as("any casing of the tag is the same language, and a resend is no different")
+                .isEqualTo("uz-Latn");
+    }
+
+    @Test
     @DisplayName("queued, emailed with a link only the email holds, opened, accepted once")
     void anOwnerIsInvitedAndSetsUpTheirAccount() {
         assertThat(invitations.inviteIfNeeded(tenantId, "owner-subject", "uz", UUID.randomUUID()))

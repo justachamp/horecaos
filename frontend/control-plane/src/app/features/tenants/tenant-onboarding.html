@@ -307,9 +307,9 @@
             (change)="resendLocale.set($any($event.target).value)"
           >
             <option value="">{{ i18n.t('onboarding.invitation.sameLanguage') }}</option>
-            @for (locale of invitationLocales; track locale) {
+            @for (locale of invitationLocales(); track locale) {
               <option [value]="locale">
-                {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+                {{ localeName(locale) }}
               </option>
             }
           </select>
@@ -344,9 +344,9 @@
           [value]="resendLocale()"
           (change)="resendLocale.set($any($event.target).value)"
         >
-          @for (locale of invitationLocales; track locale) {
+          @for (locale of invitationLocales(); track locale) {
             <option [value]="locale" [selected]="locale === (resendLocale() || ownerLocale())">
-              {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+              {{ localeName(locale) }}
             </option>
           }
         </select>
@@ -424,9 +424,9 @@
             [value]="ownerLocale()"
             (change)="ownerLocale.set($any($event.target).value)"
           >
-            @for (locale of invitationLocales; track locale) {
+            @for (locale of invitationLocales(); track locale) {
               <option [value]="locale" [selected]="locale === ownerLocale()">
-                {{ i18n.t($any('onboarding.invitation.locale.' + locale)) }}
+                {{ localeName(locale) }}
               </option>
             }
           </select>

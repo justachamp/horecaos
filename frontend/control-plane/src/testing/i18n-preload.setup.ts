@@ -1,4 +1,6 @@
 import { LOCALES, preloadLocale } from '../app/core/i18n/i18n.service';
+import { seedPlatformLocalesForTesting } from '../app/core/i18n/platform-locales';
+import { REGISTRY_FIXTURE } from './platform-locales.fixture';
 
 /**
  * Global Vitest setup (wired in `angular.json`'s `test` target via
@@ -13,3 +15,9 @@ import { LOCALES, preloadLocale } from '../app/core/i18n/i18n.service';
  * `i18n.service.spec.ts` covers the not-yet-loaded path directly.
  */
 await Promise.all(LOCALES.map((locale) => preloadLocale(locale)));
+
+/**
+ * Every spec starts with the registry already read (ADR 0149), as the shell guarantees for anything
+ * beneath it. `platform-locales.spec.ts` clears the seed to test the unread state.
+ */
+seedPlatformLocalesForTesting(REGISTRY_FIXTURE);

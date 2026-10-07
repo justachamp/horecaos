@@ -1,28 +1,33 @@
 # ADR 0148: Staff multi-factor authentication
 
 - Decision status: Accepted
-- Implementation status: Not started — a staff member signs in with a password and
-  nothing else, and there is no endpoint, table, policy or screen for a second
-  factor. What exists is the shape of the problem. `StaffDirectGrantClient.signIn`
-  sends `grant_type=password`, a username and a password to Keycloak 26.7's token
-  endpoint as the `horecaos-staff-login` confidential client (ADR 0062), and
-  nothing else; the request has no `totp` field. `StaffAuthService` maps a
-  Keycloak "not fully set up" answer to `ACCOUNT_ACTION_REQUIRED` ("Contact a
-  platform administrator") and every other refusal to one uniform "Invalid
-  credentials", so an account given the `CONFIGURE_TOTP` required action today
-  would be locked out with no screen to satisfy it. `horecaos-realm.json` defines
-  no authentication flow and no OTP policy, so the realm runs Keycloak's defaults
-  (a direct-grant flow with a conditional OTP step that engages only for a user
-  who already has an OTP credential), with brute-force protection on
-  (`failureFactor` 8, `maxFailureWaitSeconds` 900, and a quick-login check that
-  disables an account for 60 seconds when two failures arrive less than 1,000 ms
-  apart) and a password policy of 12 characters. `KeycloakStaffAccounts` already wraps the admin API for `find`,
-  `create`, `setPassword`, `findSubjectIdByLogin` and `logoutEverywhere`. The
-  segmented code field `q-otp-input` is built and tested in
-  `frontend/operations/src/app/shared/ui` with no consumer (row `X.38`), and the
-  control plane does not have it. `docs/operations-spec/staff-and-access.md`
-  §11.9 records that "whether a person has a second factor is a Keycloak fact with
-  no projection".
+- Implementation status: Partial — built and tested over HTTP (operations batch 19, 2026-10-07):
+  the password-only probe client and its realm flow, asked first on every sign-in
+  (`StaffPasswordCheckClient`, `infra/keycloak/create-staff-password-check-client.sh`,
+  OTP policy declared in the realm file); the second step on both staff surfaces
+  (`StaffAuthService`: password right and no code asked for `MFA_REQUIRED`/`MFA_CODE_REQUIRED`,
+  a wrong code and a wrong password still answer identically); the platform-owned code budget on
+  the ADR 0033 limiter (burst 5, 5 an hour, per account by a hash of the subject, charged after
+  the password is proven and before a code reaches Keycloak) with its metric and alert; enrolment
+  with the AES-256-GCM sealed secret and ticket and the confirm-by-grant proof
+  (`StaffMfaService`, `iam/web/StaffMfaController`); listing, adding and removing authenticators
+  in Keycloak (`KeycloakStaffAccounts`); requirement evaluation (`MfaPolicy`: platform grants
+  always, tenant accounts by `iam.staff_mfa_requirement` `OFF`/`SENSITIVE_ROLES`/`ALL_STAFF`);
+  `iam.staff.mfa.read` and `iam.staff.mfa.reset`, the audited administrator reset (platform
+  scope behind a second signature, `IAM_STAFF_MFA_RESET`, V0500), the three emails in uz / ru /
+  en, the break-glass script and its runbook; the second step, the enrolment screen and ticket
+  page, the authenticator card in Мой профиль, the administrator panel, the staff list column and
+  the tenant requirement card in the operations console, and the second step and enrolment in the
+  control plane, on `q-otp-input` and a QR encoder written for the console's byte budget. Not
+  built: the offer to enrol at invitation acceptance; ending a tenant's existing sessions when its
+  requirement is switched on (they hold until they expire); a control-plane screen that starts a
+  platform-scope reset or lists platform accounts (the API takes the member id, the support roles
+  hold no `STAFF_PROFILE_READ` to find one from the operations list); enforcing that a code came
+  from a *different* authenticator than the one being removed (Keycloak does not expose it; the
+  rule enforced is a valid code and at least one authenticator left); the two secrets this needs
+  per environment (the password-check client's and the enrolment sealing key) are references that
+  have to be seeded in OpenBao and the live realm reconciled by the runbook step, neither done
+  here. The Keycloak spike's result is recorded in the implementation note below.
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -455,31 +460,60 @@ reset action is how that is undone for a person.
 
 ## Implementation checklist
 
-- [ ] The Keycloak spike; its result recorded on this ADR.
-- [ ] Realm file: OTP policy, `horecaos-staff-password-check` client and flow; the
-      live-realm runbook step.
-- [ ] `StaffDirectGrantClient` sends `totp`; the password-only adapter, asked first,
+- [x] The Keycloak spike; its result recorded on this ADR (the implementation note below).
+- [x] Realm file: OTP policy, `horecaos-staff-password-check` client and flow; the
+      live-realm runbook step (written; running it against the live realm waits for the owner).
+- [x] `StaffDirectGrantClient` sends `totp`; the password-only adapter, asked first,
       returning a subject id and no token; the answers above in `StaffAuthService`;
       `ErrorCode` entries.
-- [ ] The code budget on the ADR 0033 limiter, keyed by subject id, strict, charged
+- [x] The code budget on the ADR 0033 limiter, keyed by subject id, strict, charged
       after the probe and before the code is sent; the `budget` metric and its alert;
       the same charge in the authenticator-removal endpoint.
-- [ ] Decide how the probe's Keycloak session ends (a revoke, or idle expiry), in the
-      same spike.
-- [ ] `KeycloakStaffAccounts`: list, add and remove OTP credentials; required-action
+- [x] Decide how the probe's Keycloak session ends (a revoke, or idle expiry), in the
+      same spike (a logout with the refresh token, best effort; the client's own 60-second idle
+      timeout is the backstop).
+- [x] `KeycloakStaffAccounts`: list, add and remove OTP credentials; required-action
       handling.
-- [ ] Enrolment endpoints and the sealed token; the confirm-by-grant proof and its
+- [x] Enrolment endpoints and the sealed token; the confirm-by-grant proof and its
       compensation.
-- [ ] Requirement evaluation after password sign-in; the deploy setting and the
+- [x] Requirement evaluation after password sign-in; the deploy setting and the
       tenant `ConfigurationKey`; role flag.
-- [ ] `iam.staff.mfa.read` and `iam.staff.mfa.reset` capabilities and bundles; the
+- [x] `iam.staff.mfa.read` and `iam.staff.mfa.reset` capabilities and bundles; the
       approval action for platform-scope resets; audit facts; emails in uz / ru / en.
-- [ ] Break-glass script and its runbook entry.
-- [ ] Sign-in second step, enrolment screen and authenticator list in both consoles
-      on `q-otp-input`, `q-qr-code`; `q-otp-input` available to the control plane.
-- [ ] Staff list MFA column (spec §11.9) from the cached Keycloak read.
-- [ ] Update `staff-and-access.md` §11.9 and ADR 0062/0139 status notes.
-- [ ] Tests listed under Testing, each seen failing first.
+- [x] Break-glass script and its runbook entry.
+- [x] Sign-in second step, enrolment screen and authenticator list in both consoles
+      on `q-otp-input`, `q-qr-code`; `q-otp-input` available to the control plane (the
+      control plane has the second step and enrolment; its authenticator list waits for the
+      screen that starts a platform reset, see the status line).
+- [x] Staff list MFA column (spec §11.9) from the cached Keycloak read.
+- [ ] Update `staff-and-access.md` §11.9 (done) and ADR 0062/0139 status notes (not done).
+- [x] Tests listed under Testing, each seen failing first (eight mutations of the production code, each caught by the test written for it).
+
+## Implementation note: the Keycloak spike (2026-10-07)
+
+Run against a throwaway Keycloak 26.7.0 container with the realm file and the two scripts above.
+The first open input, "can the platform hand Keycloak a secret and have a sign-in with a code
+succeed", is **yes**, and Decision 3 is built as written; enrolment through `CONFIGURE_TOTP` was
+not needed. What the spike settled, each now pinned by `StaffMfaKeycloakIntegrationTests` (which
+runs only where a Keycloak is reachable and is skipped, not failed, elsewhere):
+
+- *The secret.* The admin API stores an OTP credential whose `secretData.value` is Keycloak's own
+  20-character string, and the HMAC key is that string's UTF-8 bytes; what an authenticator app
+  wants is its Base32. The platform generates the 20 characters, shows their Base32 and an
+  `otpauth://` URI, and keeps nothing of either past the ten-minute sealed token.
+- *Two authenticators, delete by id.* Two OTP credentials on one account both verify; removing one
+  by its credential id leaves the other signing in. A credential added through the admin API with
+  a `CONFIGURE_TOTP` required action pending does not clear that action, so the add removes it in
+  the same write, or the next password grant would be answered with "account not fully set up".
+- *The probe.* A password-only grant by the second client succeeds without a code, clears
+  Keycloak's failure count for the account (which is why the platform owns the code budget), and
+  opens a session that is ended by a logout with the refresh token; the client's 60-second idle
+  timeout covers a logout that fails. Its access token never leaves the adapter: only the subject
+  id is read out.
+- *A code is single-use* inside its 30-second step on the direct grant, as the earlier run found.
+  The confirm-by-grant proof is therefore the first and only use of the code the person typed, and
+  anything that signs in again straight after it (an integration test, a person who is quick) has
+  to wait for the next step's code.
 
 ## Exit criteria
 

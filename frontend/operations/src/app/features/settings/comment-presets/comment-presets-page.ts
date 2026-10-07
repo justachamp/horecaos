@@ -4,9 +4,10 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import {
   LabelsByLocale,
-  PLATFORM_LOCALE_SET,
+  platformLocaleSet,
   labelDrafts,
   labelsToSend,
   localeDisplayName,
@@ -59,6 +60,7 @@ export class CommentPresetsPage {
   private readonly api = inject(CommentPresetsApi);
   private readonly tenant = inject(CurrentTenant);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly statuses = STATUSES;
 
@@ -72,7 +74,7 @@ export class CommentPresetsPage {
   );
 
   /** The languages this editor offers (row 10.12): the platform triple until the tenant's set loads. */
-  protected readonly localeSet = signal(PLATFORM_LOCALE_SET);
+  protected readonly localeSet = signal(platformLocaleSet(this.registry));
   protected readonly locales = computed(() => this.localeSet().locales);
   protected readonly defaultLocale = computed(() => this.localeSet().defaultLocale);
 
@@ -125,7 +127,7 @@ export class CommentPresetsPage {
         this.api.list(tenantId),
         // The set only decides which languages the form offers; a tenant whose
         // set cannot be read still gets a working editor on the platform triple.
-        this.api.localeSet(tenantId).catch(() => PLATFORM_LOCALE_SET),
+        this.api.localeSet(tenantId).catch(() => platformLocaleSet(this.registry)),
       ]);
       this.presets.set(presets);
       this.localeSet.set(localeSet);

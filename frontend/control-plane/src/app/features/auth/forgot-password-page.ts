@@ -199,7 +199,7 @@ export class ForgotPasswordPage {
     this.busy.set(true);
     this.errorKey.set(null);
     try {
-      await this.resets.request(this.login().trim(), localeParameter(this.i18n.locale()));
+      await this.resets.request(this.login().trim(), this.i18n.locale());
       this.sent.set(true);
     } catch (failure) {
       this.errorKey.set(messageFor(failure));
@@ -223,12 +223,4 @@ function messageFor(failure: unknown): MessageKey {
     }
   }
   return 'forgotPassword.failed';
-}
-
-/** The catalogue's locale in the three-value shape the platform's email renderer takes. */
-function localeParameter(locale: string): string {
-  if (locale === 'uz-Latn') {
-    return 'uz';
-  }
-  return locale === 'en' ? 'en' : 'ru';
 }

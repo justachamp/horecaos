@@ -1,3 +1,5 @@
+import { platformTag } from '../services/lang.service';
+
 /**
  * The wording of one preset comment, as the platform sends it
  * (`StorefrontCatalogQuery.CommentPresetOption`).
@@ -16,11 +18,6 @@ export interface PresetWording {
   readonly label?: string;
 }
 
-/** The storefront's language ids are the catalog's (`uz`); the platform's locale for Uzbek is `uz-Latn`. */
-function platformLocale(langId: string): string {
-  return langId === 'uz' ? 'uz-Latn' : langId;
-}
-
 /**
  * A preset's wording in the customer's own language.
  *
@@ -31,7 +28,7 @@ function platformLocale(langId: string): string {
  * this screen always did.
  */
 export function presetLabelFor(preset: PresetWording, langId: string): string {
-  const own = preset.labels?.[platformLocale(langId)];
+  const own = preset.labels?.[platformTag(langId)];
   if (own) {
     return own;
   }

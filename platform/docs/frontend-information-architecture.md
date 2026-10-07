@@ -374,7 +374,7 @@ The current set (Button, Icon, DataTable, EmptyState, StatusPill, Input, Select,
 ### Template-level gaps
 1. **One console template is not enough.** Operations needs three shells: operator console (dense, keyboard-first), **device/KDS fullscreen** (touch targets, no chrome, offline banner), and **wallboard** (oversized, TV-legible). Carbon 0px corners survive all three; the density, hit-target and type scales do not.
 2. **A semantic status colour ramp** beyond `StatusPill` — SLA green/amber/red at bucket boundaries, plus a tenant-chosen late-highlight colour that must remain accessible against the ramp.
-3. **A `dir`/script-safe type stack.** Uzbek Latin (with apostrophes that the legacy storefront's own search regex rejected), Cyrillic Russian, Latin English, plus Kazakh and Georgian on the roadmap.
+3. **A `dir`/script-safe type stack.** Uzbek Latin (with apostrophes that the legacy storefront's own search regex rejected), Cyrillic Russian, Latin English, plus Kazakh and Georgian on the roadmap. *Status (ADR 0149):* the stack states its direction (`<html dir>` follows `<html lang>` from the registry's per-entry direction, `LTR` for every language registered) and new CSS is written in logical properties, with a ratchet that fails a new stylesheet saying `margin-left`; Kazakh and Georgian are **declared in the registry with no tier live**, each with the face it needs named (a glyph audit for Kazakh, a lazily loaded face for Georgian), and activating one is a per-tier release with its own checklist (`frontend/operations/README.md`). No right-to-left language is registered, and registering one needs its own record.
 
 ---
 

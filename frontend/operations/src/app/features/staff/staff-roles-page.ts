@@ -8,12 +8,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { AccessRefusal, accessRefusal, describeApiError } from '../orders/order-errors';
 import { DeniedState } from '../../shared/ui/denied-state';
 import { LockedState } from '../../shared/ui/locked-state';
-import {
-  CAPABILITY_SENTENCES,
-  SentenceLocale,
-  capabilityAreaName,
-  sentenceLocale,
-} from './capability-sentences';
+import { CAPABILITY_SENTENCES, SentenceLocale, capabilityAreaName } from './capability-sentences';
 import { GrantView, RoleDescriptor, ScopeDirectory, StaffApi } from './staff-api';
 import { roleDescription, roleLabel, scopeLevelLabel } from './staff-role-labels';
 
@@ -100,7 +95,7 @@ export class StaffRolesPage {
   protected readonly query = signal('');
 
   protected readonly rows = computed<readonly RoleRow[]>(() => {
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     const grants = this.grants().filter((g) => g.status === 'ACTIVE');
     const needle = this.query().trim().toLowerCase();
     return this.roles()
@@ -158,7 +153,7 @@ export class StaffRolesPage {
   }
 
   protected canDoSentences(role: RoleDescriptor): readonly string[] {
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     return [...role.capabilities]
       .map((code) => CAPABILITY_SENTENCES[code]?.[locale] ?? code)
       .sort();
@@ -178,7 +173,7 @@ export class StaffRolesPage {
         }
       }
     }
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     return Array.from(others)
       .map((code) => CAPABILITY_SENTENCES[code]?.[locale] ?? code)
       .sort();

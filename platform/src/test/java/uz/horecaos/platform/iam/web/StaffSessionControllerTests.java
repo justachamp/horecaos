@@ -1,8 +1,11 @@
 package uz.horecaos.platform.iam.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -70,7 +73,7 @@ class StaffSessionControllerTests {
     @Test
     @DisplayName("control-plane sign-in is reachable with no bearer token")
     void controlPlaneSignInIsUnauthenticated() throws Exception {
-        when(auth.signIn(anyString(), anyString(), anyString()))
+        when(auth.signIn(anyString(), anyString(), any(), anyString()))
                 .thenReturn(new StaffAuthService.StaffSession(
                         "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
 
@@ -87,7 +90,7 @@ class StaffSessionControllerTests {
     @Test
     @DisplayName("operations sign-in is reachable with no bearer token")
     void operationsSignInIsUnauthenticated() throws Exception {
-        when(auth.signIn(anyString(), anyString(), anyString()))
+        when(auth.signIn(anyString(), anyString(), any(), anyString()))
                 .thenReturn(new StaffAuthService.StaffSession(
                         "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
 
@@ -99,6 +102,81 @@ class StaffSessionControllerTests {
                 .getStatus();
 
         assertThat(status).isEqualTo(201);
+    }
+
+    @Test
+    @DisplayName("the one-time code travels as otp, and a client that does not know about it keeps working")
+    void theCodeIsForwardedAsOtp() throws Exception {
+        when(auth.signIn(anyString(), anyString(), any(), anyString()))
+                .thenReturn(new StaffAuthService.StaffSession(
+                        "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
+
+        var response = mvc.perform(post("/api/v1/operations/auth/sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"cook\",\"password\":\"correct horse\",\"otp\":\"482913\"}"))
+                .andReturn()
+                .getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(201);
+        assertThat(response.getContentAsString()).contains("\"mfaEnrolmentOffered\":false");
+        verify(auth).signIn(eq("cook"), eq("correct horse"), eq("482913"), anyString());
+    }
+
+    @Test
+    @DisplayName("a code that is not six digits is refused before anything is asked of Keycloak")
+    void aMalformedCodeIsRefusedAtTheEdge() throws Exception {
+        for (String bad : new String[] {"12345", "1234567", "12345a", "", " 482913"}) {
+            var response = mvc.perform(post("/api/v1/control-plane/auth/sessions")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"cook\",\"password\":\"pw\",\"otp\":\"" + bad + "\"}"))
+                    .andReturn()
+                    .getResponse();
+            assertThat(response.getStatus()).as("otp=" + bad).isEqualTo(400);
+            assertThat(response.getContentAsString()).contains("VALIDATION_FAILED");
+        }
+        verify(auth, org.mockito.Mockito.never()).signIn(anyString(), anyString(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("the second step's answers reach the page with their own status and code, and the ticket rides along")
+    void theSecondStepAnswers() throws Exception {
+        var required = new uz.horecaos.platform.web.api.ApiException(
+                uz.horecaos.platform.web.api.ErrorCode.MFA_REQUIRED, "Enter the code.");
+        var invalid = new uz.horecaos.platform.web.api.ApiException(
+                uz.horecaos.platform.web.api.ErrorCode.MFA_CODE_INVALID, "Wrong code.");
+        var enrol = new uz.horecaos.platform.web.api.ApiException(
+                uz.horecaos.platform.web.api.ErrorCode.MFA_ENROLMENT_REQUIRED,
+                "Set one up.",
+                java.util.Map.of("enrolmentTicket", "a-ticket", "expiresAt", "2026-09-01T10:15:00Z"));
+        var exhausted = new uz.horecaos.platform.web.api.ApiException(
+                uz.horecaos.platform.web.api.ErrorCode.RATE_LIMIT_EXCEEDED,
+                "Too many.",
+                java.util.Map.of("retryAfterSeconds", 720L));
+        when(auth.signIn(anyString(), anyString(), any(), anyString()))
+                .thenThrow(required)
+                .thenThrow(invalid)
+                .thenThrow(enrol)
+                .thenThrow(exhausted);
+
+        int[] expectedStatus = {401, 401, 403, 429};
+        String[] expectedCode = {"MFA_REQUIRED", "MFA_CODE_INVALID", "MFA_ENROLMENT_REQUIRED", "RATE_LIMIT_EXCEEDED"};
+        for (int i = 0; i < 4; i++) {
+            var response = mvc.perform(post("/api/v1/operations/auth/sessions")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"cook\",\"password\":\"pw\"}"))
+                    .andReturn()
+                    .getResponse();
+            assertThat(response.getStatus()).isEqualTo(expectedStatus[i]);
+            assertThat(response.getContentAsString()).contains("\"code\":\"" + expectedCode[i] + "\"");
+            if (i == 2) {
+                assertThat(response.getContentAsString())
+                        .contains("\"enrolmentTicket\":\"a-ticket\"")
+                        .contains("\"expiresAt\":\"2026-09-01T10:15:00Z\"");
+            }
+            if (i == 3) {
+                assertThat(response.getContentAsString()).contains("\"retryAfterSeconds\":720");
+            }
+        }
     }
 
     @Test

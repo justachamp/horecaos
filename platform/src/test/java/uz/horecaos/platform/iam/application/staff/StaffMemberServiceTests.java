@@ -610,7 +610,9 @@ class StaffMemberServiceTests {
 
         assertThat(after.lastName()).isEqualTo("Ismoilova-Karimova");
         assertThat(after.phone()).isEqualTo("+998990001122");
-        assertThat(after.uiLocale()).isEqualTo("uz");
+        assertThat(after.uiLocale())
+                .as("a bare uz is read as uz-Latn and the member reads back the tag")
+                .isEqualTo("uz-Latn");
         assertThat(after.spokenLanguages()).containsExactly("uz", "ru", "en");
         assertThat(after.employmentStatus())
                 .as("a person never changes their own employment")

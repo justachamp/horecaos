@@ -8,6 +8,7 @@ import { Page } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { EmploymentStatus, StaffMember } from '../../core/api/staff-member';
 import { staffPaths } from '../../core/api/staff-paths';
+import { MfaRequirement, OwnMfa } from '../../core/auth/mfa-api';
 
 export type { EmploymentStatus, StaffMember };
 
@@ -85,6 +86,27 @@ export interface EmergencyContactInput {
   readonly phone: string;
 }
 
+/** One row of `GET .../staff/mfa-summary` (ADR 0148): the staff list's «Способ входа» column. */
+export interface MfaSummaryRow {
+  readonly memberId: string;
+  /** `KNOWN` when Keycloak answered; `NO_ACCOUNT` for an invitation not yet accepted; `UNKNOWN` when it could not say. */
+  readonly state: 'KNOWN' | 'NO_ACCOUNT' | 'UNKNOWN';
+  readonly enrolled: boolean;
+  readonly authenticators: number;
+}
+
+/** What `GET .../staff/members/{memberId}/mfa` answers: the same shape as a person's own read. */
+export type MemberMfa = Pick<OwnMfa, 'enrolled' | 'authenticators'> & {
+  readonly requirement: MfaRequirement;
+};
+
+/** `POST .../mfa/resets`'s answer. */
+export interface MfaResetResult {
+  readonly authenticatorsRemoved: number;
+  readonly sessionsEnded: boolean;
+  readonly personNotified: boolean;
+}
+
 /**
  * The staff member record's API seam (ADR 0139): the People screen, the person
  * card, «Мой профиль» and the branch's colleague picker.
@@ -123,6 +145,45 @@ export class StaffMembersApi {
       this.api.get<Page<StaffMember>>(staffPaths.locationMembers(scope)),
     );
     return result.value.items;
+  }
+
+  /**
+   * `iam.staff.mfa.read`: whether this person holds a second factor, from Keycloak's own
+   * credential list (cached sixty seconds on the platform). Never a secret.
+   */
+  async mfa(tenantId: string, memberId: string): Promise<MemberMfa> {
+    const result = await firstValueFrom(
+      this.api.get<MemberMfa>(staffPaths.memberMfa(tenantId, memberId)),
+    );
+    return result.value;
+  }
+
+  /** The column for the whole list. A person Keycloak could not answer for is `UNKNOWN`, and the rest still render. */
+  async mfaSummary(tenantId: string): Promise<readonly MfaSummaryRow[]> {
+    const result = await firstValueFrom(
+      this.api.get<{ readonly members: readonly MfaSummaryRow[] }>(staffPaths.mfaSummary(tenantId)),
+    );
+    return result.value.members;
+  }
+
+  /**
+   * `iam.staff.mfa.reset`: removes every authenticator, ends the sessions, writes an audit fact
+   * with the reason and emails the person. `version` is the member's, from the read the person
+   * card showed; a reset of a stale card is a 409, not a surprise.
+   */
+  async resetMfa(
+    tenantId: string,
+    memberId: string,
+    reason: string,
+    version: number,
+  ): Promise<MfaResetResult> {
+    return firstValueFrom(
+      this.api.post<{ readonly reason: string }, MfaResetResult>(
+        staffPaths.memberMfaReset(tenantId, memberId),
+        command({ reason }),
+        { expectedVersion: version },
+      ),
+    );
   }
 
   /** One person in full: phone, employee number and a short-lived photo link. */

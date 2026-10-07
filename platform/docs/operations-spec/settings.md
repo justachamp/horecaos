@@ -1181,7 +1181,7 @@ who will never open any other settings screen, and because half the console's ot
 
 | Field | Type | Source |
 |---|---|---|
-| Поддерживаемые языки | multi-select from `uz-Latn, uz-Cyrl, ru, en` (+ `kk`, `ka` on the roadmap) | **not built.** There is no per-brand language list. `catalog.translations.locale` exists per entity, so today the set of languages is implied by whatever anyone happened to translate |
+| Поддерживаемые языки | multi-select over **the registry's content tier** (`GET /api/v1/operations/locales`, ADR 0149): `ru, uz-Latn, en` live; `kk`, `ka` declared and offered nowhere until a release makes them live. `uz-Cyrl` and `kaa` are not declared (the registry has room for both) | **built** (10.1's brand profile, V0242 `tenant.brand_locales`): the brand's own set and default, validated against the registry's content tier, not a list this screen keeps. A bare `uz` from an older client is read as `uz-Latn` and never stored |
 | Язык по умолчанию | single select | `platform.default_locale` (`ConfigurationKeys.DEFAULT_LOCALE`, default `"uz"`, tenant-visible) — a **real registered key today**, resolvable at every level |
 | Валюта | read-only `UZS` | `tenant.tenants.default_currency` |
 | Часовой пояс | IANA | `tenant.tenants.default_timezone`; per-location `tenant.locations.timezone` |
@@ -1189,6 +1189,22 @@ who will never open any other settings screen, and because half the console's ot
 | Формат времени | read-only 24h | same |
 | Формат телефона | **built (batch 16): a pattern, `#` per digit** — as stored, three presets or a custom one; shown on the order detail, the reports customer column and the brand and branch contact phone | `tenant.brands.phone_display_pattern` (V0441), `PUT .../brands/{brandId}/regional-formats` |
 | Денежный формат | **built (batch 16):** the unit before or after a total, thousands separated by a space, comma, dot or nothing. Still whole som, no minor units | `tenant.brands.money_symbol_placement` / `money_grouping` (V0441), the same endpoint |
+
+**Languages are a registry entry with a lifecycle per tier (ADR 0149).** A language is live in
+**content** (what a brand can author and a customer read), **messages** (what the platform writes to a
+customer: notification wordings, the bot, emails, SMS) and **staff UI** (the consoles) independently, and
+activating one in a tier is a release, never a tenant's configuration. What this screen therefore means:
+
+- the languages it offers are the registry's content tier; a declared language that is not live is not on
+  the list, and adding one needs no change here;
+- **"all of this brand's languages are required"**: a notification template version needs a wording in
+  every language *the template's brand serves* (a tenant-wide template: the union of the tenant's
+  brands) before it can be saved or activated, not in every language the platform has. A customer whose
+  language the brand does not serve is written to in the brand's default, and where that wording is
+  missing too, in the registry's fallback (`ru`); a tenant-scoped vocabulary (outcome reasons, payment
+  method names) counts the union of its brands, as `TenantLocaleSet` already decides;
+- the catalog's own `uz` (`catalog.translations`, the hashed published snapshots) is `uz-Latn`'s one named
+  `catalogCode`: the console never converts it itself, it asks the registry.
 
 **Judgement.** Currency, date and time formats are **derived from country and shown read-only**,
 not offered as choices. Every one of them is a source of subtle breakage when a tenant sets it

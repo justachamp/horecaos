@@ -15,6 +15,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { formatMoneyRange } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import { WiringSentence, wiringSentence } from '../channel-wiring';
@@ -134,6 +135,7 @@ export class CampaignsPage implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   /** The address's own query: which tab, and whether a scenario is open in the editor. */
   private readonly query = toSignal(this.route.queryParamMap);
@@ -629,7 +631,11 @@ export class CampaignsPage implements OnInit {
   }
 
   protected fixedValuesOfRow(row: PredicateDraft): readonly string[] | null {
-    return descriptorFor(row.type).fixedValues;
+    const descriptor = descriptorFor(row.type);
+    // The platform's languages come from the registry, not from this catalogue (ADR 0149).
+    return descriptor.fixedValuesFromTier
+      ? this.registry.active(descriptor.fixedValuesFromTier)
+      : descriptor.fixedValues;
   }
 
   protected canCreateAudience(): boolean {

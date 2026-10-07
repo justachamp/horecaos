@@ -12,11 +12,12 @@ import {
 import { StaffMember } from '../../core/api/staff-member';
 import { I18n } from '../../core/i18n/i18n';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import {
   DraftProblem,
   EditableStatus,
-  OFFERED_LANGUAGES,
+  spokenLanguageCodes,
   ProfileDraft,
   draftOf,
   problemsOf,
@@ -74,7 +75,15 @@ export class StaffProfileForm implements OnInit {
   /** Problems are only shown after a first try to save, so a form is not red before anyone has typed. */
   protected readonly attempted = signal(false);
 
-  protected readonly languages = OFFERED_LANGUAGES;
+  private readonly registry = inject(PlatformLocales);
+
+  /** The languages the console can be set to: the registry's staff-UI tier (ADR 0149). */
+  protected readonly uiLanguages = computed(() => this.registry.active('STAFF_UI'));
+
+  /** The ISO 639 codes "speaks" offers: the languages the registry has live in the content tier. */
+  protected readonly spokenCodes = computed(() =>
+    spokenLanguageCodes(this.registry.active('CONTENT')),
+  );
   protected readonly problems = computed<readonly DraftProblem[]>(() =>
     problemsOf(this.draft(), this.manager()),
   );
@@ -105,9 +114,17 @@ export class StaffProfileForm implements OnInit {
     this.set('status', value as EditableStatus);
   }
 
-  /** The language's own name -- `uz` is the console's Uzbek (Latin). */
-  protected languageName(code: string): string {
-    return localeDisplayName(this.i18n, code === 'uz' ? 'uz-Latn' : code);
+  /** An interface language's name, in the console's own wording. */
+  protected languageName(tag: string): string {
+    return localeDisplayName(this.i18n, tag, this.registry);
+  }
+
+  /** A spoken language's name: the registry's name of the live language that code belongs to. */
+  protected spokenName(code: string): string {
+    const tag = this.registry
+      .active('CONTENT')
+      .find((candidate) => candidate.split('-')[0] === code);
+    return tag === undefined ? code : localeDisplayName(this.i18n, tag, this.registry);
   }
 
   protected submit(): void {

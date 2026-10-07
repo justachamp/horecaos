@@ -11,6 +11,12 @@
       }
     },
     {
+      "files": ["**/*.css"],
+      "rules": {
+        "horecaos/no-physical-direction": "error"
+      }
+    },
+    {
       "files": ["**/rich-text-sanitizer.spec.ts"],
       "rules": {
         "horecaos/no-raw-px-font-size": "off"

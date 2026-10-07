@@ -24,6 +24,8 @@ import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.tenancy.api.PlatformLocale;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * Contact points and addresses (ADR 0015, ADR 0029).
@@ -535,13 +537,28 @@ public class CustomerProfileService {
                         accountId,
                         expectedVersion,
                         blankToNull(displayName),
-                        blankToNull(preferredLocale),
+                        preferredLocaleOf(blankToNull(preferredLocale)),
                         blankToNull(preferredTimezone),
                         clock.instant())
                 == 0) {
             throw new StaleRecordException(expectedVersion, current.version());
         }
         return expectedVersion + 1;
+    }
+
+    /**
+     * The tag a customer's language is stored as (ADR 0149, Decision 3): what the registry calls the
+     * language the client named. The storefront's language screen writes the id of the language it
+     * offers, which for Uzbek has always been a bare {@code uz}; the platform's spelling is
+     * {@code uz-Latn}, the marketing copy of this column refuses a {@code uz} (V0043), and the
+     * customer reads the tag back. A value the registry does not know is kept as sent: a language
+     * not declared yet is still the customer's preference, and the notification path falls back
+     * to the brand's language for one it cannot send in.
+     */
+    private static @Nullable String preferredLocaleOf(@Nullable String value) {
+        return value == null
+                ? null
+                : PlatformLocales.parse(value).map(PlatformLocale::tag).orElse(value);
     }
 
     private static @Nullable String blankToNull(@Nullable String value) {

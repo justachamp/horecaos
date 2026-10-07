@@ -25,6 +25,7 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignSto
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.BatchClaim;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.CampaignRow;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * Turning a snapshot into ADR 0020 intents, one bounded batch at a time
@@ -324,7 +325,7 @@ public class CampaignSendService {
         // approver saw was computed from these, and pricing the send from a
         // different set would make the two disagree for no reason a marketer could
         // discover.
-        return member.localeAtEvaluation() == null ? "ru" : member.localeAtEvaluation();
+        return member.localeAtEvaluation() == null ? PlatformLocales.fallback().tag() : member.localeAtEvaluation();
     }
 
     /**

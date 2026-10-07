@@ -5,7 +5,13 @@ import type { MessageCatalogue, MessageKey } from './messages.en';
 import { coreRu } from './messages/core.ru';
 
 /**
- * The three locales this platform supports (ADR 0035).
+ * The languages this *build* has a message catalogue for (ADR 0035, ADR 0149).
+ *
+ * This is the one list a console keeps, on purpose: the catalogues are compile-time and typed, so a
+ * missing translation fails the build, and a language the build does not hold cannot be rendered
+ * whatever the platform says. It is not the platform's list of languages -- that is the registry
+ * (`platform-locales.ts`), which narrows what is offered to the languages live in the staff-UI tier.
+ * Adding a language is its catalogues here plus its registry entry going live; nothing else.
  *
  * `uz-Latn` carries its script subtag because uz-Latn and uz-Cyrl are different
  * locales and a bare `uz` is ambiguous.

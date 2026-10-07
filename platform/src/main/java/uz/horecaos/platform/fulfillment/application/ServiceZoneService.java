@@ -25,6 +25,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.LocalizedLabels;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -118,8 +119,9 @@ public class ServiceZoneService {
             @Nullable String nameEn,
             Map<String, String> names) {
         Map<String, String> supplied = suppliedNames(nameRu, nameUz, nameEn, names);
-        String defaultLocale =
-                brandLocales.brandDefaultLocale(tenantId, brandId).orElse("ru");
+        String defaultLocale = brandLocales
+                .brandDefaultLocale(tenantId, brandId)
+                .orElse(PlatformLocales.fallback().tag());
         String defaultName = supplied.get(defaultLocale);
         if (defaultName == null) {
             throw new ApiException(

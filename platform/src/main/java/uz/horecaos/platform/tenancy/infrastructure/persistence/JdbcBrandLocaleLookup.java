@@ -43,6 +43,27 @@ public class JdbcBrandLocaleLookup implements BrandLocaleLookup {
     }
 
     @Override
+    public TenantLocaleSet brandLocaleSet(UUID tenantId, UUID brandId) {
+        List<String> locales = new ArrayList<>();
+        String[] defaultLocale = new String[1];
+        jdbc.sql("""
+                SELECT locale, is_default FROM tenant.brand_locales
+                WHERE tenant_id = :tenantId AND brand_id = :brandId ORDER BY locale
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> {
+                    locales.add(row.getString("locale"));
+                    if (row.getBoolean("is_default")) {
+                        defaultLocale[0] = row.getString("locale");
+                    }
+                    return row.getString("locale");
+                })
+                .list();
+        return TenantLocaleSet.union(List.of(new BrandChoice(locales, defaultLocale[0])));
+    }
+
+    @Override
     public TenantLocaleSet tenantLocaleSet(UUID tenantId) {
         List<UUID> brandsInOrder =
                 jdbc.sql("""

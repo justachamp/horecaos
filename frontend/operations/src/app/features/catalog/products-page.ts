@@ -15,6 +15,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -111,6 +112,7 @@ export class ProductsPage implements OnInit {
   private readonly localeSet = inject(LocaleSet);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly columns = computed<readonly DataTableColumn[]>(() => {
     this.i18n.locale();
@@ -252,7 +254,11 @@ export class ProductsPage implements OnInit {
    * so the new row is named in the very list the operator is looking at.
    */
   private readonly listLocale = computed<string>(() =>
-    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+    listResolutionLocale(
+      this.localeSet.isConfigured(),
+      this.localeSet.defaultLocale(),
+      this.registry,
+    ),
   );
 
   /** Whether {@link listLocale} is the brand's own choice — false while it sits on the server's fallback. */
@@ -262,7 +268,11 @@ export class ProductsPage implements OnInit {
 
   /** {@link listLocale} as an operator would say it ("Uzbek (Latin)"), shown in the create dialog. */
   protected readonly listLocaleName = computed<string>(() =>
-    localeDisplayName(this.i18n, fromCatalogLocale(this.listLocale())),
+    localeDisplayName(
+      this.i18n,
+      fromCatalogLocale(this.listLocale(), this.registry),
+      this.registry,
+    ),
   );
 
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;

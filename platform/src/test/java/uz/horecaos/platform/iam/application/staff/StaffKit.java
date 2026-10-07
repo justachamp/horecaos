@@ -39,6 +39,7 @@ import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffEmergencyCon
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
+import uz.horecaos.platform.tenancy.application.PlatformLocaleVocabulary;
 import uz.horecaos.platform.web.cache.CacheRegistry;
 
 /**
@@ -131,7 +132,17 @@ final class StaffKit {
         codec = new StaffMemberCodec(TestProtection.envelope());
         ConcurrentMapCacheManager caches = new ConcurrentMapCacheManager(CacheRegistry.STAFF_DISPLAY_NAMES.cacheName());
         cache = new StaffNameCache(caches);
-        members = new StaffMemberService(store, codec, cache, publisher, authorization, revoking, photos, tx, clock);
+        members = new StaffMemberService(
+                store,
+                codec,
+                cache,
+                publisher,
+                authorization,
+                revoking,
+                photos,
+                tx,
+                clock,
+                new PlatformLocaleVocabulary());
         emergency = new StaffEmergencyContactService(store, contactStore, TestProtection.envelope(), publisher, clock);
         directory = new StaffDirectoryService(store, codec, cache, accounts);
         cards = new StaffMemberCardService(store, codec);

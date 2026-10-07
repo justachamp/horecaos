@@ -24,6 +24,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.tenancy.application.TenantProfileService;
 import uz.horecaos.platform.tenancy.domain.Markets;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantProfileStore.PublicHoliday;
@@ -49,9 +51,6 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 @Tag(name = "Reference data", description = "The platform's own supported countries, locales and public holidays")
 public class ReferenceDataController {
 
-    private static final List<Locale> LOCALES =
-            List.of(new Locale("ru", "Русский"), new Locale("uz-Latn", "O'zbekcha"), new Locale("en", "English"));
-
     private final TenantProfileService profiles;
     private final CurrentActor currentActor;
 
@@ -72,8 +71,19 @@ public class ReferenceDataController {
                         .map(market -> new Country(
                                 market.code(), market.name(), market.defaultCurrency(), market.defaultTimezone()))
                         .toList(),
-                LOCALES,
+                locales(),
                 profiles.holidays().stream().map(Holiday::of).toList());
+    }
+
+    /**
+     * The languages the staff consoles ship: the registry's staff-UI tier (ADR 0149), each named in
+     * itself. A language declared but not live there is not offered, so this list and the consoles'
+     * own catalogues cannot disagree.
+     */
+    private static List<Locale> locales() {
+        return PlatformLocales.active(Tier.STAFF_UI).stream()
+                .map(locale -> new Locale(locale.tag(), locale.ownName()))
+                .toList();
     }
 
     @PostMapping("/holidays")

@@ -232,8 +232,11 @@ export interface OnboardingTemplateSuggestion {
   readonly matched: boolean;
 }
 
-/** The language an owner's invitation is written in. */
-export type InvitationLocale = 'uz' | 'ru' | 'en';
+/**
+ * The language an owner's invitation is written in: a tag of the registry's messages tier (ADR 0149),
+ * `uz-Latn` for Uzbek. A bare `uz` from an older client is still read as that, and never stored.
+ */
+export type InvitationLocale = string;
 
 /** Where an invitation stands. `NONE` is not stored: it is a tenant nobody has invited yet. */
 export type OwnerInvitationState =

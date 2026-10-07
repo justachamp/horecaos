@@ -69,6 +69,7 @@ const AREA_BY_NAMESPACE: Readonly<Record<string, MessageArea>> = {
   invite: 'auth',
   forgotPassword: 'auth',
   resetPassword: 'auth',
+  mfa: 'auth',
 
   today: 'today',
   myWork: 'today',

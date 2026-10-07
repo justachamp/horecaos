@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.iam.api.mfa.MfaRequirementMode;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -32,7 +33,8 @@ public final class ConfigurationValueRules {
 
     private static final Map<String, Consumer<Object>> RULES = Map.of(
             "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay);
+            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
+            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode);
 
     private ConfigurationValueRules() {}
 
@@ -52,6 +54,14 @@ public final class ConfigurationValueRules {
     /** Whether {@code candidate} is a colour that may be served to a stylesheet. */
     public static boolean isHexColour(@Nullable String candidate) {
         return candidate != null && HEX_COLOUR.matcher(candidate).matches();
+    }
+
+    /** ADR 0148: a mistyped mode must be refused, never quietly read as "OFF". */
+    private static void requireMfaRequirementMode(Object value) {
+        if (MfaRequirementMode.parse(String.valueOf(value)).isEmpty()) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "iam.staff_mfa_requirement must be OFF, SENSITIVE_ROLES or ALL_STAFF");
+        }
     }
 
     private static void requireBlankOrHexColour(Object value) {

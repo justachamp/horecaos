@@ -13,6 +13,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { LocationScope } from '../../core/api/operations-paths';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
@@ -45,6 +46,7 @@ export class MenuSetsPage implements OnInit {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly localeSet = inject(LocaleSet);
 
   /**
@@ -55,7 +57,11 @@ export class MenuSetsPage implements OnInit {
    * search never matched the names of a brand whose menu is in Uzbek.
    */
   private readonly listLocale = computed<string>(() =>
-    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+    listResolutionLocale(
+      this.localeSet.isConfigured(),
+      this.localeSet.defaultLocale(),
+      this.registry,
+    ),
   );
 
   protected readonly firstLoadComplete = signal(false);

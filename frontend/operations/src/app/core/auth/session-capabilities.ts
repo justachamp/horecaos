@@ -46,7 +46,10 @@ export type Capability =
   | 'LOCATION_WRITE'
   | 'STAFF_PROFILE_READ'
   | 'STAFF_PROFILE_MANAGE'
-  | 'STAFF_EMERGENCY_CONTACT_READ';
+  | 'STAFF_EMERGENCY_CONTACT_READ'
+  | 'TENANT_CONFIGURATION_WRITE'
+  | 'IAM_STAFF_MFA_READ'
+  | 'IAM_STAFF_MFA_RESET';
 
 /**
  * Whether the signed-in operator holds a given capability *anywhere* — the

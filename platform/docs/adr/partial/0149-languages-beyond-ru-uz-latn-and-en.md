@@ -1,7 +1,31 @@
 # ADR 0149: Languages beyond ru, uz-Latn and en
 
 - Decision status: Accepted
-- Implementation status: Not started — the platform speaks three languages and
+- Implementation status: Partial — built and tested (operations batch 19, 2026-10-07): the registry
+  (`PlatformLocale`, `PlatformLocales` in `tenancy.api`: tag, `catalogCode`, input aliases, script,
+  direction, fallback rank, face, tiers, names; `ru`, `uz-Latn` and `en` live in all three tiers,
+  `kk` and `ka` declared with none, no language activated) and `GET /api/v1/{operations,
+  control-plane,storefront}/locales`; the backend lists, enums and orderings it replaces
+  (`BrandProfile`, `TenantLocaleSet`, `MessageLocale` as a handle on an entry, `TermsLocale` and
+  `ChannelPageLocale` removed, the outcome-reason, audience-predicate, reference-data, Telegram,
+  invitation, reset and staff-member sets, the four `JdbcCatalogStore` orderings, `CatalogLocales`);
+  identity reaches the registry through a port in `iam.api` because tenancy depends on identity;
+  "all of this brand's languages are required" in `NotificationTemplateService` with the send-time
+  fallback (requested, brand default, `ru`) and the tenant union for tenant-scoped vocabularies;
+  V0499 (fourteen `CHECK`s to the shape check, `uz` to `uz-Latn` in six columns, five columns widened),
+  its by-name test and the no-bare-`uz` scan with the three named exemptions;
+  `LocaleListsLiveInTheRegistryTests` as the command that finds no other list; the operations console
+  and the control plane reading the registry (`PlatformLocales`, `<html dir>`, the brand and branch
+  editors, a template's wordings, audience languages, staff languages, the catalog's codes, the
+  switcher narrowed to the staff-UI tier) with their hand-kept lists and `uz` conversions removed, a
+  logical-properties ratchet on both, the storefront's one `platformTag`, the activation checklist in
+  `frontend/operations/README.md`, `settings.md` §10.12 and the IA's type-stack line. Not built: the
+  mobile app's catalogue and lists (Flutter is on hold), the storefronts' catalogue files under the
+  registry's tags (`uz.json` stays, behind `platformTag`) and their reading of the registry rather
+  than a compiled-in language set, the Kazakh glyph audit and a Georgian face (both deferred to the
+  first activation, by the record's own default), and any language activation. The inventory the
+  record was written against, kept for the record as it stood on 2026-10-03 and not as it stands
+  now: the platform speaks three languages and
   records that fact in more than sixty independent declarations, counted by grep on
   the integrated tree (wave 17) on 2026-10-03, before counting the catalogues
   themselves. None of them is wrong; no one is the source of the others. The first
@@ -469,27 +493,29 @@ and why it is the last step that touches data.
 
 ## Implementation checklist
 
-- [ ] Owner accepts the record; no language is activated by it.
-- [ ] `PlatformLocales` and `GET …/locales`; the architecture test against literal
+- [x] Owner accepts the record; no language is activated by it (2026-10-07).
+- [x] `PlatformLocales` and `GET …/locales`; the architecture test against literal
       lists.
-- [ ] Replace `BrandProfile.KNOWN_LOCALES`, `TenantLocaleSet.PLATFORM_LOCALES`,
+- [x] Replace `BrandProfile.KNOWN_LOCALES`, `TenantLocaleSet.PLATFORM_LOCALES`,
       `MessageLocale`, `TermsLocale`, `ChannelPageLocale`, `REQUIRED_LOCALES`,
       `SUPPORTED_LOCALES`, `ReferenceDataController.LOCALES`, the bot's sets, the
       three invitation and reset `LOCALES`, `StaffMembers.UI_LOCALES` and the four
       `JdbcCatalogStore` `CASE`s; fold `CatalogLocales` into the registry's
       `catalogCode`.
-- [ ] Brand-scoped "required" in `NotificationTemplateService` and its tests, each
+- [x] Brand-scoped "required" in `NotificationTemplateService` and its tests, each
       seen failing first.
-- [ ] The migration and its by-name test; the `uz` data rewrite in six columns; the
+- [x] The migration and its by-name test; the `uz` data rewrite in six columns; the
       no-bare-`uz`-anywhere-else scan with its three named exemptions; the mail module
       on the registry.
 - [ ] Frontend mirrors removed (the nineteen lists and the sixteen conversions, bar the
-      catalog's); `dir` set; the logical-properties lint on touched files.
-- [ ] Per-language activation checklist written into `frontend/operations/README.md`
+      catalog's); `dir` set; the logical-properties lint on touched files. Done in the
+      operations console and the control plane and, for the conversions, the storefront; the
+      storefronts' language sets and the mobile app are not.
+- [x] Per-language activation checklist written into `frontend/operations/README.md`
       beside the section that prices a fourth locale, which this record replaces.
 - [ ] Glyph audit of the bundled face against Kazakh; a Georgian face chosen with its
       licence (at activation, not now).
-- [ ] Update `settings.md` §10.12 and the IA's `X.40` line.
+- [x] Update `settings.md` §10.12 and the IA's `X.40` line.
 
 ## Exit criteria
 

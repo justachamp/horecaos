@@ -10,9 +10,10 @@ import {
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import {
   LabelsByLocale,
-  PLATFORM_LOCALE_SET,
+  platformLocaleSet,
   labelDrafts,
   labelsToSend,
   localeDisplayName,
@@ -78,6 +79,7 @@ export class RegionsPage implements OnInit {
   private readonly api = inject(RegionsApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -91,7 +93,7 @@ export class RegionsPage implements OnInit {
   protected readonly problems = signal<readonly string[]>([]);
 
   /** The languages this editor offers (row 10.12): the platform triple until the tenant's set loads. */
-  protected readonly localeSet = signal(PLATFORM_LOCALE_SET);
+  protected readonly localeSet = signal(platformLocaleSet(this.registry));
   protected readonly locales = computed(() => this.localeSet().locales);
   protected readonly defaultLocale = computed(() => this.localeSet().defaultLocale);
 
@@ -122,7 +124,7 @@ export class RegionsPage implements OnInit {
         this.api.list(scope.tenantId),
         // The set only decides which languages the form offers; a tenant whose
         // set cannot be read still gets a working editor on the platform triple.
-        this.api.localeSet(scope.tenantId).catch(() => PLATFORM_LOCALE_SET),
+        this.api.localeSet(scope.tenantId).catch(() => platformLocaleSet(this.registry)),
       ]);
       this.regions.set(regions);
       this.localeSet.set(localeSet);
@@ -139,11 +141,11 @@ export class RegionsPage implements OnInit {
 
   /** The region's name in the operator's own locale. */
   protected regionName(region: RegionResponse): string {
-    return localisedName(this.i18n.locale(), region);
+    return localisedName(this.i18n.locale(), region, this.registry.fallbackOrder());
   }
 
   protected localeName(locale: string): string {
-    return localeDisplayName(this.i18n, locale);
+    return localeDisplayName(this.i18n, locale, this.registry);
   }
 
   protected isDefault(locale: string): boolean {

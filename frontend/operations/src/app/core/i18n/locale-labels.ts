@@ -1,4 +1,5 @@
-import { DEFAULT_LOCALE, I18n, LOCALES } from './i18n';
+import { I18n, LOCALES } from './i18n';
+import type { PlatformLocales } from './platform-locales';
 
 /**
  * Wording keyed by locale tag — `ru`, `uz-Latn`, `en`, or any other well-formed
@@ -25,12 +26,22 @@ export interface LocaleSetView {
   readonly configured: boolean;
 }
 
-/** What an editor uses before the set has loaded, and when it cannot be read: the platform triple, `ru` first. */
-export const PLATFORM_LOCALE_SET: LocaleSetView = {
-  locales: LOCALES,
-  defaultLocale: DEFAULT_LOCALE,
-  configured: false,
-};
+/**
+ * What an editor uses before the set has loaded, and when it cannot be read: every language the
+ * registry has live in the content tier, in its fallback order, `ru` default (ADR 0149). Before the
+ * registry itself has been read, the languages this build has catalogues for.
+ *
+ * A function and not the constant it replaced, because a constant of three languages was one more
+ * declaration of which languages exist.
+ */
+export function platformLocaleSet(registry: PlatformLocales): LocaleSetView {
+  const content = registry.active('CONTENT');
+  return {
+    locales: content.length > 0 ? content : LOCALES,
+    defaultLocale: registry.fallback(),
+    configured: false,
+  };
+}
 
 /** One editable field per offered locale, prefilled with the wording the row already has. */
 export function labelDrafts(
@@ -127,7 +138,7 @@ export function platformColumns(
 }
 
 /** The locale's name for an operator: "Russian", "Uzbek (Latin)", "English" — or the bare tag for one this console has no name for. */
-export function localeDisplayName(i18n: I18n, locale: string): string {
+export function localeDisplayName(i18n: I18n, locale: string, registry?: PlatformLocales): string {
   switch (locale) {
     case 'ru':
       return i18n.t('settings.brandProfile.locale.ru');
@@ -136,7 +147,8 @@ export function localeDisplayName(i18n: I18n, locale: string): string {
     case 'en':
       return i18n.t('settings.brandProfile.locale.en');
     default:
-      return locale;
+      // A language this console has no key for: the registry names every language it declares.
+      return registry?.nameOf(locale, i18n.locale()) ?? locale;
   }
 }
 

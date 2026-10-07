@@ -221,6 +221,46 @@ export const en = {
 
   'login.forgotPassword': 'Forgot password?',
 
+  // ADR 0148: the second step of staff sign-in, and enrolling an authenticator app.
+  'login.mfa.title': 'Enter your code',
+  'login.mfa.lead': 'Open your authenticator app and enter the six-digit code for HorecaOS.',
+  'login.mfa.group': 'One-time code',
+  'login.mfa.digit': 'Digit',
+  'login.mfa.submit': 'Confirm',
+  'login.mfa.submitting': 'Checking…',
+  'login.mfa.back': 'Use a different account',
+  'login.mfa.invalid': 'That code is not right. Check the code in your app and try again.',
+  'login.mfa.rateLimited':
+    'Too many code attempts for this account. Try again in about {minutes} min.',
+  'login.mfa.expiredPassword':
+    'The password was not accepted. Enter your username and password again.',
+  'mfa.enrol.title': 'Set up two-step sign-in',
+  'mfa.enrol.leadRequired':
+    'Your account must use a code from an authenticator app. Set it up now to continue.',
+  'mfa.enrol.passwordStep': 'First, confirm it is you.',
+  'mfa.enrol.password': 'Your current password',
+  'mfa.enrol.continue': 'Continue',
+  'mfa.enrol.scanStep':
+    'Scan this code with an authenticator app, then enter the first code it shows.',
+  'mfa.enrol.qrLabel': 'QR code for the authenticator app',
+  'mfa.enrol.qrTooLong': 'The code could not be drawn. Enter the key below in the app.',
+  'mfa.enrol.cantScan': 'Cannot scan? Enter this key in the app:',
+  'mfa.enrol.label': 'Name this device (optional)',
+  'mfa.enrol.labelPlaceholder': 'My phone',
+  'mfa.enrol.confirm': 'Confirm and turn on',
+  'mfa.enrol.confirming': 'Checking…',
+  'mfa.enrol.group': 'First code from the app',
+  'mfa.enrol.digit': 'Digit',
+  'mfa.enrol.wrongPassword': 'That is not your current password.',
+  'mfa.enrol.wrongCode':
+    'That code did not match, so nothing was set up. Check the app and try again.',
+  'mfa.enrol.expired': 'This setup has expired. Start again.',
+  'mfa.enrol.full': 'An account holds at most two authenticators. Remove one first.',
+  'mfa.enrol.rateLimited': 'Too many attempts. Try again in about {minutes} min.',
+  'mfa.enrol.failed': 'Two-step sign-in could not be set up. Try again in a moment.',
+  'mfa.enrol.noTicket': 'Sign in first to set up two-step sign-in.',
+  'mfa.enrol.toSignIn': 'Back to sign-in',
+
   // ADR 0098: a staff member who forgot their password.
   'forgotPassword.title': 'Reset your password',
   'forgotPassword.lead': 'Enter your username or email address and we will send you a link.',
@@ -639,9 +679,6 @@ export const en = {
   'onboarding.invitation.expiresAt': 'Link expires',
   'onboarding.invitation.resendReason': 'Why it is sent again',
   'onboarding.invitation.sameLanguage': 'Same language',
-  'onboarding.invitation.locale.uz': 'Uzbek',
-  'onboarding.invitation.locale.ru': 'Russian',
-  'onboarding.invitation.locale.en': 'English',
   'onboarding.invitation.resend': 'Send again',
   'onboarding.invitation.none':
     'The owner’s account was linked before invitations existed, so no email was sent. Send one so they can set a password.',

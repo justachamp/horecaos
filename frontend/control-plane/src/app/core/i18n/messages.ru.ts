@@ -213,6 +213,45 @@ export const ru: Messages = {
 
   'login.forgotPassword': 'Забыли пароль?',
 
+  // ADR 0148: the second step of staff sign-in, and enrolling an authenticator app.
+  'login.mfa.title': 'Введите код',
+  'login.mfa.lead': 'Откройте приложение-аутентификатор и введите шестизначный код для HorecaOS.',
+  'login.mfa.group': 'Одноразовый код',
+  'login.mfa.digit': 'Цифра',
+  'login.mfa.submit': 'Подтвердить',
+  'login.mfa.submitting': 'Проверяем…',
+  'login.mfa.back': 'Войти под другой учётной записью',
+  'login.mfa.invalid': 'Код не подошёл. Проверьте код в приложении и попробуйте снова.',
+  'login.mfa.rateLimited':
+    'Слишком много попыток ввода кода для этой учётной записи. Повторите примерно через {minutes} мин.',
+  'login.mfa.expiredPassword': 'Пароль не принят. Введите имя пользователя и пароль заново.',
+  'mfa.enrol.title': 'Настройте вход в два шага',
+  'mfa.enrol.leadRequired':
+    'Для вашей учётной записи нужен код из приложения-аутентификатора. Настройте его сейчас, чтобы продолжить.',
+  'mfa.enrol.passwordStep': 'Сначала подтвердите, что это вы.',
+  'mfa.enrol.password': 'Ваш текущий пароль',
+  'mfa.enrol.continue': 'Продолжить',
+  'mfa.enrol.scanStep':
+    'Отсканируйте этот код приложением-аутентификатором и введите первый код, который оно покажет.',
+  'mfa.enrol.qrLabel': 'QR-код для приложения-аутентификатора',
+  'mfa.enrol.qrTooLong': 'Код не удалось нарисовать. Введите ключ ниже в приложении.',
+  'mfa.enrol.cantScan': 'Не получается отсканировать? Введите в приложении этот ключ:',
+  'mfa.enrol.label': 'Название устройства (необязательно)',
+  'mfa.enrol.labelPlaceholder': 'Мой телефон',
+  'mfa.enrol.confirm': 'Подтвердить и включить',
+  'mfa.enrol.confirming': 'Проверяем…',
+  'mfa.enrol.group': 'Первый код из приложения',
+  'mfa.enrol.digit': 'Цифра',
+  'mfa.enrol.wrongPassword': 'Это не ваш текущий пароль.',
+  'mfa.enrol.wrongCode':
+    'Код не подошёл, поэтому ничего не настроено. Проверьте приложение и попробуйте снова.',
+  'mfa.enrol.expired': 'Настройка устарела. Начните заново.',
+  'mfa.enrol.full': 'У учётной записи не больше двух аутентификаторов. Сначала удалите один.',
+  'mfa.enrol.rateLimited': 'Слишком много попыток. Повторите примерно через {minutes} мин.',
+  'mfa.enrol.failed': 'Не удалось настроить вход в два шага. Попробуйте ещё раз чуть позже.',
+  'mfa.enrol.noTicket': 'Сначала выполните вход, чтобы настроить вход в два шага.',
+  'mfa.enrol.toSignIn': 'Назад ко входу',
+
   'forgotPassword.title': 'Восстановление пароля',
   'forgotPassword.lead': 'Введите имя пользователя или email — мы отправим ссылку.',
   'forgotPassword.login': 'Имя пользователя или email',
@@ -630,9 +669,6 @@ export const ru: Messages = {
   'onboarding.invitation.expiresAt': 'Ссылка действует до',
   'onboarding.invitation.resendReason': 'Почему отправляем снова',
   'onboarding.invitation.sameLanguage': 'Тот же язык',
-  'onboarding.invitation.locale.uz': 'Узбекский',
-  'onboarding.invitation.locale.ru': 'Русский',
-  'onboarding.invitation.locale.en': 'Английский',
   'onboarding.invitation.resend': 'Отправить снова',
   'onboarding.invitation.none':
     'Учётная запись владельца была привязана до появления приглашений, поэтому письмо не отправлялось. Отправьте его, чтобы владелец мог задать пароль.',
