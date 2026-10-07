@@ -736,7 +736,37 @@ public class JdbcNotificationStore {
             @Nullable String providerType,
             @Nullable Instant acknowledgedAt,
             Instant now) {
+        settleAttempt(
+                tenantId,
+                attemptId,
+                status,
+                externalMessageId,
+                failureCode,
+                providerBindingId,
+                providerType,
+                acknowledgedAt,
+                null,
+                now);
+    }
+
+    /**
+     * {@link #settleAttempt} with the segments the provider says it billed (ADR 0146
+     * Decision 7), coalesced for the same reason the binding is: a later settle that
+     * did not hear a figure must not erase the one an earlier answer gave.
+     */
+    public void settleAttempt(
+            UUID tenantId,
+            UUID attemptId,
+            String status,
+            @Nullable String externalMessageId,
+            @Nullable String failureCode,
+            @Nullable UUID providerBindingId,
+            @Nullable String providerType,
+            @Nullable Instant acknowledgedAt,
+            @Nullable Integer providerSegments,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
+        parameters.put("segments", providerSegments);
         parameters.put("tenantId", tenantId);
         parameters.put("id", attemptId);
         parameters.put("status", status);
@@ -756,6 +786,8 @@ public class JdbcNotificationStore {
                     external_message_id = coalesce(:externalMessageId, external_message_id),
                     provider_binding_id = coalesce(:bindingId, provider_binding_id),
                     provider_type = coalesce(:providerType, provider_type),
+                    provider_segments = coalesce(:segments, provider_segments),
+                    receipt_state = CASE WHEN :status = 'ACCEPTED' THEN receipt_state END,
                     failure_code = :failureCode, acknowledged_at = :acknowledgedAt,
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.notifications.api;
 
+import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -38,6 +39,39 @@ public interface NotificationTransport {
             UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, String providerIdempotencyKey);
 
     /**
+     * Discovers what actually happened, given everything the platform knows about
+     * the attempt (ADR 0146 Decision 2, {@code resolve}).
+     *
+     * <p>The key-only overload above is enough for a gateway that holds our
+     * idempotency key. One that does not (VAS documents none) can be asked only
+     * "what did you send to this number today", which needs the provider's own
+     * message id when we have one and otherwise the destination and the hash of
+     * what we sent. Defaulted to the key-only call so a transport that predates
+     * ADR 0146 keeps its meaning.
+     */
+    default DispatchOutcome reconcile(ReconcileRequest request) {
+        return reconcile(
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.channel(),
+                request.providerIdempotencyKey());
+    }
+
+    /**
+     * Whether a message for {@code purpose} can leave on {@code channel} for this
+     * brand right now, and if not, the stable reason (ADR 0146 Decision 8).
+     *
+     * <p>"Wired" means a working account for this brand, not an adapter in this
+     * build: an active binding whose provider type has an adapter, whose sender is
+     * configured, and whose account has been cleared for the purpose. Defaulted to
+     * the global answer for a transport with no scoped notion of readiness.
+     */
+    default Readiness readiness(UUID tenantId, UUID brandId, String channel, String purpose) {
+        return supports(channel) ? Readiness.ok() : Readiness.notReady("NO_ADAPTER");
+    }
+
+    /**
      * Whether a real adapter is present for a channel.
      *
      * <p>Asked by eligibility, so a message on an unwired channel is suppressed
@@ -45,4 +79,53 @@ public interface NotificationTransport {
      * then quietly failed at the last step.
      */
     boolean supports(String channel);
+
+    /**
+     * Everything the platform has about one attempt whose outcome is not known.
+     *
+     * @param externalMessageId the provider's id when the answer to the send gave
+     *                          one, null when it never arrived
+     * @param destination the recipient, resolved for this call only and never
+     *                    persisted (ADR 0029); null when {@code externalMessageId}
+     *                    already identifies the message, because every
+     *                    destination lookup decrypts a number
+     * @param renderedContentHash SHA-256 of the text that was sent, for a
+     *                            gateway that can only be searched by day and
+     *                            destination
+     * @param requestedAt when the attempt was made, which names the day to search
+     */
+    record ReconcileRequest(
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String providerIdempotencyKey,
+            @Nullable String externalMessageId,
+            @Nullable String destination,
+            @Nullable String renderedContentHash,
+            Instant requestedAt) {
+
+        /** Holds a destination: Camel prints exchange bodies into logs, and a record prints its components. */
+        @Override
+        public String toString() {
+            return "ReconcileRequest[channel=%s, key=%s]".formatted(channel, providerIdempotencyKey);
+        }
+    }
+
+    /**
+     * @param reason a stable code when not ready: {@code NO_ADAPTER},
+     *               {@code NO_PROVIDER_BINDING}, {@code INSTALLATION_INACTIVE},
+     *               {@code SMS_ACCOUNT_MISCONFIGURED} or
+     *               {@code SMS_PURPOSE_NOT_PERMITTED}
+     */
+    record Readiness(boolean ready, @Nullable String reason) {
+
+        public static Readiness ok() {
+            return new Readiness(true, null);
+        }
+
+        public static Readiness notReady(String reason) {
+            return new Readiness(false, reason);
+        }
+    }
 }

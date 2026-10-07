@@ -331,6 +331,16 @@ public class SecurityConfiguration {
                         // registration ever had anything to prove.
                         .requestMatchers(HttpMethod.POST, "/providers/telegram/*/webhook")
                         .permitAll()
+                        // ADR 0146 Decision 4: an SMS gateway's delivery receipts.
+                        // Authenticated inside SmsReceiptController (a
+                        // per-installation secret where the provider can carry
+                        // one, the edge allowlist where it cannot), and every
+                        // refusal there is the same 404, so a provider type with
+                        // no receipt source is unreachable rather than
+                        // unauthenticated. Without this line the callback would
+                        // meet anyRequest().authenticated() and a bodyless 401.
+                        .requestMatchers(HttpMethod.POST, "/providers/sms/*/receipts")
+                        .permitAll()
                         // ADR 0062: staff sign in on a first-party page instead of a
                         // Keycloak redirect, and the backend takes the credentials to
                         // Keycloak on the caller's behalf. Sign-in is unavoidably

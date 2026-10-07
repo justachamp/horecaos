@@ -25,7 +25,7 @@ import uz.horecaos.platform.integration.api.provider.BindingRef;
  * record this class returns can hold one.
  */
 @Repository
-public class JdbcSmsAccountLookup implements SmsAccountLookup {
+public class JdbcSmsAccountLookup implements SmsAccountLookup, BindingConfigurationLookup {
 
     /** The keys this provider's account is configured under. */
     static final String LOGIN_KEY = "login";
@@ -40,6 +40,23 @@ public class JdbcSmsAccountLookup implements SmsAccountLookup {
     public JdbcSmsAccountLookup(JdbcClient jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public Map<String, String> configuration(BindingRef binding) {
+        return jdbc.sql("""
+                SELECT i.non_sensitive_config::text AS installation_config,
+                       b.configuration_override::text AS binding_config
+                  FROM integration.bindings b
+                  JOIN integration.installations i
+                    ON i.id = b.installation_id AND i.tenant_id = b.tenant_id
+                 WHERE b.tenant_id = :tenantId AND b.id = :bindingId
+                """)
+                .param("tenantId", binding.tenantId())
+                .param("bindingId", binding.bindingId())
+                .query((row, number) -> merge(row.getString("installation_config"), row.getString("binding_config")))
+                .optional()
+                .orElse(Map.of());
     }
 
     @Override
@@ -59,10 +76,15 @@ public class JdbcSmsAccountLookup implements SmsAccountLookup {
     }
 
     private SmsAccount read(String installationJson, String bindingJson) {
+        Map<String, String> merged = merge(installationJson, bindingJson);
+        return new SmsAccount(merged.get(LOGIN_KEY), merged.get(SENDER_KEY));
+    }
+
+    private Map<String, String> merge(String installationJson, String bindingJson) {
         Map<String, String> merged = new java.util.LinkedHashMap<>();
         flatten(installationJson, merged);
         flatten(bindingJson, merged);
-        return new SmsAccount(merged.get(LOGIN_KEY), merged.get(SENDER_KEY));
+        return merged;
     }
 
     private void flatten(String json, Map<String, String> into) {

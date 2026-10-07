@@ -22,6 +22,15 @@ import org.jspecify.annotations.Nullable;
  *                          failed before one was resolved. Recorded on the
  *                          attempt because "which gateway did we use?" is half of
  *                          any answer about a message that did not arrive
+ * @param normalizedStatus the provider's word mapped onto ADR 0020's ladder by
+ *                         the adapter that understands it (ADR 0146), or null
+ *                         for a gateway whose adapter leaves that to the
+ *                         dispatcher's own generic reading
+ * @param providerSegments how many segments the provider says it billed, null
+ *                         when it did not say (ADR 0146 Decision 7)
+ * @param hardBounce whether the provider says the receiver can never be reached
+ *                   (blacklisted, unroutable): ADR 0146 Decision 6 turns that,
+ *                   and only that, into an ADR 0044 suppression
  */
 public record DispatchOutcome(
         Status status,
@@ -31,7 +40,10 @@ public record DispatchOutcome(
         @Nullable String detail,
         @Nullable Duration retryAfter,
         @Nullable UUID providerBindingId,
-        @Nullable String providerType) {
+        @Nullable String providerType,
+        @Nullable String normalizedStatus,
+        @Nullable Integer providerSegments,
+        boolean hardBounce) {
 
     public enum Status {
 
@@ -49,26 +61,60 @@ public record DispatchOutcome(
     }
 
     public static DispatchOutcome accepted(@Nullable String externalMessageId, @Nullable String providerStatus) {
-        return new DispatchOutcome(Status.ACCEPTED, externalMessageId, providerStatus, null, null, null, null, null);
+        return new DispatchOutcome(
+                Status.ACCEPTED, externalMessageId, providerStatus, null, null, null, null, null, null, null, false);
     }
 
     public static DispatchOutcome rejected(@Nullable String errorCode, @Nullable String detail) {
-        return new DispatchOutcome(Status.REJECTED, null, null, errorCode, detail, null, null, null);
+        return new DispatchOutcome(Status.REJECTED, null, null, errorCode, detail, null, null, null, null, null, false);
     }
 
     public static DispatchOutcome retryable(
             @Nullable String errorCode, @Nullable String detail, @Nullable Duration retryAfter) {
-        return new DispatchOutcome(Status.RETRYABLE, null, null, errorCode, detail, retryAfter, null, null);
+        return new DispatchOutcome(
+                Status.RETRYABLE, null, null, errorCode, detail, retryAfter, null, null, null, null, false);
     }
 
     public static DispatchOutcome uncertain(@Nullable String errorCode, @Nullable String detail) {
-        return new DispatchOutcome(Status.UNCERTAIN, null, null, errorCode, detail, null, null, null);
+        return new DispatchOutcome(
+                Status.UNCERTAIN, null, null, errorCode, detail, null, null, null, null, null, false);
     }
 
     /** The same outcome, attributed to the account that produced it. */
     public DispatchOutcome from(UUID bindingId, @Nullable String providerType) {
         return new DispatchOutcome(
-                status, externalMessageId, providerStatus, errorCode, detail, retryAfter, bindingId, providerType);
+                status,
+                externalMessageId,
+                providerStatus,
+                errorCode,
+                detail,
+                retryAfter,
+                bindingId,
+                providerType,
+                normalizedStatus,
+                providerSegments,
+                hardBounce);
+    }
+
+    /**
+     * The same accepted outcome with what the adapter understood of it (ADR 0146):
+     * its own normalisation of the provider's word, the segments billed, and
+     * whether the receiver is unreachable for good.
+     */
+    public DispatchOutcome understood(
+            @Nullable String normalizedStatus, @Nullable Integer providerSegments, boolean hardBounce) {
+        return new DispatchOutcome(
+                status,
+                externalMessageId,
+                providerStatus,
+                errorCode,
+                detail,
+                retryAfter,
+                providerBindingId,
+                providerType,
+                normalizedStatus,
+                providerSegments,
+                hardBounce);
     }
 
     public Optional<Duration> retryDelay() {

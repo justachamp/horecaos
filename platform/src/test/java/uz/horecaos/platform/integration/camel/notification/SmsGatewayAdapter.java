@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.camel.notification;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
@@ -10,14 +11,24 @@ import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 
 /**
- * A generic JSON-over-HTTP SMS gateway (ADR 0020, ADR 0007).
+ * The controlled fake SMS gateway ADR 0007 asks for, and the only adapter that
+ * speaks {@code GENERIC_SMS} (ADR 0146 Decision 3).
  *
- * <p>This is the one wired channel. It is deliberately generic rather than named
- * after a vendor: no SMS contract exists yet, and inventing a provider-specific
- * adapter would encode a request shape nobody has agreed to. What it does prove is
- * the path — intent, eligibility, template, render, attempt, route, provider,
- * outcome — end to end, which is what ADR 0020's rollout asks for before a real
- * gateway is connected.
+ * <p>This used to be the one wired SMS channel in production, deliberately generic
+ * because no SMS contract existed. ADR 0146 made it test scope: a production bean
+ * with a request shape nobody agreed to, and an {@code Idempotency-Key} header no
+ * real gateway documents, is a placeholder that a tenant could bind and lose its
+ * order confirmations to. What it still proves is the path — intent, eligibility,
+ * template, render, attempt, route, provider, outcome — and, because it honours an
+ * idempotency key, the ADR 0007 behaviours (a repeated key produces one effect, a
+ * lost reply is resolved rather than resent) that a gateway with no key cannot
+ * show. It stays a {@code @Component}, so any Spring test context carries it and
+ * a second SMS adapter beside {@code VasSmsGatewayAdapter} is exercised by every
+ * context test that starts the application.
+ *
+ * <p>Its provider type is accepted for a test installation (an approved
+ * environment row is inserted by the test), never for a production one: no
+ * migration approves {@code GENERIC_SMS}.
  *
  * <p>The request carries the idempotency key as a header, so the ADR 0007 contract
  * suite's "a repeated key produces one side effect" test exercises the same path a
@@ -40,7 +51,7 @@ public class SmsGatewayAdapter implements NotificationChannelAdapter {
      * <p>The one answer that makes a second send safe, and the reason a status
      * query exists at all. Every other answer leaves the message possibly sent.
      */
-    static final String NO_RECORD = "PROVIDER_HAS_NO_RECORD";
+    static final String NO_RECORD = NotificationChannelAdapter.NO_RECORD;
 
     private final ProviderHttpClient http;
 
@@ -89,6 +100,32 @@ public class SmsGatewayAdapter implements NotificationChannelAdapter {
             return ProviderOutcome.success(
                     Map.of("providerStatus", status), string(response, "externalReference", null));
         });
+    }
+
+    /**
+     * The fake's own receipt body, {@code {"messageId": …, "status": …}}, which is
+     * the only receipt shape that exists for a gateway that can carry a secret
+     * header ({@code ReceiptAuthentication.SECRET_HEADER}, the default). It exists
+     * so the receipt endpoint's rules are proven without a real provider whose
+     * callback has not been captured.
+     */
+    @Override
+    public Optional<ReceiptEvent> normalise(Map<String, Object> rawReceipt) {
+        String id = string(rawReceipt, "messageId", null);
+        String status = string(rawReceipt, "status", null);
+        if (id == null || id.isBlank() || status == null) {
+            return Optional.empty();
+        }
+        String word = status.toUpperCase(java.util.Locale.ROOT);
+        return switch (word) {
+            case "ACCEPTED" -> Optional.of(new ReceiptEvent(id, "ACCEPTED", word, null, false));
+            case "SENT" -> Optional.of(new ReceiptEvent(id, "DISPATCHED", word, null, false));
+            case "DELIVERED" -> Optional.of(new ReceiptEvent(id, "DELIVERED", word, null, false));
+            case "FAILED" -> Optional.of(new ReceiptEvent(id, "FAILED", word, null, false));
+            case "BLACKLISTED" -> Optional.of(new ReceiptEvent(id, "FAILED", word, null, true));
+            case "UNKNOWN" -> Optional.of(new ReceiptEvent(id, "UNKNOWN", word, null, false));
+            default -> Optional.empty();
+        };
     }
 
     /**

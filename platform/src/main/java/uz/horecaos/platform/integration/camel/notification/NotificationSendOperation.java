@@ -24,7 +24,8 @@ public record NotificationSendOperation(
         @Nullable UUID locationId,
         String channel,
         @Nullable NotificationDispatch dispatch,
-        String providerIdempotencyKey) {
+        String providerIdempotencyKey,
+        @Nullable ResolveRequest resolveRequest) {
 
     public enum Kind {
         SEND,
@@ -55,13 +56,32 @@ public record NotificationSendOperation(
                 dispatch.locationId(),
                 dispatch.channel(),
                 dispatch,
-                dispatch.providerIdempotencyKey());
+                dispatch.providerIdempotencyKey(),
+                null);
     }
 
     public static NotificationSendOperation queryStatus(
             UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, String providerIdempotencyKey) {
         return new NotificationSendOperation(
-                Kind.QUERY_STATUS, tenantId, brandId, locationId, channel, null, providerIdempotencyKey);
+                Kind.QUERY_STATUS, tenantId, brandId, locationId, channel, null, providerIdempotencyKey, null);
+    }
+
+    /**
+     * The question ADR 0146 calls {@code resolve}: everything the platform has
+     * about an attempt whose outcome is not known, for a gateway that cannot be
+     * asked by our key.
+     */
+    public static NotificationSendOperation resolve(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, ResolveRequest request) {
+        return new NotificationSendOperation(
+                Kind.QUERY_STATUS,
+                tenantId,
+                brandId,
+                locationId,
+                channel,
+                null,
+                request.providerIdempotencyKey(),
+                request);
     }
 
     @Override

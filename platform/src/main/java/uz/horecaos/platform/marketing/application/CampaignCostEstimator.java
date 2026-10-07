@@ -5,8 +5,8 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.marketing.api.SmsSegments;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
-import uz.horecaos.platform.marketing.domain.SmsSegments;
 
 /**
  * What a send will cost, per locale and per encoding (ADR 0044).
