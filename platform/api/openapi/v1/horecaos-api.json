@@ -81673,7 +81673,7 @@
     },
     "/api/v1/tenants/{tenantId}/reporting/payment-mix" : {
       "get" : {
-        "description" : "payment_mix.amount.v1, over reporting.fact_order_tender: net tendered amount per payment method, from tenders that reached SETTLED or REVERSED. \"overview\" folds every branch into one row per method and legal entity (ADR 0038: never across two, since this is money); \"byLocation\" keeps the branch split so 7.3b's cash reconciliation can answer from the same read.",
+        "description" : "payment_mix.amount.v1, over reporting.fact_order_tender: net tendered amount per payment method, from tenders that reached SETTLED or REVERSED. \"overview\" folds every branch into one row per method and legal entity (ADR 0038: never across two, since this is money); \"byLocation\" keeps the branch split so 7.3b's cash reconciliation can answer from the same read. legalEntityId narrows both to one taxpayer; paymentMethodCode narrows both to the named methods.",
         "operationId" : "paymentMix",
         "parameters" : [ {
           "in" : "path",
@@ -81716,6 +81716,17 @@
           "required" : false,
           "schema" : {
             "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
               "type" : "string"
             },
             "type" : "array"

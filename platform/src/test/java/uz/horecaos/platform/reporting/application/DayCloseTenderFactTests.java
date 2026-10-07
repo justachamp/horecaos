@@ -1,6 +1,7 @@
 package uz.horecaos.platform.reporting.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -48,6 +49,7 @@ class DayCloseTenderFactTests {
     private static final UUID CUSTOMER = UUID.fromString("018f6f4e-2000-7000-8000-0000000c9005");
     private static final UUID CASH_METHOD = UUID.fromString("018f6f4e-2000-7000-8000-0000000c9006");
     private static final UUID CARD_METHOD = UUID.fromString("018f6f4e-2000-7000-8000-0000000c9007");
+    private static final UUID SECOND_ENTITY = UUID.fromString("018f6f4e-2000-7000-8000-0000000c9008");
 
     private static final ZoneId TASHKENT = ZoneId.of("Asia/Tashkent");
     private static final LocalDate DAY = LocalDate.of(2026, 9, 1);
@@ -278,6 +280,123 @@ class DayCloseTenderFactTests {
         assertThat(filteredResult.byLocation().getFirst().paymentMethodCode()).isEqualTo("CASH");
     }
 
+    @Test
+    @DisplayName("ADR 0038: the overview never folds two legal entities into one row, and legalEntityIds narrows"
+            + " both halves to one taxpayer")
+    void paymentMixNeverFoldsTwoLegalEntitiesAndNarrowsToOne() {
+        UUID first = insertOrder("ENTITY-ONE", 40_000, ENTITY);
+        insertSettlement(first, 40_000, tender(1, CASH_METHOD, 40_000, 0, "SETTLED"));
+        UUID second = insertOrder("ENTITY-TWO", 25_000, SECOND_ENTITY);
+        insertSettlement(second, 25_000, tender(1, CASH_METHOD, 25_000, 0, "SETTLED"));
+
+        close.close(TENANT, DAY);
+
+        var both = queries.paymentMix(TENANT, DAY, DAY, List.of(), List.of());
+        assertThat(both.overview())
+                .as("two taxpayers' cash is two rows — summing them is the figure ADR 0038 forbids")
+                .hasSize(2)
+                .extracting(
+                        ReportQueryService.PaymentMixRow::legalEntityId, ReportQueryService.PaymentMixRow::amountSom)
+                .containsExactlyInAnyOrder(tuple(ENTITY, 40_000L), tuple(SECOND_ENTITY, 25_000L));
+
+        var oneEntity = queries.paymentMix(TENANT, DAY, DAY, List.of(), List.of(), List.of(SECOND_ENTITY));
+        assertThat(oneEntity.overview()).singleElement().satisfies(row -> {
+            assertThat(row.legalEntityId()).isEqualTo(SECOND_ENTITY);
+            assertThat(row.amountSom()).isEqualTo(25_000L);
+        });
+        assertThat(oneEntity.byLocation())
+                .as("the branch split is narrowed by the same entity")
+                .singleElement()
+                .satisfies(row -> assertThat(row.legalEntityId()).isEqualTo(SECOND_ENTITY));
+    }
+
+    // ------------------------------------------------------------- the recut
+
+    @Test
+    @DisplayName("ADR 0115: a refund that lands after the close is a payment_mix.amount divergence in the recut,"
+            + " and the stored figure is left alone")
+    void aRefundAfterTheCloseIsReportedByTheRecut() {
+        UUID orderId = insertOrder("REFUND-AFTER-CLOSE", 100_000);
+        insertSettlement(orderId, 100_000, tender(1, CASH_METHOD, 100_000, 0, "SETTLED"));
+        close.close(TENANT, DAY);
+
+        // The customer is refunded the next morning, long after the day was closed. The tender
+        // fact is a snapshot taken at close (V0304), so nothing rewrites it.
+        jdbc.sql("UPDATE payments.tenders SET refunded_minor = 30000 WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+
+        DayCloseService.CloseResult recut = close.recut(TENANT, DAY);
+
+        assertThat(recut.divergences())
+                .filteredOn(divergence -> divergence.metricName().equals("payment_mix.amount"))
+                .singleElement()
+                .satisfies(divergence -> {
+                    assertThat(divergence.metricVersion()).isEqualTo(1);
+                    assertThat(divergence.storedValue()).isEqualTo(100_000L);
+                    assertThat(divergence.recutValue()).isEqualTo(70_000L);
+                    assertThat(divergence.dimension())
+                            .contains("location=" + LOCATION)
+                            .contains("entity=" + ENTITY)
+                            .contains("method=CASH");
+                });
+
+        assertThat(store.readPaymentMix(TENANT, DAY, DAY, List.of(), List.of()))
+                .as("a recut never rewrites a stored figure (ADR 0043)")
+                .singleElement()
+                .satisfies(row -> assertThat(row.amountSom()).isEqualTo(100_000L));
+        assertThat(queries.paymentMix(TENANT, DAY, DAY, List.of(), List.of())
+                        .provenance()
+                        .openDivergences())
+                .as("the payment-mix response says on its face that a recut disagreed")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0115: a recut over an unchanged day raises no payment_mix.amount divergence")
+    void anUnchangedDayRaisesNoPaymentMixDivergence() {
+        UUID orderId = insertOrder("UNCHANGED", 100_000);
+        insertSettlement(
+                orderId,
+                100_000,
+                tender(1, CASH_METHOD, 60_000, 10_000, "SETTLED"),
+                tender(2, CARD_METHOD, 40_000, 0, "SETTLED"));
+        UUID neverCollected = insertOrder("NEVER-COLLECTED-RECUT", 20_000);
+        insertSettlement(neverCollected, 20_000, tender(1, CASH_METHOD, 20_000, 0, "FAILED"));
+        close.close(TENANT, DAY);
+
+        DayCloseService.CloseResult recut = close.recut(TENANT, DAY);
+
+        assertThat(recut.divergences())
+                .as("a FAILED tender is outside the inclusion rule on both sides of the comparison")
+                .noneMatch(divergence -> divergence.metricName().equals("payment_mix.amount"));
+    }
+
+    @Test
+    @DisplayName("ADR 0115: a payment method that first collects money after the close is a divergence from zero")
+    void aMethodThatAppearsAfterTheCloseIsADivergenceFromZero() {
+        UUID orderId = insertOrder("LATE-SETTLE", 50_000);
+        insertSettlement(orderId, 50_000, tender(1, CARD_METHOD, 50_000, 0, "RESERVED"));
+        close.close(TENANT, DAY);
+
+        // The acquirer confirms the capture after the day closed: RESERVED -> SETTLED.
+        jdbc.sql("""
+                UPDATE payments.tenders SET status = 'SETTLED', settled_at = now()
+                 WHERE tenant_id = :t
+                """).param("t", TENANT).update();
+
+        DayCloseService.CloseResult recut = close.recut(TENANT, DAY);
+
+        assertThat(recut.divergences())
+                .filteredOn(divergence -> divergence.metricName().equals("payment_mix.amount"))
+                .singleElement()
+                .satisfies(divergence -> {
+                    assertThat(divergence.storedValue()).isZero();
+                    assertThat(divergence.recutValue()).isEqualTo(50_000L);
+                    assertThat(divergence.dimension()).contains("method=CARD");
+                });
+    }
+
     // ---------------------------------------------------------------- setup
 
     private record TenderSpec(
@@ -329,6 +448,10 @@ class DayCloseTenderFactTests {
     }
 
     private UUID insertOrder(String seed, long totalMinor) {
+        return insertOrder(seed, totalMinor, ENTITY);
+    }
+
+    private UUID insertOrder(String seed, long totalMinor, UUID legalEntityId) {
         UUID orderId = orderId(seed);
         UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
         UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
@@ -413,7 +536,7 @@ class DayCloseTenderFactTests {
                 .param("orderId", orderId)
                 .param("b", BRAND)
                 .param("loc", LOCATION)
-                .param("entity", ENTITY)
+                .param("entity", legalEntityId)
                 .param("amount", totalMinor)
                 .param("key", "intent-" + seed)
                 .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
@@ -442,6 +565,10 @@ class DayCloseTenderFactTests {
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
                 VALUES (:id, :t, 'ENTITY', 'Birinchi MCHJ', '123456789', 'ACTIVE')
                 """).param("id", ENTITY).param("t", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
+                VALUES (:id, :t, 'ENTITY2', 'Ikkinchi MCHJ', '987654321', 'ACTIVE')
+                """).param("id", SECOND_ENTITY).param("t", TENANT).update();
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name,
                     identity_policy_version, version)

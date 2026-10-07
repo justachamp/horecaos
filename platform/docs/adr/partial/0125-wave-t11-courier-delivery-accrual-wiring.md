@@ -1,10 +1,16 @@
 # ADR 0125: Wiring the delivery-accrual path across the courier/fulfillment/ordering boundary
 
 - Decision status: Accepted
-- Implementation status: Not started — this record is written before the
-  code it describes lands in the same wave (`wave139-t11`), per the
-  platform's own ADR discipline; both should move to Built together once a
-  human has reviewed the shape below rather than only the code.
+- Implementation status: Partial — `DeliveryCompletionPort` and
+  `JdbcDeliveryCompletionAdapter` close an order's internal shipment and answer
+  what the accrual needs; `DeliveryAccrualOrderCompletionTrigger` accrues
+  after commit, never blocking an order's completion; the cash to collect is
+  read from the settlement and nets every non-cash tender already reserved or
+  settled; the accrual is dated on the courier app's own «delivered» tap and its
+  «picked up» tap is the kitchen handover; `reporting.fact_delivery` (V0337,
+  with `brand_id` since V0510) and the `COURIER` scope of `agg_sla_bucket_day`
+  are written by the day close. Not built: a recorded position check, so
+  `geoUnverified` is true on every accrual.
 - Date proposed: 2026-09-14
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
@@ -18,6 +24,35 @@
   (platform owner, tracked against ADR 0042)
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
+
+**Implementation record, 2026-10-07.** Both open inputs are closed and the last
+checklist item is done; each differs from this record's text at one point, and says so.
+(1) *Cash to collect and the loyalty tender.* The first build took
+`cashToCollectMinor` from the order's total, which is what the Alternatives row and the
+fourth Consequence below describe. Review found the harm that row names as its revisit
+condition: a customer who paid 12 000 of a 94 000 order in points was told, through the
+courier's ledger, to hand over 94 000 in cash. The trigger now asks `CashDueLookupPort`,
+the settlement's own figure, which nets every non-cash tender that is `RESERVED` or
+`SETTLED` (the same figure the courier app shows as `cashDueMinor`), and falls back to
+the order total only when the settlement cannot be read. The open input is closed on
+subtracting it. The Alternatives row and the Consequence describe the first build and
+are left as written; the platform owner is asked to confirm this reading, because the
+literal default of this record was the first build. (2) *`fact_delivery.brand_id`.* The
+record asks whether the fact should carry the brand once the earning does. The earning
+still carries none and does not need to: the close job already reaches past it to
+`assignment_attempts` for `accepted_at`, and the shipment it names holds the brand
+(`shipments.brand_id`, with the composite key that makes a location belong to one
+brand). V0510 adds the column, backfills it the same way and the close reads it from the
+shipment; the open input is closed on carrying it. (3) *Pickup and delivery capture.*
+The courier app (gap map 3.9) now records `picked_up_at` and `delivered_at` on the
+shipment. The accrual uses them: the delivery is dated on the courier's own tap rather
+than on the operator's later «completed», which used to turn an on-time delivery into a
+late one, and the courier's pickup is the kitchen handover that can excuse a late
+delivery (`LATE_EXCUSED`). With no capture the completion still stands in for the
+delivery and the handover stays unknown, never guessed. What this does not close is the
+position check: the app measures a courier against its radii and discards the position
+(by design, ADR 0045), so nothing records that a delivery was geo-verified and
+`geoUnverified` stays true on every accrual until something does.
 
 ## Context
 
@@ -209,8 +244,12 @@ this wave is read by anything else yet.
 - [x] `DeliveryAccrualOrderCompletionTrigger` (`AFTER_COMMIT`, defensive catch)
 - [x] `reporting.fact_delivery` + close-time projector
 - [x] `agg_sla_bucket_day` `COURIER` scope population
-- [ ] Real pickup-confirmation capture (closes the `kitchen_handover_at` /
-      `LATE_EXCUSED` gap noted above) — future wave
+- [x] Real pickup-confirmation capture (closes the `kitchen_handover_at` /
+      `LATE_EXCUSED` gap noted above) — the courier app's «picked up» and
+      «delivered» taps, read through `DeliveryCompletionPort` (2026-10-07)
+- [ ] A recorded position check, so `geoUnverified` can be false — nothing
+      stores that a delivery's position was verified; waits on a decision about
+      what a position check may keep (ADR 0045)
 
 ## Exit criteria
 

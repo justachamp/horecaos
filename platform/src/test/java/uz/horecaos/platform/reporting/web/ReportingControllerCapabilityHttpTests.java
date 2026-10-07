@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+import com.jayway.jsonpath.JsonPath;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -97,6 +98,14 @@ class ReportingControllerCapabilityHttpTests {
         // tables are derived and rebuildable, ADR 0043), so a stale row from
         // an earlier test would collide on this one's primary key.
         jdbc.sql("TRUNCATE TABLE reporting.fact_order_line, reporting.fact_order")
+                .update();
+        // Row-level, not another table in the TRUNCATE above: the tender fact is partitioned by
+        // month, so truncating it takes an exclusive lock on every partition, and a longer list
+        // of tables is a longer list of ways to deadlock with whatever else touches this
+        // database (one run of this reset did, on the cascade below, before this was a DELETE).
+        // Only this tenant's rows are this suite's.
+        jdbc.sql("DELETE FROM reporting.fact_order_tender WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         roleRegistry.synchronize();
@@ -655,6 +664,92 @@ class ReportingControllerCapabilityHttpTests {
                 .contains("\"code\":\"OVER_8KM\",\"fromMeters\":8000,\"toMetersExclusive\":null");
     }
 
+    // ------------------------------------------------------------ ADR 0115 (7.1c, 7.3b): the payment mix
+
+    @Test
+    void paymentMixRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/payment-mix")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void paymentMixFoldsBranchesButNeverTaxpayersAndCountsOnlyMoneyThatMoved() throws Exception {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        UUID branchOne = UUID.randomUUID();
+        UUID branchTwo = UUID.randomUUID();
+        insertTender(entityA, branchOne, "CASH", 70_000L, "SETTLED");
+        insertTender(entityA, branchTwo, "CASH", 30_000L, "SETTLED");
+        insertTender(entityB, branchOne, "CASH", 5_000L, "SETTLED");
+        insertTender(entityA, branchOne, "CARD", 9_999L, "FAILED");
+
+        MvcResult ok = mvc.perform(get(REPORTING + "/payment-mix")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(body, "$.overview[?(@.legalEntityId=='" + entityA + "')].amountSom"))
+                .as("both of taxpayer A's branches fold into one CASH row; the FAILED card tender is not takings")
+                .containsExactly(100_000);
+        assertThat(JsonPath.<List<Integer>>read(body, "$.overview[?(@.legalEntityId=='" + entityB + "')].amountSom"))
+                .as("taxpayer B's cash is its own row, never summed into A's")
+                .containsExactly(5_000);
+        assertThat(JsonPath.<List<Object>>read(body, "$.overview")).hasSize(2);
+        assertThat(JsonPath.<List<Object>>read(body, "$.byLocation"))
+                .as("the branch split keeps one row per (branch, taxpayer, method)")
+                .hasSize(3);
+        assertThat(JsonPath.<List<String>>read(body, "$.provenance.metricVersions"))
+                .containsExactly("payment_mix.amount.v1");
+        assertThat(JsonPath.<List<String>>read(body, "$.provenance.provisionalMetrics"))
+                .as("finance has signed nothing here, so the response says the figure is provisional")
+                .containsExactly("payment_mix.amount.v1");
+    }
+
+    @Test
+    void paymentMixNarrowsToOneTaxpayerAndToTheNamedMethods() throws Exception {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        insertTender(entityA, branch, "CASH", 40_000L, "SETTLED");
+        insertTender(entityA, branch, "CARD", 10_000L, "SETTLED");
+        insertTender(entityB, branch, "CASH", 5_000L, "SETTLED");
+
+        MvcResult oneEntity = mvc.perform(get(REPORTING + "/payment-mix")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("legalEntityId", entityB.toString()))
+                .andReturn();
+        assertThat(oneEntity.getResponse().getStatus()).isEqualTo(200);
+        assertThat(JsonPath.<List<Integer>>read(
+                        oneEntity.getResponse().getContentAsString(), "$.overview[*].amountSom"))
+                .containsExactly(5_000);
+        assertThat(JsonPath.<List<Integer>>read(
+                        oneEntity.getResponse().getContentAsString(), "$.byLocation[*].amountSom"))
+                .containsExactly(5_000);
+
+        MvcResult cardOfA = mvc.perform(get(REPORTING + "/payment-mix")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("legalEntityId", entityA.toString())
+                        .queryParam("paymentMethodCode", "CARD"))
+                .andReturn();
+        assertThat(JsonPath.<List<Integer>>read(cardOfA.getResponse().getContentAsString(), "$.overview[*].amountSom"))
+                .containsExactly(10_000);
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private static final UUID PIZZA = UUID.fromString("018f9b20-9100-7000-8000-0000000000b1");
@@ -703,6 +798,28 @@ class ReportingControllerCapabilityHttpTests {
                 .param("gross", netSom)
                 .param("net", netSom)
                 .param("occurredAt", occurredAt)
+                .update();
+    }
+
+    /** One {@code reporting.fact_order_tender} row on {@link #FACT_DAY} — the payment-mix endpoint's whole source. */
+    private void insertTender(
+            UUID legalEntityId, UUID locationId, String paymentMethodCode, long amountSom, String status) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_order_tender (
+                    tenant_id, business_date, order_id, tender_sequence, boundary_version, location_id,
+                    legal_entity_id, payment_method_code, settles_from_balance, tender_status, amount_som,
+                    metric_calculation_version)
+                VALUES (:tenantId, :businessDate, :orderId, 1, 1, :locationId,
+                    :legalEntityId, :method, false, :status, :amount, 1)
+                """)
+                .param("tenantId", TENANT)
+                .param("businessDate", FACT_DAY)
+                .param("orderId", UUID.randomUUID())
+                .param("locationId", locationId)
+                .param("legalEntityId", legalEntityId)
+                .param("method", paymentMethodCode)
+                .param("status", status)
+                .param("amount", amountSom)
                 .update();
     }
 

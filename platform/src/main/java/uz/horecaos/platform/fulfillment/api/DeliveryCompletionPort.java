@@ -35,10 +35,13 @@ import org.jspecify.annotations.Nullable;
  * nothing depending back on {@code courier}.
  *
  * <p>{@code closeInternalShipment} both answers the question and closes the
- * loop: it is also where {@code fulfillment.shipments} finally learns a
- * delivery happened, because nothing else does — see the class doc on
- * {@code courier.application.DeliveryAccrualOrderCompletionTrigger} for why
- * order completion is where "delivered" is known today.
+ * loop: it is also where a shipment nobody closed in the courier app learns
+ * its delivery happened. A courier who tapped «picked up» and «delivered» in
+ * the app (gap map 3.9) has already written both instants, and the answer
+ * carries them; when the app captured nothing the order's completion stands in
+ * for the delivery and the pickup stays unknown. See the class doc on {@code
+ * courier.application.DeliveryAccrualOrderCompletionTrigger} for why order
+ * completion is still what triggers the accrual.
  *
  * <p>{@code fulfillment.infrastructure.sourcing.JdbcDeliveryCompletionAdapter}
  * implements this, within {@code fulfillment} itself.
@@ -67,10 +70,14 @@ public interface DeliveryCompletionPort {
      * {@code DeliveryOrderPort} already gives for its own four empty cases.
      *
      * @param deliveredAt the instant the order finished — {@code
-     *                     OrderCompleted.completedAt()} in production, so the
-     *                     shipment's {@code delivered_at} and the accrual's
-     *                     {@code deliveredAt} are the same instant rather than
-     *                     two clock reads a few milliseconds apart
+     *                     OrderCompleted.completedAt()} in production. It is
+     *                     what the shipment is stamped with only when nobody
+     *                     recorded a delivery before: a courier who tapped
+     *                     «delivered» in the app (gap map 3.9) already wrote
+     *                     the real instant, and the operator's «completed» can
+     *                     come hours later. The answer's own {@link
+     *                     InternalDelivery#deliveredAt()} is the one instant
+     *                     the shipment and the accrual then share
      */
     Optional<InternalDelivery> closeInternalShipment(UUID tenantId, UUID orderId, Instant deliveredAt);
 
@@ -78,6 +85,17 @@ public interface DeliveryCompletionPort {
      * What {@code fulfillment} knows about one internal delivery, at the
      * moment it closed.
      *
+     * @param deliveredAt     when the delivery happened, as the shipment now
+     *                        records it: the courier's own tap when the courier
+     *                        app captured one, otherwise the instant {@link
+     *                        #closeInternalShipment} was told. The accrual is
+     *                        priced and judged on time against this, never
+     *                        against a later «completed»
+     * @param pickedUpAt      when the courier collected the bag, as the courier
+     *                        app captured it ({@code shipments.picked_up_at});
+     *                        null when nothing was captured, which is a gap and
+     *                        never a guess. This is the kitchen handover ADR
+     *                        0042's on-time rule judges a late delivery by
      * @param acceptedAt      when the courier accepted the offer (ADR 0014) —
      *                        the instant {@code CourierAccrualService}
      *                        resolves the rate card at, snapshotted here
@@ -118,6 +136,8 @@ public interface DeliveryCompletionPort {
             UUID shipmentId,
             UUID assignmentAttemptId,
             Instant acceptedAt,
+            Instant deliveredAt,
+            @Nullable Instant pickedUpAt,
             int distanceMeters,
             @Nullable String distanceSourceName,
             @Nullable Instant promisedDeliveryEnd,

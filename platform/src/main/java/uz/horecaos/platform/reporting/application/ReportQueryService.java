@@ -609,11 +609,27 @@ public class ReportQueryService {
     @Transactional(readOnly = true)
     public PaymentMixResult paymentMix(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> paymentMethodCodes) {
+        return paymentMix(tenantId, from, to, locationIds, paymentMethodCodes, List.of());
+    }
+
+    /**
+     * {@link #paymentMix(UUID, LocalDate, LocalDate, List, List)} narrowed to the given legal
+     * entities. This is money, so a reader who answers to one taxpayer asks for that taxpayer
+     * (ADR 0038); empty means every entity, each still on its own rows — never folded together.
+     */
+    @Transactional(readOnly = true)
+    public PaymentMixResult paymentMix(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> paymentMethodCodes,
+            List<UUID> legalEntityIds) {
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
         List<JdbcReportingStore.PaymentMixRow> rows =
-                store.readPaymentMix(tenantId, from, to, locationIds, paymentMethodCodes);
+                store.readPaymentMix(tenantId, from, to, locationIds, paymentMethodCodes, legalEntityIds);
 
         Map<OverviewKey, PaymentMixAccumulator> overview = new LinkedHashMap<>();
         for (JdbcReportingStore.PaymentMixRow row : rows) {

@@ -1010,7 +1010,11 @@ public class JdbcReportingStore {
      * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger}
      * now writes on every real delivery. Joined to {@code
      * fulfillment.assignment_attempts} for {@code accepted_at}, which the
-     * earning row itself does not carry (ADR 0042 never needed it).
+     * earning row itself does not carry (ADR 0042 never needed it), and to
+     * {@code fulfillment.shipments} for {@code brand_id}, which it does not
+     * carry either (ADR 0125, V0510). Both joins are inner and cannot drop a
+     * row: the earning's own foreign keys require the attempt and the shipment
+     * (V0054).
      *
      * <p>Read by an instant range against {@code delivered_at} — the same
      * choice every other {@code readSource*} here makes over {@code
@@ -1029,12 +1033,14 @@ public class JdbcReportingStore {
     public List<SourceDelivery> readSourceDeliveries(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
                 SELECT earning.id AS earning_id, earning.courier_id, earning.location_id,
-                       earning.shipment_id, earning.assignment_attempt_id, earning.distance_meters,
-                       earning.distance_source, earning.on_time_outcome, earning.delivered_at,
-                       attempt.accepted_at
+                       shipment.brand_id, earning.shipment_id, earning.assignment_attempt_id,
+                       earning.distance_meters, earning.distance_source, earning.on_time_outcome,
+                       earning.delivered_at, attempt.accepted_at
                   FROM fulfillment.courier_assignment_earnings earning
                   JOIN fulfillment.assignment_attempts attempt
                     ON attempt.tenant_id = earning.tenant_id AND attempt.id = earning.assignment_attempt_id
+                  JOIN fulfillment.shipments shipment
+                    ON shipment.tenant_id = earning.tenant_id AND shipment.id = earning.shipment_id
                  WHERE earning.tenant_id = :tenantId
                    AND earning.delivered_at >= :from AND earning.delivered_at < :to
                 """)
@@ -1045,6 +1051,7 @@ public class JdbcReportingStore {
                         Objects.requireNonNull(row.getObject("earning_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("brand_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("assignment_attempt_id", UUID.class)),
                         row.getInt("distance_meters"),
@@ -1060,6 +1067,7 @@ public class JdbcReportingStore {
             UUID earningId,
             UUID courierId,
             UUID locationId,
+            UUID brandId,
             UUID shipmentId,
             UUID assignmentAttemptId,
             int distanceMeters,
@@ -1077,6 +1085,7 @@ public class JdbcReportingStore {
         params.put("calculationVersion", fact.metricCalculationVersion());
         params.put("courierId", fact.courierId());
         params.put("locationId", fact.locationId());
+        params.put("brandId", fact.brandId());
         params.put("shipmentId", fact.shipmentId());
         params.put("assignmentAttemptId", fact.assignmentAttemptId());
         params.put("distanceMeters", fact.distanceMeters());
@@ -1089,12 +1098,12 @@ public class JdbcReportingStore {
         jdbc.sql("""
                 INSERT INTO reporting.fact_delivery (
                     tenant_id, courier_assignment_earning_id, business_date, boundary_version,
-                    metric_calculation_version, courier_id, location_id, shipment_id,
+                    metric_calculation_version, courier_id, location_id, brand_id, shipment_id,
                     assignment_attempt_id, distance_meters, distance_source, on_time_outcome,
                     accepted_at, delivered_at, transit_seconds)
                 VALUES (
                     :tenantId, :earningId, :businessDate, :boundaryVersion, :calculationVersion,
-                    :courierId, :locationId, :shipmentId, :assignmentAttemptId, :distanceMeters,
+                    :courierId, :locationId, :brandId, :shipmentId, :assignmentAttemptId, :distanceMeters,
                     :distanceSource, :onTimeOutcome, :acceptedAt, :deliveredAt, :transitSeconds)
                 """).params(params).update();
     }
@@ -1943,6 +1952,21 @@ public class JdbcReportingStore {
      */
     public List<PaymentMixRow> readPaymentMix(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> paymentMethodCodes) {
+        return readPaymentMix(tenantId, from, to, locationIds, paymentMethodCodes, List.of());
+    }
+
+    /**
+     * {@link #readPaymentMix(UUID, LocalDate, LocalDate, List, List)} narrowed to the given legal
+     * entities (ADR 0038: this is money, so a reader who answers to one taxpayer asks for that
+     * taxpayer). Empty means every entity, each still on its own rows.
+     */
+    public List<PaymentMixRow> readPaymentMix(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> paymentMethodCodes,
+            List<UUID> legalEntityIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("from", from);
@@ -1952,6 +1976,10 @@ public class JdbcReportingStore {
         if (!locationIds.isEmpty()) {
             filter.append(" AND location_id IN (:locations)");
             params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
         }
         if (!paymentMethodCodes.isEmpty()) {
             filter.append(" AND payment_method_code IN (:methods)");

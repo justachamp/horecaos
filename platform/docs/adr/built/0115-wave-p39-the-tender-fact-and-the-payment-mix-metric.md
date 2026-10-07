@@ -1,10 +1,17 @@
 # ADR 0115: The tender fact and the payment-mix metric
 
 - Decision status: Accepted
-- Implementation status: Not started — this record is written before V0304
-  and the code it describes land in the same wave (`wave138-p39`), per the
-  platform's own ADR discipline; both should move to Built together once a
-  human has reviewed the shape below rather than only the code.
+- Implementation status: Built — `reporting.fact_order_tender` (V0304) is
+  written by `DayCloseService` inside the close's own transaction;
+  `payment_mix.amount.v1` is registered and answered by
+  `GET .../reporting/payment-mix` (refused from `/queries` by name; narrowed by
+  branch, payment method and legal entity); the recut compares it per branch,
+  entity and method and records a divergence when a refund or a capture lands
+  after the close; the business overview's payment card, the branch report's
+  payment table (7.3b, Table D) and the filter bar's payment-method chip read
+  it. The metric is marked provisional until finance signs it and counts a
+  provider-settled tender at its recorded amount, never net of the provider's
+  commission: both are open inputs that wait on other people, not unbuilt work.
 - Date proposed: 2026-09-14
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
@@ -21,6 +28,27 @@
   exists to supply the commission figure)
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
+
+**Implementation record, 2026-10-07.** What this record decides is built: the
+table and its partition upkeep (V0304), the producer inside `close`'s
+transaction, the metric and its bespoke endpoint, the unlocked filter chip and
+the overview card. Batch 19 finished the edges the first build left. (1) The
+recut now compares `payment_mix.amount.v1` per (branch, legal entity, method)
+against the stored rows and records a divergence, because a net-in-place snapshot
+is exactly the shape a refund recorded the next morning leaves behind; the stored
+row is never rewritten (ADR 0043). (2) The endpoint takes `legalEntityId`: this is
+money, and a reader who answers to one taxpayer asks for that taxpayer, with the
+overview still never folding two entities into one row. (3) The overview card and
+the branch report's Table D say what the figure cannot say about itself: it is
+provisional while finance has not signed it, it is counted at the amount recorded
+as tendered (the metric's own `openQuestion`, shown only while the registry still
+carries it), and the overview card says it is not cut by channel or fulfilment type
+(the tender fact has neither column). Table D gives the legal entity a column of its
+own when one branch trades under more than one. The two open inputs stay as the
+record states them: the provisional flag stays until finance signs, and the
+net-of-commission question stays the metric's `openQuestion` until ADR 0013's
+settlement import can supply a commission figure, at which point
+`payment_mix.amount.v2` is the place to fold it in.
 
 ## Context
 
@@ -205,20 +233,21 @@ unnecessary unless the whole feature is reverted.
 
 ## Implementation checklist
 
-- [ ] `V0304` creates `reporting.fact_order_tender`, widens
+- [x] `V0304` creates `reporting.fact_order_tender`, widens
       `reporting.ensure_fact_partition`'s allowlist, and grants both
       `horecaos_application` and `horecaos_reporting_read`.
-- [ ] `DayCloseService` writes a tender fact per order inside `close`'s
+- [x] `DayCloseService` writes a tender fact per order inside `close`'s
       existing transaction, next to the order-fact write.
-- [ ] `payment_mix.amount.v1` is registered in `MetricRegistry` and answered
+- [x] `payment_mix.amount.v1` is registered in `MetricRegistry` and answered
       by `GET .../reporting/payment-mix`, refused from `/queries` by name.
-- [ ] The reports filter bar's payment-type chip reads
+- [x] The reports filter bar's payment-type chip reads
       `payments.payment_methods` and is no longer locked.
-- [ ] The business-overview page's payment card reads the new endpoint in
+- [x] The business-overview page's payment card reads the new endpoint in
       place of its "not built" placeholder.
 - [ ] Finance signs `payment_mix.amount.v1` (open input above; tracked the
       same way every other unsigned metric already is, not blocking this
-      wave).
+      wave). Until it does the response marks the metric provisional and both
+      readers say so.
 
 ## Exit criteria
 
