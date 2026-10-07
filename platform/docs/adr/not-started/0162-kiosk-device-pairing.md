@@ -1,6 +1,6 @@
 # ADR 0162: Kiosk device pairing
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — a kiosk can be registered as a sales channel and
   cannot be paired, listed or revoked as a device, and no kiosk client exists. What is
   there is the channel and the primitive, side by side and unjoined. The channel:
@@ -28,7 +28,7 @@
   device app" among three separate deployables, and what the console has is `q-kiosk-frame`
   (`shared/ui/kiosk-frame.ts`), a 9:16 preview of the menu (`X.28`).
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: [ADR 0025](../built/0025-fine-grained-authorization-and-capability-model.md),
   [ADR 0027](../built/0027-audit-evidence-and-approval-model.md),
@@ -122,6 +122,8 @@
 
 **To accept as written:** say "accept 0162" (preferably in the same reply as "accept 0155").
 Every open input above is then closed on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

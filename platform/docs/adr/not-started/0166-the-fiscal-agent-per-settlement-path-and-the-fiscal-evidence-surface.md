@@ -1,6 +1,6 @@
 # ADR 0166: The fiscal agent per settlement path and the fiscal evidence surface
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — the evidence exists and nothing shows it.
   `fiscal.fiscal_documents` (V0027, moved by V0039) already holds, per settlement
   leg, `legal_entity_id`, `provider_type`, `external_receipt_id`, `fiscal_sign`,
@@ -36,7 +36,7 @@
   cash tender at a location with no capable `fiscal.fiscal_terminals` row (V0247) as
   `OPERATOR`, a responsibility ADR 0038 says nothing implements.
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0007, ADR 0011, ADR 0013, ADR 0025, ADR 0026, ADR 0027, ADR 0028,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0038, ADR 0039, ADR 0040, ADR 0046,
@@ -117,6 +117,8 @@
 
 **To accept as written:** say "accept 0166". Every open input above is then closed on
 its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0170: Courier pay for grouped orders and the ranking feed
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — the bias is built and nothing feeds it, and
   the unpaid-order window can only flag. Built (ADR 0142, batch 17): `Grouping`
   (`mergeRadiusMeters` 50 to 5000, `maxOrdersPerRun` 2 to 4, `maxWaitSeconds` 0 to
@@ -23,7 +23,7 @@
   (`fulfillment.courier_types`, V0040, 1 to 10), so a courier already carrying an
   order is not a candidate at all (`FleetCandidate.hasCapacity`).
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0007, ADR 0013, ADR 0014, ADR 0019, ADR 0025, ADR 0026, ADR 0027,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0037, ADR 0042, ADR 0050, ADR 0108,
@@ -73,6 +73,8 @@
 
 **To accept as written:** say "accept 0170". Every open input above is then closed
 on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

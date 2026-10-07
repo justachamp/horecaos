@@ -1,6 +1,6 @@
 # ADR 0160: User-scoped personalization
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — the console remembers a few of a person's choices
   and the platform remembers one of them. The platform's one is the interface language:
   `iam.staff_members.ui_locale` (V0453, `ru`, `uz` or `en`), edited through
@@ -27,7 +27,7 @@
   `ConfigurationKey` resolves a scalar (`Boolean`, `Integer`, `Long`, `String` or
   `BigDecimal`). There is no staff preferences table.
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0033, ADR 0057,
   ADR 0101, ADR 0139
@@ -84,6 +84,8 @@
 
 **To accept as written:** say "accept 0160". Every open input above is then closed on
 its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

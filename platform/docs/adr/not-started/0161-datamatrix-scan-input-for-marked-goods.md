@@ -1,6 +1,6 @@
 # ADR 0161: DataMatrix scan input for marked goods
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — the display half of row `X.35` is built
   and the scan half has nothing behind it. `q-qr-code`
   (`frontend/operations/src/app/shared/ui/qr-code.ts`) renders a QR bitmap and,
@@ -34,7 +34,7 @@
   customer paying through Payme. No tenant sells a marked SKU today (V0028 says
   so), which is the only reason it has not mattered.
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0007, ADR 0017, ADR 0025, ADR 0026, ADR 0027, ADR 0029,
   ADR 0030, ADR 0031, ADR 0032, ADR 0033, ADR 0035, ADR 0038, ADR 0039,
@@ -131,6 +131,8 @@
 
 **To accept as written:** say "accept 0161". Every open input above is then
 closed on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

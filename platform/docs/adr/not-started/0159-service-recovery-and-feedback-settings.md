@@ -1,6 +1,6 @@
 # ADR 0159: Service recovery and feedback settings
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — what exists is ADR 0071's order review and none
   of what this record adds. `reviews.order_reviews` (V0168) holds one immutable row per
   order, a 1–5 rating and an envelope-encrypted `comment_protected`, granted
@@ -32,7 +32,7 @@
   has one registered participant (`dinein`) and none for `reviews`, so a customer's erasure
   does not touch their review comment today.
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: [ADR 0010](../partial/0010-s3-media-lifecycle-and-filesystem-migration.md),
   [ADR 0015](../partial/0015-customer-accounts-cross-brand-identity-and-consent.md),
@@ -162,6 +162,8 @@
 
 **To accept as written:** say "accept 0159". Every open input above is then closed on its
 proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0157: Content and merchandising slots
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — nothing authors, stores or serves
   brand-written content today, and every fact below was read from the tree on
   2026-10-07. *No tables:* there is no `content` module, schema or table; the only
@@ -43,7 +43,7 @@
   consumer. The legacy `ui_elements`, `ui_element_items` and `ui_offers` tables are
   an unresolved `DECIDE` row in `docs/domains/legacy-mapping.md`.
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0010, ADR 0016, ADR 0021, ADR 0024, ADR 0025, ADR 0027,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0033, ADR 0034, ADR 0035,
@@ -185,6 +185,8 @@
 
 **To accept as written:** say "accept 0157". Every open input above is then
 closed on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 

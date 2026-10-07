@@ -1,6 +1,6 @@
 # ADR 0164: A courier-service tenant
 
-- Decision status: Proposed — proposed by Claude (batch 19); the platform owner decides
+- Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
 - Implementation status: Not started — the discriminator exists and nothing reads it
   for routing, and the delivery screens exist and nothing puts them first. Built:
   `tenant.tenants.business_type` with `COURIER_SERVICE` among nine kinds (V0203,
@@ -22,7 +22,7 @@
   business-type axis"; ADR 0090 built one, and the second entry for the same row says
   the discriminator exists and what is missing is a decision to let it drive routing.
 - Date proposed: 2026-10-07
-- Date decided: —
+- Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0002, ADR 0014, ADR 0021, ADR 0025, ADR 0027, ADR 0030, ADR 0031,
   ADR 0035, ADR 0042, ADR 0082, ADR 0087, ADR 0090, ADR 0127, ADR 0144
@@ -63,6 +63,8 @@
 
 **To accept as written:** say "accept 0164". Every open input above is then closed
 on its proposed default.
+
+**Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
 ## Context
 
