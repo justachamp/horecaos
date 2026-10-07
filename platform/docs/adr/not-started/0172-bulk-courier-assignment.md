@@ -148,6 +148,9 @@ creates a run.**
    becomes required for it (`[A-Z0-9_]{1,48}`, as the single assignment's). Each item is
    an order id and the order version the operator saw (`expectedVersion`), as for
    `ADVANCE` and `CANCEL`. The cap of 200 stands; the working ceiling is the courier's.
+   One branch per request, as the endpoint's path is: the selection column is withheld on
+   «Все филиалы» (ADR 0144), and an order of another branch answers
+   `ORDER_NOT_FOUND_AT_LOCATION`.
 2. **The call into `fulfillment`.** `ordering` calls a new
    `fulfillment.api.CourierAssignmentPort.assignForOrder(tenantId, brandId, locationId,
    orderId, courierId, reasonCode, attemptKey, bulkOperationId, actor)`, the direction
