@@ -335,7 +335,11 @@ class StorefrontCustomerSurfaceTests {
         assertThat(json(result).path("version").asInt())
                 .as("the version moves, or a second edit would be accepted against a stale read")
                 .isEqualTo(2);
-        assertThat(recipients.preferredLocale(SHARED_TENANT, ownerAccount)).contains("uz");
+        assertThat(recipients.preferredLocale(SHARED_TENANT, ownerAccount))
+                .as("the storefront's language screen sends the id of the language it offers, a bare uz; "
+                        + "the platform stores and reads back the tag, uz-Latn (ADR 0149), which is the only "
+                        + "spelling the marketing copy of this column accepts")
+                .contains("uz-Latn");
     }
 
     @Test

@@ -180,6 +180,13 @@ public class SecurityConfiguration {
                                 // would protect. See StorefrontAnalyticsConfigController's
                                 // own doc comment.
                                 "/api/v1/storefront/tenants/*/brands/*/analytics",
+                                // ADR 0149: which languages exist and where each is live. A
+                                // read of code, not of a table -- the same answer for every
+                                // tenant and every visitor, naming nobody -- and wanted before
+                                // an account exists, because the language picker is the first
+                                // thing a storefront paints. The staff surfaces' twins stay
+                                // behind a session.
+                                "/api/v1/storefront/locales",
                                 // ADR 0047: the guest's own running bill. Outside
                                 // the resource server's principal model on purpose
                                 // — see the POST pair below — and authorised by the

@@ -12,8 +12,10 @@ import uz.horecaos.platform.customers.api.ConsentDirectory.ConsentState;
 import uz.horecaos.platform.customers.api.ConsentRecorder;
 import uz.horecaos.platform.legal.domain.EffectiveTerms;
 import uz.horecaos.platform.legal.domain.PlatformDefaultTerms;
-import uz.horecaos.platform.legal.domain.TermsLocale;
 import uz.horecaos.platform.legal.domain.TermsVersion;
+import uz.horecaos.platform.tenancy.api.PlatformLocale;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -139,11 +141,12 @@ public class TermsAcceptanceService {
     }
 
     private static String requireLocale(String requestedLocale) {
-        return TermsLocale.parse(requestedLocale)
-                .map(TermsLocale::tag)
+        return PlatformLocales.parseActive(requestedLocale, Tier.CONTENT)
+                .map(PlatformLocale::tag)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.VALIDATION_FAILED,
-                        "locale must be one of " + TermsLocale.tags() + ", got \"" + requestedLocale + "\""));
+                        "locale must be one of " + PlatformLocales.activeTags(Tier.CONTENT) + ", got \""
+                                + requestedLocale + "\""));
     }
 
     private static String versionLabel(int version, String locale) {

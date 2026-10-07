@@ -21,6 +21,7 @@ import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import uz.horecaos.platform.iam.api.LocaleVocabulary;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.OtpCredential;
@@ -102,6 +103,7 @@ public class StaffMfaService implements StaffMfaAdministration {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
+    private final LocaleVocabulary locales;
 
     public StaffMfaService(
             StaffAccounts accounts,
@@ -117,7 +119,9 @@ public class StaffMfaService implements StaffMfaAdministration {
             RateLimiter limiter,
             CacheManager caches,
             TransactionTemplate transactions,
-            Clock clock) {
+            Clock clock,
+            LocaleVocabulary locales) {
+        this.locales = locales;
         this.accounts = accounts;
         this.passwordCheck = passwordCheck;
         this.keycloak = keycloak;
@@ -496,7 +500,8 @@ public class StaffMfaService implements StaffMfaAdministration {
             return false;
         }
         try {
-            String language = facts.uiLocale(account.subjectId()).orElse("ru");
+            String language =
+                    locales.message(facts.uiLocale(account.subjectId()).orElse(null));
             return mail.send(StaffMfaEmails.render(to, language, kind)).status() == StaffEmailSender.Status.SENT;
         } catch (RuntimeException failure) {
             log.warn(

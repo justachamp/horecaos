@@ -28,6 +28,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService.InvitationAccepted;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService.InvitationInspection;
@@ -183,7 +184,7 @@ public class StaffInvitationController {
                         scopeOf(tenantId, body),
                         body.reason(),
                         body.validUntil(),
-                        body.locale() == null ? "ru" : body.locale()),
+                        body.locale() == null ? PlatformLocales.fallback().tag() : body.locale()),
                 ActorRef.user(currentActor.get().subject(), null),
                 correlationId);
         return ResponseEntity.ok(new StaffInvitationCreatedResponse(

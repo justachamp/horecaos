@@ -49,6 +49,7 @@ import uz.horecaos.platform.iam.application.mfa.StaffMfaService.Enrolment;
 import uz.horecaos.platform.iam.infrastructure.keycloak.FakeKeycloakMfaRealm;
 import uz.horecaos.platform.iam.infrastructure.keycloak.FakeKeycloakMfaRealm.Totp;
 import uz.horecaos.platform.iam.infrastructure.keycloak.FakeKeycloakMfaRealm.User;
+import uz.horecaos.platform.tenancy.application.PlatformLocaleVocabulary;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.CacheRegistry;
@@ -168,7 +169,8 @@ class StaffMfaFlowTests {
                 limiter,
                 caches,
                 transactions,
-                clock);
+                clock,
+                new PlatformLocaleVocabulary());
 
         logs = new ListAppender<>();
         logs.start();

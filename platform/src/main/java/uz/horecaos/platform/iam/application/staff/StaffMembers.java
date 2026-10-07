@@ -27,9 +27,6 @@ final class StaffMembers {
     static final String ON_LEAVE = "ON_LEAVE";
     static final String ENDED = "ENDED";
 
-    /** The interface languages a console speaks. */
-    static final Set<String> UI_LOCALES = Set.of("ru", "uz", "en");
-
     static final int MAX_SPOKEN_LANGUAGES = 8;
 
     private StaffMembers() {}

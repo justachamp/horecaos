@@ -1,6 +1,5 @@
 package uz.horecaos.platform.iam.application.mfa;
 
-import java.util.Locale;
 import uz.horecaos.platform.iam.api.mail.StaffEmail;
 
 /**
@@ -26,10 +25,15 @@ final class StaffMfaEmails {
 
     private StaffMfaEmails() {}
 
+    /**
+     * @param language the registry's tag for the person's language ({@code LocaleVocabulary#message}),
+     *     never a raw stored value; a language the platform sends in before this table has its
+     *     wording is addressed in Russian, the staff default, and never in a machine translation
+     */
     static StaffEmail render(String to, String language, Kind kind) {
-        Words words = words(canonical(language), kind);
+        Words words = words(language, kind);
         String greeting =
-                switch (canonical(language)) {
+                switch (language) {
                     case "uz-Latn" -> "Assalomu alaykum!";
                     case "en" -> "Hello,";
                     default -> "Здравствуйте!";
@@ -45,18 +49,6 @@ final class StaffMfaEmails {
                 </body></html>
                 """.formatted(escape(greeting), escape(words.body()), escape(words.ifNotYou()));
         return new StaffEmail(to, words.subject(), text, html);
-    }
-
-    /** {@code uz} is read as an alias of {@code uz-Latn}; anything unknown is Russian, the staff default. */
-    static String canonical(String language) {
-        if (language == null) {
-            return "ru";
-        }
-        return switch (language.strip().toLowerCase(Locale.ROOT)) {
-            case "uz", "uz-latn" -> "uz-Latn";
-            case "en" -> "en";
-            default -> "ru";
-        };
     }
 
     private static Words words(String language, Kind kind) {

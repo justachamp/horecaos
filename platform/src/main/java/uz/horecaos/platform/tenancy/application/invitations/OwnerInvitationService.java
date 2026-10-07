@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -32,6 +31,9 @@ import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedException;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
 import uz.horecaos.platform.iam.api.staff.StaffMemberRegistry;
+import uz.horecaos.platform.tenancy.api.PlatformLocale;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationEventStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcOwnerInvitationStore.OverviewRow;
@@ -60,8 +62,6 @@ public class OwnerInvitationService implements OwnerInvitations {
 
     /** How long an emailed link works. */
     public static final Duration LINK_LIFETIME = Duration.ofHours(72);
-
-    public static final Set<String> LOCALES = Set.of("uz", "ru", "en");
 
     /** Everything that is neither accepted nor unnecessary: the work an operator still has. */
     public static final String OUTSTANDING = "OUTSTANDING";
@@ -179,7 +179,7 @@ public class OwnerInvitationService implements OwnerInvitations {
     @Transactional
     public boolean queueFor(UUID tenantId, String subjectId, String locale, String queuedBy, String correlationId) {
         Instant now = clock.instant();
-        String language = LOCALES.contains(locale) ? locale : "ru";
+        String language = PlatformLocales.resolve(locale, Tier.MESSAGES);
         UUID id = Ids.newId();
         if (!store.queueIfAbsent(id, tenantId, subjectId, language, queuedBy, now)) {
             return false;
@@ -357,7 +357,9 @@ public class OwnerInvitationService implements OwnerInvitations {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT, "The owner has already set up their account; they sign in instead");
         }
-        String language = locale != null && LOCALES.contains(locale) ? locale : row.locale();
+        String language = PlatformLocales.parseActive(locale, Tier.MESSAGES)
+                .map(PlatformLocale::tag)
+                .orElse(row.locale());
         Instant now = clock.instant();
         String by = actor.subject() == null ? "unknown" : actor.subject();
         if (!store.requeue(row.id(), language, by, now)) {
@@ -412,7 +414,7 @@ public class OwnerInvitationService implements OwnerInvitations {
                     "The owner already has a password; they sign in",
                     Map.of("reason", "ALREADY_SET_UP"));
         }
-        String language = locale != null && LOCALES.contains(locale) ? locale : "ru";
+        String language = PlatformLocales.resolve(locale, Tier.MESSAGES);
         Instant now = clock.instant();
         UUID id = Ids.newId();
         String by = actor.subject() == null ? "unknown" : actor.subject();

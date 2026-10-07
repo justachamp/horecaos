@@ -147,8 +147,12 @@ public class CampaignTelegramDeliveryService implements CampaignMessagePort {
             return Map.of();
         }
         Map<String, String> bodies = new LinkedHashMap<>();
-        for (MessageLocale locale : MessageLocale.required()) {
-            var resolution = templates.resolve(tenantId, brandId, templateKey, NotificationChannel.TELEGRAM, locale);
+        // The languages this brand serves that the platform can send in (ADR 0149): a language the
+        // brand does not serve has no body to show, and one it does serve but this template lacks is
+        // left out rather than filled with another language's text.
+        for (MessageLocale locale : templates.requiredLocales(tenantId, brandId)) {
+            var resolution = templates.resolveExact(
+                    tenantId, brandId, templateKey, NotificationChannel.TELEGRAM, locale, null, null);
             if (resolution.isFound()) {
                 bodies.put(
                         locale.tag(),

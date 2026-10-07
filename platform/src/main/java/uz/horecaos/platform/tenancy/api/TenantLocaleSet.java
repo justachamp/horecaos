@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
 
 /**
  * The locale set a <em>tenant-scoped</em> vocabulary is edited in (row 10.12).
@@ -40,11 +41,19 @@ import org.jspecify.annotations.Nullable;
  */
 public record TenantLocaleSet(List<String> locales, String defaultLocale, boolean configured) {
 
-    /** The platform's own supported triple, in canonical order. */
-    public static final List<String> PLATFORM_LOCALES = List.of("ru", "uz-Latn", "en");
+    /**
+     * The languages a brand that has chosen none supports: every language live in the content tier
+     * of the registry, in fallback order (ADR 0149). Today that is the platform's triple; it widens
+     * when a language is activated, and a brand that has configured nothing widens with it.
+     */
+    public static List<String> platformLocales() {
+        return PlatformLocales.activeTags(Tier.CONTENT);
+    }
 
-    /** The default a brand falls back to when it has chosen none. */
-    public static final String PLATFORM_DEFAULT_LOCALE = "ru";
+    /** The default a brand falls back to when it has chosen none: the registry's fallback language. */
+    public static String platformDefaultLocale() {
+        return PlatformLocales.fallback().tag();
+    }
 
     public TenantLocaleSet {
         Objects.requireNonNull(defaultLocale, "A locale set names its default");
@@ -53,7 +62,7 @@ public record TenantLocaleSet(List<String> locales, String defaultLocale, boolea
 
     /** No brand has chosen anything: the platform triple, {@code ru} first. */
     public static TenantLocaleSet platformFallback() {
-        return new TenantLocaleSet(PLATFORM_LOCALES, PLATFORM_DEFAULT_LOCALE, false);
+        return new TenantLocaleSet(platformLocales(), platformDefaultLocale(), false);
     }
 
     /**
@@ -93,14 +102,14 @@ public record TenantLocaleSet(List<String> locales, String defaultLocale, boolea
                 anyConfigured = true;
                 union.addAll(brand.locales());
             } else {
-                union.addAll(PLATFORM_LOCALES);
+                union.addAll(platformLocales());
             }
         }
 
         BrandChoice first = brandsInOrder.getFirst();
         String defaultLocale;
         if (!first.configured()) {
-            defaultLocale = PLATFORM_DEFAULT_LOCALE;
+            defaultLocale = platformDefaultLocale();
         } else if (first.defaultLocale() != null && first.locales().contains(first.defaultLocale())) {
             defaultLocale = first.defaultLocale();
         } else {
@@ -112,7 +121,7 @@ public record TenantLocaleSet(List<String> locales, String defaultLocale, boolea
 
         List<String> ordered = new ArrayList<>();
         ordered.add(defaultLocale);
-        for (String platform : PLATFORM_LOCALES) {
+        for (String platform : platformLocales()) {
             if (union.contains(platform) && !ordered.contains(platform)) {
                 ordered.add(platform);
             }

@@ -29,6 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.LocaleVocabulary;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffProfile;
@@ -99,6 +100,7 @@ public class StaffMemberService implements StaffMemberRegistry {
     private final StaffPhotos photos;
     private final TransactionTemplate transactions;
     private final Clock clock;
+    private final LocaleVocabulary locales;
 
     public StaffMemberService(
             JdbcStaffMemberStore store,
@@ -109,7 +111,9 @@ public class StaffMemberService implements StaffMemberRegistry {
             GrantAuthority grants,
             StaffPhotos photos,
             TransactionTemplate transactions,
-            Clock clock) {
+            Clock clock,
+            LocaleVocabulary locales) {
+        this.locales = locales;
         this.store = store;
         this.codec = codec;
         this.names = names;
@@ -1273,16 +1277,20 @@ public class StaffMemberService implements StaffMemberRegistry {
         }
     }
 
-    private static @Nullable String localeOf(@Nullable String raw) {
+    /**
+     * The tag a staff member's interface language is stored as (ADR 0149): what the registry's
+     * staff-interface tier calls it. A bare {@code uz}, which clients that predate the registry
+     * still send, is read as {@code uz-Latn} and the member reads back the tag, never the alias.
+     */
+    private @Nullable String localeOf(@Nullable String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        String locale = raw.strip().toLowerCase(Locale.ROOT);
-        if (!StaffMembers.UI_LOCALES.contains(locale)) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED, "uiLocale must be one of ru, uz, en", Map.of("field", "uiLocale"));
-        }
-        return locale;
+        return locales.staffInterface(raw)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "uiLocale must be one of " + String.join(", ", locales.staffInterfaceTags()),
+                        Map.of("field", "uiLocale")));
     }
 
     private static List<String> languagesOf(@Nullable List<String> raw) {

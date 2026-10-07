@@ -2,6 +2,8 @@ package uz.horecaos.platform.tenancy.application.invitations;
 
 import java.util.Map;
 import uz.horecaos.platform.mail.api.OutgoingMail;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The words of a staff invitation (ADR 0116, staff-and-access.md §4), in the
@@ -19,7 +21,7 @@ final class StaffInvitationEmail {
     private record Words(String subject, String greeting, String body, String action, String expiry, String ignore) {}
 
     private static final Map<String, Words> WORDS = Map.of(
-            "uz",
+            "uz-Latn",
             new Words(
                     "%s jamoasiga qo'shiling — HorecaOS",
                     "Assalomu alaykum!",
@@ -48,7 +50,7 @@ final class StaffInvitationEmail {
     private StaffInvitationEmail() {}
 
     static OutgoingMail render(String to, String locale, String tenantName, String jobName, String link, long hours) {
-        Words words = java.util.Objects.requireNonNull(WORDS.getOrDefault(locale, WORDS.get("ru")));
+        Words words = java.util.Objects.requireNonNull(WORDS.get(PlatformLocales.resolve(locale, Tier.MESSAGES)));
         String subject = words.subject().formatted(tenantName.replaceAll("[\\r\\n]+", " "));
         String body = words.body().formatted(tenantName, jobName);
         String expiry = words.expiry().formatted(hours);

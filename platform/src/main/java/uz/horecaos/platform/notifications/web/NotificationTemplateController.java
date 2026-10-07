@@ -145,7 +145,7 @@ public class NotificationTemplateController {
     @RequiresCapability(value = Capability.NOTIFICATION_TEMPLATE_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(
             summary = "Save a draft version in every locale",
-            description = "Refused unless ru, uz-Latn, and en are all present, and unless every "
+            description = "Refused unless every language the brand serves is present (ADR 0149), and unless every "
                     + "placeholder is declared by the variables schema. Both failures belong "
                     + "here, where an author can fix them, rather than at send time.")
     public ResponseEntity<VersionResponse> addVersion(
