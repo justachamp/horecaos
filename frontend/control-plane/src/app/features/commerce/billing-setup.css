@@ -54,10 +54,10 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .rowActions {
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }

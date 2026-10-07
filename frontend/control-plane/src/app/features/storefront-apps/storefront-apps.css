@@ -82,7 +82,7 @@
 }
 
 .chip {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 2px 8px;
   border: 1px solid var(--q-hairline);
   white-space: nowrap;
