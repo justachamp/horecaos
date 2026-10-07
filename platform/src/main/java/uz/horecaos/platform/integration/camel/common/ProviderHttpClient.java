@@ -218,7 +218,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             Set<Integer> acceptedStatuses,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "GET", path, headers, null, "application/json", acceptedStatuses, onSuccess);
+        return exchange(call, "GET", path, "", path, headers, null, "application/json", acceptedStatuses, onSuccess);
     }
 
     /**
@@ -280,6 +280,8 @@ public class ProviderHttpClient {
                 call,
                 "POST",
                 path,
+                "",
+                path,
                 headers,
                 encoded.getBytes(StandardCharsets.UTF_8),
                 "application/x-www-form-urlencoded",
@@ -302,13 +304,15 @@ public class ProviderHttpClient {
         } catch (RuntimeException failure) {
             return classifier.classify(failure, false);
         }
-        return exchange(call, method, path, headers, payload, "application/json", Set.of(), onSuccess);
+        return exchange(call, method, path, query, logLabel, headers, payload, "application/json", Set.of(), onSuccess);
     }
 
     private ProviderOutcome exchange(
             ProviderCall call,
             String method,
             String path,
+            String query,
+            String logLabel,
             Map<String, String> headers,
             byte @Nullable [] payload,
             String contentType,
