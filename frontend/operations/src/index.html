@@ -1,7 +1,10 @@
 <!doctype html>
 <!-- lang is set from the stored locale at runtime by I18n.setLocale; ru is the
-     default this console opens in, so it is the honest value to ship. -->
-<html lang="ru">
+     default this console opens in, so it is the honest value to ship. dir is stated, not
+     left to the browser's default (ADR 0149, Decision 6): every language the platform
+     registers is left-to-right, and the registry's own direction replaces this value once
+     it has been read. -->
+<html lang="ru" dir="ltr">
   <head>
     <meta charset="utf-8" />
     <title>HorecaOS Operations</title>

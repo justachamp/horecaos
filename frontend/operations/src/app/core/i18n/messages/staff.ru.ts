@@ -398,7 +398,6 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.myProfile.mfa.cancelSetup': 'Отмена',
   'staff.myProfile.mfa.done': 'Вход в два шага настроен.',
   'staff.myProfile.mfa.remove': 'Удалить',
-  'staff.myProfile.mfa.removeTitle': 'Удалить этот аутентификатор',
   'staff.myProfile.mfa.removeBody':
     'Для подтверждения введите пароль и текущий код из приложения-аутентификатора.',
   'staff.myProfile.mfa.removePassword': 'Ваш текущий пароль',

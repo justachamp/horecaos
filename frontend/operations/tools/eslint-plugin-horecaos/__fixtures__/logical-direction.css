@@ -1,0 +1,18 @@
+.card {
+  margin-inline-start: 8px;
+  padding-inline-end: 4px;
+  border-inline-start: 2px solid red;
+  text-align: start;
+  /* left and right in prose, and in a selector, are not offsets */
+}
+
+.badge {
+  position: absolute;
+  inset-inline-end: 0;
+  border-start-start-radius: 4px;
+  left: auto;
+}
+
+.table-left-column {
+  color: red;
+}

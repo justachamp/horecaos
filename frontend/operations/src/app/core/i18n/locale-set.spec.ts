@@ -8,6 +8,7 @@ import { ApiClient } from '../api/api-client';
 import { CurrentBrand } from '../auth/current-brand';
 import { SessionContext } from '../auth/session-context';
 import { LocaleSet, resolveLocaleSet } from './locale-set';
+import { PlatformLocales } from './platform-locales';
 
 function url(path: string): string {
   return `${environment.apiBaseUrl}${path}`;
@@ -163,12 +164,17 @@ describe('LocaleSet', () => {
 });
 
 describe('resolveLocaleSet', () => {
-  it('puts the default first and the rest in the platform order', () => {
-    const resolved = resolveLocaleSet([
-      { locale: 'en', isDefault: false },
-      { locale: 'ru', isDefault: false },
-      { locale: 'uz-Latn', isDefault: true },
-    ]);
+  const registry = (): PlatformLocales => TestBed.inject(PlatformLocales);
+
+  it('puts the default first and the rest in the registry order', () => {
+    const resolved = resolveLocaleSet(
+      [
+        { locale: 'en', isDefault: false },
+        { locale: 'ru', isDefault: false },
+        { locale: 'uz-Latn', isDefault: true },
+      ],
+      registry(),
+    );
 
     expect(resolved.locales).toEqual(['uz-Latn', 'ru', 'en']);
     expect(resolved.defaultLocale).toBe('uz-Latn');
@@ -176,9 +182,9 @@ describe('resolveLocaleSet', () => {
   });
 
   it.each([[[]], [null], [undefined]])(
-    'is the platform triple, ru default, for an unconfigured brand (%j)',
+    'is the registry content tier, ru default, for an unconfigured brand (%j)',
     (configured) => {
-      const resolved = resolveLocaleSet(configured);
+      const resolved = resolveLocaleSet(configured, registry());
 
       expect(resolved.locales).toEqual(['ru', 'uz-Latn', 'en']);
       expect(resolved.defaultLocale).toBe('ru');
@@ -186,12 +192,30 @@ describe('resolveLocaleSet', () => {
     },
   );
 
+  it('does not offer a language the registry declares but has not made live, for a brand that chose nothing', () => {
+    expect(resolveLocaleSet(null, registry()).locales).not.toContain('kk');
+  });
+
+  it('orders a language the registry has never heard of after every one it has, then by tag', () => {
+    const resolved = resolveLocaleSet(
+      [
+        { locale: 'zz', isDefault: false },
+        { locale: 'aa', isDefault: false },
+        { locale: 'en', isDefault: true },
+        { locale: 'ru', isDefault: false },
+      ],
+      registry(),
+    );
+
+    expect(resolved.locales).toEqual(['en', 'ru', 'aa', 'zz']);
+  });
+
   it('does not mutate the list it is given', () => {
     const configured = [
-      { locale: 'en' as const, isDefault: false },
-      { locale: 'ru' as const, isDefault: true },
+      { locale: 'en', isDefault: false },
+      { locale: 'ru', isDefault: true },
     ];
-    resolveLocaleSet(configured);
+    resolveLocaleSet(configured, registry());
 
     expect(configured.map((option) => option.locale)).toEqual(['en', 'ru']);
   });

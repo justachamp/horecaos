@@ -369,7 +369,7 @@
                 <q-status-pill [label]="group.status" [tone]="statusTone(group.status)" />
               </td>
               <td class="q-body-sm">
-                @for (tag of localeTags; track tag) {
+                @for (tag of localeTags(); track tag) {
                   <span
                     class="locale-chip"
                     [class.locale-chip--missing]="!localeStatus(group, tag)"
@@ -417,7 +417,7 @@
           [value]="testSendLocale()"
           (change)="testSendLocale.set($any($event.target).value)"
         >
-          @for (tag of localeTags; track tag) {
+          @for (tag of localeTags(); track tag) {
             <option [value]="tag">{{ tag }}</option>
           }
         </select>

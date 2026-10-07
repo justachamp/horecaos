@@ -16,6 +16,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ActorChip } from '../../shared/ui/actor-chip';
@@ -281,6 +282,7 @@ export class ProductEditorPage implements OnInit {
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly localeSet = inject(LocaleSet);
 
   protected readonly tabs = TABS;
@@ -295,7 +297,7 @@ export class ProductEditorPage implements OnInit {
    * locale the list screens read ({@link listLocale}) is always among them.
    */
   protected readonly editingLocales = computed<readonly string[]>(() =>
-    this.localeSet.locales().map(toCatalogLocale),
+    this.localeSet.locales().map((locale) => toCatalogLocale(locale, this.registry)),
   );
 
   /**
@@ -305,7 +307,11 @@ export class ProductEditorPage implements OnInit {
    * defaults for unrelated things. See {@link listResolutionLocale}.
    */
   protected readonly listLocale = computed<string>(() =>
-    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+    listResolutionLocale(
+      this.localeSet.isConfigured(),
+      this.localeSet.defaultLocale(),
+      this.registry,
+    ),
   );
   protected readonly activeTab = signal<EditorTab>('BASIC');
   protected readonly editingLocale = signal<string>('ru');
@@ -1832,8 +1838,9 @@ export class ProductEditorPage implements OnInit {
     readonly labelUz: string;
     readonly labelEn: string;
   }): string {
-    switch (this.editingLocale()) {
-      case 'uz':
+    // The three label columns are the platform tags' (ADR 0149): the editor holds catalog codes.
+    switch (this.registry.tagOfCatalogCode(this.editingLocale())) {
+      case 'uz-Latn':
         return preset.labelUz;
       case 'en':
         return preset.labelEn;

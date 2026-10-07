@@ -13,7 +13,9 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { localeDisplayName } from '../../../core/i18n/locale-labels';
 import { LocaleSet } from '../../../core/i18n/locale-set';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { PhonePipe } from '../../../core/format/phone.pipe';
 import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
@@ -106,6 +108,7 @@ export class LocationDetailPane {
   private readonly baseLocation = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
   private readonly localeSet = inject(LocaleSet);
+  private readonly registry = inject(PlatformLocales);
 
   /** Route param, bound by `withComponentInputBinding()` — see `order-detail-pane.ts` for the same idiom. */
   readonly locationId = input.required<string>();
@@ -129,14 +132,14 @@ export class LocationDetailPane {
   // ------------------------------------------------------- 10.2b: venue facts
   /**
    * Staff 10.12: the brand's own supported-locale set (default first), or
-   * the platform triple when the brand has not configured one — never the
-   * fixed `LOCATION_KNOWN_LOCALES` triple this editor used to hard-code.
+   * every language the registry has live in its content tier when the brand has
+   * not configured one — never a list this editor carries itself.
    * Locale content this branch already has in a locale the brand no longer
    * supports stays hidden from editing here but is never deleted on save
    * (see {@link savePlace}'s own doc).
    */
-  protected readonly knownLocales = computed(
-    () => this.localeSet.locales() as readonly LocationLocaleCode[],
+  protected readonly knownLocales = computed<readonly LocationLocaleCode[]>(() =>
+    this.localeSet.locales(),
   );
   protected readonly draftSortOrder = signal(0);
   protected readonly draftSeats = signal('');
@@ -366,14 +369,7 @@ export class LocationDetailPane {
   }
 
   protected localeLabel(locale: LocationLocaleCode): string {
-    switch (locale) {
-      case 'ru':
-        return this.i18n.t('settings.brandProfile.locale.ru');
-      case 'uz-Latn':
-        return this.i18n.t('settings.brandProfile.locale.uzLatn');
-      case 'en':
-        return this.i18n.t('settings.brandProfile.locale.en');
-    }
+    return localeDisplayName(this.i18n, locale, this.registry);
   }
 
   /** Staff 10.12: whether this locale is the brand's own required default — marked visibly in the editor's legend. */

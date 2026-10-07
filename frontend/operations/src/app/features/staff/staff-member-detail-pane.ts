@@ -18,9 +18,10 @@ import { StaffMember, hasName } from '../../core/api/staff-member';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
-import { CAPABILITY_SENTENCES, capabilityAreaName, sentenceLocale } from './capability-sentences';
+import { CAPABILITY_SENTENCES, capabilityAreaName } from './capability-sentences';
 import { StaffAccessDialog } from './staff-access-dialog';
 import { StaffEmergencyContacts } from './staff-emergency-contacts';
 import {
@@ -95,6 +96,7 @@ export class StaffMemberDetailPane {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   /** Route param, bound by `withComponentInputBinding()` — see `location-detail-pane.ts` for the same idiom. */
   readonly subjectId = input.required<string>();
@@ -276,7 +278,7 @@ export class StaffMemberDetailPane {
     if (!role) {
       return [];
     }
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     const byArea = new Map<string, string[]>();
     for (const code of role.capabilities) {
       const area = capabilityAreaName(code, locale);
@@ -312,8 +314,9 @@ export class StaffMemberDetailPane {
     }
   }
 
-  protected languageName(code: string): string {
-    return localeDisplayName(this.i18n, code === 'uz' ? 'uz-Latn' : code);
+  /** A language's name for either of its spellings: the registry's tag (`uz-Latn`) or an ISO 639 code (`uz`). */
+  protected languageName(codeOrTag: string): string {
+    return localeDisplayName(this.i18n, this.registry.canonical(codeOrTag), this.registry);
   }
 
   // ------------------------------------------------------------- profile

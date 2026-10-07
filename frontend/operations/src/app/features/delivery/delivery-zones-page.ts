@@ -13,6 +13,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import {
   LabelsByLocale,
   labelDrafts,
@@ -118,6 +119,7 @@ export class DeliveryZonesPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly localeSet = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -285,7 +287,7 @@ export class DeliveryZonesPage implements OnInit {
 
   /** The zone's name in the operator's own locale — the point of authoring three. */
   protected zoneName(zone: ZoneSummaryResponse): string {
-    return localisedName(this.i18n.locale(), zone);
+    return localisedName(this.i18n.locale(), zone, this.registry.fallbackOrder());
   }
 
   protected roleKey(role: string): MessageKey {

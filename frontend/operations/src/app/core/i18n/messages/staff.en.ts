@@ -394,7 +394,6 @@ export const staffEn = {
   'staff.myProfile.mfa.cancelSetup': 'Cancel',
   'staff.myProfile.mfa.done': 'Two-step sign-in is set up.',
   'staff.myProfile.mfa.remove': 'Remove',
-  'staff.myProfile.mfa.removeTitle': 'Remove this authenticator',
   'staff.myProfile.mfa.removeBody':
     'Enter your password and a current code from an authenticator app to confirm.',
   'staff.myProfile.mfa.removePassword': 'Your current password',

@@ -7,12 +7,13 @@ import { OwnProfile } from '../../core/auth/own-profile';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { ApiError } from '../../core/api/problem-details';
 import { StaffMember, hasName } from '../../core/api/staff-member';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, isLocale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
-import { CAPABILITY_SENTENCES, capabilityAreaName, sentenceLocale } from './capability-sentences';
+import { CAPABILITY_SENTENCES, capabilityAreaName } from './capability-sentences';
 import { StaffApi, TelegramLinkCodeResponse } from './staff-api';
 import { StaffMembersApi } from './staff-members-api';
 import { ProfileDraft, draftOf, toSelfRequest } from './staff-profile-draft';
@@ -86,6 +87,7 @@ export class MyProfilePage {
   private readonly ownProfile = inject(OwnProfile);
   protected readonly auth = inject(Auth);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly scopes = computed<readonly ScopeGrant[]>(() => this.tenant.scopes());
   protected readonly expandedIndex = signal<number | null>(null);
@@ -250,8 +252,9 @@ export class MyProfilePage {
     }
   }
 
-  protected languageName(code: string): string {
-    return localeDisplayName(this.i18n, code === 'uz' ? 'uz-Latn' : code);
+  /** A language's name for either of its spellings: the registry's tag (`uz-Latn`) or an ISO 639 code (`uz`). */
+  protected languageName(codeOrTag: string): string {
+    return localeDisplayName(this.i18n, this.registry.canonical(codeOrTag), this.registry);
   }
 
   /** What a write returned is the record now: here, and in the shell chip. */
@@ -266,10 +269,11 @@ export class MyProfilePage {
    * from the record -- see `OwnProfile`.)
    */
   private applyInterfaceLanguage(code: string | null): void {
-    if (code === 'ru' || code === 'en') {
-      this.i18n.setLocale(code);
-    } else if (code === 'uz') {
-      this.i18n.setLocale('uz-Latn');
+    // The record holds the registry's tag; a bare `uz` from an older record is read as `uz-Latn`.
+    // A language the registry offers but this build has no catalogue for changes nothing here.
+    const tag = code === null ? null : this.registry.canonical(code);
+    if (tag !== null && isLocale(tag)) {
+      this.i18n.setLocale(tag);
     }
   }
 
@@ -301,7 +305,7 @@ export class MyProfilePage {
     if (!capabilities || capabilities.length === 0) {
       return [];
     }
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     const byArea = new Map<string, string[]>();
     for (const code of capabilities) {
       const area = capabilityAreaName(code, locale);

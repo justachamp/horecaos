@@ -400,7 +400,6 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.myProfile.mfa.cancelSetup': 'Bekor qilish',
   'staff.myProfile.mfa.done': 'Ikki bosqichli kirish sozlandi.',
   'staff.myProfile.mfa.remove': 'Oʻchirish',
-  'staff.myProfile.mfa.removeTitle': 'Bu autentifikatorni oʻchirish',
   'staff.myProfile.mfa.removeBody':
     'Tasdiqlash uchun parolingizni va autentifikator ilovasidagi joriy kodni kiriting.',
   'staff.myProfile.mfa.removePassword': 'Joriy parolingiz',

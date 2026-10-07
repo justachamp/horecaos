@@ -13,6 +13,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { formatMoneyRange } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import {
@@ -98,6 +99,7 @@ export class CampaignsPage implements OnInit {
   private readonly brand = inject(CurrentBrand);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   /** Whether the detail route (`:campaignId`) is currently activated — same pattern `OrdersPage` uses for its own dock. */
   protected readonly docked = signal(false);
@@ -528,7 +530,11 @@ export class CampaignsPage implements OnInit {
   }
 
   protected fixedValuesOfRow(row: PredicateDraft): readonly string[] | null {
-    return descriptorFor(row.type).fixedValues;
+    const descriptor = descriptorFor(row.type);
+    // The platform's languages come from the registry, not from this catalogue (ADR 0149).
+    return descriptor.fixedValuesFromTier
+      ? this.registry.active(descriptor.fixedValuesFromTier)
+      : descriptor.fixedValues;
   }
 
   protected canCreateAudience(): boolean {

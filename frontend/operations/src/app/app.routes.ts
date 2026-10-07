@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
 import { messagesGuard } from './core/i18n/messages.guard';
+import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { NAV_ITEMS } from './shell/navigation';
 
 /**
@@ -94,7 +95,9 @@ export const routes: Routes = [
   {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
-    canActivate: [authGuard],
+    // The registry is read before anything beneath the shell draws (ADR 0149): the editors under it
+    // read the languages a brand may choose, a template needs and the catalog stores synchronously.
+    canActivate: [authGuard, platformLocalesGuard],
     canActivateChild: [capabilityGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'today' },
