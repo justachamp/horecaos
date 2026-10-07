@@ -19,6 +19,12 @@ public final class AssistantConfigurationKeys {
     public static final String MONTHLY_SPEND_CEILING_USD_CENTS_CODE = "assistant.monthly_spend_ceiling_usd_cents";
     public static final String CONVERSATION_TURN_CAP_CODE = "assistant.conversation_turn_cap";
     public static final String PRICE_CHANNEL_CODE_CODE = "assistant.price_channel_code";
+    public static final String DISCLOSURE_TEXT_EN_CODE = "assistant.disclosure_text_en";
+    public static final String DISCLOSURE_TEXT_RU_CODE = "assistant.disclosure_text_ru";
+    public static final String DISCLOSURE_TEXT_UZ_CODE = "assistant.disclosure_text_uz";
+
+    /** The longest disclosure a tenant may author: one first message, not a policy document. */
+    public static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
     /**
      * The per-tenant switch ADR 0069's rollout names ("ships behind an entitlement
@@ -93,6 +99,48 @@ public final class AssistantConfigurationKeys {
             .describedAs("The sales channel code whose menu and prices the assistant quotes. Defaults to "
                     + "STOREFRONT, the channel the Telegram bot's carts are built on (ADR 0075).")
             .build();
+
+    /**
+     * What the tenant tells its customers, in English, ahead of the assistant's first answer in
+     * a conversation: that it is automated and that the question is processed by an outside
+     * service (ADR 0069 -- "what a tenant must disclose to its customers" is the tenant's own
+     * obligation, not the platform's to decide). Blank keeps the platform's default wording,
+     * {@code CustomerWording#disclosure}, which is a default and not legal advice.
+     *
+     * <p>Blank is a real, resolved value, never "unset": a tenant cannot switch the disclosure
+     * off by clearing it, only replace what it says. The text is the tenant's own business
+     * content, rendered locally into the reply after the model returns and never sent to the
+     * model; a write is refused above {@link #DISCLOSURE_TEXT_MAXIMUM_CHARACTERS} characters or
+     * with a control character in it (see {@code ConfigurationValueRules}).
+     */
+    public static final ConfigurationKey<String> DISCLOSURE_TEXT_EN = disclosureKey(DISCLOSURE_TEXT_EN_CODE, "English");
+
+    /** {@link #DISCLOSURE_TEXT_EN}, in Russian. */
+    public static final ConfigurationKey<String> DISCLOSURE_TEXT_RU = disclosureKey(DISCLOSURE_TEXT_RU_CODE, "Russian");
+
+    /** {@link #DISCLOSURE_TEXT_EN}, in Uzbek (Latin). */
+    public static final ConfigurationKey<String> DISCLOSURE_TEXT_UZ = disclosureKey(DISCLOSURE_TEXT_UZ_CODE, "Uzbek");
+
+    /** The disclosure key for a reply locale ({@code en}, {@code ru} or {@code uz}); English for any other. */
+    public static ConfigurationKey<String> disclosureKeyFor(String locale) {
+        return switch (locale) {
+            case "ru" -> DISCLOSURE_TEXT_RU;
+            case "uz" -> DISCLOSURE_TEXT_UZ;
+            default -> DISCLOSURE_TEXT_EN;
+        };
+    }
+
+    private static ConfigurationKey<String> disclosureKey(String code, String language) {
+        return ConfigurationKey.of(code, String.class)
+                .defaultValue("")
+                .ownedBy("assistant")
+                .tenantVisible()
+                .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+                .describedAs("The " + language + " sentence the assistant says ahead of its first answer in a "
+                        + "conversation, telling the customer it is automated and that the question is "
+                        + "processed by an outside service (ADR 0069). Blank keeps the platform's default wording.")
+                .build();
+    }
 
     private AssistantConfigurationKeys() {}
 }

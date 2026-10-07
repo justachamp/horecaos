@@ -16,6 +16,12 @@ import org.jspecify.annotations.Nullable;
  * @param needsReply {@code HANDED_TO_OPERATOR}, or {@code FLOW_ACTIVE} with
  *                    an unanswered inbound message — see {@link
  *                    ConversationRepository.ListRow#needsReply()}
+ * @param assistantActive the assistant (ADR 0069) has answered here and no person
+ *                        holds the conversation, so it is the one answering the
+ *                        customer's next message — what the inbox marks, and what
+ *                        «take over» takes the conversation from
+ * @param assistantInvolved the assistant has taken at least one turn here, whoever
+ *                          holds the conversation now
  */
 public record ConversationSummaryView(
         UUID id,
@@ -23,6 +29,8 @@ public record ConversationSummaryView(
         @Nullable UUID customerAccountId,
         String state,
         boolean needsReply,
+        boolean assistantActive,
+        boolean assistantInvolved,
         Instant lastActivityAt) {
 
     static ConversationSummaryView of(ConversationRepository.ListRow row) {
@@ -32,6 +40,8 @@ public record ConversationSummaryView(
                 row.customerAccountId(),
                 row.state().name(),
                 row.needsReply(),
+                row.assistantTookPart() && row.state().machineAnswers(),
+                row.assistantTookPart(),
                 row.lastActivityAt());
     }
 }

@@ -157,6 +157,23 @@ class ConversationMessageStore {
     }
 
     /**
+     * Whether the grounded assistant has ever spoken in this conversation (ADR 0069). Reads the
+     * clear {@code direction} column only; nothing is decrypted, so the inbox's header can say
+     * who is answering without opening the thread.
+     */
+    boolean assistantHasSpokenIn(UUID tenantId, UUID conversationId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM conversations.conversation_messages
+                    WHERE tenant_id = :tenantId AND conversation_id = :conversationId AND direction = 'ASSISTANT')
+                """)
+                .param("tenantId", tenantId)
+                .param("conversationId", conversationId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
      * The newest {@code limit} messages of a conversation, decrypted, oldest
      * first -- the context a {@link uz.horecaos.platform.conversations.api.ConversationParticipant}
      * is given (ADR 0069), as opposed to {@link #history}'s whole thread for an

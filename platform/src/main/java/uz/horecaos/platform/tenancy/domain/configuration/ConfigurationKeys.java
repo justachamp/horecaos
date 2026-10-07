@@ -419,6 +419,28 @@ public final class ConfigurationKeys {
                     + "STOREFRONT, the channel the Telegram bot's carts are built on (ADR 0075).")
             .build();
 
+    public static final ConfigurationKey<String> ASSISTANT_DISCLOSURE_TEXT_EN =
+            assistantDisclosureKey("assistant.disclosure_text_en", "English");
+
+    public static final ConfigurationKey<String> ASSISTANT_DISCLOSURE_TEXT_RU =
+            assistantDisclosureKey("assistant.disclosure_text_ru", "Russian");
+
+    public static final ConfigurationKey<String> ASSISTANT_DISCLOSURE_TEXT_UZ =
+            assistantDisclosureKey("assistant.disclosure_text_uz", "Uzbek");
+
+    /** Declared identically by {@code AssistantConfigurationKeys}; see the note above {@link #ASSISTANT_ENABLED}. */
+    private static ConfigurationKey<String> assistantDisclosureKey(String code, String language) {
+        return ConfigurationKey.of(code, String.class)
+                .defaultValue("")
+                .ownedBy("assistant")
+                .tenantVisible()
+                .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+                .describedAs("The " + language + " sentence the assistant says ahead of its first answer in a "
+                        + "conversation, telling the customer it is automated and that the question is "
+                        + "processed by an outside service (ADR 0069). Blank keeps the platform's default wording.")
+                .build();
+    }
+
     /**
      * ADR 0082: whether a tenant's operations app shows its administrators the
      * HorecaOS support visits to their account (ADR 0081), and lets them end
@@ -752,6 +774,9 @@ public final class ConfigurationKeys {
             ASSISTANT_MONTHLY_SPEND_CEILING_USD_CENTS,
             ASSISTANT_CONVERSATION_TURN_CAP,
             ASSISTANT_PRICE_CHANNEL_CODE,
+            ASSISTANT_DISCLOSURE_TEXT_EN,
+            ASSISTANT_DISCLOSURE_TEXT_RU,
+            ASSISTANT_DISCLOSURE_TEXT_UZ,
             FEATURE_SUPPORT_VISITS,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,

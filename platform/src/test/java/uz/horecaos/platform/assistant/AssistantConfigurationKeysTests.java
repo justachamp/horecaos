@@ -27,7 +27,7 @@ class AssistantConfigurationKeysTests {
     }
 
     @Test
-    void theRegistryAndTheAssistantModuleDeclareTheSameFourKeys() {
+    void theRegistryAndTheAssistantModuleDeclareTheSameSevenKeys() {
         sameKey(ConfigurationKeys.require(AssistantConfigurationKeys.ENABLED_CODE), AssistantConfigurationKeys.ENABLED);
         sameKey(
                 ConfigurationKeys.require(AssistantConfigurationKeys.MONTHLY_SPEND_CEILING_USD_CENTS_CODE),
@@ -38,6 +38,31 @@ class AssistantConfigurationKeysTests {
         sameKey(
                 ConfigurationKeys.require(AssistantConfigurationKeys.PRICE_CHANNEL_CODE_CODE),
                 AssistantConfigurationKeys.PRICE_CHANNEL_CODE);
+        sameKey(
+                ConfigurationKeys.require(AssistantConfigurationKeys.DISCLOSURE_TEXT_EN_CODE),
+                AssistantConfigurationKeys.DISCLOSURE_TEXT_EN);
+        sameKey(
+                ConfigurationKeys.require(AssistantConfigurationKeys.DISCLOSURE_TEXT_RU_CODE),
+                AssistantConfigurationKeys.DISCLOSURE_TEXT_RU);
+        sameKey(
+                ConfigurationKeys.require(AssistantConfigurationKeys.DISCLOSURE_TEXT_UZ_CODE),
+                AssistantConfigurationKeys.DISCLOSURE_TEXT_UZ);
+    }
+
+    @Test
+    @DisplayName(
+            "the disclosure is the tenant's to word: visible to it, settable down to a brand, blank by default, and one key per reply language")
+    void theDisclosureIsTheTenantsToWord() {
+        for (String locale : new String[] {"en", "ru", "uz"}) {
+            var key = AssistantConfigurationKeys.disclosureKeyFor(locale);
+            assertThat(key.code()).isEqualTo("assistant.disclosure_text_" + locale);
+            assertThat(key.tenantVisible()).isTrue();
+            assertThat(key.defaultValue()).isEqualTo("");
+            assertThat(key.settableScopes())
+                    .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND);
+        }
+        assertThat(AssistantConfigurationKeys.disclosureKeyFor("de"))
+                .isSameAs(AssistantConfigurationKeys.DISCLOSURE_TEXT_EN);
     }
 
     @Test

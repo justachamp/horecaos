@@ -1,6 +1,7 @@
 package uz.horecaos.platform.conversations.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.util.List;
@@ -20,6 +21,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.commercial.api.EntitlementKey;
+import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
+import uz.horecaos.platform.commercial.api.LimitCheck;
 import uz.horecaos.platform.conversations.api.ChannelKind;
 import uz.horecaos.platform.conversations.api.ConversationChannelRef;
 import uz.horecaos.platform.conversations.api.ConversationOutboundGateway;
@@ -29,6 +34,8 @@ import uz.horecaos.platform.conversations.domain.ConversationState;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * ADR 0069's seam in ADR 0059's engine: a participant is offered the text no
@@ -86,6 +93,8 @@ class ConversationParticipantTests {
     private Scripted participant;
     private List<OutboundMessage> sent;
     private ConversationEngine engine;
+    private ConversationInboxService inbox;
+    private AuditRecorder audit;
     private FieldProtection protection;
     private UUID tenant;
     private UUID brand;
@@ -114,7 +123,7 @@ class ConversationParticipantTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         objectMapper = JsonMapper.builder().build();
         Clock clock = Clock.systemUTC();
-        AuditRecorder audit = new JdbcAuditRecorder(jdbc, objectMapper);
+        audit = new JdbcAuditRecorder(jdbc, objectMapper);
         protection = TestProtection.envelope();
         conversations = new ConversationRepository(jdbc, clock);
         runs = new FlowRunRepository(jdbc, clock, protection, objectMapper);
@@ -169,6 +178,16 @@ class ConversationParticipantTests {
                 clock,
                 () -> List.of(participant),
                 "https://s.example");
+        inbox = new ConversationInboxService(
+                conversations,
+                runs,
+                messages,
+                flowDocuments,
+                outbound,
+                engine,
+                audit,
+                new PermissiveEntitlements(),
+                clock);
         channel = new ConversationChannelRef(tenant, brand, installation, ChannelKind.TELEGRAM, 7_001L, null);
     }
 
@@ -348,6 +367,133 @@ class ConversationParticipantTests {
         assertThat(conversation().state()).isEqualTo(ConversationState.HANDED_TO_OPERATOR);
     }
 
+    // ------------------------------------------------------------------ the inbox
+
+    @Test
+    @DisplayName(
+            "an operator can take over a conversation the assistant has been answering: it is IDLE with no flow run, and taking over is how a person becomes its author")
+    void anOperatorTakesOverFromTheAssistant() {
+        participant.script(offered -> new ConversationParticipant.Replied("Plov is 45 000 so'm", UUID.randomUUID()));
+        engine.handleText(channel, "How much is plov?");
+        ConversationRepository.Row before = conversation();
+        assertThat(before.state()).isEqualTo(ConversationState.IDLE);
+
+        ConversationView taken =
+                inbox.takeover(tenant, brand, before.id(), before.version(), "operator-7", "The customer asked for me");
+
+        assertThat(taken.state()).isEqualTo("HANDED_TO_OPERATOR");
+        assertThat(taken.assignedTo()).isEqualTo("operator-7");
+        assertThat(jdbc.sql("""
+                        SELECT reason FROM audit.audit_events
+                        WHERE action_code = 'conversation.takeover' AND correlation_id = :conversationId
+                        """)
+                        .param("conversationId", before.id().toString())
+                        .query(String.class)
+                        .list())
+                .as("one audited takeover, with the reason the operator gave")
+                .containsExactly("The customer asked for me");
+
+        // And from then on the participant is never asked, exactly as for a handoff.
+        participant.offers.clear();
+        engine.handleText(channel, "hello? are you there?");
+        assertThat(participant.offers).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a takeover from the assistant with no reason typed says who it was taken from, in the audit trail")
+    void aTakeoverFromTheAssistantSaysSoInTheAudit() {
+        participant.script(offered -> new ConversationParticipant.Replied("Plov is 45 000 so'm", UUID.randomUUID()));
+        engine.handleText(channel, "How much is plov?");
+        ConversationRepository.Row before = conversation();
+
+        inbox.takeover(tenant, brand, before.id(), before.version(), "operator-7", "  ");
+
+        assertThat(jdbc.sql("""
+                        SELECT reason FROM audit.audit_events
+                        WHERE action_code = 'conversation.takeover' AND correlation_id = :conversationId
+                        """)
+                        .param("conversationId", before.id().toString())
+                        .query(String.class)
+                        .list())
+                .containsExactly("Operator took the conversation over from the assistant");
+    }
+
+    @Test
+    @DisplayName(
+            "an idle conversation the assistant never spoke in is still not takeable: there is nothing to take over from")
+    void anIdleConversationNobodyAnsweredIsNotTakeable() {
+        participant.willing = false;
+        // A conversation with a customer message and nobody answering it.
+        ConversationRepository.Row created = conversations.getOrCreate(channel);
+        messages.record(tenant, created.id(), ConversationMessageStore.Direction.INBOUND, null, "hello");
+
+        assertThatThrownBy(() -> inbox.takeover(tenant, brand, created.id(), created.version(), "operator-7", null))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        failure -> assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT));
+    }
+
+    @Test
+    @DisplayName(
+            "the inbox says who is answering: a conversation the assistant has spoken in is marked active until a person takes it, and involved for good")
+    void theInboxMarksTheAssistant() {
+        participant.script(offered -> new ConversationParticipant.Replied("Plov is 45 000 so'm", UUID.randomUUID()));
+        engine.handleText(channel, "How much is plov?");
+        UUID conversationId = conversation().id();
+
+        assertThat(inbox.list(tenant, brand, 10)).singleElement().satisfies(row -> {
+            assertThat(row.assistantActive()).isTrue();
+            assertThat(row.assistantInvolved()).isTrue();
+            assertThat(row.needsReply()).as("an answered question needs nobody").isFalse();
+        });
+        ConversationInboxService.ConversationHistory opened =
+                inbox.history(tenant, brand, conversationId, "operator-7");
+        assertThat(opened.conversation().assistantActive()).isTrue();
+        assertThat(opened.messages())
+                .extracting(ConversationMessageView::direction)
+                .containsExactly("INBOUND", "ASSISTANT");
+        assertThat(opened.messages().get(1).assistantTurnId()).isNotNull();
+
+        ConversationView taken = inbox.takeover(
+                tenant, brand, conversationId, opened.conversation().version(), "operator-7", null);
+
+        assertThat(taken.assistantActive()).as("a person holds it now").isFalse();
+        assertThat(taken.assistantInvolved()).isTrue();
+        assertThat(inbox.list(tenant, brand, 10)).singleElement().satisfies(row -> {
+            assertThat(row.assistantActive()).isFalse();
+            assertThat(row.assistantInvolved()).isTrue();
+            assertThat(row.needsReply()).isTrue();
+        });
+    }
+
+    @Test
+    @DisplayName(
+            "a conversation the assistant handed over is involved but not active, and one it never touched is neither")
+    void aHandedOverConversationIsInvolvedNotActive() {
+        participant.script(
+                offered -> new ConversationParticipant.HandedOff("A person will reply here.", UUID.randomUUID()));
+        engine.handleText(channel, "this is a complaint");
+        assertThat(inbox.list(tenant, brand, 10)).singleElement().satisfies(row -> {
+            assertThat(row.state()).isEqualTo("HANDED_TO_OPERATOR");
+            assertThat(row.assistantActive()).isFalse();
+            assertThat(row.assistantInvolved()).isTrue();
+        });
+
+        participant.willing = false;
+        ConversationChannelRef other =
+                new ConversationChannelRef(tenant, brand, channel.installationId(), ChannelKind.TELEGRAM, 7_002L, null);
+        messages.record(
+                tenant,
+                conversations.getOrCreate(other).id(),
+                ConversationMessageStore.Direction.INBOUND,
+                null,
+                "hello");
+        assertThat(inbox.list(tenant, brand, 10))
+                .filteredOn(row -> !row.assistantInvolved())
+                .singleElement()
+                .satisfies(row -> assertThat(row.assistantActive()).isFalse());
+    }
+
     // ---------------------------------------------------------------- robustness
 
     @Test
@@ -415,5 +561,31 @@ class ConversationParticipantTests {
             offers.add(turn);
             return script.apply(turn);
         }
+    }
+
+    /** Takeover and history never consult the plan; a reply would, and this suite sends none. */
+    private static final class PermissiveEntitlements implements EntitlementService {
+        @Override
+        public EntitlementSnapshot snapshot(UUID tenantId) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+
+        @Override
+        public LimitCheck check(UUID tenantId, EntitlementKey<Long> key, long requested) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+
+        @Override
+        public LimitCheck require(UUID tenantId, EntitlementKey<Long> key, long requested) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+
+        @Override
+        public boolean featureEnabled(UUID tenantId, EntitlementKey<Boolean> key) {
+            return true;
+        }
+
+        @Override
+        public void requireFeature(UUID tenantId, EntitlementKey<Boolean> key) {}
     }
 }

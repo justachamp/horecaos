@@ -1363,6 +1363,8 @@ export interface ConversationMessageResponse {
 
 export interface ConversationResponse {
   assignedTo?: string;
+  assistantActive?: boolean;
+  assistantInvolved?: boolean;
   brandId?: string;
   channel?: string;
   conversationId?: string;
@@ -1373,6 +1375,8 @@ export interface ConversationResponse {
 }
 
 export interface ConversationSummaryResponse {
+  assistantActive?: boolean;
+  assistantInvolved?: boolean;
   channel?: string;
   conversationId?: string;
   customerAccountId?: string;
@@ -2530,6 +2534,12 @@ export interface ExternalQuoteResponse {
   quoteId?: string;
 }
 
+export interface FactResponse {
+  cited?: boolean;
+  id?: string;
+  kind?: string;
+}
+
 export interface FactsBody {
   brandOrderPosition?: number;
   channelOrderPosition?: number;
@@ -2826,6 +2836,11 @@ export interface KitchenEventsResponse {
   events?: Array<KitchenEventResponse>;
   ticketId?: string;
   ticketStatus?: string;
+}
+
+export interface KnowledgeVersionResponse {
+  entryId?: string;
+  version?: number;
 }
 
 export interface LadderStep {
@@ -6480,6 +6495,19 @@ export interface TraceView {
   state?: string;
 }
 
+export interface TurnResponse {
+  facts?: Array<FactResponse>;
+  knowledgeVersions?: Array<KnowledgeVersionResponse>;
+  locale?: string;
+  modelId?: string;
+  occurredAt?: string;
+  outcome?: string;
+  questionKinds?: Array<string>;
+  refusalReason?: string;
+  servedFromCache?: boolean;
+  turnId?: string;
+}
+
 export interface UnassignRequest {
   expectedShipmentVersion: number;
   reasonCode: string;
@@ -6829,6 +6857,7 @@ export interface Operations {
   "retireBrand": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/knowledge/{entryId}/retirements"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } }; body: RetireRequest }; responses: { "200": AssistantKnowledgeControllerEntryResponse } };
   "versionsBrand": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/knowledge/{entryId}/versions"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } } }; responses: { "200": Array<AssistantKnowledgeControllerVersionResponse> } };
   "publishBrand": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/knowledge/{entryId}/versions"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } }; body: PublishVersionRequest }; responses: { "200": AssistantKnowledgeControllerEntryResponse } };
+  "turn": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/turns/{turnId}"; request: { parameters: { path: { brandId: string; tenantId: string; turnId: string } } }; responses: { "200": TurnResponse } };
   "forCustomer": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { customerAccountId: string } } }; responses: { "200": Array<BenefitGrantResponse> } };
   "mint_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintBenefitGrantRequest }; responses: { "200": MintBenefitGrantResponse } };
   "list_29": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };

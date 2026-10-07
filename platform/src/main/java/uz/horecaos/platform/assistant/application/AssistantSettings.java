@@ -3,6 +3,7 @@ package uz.horecaos.platform.assistant.application;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.assistant.api.AssistantConfigurationKeys;
+import uz.horecaos.platform.assistant.domain.CustomerWording;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -69,6 +70,19 @@ public class AssistantSettings {
         Integer configured = configuration.value(
                 AssistantConfigurationKeys.CONVERSATION_TURN_CAP, ResourceScope.brand(tenantId, brandId));
         return configured == null ? 0 : configured;
+    }
+
+    /**
+     * What the assistant says ahead of its first answer in a conversation, in the reply's
+     * language: the tenant's own wording for this brand when it has authored one (the
+     * disclosure is the tenant's obligation to its customers, ADR 0069), otherwise the
+     * platform's default. A tenant can replace the sentence and cannot remove it: a blank
+     * value is "keep the default", not "say nothing".
+     */
+    public String disclosureText(UUID tenantId, UUID brandId, String locale) {
+        String authored = configuration.value(
+                AssistantConfigurationKeys.disclosureKeyFor(locale), ResourceScope.brand(tenantId, brandId));
+        return authored == null || authored.isBlank() ? CustomerWording.disclosure(locale) : authored.strip();
     }
 
     public String priceChannelCode(UUID tenantId, UUID brandId) {

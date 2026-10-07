@@ -3,11 +3,14 @@ package uz.horecaos.platform.assistant.infrastructure.persistence;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -61,6 +64,39 @@ public class JdbcTurnStore {
                 .param("knowledge", objectMapper.writeValueAsString(turn.knowledgeVersions()))
                 .param("pseudonym", turn.customerPseudonym())
                 .update();
+    }
+
+    /**
+     * One turn's provenance, read for an operator (ADR 0069: "why did it say that" has an
+     * answer). Keyed by brand as well as tenant, so a turn id from another brand's
+     * conversation is simply not found from this brand's path.
+     */
+    public Optional<TurnView> find(UUID tenantId, UUID brandId, UUID turnId) {
+        return jdbc.sql("""
+                SELECT id, occurred_at, locale, question_kinds, outcome, refusal_reason, model_id,
+                       served_from_cache, facts::text AS facts, cited_fact_ids::text AS cited,
+                       knowledge_versions::text AS knowledge
+                  FROM assistant.turns
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :turnId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("turnId", turnId)
+                .query((row, number) -> new TurnView(
+                        row.getObject("id", UUID.class),
+                        row.getObject("occurred_at", OffsetDateTime.class).toInstant(),
+                        row.getString("locale"),
+                        row.getString("question_kinds"),
+                        row.getString("outcome"),
+                        row.getString("refusal_reason"),
+                        row.getString("model_id"),
+                        row.getBoolean("served_from_cache"),
+                        objectMapper.readValue(
+                                row.getString("facts"), new TypeReference<List<Map<String, Object>>>() {}),
+                        objectMapper.readValue(row.getString("cited"), new TypeReference<List<String>>() {}),
+                        objectMapper.readValue(
+                                row.getString("knowledge"), new TypeReference<List<Map<String, Object>>>() {})))
+                .optional();
     }
 
     /** What the tenant has cost the platform in the half-open window, in millionths of a US dollar. */
@@ -166,6 +202,20 @@ public class JdbcTurnStore {
             java.util.List<String> citedFactIds,
             java.util.List<Map<String, Object>> knowledgeVersions,
             @Nullable String customerPseudonym) {}
+
+    /** One turn as an operator reads it: how it ended and what it stood on, never what anyone said. */
+    public record TurnView(
+            UUID id,
+            Instant occurredAt,
+            String locale,
+            String questionKinds,
+            String outcome,
+            @Nullable String refusalReason,
+            @Nullable String modelId,
+            boolean servedFromCache,
+            List<Map<String, Object>> facts,
+            List<String> citedFactIds,
+            List<Map<String, Object>> knowledgeVersions) {}
 
     public record UsageRow(
             long turns,

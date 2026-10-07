@@ -126,6 +126,47 @@ class AssistantSettingsTests {
                 .isFalse();
     }
 
+    private void setText(String key, String scope, @Nullable UUID brandId, String text) {
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values
+                    (id, key_code, scope_type, tenant_id, brand_id, value_type, string_value, set_by)
+                VALUES (:id, :key, :scope, :tenantId, :brandId, 'STRING', :text, 'a-test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("key", key)
+                .param("scope", scope)
+                .param("tenantId", tenant)
+                .param("brandId", brandId)
+                .param("text", text)
+                .update();
+    }
+
+    @Test
+    @DisplayName(
+            "the disclosure is the platform's wording until a tenant words it, a brand's own wording wins for that brand, and a blank keeps the default")
+    void theDisclosureResolvesDownToTheBrandAndNeverToSilence() {
+        String platformRussian = settings.disclosureText(tenant, brand, "ru");
+        assertThat(platformRussian).contains("автоматический помощник");
+
+        setText("assistant.disclosure_text_ru", "TENANT", null, "  Вам отвечает наш робот.  ");
+        assertThat(settings.disclosureText(tenant, brand, "ru")).isEqualTo("Вам отвечает наш робот.");
+        assertThat(settings.disclosureText(tenant, brand, "en"))
+                .as("another language is untouched")
+                .contains("automated assistant");
+
+        setText("assistant.disclosure_text_ru", "BRAND", siblingBrand, "Бренд-2: это бот.");
+        assertThat(settings.disclosureText(tenant, siblingBrand, "ru")).isEqualTo("Бренд-2: это бот.");
+        assertThat(settings.disclosureText(tenant, brand, "ru")).isEqualTo("Вам отвечает наш робот.");
+
+        setText("assistant.disclosure_text_uz", "TENANT", null, "");
+        assertThat(settings.disclosureText(tenant, brand, "uz"))
+                .as("blank is not silence")
+                .isEqualTo(settings.disclosureText(UUID.randomUUID(), UUID.randomUUID(), "uz"));
+        assertThat(settings.disclosureText(tenant, brand, "de"))
+                .as("a language the assistant does not speak gets the English sentence")
+                .contains("automated assistant");
+    }
+
     @Test
     @DisplayName("the ceiling and the turn cap carry the documented defaults and take a tenant's own value")
     void theNumbersAreConfigurable() {

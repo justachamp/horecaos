@@ -899,6 +899,35 @@ class AssistantTurnServiceTests {
     }
 
     @Test
+    @DisplayName(
+            "a tenant's own disclosure replaces the platform's wording for its language only, and the default stays for every other")
+    void aTenantsOwnDisclosureReplacesTheDefaultForItsLanguageOnly() {
+        fx.branches.only(AssistantFixture.branch(fx.chilonzor, "Chilonzor", "Bunyodkor 12", "Chilonzor", null));
+        fx.configuration.put(
+                "assistant.disclosure_text_ru", "Вам отвечает робот нашей сети. Вопрос уходит во внешний ИИ.");
+        AssistantTurnService custom = fx.rebuild();
+
+        String russian = text(custom.offer(fx.ask(UUID.randomUUID(), "Сколько стоит плов?")));
+        String english = text(custom.offer(fx.ask(UUID.randomUUID(), "How much is the plov?")));
+
+        assertThat(russian).startsWith("Вам отвечает робот нашей сети. Вопрос уходит во внешний ИИ.\n\n");
+        assertThat(russian).doesNotContain("автоматический помощник");
+        assertThat(english).contains("automated assistant");
+    }
+
+    @Test
+    @DisplayName(
+            "a blank disclosure is the default and never silence: a tenant can replace the sentence and cannot remove it")
+    void aBlankDisclosureKeepsTheDefault() {
+        fx.branches.only(AssistantFixture.branch(fx.chilonzor, "Chilonzor", "Bunyodkor 12", "Chilonzor", null));
+        fx.configuration.put("assistant.disclosure_text_ru", "   ");
+
+        String first = text(fx.rebuild().offer(fx.ask(UUID.randomUUID(), "Сколько стоит плов?")));
+
+        assertThat(first).contains("автоматический помощник").contains("ИИ-сервис");
+    }
+
+    @Test
     @DisplayName("the answer is in the customer's language: Russian, Uzbek and English each get their own wording")
     void theAnswerIsInTheCustomersLanguage() {
         fx.branches.only(AssistantFixture.branch(fx.chilonzor, "Chilonzor", "Bunyodkor 12", "Chilonzor", null));

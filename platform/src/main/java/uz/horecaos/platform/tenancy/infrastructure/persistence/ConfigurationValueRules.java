@@ -30,9 +30,20 @@ public final class ConfigurationValueRules {
     /** A day: past it a threshold is a typo, not a policy. */
     private static final int MAXIMUM_MINUTES = 1_440;
 
+    /**
+     * The longest disclosure sentence a tenant may author (ADR 0069). Declared here and not
+     * read from {@code AssistantConfigurationKeys}: that class lives in the assistant module,
+     * which this one may not import, and {@code AssistantConfigurationKeysTests} holds the two
+     * numbers together.
+     */
+    static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
+
     private static final Map<String, Consumer<Object>> RULES = Map.of(
             "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay);
+            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
+            "assistant.disclosure_text_en", value -> requirePlainShortText("assistant.disclosure_text_en", value),
+            "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
+            "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
 
     private ConfigurationValueRules() {}
 
@@ -60,6 +71,28 @@ public final class ConfigurationValueRules {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "ordering.late_colour must be blank (keep the design-system colour) or #rrggbb");
+        }
+    }
+
+    /**
+     * Text a customer will read in a chat message: bounded, and plain. A control character
+     * (other than a line break) has no business in a sentence and can corrupt how a channel
+     * renders it, so it is refused where it is written rather than discovered in a customer's
+     * chat. Blank is allowed -- it means "keep the platform's wording".
+     */
+    private static void requirePlainShortText(String code, Object value) {
+        String text = String.valueOf(value);
+        if (text.length() > DISCLOSURE_TEXT_MAXIMUM_CHARACTERS) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "%s must be at most %d characters".formatted(code, DISCLOSURE_TEXT_MAXIMUM_CHARACTERS));
+        }
+        boolean hasControlCharacter =
+                text.codePoints().anyMatch(codePoint -> Character.isISOControl(codePoint) && codePoint != '\n');
+        if (hasControlCharacter) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    code + " must be plain text: no control characters other than a line break");
         }
     }
 

@@ -390,6 +390,167 @@ class AssistantControllersEndpointTests {
         assertThat(busy.get("ceilingReached").asBoolean()).isTrue();
     }
 
+    // ============================================================ a turn's provenance
+
+    @Test
+    @DisplayName(
+            "an operator reads why the assistant said what it said -- how the turn ended and which facts it stood on -- from its own brand, with the right capability, and no words")
+    void aTurnsProvenance() throws Exception {
+        UUID knowledgeEntry = UUID.randomUUID();
+        UUID turn = insertTurnWithFacts(knowledgeEntry);
+        String path = "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/assistant/turns/" + turn;
+
+        MvcResult read = mvc.perform(get(path).with(tokenFor(OWNER))).andReturn();
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        JsonNode view = body(read);
+        assertThat(view.get("turnId").asString()).isEqualTo(turn.toString());
+        assertThat(view.get("outcome").asString()).isEqualTo("ANSWERED");
+        assertThat(view.get("locale").asString()).isEqualTo("ru");
+        assertThat(view.get("questionKinds")).hasSize(2);
+        assertThat(view.get("facts")).hasSize(2);
+        assertThat(view.get("facts").get(0).get("kind").asString()).isEqualTo("PRICE");
+        assertThat(view.get("facts").get(0).get("cited").asBoolean()).isTrue();
+        assertThat(view.get("facts").get(1).get("kind").asString()).isEqualTo("KNOWLEDGE");
+        assertThat(view.get("facts").get(1).get("cited").asBoolean()).isFalse();
+        assertThat(view.get("knowledgeVersions")).hasSize(1);
+        assertThat(view.get("knowledgeVersions").get(0).get("entryId").asString())
+                .isEqualTo(knowledgeEntry.toString());
+        assertThat(view.get("knowledgeVersions").get(0).get("version").asInt()).isEqualTo(3);
+        assertThat(read.getResponse().getContentAsString(UTF_8))
+                .as("provenance is ids and kinds; the ledger holds no words and neither does this")
+                .doesNotContain("customer_pseudonym")
+                .doesNotContain("variantId");
+
+        assertThat(mvc.perform(get(path).with(tokenFor(BRAND_MANAGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        assertThat(mvc.perform(get(path).with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("finance holds neither assistant capability")
+                .isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName(
+            "a turn is found only from its own brand's path: another brand's path, an unknown id and another tenant all read as not found")
+    void aTurnIsNotFoundFromAnyPathButItsOwn() throws Exception {
+        UUID turn = insertTurnWithFacts(UUID.randomUUID());
+        String base = "/api/v1/operations/tenants/" + TENANT + "/brands/";
+
+        assertThat(mvc.perform(get(base + OTHER_BRAND + "/assistant/turns/" + turn)
+                                .with(tokenFor(OWNER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(404);
+        assertThat(mvc.perform(get(base + BRAND + "/assistant/turns/" + UUID.randomUUID())
+                                .with(tokenFor(OWNER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(404);
+        assertThat(mvc.perform(get(base + BRAND + "/assistant/turns/" + turn).with(tokenFor("a-stranger")))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("no grant at all")
+                .isEqualTo(403);
+    }
+
+    // ================================================== the settings card's endpoints
+
+    private static final String CONFIG = "/api/v1/operations/tenants/" + TENANT + "/configuration";
+
+    @Test
+    @DisplayName(
+            "the console's switch and wording go through the tenant configuration endpoints: the visible keys are listed, the ceiling is not, and what is written is what the usage screen and the assistant read")
+    void theSettingsCardThroughTheTenantEndpoints() throws Exception {
+        JsonNode keys =
+                body(mvc.perform(get(CONFIG + "/keys").with(tokenFor(OWNER))).andReturn());
+        List<String> codes = new java.util.ArrayList<>();
+        keys.forEach(key -> codes.add(key.get("code").asString()));
+        assertThat(codes)
+                .contains(
+                        "assistant.enabled",
+                        "assistant.disclosure_text_en",
+                        "assistant.disclosure_text_ru",
+                        "assistant.disclosure_text_uz")
+                .as("what HorecaOS pays the processor is the platform's to set")
+                .doesNotContain("assistant.monthly_spend_ceiling_usd_cents");
+        MvcResult ceiling = mvc.perform(get(CONFIG + "/keys/assistant.monthly_spend_ceiling_usd_cents/resolution")
+                        .param("scopeType", "TENANT")
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(ceiling.getResponse().getStatus()).isEqualTo(404);
+        MvcResult ceilingWrite = send(
+                CONFIG + "/keys/assistant.monthly_spend_ceiling_usd_cents/values",
+                OWNER,
+                "{\"scopeType\":\"TENANT\",\"explicitNull\":false,\"integerValue\":99999,\"reason\":\"more\"}",
+                null);
+        assertThat(ceilingWrite.getResponse().getStatus())
+                .as("a tenant cannot raise what the platform pays for it")
+                .isEqualTo(404);
+
+        String usagePath = "/api/v1/operations/tenants/" + TENANT + "/assistant/usage";
+        assertThat(body(mvc.perform(get(usagePath).with(tokenFor(OWNER))).andReturn())
+                        .get("switchedOn")
+                        .asBoolean())
+                .isFalse();
+        MvcResult switchedOn = send(
+                CONFIG + "/keys/assistant.enabled/values",
+                OWNER,
+                "{\"scopeType\":\"TENANT\",\"explicitNull\":false,\"booleanValue\":true,\"reason\":\"pilot\"}",
+                null);
+        assertThat(switchedOn.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(mvc.perform(get(usagePath).with(tokenFor(OWNER))).andReturn())
+                        .get("switchedOn")
+                        .asBoolean())
+                .isTrue();
+
+        MvcResult worded = send(
+                CONFIG + "/keys/assistant.disclosure_text_ru/values",
+                OWNER,
+                "{\"scopeType\":\"BRAND\",\"brandId\":\"" + BRAND
+                        + "\",\"explicitNull\":false,\"stringValue\":\"Вам отвечает бот сети.\",\"reason\":\"our wording\"}",
+                null);
+        assertThat(worded.getResponse().getStatus()).isEqualTo(200);
+        JsonNode resolved = body(mvc.perform(get(CONFIG + "/keys/assistant.disclosure_text_ru/resolution")
+                        .param("scopeType", "BRAND")
+                        .param("brandId", BRAND.toString())
+                        .with(tokenFor(OWNER)))
+                .andReturn());
+        assertThat(resolved.get("value").asString()).isEqualTo("Вам отвечает бот сети.");
+        assertThat(resolved.get("cameFromDefault").asBoolean()).isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "a disclosure that is too long or carries a control character is a 400 where it is written, and leaves nothing behind")
+    void aBadDisclosureIsRefusedAtTheDoor() throws Exception {
+        MvcResult tooLong = send(
+                CONFIG + "/keys/assistant.disclosure_text_en/values",
+                OWNER,
+                "{\"scopeType\":\"TENANT\",\"explicitNull\":false,\"stringValue\":\"" + "x".repeat(501)
+                        + "\",\"reason\":\"too much\"}",
+                null);
+        assertThat(tooLong.getResponse().getStatus()).isEqualTo(400);
+        MvcResult control = send(
+                CONFIG + "/keys/assistant.disclosure_text_en/values",
+                OWNER,
+                "{\"scopeType\":\"TENANT\",\"explicitNull\":false,\"stringValue\":\"bell\\u0007\",\"reason\":\"x\"}",
+                null);
+        assertThat(control.getResponse().getStatus()).isEqualTo(400);
+        assertThat(jdbc.sql(
+                                "SELECT count(*) FROM tenant.configuration_values WHERE key_code LIKE 'assistant.disclosure%'")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // ===================================================================== fixtures
 
     private void insertTurn(
@@ -413,6 +574,30 @@ class AssistantControllersEndpointTests {
                 .param("cost", costMicros)
                 .param("cached", cached)
                 .update();
+    }
+
+    private UUID insertTurnWithFacts(UUID knowledgeEntry) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO assistant.turns
+                    (id, tenant_id, brand_id, conversation_id, occurred_at, locale, question_kinds, outcome,
+                     model_id, facts, cited_fact_ids, knowledge_versions, customer_pseudonym)
+                VALUES (:id, :tenantId, :brandId, :conversationId, :at, 'ru', 'KNOWLEDGE,PRICE', 'ANSWERED',
+                        'claude-sonnet-5-5',
+                        CAST(:facts AS jsonb), CAST(:cited AS jsonb), CAST(:knowledge AS jsonb), 'pseudonym-1')
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("conversationId", UUID.randomUUID())
+                .param("at", Instant.now().atOffset(ZoneOffset.UTC))
+                .param(
+                        "facts",
+                        "[{\"id\":\"f1\",\"kind\":\"PRICE\",\"variantId\":\"v-1\"},{\"id\":\"f2\",\"kind\":\"KNOWLEDGE\"}]")
+                .param("cited", "[\"f1\"]")
+                .param("knowledge", "[{\"entryId\":\"" + knowledgeEntry + "\",\"version\":3}]")
+                .update();
+        return id;
     }
 
     private void seedTenancy() {

@@ -331,7 +331,7 @@ public class AssistantTurnService implements ConversationParticipant {
         // 9. Send. The disclosure rides on the first answer of a conversation.
         String reply = response.reply().strip();
         if (!turns.hasAnsweredIn(tenantId, context.conversationId())) {
-            reply = CustomerWording.disclosure(context.locale()) + "\n\n" + reply;
+            reply = settings.disclosureText(tenantId, brandId, context.locale()) + "\n\n" + reply;
         }
         Evidence evidence =
                 retrieved.bindsThePlatform(verdict.citedFactIds()) ? Evidence.BINDING_ANSWER : Evidence.NONE;

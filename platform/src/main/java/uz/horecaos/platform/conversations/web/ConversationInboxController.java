@@ -64,8 +64,9 @@ public class ConversationInboxController {
             summary = "A brand's conversations, needs-attention first",
             description = "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation "
                     + "whose newest message nobody has answered yet, then everything else by "
-                    + "last activity. No message bodies here — open a conversation for its "
-                    + "decrypted history.")
+                    + "last activity. assistantActive marks a conversation the assistant is "
+                    + "answering (ADR 0069), assistantInvolved one it has spoken in at all. No "
+                    + "message bodies here — open a conversation for its decrypted history.")
     public List<ConversationSummaryResponse> list(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -113,11 +114,13 @@ public class ConversationInboxController {
     @PostMapping("/{conversationId}/takeover")
     @RequiresCapability(value = Capability.CONVERSATION_INBOX_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
-            summary = "Take a FLOW_ACTIVE conversation over from the flow engine",
+            summary = "Take a conversation over from the flow engine or the assistant",
             description = "FLOW_ACTIVE -> HANDED_TO_OPERATOR by explicit operator action, before "
-                    + "the flow document itself ever reaches an operator-handoff block. The "
-                    + "engine stops answering this conversation from this call onward. Requires "
-                    + "If-Match against the conversation's current version.")
+                    + "the flow document itself ever reaches an operator-handoff block; also an "
+                    + "IDLE conversation the assistant (ADR 0069) has been answering, which has "
+                    + "no flow run at all. Neither the engine nor the assistant answers this "
+                    + "conversation from this call onward. Requires If-Match against the "
+                    + "conversation's current version.")
     public ResponseEntity<ConversationResponse> takeover(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -200,6 +203,8 @@ public class ConversationInboxController {
             @Nullable UUID customerAccountId,
             String state,
             boolean needsReply,
+            boolean assistantActive,
+            boolean assistantInvolved,
             Instant lastActivityAt) {
 
         static ConversationSummaryResponse of(ConversationSummaryView view) {
@@ -209,6 +214,8 @@ public class ConversationInboxController {
                     view.customerAccountId(),
                     view.state(),
                     view.needsReply(),
+                    view.assistantActive(),
+                    view.assistantInvolved(),
                     view.lastActivityAt());
         }
     }
@@ -220,6 +227,8 @@ public class ConversationInboxController {
             @Nullable UUID customerAccountId,
             String state,
             @Nullable String assignedTo,
+            boolean assistantActive,
+            boolean assistantInvolved,
             Instant updatedAt,
             long version) {
 
@@ -231,6 +240,8 @@ public class ConversationInboxController {
                     view.customerAccountId(),
                     view.state(),
                     view.assignedTo(),
+                    view.assistantActive(),
+                    view.assistantInvolved(),
                     view.updatedAt(),
                     view.version());
         }

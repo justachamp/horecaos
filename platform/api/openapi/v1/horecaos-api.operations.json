@@ -4322,6 +4322,12 @@
           "assignedTo" : {
             "type" : "string"
           },
+          "assistantActive" : {
+            "type" : "boolean"
+          },
+          "assistantInvolved" : {
+            "type" : "boolean"
+          },
           "brandId" : {
             "format" : "uuid",
             "type" : "string"
@@ -4353,6 +4359,12 @@
       },
       "ConversationSummaryResponse" : {
         "properties" : {
+          "assistantActive" : {
+            "type" : "boolean"
+          },
+          "assistantInvolved" : {
+            "type" : "boolean"
+          },
           "channel" : {
             "type" : "string"
           },
@@ -8065,6 +8077,20 @@
         },
         "type" : "object"
       },
+      "FactResponse" : {
+        "properties" : {
+          "cited" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "FactsBody" : {
         "properties" : {
           "brandOrderPosition" : {
@@ -8983,6 +9009,19 @@
           },
           "ticketStatus" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "KnowledgeVersionResponse" : {
+        "properties" : {
+          "entryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -20589,6 +20628,52 @@
         },
         "type" : "object"
       },
+      "TurnResponse" : {
+        "properties" : {
+          "facts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FactResponse"
+            },
+            "type" : "array"
+          },
+          "knowledgeVersions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/KnowledgeVersionResponse"
+            },
+            "type" : "array"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "modelId" : {
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "questionKinds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "refusalReason" : {
+            "type" : "string"
+          },
+          "servedFromCache" : {
+            "type" : "boolean"
+          },
+          "turnId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "UnassignRequest" : {
         "properties" : {
           "expectedShipmentVersion" : {
@@ -23717,6 +23802,51 @@
         "tags" : [ "Assistant knowledge" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/turns/{turnId}" : {
+      "get" : {
+        "description" : "The turn a conversation message points at through assistantTurnId. Lists the kinds of fact retrieved and which of them the reply cited, and the tenant's knowledge entry versions among them. Carries no customer or assistant words: those stay in the conversation. Not found when the turn is in another brand.",
+        "operationId" : "turn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TurnResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One assistant turn: how it ended and which facts it stood on",
+        "tags" : [ "Assistant turns" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants" : {
       "get" : {
         "description" : "Status and terms only, newest first — never the code: a later read shows codeHint on the equivalent promo-code screen, and this endpoint carries no hint field at all because a grant is never presented as a word to recognise in a list, only redeemed once by the one account it was minted for.",
@@ -23812,7 +23942,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
-        "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
+        "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. assistantActive marks a conversation the assistant is answering (ADR 0069), assistantInvolved one it has spoken in at all. No message bodies here — open a conversation for its decrypted history.",
         "operationId" : "list_29",
         "parameters" : [ {
           "in" : "path",
@@ -24061,7 +24191,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/takeover" : {
       "post" : {
-        "description" : "FLOW_ACTIVE -> HANDED_TO_OPERATOR by explicit operator action, before the flow document itself ever reaches an operator-handoff block. The engine stops answering this conversation from this call onward. Requires If-Match against the conversation's current version.",
+        "description" : "FLOW_ACTIVE -> HANDED_TO_OPERATOR by explicit operator action, before the flow document itself ever reaches an operator-handoff block; also an IDLE conversation the assistant (ADR 0069) has been answering, which has no flow run at all. Neither the engine nor the assistant answers this conversation from this call onward. Requires If-Match against the conversation's current version.",
         "operationId" : "takeover",
         "parameters" : [ {
           "in" : "path",
@@ -24109,7 +24239,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Take a FLOW_ACTIVE conversation over from the flow engine",
+        "summary" : "Take a conversation over from the flow engine or the assistant",
         "tags" : [ "Operator inbox" ]
       }
     },
@@ -50975,6 +51105,9 @@
   }, {
     "description" : "The tenant's own consent-purpose registry",
     "name" : "Consent types"
+  }, {
+    "description" : "Why the assistant said what it said",
+    "name" : "Assistant turns"
   }, {
     "description" : "Opening and closing the window in which a courier's position is collected",
     "name" : "Courier duty and telemetry"
