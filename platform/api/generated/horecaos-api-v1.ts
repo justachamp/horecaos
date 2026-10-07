@@ -535,6 +535,7 @@ export interface AssistantUsageControllerUsageResponse {
   ceilingUsdCents?: number;
   costUsdMicros?: number;
   declined?: number;
+  defaultDisclosure?: { [key: string]: string };
   entitled?: boolean;
   escalated?: number;
   inputTokens?: number;

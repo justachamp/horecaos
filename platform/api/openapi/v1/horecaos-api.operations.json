@@ -1184,6 +1184,12 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "defaultDisclosure" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
           "entitled" : {
             "type" : "boolean"
           },
@@ -23121,7 +23127,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/assistant/usage" : {
       "get" : {
-        "description" : "Calendar month in UTC. Spend is in millionths of a US dollar (one cent is 10000); the ceiling is in US cents. ceilingReached is true exactly when the assistant is refusing for that reason.",
+        "description" : "Calendar month in UTC. Spend is in millionths of a US dollar (one cent is 10000); the ceiling is in US cents. ceilingReached is true exactly when the assistant is refusing for that reason. defaultDisclosure is the platform's own wording ahead of a first answer, by reply language: what a tenant that has written none says.",
         "operationId" : "usage_1",
         "parameters" : [ {
           "in" : "path",
