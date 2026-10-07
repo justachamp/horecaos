@@ -115,7 +115,10 @@ class CourierJobsServiceTests {
                 """).update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
-        now = Instant.now();
+        // Postgres keeps microseconds and ROUNDS a nanosecond instant to them; CI's Linux clock
+        // supplies nanoseconds (a Mac's does not), so a `now` that is not already whole micros reads
+        // back one microsecond off. Truncate at the source and every stored instant equals `now`.
+        now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         tx = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
         realtime = new RecordingRealtime();
         orders = new RecordingOrders();
