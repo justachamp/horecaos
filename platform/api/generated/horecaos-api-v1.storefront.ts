@@ -94,6 +94,10 @@ export interface Banner {
   priority?: number;
 }
 
+export interface CallbackRequestResponse {
+  leadId: string;
+}
+
 export interface CartLineResponse {
   comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
@@ -183,6 +187,12 @@ export interface CreateCartRequest {
   channel: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
   locationId: string;
+}
+
+export interface CustomerCallbackRequest {
+  forCompany?: boolean;
+  note?: string;
+  phone: string;
 }
 
 export interface CustomerSessionResponse {
@@ -892,6 +902,7 @@ export interface Operations {
   "removeAddress": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
   "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
+  "request": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CustomerCallbackRequest }; responses: { "200": CallbackRequestResponse } };
   "currentErasureRequest": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "requestErasure": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "cancelErasureRequest": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request/cancel"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
