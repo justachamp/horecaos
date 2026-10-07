@@ -1251,6 +1251,29 @@ public enum Capability {
     COMMERCIAL_ARREARS_READ("commercial.arrears.read", "commercial", "arrears.read"),
 
     /**
+     * ADR 0095: a tenant paying HorecaOS in advance — charging the card it keeps on file to put money in
+     * its wallet, and asking for a prepayment invoice to pay by bank transfer instead.
+     *
+     * <p>The tenant's own act, and the opposite of {@link #COMMERCIAL_WALLET_MANAGE}: that is HorecaOS
+     * deciding what a tenant is owed or owes, this is a tenant putting its own money in. A tenant cannot
+     * credit itself without paying: a card top-up is a charge the provider confirmed, and a bank transfer
+     * waits for HorecaOS finance to record it. Composed into the pair that already holds {@link
+     * #COMMERCIAL_SUBSCRIPTION_MANAGE}, the tenant's other commitment of money.
+     */
+    COMMERCIAL_WALLET_TOPUP("commercial.wallet.topup", "commercial", "wallet.topup"),
+
+    /**
+     * ADR 0095: the card a tenant keeps on file with HorecaOS, and how it chooses to be collected —
+     * invoice and bank transfer, prepaid wallet, or the card charged for each statement's remainder.
+     *
+     * <p>Choosing the card for statements is the tenant's own recorded consent to recurring charges,
+     * which is why it is a capability of its own and not something {@link #COMMERCIAL_WALLET_TOPUP}
+     * implies: a finance clerk who may top the wallet up must not thereby agree that the card is
+     * charged every month.
+     */
+    COMMERCIAL_CARD_MANAGE("commercial.card.manage", "commercial", "card.manage"),
+
+    /**
      * ADR 0046: reading a customer's points balance, their movements, and the
      * brand's outstanding liability.
      *

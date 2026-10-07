@@ -222,4 +222,53 @@ public class JdbcCardChargeAttemptStore {
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
+
+    /**
+     * The CARD tenants a settlement sweep should look at, oldest id first: card on file, something still
+     * owed on an issued statement, and either an attempt still unresolved (always retried under its own
+     * key) or no reason to hold back.
+     *
+     * <p>The reasons to hold back are the two a collections process owes a card: a decline within {@code
+     * retryAfter} is not repeated, and {@code maxDeclines} declines under the card on file since the last
+     * success stop the sweep until the card changes or a person triggers a pass — a card that was reported
+     * lost does not get charged every day for ever. A person-triggered pass is not held back by either.
+     */
+    public java.util.List<UUID> settlementCandidates(
+            Instant now, java.time.Duration retryAfter, int maxDeclines, int limit) {
+        return jdbc.sql("""
+                        SELECT b.tenant_id
+                          FROM commercial.tenant_billing b
+                         WHERE b.payment_method = 'CARD'
+                           AND b.card_token_reference IS NOT NULL
+                           AND EXISTS (
+                               SELECT 1 FROM commercial.statements s
+                                WHERE s.tenant_id = b.tenant_id AND s.status = 'ISSUED'
+                                  AND s.total_minor > COALESCE((
+                                      SELECT -SUM(w.amount_minor) FROM commercial.wallet_entries w
+                                       WHERE w.tenant_id = s.tenant_id AND w.statement_id = s.id
+                                         AND w.entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL')), 0))
+                           AND (
+                               EXISTS (SELECT 1 FROM commercial.card_charge_attempts p
+                                        WHERE p.tenant_id = b.tenant_id AND p.outcome = 'PENDING')
+                               OR (
+                                   NOT EXISTS (SELECT 1 FROM commercial.card_charge_attempts d
+                                                WHERE d.tenant_id = b.tenant_id AND d.outcome = 'FAILED'
+                                                  AND d.settled_at > :retryCutoff)
+                                   AND (SELECT COUNT(*) FROM commercial.card_charge_attempts d
+                                         WHERE d.tenant_id = b.tenant_id AND d.outcome = 'FAILED'
+                                           AND d.card_token_reference IS NOT DISTINCT FROM b.card_token_reference
+                                           AND d.settled_at > COALESCE((
+                                               SELECT MAX(ok.settled_at) FROM commercial.card_charge_attempts ok
+                                                WHERE ok.tenant_id = b.tenant_id AND ok.outcome = 'SUCCEEDED'),
+                                               '-infinity'::timestamptz)) < :maxDeclines
+                               ))
+                         ORDER BY b.tenant_id
+                         LIMIT :limit
+                        """)
+                .param("retryCutoff", now.minus(retryAfter).atOffset(ZoneOffset.UTC))
+                .param("maxDeclines", maxDeclines)
+                .param("limit", limit)
+                .query((row, number) -> row.getObject("tenant_id", UUID.class))
+                .list();
+    }
 }

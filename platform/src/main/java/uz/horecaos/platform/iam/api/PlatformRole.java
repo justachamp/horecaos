@@ -353,6 +353,9 @@ public enum PlatformRole {
                     // ADR 0095: the owner's own wallet -- both balances, the ledger,
                     // live bonus grants and each statement's paid and due amounts.
                     COMMERCIAL_WALLET_READ,
+                    // ADR 0095: paying HorecaOS in advance, and the card kept for it.
+                    COMMERCIAL_WALLET_TOPUP,
+                    COMMERCIAL_CARD_MANAGE,
                     IAM_GRANT_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
@@ -637,6 +640,9 @@ public enum PlatformRole {
                     COMMERCIAL_ARREARS_READ,
                     // ADR 0095: finance is who answers "why is this still due".
                     COMMERCIAL_WALLET_READ,
+                    // ADR 0095: finance is also who puts money in, and who keeps the card for it.
+                    COMMERCIAL_WALLET_TOPUP,
+                    COMMERCIAL_CARD_MANAGE,
                     REPORTING_READ,
                     // ADR 0043/ADR 0029, wave P28: finance is who takes a figure out of
                     // Reports for a statement or a filing. The PII column group stays

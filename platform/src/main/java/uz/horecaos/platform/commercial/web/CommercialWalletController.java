@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.List;
@@ -20,10 +21,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.commercial.application.CardTopUpService;
+import uz.horecaos.platform.commercial.application.PrepaymentInvoiceService;
 import uz.horecaos.platform.commercial.application.WalletService;
 import uz.horecaos.platform.commercial.application.WalletService.WalletChangeOutcome;
 import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
+import uz.horecaos.platform.commercial.domain.PrepaymentInvoice;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
 import uz.horecaos.platform.commercial.domain.WalletBalances;
@@ -63,11 +67,22 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CommercialWalletController {
 
     private final WalletService wallet;
+    private final PrepaymentInvoiceService invoices;
+    private final CardTopUpService topUps;
     private final CurrentActor currentActor;
+    private final Clock clock;
 
-    public CommercialWalletController(WalletService wallet, CurrentActor currentActor) {
+    public CommercialWalletController(
+            WalletService wallet,
+            PrepaymentInvoiceService invoices,
+            CardTopUpService topUps,
+            CurrentActor currentActor,
+            Clock clock) {
         this.wallet = wallet;
+        this.invoices = invoices;
+        this.topUps = topUps;
         this.currentActor = currentActor;
+        this.clock = clock;
     }
 
     // ------------------------------------------------------------------- reads
@@ -131,6 +146,34 @@ public class CommercialWalletController {
                 .toList());
     }
 
+    @GetMapping("/api/v1/control-plane/tenants/{tenantId}/wallet/invoices")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The tenant's prepayment invoices, newest first",
+            description = "What finance matches an incoming bank transfer against: each carries its number, "
+                    + "which is what the tenant quotes in the payment's purpose, and how much of it the ledger "
+                    + "has been paid.")
+    public ResponseEntity<List<CommercialOperationsWalletController.PrepaymentInvoiceView>> prepaymentInvoices(
+            @PathVariable UUID tenantId) {
+        Instant now = clock.instant();
+        return ResponseEntity.ok(invoices.list(tenantId).stream()
+                .map(invoice -> CommercialOperationsWalletController.PrepaymentInvoiceView.of(invoice, now))
+                .toList());
+    }
+
+    @GetMapping("/api/v1/control-plane/tenants/{tenantId}/wallet/top-ups")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The tenant's recent card top-ups, newest first",
+            description = "PENDING is a charge the provider has not answered yet; the platform resolves it by "
+                    + "asking the provider under the same key, so it is never charged twice.")
+    public ResponseEntity<List<CommercialOperationsWalletController.TopUpView>> cardTopUps(
+            @PathVariable UUID tenantId) {
+        return ResponseEntity.ok(topUps.recent(tenantId, 50).stream()
+                .map(CommercialOperationsWalletController.TopUpView::of)
+                .toList());
+    }
+
     // ------------------------------------------------------------- money in
 
     @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/transfers")
@@ -138,11 +181,21 @@ public class CommercialWalletController {
     @Operation(
             summary = "Record a bank transfer HorecaOS finance received",
             description = "One person's audited act, like issuing a statement — not a correction. Pays the "
-                    + "oldest open statement at once.")
+                    + "oldest open statement at once. Naming the prepayment invoice it pays makes the entry say "
+                    + "so, and the invoice's paid figure is then the ledger's own sum.")
     public ResponseEntity<WalletEntryRecorded> recordTransfer(
             @PathVariable UUID tenantId, @Valid @RequestBody RecordTransferRequest body) {
-        UUID id = wallet.recordTransfer(
-                tenantId, body.amountMinor(), body.bankReference(), actor(), body.reason(), correlationId());
+        UUID id = body.prepaymentInvoiceNumber() == null
+                ? wallet.recordTransfer(
+                        tenantId, body.amountMinor(), body.bankReference(), actor(), body.reason(), correlationId())
+                : invoices.recordTransfer(
+                        tenantId,
+                        body.prepaymentInvoiceNumber(),
+                        body.amountMinor(),
+                        body.bankReference(),
+                        actor(),
+                        body.reason(),
+                        correlationId());
         // Once the money is committed, and never inside its transaction: the
         // card provider is a third party, and asking it from inside the unit of
         // work that recorded this money would let a provider timeout roll that
@@ -167,6 +220,19 @@ public class CommercialWalletController {
         // money back (ADR 0095).
         wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(new WalletEntryRecorded(id));
+    }
+
+    @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/invoices/{invoiceId}/cancel")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Withdraw a prepayment invoice nothing has paid",
+            description = "Refused once any money has been recorded against it.")
+    public ResponseEntity<CommercialOperationsWalletController.PrepaymentInvoiceView> cancelPrepaymentInvoice(
+            @PathVariable UUID tenantId, @PathVariable UUID invoiceId, @Valid @RequestBody CancelInvoiceRequest body) {
+        PrepaymentInvoice cancelled = invoices.cancel(
+                tenantId, invoiceId, actor(), body.reason(), Capability.COMMERCIAL_WALLET_MANAGE, correlationId());
+        return ResponseEntity.ok(
+                CommercialOperationsWalletController.PrepaymentInvoiceView.of(cancelled, clock.instant()));
     }
 
     // -------------------------------------------------- manual changes: two people
@@ -371,9 +437,14 @@ public class CommercialWalletController {
         return instant == null ? null : instant.toString();
     }
 
+    /** {@code prepaymentInvoiceNumber} names the invoice this transfer pays, when it pays one. */
     public record RecordTransferRequest(
             @Min(1) long amountMinor,
             @NotBlank @Size(max = 128) String bankReference,
+            @NotBlank @Size(max = 1000) String reason,
+            @Nullable @Size(max = 32) String prepaymentInvoiceNumber) {}
+
+    public record CancelInvoiceRequest(
             @NotBlank @Size(max = 1000) String reason) {}
 
     public record RecordDepositRequest(
