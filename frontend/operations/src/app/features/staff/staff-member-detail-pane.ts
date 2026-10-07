@@ -34,6 +34,7 @@ import {
 } from './staff-api';
 import { StaffJobDialog } from './staff-job-dialog';
 import { StaffMembersApi } from './staff-members-api';
+import { StaffMfaPanel } from './staff-mfa-panel';
 import { ProfileDraft, toManagerRequest } from './staff-profile-draft';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
@@ -70,7 +71,14 @@ interface CapabilityGroup {
  */
 @Component({
   selector: 'q-staff-member-detail-pane',
-  imports: [TPipe, StaffJobDialog, StaffAccessDialog, StaffProfileForm, StaffEmergencyContacts],
+  imports: [
+    TPipe,
+    StaffJobDialog,
+    StaffAccessDialog,
+    StaffProfileForm,
+    StaffEmergencyContacts,
+    StaffMfaPanel,
+  ],
   templateUrl: './staff-member-detail-pane.html',
   styleUrl: './staff-member-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -82,6 +90,8 @@ export class StaffMemberDetailPane {
   private readonly ownProfile = inject(OwnProfile);
   private readonly tenant = inject(CurrentTenant);
   private readonly auth = inject(Auth);
+  /** Who is looking: nobody resets their own second factor from here (ADR 0148). */
+  protected readonly ownSubject = () => this.auth.subject();
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);

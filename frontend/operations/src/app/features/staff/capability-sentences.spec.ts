@@ -69,6 +69,8 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'fiscal.document.read',
   'fiscal.document.resolve',
   'iam.grant.manage',
+  'iam.staff.mfa.read',
+  'iam.staff.mfa.reset',
   'integration.binding.activate',
   'integration.failure.read',
   'integration.failure.retry',

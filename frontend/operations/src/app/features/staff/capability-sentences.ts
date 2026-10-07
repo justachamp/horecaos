@@ -845,6 +845,20 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     uz: 'Xodimlarning favqulodda kontaktlarini koʻrish (har bir koʻrish yoziladi)',
     en: 'View staff emergency contacts (each view is recorded)',
   },
+  // ADR 0148: a person's second factor. Reading it says only whether one exists and when each
+  // was added; resetting it is the administrator's act for a lost phone, and says it is recorded.
+  'iam.staff.mfa.read': {
+    area: 'staff',
+    ru: 'Видеть, включён ли у сотрудника вход в два шага',
+    uz: 'Xodimda ikki bosqichli kirish yoqilganini koʻrish',
+    en: 'See whether a person has two-step sign-in turned on',
+  },
+  'iam.staff.mfa.reset': {
+    area: 'staff',
+    ru: 'Сбрасывать второй фактор сотрудника, потерявшего телефон (каждый сброс записывается)',
+    uz: 'Telefonini yoʻqotgan xodimning ikkinchi omilini tiklash (har bir tiklash yoziladi)',
+    en: 'Reset the second factor of a person who lost their phone (each reset is recorded)',
+  },
   'staff.self.manage': {
     area: 'staff',
     ru: 'Менять свои имя, телефон, фото и языки',

@@ -119,6 +119,13 @@ describe('routes', () => {
     expect(login?.canActivate).toBeUndefined();
   });
 
+  it('leaves the second-factor enrolment page outside the guard (ADR 0148)', () => {
+    // The platform revoked the session it had just issued; what opens this page is the ticket.
+    const enrol = routes.find((route) => route.path === 'enrol-second-factor');
+    expect(enrol).toBeDefined();
+    expect(enrol?.canActivate).toBeUndefined();
+  });
+
   it('declares a capability for every section that is not the overview', () => {
     for (const section of SECTIONS) {
       if (section.id !== 'overview') {

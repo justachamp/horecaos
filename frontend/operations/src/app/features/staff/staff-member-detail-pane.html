@@ -432,6 +432,16 @@
           }
         }
 
+        @if (member(); as person) {
+          <!-- ADR 0148: «Способ входа» from Keycloak's credential list, and the reset. -->
+          <q-staff-mfa-panel
+            [tenantId]="tenantId() ?? ''"
+            [memberId]="person.memberId"
+            [memberVersion]="person.version"
+            [isOwnAccount]="person.principalSubject === ownSubject()"
+          />
+        }
+
         <p class="q-caption not-built-note">{{ 'staff.detail.security.notBuilt' | t }}</p>
       </div>
     }

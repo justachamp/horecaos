@@ -6,6 +6,7 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { StaffMember } from '../../core/api/staff-member';
 import { Auth } from '../../core/auth/auth';
+import { MfaApi } from '../../core/auth/mfa-api';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { OwnProfile } from '../../core/auth/own-profile';
@@ -66,6 +67,18 @@ async function setUp(
       { provide: CurrentTenant, useValue: tenant },
       { provide: CurrentLocation, useValue: currentLocation },
       { provide: Auth, useValue: { displayName: signal('Aziza') } },
+      // The second-factor card (ADR 0148) has its own spec; here it only has to render.
+      {
+        provide: MfaApi,
+        useValue: {
+          own: vi.fn().mockResolvedValue({
+            enrolled: false,
+            authenticators: [],
+            requirement: 'NOT_REQUIRED',
+            maximum: 2,
+          }),
+        },
+      },
     ],
   }).compileComponents();
   TestBed.inject(I18n).setLocale('ru');

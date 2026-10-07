@@ -27,6 +27,15 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
+    // ADR 0148: a platform account the platform requires a second factor of, and that holds
+    // none, lands here from a refused sign-in. Outside the guard for the reason /login is: the
+    // platform revoked the session it had just issued, so there is none to guard on. What opens
+    // the page is the enrolment ticket held in memory (MfaTicket); without one it says so.
+    path: 'enrol-second-factor',
+    loadComponent: () =>
+      import('./features/auth/enrol-second-factor-page').then((m) => m.EnrolSecondFactorPage),
+  },
+  {
     // ADR 0098: asking for a password reset, and the page the emailed link
     // lands on. Both outside the shell and outside `authGuard`, for the reason
     // `/login` is: somebody who cannot sign in has no session to present, and

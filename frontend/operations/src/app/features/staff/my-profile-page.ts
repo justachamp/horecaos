@@ -16,6 +16,7 @@ import { CAPABILITY_SENTENCES, capabilityAreaName, sentenceLocale } from './capa
 import { StaffApi, TelegramLinkCodeResponse } from './staff-api';
 import { StaffMembersApi } from './staff-members-api';
 import { ProfileDraft, draftOf, toSelfRequest } from './staff-profile-draft';
+import { MyProfileMfaCard } from './my-profile-mfa-card';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 
@@ -63,14 +64,16 @@ interface CapabilityGroup {
  * .../staff/telegram/links` is `IAM_GRANT_MANAGE`-gated administration) —
  * deliberately not built here.
  *
+ * **«Вход в два шага» is real (ADR 0148):** {@link MyProfileMfaCard}.
+ *
  * The rest of «Безопасность» (sign-in history, active sessions, «Выйти везде»,
- * PIN, MFA) needs the Keycloak session projection and the MFA decision
- * (staff-and-access.md §11.6, §11.7, §11.9) and still renders as a named
- * absence, the same "omit, do not disable" rule `not-built-page.ts` follows.
+ * PIN) needs the Keycloak session projection (staff-and-access.md §11.6, §11.7)
+ * and still renders as a named absence, the same "omit, do not disable" rule
+ * `not-built-page.ts` follows.
  */
 @Component({
   selector: 'q-my-profile-page',
-  imports: [TPipe, StaffProfileForm],
+  imports: [TPipe, StaffProfileForm, MyProfileMfaCard],
   templateUrl: './my-profile-page.html',
   styleUrl: './my-profile-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
