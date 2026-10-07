@@ -789,6 +789,37 @@ reveal of a stored track names an actor, a courier, a window, and a purpose; and
 no courier earning figure changes when a track is dropped, because no earning
 figure was ever computed from one.
 
+## Status addition (2026-10-07)
+
+The channel catalogue in the Transport section lists `ORDER_QUEUE` at
+`LOCATION` only, and that table stays as decided on 2026-08-23. Since batch 18
+(gap-map row `1.1`, commit `bfe6ffe2`) the code declares the channel at
+`LOCATION|BRAND`, the same scope pair the table already gives `COUNTERS`:
+`StreamChannel.ORDER_QUEUE` is `EnumSet.of(ScopeType.LOCATION, ScopeType.BRAND)`.
+Read the `ORDER_QUEUE` row's scope column as `LOCATION|BRAND`.
+
+Nothing else on that row moves. The capability is still `order.read`, the frame
+class still `signal`, the source still `ordering.events`, and the cadence cap
+still a 250 ms coalesce. What the second scope adds is exactly what the console's
+«Все филиалы» board needed in order to stop polling a brand-wide read every ten
+seconds: `OrderRealtimeSignalTrigger` publishes each order status transition
+twice, once at the order's branch (unchanged) and once at its brand. A
+subscription matches exactly one scope key, so a brand-wide board hears every
+branch of its brand and a branch board hears only its own, never the same change
+twice. The stream endpoint already authorizes each channel at the scope it is
+subscribed at, so a brand subscription needs `order.read` granted at the brand;
+a branch grant does not buy it, and no brand grant is inferred from a branch one.
+That is this record's own authorization rule applied to a second scope, not a new
+decision. `OrderRealtimeSignalTriggerTests`, `RealtimeSignalBrandHopTests`,
+`SseStreamRegistryTests`, `OperationsStreamControllerTests` and
+`TelemetryDecisionTests` cover the trigger, the wire form, the registry's
+routing, the authorization and the channel's declared scopes.
+
+The catalogue also predates `KITCHEN_BOARD` (`LOCATION`, `kitchen.ticket.read`,
+`signal`, source `kitchen.events`, 250 ms coalesce), the eighth channel, added
+under ADR 0041's rollout. This record's Decision, Alternatives and Consequences
+are unchanged.
+
 ## References
 
 - ADR 0004 transactional outbox; ADR 0014 delivery sourcing and partner
