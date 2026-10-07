@@ -277,11 +277,23 @@ describe('DraftsPage', () => {
   });
 
   it('renders the first-line product preview when the response names one, and a placeholder otherwise', async () => {
+    // The page sorts newest first and this test reads the cells by position, so each draft carries
+    // its own `createdAt`, one second apart in the order the rows must appear. Two `new Date()`
+    // defaults usually share a millisecond and tie, but straddling a tick puts `b` above `a`.
+    const now = Date.now();
     await render({
       list: () =>
         Promise.resolve([
-          draft({ cartId: 'a', firstLineProductName: 'Plov' }),
-          draft({ cartId: 'b', firstLineProductName: null }),
+          draft({
+            cartId: 'a',
+            firstLineProductName: 'Plov',
+            createdAt: new Date(now).toISOString(),
+          }),
+          draft({
+            cartId: 'b',
+            firstLineProductName: null,
+            createdAt: new Date(now - 1_000).toISOString(),
+          }),
         ]),
     });
 
