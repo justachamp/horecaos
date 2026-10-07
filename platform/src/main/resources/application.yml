@@ -294,6 +294,25 @@ horecaos:
       security: ${HORECAOS_MAIL_SMTP_SECURITY:STARTTLS}
       username: ${HORECAOS_MAIL_SMTP_USERNAME:}
       password-reference: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:}
+  # ADR 0145: the map and geocoding provider. Unset is `none`, which is correct for every
+  # environment that has no key: every lookup answers NOT_CONFIGURED, GET .../map-config says
+  # `configured: false`, and the screens state it. Nothing here is a secret.
+  #
+  #   provider                 none | yandex  (`fake` exists only under the local profile and
+  #                            in a production environment is reported as not configured)
+  #   yandex.secret-reference  the ADR 0028 reference of the SERVER key, in the platform-owned
+  #                            provider_geocoding category, e.g.
+  #                            horecaos:production:provider_geocoding:platform:yandex-server-key
+  #                            Written by the owner with `bao kv put`; no tenant can write it.
+  #   yandex.browser-key       the PUBLIC, referrer-restricted key for the vendor's map script,
+  #                            delivered to browsers by GET .../map-config so it can be rotated
+  #                            without a build. Unset means no tiles.
+  #   yandex.attribution       the provider's own attribution text (default: its own).
+  geo:
+    provider: ${HORECAOS_GEO_PROVIDER:none}
+    yandex:
+      secret-reference: ${HORECAOS_GEO_YANDEX_SECRET_REFERENCE:}
+      browser-key: ${HORECAOS_GEO_YANDEX_BROWSER_KEY:}
   # ADR 0058: this platform's own public origin, from Telegram's point of view
   # — what TelegramWebhookRegistrationService builds a bot's webhook URL from
   # (this origin + /providers/telegram/{installationId}/webhook). Telegram
