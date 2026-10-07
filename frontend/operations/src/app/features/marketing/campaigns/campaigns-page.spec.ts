@@ -131,6 +131,17 @@ describe('CampaignsPage', () => {
     expect(row.textContent?.replace(/\s/g, ' ')).toContain('UZS 42,000–63,000');
   });
 
+  it('hints the languages a customer can be written to from the registry, not from a list of its own (ADR 0149)', async () => {
+    await render([campaign()]);
+    const page = fixture.componentInstance as unknown as {
+      fixedValuesOfRow(row: { type: string }): readonly string[] | null;
+    };
+
+    expect(page.fixedValuesOfRow({ type: 'PREFERRED_LOCALE' })).toEqual(['ru', 'uz-Latn', 'en']);
+    // A predicate with no closed set of its own has no hint.
+    expect(page.fixedValuesOfRow({ type: 'ORDER_COUNT' })).toBeNull();
+  });
+
   it('hints a maker that their own campaign is awaiting a second signature', async () => {
     await render([campaign({ status: 'IN_REVIEW' })]);
     const host = fixture.nativeElement as HTMLElement;
