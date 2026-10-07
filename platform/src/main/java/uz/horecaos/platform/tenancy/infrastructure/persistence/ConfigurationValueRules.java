@@ -36,7 +36,8 @@ public final class ConfigurationValueRules {
     private static final Map<String, Consumer<Object>> RULES = Map.of(
             "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
             "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold);
+            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
+            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes);
 
     private ConfigurationValueRules() {}
 
@@ -88,6 +89,16 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     "ordering.late_order_threshold_minutes must be between 1 and "
                             + MAXIMUM_LATE_ORDER_THRESHOLD_MINUTES);
+        }
+    }
+
+    /** At least a minute (a wall stamps its read at most once a minute) and at most a day. */
+    private static void requireNotSeenAfterMinutes(Object value) {
+        int minutes = ((Number) value).intValue();
+        if (minutes < 1 || minutes > MAXIMUM_MINUTES) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "kitchen.display.not_seen_after_minutes must be between 1 and " + MAXIMUM_MINUTES);
         }
     }
 }

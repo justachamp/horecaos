@@ -28,7 +28,7 @@ only the surface it actually calls:
 |---|---|---|---|---|
 | `storefront` | `/api/v1/storefront/**` | [horecaos-api.storefront.json](openapi/v1/horecaos-api.storefront.json) | [horecaos-api-v1.storefront.ts](generated/horecaos-api-v1.storefront.ts) | `frontend/storefront`, and eventually `frontend/mobile` |
 | `control-plane` | `/api/v1/control-plane/**`, `/api/v1/platform-admin/**` | [horecaos-api.control-plane.json](openapi/v1/horecaos-api.control-plane.json) | [horecaos-api-v1.control-plane.ts](generated/horecaos-api-v1.control-plane.ts) | `frontend/control-plane` |
-| `operations` | `/api/v1/tenants/**`, `/api/v1/session/**`, `/api/v1/operations/**`, `/api/v1/courier/**` | [horecaos-api.operations.json](openapi/v1/horecaos-api.operations.json) | [horecaos-api-v1.operations.ts](generated/horecaos-api-v1.operations.ts) | `frontend/operations` |
+| `operations` | `/api/v1/tenants/**`, `/api/v1/session/**`, `/api/v1/operations/**`, `/api/v1/courier/**`, `/api/v1/devices/**` | [horecaos-api.operations.json](openapi/v1/horecaos-api.operations.json) | [horecaos-api-v1.operations.ts](generated/horecaos-api-v1.operations.ts) | `frontend/operations` |
 | `providers` | `/providers/**`, `/api/v1/partner/**` | [horecaos-api.providers.json](openapi/v1/horecaos-api.providers.json) | [horecaos-api-v1.providers.ts](generated/horecaos-api-v1.providers.ts) | no frontend — external payment (Click, Payme) and aggregator/marketplace callers; kept versioned like every other surface |
 
 Each group document is served at `/v3/api-docs/<group>` (Swagger UI at

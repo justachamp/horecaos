@@ -262,6 +262,20 @@ public class JdbcKitchenStore {
     }
 
     /**
+     * A branch's own display name and IANA zone, for a device that must say where it is and read its
+     * clock in the branch's own zone rather than a placeholder (ADR 0151).
+     */
+    public Optional<LocationSummary> locationSummary(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT display_name, timezone FROM tenant.locations WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", locationId)
+                .query((rs, n) -> new LocationSummary(rs.getString("display_name"), rs.getString("timezone")))
+                .optional();
+    }
+
+    /**
      * The ceiling covering one station at one local weekday and time, if the
      * branch set one.
      *
@@ -1159,6 +1173,9 @@ public class JdbcKitchenStore {
             Instant createdAt) {}
 
     /** One station's throughput ceiling for one weekday and one local time window (ADR 0041, IA §2.6). */
+    /** A branch's own name and IANA zone (ADR 0151). */
+    public record LocationSummary(String displayName, String timezone) {}
+
     public record StationCapacityRow(
             UUID id,
             UUID tenantId,

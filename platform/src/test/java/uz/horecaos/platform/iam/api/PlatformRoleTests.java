@@ -343,6 +343,38 @@ class PlatformRoleTests {
         }
     }
 
+    // ------------------------------------------------------- ADR 0151: the wall display's bundle
+
+    @Test
+    void everyBundleThatReadsTheTicketsAlsoReadsTheWallProjectionSoNoStaffUserLosesTheVduPage() {
+        for (PlatformRole role : PlatformRole.values()) {
+            if (role.capabilities().contains(Capability.KITCHEN_TICKET_READ)) {
+                assertThat(role.capabilities())
+                        .as("%s holds kitchen.ticket.read, so it must hold kitchen.display.read (ADR 0151)", role)
+                        .contains(Capability.KITCHEN_DISPLAY_READ);
+            }
+        }
+    }
+
+    @Test
+    void aWallDisplayHoldsExactlyTheOneCapabilityThatOpensItsProjection() {
+        assertThat(PlatformRole.KITCHEN_VDU_DEVICE.capabilities())
+                .as("no ticket read, no advance, no order read, no location read: a read added later under "
+                        + "kitchen.ticket.read must not reach a wall by accident")
+                .containsExactly(Capability.KITCHEN_DISPLAY_READ);
+        assertThat(PlatformRole.KITCHEN_VDU_DEVICE.scopeType()).isEqualTo(ResourceScope.ScopeType.LOCATION);
+        assertThat(Capability.KITCHEN_DISPLAY_READ.code()).isEqualTo("kitchen.display.read");
+    }
+
+    @Test
+    void aTouchDisplayKeepsItsOwnTwoCapabilitiesAndNothingElseBeyondTheWallRead() {
+        assertThat(PlatformRole.KITCHEN_DEVICE.capabilities())
+                .containsExactlyInAnyOrder(
+                        Capability.KITCHEN_TICKET_READ,
+                        Capability.KITCHEN_DISPLAY_READ,
+                        Capability.KITCHEN_TICKET_ADVANCE);
+    }
+
     @Test
     void rolesAndCapabilitiesResolveByCode() {
         assertThat(PlatformRole.find("location-manager")).contains(PlatformRole.LOCATION_MANAGER);

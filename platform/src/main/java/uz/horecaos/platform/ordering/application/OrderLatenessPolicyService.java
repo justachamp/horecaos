@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.api.LatenessPolicyPort;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
@@ -63,7 +64,7 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
  * {@link OrderLatenessPolicy#platformDefault()} applies everywhere.
  */
 @Service
-public class OrderLatenessPolicyService {
+public class OrderLatenessPolicyService implements LatenessPolicyPort {
 
     /**
      * The most the setting accepts (the order-policy card's own ceiling, ten hours); a larger stored
@@ -84,6 +85,26 @@ public class OrderLatenessPolicyService {
     /** The policy in force for a location right now. */
     public Effective resolve(UUID tenantId, UUID brandId, UUID locationId) {
         return resolveAt(ResourceScope.location(tenantId, brandId, locationId));
+    }
+
+    /** {@inheritDoc} The same resolution, in the shape other modules may name (ADR 0151). */
+    @Override
+    public LatenessPolicyView policyAt(UUID tenantId, UUID brandId, UUID locationId) {
+        Effective effective = resolve(tenantId, brandId, locationId);
+        OrderLatenessPolicy policy = effective.policy();
+        return new LatenessPolicyView(
+                thresholdsOf(policy.delivery()),
+                thresholdsOf(policy.pickup()),
+                thresholdsOf(policy.dineIn()),
+                effective.isPlatformDefault(),
+                effective.policyId(),
+                effective.policyVersion(),
+                effective.lateColour());
+    }
+
+    private static Thresholds thresholdsOf(OrderLatenessPolicy.LatenessThresholds thresholds) {
+        return new Thresholds(
+                thresholds.atRiskBeforeSeconds(), thresholds.lateAfterSeconds(), thresholds.noPromiseFallbackSeconds());
     }
 
     /**

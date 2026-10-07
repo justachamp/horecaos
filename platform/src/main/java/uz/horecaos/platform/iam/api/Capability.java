@@ -573,6 +573,17 @@ public enum Capability {
     KITCHEN_TICKET_READ("kitchen.ticket.read", "kitchen", "ticket.read"),
 
     /**
+     * ADR 0151: reading the VDU wall projection ({@code GET .../kitchen/vdu}) and nothing else.
+     *
+     * <p>Separate from {@link #KITCHEN_TICKET_READ} so that a wall display, which holds this and
+     * only this, cannot call the touch board's read, a single ticket, or any read added later under
+     * the ticket capability. Every bundle that holds {@code kitchen.ticket.read} also holds this one,
+     * so no staff member loses the VDU page; {@code PlatformRoleTests} makes that an invariant
+     * rather than a habit.
+     */
+    KITCHEN_DISPLAY_READ("kitchen.display.read", "kitchen", "display.read"),
+
+    /**
      * ADR 0041: starting and readying lines, restricted to the principal's own
      * stations.
      *
