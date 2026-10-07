@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,7 +22,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffRoutingService;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffRoutingService.InvalidRoutingRequestException;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffService.TariffDetail;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
@@ -64,10 +68,13 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OperationsDeliveryTariffController {
 
     private final DeliveryTariffService tariffs;
+    private final DeliveryTariffRoutingService routing;
     private final CurrentActor currentActor;
 
-    public OperationsDeliveryTariffController(DeliveryTariffService tariffs, CurrentActor currentActor) {
+    public OperationsDeliveryTariffController(
+            DeliveryTariffService tariffs, DeliveryTariffRoutingService routing, CurrentActor currentActor) {
         this.tariffs = tariffs;
+        this.routing = routing;
         this.currentActor = currentActor;
     }
 
@@ -85,12 +92,14 @@ public class OperationsDeliveryTariffController {
     @RequiresCapability(value = Capability.DELIVERY_TARIFF_READ, scope = ScopeType.BRAND)
     @Operation(
             summary = "One tariff's live bands, time rules and discounts",
-            description = "activeVersion is absent for a tariff drafted but never activated.")
+            description = "activeVersion is absent for a tariff drafted but never activated. routing "
+                    + "says what a ROAD version's distance is measured by right now (ADR 0147).")
     public ResponseEntity<DeliveryTariffController.TariffDetailResponse> detail(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID tariffId) {
         try {
+            TariffDetail detail = tariffs.tariffDetail(tenantId, brandId, tariffId);
             return ResponseEntity.ok(DeliveryTariffController.TariffDetailResponse.of(
-                    tariffs.tariffDetail(tenantId, brandId, tariffId)));
+                    detail, routing.routingOf(tenantId, detail.activeVersion())));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
@@ -143,9 +152,14 @@ public class OperationsDeliveryTariffController {
                 timeRules(body.timeRules()),
                 discounts(body.discounts()));
 
-        var drafted = tariffs.draftVersion(tenantId, brandId, draft, actorId());
-        return ResponseEntity.ok(
-                new DeliveryTariffController.VersionView(drafted.tariffId(), drafted.version(), "DRAFT"));
+        try {
+            var drafted = routing.draftVersion(
+                    tenantId, brandId, draft, actorId(), Boolean.TRUE.equals(body.usePlatformRouting()));
+            return ResponseEntity.ok(
+                    new DeliveryTariffController.VersionView(drafted.tariffId(), drafted.version(), "DRAFT"));
+        } catch (InvalidRoutingRequestException invalid) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, invalid.getMessage());
+        }
     }
 
     @PostMapping("/{tariffId}/versions/{version}/activate")
@@ -251,6 +265,12 @@ public class OperationsDeliveryTariffController {
      * A new draft version of a tariff, with its bands, time rules and discounts.
      * The control-plane equivalent's {@code actorId} field is absent here: the
      * caller's authenticated identity is used instead, never a request field.
+     *
+     * @param usePlatformRouting true to bind a {@code ROAD} draft to the tenant's
+     *                           platform routing installation, created in the same
+     *                           action (ADR 0147). Boxed and optional: Jackson 3
+     *                           refuses a missing primitive, and a RADIUS draft sends
+     *                           nothing here
      */
     public record DraftTariffVersionRequest(
             @NotBlank @Size(min = 3, max = 3) String currency,
@@ -266,5 +286,6 @@ public class OperationsDeliveryTariffController {
             RoundingRule feeRoundingRule,
             @NotEmpty List<DeliveryTariffController.BandRequest> bands,
             List<DeliveryTariffController.TimeRuleRequest> timeRules,
-            List<DeliveryTariffController.DiscountRequest> discounts) {}
+            List<DeliveryTariffController.DiscountRequest> discounts,
+            @Nullable Boolean usePlatformRouting) {}
 }

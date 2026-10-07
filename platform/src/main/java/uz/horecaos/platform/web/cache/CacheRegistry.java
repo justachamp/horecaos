@@ -94,7 +94,29 @@ public enum CacheRegistry {
             "staff.display_names",
             Duration.ofMinutes(10),
             20_000,
-            "StaffMemberChanged (evicted on every profile write)");
+            "StaffMemberChanged (evicted on every profile write)"),
+
+    /**
+     * The road routes the OSRM adapter has measured (ADR 0147, decision 4), keyed by
+     * tenant, installation, the branch's exact point, the destination rounded to four
+     * decimals (about 11 m) and the routing dataset version.
+     *
+     * <p>Twenty-four hours, because a road network does not change between two
+     * checkouts and a repeated destination is the common case, and no event ever
+     * evicts: the dataset version is part of the key, so a new image tag simply
+     * misses every entry and the old ones age out. The installation is re-read from
+     * the database on every call before this is consulted, so suspending it (the
+     * rollback) takes effect at once rather than a TTL later.
+     *
+     * <p>A performance aid and never an authority. The fee row stores the metres it
+     * used, not a cache key, and an entry lost to eviction or a restart costs one
+     * engine call.
+     */
+    ROUTING_ROAD_ROUTES(
+            "routing.road_routes",
+            Duration.ofHours(24),
+            50_000,
+            "none: the dataset version is part of the key, so a new dataset misses every entry");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

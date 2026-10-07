@@ -131,7 +131,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "POST", path, headers, body, onSuccess);
+        return exchange(call, "POST", path, path, headers, body, onSuccess);
     }
 
     public ProviderOutcome patch(
@@ -140,7 +140,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "PATCH", path, headers, body, onSuccess);
+        return exchange(call, "PATCH", path, path, headers, body, onSuccess);
     }
 
     public ProviderOutcome put(
@@ -149,7 +149,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "PUT", path, headers, body, onSuccess);
+        return exchange(call, "PUT", path, path, headers, body, onSuccess);
     }
 
     public ProviderOutcome get(
@@ -157,7 +157,7 @@ public class ProviderHttpClient {
             String path,
             Map<String, String> headers,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "GET", path, headers, null, onSuccess);
+        return exchange(call, "GET", path, path, headers, null, onSuccess);
     }
 
     /**
@@ -173,13 +173,36 @@ public class ProviderHttpClient {
             String path,
             Map<String, String> headers,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "DELETE", path, headers, null, onSuccess);
+        return exchange(call, "DELETE", path, path, headers, null, onSuccess);
+    }
+
+    /**
+     * A GET whose path carries personal data, logged under a fixed label instead.
+     *
+     * <p>Here because OSRM's route service takes both coordinates in the path
+     * ({@code /route/v1/driving/lon,lat;lon,lat}) and has no POST form, and one of
+     * the two is a customer's delivery point. {@link #get} logs the path when the
+     * connection fails, which would put a precise location into the log aggregator
+     * on every routing outage (ADR 0029: a precise location is as identifying as the
+     * address beside it). The label is what a log line may say.
+     *
+     * @param operation a fixed, personal-data-free name for the call, such as
+     *                  {@code osrm.route}
+     */
+    public ProviderOutcome getWithSensitivePath(
+            ProviderCall call,
+            String path,
+            String operation,
+            Map<String, String> headers,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        return exchange(call, "GET", path, operation, headers, null, onSuccess);
     }
 
     private ProviderOutcome exchange(
             ProviderCall call,
             String method,
             String path,
+            String logLabel,
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
@@ -213,7 +236,7 @@ public class ProviderHttpClient {
             // The credential is never in scope here, and the message logged is
             // the classifier's rather than the provider's body: provider errors
             // have been known to echo request content back.
-            log.warn("Provider call {} {} failed: {} ({})", method, path, outcome.status(), outcome.errorCode());
+            log.warn("Provider call {} {} failed: {} ({})", method, logLabel, outcome.status(), outcome.errorCode());
             return outcome;
         } catch (RuntimeException failure) {
             return classifier.classify(failure, mayHaveReachedProvider(failure));

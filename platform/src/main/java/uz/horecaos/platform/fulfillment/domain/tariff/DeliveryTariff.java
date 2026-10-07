@@ -115,6 +115,32 @@ public record DeliveryTariff(
     }
 
     /**
+     * The same version with its routing installation replaced, for "use platform
+     * routing" (ADR 0147), where the installation is created in the action that drafts
+     * the version and so is not known to the caller who built it.
+     */
+    public DeliveryTariff withRoutingInstallation(UUID installationId) {
+        return new DeliveryTariff(
+                tariffId,
+                version,
+                status,
+                currency,
+                feeSource,
+                distanceMode,
+                roadFactorBasisPoints,
+                installationId,
+                maxDistanceMeters,
+                minFeeMinor,
+                maxFeeMinor,
+                distanceAccrual,
+                feeRoundingStepMinor,
+                feeRoundingRule,
+                bands,
+                timeRules,
+                discounts);
+    }
+
+    /**
      * Everything that must be true before a version may go live.
      *
      * <p>Returns the problems rather than throwing on the first, so an operator

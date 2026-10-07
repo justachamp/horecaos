@@ -763,7 +763,7 @@ public class ProviderInstallationController {
             case DELIVERY -> SecretCategory.PROVIDER_DELIVERY;
             case NOTIFICATION -> SecretCategory.PROVIDER_NOTIFICATION;
             case VOICE -> SecretCategory.PROVIDER_VOICE;
-            case MARKETPLACE, GEOCODING, OTHER, ANALYTICS ->
+            case MARKETPLACE, GEOCODING, OTHER, ANALYTICS, ROUTING ->
                 throw new ApiException(
                         ErrorCode.UNPROCESSABLE_STATE,
                         "The secret door has no category for " + category + " installations yet");

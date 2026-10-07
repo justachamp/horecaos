@@ -61,5 +61,21 @@ public enum ProviderCategory {
      */
     ANALYTICS,
 
+    /**
+     * A road-distance engine (ADR 0147): the platform's own OSRM first, a hosted
+     * routing API when a measured trigger fires.
+     *
+     * <p>Unlike every other outbound category this one is usually keyless and
+     * platform-run, so its installation is created for the tenant by choosing "use
+     * platform routing" on a {@code ROAD} tariff rather than through a credential
+     * screen. It is still an ordinary ADR 0026 installation: ADR 0037's rule that a
+     * {@code ROAD} tariff needs one is unchanged, and suspending it is the rollback.
+     *
+     * <p>What it carries is two coordinates and nothing that names a person. It has
+     * no capability catalogue and no binding: the tariff version points at the
+     * installation directly ({@code routing_provider_installation_id}).
+     */
+    ROUTING,
+
     OTHER
 }

@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffRoutingService;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffRoutingService.InvalidRoutingRequestException;
+import uz.horecaos.platform.fulfillment.application.DeliveryTariffRoutingService.TariffRouting;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService.TariffDetail;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
@@ -55,9 +59,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class DeliveryTariffController {
 
     private final DeliveryTariffService tariffs;
+    private final DeliveryTariffRoutingService routing;
 
-    public DeliveryTariffController(DeliveryTariffService tariffs) {
+    public DeliveryTariffController(DeliveryTariffService tariffs, DeliveryTariffRoutingService routing) {
         this.tariffs = tariffs;
+        this.routing = routing;
     }
 
     @GetMapping
@@ -73,11 +79,17 @@ public class DeliveryTariffController {
     @RequiresCapability(value = Capability.DELIVERY_TARIFF_READ, scope = ScopeType.BRAND)
     @Operation(
             summary = "One tariff's live bands, time rules and discounts",
-            description = "activeVersion is absent for a tariff drafted but never activated.")
+            description = "activeVersion is absent for a tariff drafted but never activated. routing "
+                    + "says what a ROAD version's distance is measured by right now: the road engine, "
+                    + "or the straight line times the detour factor because routing is not answering, "
+                    + "from the recent fees when there are any and from configuration when there are "
+                    + "not (ADR 0147).")
     public ResponseEntity<TariffDetailResponse> detail(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID tariffId) {
         try {
-            return ResponseEntity.ok(TariffDetailResponse.of(tariffs.tariffDetail(tenantId, brandId, tariffId)));
+            TariffDetail detail = tariffs.tariffDetail(tenantId, brandId, tariffId);
+            return ResponseEntity.ok(
+                    TariffDetailResponse.of(detail, routing.routingOf(tenantId, detail.activeVersion())));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
@@ -131,8 +143,13 @@ public class DeliveryTariffController {
                 timeRules(body.timeRules()),
                 discounts(body.discounts()));
 
-        var drafted = tariffs.draftVersion(tenantId, brandId, draft, body.actorId());
-        return ResponseEntity.ok(new VersionView(drafted.tariffId(), drafted.version(), "DRAFT"));
+        try {
+            var drafted = routing.draftVersion(
+                    tenantId, brandId, draft, body.actorId(), Boolean.TRUE.equals(body.usePlatformRouting()));
+            return ResponseEntity.ok(new VersionView(drafted.tariffId(), drafted.version(), "DRAFT"));
+        } catch (InvalidRoutingRequestException invalid) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, invalid.getMessage());
+        }
     }
 
     @PostMapping("/{tariffId}/versions/{version}/activate")
@@ -242,6 +259,10 @@ public class DeliveryTariffController {
      *                              routing does not answer. Never below 10000: a
      *                              factor under 1.0 claims the road is shorter than
      *                              the straight line
+     * @param usePlatformRouting    true to bind a {@code ROAD} draft to the tenant's
+     *                              platform routing installation, created in the same
+     *                              action (ADR 0147). Boxed because Jackson 3 refuses a
+     *                              missing primitive, and every existing caller omits it
      */
     public record DraftTariffVersionRequest(
             @NotBlank @Size(min = 3, max = 3) String currency,
@@ -258,7 +279,8 @@ public class DeliveryTariffController {
             @NotEmpty List<BandRequest> bands,
             List<TimeRuleRequest> timeRules,
             List<DiscountRequest> discounts,
-            @NotNull UUID actorId) {}
+            @NotNull UUID actorId,
+            @Nullable Boolean usePlatformRouting) {}
 
     /**
      * One distance band of a rate table.
@@ -400,13 +422,65 @@ public class DeliveryTariffController {
 
     /** {@code activeVersion} carries every number a quote actually resolves against; null when there is none live yet. */
     public record TariffDetailResponse(
-            TariffSummaryResponse tariff, @Nullable ActiveVersionResponse activeVersion) {
+            TariffSummaryResponse tariff,
+            @Nullable ActiveVersionResponse activeVersion,
+            @Nullable RoutingView routing) {
 
-        static TariffDetailResponse of(TariffDetail detail) {
+        static TariffDetailResponse of(TariffDetail detail, @Nullable TariffRouting routing) {
             DeliveryTariff active = detail.activeVersion();
             return new TariffDetailResponse(
                     TariffSummaryResponse.of(detail.summary()),
-                    active == null ? null : ActiveVersionResponse.of(active));
+                    active == null ? null : ActiveVersionResponse.of(active),
+                    routing == null ? null : RoutingView.of(routing));
+        }
+    }
+
+    /**
+     * What the live version's distance is measured by (ADR 0147).
+     *
+     * <p>{@code basis} is {@code STRAIGHT_LINE} for a {@code RADIUS} tariff, {@code ROAD}
+     * for one the routing engine is measuring, and {@code STRAIGHT_LINE_FALLBACK} for a
+     * {@code ROAD} tariff that is pricing from the straight line times
+     * {@code roadFactorBasisPoints} because routing is not answering. {@code basisEvidence}
+     * says whether that was read off recent fees ({@code FEES}) or inferred from
+     * configuration because none were priced in the window ({@code CONFIGURATION}).
+     * Nothing here is a probe of the engine.
+     *
+     * @param engineEnabled          whether the platform has switched the engine on
+     * @param installationStatus     the routing installation's own status, or null when
+     *                               the version names none
+     * @param engineDatasetVersion   the dataset the engine would answer from now, or null
+     * @param lastDatasetVersion     the dataset on the most recent fee the engine measured
+     *                               in the window, or null
+     */
+    public record RoutingView(
+            String basis,
+            String basisEvidence,
+            int roadFactorBasisPoints,
+            boolean engineEnabled,
+            @Nullable String installationStatus,
+            @Nullable String engineDatasetVersion,
+            @Nullable String lastDatasetVersion,
+            long roadFees,
+            long fallbackFees,
+            long windowHours,
+            @Nullable String lastDistanceSource,
+            @Nullable Instant lastResolvedAt) {
+
+        static RoutingView of(TariffRouting routing) {
+            return new RoutingView(
+                    routing.basis().name(),
+                    routing.basisEvidence().name(),
+                    routing.roadFactorBasisPoints(),
+                    routing.engine().engineEnabled(),
+                    routing.engine().installationStatus(),
+                    routing.engine().datasetVersion(),
+                    routing.lastDatasetVersion(),
+                    routing.roadFees(),
+                    routing.fallbackFees(),
+                    routing.windowHours(),
+                    routing.lastDistanceSource(),
+                    routing.lastResolvedAt());
         }
     }
 
