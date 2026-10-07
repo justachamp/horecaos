@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
@@ -10,10 +17,13 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { ChartCategory, ChartHeatRow } from '../../shared/ui/charts/chart-model';
 import { HeatmapChart } from '../../shared/ui/charts/heatmap-chart';
 import { HistogramChart } from '../../shared/ui/charts/histogram-chart';
+import { FALLBACK_MAP_CENTRE, MapRegionService } from '../delivery/map-region';
+import { OrderPointsMap } from '../delivery/order-points-map';
 import { LocationsApi, LocationView } from '../settings/locations/locations-api';
 import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
 import { ProvenanceBanner } from './provenance-banner';
 import { REPORTS_PLACEHOLDER_TIME_ZONE } from './reports-filter-state';
+import { ZoneDensity } from './zone-density';
 import { formatCount } from './report-formatting';
 import {
   DemandHistoryResponse,
@@ -109,10 +119,16 @@ interface DrillDown {
  * this wave, unlike every other unbuilt reports section.
  *
  * **What ships.** 7.10b — a handover-time histogram, and 7.10c — the
- * day-of-week × hour cohort grid with cell drill-down. **What stays
- * deferred** (named on screen, never silently dropped): the order-density
- * heatmap and today's-orders-as-pins rows (7.10/7.10a), both blocked on a
- * map provider decision tracked under `X.4`.
+ * day-of-week × hour cohort grid with cell drill-down; and, since ADR 0145,
+ * the two map rows. **7.10, the order-density view**: deliveries per delivery
+ * zone, shaded on the zone outlines and listed beside them
+ * (`q-zone-density`), with the deliveries no drawn zone covered as a row of
+ * their own. It reads a zone dimension off the fee-resolution fact and never a
+ * doorstep (ADR 0037). **7.10a, today's orders as pins**
+ * (`q-order-points-map`): an explicit, audited reveal under its own capability
+ * that opens the day's doorsteps as pins carrying an order number and no
+ * person (ADR 0027, ADR 0029), never a reporting fact, never refreshed on its
+ * own, and refused with one sentence to a caller who may not.
  *
  * **7.10b's histogram is two charts, and both are real as of wave 10
  * w5-reports-exports.** The duration chart reads `GET .../reporting/sla-buckets`,
@@ -156,7 +172,15 @@ interface DrillDown {
  */
 @Component({
   selector: 'q-geography-page',
-  imports: [TPipe, ProvenanceBanner, HistogramChart, HeatmapChart, OrderRowsTable],
+  imports: [
+    TPipe,
+    ProvenanceBanner,
+    HistogramChart,
+    HeatmapChart,
+    OrderRowsTable,
+    ZoneDensity,
+    OrderPointsMap,
+  ],
   templateUrl: './geography-page.html',
   styleUrl: './geography-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -165,6 +189,7 @@ export class GeographyPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly locationsApi = inject(LocationsApi);
   private readonly api = inject(ReportingApi);
+  private readonly mapRegions = inject(MapRegionService);
   protected readonly i18n = inject(I18n);
 
   protected readonly WEEKDAYS = WEEKDAYS;
@@ -173,6 +198,24 @@ export class GeographyPage implements OnInit {
   protected readonly state = signal<LoadState>('loading');
   protected readonly locations = signal<readonly LocationView[]>([]);
   protected readonly selectedLocationId = signal<string | null>(null);
+
+  // ----------------------------------------------- 7.10 / 7.10a (ADR 0145)
+  private readonly baseScope = signal<LocationScope | null>(null);
+  /** The selected branch as a scope: one stable object per branch, because the map sections key their reads on it. */
+  protected readonly selectedScope = computed<LocationScope | null>(() => {
+    const base = this.baseScope();
+    const locationId = this.selectedLocationId();
+    return base && locationId ? { ...base, locationId } : null;
+  });
+  protected readonly mapCentre = computed(
+    () => this.mapRegions.primary()?.centre ?? FALLBACK_MAP_CENTRE,
+  );
+  /** The density window: the same recent span the histograms read, today excluded by the server (an open day is not closed). */
+  protected readonly densityFrom = daysAgoIso(HISTOGRAM_WINDOW_DAYS - 1);
+  protected readonly densityTo = todayIso();
+  /** What the platform's audit records as the reason the day's doorsteps were opened from this screen (row 7.10a). */
+  protected readonly pinsPurpose =
+    "Operations console: Geography report, today's orders as pins (row 7.10a)";
 
   // ---------------------------------------------------------------- 7.10b
   protected readonly histogramState = signal<SecondaryLoadState>('idle');
@@ -222,7 +265,11 @@ export class GeographyPage implements OnInit {
       return;
     }
     this.scope = scope;
+    this.baseScope.set(scope);
     this.selectedLocationId.set(scope.locationId);
+    // Read beside the page, never in front of it: a reader who may not see regions still gets the map,
+    // opened on the fallback centre.
+    void this.mapRegions.ensureLoaded();
     await this.loadBranchOptions(scope);
     this.state.set('ready');
     void this.loadDistanceBucketDefinitions(scope);

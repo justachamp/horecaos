@@ -909,7 +909,10 @@ export const routes: Routes = [
           // heatmap and today's orders as pins) stay deferred with X.4 and
           // are named as such on the page itself, not silently absent.
           {
+            // ADR 0145: the order-density view and today's orders as pins. `delivery` holds the pins' own
+            // words and the zone names' vocabulary; `map` holds the map's.
             path: 'geography',
+            canActivate: [messagesGuard('delivery', 'map')],
             loadComponent: () =>
               import('./features/reports/geography-page').then((m) => m.GeographyPage),
           },

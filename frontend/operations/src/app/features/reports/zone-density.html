@@ -1,0 +1,75 @@
+<section class="density" data-testid="zone-density">
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'reports.geography.loading' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+        <button type="button" class="secondary" (click)="retry()" data-testid="zone-density-retry">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <q-provenance-banner [provenance]="provenance()" />
+
+      @if (total() === 0 && rows().length === 0) {
+        <p class="q-body-sm" data-testid="zone-density-empty">
+          {{ 'reports.geography.density.empty' | t }}
+        </p>
+      } @else {
+        @if (areas().length > 0) {
+          <q-map-canvas
+            [center]="center()"
+            [areas]="areas()"
+            [zoom]="11"
+            [height]="360"
+            [label]="'reports.geography.density.mapLabel' | t"
+            data-testid="zone-density-map"
+          />
+          <p class="q-caption" data-testid="zone-density-scale">
+            {{ 'reports.geography.density.scale' | t }}
+          </p>
+        } @else if (!zonesReadable()) {
+          <p class="q-caption" data-testid="zone-density-no-zones">
+            {{ 'reports.geography.density.zonesNotReadable' | t }}
+          </p>
+        }
+
+        <table class="density__table" data-testid="zone-density-table">
+          <thead>
+            <tr>
+              <th>{{ 'reports.geography.density.column.zone' | t }}</th>
+              <th class="density__num">{{ 'reports.geography.density.column.deliveries' | t }}</th>
+              <th class="density__num">{{ 'reports.geography.density.column.share' | t }}</th>
+              <th class="density__num">{{ 'reports.geography.density.column.fees' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.zoneId ?? 'outside') {
+              <tr
+                [class.density__row--outside]="row.zoneId === null"
+                data-testid="zone-density-row"
+              >
+                <td>{{ row.name }}</td>
+                <td class="density__num q-tnum">{{ formatCount(row.deliveries) }}</td>
+                <td class="density__num q-tnum">{{ row.sharePercent.toFixed(1) }}%</td>
+                <td class="density__num q-tnum">{{ row.fees }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (outsideRow(); as outside) {
+          <p class="q-body-sm density__outside" data-testid="zone-density-outside">
+            {{ 'reports.geography.density.outsideNote' | t: { count: outside.deliveries } }}
+          </p>
+        }
+        <p class="q-caption" data-testid="zone-density-basis">
+          {{ 'reports.geography.density.basis' | t: { from: from(), to: to() } }}
+        </p>
+      }
+    }
+  }
+</section>

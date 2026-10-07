@@ -574,10 +574,8 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
   'reports.geography.title': 'Geografiya',
   'reports.geography.intro':
-    'Yetkazib berish vaqti va masofasi gistogrammalari, hafta kuni/soat issiqlik jadvali.',
+    'Yetkazib berish vaqti va masofasi gistogrammalari, hafta kuni / soat issiqlik jadvali hamda yetkazib berishlarning zonalar boʻyicha taqsimoti.',
   'reports.geography.loading': 'Yuklanmoqda…',
-  'reports.geography.mapDeferred':
-    'Zichlik xaritasi va buyurtma nuqtalari xarita provayderigacha kechiktirildi (X.4).',
   'reports.geography.branch.label': 'Filial',
   'reports.geography.section.histograms': 'Yetkazib berish vaqti va masofasi gistogrammalari',
   'reports.geography.histogram.duration.title': 'Qayta ishlash vaqti',
@@ -601,4 +599,28 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.products.combos.column.sold': 'Sotilgan',
   'reports.products.combos.note':
     'Faqat yakunlangan buyurtmalar. Alohida sotilgan taom kombo emas.',
+  'reports.geography.section.density': 'Yetkazib berishlar qayerga boradi: zonalar boʻyicha',
+  'reports.geography.density.intro':
+    'Har bir yetkazib berish zonasi oxirgi 30 kunda uning tarifi narxlagan yetkazib berishlar soniga qarab boʻyalgan, eng band zona eng toʻq. Chizilgan zonalardan birortasi qamrab olmagan yetkazib berishlar alohida qator: bu raqam zona yomon chizilganini yoki qamrov zonasi yoʻqligini koʻrsatadi.',
+  'reports.geography.density.mapLabel': 'Yetkazib berishlar soniga qarab boʻyalgan zonalar',
+  'reports.geography.density.areaLabel': '{zone}: yetkazib berishlar — {count}',
+  'reports.geography.density.scale':
+    'Zona qanchalik toʻq boʻlsa, shunchalik koʻp yetkazib berish; xira zonada kam yoki umuman yoʻq.',
+  'reports.geography.density.zonesNotReadable':
+    'Sizning rolingiz hisobotlarni oʻqiy oladi, ammo yetkazib berish zonalarini emas, shuning uchun quyidagi hisoblarda zona nomlari yoʻq va xarita ham yoʻq.',
+  'reports.geography.density.column.zone': 'Zona',
+  'reports.geography.density.column.deliveries': 'Yetkazib berishlar',
+  'reports.geography.density.column.share': 'Ulushi',
+  'reports.geography.density.column.fees': 'Yetkazib berish toʻlovi',
+  'reports.geography.density.outside': 'Barcha chizilgan zonalardan tashqarida',
+  'reports.geography.density.zoneUnknown': 'Zona',
+  'reports.geography.density.outsideNote':
+    'Manzilini hech bir chizilgan zona qamrab olmagani uchun filialning oʻz tarifi narxlagan yetkazib berishlar: {count}. Agar ular kutilganidan koʻp boʻlsa, zona yomon chizilgan yoki qamrov zonasi yoʻq.',
+  'reports.geography.density.empty':
+    'Bu davrda yetkazib berishlar narxlanmagan, brendda esa amaldagi yetkazib berish zonalari yoʻq.',
+  'reports.geography.density.basis':
+    'Haqini tarif aniqlagan yetkazib berishlar, shu filialda {from} dan {to} gacha yopilgan ish kunlari boʻyicha. Bugungi kun kirmaydi, tarif modelidan tashqarida narxlangan yetkazib berishlar (qoʻlda toʻlov, agregatorning oʻz narxi) ham kirmaydi.',
+  'reports.geography.section.pins': 'Bugungi buyurtmalar nuqtalar sifatida',
+  'reports.geography.pins.intro':
+    'Shu filialning bugungi yetkazib berish buyurtmalari qayerga ketayotgani, har bir buyurtma uchun bitta nuqta: toʻplanishlar va chetga chiqqanlarni koʻrish uchun. Bu yetkazib berish manzillarini ochadi, shuning uchun qayd etiladi va dispetcherlar hamda filial menejerlarida bor; yuqoridagi hisobotga kirmaydi.',
 };
