@@ -244,6 +244,24 @@ public enum Capability {
     ORDER_PLACE("order.place", "order", "place"),
 
     /**
+     * ADR 0145 decision 8, row {@code 7.10a}: opening the day's delivery orders as points on a map.
+     *
+     * <p>Seeing where today's orders are going needs the doorstep, and a doorstep is a customer's
+     * home: it lives only inside the order's envelope-encrypted snapshot (ADR 0029), never in a
+     * reporting fact. So this is a reveal, not a report -- the record calls it "a dispatcher-scope
+     * read with an ADR 0027 audited purpose, never a reporting fact". Every call states a purpose
+     * and leaves one audit fact for the whole call; the answer carries an order number and a point
+     * and nothing that identifies a person (no name, no phone, no address text).
+     *
+     * <p>Its own capability rather than {@link #CUSTOMER_PII_REVEAL}, which opens one order's
+     * address for a reason about that order: this opens a branch's whole day at once, which is a
+     * different act with a different blast radius. Held by exactly the two bundles that already
+     * hold both the live courier map and the address reveal -- the dispatcher and the branch
+     * manager -- and by nothing wider.
+     */
+    ORDER_POINTS_REVEAL("order.points.reveal", "order", "points.reveal"),
+
+    /**
      * ADR 0064: attaching the voice call id an order originated from. A narrow
      * capability of its own rather than folded into {@link #ORDER_ADVANCE} or
      * {@link #ORDER_AMEND} — recording where an order came from changes

@@ -1621,6 +1621,59 @@ public class JdbcReportingStore {
     public record DistanceBucketRow(String bucketCode, int deliveryCount) {}
 
     /**
+     * Row 7.10 (ADR 0145 decision 8): deliveries per delivery zone, the zone dimension the
+     * order-density view is drawn from.
+     *
+     * <p>Reads {@code reporting.fact_delivery_fee_resolution} alone (V0411) -- the closed,
+     * business-date-grain fact that already carries {@code zone_id} -- so the density view needs
+     * a zone and never a doorstep, which is exactly the split ADR 0037 made when it kept
+     * coordinates out of {@code DeliveryFeeResolved}. A resolution that fell through to the
+     * branch's own tariff names no zone, and comes back as the group whose {@code zoneId} is
+     * null: "orders no drawn zone covers" is the number that says a zone is badly cut or a
+     * catchment is missing, and dropping it would hide the one thing the view is for.
+     *
+     * <p>Counted from fee resolutions that named a tariff (the fact's own definition), so a
+     * delivery priced outside the tariff model -- a manual fee, an aggregator's own price -- is
+     * not in it; the figure is "deliveries whose fee a zone or branch tariff resolved", and the
+     * screen says so rather than calling it every order. {@code locationIds} empty means every
+     * branch, as in every other reader here. Money stays in integer minor units, grouped by
+     * currency so two currencies are never added together.
+     */
+    public List<ZoneDensityRow> readZoneDensity(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT zone_id, currency,
+                       count(*)::integer AS delivery_count,
+                       sum(final_fee_minor)::bigint AS total_fee_minor
+                  FROM reporting.fact_delivery_fee_resolution
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY zone_id, currency
+                 ORDER BY delivery_count DESC, zone_id NULLS LAST, currency
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new ZoneDensityRow(
+                        row.getObject("zone_id", UUID.class),
+                        row.getInt("delivery_count"),
+                        row.getLong("total_fee_minor"),
+                        Objects.requireNonNull(row.getString("currency"))))
+                .list();
+    }
+
+    /** One zone's deliveries over a range; {@code zoneId} null is the deliveries no drawn zone covered. */
+    public record ZoneDensityRow(@Nullable UUID zoneId, int deliveryCount, long totalFeeMinor, String currency) {}
+
+    /**
      * T11 (7.4a): the {@code COURIER} scope of {@code agg_sla_bucket_day},
      * narrowed the way {@link #readSlaBuckets} deliberately is not — that
      * method reads every {@code scope_kind} in range for the {@code LOCATION}

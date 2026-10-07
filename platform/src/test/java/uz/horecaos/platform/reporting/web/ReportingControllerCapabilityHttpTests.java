@@ -601,6 +601,36 @@ class ReportingControllerCapabilityHttpTests {
                 .contains("\"bucketCode\":\"OVER_8KM\",\"deliveryCount\":0");
     }
 
+    // ------------------------------------------------------------ ADR 0145 (7.10): zone density
+
+    @Test
+    void zoneDensityRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/zone-density")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void zoneDensityAnswersAnEmptyMapWithItsProvenanceForARangeWithNoDeliveries() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/zone-density")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(ok.getResponse().getContentAsString())
+                .contains("\"zones\":[]")
+                .contains("\"provenance\"");
+    }
+
     @Test
     void distanceBucketSetRefusesWithoutReportingRead() throws Exception {
         MvcResult refused = mvc.perform(get(REPORTING + "/distance-bucket-set").with(tokenFor(DISPATCHER)))

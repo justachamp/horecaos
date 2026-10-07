@@ -442,6 +442,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     uz: 'Kuryerlar joylashuvini koʻrish',
     en: 'View courier positions',
   },
+  'order.points.reveal': {
+    area: 'order',
+    ru: 'Открывать на карте точки доставки сегодняшних заказов',
+    uz: 'Bugungi buyurtmalar yetkazish nuqtalarini xaritada ochish',
+    en: "Open the day's delivery points on the map",
+  },
   'courier.duty.manage': {
     area: 'courier',
     ru: 'Открывать и закрывать смену курьера вручную',

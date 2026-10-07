@@ -799,6 +799,9 @@ public enum PlatformRole {
                     COURIER_READ,
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
+                    // ADR 0145, row 7.10a: the day's delivery orders as points. Held beside the
+                    // live courier map and the address reveal, which this is a bulk form of.
+                    ORDER_POINTS_REVEAL,
                     CUSTOMER_READ,
                     // Row 1.3a: create-on-miss in the New order screen's
                     // customer pane 403'd for this role until this grant —
@@ -1009,6 +1012,9 @@ public enum PlatformRole {
                     // it a deliberate, audited grant rather than a standing one.
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
+                    // ADR 0145, row 7.10a: where the day's delivery orders are going, beside where
+                    // the couriers are -- audited, with a purpose, and holding no customer identity.
+                    ORDER_POINTS_REVEAL,
                     // T18: the operational blast a dispatcher sends the roster it
                     // already runs -- shift change, weather, a route closure.
                     COURIER_BROADCAST_MANAGE,

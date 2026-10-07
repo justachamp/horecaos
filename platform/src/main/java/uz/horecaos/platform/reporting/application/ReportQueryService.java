@@ -480,6 +480,20 @@ public class ReportQueryService {
     public record DistanceBucketsResult(List<JdbcReportingStore.DistanceBucketRow> buckets, Provenance provenance) {}
 
     /**
+     * Row 7.10 (ADR 0145): deliveries per delivery zone over a closed range -- see
+     * {@link JdbcReportingStore#readZoneDensity} for what is counted and what is not.
+     */
+    @Transactional(readOnly = true)
+    public ZoneDensityResult zoneDensity(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        List<JdbcReportingStore.ZoneDensityRow> rows = store.readZoneDensity(tenantId, from, to, locationIds);
+        return new ZoneDensityResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record ZoneDensityResult(List<JdbcReportingStore.ZoneDensityRow> rows, Provenance provenance) {}
+
+    /**
      * T11 (7.4a, ADR 0125): the {@code COURIER} scope of the fixed SLA
      * distribution — same shape {@link #slaBuckets} returns for {@code
      * LOCATION}, narrowed to the courier scope at the store layer rather

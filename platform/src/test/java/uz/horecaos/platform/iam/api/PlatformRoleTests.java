@@ -210,6 +210,25 @@ class PlatformRoleTests {
                 .containsExactlyInAnyOrder(PlatformRole.COURIER_DISPATCHER, PlatformRole.LOCATION_MANAGER);
     }
 
+    /**
+     * ADR 0145 decision 8, row 7.10a: opening a branch's whole day of doorsteps at once is a
+     * bulk form of the address reveal, held by the two bundles that already hold both the live
+     * courier map and that reveal -- and by nothing wider.
+     */
+    @Test
+    void theDaysDoorstepsAreOpenedByDispatchAndTheBranchOnly() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.ORDER_POINTS_REVEAL))
+                        .toList())
+                .containsExactlyInAnyOrder(PlatformRole.COURIER_DISPATCHER, PlatformRole.LOCATION_MANAGER);
+        assertThat(PlatformRole.COURIER_DISPATCHER.grants(Capability.CUSTOMER_PII_REVEAL))
+                .as("it is a bulk form of an address reveal, so nobody holds it who could not open one address")
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.CUSTOMER_PII_REVEAL))
+                .isTrue();
+    }
+
     @Test
     void platformSupportCanReadButNeverMutate() {
         Set<Capability> mutations = EnumSet.of(

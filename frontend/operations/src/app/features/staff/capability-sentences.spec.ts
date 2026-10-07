@@ -112,6 +112,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'order.approve',
   'order.cancel',
   'order.outcome-reason.manage',
+  'order.points.reveal',
   'order.read',
   'order.state.override',
   'partner.invoice.manage',
