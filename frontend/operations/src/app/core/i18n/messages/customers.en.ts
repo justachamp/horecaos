@@ -95,7 +95,6 @@ export const customersEn = {
   'customers.profile.merge.action': 'Merge into another account',
 
   'customers.address.label': 'Label',
-  'customers.address.line1': 'Address line',
   'customers.address.city': 'City',
   'customers.address.district': 'District',
   'customers.address.entrance': 'Entrance',

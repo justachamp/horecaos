@@ -376,6 +376,11 @@
             (ringChange)="onRingChange($event)"
             (problemsChange)="onRingProblems($event)"
           />
+          @if (draftRegionBounds()) {
+            <p class="q-caption" data-testid="zone-polygon-region-box">
+              {{ 'delivery.zones.draft.polygonRegionBox' | t }}
+            </p>
+          }
           @if (draftRing().length < 3) {
             <p class="q-caption" data-testid="zone-polygon-empty">
               {{ 'delivery.zones.draft.polygonEmpty' | t }}

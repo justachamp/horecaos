@@ -1341,4 +1341,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Filialning xaritada nuqtasi yoʻq. U boʻlmaguncha filialdan masofa oʻlchab boʻlmaydi va uning atrofida yetkazib berish zonasi chizib boʻlmaydi. Nuqtani qoʻyish uchun tahrirlashni oching.',
   'settings.locations.pin.hint':
     'Nuqtani filial eshigiga olib keling: xaritani bosing, nuqtani sudrang yoki koordinatalarni kiriting. Nuqta faqat siz surgan boʻlsangiz saqlanadi; filial nuqtasini koʻchirish mumkin, oʻchirib boʻlmaydi.',
+  'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
+    'Kunlik yetkazib berish nuqtalari xaritada ochildi',
 };

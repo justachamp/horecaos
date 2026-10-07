@@ -97,7 +97,6 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.profile.merge.action': 'Boshqa hisobga birlashtirish',
 
   'customers.address.label': 'Belgi',
-  'customers.address.line1': 'Manzil',
   'customers.address.city': 'Shahar',
   'customers.address.district': 'Tuman',
   'customers.address.entrance': 'Kirish',

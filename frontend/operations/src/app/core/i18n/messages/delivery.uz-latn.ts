@@ -745,7 +745,7 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.zones.draft.shape.CIRCLE': 'Filial atrofidagi doira',
   'delivery.zones.draft.shape.POLYGON': 'Xaritada chizish',
   'delivery.zones.draft.polygonHint':
-    'Zona konturini burchak-burchak chizing. Saqlash faqat yangi versiya qoralamasini yaratadi: versiya xaritada koʻrib chiqilib, yoqilmaguncha yetkazib berish narxiga taʼsir qilmaydi.',
+    'Zona konturini burchak-burchak chizing. Saqlash faqat yangi versiya qoralamasini yaratadi: versiya xaritada koʻrib chiqilib, yoqilmaguncha yetkazib berish narxiga taʻsir qilmaydi.',
   'delivery.zones.draft.polygonEmpty': 'Konturni saqlash uchun kamida uchta burchak chizing.',
   'delivery.zones.draft.fromVersion':
     'Asos sifatida {version}-versiya konturi olindi. Saqlash yangi versiya yaratadi; {version}-versiya oʻzgarishsiz qoladi.',

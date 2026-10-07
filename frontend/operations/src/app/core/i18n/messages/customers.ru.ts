@@ -97,7 +97,6 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.profile.merge.action': 'Объединить с другой учётной записью',
 
   'customers.address.label': 'Метка',
-  'customers.address.line1': 'Адрес',
   'customers.address.city': 'Город',
   'customers.address.district': 'Район',
   'customers.address.entrance': 'Подъезд',
