@@ -128,6 +128,46 @@ public enum ErrorCode {
      */
     ACCOUNT_ACTION_REQUIRED(HttpStatus.UNAUTHORIZED, "Account action required"),
 
+    /**
+     * ADR 0148: the password was right and the account holds a second factor,
+     * and no code was sent. Answered only after the password-only client has
+     * confirmed the password, so it is reachable by someone who already knows
+     * the password and by nobody else: an unknown name and a wrong password
+     * keep the uniform {@link #UNAUTHENTICATED}.
+     */
+    MFA_REQUIRED(HttpStatus.UNAUTHORIZED, "Second factor required"),
+
+    /**
+     * ADR 0148: the password was right and the code was not. Like {@link
+     * #MFA_REQUIRED} it is reachable only after the password was confirmed, and
+     * the platform's own attempt budget has already been charged by then.
+     */
+    MFA_CODE_INVALID(HttpStatus.UNAUTHORIZED, "Second-factor code invalid"),
+
+    /**
+     * ADR 0148: the account needs a second factor and holds none. The session
+     * Keycloak issued has been revoked; the answer carries a short-lived
+     * enrolment ticket that opens the enrolment endpoints and nothing else.
+     */
+    MFA_ENROLMENT_REQUIRED(HttpStatus.FORBIDDEN, "Second factor enrolment required"),
+
+    /**
+     * ADR 0148: an enrolment or removal re-proves the current password and the
+     * caller got it wrong. Deliberately not {@link #UNAUTHENTICATED}: the caller
+     * is signed in, and a console that treats every 401 as an ended session
+     * would sign them out for a typo.
+     */
+    CURRENT_PASSWORD_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Current password invalid"),
+
+    /**
+     * ADR 0148: the code that confirms an enrolment, or an authenticator's
+     * removal, did not verify. A new authenticator's credential is deleted
+     * again when its first code fails. Distinct from {@link #MFA_CODE_INVALID}
+     * for the same reason {@link #CURRENT_PASSWORD_INVALID} is distinct from
+     * {@link #UNAUTHENTICATED}: the caller is signed in.
+     */
+    MFA_CONFIRMATION_CODE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmation code invalid"),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
 
     /**

@@ -360,6 +360,22 @@ public class SecurityConfiguration {
                                 "/api/v1/control-plane/auth/sessions/current",
                                 "/api/v1/operations/auth/sessions/current")
                         .permitAll()
+                        // ADR 0148: enrolling a second factor, on both staff prefixes. The two
+                        // POSTs authenticate their caller themselves, by a session when there is
+                        // one and otherwise by the enrolment ticket a refused sign-in carried:
+                        // the account a rule has just locked out of the console has no session to
+                        // present, which is exactly who needs these. Both re-prove the current
+                        // password, so a ticket alone enrols nothing, and a ticket is sealed to the
+                        // one account it was issued for and the one purpose. An invalid bearer is
+                        // still refused here, as everywhere on this chain. The list and the removal
+                        // of an authenticator are not opened: they need a session.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/control-plane/auth/mfa/enrolments",
+                                "/api/v1/control-plane/auth/mfa/enrolments/confirm",
+                                "/api/v1/operations/auth/mfa/enrolments",
+                                "/api/v1/operations/auth/mfa/enrolments/confirm")
+                        .permitAll()
                         // ADR 0097: an invited owner setting up their account. They have
                         // no password yet, so there is no session to authenticate with;
                         // what authorises both calls is the one-time token in the body,

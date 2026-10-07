@@ -100,6 +100,11 @@ public enum PlatformRole {
                     // people of that branch alone; the self-service capability is every job's.
                     STAFF_PROFILE_READ,
                     STAFF_PROFILE_MANAGE,
+                    // ADR 0148: whether a person holds a second factor, and removing it when
+                    // the device is lost. A tenant owner's own reset is refused here and done
+                    // by platform support inside a support session (StaffMfaService).
+                    IAM_STAFF_MFA_READ,
+                    IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
                     // ADR 0027: which of this tenant's actions need a second signature,
@@ -378,6 +383,11 @@ public enum PlatformRole {
                     // people of that branch alone; the self-service capability is every job's.
                     STAFF_PROFILE_READ,
                     STAFF_PROFILE_MANAGE,
+                    // ADR 0148: whether a person holds a second factor, and removing it when
+                    // the device is lost. A tenant owner's own reset is refused here and done
+                    // by platform support inside a support session (StaffMfaService).
+                    IAM_STAFF_MFA_READ,
+                    IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
                     // ADR 0044: authoring campaigns and reading audiences. Export is
@@ -908,6 +918,8 @@ public enum PlatformRole {
             ScopeType.TENANT,
             EnumSet.of(
                     SUPPORT_SESSION_READ,
+                    // ADR 0148: whether a person holds a second factor.
+                    IAM_STAFF_MFA_READ,
                     TENANT_READ,
                     BRAND_READ,
                     LOCATION_READ,
@@ -940,6 +952,10 @@ public enum PlatformRole {
             ScopeType.TENANT,
             EnumSet.of(
                     SUPPORT_SESSION_READ,
+                    // ADR 0148: a lost phone is reset by an administrator, and a tenant
+                    // owner's own phone by platform support -- which is this session.
+                    IAM_STAFF_MFA_READ,
+                    IAM_STAFF_MFA_RESET,
                     TENANT_READ,
                     BRAND_READ,
                     LOCATION_READ,
@@ -1089,6 +1105,25 @@ public enum PlatformRole {
      */
     public boolean supportSessionOnly() {
         return this == SUPPORT_SESSION_VIEW || this == SUPPORT_SESSION_ASSIST;
+    }
+
+    /**
+     * ADR 0148: the roles whose holders can reveal customer data, export it and change who
+     * may -- the owner, the administrator, finance and the brand manager -- and so the roles a
+     * tenant's {@code SENSITIVE_ROLES} second-factor setting names.
+     *
+     * <p>Code-owned, like the bundles themselves: neither this flag nor the setting names a
+     * person. A cashier on a shared terminal is outside it on purpose, and so are the
+     * support-session roles, whose holders are platform staff and meet the platform rule
+     * instead.
+     */
+    public boolean mfaSensitive() {
+        return this == TENANT_OWNER || this == TENANT_ADMIN || this == TENANT_FINANCE || this == BRAND_MANAGER;
+    }
+
+    /** Whether the role with this code is {@link #mfaSensitive()}; an unknown code is not. */
+    public static boolean isMfaSensitive(String roleCode) {
+        return find(roleCode).map(PlatformRole::mfaSensitive).orElse(false);
     }
 
     public static Optional<PlatformRole> find(String code) {

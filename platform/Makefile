@@ -101,6 +101,8 @@ up: ## Start local PostgreSQL, Kafka, and Keycloak
 	docker compose ps
 	@echo "==> Assigning ADR 0009 Keycloak service-account roles"
 	./infra/keycloak/assign-service-account-roles.sh
+	@echo "==> Declaring the ADR 0148 OTP policy and the password-only staff client"
+	./infra/keycloak/create-staff-password-check-client.sh
 
 down: ## Stop the local dependency stack
 	docker compose down

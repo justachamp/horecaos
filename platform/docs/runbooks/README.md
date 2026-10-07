@@ -36,6 +36,7 @@ That shapes them more than any style guide would.
 | [customers-cannot-sign-in.md](customers-cannot-sign-in.md) | No SMS is arriving, or a customer cannot get past the code screen |
 | [laptop-lost.md](laptop-lost.md) | Revoking your own access from the second device |
 | [control-band-response.md](control-band-response.md) | A control band breached and an agent wrote an `intent.md` to triage |
+| [staff-second-factor.md](staff-second-factor.md) | Authenticator-app codes for staff sign-in: the rollout order and its realm steps, the code-budget alert, resetting a lost phone, and the break-glass for the night no administrator can (ADR 0148) |
 | [staff-member-backfill.md](staff-member-backfill.md) | The tenant's own staff record against Keycloak: how many active staff have no row, what the reconciler says, the drift gauge, and when the retention sweeper may enforce (ADR 0139) |
 | [catalog-offering-listing-backfill.md](catalog-offering-listing-backfill.md) | A pre-existing tenant's offerings were set `AVAILABLE` before the auto-listing fix and still read as unsellable |
 

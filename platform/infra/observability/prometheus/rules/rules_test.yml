@@ -132,3 +132,24 @@ tests:
             exp_annotations:
               summary: "an onboarding run has not moved for 3770s"
               runbook: docs/runbooks/onboarding-run-stalled.md
+
+  # Staff second factor (ADR 0148): the code budget refusing sign-ins. Two refusals in
+  # five minutes is the owner mistyping; the third is the alert.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_auth_staff_mfa_total{step="budget", outcome="exhausted"}'
+        values: '0 0 1 2 3 3'
+      - series: 'horecaos_auth_staff_mfa_total{step="budget", outcome="ok"}'
+        values: '0 5 5 5 5 5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HorecaosStaffMfaCodeBudgetExhausted
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HorecaosStaffMfaCodeBudgetExhausted
+        exp_alerts:
+          - exp_labels:
+              tier: trading
+            exp_annotations:
+              summary: "3 staff sign-ins were refused by the code budget in the last 5 minutes"
+              runbook: docs/runbooks/staff-second-factor.md

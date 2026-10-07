@@ -684,6 +684,29 @@ public final class ConfigurationKeys {
             .describedAs("The most lines a promotion simulation may price.")
             .build();
 
+    /**
+     * ADR 0148: whom the tenant asks for a second factor at sign-in. {@code OFF} (the default and
+     * what every tenant has until it opens this), {@code SENSITIVE_ROLES} (the owner, the
+     * administrator, finance and the brand manager) or {@code ALL_STAFF}.
+     *
+     * <p>Platform accounts are outside this key: every account holding a platform-scope grant
+     * needs a second factor on a deploy setting of its own ({@code horecaos.iam.mfa.enforcement}).
+     * Read by {@code iam} through the {@code iam.api.mfa.TenantStaffMfaRequirements} port, which
+     * {@code tenancy} implements, because {@code iam} importing this registry would close a
+     * module cycle. Settable at tenant scope only: a brand or a branch asking for less than its
+     * tenant would be a way around the tenant's own control.
+     */
+    public static final ConfigurationKey<String> IAM_STAFF_MFA_REQUIREMENT = ConfigurationKey.of(
+                    "iam.staff_mfa_requirement", String.class)
+            .defaultValue("OFF")
+            .ownedBy("iam")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whom the tenant asks for an authenticator-app code at sign-in: OFF, "
+                    + "SENSITIVE_ROLES (owner, administrator, finance, brand manager) or ALL_STAFF. "
+                    + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -699,6 +722,7 @@ public final class ConfigurationKeys {
             TELEMETRY_TRACK_RETENTION_DAYS,
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
+            IAM_STAFF_MFA_REQUIREMENT,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,

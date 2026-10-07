@@ -1324,6 +1324,28 @@ public enum Capability {
     IAM_GRANT_MANAGE("iam.grant.manage", "iam", "grant.manage"),
 
     /**
+     * ADR 0148: reading whether a person holds a second factor, how many authenticators
+     * and when each was added -- the «Способ входа» field on the person card and the column
+     * on the staff list. Never a secret and never a code: the platform holds neither.
+     *
+     * <p>Declared at {@code TENANT} scope on the staff routes and at {@code PLATFORM} scope
+     * for a platform account.
+     */
+    IAM_STAFF_MFA_READ("iam.staff.mfa.read", "iam", "staff.mfa.read"),
+
+    /**
+     * ADR 0148: removing a person's second factor because the device is lost -- an audited
+     * administrator action, and never a link anyone can follow from a mailbox. Removes every
+     * authenticator, ends the person's sessions, writes an ADR 0027 fact with the reason and
+     * emails the person.
+     *
+     * <p>For a platform-scope account the reset needs a second signature (ADR 0050, fail
+     * closed); a tenant owner's own reset is performed by platform support inside an ADR
+     * 0081 session.
+     */
+    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", "iam", "staff.mfa.reset"),
+
+    /**
      * ADR 0081: opening a support session into one tenant — a time-boxed
      * grant of a support-only role, with a stated reason, that the tenant can
      * see. Platform-scoped: it is HorecaOS staff entering a restaurant, never

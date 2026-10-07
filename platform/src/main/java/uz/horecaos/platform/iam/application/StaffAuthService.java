@@ -1,11 +1,23 @@
 package uz.horecaos.platform.iam.application;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
+import uz.horecaos.platform.iam.api.mfa.StaffMfaAdministration.Requirement;
+import uz.horecaos.platform.iam.application.mfa.MfaCodeBudget;
+import uz.horecaos.platform.iam.application.mfa.MfaMetrics;
+import uz.horecaos.platform.iam.application.mfa.MfaMetrics.Outcome;
+import uz.horecaos.platform.iam.application.mfa.MfaMetrics.Step;
+import uz.horecaos.platform.iam.application.mfa.MfaPolicy;
+import uz.horecaos.platform.iam.application.mfa.SealedTokens;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffDirectGrantClient;
+import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient;
+import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient.PasswordCheck;
 import uz.horecaos.platform.iam.infrastructure.keycloak.TokenOutcome;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -47,40 +59,137 @@ public class StaffAuthService {
      */
     private static final RateLimiter.Policy SIGN_IN_LIMIT = RateLimiter.Policy.strictPerMinute(5);
 
-    private final StaffDirectGrantClient keycloak;
-    private final RateLimiter rateLimiter;
+    /**
+     * How long the ticket a refused sign-in carries stays good: enough to scan a QR code and type
+     * the first code, short enough that a ticket left in a browser tab is not an open door.
+     */
+    static final Duration ENROLMENT_TICKET_LIFETIME = Duration.ofMinutes(15);
 
-    public StaffAuthService(StaffDirectGrantClient keycloak, RateLimiter rateLimiter) {
+    private final StaffDirectGrantClient keycloak;
+    private final StaffPasswordCheckClient passwordCheck;
+    private final RateLimiter rateLimiter;
+    private final MfaCodeBudget codeBudget;
+    private final MfaPolicy policy;
+    private final StaffAccounts accounts;
+    private final SealedTokens tickets;
+    private final MfaMetrics metrics;
+    private final Clock clock;
+
+    public StaffAuthService(
+            StaffDirectGrantClient keycloak,
+            StaffPasswordCheckClient passwordCheck,
+            RateLimiter rateLimiter,
+            MfaCodeBudget codeBudget,
+            MfaPolicy policy,
+            StaffAccounts accounts,
+            SealedTokens tickets,
+            MfaMetrics metrics,
+            Clock clock) {
         this.keycloak = keycloak;
+        this.passwordCheck = passwordCheck;
         this.rateLimiter = rateLimiter;
+        this.codeBudget = codeBudget;
+        this.policy = policy;
+        this.accounts = accounts;
+        this.tickets = tickets;
+        this.metrics = metrics;
+        this.clock = clock;
     }
 
     /**
-     * The one place a staff password is checked.
+     * The one place a staff password is checked, and the second step that follows it (ADR 0148).
      *
-     * @param rateLimitKey an opaque, already-hashed handle combining the
-     *                      caller's address and the username being attempted
-     *                      (ADR 0033, ADR 0029) — never the raw address or
-     *                      username, and never stored anywhere but this
-     *                      limiter's in-memory bucket map
+     * <p>After the per-address budget the calls run in a fixed order, and the order is the
+     * design:
+     * <ol>
+     *   <li><strong>Is the password right?</strong> Asked of the password-only client, which has
+     *       no OTP step. A wrong password or an unknown name stops here with the uniform failure,
+     *       and costs Keycloak one failure, as it always did.
+     *   <li><strong>May a code be tried?</strong> Only when {@code otp} was sent, and only for a
+     *       verified password: one attempt is charged to the account's own budget before the code
+     *       goes anywhere. Spent, the answer is 429 and Keycloak never sees the code, right or wrong.
+     *   <li><strong>Sign in.</strong> Issued: a session, unless the account needs a second factor
+     *       it does not have. Refused with no code sent: {@code MFA_REQUIRED}. Refused with one:
+     *       {@code MFA_CODE_INVALID}. Both are reachable only by somebody who already knows the
+     *       password.
+     * </ol>
+     *
+     * @param otp the six-digit code, or null for a first attempt
+     * @param rateLimitKey an opaque, already-hashed handle combining the caller's address and the
+     *     username being attempted (ADR 0033, ADR 0029) -- never the raw address or username, and
+     *     never stored anywhere but this limiter's in-memory bucket map
      */
-    public StaffSession signIn(String username, String password, String rateLimitKey) {
+    public StaffSession signIn(String username, String password, @Nullable String otp, String rateLimitKey) {
         RateLimiter.Decision decision =
                 rateLimiter.check(new RateLimiter.Key(SIGN_IN_OPERATION, null, rateLimitKey), SIGN_IN_LIMIT);
         if (!decision.allowed()) {
             throw tooManyAttempts(decision.retryAfter());
         }
 
-        return switch (keycloak.signIn(username, password)) {
-            case TokenOutcome.Issued issued -> toSession(issued);
-            case TokenOutcome.Refused refused -> throw signInRefusal(refused.reason());
+        String subjectId =
+                switch (passwordCheck.verify(username, password)) {
+                    case PasswordCheck.Verified verified -> verified.account().subjectId();
+                    case PasswordCheck.Refused refused -> throw signInRefusal(refused.reason());
+                };
+
+        if (otp != null) {
+            try {
+                codeBudget.charge(subjectId);
+            } catch (ApiException exhausted) {
+                metrics.record(Step.BUDGET, Outcome.EXHAUSTED);
+                throw exhausted;
+            }
+            metrics.record(Step.BUDGET, Outcome.OK);
+        }
+
+        return switch (keycloak.signIn(username, password, otp)) {
+            case TokenOutcome.Issued issued -> {
+                StaffSession session = withRequirement(issued, subjectId, otp != null);
+                if (otp != null) {
+                    metrics.record(Step.CHALLENGE, Outcome.OK);
+                }
+                yield session;
+            }
+            case TokenOutcome.Refused refused -> throw signInRefusal(refused.reason(), otp != null);
         };
+    }
+
+    /**
+     * What a session that Keycloak issued must still pass: the account's requirement (ADR 0148,
+     * Decision 4). Keycloak accepted a password-only grant, or accepted a code for an account it
+     * knows, so the question left is whether this account needed a factor it does not have.
+     */
+    private StaffSession withRequirement(TokenOutcome.Issued issued, String subjectId, boolean codeWasSent) {
+        Requirement requirement = policy.requirementFor(subjectId, issued.hasRealmRole("platform-admin"));
+        if (requirement == Requirement.NOT_REQUIRED) {
+            return toSession(issued, false);
+        }
+        // A grant with no code that Keycloak accepted means no OTP credential exists: with one,
+        // it would have been refused. With a code sent, Keycloak ignores the parameter for an
+        // account that has none, so the credential list is the only way to tell.
+        boolean holdsFactor = codeWasSent && !accounts.otpCredentials(subjectId).isEmpty();
+        if (holdsFactor) {
+            return toSession(issued, false);
+        }
+        if (requirement == Requirement.OFFERED) {
+            return toSession(issued, true);
+        }
+        // Required and absent: the session must not outlive this answer.
+        keycloak.revoke(issued.refreshToken());
+        Instant expiresAt = clock.instant().plus(ENROLMENT_TICKET_LIFETIME);
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("enrolmentTicket", tickets.sealTicket(subjectId, ENROLMENT_TICKET_LIFETIME));
+        properties.put("expiresAt", expiresAt.toString());
+        throw new ApiException(
+                ErrorCode.MFA_ENROLMENT_REQUIRED,
+                "This account needs a second factor before it can sign in. Set one up to continue.",
+                properties);
     }
 
     /** Proxies the refresh grant. Not rate-limited: a refresh token is not a guessable secret. */
     public StaffSession refresh(String refreshToken) {
         return switch (keycloak.refresh(refreshToken)) {
-            case TokenOutcome.Issued issued -> toSession(issued);
+            case TokenOutcome.Issued issued -> toSession(issued, false);
             case TokenOutcome.Refused ignored ->
                 throw new ApiException(ErrorCode.SESSION_EXPIRED, "Your session has ended. Sign in again.");
         };
@@ -95,13 +204,8 @@ public class StaffAuthService {
         keycloak.revoke(refreshToken);
     }
 
-    private static StaffSession toSession(TokenOutcome.Issued issued) {
-        return new StaffSession(
-                issued.accessToken(),
-                issued.refreshToken(),
-                issued.accessTokenExpiresAt(),
-                issued.refreshTokenExpiresAt(),
-                issued.tokenType());
+    private static StaffSession toSession(TokenOutcome.Issued issued, boolean mfaEnrolmentOffered) {
+        return StaffSession.of(issued, mfaEnrolmentOffered);
     }
 
     private static ApiException signInRefusal(TokenOutcome.FailureReason reason) {
@@ -113,6 +217,25 @@ public class StaffAuthService {
                         "This account needs one more step before it can sign in. "
                                 + "Contact a platform administrator.");
         };
+    }
+
+    /**
+     * A refusal from the login client after the password-only client confirmed the password. The
+     * only credential left to be wrong is the code, or its absence -- so this is the one place a
+     * sign-in answers anything but the uniform failure for a credential problem, and it is reached
+     * by nobody who does not already hold the password.
+     */
+    private ApiException signInRefusal(TokenOutcome.FailureReason reason, boolean codeWasSent) {
+        if (reason == TokenOutcome.FailureReason.ACCOUNT_ACTION_REQUIRED) {
+            return signInRefusal(reason);
+        }
+        if (codeWasSent) {
+            metrics.record(Step.CHALLENGE, Outcome.INVALID);
+            return new ApiException(
+                    ErrorCode.MFA_CODE_INVALID, "That code is not valid. Check the code and try again.");
+        }
+        metrics.record(Step.CHALLENGE, Outcome.REQUIRED);
+        return new ApiException(ErrorCode.MFA_REQUIRED, "Enter the code from your authenticator app to sign in.");
     }
 
     private static ApiException tooManyAttempts(Duration retryAfter) {
@@ -131,13 +254,37 @@ public class StaffAuthService {
      *                              {@code TokenOutcome.Issued}'s own doc for
      *                              why that is the normal, not the missing,
      *                              case
+     * @param mfaEnrolmentOffered   true when the account has no second factor and the
+     *                              platform rule is in its {@code PROMPT} phase: offer the
+     *                              enrolment screen, do not require it (ADR 0148)
      */
     public record StaffSession(
             String accessToken,
             String refreshToken,
             Instant accessTokenExpiresAt,
             @Nullable Instant refreshTokenExpiresAt,
-            String tokenType) {
+            String tokenType,
+            boolean mfaEnrolmentOffered) {
+
+        public StaffSession(
+                String accessToken,
+                String refreshToken,
+                Instant accessTokenExpiresAt,
+                @Nullable Instant refreshTokenExpiresAt,
+                String tokenType) {
+            this(accessToken, refreshToken, accessTokenExpiresAt, refreshTokenExpiresAt, tokenType, false);
+        }
+
+        /** The session a Keycloak grant opened. */
+        public static StaffSession of(TokenOutcome.Issued issued, boolean mfaEnrolmentOffered) {
+            return new StaffSession(
+                    issued.accessToken(),
+                    issued.refreshToken(),
+                    issued.accessTokenExpiresAt(),
+                    issued.refreshTokenExpiresAt(),
+                    issued.tokenType(),
+                    mfaEnrolmentOffered);
+        }
 
         /** A record's generated {@code toString} would print both tokens. */
         @Override

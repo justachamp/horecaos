@@ -132,6 +132,7 @@ class EndpointCapabilityDeclarationTests {
                     || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
+                    || isStaffMfaEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
@@ -261,6 +262,7 @@ class EndpointCapabilityDeclarationTests {
                     || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)
                     || isStaffAuthEndpoint(handler)
+                    || isStaffMfaEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
@@ -466,6 +468,40 @@ class EndpointCapabilityDeclarationTests {
             if (path.equals(prefix + "/sessions")
                     || path.equals(prefix + "/sessions/refresh")
                     || path.equals(prefix + "/sessions/current")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ADR 0148: a staff member enrolling and removing their own second factor, on both staff
+     * prefixes: the enrolment pair, the list and the removal of an authenticator.
+     *
+     * <p>None of the four authorization strategies describes them, for the reasons {@link
+     * #isStaffAuthEndpoint} states and one more: the enrolment pair is authorised by a session or
+     * by the enrolment ticket a refused sign-in carried (sealed to one account and one purpose),
+     * and every one of the four re-proves the current password and acts on the caller's own
+     * authenticators and nobody's else -- no member id, no subject, no tenant can reach them.
+     * There is no capability to hold: a person does not need to be granted the right to protect
+     * their own account.
+     *
+     * <p>Replay protection is exempted because each is protected by something stronger than a
+     * stored key. Beginning an enrolment writes nothing. Confirming one is single-use by
+     * construction: its sealed token names the authenticators the account held when it was made,
+     * so a second confirmation finds them changed. Removing an authenticator spends a one-time
+     * code, which Keycloak refuses a second time inside its step, and the attempt budget of ADR
+     * 0148 is charged first. The administrator's read and reset are {@code @RequiresCapability}
+     * endpoints and are not in this list.
+     *
+     * <p>Exact paths, as every exemption here.
+     */
+    private static boolean isStaffMfaEndpoint(Method handler) {
+        String path = pathOf(handler);
+        for (String prefix : new String[] {"/api/v1/control-plane/auth/mfa", "/api/v1/operations/auth/mfa"}) {
+            if (path.equals(prefix + "/enrolments")
+                    || path.equals(prefix + "/enrolments/confirm")
+                    || path.equals(prefix + "/authenticators/{authenticatorId}")) {
                 return true;
             }
         }

@@ -36,6 +36,7 @@ class KeycloakStaffAccounts implements StaffAccounts {
     private static final ParameterizedTypeReference<Map<String, Object>> SINGLE = new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST =
             new ParameterizedTypeReference<>() {};
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final RestClient client;
     private final String realm;
@@ -391,6 +392,137 @@ class KeycloakStaffAccounts implements StaffAccounts {
         } catch (HttpClientErrorException.NotFound none) {
             // No consent and no offline token: already the state this is for.
         }
+    }
+
+    /**
+     * The account's OTP credentials from {@code GET /users/{id}/credentials}, oldest first
+     * (ADR 0148). A missing account is an empty list, the same answer an account with no
+     * second factor gives; callers that need the difference ask {@link #find}.
+     */
+    @Override
+    public List<OtpCredential> otpCredentials(String subjectId) {
+        List<Map<String, Object>> credentials;
+        try {
+            credentials = client.get()
+                    .uri("/admin/realms/{realm}/users/{id}/credentials", realm, subjectId)
+                    .retrieve()
+                    .body(LIST);
+        } catch (HttpClientErrorException.NotFound missing) {
+            return List.of();
+        }
+        if (credentials == null) {
+            return List.of();
+        }
+        return credentials.stream()
+                .filter(credential -> "otp".equals(credential.get("type")) && credential.get("id") != null)
+                .map(credential -> new OtpCredential(
+                        String.valueOf(credential.get("id")),
+                        text(credential.get("userLabel")),
+                        credential.get("createdDate") instanceof Number created
+                                ? java.time.Instant.ofEpochMilli(created.longValue())
+                                : null))
+                .sorted(java.util.Comparator.comparing(
+                        OtpCredential::createdAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .toList();
+    }
+
+    /**
+     * Registers the credential through the one route the identity provider offers: a {@code
+     * credentials} element on the user representation, echoed back whole so the replacing
+     * {@code PUT} drops nothing (the same care {@link #completeSetup} takes). Proven against a
+     * live Keycloak 26.7 by {@code infra/keycloak/spikes/mfa-lockout-probe.py}, which adds one
+     * to a user that already exists and then signs in with a code computed from the same secret.
+     *
+     * <p>The new credential's id is found by difference, because the {@code PUT} answers 204
+     * with no body. A pending {@code CONFIGURE_TOTP} required action is removed in the same
+     * write: the factor it asks for now exists, and a sign-in refused with "not fully set up"
+     * over an action nobody can complete is the lock-out ADR 0148's Context describes.
+     */
+    @Override
+    public OtpCredential addOtpCredential(String subjectId, String secret, String label) {
+        Map<String, Object> current = client.get()
+                .uri("/admin/realms/{realm}/users/{id}", realm, subjectId)
+                .retrieve()
+                .body(SINGLE);
+        if (current == null) {
+            throw new IllegalStateException("The account cannot be read to add an authenticator to it");
+        }
+        List<String> before =
+                otpCredentials(subjectId).stream().map(OtpCredential::id).toList();
+
+        Map<String, Object> updated = new LinkedHashMap<>(current);
+        updated.put(
+                "credentials",
+                List.of(Map.of(
+                        "type",
+                        "otp",
+                        "userLabel",
+                        label,
+                        "secretData",
+                        JSON.writeValueAsString(Map.of("value", secret)),
+                        "credentialData",
+                        JSON.writeValueAsString(Map.of(
+                                "subType", "totp",
+                                "digits", 6,
+                                "counter", 0,
+                                "period", 30,
+                                "algorithm", "HmacSHA1")))));
+        if (current.get("requiredActions") instanceof List<?> actions) {
+            updated.put(
+                    "requiredActions",
+                    actions.stream()
+                            .filter(action -> !"CONFIGURE_TOTP".equals(action))
+                            .toList());
+        }
+        client.put()
+                .uri("/admin/realms/{realm}/users/{id}", realm, subjectId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(updated)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new IllegalStateException(
+                            "Keycloak refused to add the authenticator with " + response.getStatusCode());
+                })
+                .toBodilessEntity();
+
+        List<OtpCredential> created = otpCredentials(subjectId).stream()
+                .filter(credential -> !before.contains(credential.id()))
+                .toList();
+        if (created.size() != 1) {
+            throw new IllegalStateException("Keycloak accepted the authenticator but listed " + created.size()
+                    + " new credentials for the account");
+        }
+        return created.getFirst();
+    }
+
+    @Override
+    public boolean removeOtpCredential(String subjectId, String credentialId) {
+        boolean isOtp = otpCredentials(subjectId).stream()
+                .anyMatch(credential -> credential.id().equals(credentialId));
+        if (!isOtp) {
+            // Never pass the id on: Keycloak would delete a password credential just as readily.
+            return false;
+        }
+        try {
+            client.delete()
+                    .uri("/admin/realms/{realm}/users/{id}/credentials/{credentialId}", realm, subjectId, credentialId)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException.NotFound alreadyGone) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int removeAllOtpCredentials(String subjectId) {
+        int removed = 0;
+        for (OtpCredential credential : otpCredentials(subjectId)) {
+            if (removeOtpCredential(subjectId, credential.id())) {
+                removed++;
+            }
+        }
+        return removed;
     }
 
     @Override
