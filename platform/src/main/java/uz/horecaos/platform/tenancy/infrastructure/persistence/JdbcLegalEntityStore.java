@@ -20,6 +20,7 @@ import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
 import uz.horecaos.platform.tenancy.api.LegalEntitySummary;
+import uz.horecaos.platform.tenancy.api.LegalParty;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.LegalEntity;
 import uz.horecaos.platform.tenancy.domain.LocationFiscalAssignment;
@@ -200,6 +201,35 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                         row.getString("code"),
                         OperatingUnitStatus.valueOf(row.getString("status")) == OperatingUnitStatus.ACTIVE))
                 .optional();
+    }
+
+    /**
+     * The tenant's active companies, for the one caller that must pick a buyer
+     * ({@link LegalEntityDirectory#activeParties}). A fresh query rather than
+     * {@link #listForTenant}, for the reason {@link #summary} gives: the full
+     * {@link LegalEntity} aggregate stays inside {@code tenancy.application}.
+     */
+    @Override
+    public List<LegalParty> activeParties(UUID tenantId) {
+        if (!isWired()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT id, tenant_id, code, legal_name, tin, vat_registered, registered_address
+                  FROM tenant.legal_entities
+                 WHERE tenant_id = :tenantId AND status = 'ACTIVE'
+                 ORDER BY code
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> new LegalParty(
+                        row.getObject("id", UUID.class),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getString("code"),
+                        row.getString("legal_name"),
+                        row.getString("tin"),
+                        row.getBoolean("vat_registered"),
+                        row.getString("registered_address")))
+                .list();
     }
 
     // ----------------------------------------------------------- legal entities

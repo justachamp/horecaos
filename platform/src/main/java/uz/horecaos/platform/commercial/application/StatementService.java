@@ -258,6 +258,16 @@ public class StatementService {
     @Transactional
     public void voidStatement(UUID tenantId, UUID statementId, ActorRef actor, String reason, String correlationId) {
         Statement statement = find(tenantId, statementId);
+        if (statements.hasLiveEInvoice(tenantId, statementId)) {
+            // ADR 0096: an invoice made from this statement stands at an e-invoicing
+            // operator (or may). Cancelling it needs the operator's own signers, so it
+            // happens there; the statement follows once the operator says it is
+            // cancelled or refused.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "Statement %s has an e-invoice at an operator; cancel it there first".formatted(statement.number()),
+                    Map.of("reason", "EINVOICE_LIVE", "statementNumber", String.valueOf(statement.number())));
+        }
         Instant now = clock.instant();
         if (!statements.voidStatement(tenantId, statementId, subject(actor), reason, now)) {
             throw new ApiException(

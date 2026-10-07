@@ -48,6 +48,11 @@ class PlatformRoleTests {
             // transfer or change its own payment method would be deciding what it
             // owes -- the same reasoning as COMMERCIAL_STATEMENT_ISSUE above.
             Capability.COMMERCIAL_WALLET_MANAGE,
+            // ADR 0096: HorecaOS is the seller on the invoice it sends to an operator, and
+            // the account it sends through is HorecaOS's own -- a tenant holding either
+            // would be deciding what it is invoiced and by which account.
+            Capability.COMMERCIAL_EINVOICE_SEND,
+            Capability.COMMERCIAL_EINVOICING_MANAGE,
             Capability.MIGRATION_READ,
             Capability.MIGRATION_SCOPE_MANAGE,
             Capability.MIGRATION_RUN_EXECUTE,
