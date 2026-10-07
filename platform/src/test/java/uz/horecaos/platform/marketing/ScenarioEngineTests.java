@@ -102,6 +102,11 @@ class ScenarioEngineTests {
         assertThat(h.decide(scenario)).isZero();
         assertThat(h.port.sent()).hasSize(1);
 
+        // Expansion finding nobody left to enrol does not end a scenario whose guest has steps to go.
+        h.sends.expandNextBatch(TENANT, scenario);
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.SENDING);
+
         h.clock.advance(Duration.ofHours(1));
         assertThat(h.decide(scenario)).isEqualTo(1);
         assertThat(h.port.sent()).hasSize(2);
@@ -112,6 +117,11 @@ class ScenarioEngineTests {
         assertThat(h.port.sent()).hasSize(3);
         assertThat(h.outcomeOf(scenario, guest)).isEqualTo("COMPLETED");
         assertThat(h.port.distinctMessages()).isEqualTo(3);
+
+        // The scenario is over when its last guest is: the next expansion finds nobody in progress.
+        assertThat(h.sends.expandNextBatch(TENANT, scenario).terminalStatus()).isEqualTo(CampaignStatus.SENT);
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.SENT);
 
         // The events say what was decided and for whom, in identifiers only.
         assertThat(h.events.stream().filter(ScenarioStepDecided.class::isInstance))
@@ -222,6 +232,15 @@ class ScenarioEngineTests {
                 .param("id", scenario)
                 .update();
         h.enrolEverybody(scenario);
+        // A second writer that enrols somebody who is already in, claiming the other side, is told
+        // they are in already and changes nothing: the assignment is made once, at entry.
+        for (UUID guest : guests) {
+            boolean flipped = !Boolean.TRUE.equals(atEntry.get(guest));
+            assertThat(h.scenarioStore.enrol(
+                            TENANT, BRAND, scenario, guest, flipped, flipped ? null : START, h.clock.instant()))
+                    .as("guest %s is already in", guest)
+                    .isFalse();
+        }
 
         h.decide(scenario);
         h.clock.advance(Duration.ofHours(2));
