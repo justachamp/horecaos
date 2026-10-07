@@ -25,7 +25,8 @@
   the seller cannot be resolved, TIN `000000000`. (2) No delivery-line ИКПУ or package
   code can reach a receipt: `catalog.fiscal_classifications` carries them for the
   `FEE` node and the real line builder that would read them does not exist. (3)
-  Marking codes have no store: `fiscal.fiscal_unit_marks` is not built, and
+  Marking codes have no store: ADR 0038's `fiscal.fiscal_unit_marks` is not built (ADR
+  0161 puts the store in `ordering` instead), and
   `catalog.api.FiscalNodeFacts.requiresMarkingCapablePayment`, the check that removes
   Payme from a cart holding a marked good, has no caller in `CartPaymentOptions` or
   `CheckoutEligibilityGuard`. (4) A correction or void has no command:
@@ -39,7 +40,11 @@
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0007, ADR 0011, ADR 0013, ADR 0025, ADR 0026, ADR 0027, ADR 0028,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0038, ADR 0039, ADR 0040, ADR 0046,
-  ADR 0048, ADR 0165
+  ADR 0048, ADR 0161, ADR 0165. ADR 0161 (Proposed) owns the per-unit mark store and
+  the count-only display of marking; neither record blocks the other: this surface
+  shows the count where ADR 0161's port exists and says "marks not built" where it
+  does not, and ADR 0161 relies on this record for the retention key and the
+  payment-options wiring.
 - Supersedes / Superseded by: — (amends ADR 0038 without editing it. It closes that
   record's open input "which party is the legal fiscal agent per settlement path", and
   it reopens exactly one rejected row, «Integrate a fiscal operator directly, creating
@@ -51,7 +56,10 @@
   the principal, with one Qoida Click service and one Qoida Payme cashbox» from three
   conditions to "never on HorecaOS's INN". ADR 0038's decisions on per-entity merchant
   accounts, the `PARTNER`/`TERMINAL`/`MARKETPLACE`/`OPERATOR` taxonomy, cash as
-  `NOT_APPLICABLE` and the document lifecycle are not touched)
+  `NOT_APPLICABLE` and the document lifecycle are not touched. ADR 0038's sketch of
+  `fiscal.fiscal_unit_marks` is left to ADR 0161, which places the mark store in
+  `ordering` as `ordering.order_line_marks`: this record builds no mark table, shows
+  marking as a count only, and does not reveal a marking code)
 - Open inputs: each is closed on its proposed default if the owner accepts the
   record as written; the ones that name a person other than the owner stay with
   that person and the work they block is marked.
@@ -88,14 +96,17 @@
     Proposed default: seven years, the ADR 0029 `FINANCIAL` provisional period and above
     the five-year floor the provider notes cite, as ADR 0030 policy
     `fiscal.evidence_retention_years`, still flagged provisional so the ADR 0029 startup
-    guard keeps refusing a production profile until someone confirms it. Blocks: only
-    that guard.
+    guard keeps refusing a production profile until someone confirms it. It is the one
+    retention key for fiscal evidence: marking evidence (ADR 0161's mark rows and the sent
+    `Labels`) follows it and ADR 0161 declares no second key. Blocks: only that guard.
   - **How the receipt identifiers are classified and stored under ADR 0029**
     (Ayubkhon Abbosov, as the owner of platform security). Proposed default: the fiscal
-    sign, receipt number, terminal id, receipt URL and any marking code are `FINANCIAL`
-    for *reads* — purpose-bound, audited, masked in lists, never in a log, metric or
-    event — and the existing plain columns stay plain until ADR 0029's financial
-    rollout reaches `payments`; this record neither needs that migration nor blocks it.
+    sign, receipt number, terminal id and receipt URL are `FINANCIAL` for *reads* —
+    purpose-bound, audited, masked in lists, never in a log, metric or event; a marking
+    code is `FINANCIAL` too but is never returned by this surface at all (ADR 0161: no
+    screen, no reveal, a count only) — and the existing plain columns stay plain until
+    ADR 0029's financial rollout reaches `payments`; this record neither needs that
+    migration nor blocks it.
     The INN is a business identifier and may travel. Blocks: nothing.
   - **Cash at a location with no capable terminal** (Ayubkhon Abbosov). Proposed
     default: the surface reports it as it is, an unevidenced tenant obligation with
@@ -161,8 +172,9 @@ built.
    neither Payme's `shipping` block nor any built line builder reads them: ADR 0038's
    own decision is that the fee is "an ordinary item line", and the provider notes
    explain that emitting it through `shipping` would drop the classification silently.
-   Marking codes are stored by `fiscal.fiscal_unit_marks`, which is not built, and Payme
-   has no field for them at all.
+   Marking codes have no store yet (ADR 0161 builds one, `ordering.order_line_marks`; ADR
+   0038's `fiscal.fiscal_unit_marks` sketch is not built), and Payme has no field for them
+   at all.
 
 **What each settlement path means for who owes what.** ADR 0038's responsibility table
 is the frame, and this record only completes its two missing columns.
@@ -209,7 +221,10 @@ endpoint, on the order and payments screens.**
    and registration time; which tender the document covers and how the provider split it
    (Click's `received_cash`, `received_card`, `received_ecash`); the lines as sent, with
    ИКПУ, package code, unit, quantity, price, VAT and discount, the delivery fee marked as
-   such; and the marking codes transmitted, as a count and a masked tail. The console
+   such; and the marking codes transmitted, as a count only (the number of `Labels` in
+   the request as sent, beside the captured-of-required count that ADR 0161's
+   `ordering.api.OrderMarksPort.markCounts` provides): never a code, never a tail, and
+   no reveal, which is ADR 0161's rule for marking. The console
    never draws a receipt body: it shows identifiers, a link to the OFD, and the sent lines,
    which honours the finance wave's trap, "do not render a partial receipt".
 3. **The INN used is snapshotted onto the document, not joined later.** A location's
@@ -226,12 +241,14 @@ endpoint, on the order and payments screens.**
    set, because a setting that disagreed with the bindings would be a lie on a tax
    document.
 5. **A purpose is required to see an identifier.** Lists and the worklist show masked
-   values (the last four characters) and `hasEvidence`; the full fiscal sign, receipt URL,
-   receipt number and marking codes are returned only to a principal holding the new
+   values (the last four characters) and `hasEvidence`; the full fiscal sign, receipt URL
+   and receipt number are returned only to a principal holding the new
    capability `fiscal.evidence.reveal`, for a declared purpose (`TAX_INQUIRY`,
    `CUSTOMER_COMPLAINT`, `AUDIT`, `CORRECTION`), and every reveal writes a `SECURITY` audit
    fact naming the document, the fields and the purpose. The identifiers never appear in a
-   log, a metric, an event or an error message; the INN may.
+   log, a metric, an event or an error message; the INN may. A marking code is not among
+   the fields a reveal can return: ADR 0161 keeps every code off every screen and gives it
+   no reveal, so the evidence block shows the count only.
 6. **No synthetic line is ever filed outside a sandbox.** Until the real line builder
    exists, `PartnerFiscalizationBridge.retry` answers 409 `FISCAL_LINES_NOT_BUILT` for
    any provider environment other than a sandbox, and the document stays `BLOCKED` with
@@ -242,12 +259,17 @@ endpoint, on the order and payments screens.**
    item line, the ИКПУ and package code read from `catalog.fees`'s classification at the
    time and **stored as sent**, so the evidence shows what was filed and not what the
    catalog says today.
-7. **Marking is stored per unit, wired into payment options, and shown by count.**
-   `fiscal.fiscal_unit_marks` (ADR 0038 stage 5) is built when the first marked SKU is
-   sold, with the code by ADR 0029 protected reference. In the same change
+7. **Marking is stored by ADR 0161, wired into payment options here, and shown by
+   count.** The per-unit mark store is ADR 0161's `ordering.order_line_marks`, with the
+   code under ADR 0029 protection and returned by no endpoint; ADR 0038's
+   `fiscal.fiscal_unit_marks` sketch is not built and this record builds no mark table.
+   This record reads counts through `ordering.api.OrderMarksPort.markCounts`, for the
+   evidence block's "captured of required" and its "codes transmitted" figure.
    `FiscalNodeFacts.requiresMarkingCapablePayment` is called from the payment-options
-   path so Payme is not offered for such a cart. HorecaOS does nothing at the moment of
-   sale beyond transmitting the codes (open input).
+   path so Payme is not offered for such a cart; that wiring is this record's (it is
+   precondition P1 of ADR 0161) and lands before `feature.marked_goods` is turned on for
+   any tenant. HorecaOS does nothing at the moment of sale beyond transmitting the codes
+   (open input).
 8. **Correction and void are requests HorecaOS records, and the agent issues.** An
    operator with `fiscal.document.resolve` raises a correction or void request against a
    document with a reason, under an ADR 0027 approval; the document moves to
@@ -267,8 +289,10 @@ endpoint, on the order and payments screens.**
    its place on Payme; the tender split inside the payment; marking codes on Click only.
    It never carries HorecaOS's name, INN or fee.
 10. **Evidence is retained for the legal entity's period, as policy.** `fiscal.evidence_retention_years`
-    (ADR 0030, provisional) governs the document rows and the protected references;
-    offboarding a tenant does not shorten it, because the obligation is the tenant's.
+    (ADR 0030, provisional) governs the document rows and the protected references, and
+    the marking evidence of ADR 0161 (its `ordering.order_line_marks` rows and the sent
+    `Labels`), which declares no key of its own; offboarding a tenant does not shorten it,
+    because the obligation is the tenant's.
 
 ## Alternatives considered
 
@@ -300,7 +324,7 @@ endpoint, on the order and payments screens.**
 ### Negative
 
 - Three prerequisites are real work and gate the screen's honesty: the line builder,
-  `fiscal_unit_marks` and the terminal issuance adapter. Until they land the surface
+  ADR 0161's mark store and the terminal issuance adapter. Until they land the surface
   shows `BLOCKED` documents and "lines not built", which is correct and unflattering.
 - A tenant with cash and no fiscal equipment is shown, accurately, as an unevidenced
   obligation. That is the tenant's position today and it was invisible.
@@ -332,11 +356,11 @@ fiscal.fiscal_documents        (existing; V0027, V0039)
   + sent_tender_split_reference null      -- ADR 0029 protected reference to what was sent
   status gains CORRECTION_REQUESTED, VOID_REQUESTED, CORRECTED, VOIDED (ADR 0038)
 
-fiscal.fiscal_unit_marks       (ADR 0038 stage 5, built with the first marked SKU)
-  id, tenant_id, order_line_id, document_id null, sequence
-  marking_scheme, code_reference          -- ADR 0029 protected; never logged
-  captured_by, captured_at, capture_stage (PICK|HANDOVER)
-  unique (tenant_id, order_line_id, sequence)
+(marks)                        no table here. The per-unit mark store is ADR 0161's
+                               ordering.order_line_marks (ADR 0029 protected code, never
+                               returned). This record reads counts only, through
+                               ordering.api.OrderMarksPort.markCounts, and builds no
+                               fiscal.fiscal_unit_marks.
 
 fiscal.fiscal_correction_requests
   id, tenant_id, document_id, kind (CORRECTION|VOID)
@@ -348,8 +372,8 @@ fiscal.fiscal_correction_requests
   unique (tenant_id, document_id) where status = 'REQUESTED'   -- one open request per document
 ```
 
-Grants: the application role holds `SELECT, INSERT, UPDATE` on the three tables and no
-`DELETE` on any, matching `fiscal.fiscal_documents` (V0039: "a fiscal document is
+Grants: the application role holds `SELECT, INSERT, UPDATE` on the two tables and no
+`DELETE` on either, matching `fiscal.fiscal_documents` (V0039: "a fiscal document is
 evidence"). The new columns carry the same grants through the table. A check ties
 `seller_tin` to `seller_name` (both or neither). `lines_synthetic` is set by the bridge
 when it sends the placeholder; refusing that outside a sandbox is done in code and not
@@ -419,8 +443,9 @@ configuration (ADR 0026).
 ### The surface
 
 Order detail's fiscal panel gains an evidence block per document (the sent lines, the
-INN, the tender split, the marks count, masked identifiers, a "show" action that asks for
-a purpose) and the payments page gains the per-tenant payment-types table and a link from
+INN, the tender split, the marks count (ADR 0161's `markCounts`: captured of required,
+never a code or a tail), masked identifiers, a "show" action that asks for a purpose)
+and the payments page gains the per-tenant payment-types table and a link from
 each tender to its document. The finance fiscal page's blocked worklist gains the reason
 text and ageing it already receives. All strings in ru, uz-Latn and en. No receipt is
 drawn.
@@ -429,6 +454,8 @@ drawn.
 
 - A reveal without the capability is 403; with it and no purpose is 422; with both is
   audited, and the audit fact is read back in the same test.
+- No marking code or tail is in any response of the evidence endpoint, with or without
+  the capability and whatever the purpose; the block carries a count.
 - A document opened for a location reassigned later still shows the original INN
   (the clock is advanced and the assignment changed, so the test is about a duration, not
   an instant).
@@ -448,8 +475,8 @@ guard (Decision 6) and the INN snapshot with its backfill, which change no scree
 the reveal capability, the endpoint and the console block, which show what exists —
 `BLOCKED` documents, the cash `NOT_APPLICABLE` reason, `NO_FISCAL_PATH` — and say "lines
 not built" where that is true. Then the line builder and `PARTNER` submission at capture
-(ADR 0038 rollout stage 4), then terminal issuance and marks, each behind its own
-configuration. Then correction requests. Rollback of the surface is removing the endpoint
+(ADR 0038 rollout stage 4), then terminal issuance and ADR 0161's marks, each behind its
+own configuration. Then correction requests. Rollback of the surface is removing the endpoint
 and the block; the columns and the snapshot are additive and harmless. Rollback of Decision
 6 is setting `fiscal.synthetic_lines_allowed` for a named environment, a platform write
 that is audited.
@@ -459,9 +486,9 @@ that is audited.
 - [ ] Owner accepts the record, or answers the open inputs.
 - [ ] Migration: `seller_tin`, `seller_name`, `lines_synthetic`, the sent-split reference,
       with a backfill from the assignment for existing rows and a marker for rows it cannot
-      resolve; `fiscal.fiscal_correction_requests` with grants; `fiscal.fiscal_unit_marks`
-      with the first marked SKU. Check every active worktree's `db/migration/` for the next
-      free number first.
+      resolve; `fiscal.fiscal_correction_requests` with grants (the mark store is ADR
+      0161's migration, not this one). Check every active worktree's `db/migration/` for the
+      next free number first.
 - [ ] `fiscal.evidence.reveal` capability, `fiscal.evidence_retention_years` and
       `fiscal.synthetic_lines_allowed` keys; `fiscal.events` topic and its catalogue entries.
 - [ ] `GET .../orders/{orderId}/fiscal-evidence` and `GET .../fiscal/payment-types`, with
@@ -472,6 +499,8 @@ that is audited.
       and `submit` driven at capture.
 - [ ] `FiscalNodeFacts.requiresMarkingCapablePayment` called from `CartPaymentOptions` and
       `CheckoutEligibilityGuard`.
+- [ ] The evidence block's marks count reads ADR 0161's `OrderMarksPort.markCounts`; until
+      that port exists the block says "marks not built" and shows no count.
 - [ ] Correction and void requests, attachments, the four states, and a reader for
       `order_revisions.fiscal_correction_required`.
 - [ ] `FiscalTerminalPort`, a fake adapter and its contract tests (not required for the
@@ -499,7 +528,8 @@ the first.
   receipts, the responsibility table, its Alternatives table, its open input), ADR 0039
   (amendment consequence matrix), ADR 0040 (aggregator-collected money), ADR 0046
   (redemption as a per-line discount), ADR 0048, ADR 0058 (the receipt link is a legal
-  artifact), ADR 0165 (HorecaOS holds no customer funds)
+  artifact), ADR 0161 (the mark store and the count-only display of marking), ADR 0165
+  (HorecaOS holds no customer funds)
 - `platform/docs/operations-gap-map.md` row `X.2` of §8, rows `8.2`, `10.7a`, `10.7b`,
   `10.7c`, `4.2d`, and the finance wave's trap note
 - `platform/docs/frontend-information-architecture.md` row 8.2

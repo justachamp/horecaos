@@ -41,9 +41,14 @@
 - Depends on: ADR 0007, ADR 0025, ADR 0026, ADR 0029, ADR 0030, ADR 0031,
   ADR 0032, ADR 0043, ADR 0064, ADR 0139
 - Supersedes / Superseded by: — (amends ADR 0064 without editing it. It adds two
-  measures to that record's "Stats are ADR 0043 facts" and corrects one sentence of
-  its status line, which describes `talk_duration_seconds` as talk time when it is
-  call length. It reopens no row of ADR 0064's Alternatives table: "A stats
+  measures to that record's "Stats are ADR 0043 facts" and corrects nothing in it:
+  ADR 0064's text is unchanged, and its Decision bullet "Stats are ADR 0043 facts
+  ... durations" stays true. The mislabel is only the console label «Talk time»
+  and the V0149 column name `talk_duration_seconds`, both fixed here without
+  touching ADR 0064: the label becomes «Call length», and a `COMMENT ON COLUMN`
+  states what the column holds (call length), while the name stays, because
+  renaming a stored column and its API field is a definition change that ADR
+  0043 reserves for a new version. It reopens no row of ADR 0064's Alternatives table: "A stats
   dashboard fed by the PBX directly" stays rejected, and Decision 8 is written so
   that the voice platform's own analytics are never a source. It reopens one
   statement of `operations-spec/statistics.md` §2.5, that the telephony tab "is not
@@ -67,10 +72,11 @@
     key `voice.ring_time_ceiling_seconds`.
   - **Whether an order that is later rejected, cancelled or expired still counts
     as the call's conversion** (platform owner, product). Proposed default: yes,
-    an order that was placed from the call counts, because the figure then does
-    not move after the day closes and because taking the order is what the
-    operator controls; a second column for completed conversions is added if
-    wanted, never a redefinition.
+    an order that was placed from the call counts, because an order's later
+    status (completed, cancelled, expired) must not change what the operator
+    achieved on the call, and because taking the order is what the operator
+    controls; a second column for completed conversions is added if wanted, never
+    a redefinition.
   - **Backfilling days closed before the migration** (platform owner). Proposed
     default: none. They stay `NULL`, read as «not measured», and no tenant holds
     live call data to be wrong about.
@@ -201,11 +207,14 @@ and show nothing, rather than zero, wherever a figure was not measured.**
 4. **A conversion is an order that was placed from the call, and it counts the
    call once.** The test is `EXISTS` an order with `source_call_id` equal to the
    `OFFERED` event id and `created_at` not before the call was offered, in any
-   status. The qualification does not look at status because the figure must not
-   move after the day closes, and the existing recut re-derives and compares
-   but does not write. The consequence is stated in the tab: a provenance
-   written after the day closed (the console writes it within seconds of placing
-   the order) is not counted, so conversion is a lower bound. An index serves
+   status. The qualification does not look at status because an order's later
+   status (completed, cancelled, expired) must not change what the operator
+   achieved on the call: taking the order is what the operator controls, and what
+   the kitchen does with it afterwards is not. The only drift left is late
+   provenance, and it is stated in the tab: a provenance written after the day
+   closed (the console writes it within seconds of placing the order) is not
+   counted by that close, and a rebuild of the day would count it, so conversion
+   is a lower bound and not a settled number. An index serves
    the lookup: `ordering.orders (tenant_id, source_call_id) WHERE source_call_id
    IS NOT NULL`, tiny because phone orders are a minority.
 
@@ -262,7 +271,7 @@ and show nothing, rather than zero, wherever a figure was not measured.**
 | Edit V0149 in place to add the columns | Flyway checksums make an applied migration immutable in every environment | Never |
 | Store the ratios (average ring seconds, conversion percent) | A ratio cannot be summed across hours, operators or days, which is exactly how the tab rolls rows up | Never |
 | A per-call fact table (`fact_call`) instead of columns on the hour grain | Right when the owner wants percentiles or a service-level percentage, which need the distribution; premature for an average and a ratio, and a second grain for calls that V0149 already declined to widen every table for | A service-level target is set (open input 6). ADR 0043's own rule for SLA buckets then applies: store raw seconds, cut buckets later |
-| Count a conversion only for an order that completed | The count would change after the day closes, and the recut compares but does not write, so a stored day would silently disagree with a rebuilt one | The owner wants "completed conversion": add a second column beside this one |
+| Count a conversion only for an order that completed | An order's later status (completed, cancelled, expired) would change what the operator achieved on the call, and the call's conversion would then depend on the kitchen's outcome and not on taking the order; the drift that remains with the chosen rule is late provenance only, which is documented as a lower bound | The owner wants "completed conversion": add a second column beside this one |
 | Join calls to orders by caller number and a time window | Needs the plaintext number, which is ADR 0029-protected on the `OFFERED` row and nowhere else, and is a guess where the provenance link is a fact | Never |
 | Make provenance mandatory when an order is started from a claimed call | An order must never fail to place over a reporting fact; the write is made after placement, as built | Conversion coverage proves too low in practice |
 | Leave the tab rendering for every branch with notices | The spec's own reasoning is that an empty tab teaches people the screen is broken, and the notices are now stale as well as unhelpful | Tenants ask to see the empty state |
@@ -297,13 +306,18 @@ and show nothing, rather than zero, wherever a figure was not measured.**
 - Per-operator figures are only as attributable as the claim of the screen-pop
   card: a call answered on a handset without claiming the card is `(unassigned)`.
 - Conversion is a lower bound whenever provenance is written after its day closes.
+- The existing recut does not cover call facts (ADR 0064's status line says so: the
+  divergence check "does not yet cover call facts the way it covers order facts"; it
+  compares revenue and order counts per branch-day and the promotion fact, and derives
+  call hours without comparing them). Until the checklist's extension lands, nothing
+  compares a stored call day with a rebuilt one.
 - The tab changes for tenants who have seen it: a column's label and a ratio
   disappear from the operator rows.
 
 ### Accepted trade-offs
 
 - Any-status conversion rewards an order that is later cancelled; the alternative
-  makes a stored day disagree with a rebuilt one.
+  makes the operator's figure depend on what the kitchen does afterwards.
 - No backfill: history before the migration reads «not measured» for ever.
 - No percentile or service-level figure: an average hides a long tail, and the
   maximum is the only tail the facts keep.
@@ -315,8 +329,10 @@ and show nothing, rather than zero, wherever a figure was not measured.**
 
 ### Physical model
 
-One Flyway migration at the next free number after `V0489` (the gap map's PART C
-allocates numbers so parallel waves cannot collide). Every row already carries
+One Flyway migration, numbered at implementation time: the next free number after
+`V0489` once every active worktree's `db/migration/` has been checked (the gap map's
+PART C reserves no number above `V0489`, and sibling worktrees already hold `V0490`,
+`V0493` and `V0494`). Every row already carries
 `tenant_id` and is in the primary key; the grants of V0149 are table-level and cover
 added columns, so none is repeated.
 
@@ -346,7 +362,10 @@ CREATE INDEX ix_orders_source_call
 
 `ordering.orders` is not partitioned, so the index is an ordinary partial index.
 The columns carry `COMMENT`s that state the definitions above in one sentence each,
-as V0274 did for its column.
+as V0274 did for its column. The same migration issues `COMMENT ON COLUMN
+reporting.fact_call_hour.talk_duration_seconds` stating that it is call length (first
+event to `ENDED`, ring and queue time included); that comment is the whole of the
+correction to the column, and its name and stored values do not change.
 
 ### The source read and the aggregation
 
@@ -506,8 +525,14 @@ The migration is additive and forward-only.
 - [ ] Adapter contract clauses and the fakes' ring-delay and transfer scripts.
 - [ ] Tab: states, ratios with coverage, hidden tab and deep-link fallback, «Call
       length», «Not attributed», strings in three languages, specs.
-- [ ] Correct ADR 0064's status-line sentence about talk time in a follow-up note,
-      not in place; update the `7.5b` gap-map row after a re-audit.
+- [ ] `COMMENT ON COLUMN reporting.fact_call_hour.talk_duration_seconds` states it is
+      call length (first event to `ENDED`); the tab label «Talk time» becomes «Call
+      length» in ru, uz-latn and en. ADR 0064 is not edited.
+- [ ] Extend `DayCloseService.recut` to compare `converted_count` and
+      `ring_sample_count` per hour and operator, and treat a higher recut value as
+      expected late-provenance drift.
+- [ ] Update the `7.5b` gap-map row after a re-audit (the owner's step, not an edit
+      of this record).
 
 ## Exit criteria
 
