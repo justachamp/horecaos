@@ -37,6 +37,9 @@ public final class KafkaTopicCatalog {
     public static final String INVENTORY_EVENTS = "inventory.events";
     public static final String PRICING_EVENTS = "pricing.events";
 
+    /** ADR 0112: scenario decisions, a guest's run ending, and an offer being published. */
+    public static final String MARKETING_EVENTS = "marketing.events";
+
     /** ADR 0040 marketplace facts: a partner confirmed a new availability, a channel went stale. */
     public static final String INTEGRATION_EVENTS = "integration.events";
 
@@ -67,6 +70,12 @@ public final class KafkaTopicCatalog {
             // control-plane creations have, so this shares tenancy's partition
             // count rather than a per-order topic's.
             new TopicSpecification(PRICING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0112. A scenario decision is one record per guest per step, so the
+            // volume is a campaign's audience times its steps and keyed by campaign,
+            // which keeps one scenario's facts in order and a poison record holding
+            // back that scenario alone. Shares tenancy's partition count: a pilot's
+            // audiences are hundreds, not hundreds of thousands.
+            new TopicSpecification(MARKETING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0040. A confirmed availability push is one record per dish per binding and
             // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
             // minute, so this shares tenancy's partition count: keyed by binding, so one

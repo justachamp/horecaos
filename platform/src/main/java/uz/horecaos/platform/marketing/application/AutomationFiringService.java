@@ -135,7 +135,7 @@ public class AutomationFiringService {
         }
 
         MarketingChannel channel = MarketingChannel.valueOf(rule.channel());
-        if (!messages.isWired(channel.name())) {
+        if (!messages.isWired(rule.tenantId(), rule.brandId(), channel.name())) {
             runs.markRefused(rule.tenantId(), runId, "CHANNEL_NOT_WIRED");
             return FireOutcome.CHANNEL_NOT_WIRED;
         }

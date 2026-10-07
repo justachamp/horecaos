@@ -199,6 +199,36 @@ public class JdbcDeliveryReceiptStore {
                 .list();
     }
 
+    /**
+     * The latest attempt of each notification, for a campaign's recipient list
+     * (ADR 0146): what a gateway has said about a message and what it billed.
+     * Notifications with no attempt yet are simply absent from the answer.
+     */
+    public java.util.Map<UUID, AttemptEvidence> latestAttempts(UUID tenantId, Collection<UUID> notificationIds) {
+        if (notificationIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<UUID, AttemptEvidence> latest = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT DISTINCT ON (a.notification_id)
+                       a.notification_id, a.status, a.receipt_state, a.provider_segments
+                  FROM notifications.delivery_attempts a
+                 WHERE a.tenant_id = :tenantId AND a.notification_id IN (:ids)
+                 ORDER BY a.notification_id, a.attempt_number DESC
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", notificationIds)
+                .query((row, number) -> java.util.Map.entry(
+                        row.getObject("notification_id", UUID.class),
+                        new AttemptEvidence(
+                                row.getString("status"),
+                                row.getString("receipt_state"),
+                                row.getObject("provider_segments", Integer.class))))
+                .list()
+                .forEach(entry -> latest.put(entry.getKey(), entry.getValue()));
+        return latest;
+    }
+
     private static ReceiptAttempt attempt(ResultSet row, int number) throws SQLException {
         return new ReceiptAttempt(
                 row.getObject("id", UUID.class),
@@ -223,6 +253,11 @@ public class JdbcDeliveryReceiptStore {
             Instant requestedAt,
             @Nullable UUID recipientAccountId,
             @Nullable UUID brandId) {}
+
+    public record AttemptEvidence(
+            String status,
+            @Nullable String receiptState,
+            @Nullable Integer segmentsBilled) {}
 
     public record ReceiptCandidate(UUID attemptId, UUID tenantId, Instant requestedAt) {}
 

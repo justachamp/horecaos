@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -56,8 +57,10 @@ public class CampaignService {
     private final CampaignMessagePort messages;
     private final AuditRecorder audit;
     private final EntitlementService entitlements;
+    private final @Nullable ScenarioService scenarios;
     private final Clock clock;
 
+    /** The shape every caller used before ADR 0112: no scenario launch checks. */
     public CampaignService(
             JdbcCampaignStore campaigns,
             JdbcEngagementStore engagement,
@@ -67,6 +70,21 @@ public class CampaignService {
             AuditRecorder audit,
             EntitlementService entitlements,
             Clock clock) {
+        this(campaigns, engagement, audiences, estimator, messages, audit, entitlements, null, clock);
+    }
+
+    @Autowired
+    public CampaignService(
+            JdbcCampaignStore campaigns,
+            JdbcEngagementStore engagement,
+            AudienceService audiences,
+            CampaignCostEstimator estimator,
+            CampaignMessagePort messages,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            @Nullable ScenarioService scenarios,
+            Clock clock) {
+        this.scenarios = scenarios;
         this.campaigns = campaigns;
         this.engagement = engagement;
         this.audiences = audiences;
@@ -331,16 +349,34 @@ public class CampaignService {
                 campaign.scheduledAt() == null || !campaign.scheduledAt().isAfter(now);
         CampaignStatus target = momentHasArrived ? CampaignStatus.SENDING : CampaignStatus.SCHEDULED;
 
-        if (target == CampaignStatus.SENDING && !messages.isWired(channel.name())) {
-            throw new ApiException(
-                    ErrorCode.UNPROCESSABLE_STATE,
-                    "No ADR 0020 delivery path is wired for %s yet; this campaign cannot be launched"
-                            .formatted(channel));
+        if (campaign.isScenario() && scenarios != null) {
+            // Every messaging step's channel and every offer it names, read before the
+            // second signature is spent on a scenario whose third step could not send.
+            scenarios.assertStartable(campaign);
+        }
+        if (target == CampaignStatus.SENDING) {
+            // Scoped to this brand and to the marketing purpose (ADR 0146 Decision
+            // 8): a channel that has an adapter in this build but no cleared account
+            // for this brand cannot send, and the refusal says why in a code a
+            // console can show rather than as a fault three frames deeper.
+            CampaignMessagePort.Wiring wiring = messages.wiring(
+                    tenantId, campaign.brandId(), channel.name(), CampaignMessagePort.PURPOSE_MARKETING);
+            if (!wiring.isWired()) {
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
+                        "No ADR 0020 delivery path is wired for %s for this brand (%s); this campaign cannot be launched"
+                                .formatted(channel, wiring.reason()));
+            }
         }
         if (!campaign.status().canTransitionTo(target)) {
             return false;
         }
-        return campaigns.transition(tenantId, campaignId, campaign.status(), target, now);
+        boolean transitioned = campaigns.transition(tenantId, campaignId, campaign.status(), target, now);
+        if (transitioned && target == CampaignStatus.SENDING && campaign.isScenario() && scenarios != null) {
+            // A revision replaces the version it supersedes for everybody, from now.
+            scenarios.onStarted(campaign);
+        }
+        return transitioned;
     }
 
     /**

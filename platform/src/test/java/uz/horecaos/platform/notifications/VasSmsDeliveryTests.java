@@ -54,11 +54,14 @@ import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
 import uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.integration.provider.JdbcSmsAccountLookup;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.application.DeliverabilityFeedbackService;
 import uz.horecaos.platform.marketing.application.MarketingSuppressionService;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
 import uz.horecaos.platform.notifications.application.CampaignBlockRateMonitor;
+import uz.horecaos.platform.notifications.application.CampaignMessageRouter;
+import uz.horecaos.platform.notifications.application.CampaignSmsDeliveryService;
 import uz.horecaos.platform.notifications.application.CustomerTelegramChannelRouter;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
@@ -71,6 +74,7 @@ import uz.horecaos.platform.notifications.application.TelegramOperationsEntitlem
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcDeliveryReceiptStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
@@ -110,6 +114,9 @@ class VasSmsDeliveryTests {
     private OrderNotificationTrigger trigger;
     private SimpleMeterRegistry meters;
     private SmsGateway verificationGateway;
+    private CampaignMessageRouter router;
+    private ConsentService consentService;
+    private UUID installationId;
 
     private UUID accountId;
     private UUID bindingId;
@@ -150,6 +157,7 @@ class VasSmsDeliveryTests {
         CustomerProfileService profiles = new CustomerProfileService(
                 customerStore, protection, objectMapper, clock, new JdbcAuditRecorder(jdbc, objectMapper));
         ConsentService consent = new ConsentService(customerStore, clock);
+        consentService = consent;
         RecipientContactDirectory contacts = new RecipientContactService(customerStore, protection);
 
         notifications = new JdbcNotificationStore(jdbc);
@@ -219,6 +227,13 @@ class VasSmsDeliveryTests {
                 Duration.ofSeconds(30));
 
         worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
+        router = new CampaignMessageRouter(
+                List.of(new CampaignSmsDeliveryService(
+                        notifications, templates, objectMapper, clock, Duration.ofDays(1))),
+                transport,
+                notifications,
+                new JdbcDeliveryReceiptStore(jdbc));
+        activatePromotionTemplate(templates);
         trigger = new OrderNotificationTrigger(
                 notifications,
                 operationsAlerts,
@@ -430,6 +445,94 @@ class VasSmsDeliveryTests {
     }
 
     @Test
+    @DisplayName(
+            "a brand whose account is cleared for transactional SMS only is not wired for a campaign, and says why")
+    void aCampaignChannelIsWiredPerBrandAndPurpose() {
+        assertThat(router.wiring(TENANT, BRAND, "SMS", "MARKETING"))
+                .isEqualTo(CampaignMessagePort.Wiring.no("SMS_PURPOSE_NOT_PERMITTED"));
+        assertThat(router.wiring(TENANT, BRAND, "SMS", "COURIER").reason()).isEqualTo("SMS_PURPOSE_NOT_PERMITTED");
+        assertThat(router.wiring(TENANT, UUID.randomUUID(), "SMS", "MARKETING").reason())
+                .as("an adapter in this build is not an account for that brand")
+                .isEqualTo("NO_PROVIDER_BINDING");
+        assertThat(router.wiring(TENANT, BRAND, "EMAIL", "MARKETING").reason()).isEqualTo("NO_DELIVERY_ADAPTER");
+        assertThat(router.isWired(TENANT, BRAND, "SMS")).isFalse();
+
+        allowPurposes("TRANSACTIONAL, MARKETING");
+
+        assertThat(router.isWired(TENANT, BRAND, "SMS")).isTrue();
+        assertThat(router.wiring(TENANT, BRAND, "SMS", "COURIER").reason())
+                .as("marketing and courier are separate answers")
+                .isEqualTo("SMS_PURPOSE_NOT_PERMITTED");
+    }
+
+    @Test
+    @DisplayName(
+            "a marketing message that slips past the check is refused at send with the same code, and nothing leaves")
+    void aMarketingMessageIsRefusedAtTheGatewayToo() {
+        grantMarketingConsent();
+        UUID notificationId = enqueue("campaign-refused");
+
+        worker.drain();
+
+        assertThat(statusOf(notificationId)).isEqualTo("FAILED_TERMINAL");
+        assertThat(notifications.find(TENANT, notificationId).orElseThrow().lastError())
+                .isEqualTo("SMS_PURPOSE_NOT_PERMITTED");
+        assertThat(gateway.callsTo("/send")).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "once the installation names marketing, a campaign message is sent, and its recipient shows 'handed to the operator'")
+    void aClearedAccountCarriesACampaignMessage() {
+        allowPurposes("TRANSACTIONAL, MARKETING");
+        grantMarketingConsent();
+        gateway.reply("/send", """
+                {"status":{"code":0,"description":"success"},"id":"6100","parts":1}""");
+        UUID notificationId = enqueue("campaign-ok");
+        assertThat(enqueue("campaign-ok"))
+                .as("the same key is the same message, not a second one")
+                .isEqualTo(notificationId);
+
+        worker.drain();
+
+        assertThat(statusOf(notificationId)).isEqualTo("DELIVERED");
+        assertThat(gateway.callsTo("/send")).isEqualTo(1);
+        assertThat(String.valueOf(gateway.callTo("/send").body().get("text"))).isEqualTo("Chegirma 20%");
+        var evidence = java.util.Objects.requireNonNull(
+                router.deliveryEvidence(TENANT, List.of(notificationId)).get(notificationId));
+        assertThat(evidence.state())
+                .as("accepted by the gateway, and nothing has reported on it: neither delivered nor failed")
+                .isEqualTo("HANDED_TO_OPERATOR");
+        assertThat(evidence.segmentsBilled()).isEqualTo(1);
+        assertThat(evidence.receiptState()).isNull();
+
+        // A receipt is what moves it, and the recipient list reads it from the
+        // attempt rather than from a copy.
+        jdbc.sql("UPDATE notifications.delivery_attempts SET status = 'DELIVERED', acknowledged_at = now() "
+                        + "WHERE notification_id = :id")
+                .param("id", notificationId)
+                .update();
+        assertThat(java.util.Objects.requireNonNull(router.deliveryEvidence(TENANT, List.of(notificationId))
+                                .get(notificationId))
+                        .state())
+                .isEqualTo("DELIVERED");
+    }
+
+    @Test
+    @DisplayName("a cleared account does not relax consent: no decision, no message")
+    void consentStillDecides() {
+        allowPurposes("TRANSACTIONAL, MARKETING");
+        UUID notificationId = enqueue("campaign-no-consent");
+
+        worker.drain();
+
+        assertThat(statusOf(notificationId)).isEqualTo("SUPPRESSED");
+        assertThat(notifications.find(TENANT, notificationId).orElseThrow().suppressionReason())
+                .isEqualTo("CONSENT_WITHHELD");
+        assertThat(gateway.callsTo("/send")).isZero();
+    }
+
+    @Test
     @DisplayName("no number, text or credential is written to any notification table")
     void nothingPersonalIsKept() {
         gateway.reply("/send", """
@@ -463,6 +566,62 @@ class VasSmsDeliveryTests {
                 12_500_000L,
                 "CONFIRMED",
                 3);
+    }
+
+    private UUID enqueue(String key) {
+        return java.util.Objects.requireNonNull(router.enqueue(marketing(key)));
+    }
+
+    private void allowPurposes(String purposes) {
+        jdbc.sql("""
+                UPDATE integration.installations
+                   SET non_sensitive_config = CAST(:config AS jsonb)
+                 WHERE id = :id
+                """)
+                .param(
+                        "config",
+                        "{\"login\":\"horecaos\",\"sender\":\"16888\",\"permittedPurposes\":\"%s\"}"
+                                .formatted(purposes))
+                .param("id", installationId)
+                .update();
+    }
+
+    private void grantMarketingConsent() {
+        consentService.record(
+                TENANT,
+                accountId,
+                BRAND,
+                "PROMOTIONS",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "v1",
+                ConsentService.Source.STOREFRONT,
+                "storefront-checkbox",
+                NOW.minusSeconds(86_400));
+    }
+
+    private CampaignMessagePort.MarketingMessage marketing(String key) {
+        return new CampaignMessagePort.MarketingMessage(
+                TENANT,
+                BRAND,
+                accountId,
+                "SMS",
+                "PROMO_SMS",
+                "PROMOTIONS",
+                UUID.randomUUID(),
+                key,
+                Map.of(),
+                NOW,
+                null);
+    }
+
+    private void activatePromotionTemplate(NotificationTemplateService templates) {
+        UUID templateId = templates.createTemplate(
+                TENANT, BRAND, "PROMO_SMS", NotificationClass.MARKETING, NotificationChannel.SMS, "PROMOTIONS");
+        Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
+        MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Chegirma 20%")));
+        int version = templates.addVersion(TENANT, BRAND, templateId, wordings, Map.of());
+        templates.activate(TENANT, BRAND, templateId, version, "copy-approver");
     }
 
     private UUID onlyNotification() {
@@ -527,7 +686,7 @@ class VasSmsDeliveryTests {
 
     /** A real VAS installation: login and sender in its non-secret configuration, the key behind a reference. */
     private void seedVasInstallation() {
-        UUID installationId = UUID.randomUUID();
+        installationId = UUID.randomUUID();
         bindingId = UUID.randomUUID();
 
         jdbc.sql("""

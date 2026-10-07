@@ -684,6 +684,49 @@ public final class ConfigurationKeys {
             .describedAs("The most lines a promotion simulation may price.")
             .build();
 
+    /**
+     * ADR 0112: the tenant's ranking of campaign purposes, most important first, as a
+     * comma-separated list of consent purposes. When a scenario step and a broadcast are
+     * both due for one guest on one channel, the higher-ranked purpose is sent and the
+     * other is deferred to the next eligible slot and never dropped. Declared here so a
+     * stored row passes the startup validator, and declared identically in {@code
+     * marketing.api.MarketingConfigurationKeys} for the reason recorded on {@link
+     * #COURIER_APPLICANT_RETENTION_MONTHS}; {@code MarketingConfigurationKeyTests}
+     * fails the build if they drift. Empty by default: with no ranking, a send already
+     * under way wins and the scenario step waits.
+     */
+    public static final ConfigurationKey<String> MARKETING_CHANNEL_PRIORITY_ORDER = ConfigurationKey.of(
+                    "marketing.channel.priority.order", String.class)
+            .defaultValue("")
+            .ownedBy("marketing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Which campaign purpose is sent first when a scenario step and a broadcast are both "
+                    + "due for one guest: a comma-separated list of consent purposes, most important first.")
+            .build();
+
+    /** ADR 0112: how many times a day a guest may be shown one in-app banner. See {@link #MARKETING_CHANNEL_PRIORITY_ORDER}. */
+    public static final ConfigurationKey<Integer> MARKETING_IN_APP_SHOW_CAP_PER_DAY = ConfigurationKey.of(
+                    "marketing.in_app.show_cap_per_day", Integer.class)
+            .defaultValue(3)
+            .ownedBy("marketing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("The most times a guest is shown one in-app banner in a day. A banner has no "
+                    + "delivery attempt to count against the messaging frequency cap, so it has its own.")
+            .build();
+
+    /** ADR 0112: the withheld percentage a scenario author is offered. See {@link #MARKETING_CHANNEL_PRIORITY_ORDER}. */
+    public static final ConfigurationKey<Integer> MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT =
+            ConfigurationKey.of("marketing.scenario.control_group_percent.default", Integer.class)
+                    .defaultValue(10)
+                    .ownedBy("marketing")
+                    .tenantVisible()
+                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                    .describedAs("The share of a scenario's audience withheld as a control group that the "
+                            + "authoring form offers by default. A scenario may set its own, or none.")
+                    .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -725,7 +768,10 @@ public final class ConfigurationKeys {
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,
-            DELIVERY_OUT_OF_ZONE_POLICY));
+            DELIVERY_OUT_OF_ZONE_POLICY,
+            MARKETING_CHANNEL_PRIORITY_ORDER,
+            MARKETING_IN_APP_SHOW_CAP_PER_DAY,
+            MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT));
 
     private ConfigurationKeys() {}
 

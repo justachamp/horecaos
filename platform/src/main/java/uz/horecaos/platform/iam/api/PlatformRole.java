@@ -390,6 +390,10 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews, the same class of read.
                     REVIEW_READ,
                     CAMPAIGN_AUTHOR,
+                    // ADR 0112: the offers a campaign may point at, and a quieter contact
+                    // policy. Beside authoring, because both are ways of composing one.
+                    MARKETING_OFFER_MANAGE,
+                    MARKETING_CONTACT_POLICY_MANAGE,
                     // ADR 0046: correcting a balance by hand, which support cannot do.
                     LOYALTY_READ,
                     LOYALTY_ADJUST,
@@ -666,6 +670,9 @@ public enum PlatformRole {
                     // signal, the same class of read as the referral line above it.
                     REVIEW_READ,
                     CAMPAIGN_AUTHOR,
+                    // ADR 0112: a brand manager's own offers and contact policy.
+                    MARKETING_OFFER_MANAGE,
+                    MARKETING_CONTACT_POLICY_MANAGE,
                     // T18: minting the brand's own trackable acquisition links,
                     // beside the campaign-authoring power immediately above it.
                     MARKETING_LINK_MANAGE,

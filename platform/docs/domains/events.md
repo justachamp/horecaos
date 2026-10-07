@@ -48,6 +48,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `voice.events` | 3 | 1 | `PT168H` | `delete` |
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
+| `marketing.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
@@ -441,6 +442,32 @@ high-volume per-request facts whose payload shape and retention deserve their
 own decision rather than riding along with a once-a-day control-plane
 activation — the same restraint `inventory.events` states for its own six
 unpublished siblings.
+
+## `marketing.events`
+
+- Producing module: `marketing`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `campaignId` for a scenario's facts, `offerId` for an offer's
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `ScenarioStepDecided` | 1 | `campaignId` | [`ScenarioStepDecided.v1`](../../src/main/resources/events/marketing.events/ScenarioStepDecided.v1.schema.json) | `campaignId`, `brandId`, `customerAccountId`, `stepSequence`, `decision`, `refusalReason` |
+| `ScenarioParticipantStopped` | 1 | `campaignId` | [`ScenarioParticipantStopped.v1`](../../src/main/resources/events/marketing.events/ScenarioParticipantStopped.v1.schema.json) | `campaignId`, `brandId`, `customerAccountId`, `outcome` |
+| `OfferPublished` | 1 | `offerId` | [`OfferPublished.v1`](../../src/main/resources/events/marketing.events/OfferPublished.v1.schema.json) | `offerId`, `brandId`, `version` |
+
+ADR 0112's per-guest scenario engine. A decision, a guest's run ending and an offer
+being published are each appended in the same `BEFORE_COMMIT` transaction as the row
+that records them (`MarketingOutboxEventListener`), so neither commits without the
+other. `customerAccountId` is the pseudonymous account id every marketing table already
+holds; a reason is a code from a closed set and never its sentence, and nothing carries a
+phone number, an address or a rendered message (ADR 0029). A consumer that needs the
+sentence reads the decision through the authorized scenario API.
+
+ADR 0112 also names `EnqueueCallTaskCommand`, addressed to `customers` for ADR 0111's
+call-centre lead queue. It is not catalogued: no such queue exists to consume it, so a
+`CALL_CENTRE` scenario step is refused at authoring (`CHANNEL_NOT_WIRED`) rather than a
+command being published that nothing reads.
 
 ## `pos.commands`
 

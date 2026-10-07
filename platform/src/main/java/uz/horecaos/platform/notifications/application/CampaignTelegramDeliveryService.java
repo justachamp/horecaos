@@ -13,17 +13,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
-import uz.horecaos.platform.marketing.api.CampaignMessagePort;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort.MarketingMessage;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
-import uz.horecaos.platform.notifications.domain.SuppressionReason;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NotificationRow;
 
 /**
- * {@link CampaignMessagePort}'s implementation, for the TELEGRAM channel only
+ * The TELEGRAM channel of {@code CampaignMessagePort} (see {@link CampaignChannelDelivery}),
  * (ADR 0044, ADR 0059 stage 4).
  *
  * <p>Riding the machinery waves 6 to 8 built rather than building a second
@@ -46,7 +45,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
  * busy bot can push it past where quiet hours alone would have.
  */
 @Component
-public class CampaignTelegramDeliveryService implements CampaignMessagePort {
+public class CampaignTelegramDeliveryService implements CampaignChannelDelivery {
 
     /**
      * The one marketing-side channel name this adapter answers for. A literal
@@ -94,13 +93,18 @@ public class CampaignTelegramDeliveryService implements CampaignMessagePort {
     }
 
     @Override
+    public String channel() {
+        return MESSAGING_APP_CHANNEL;
+    }
+
+    @Override
     @Transactional
     public @Nullable UUID enqueue(MarketingMessage message) {
         if (!MESSAGING_APP_CHANNEL.equals(message.channel())) {
-            // Unreachable in practice: CampaignSendService checks isWired(channel)
-            // before it ever calls this, and only MESSAGING_APP answers true.
-            // Defended anyway rather than assumed, the same posture
-            // resolveRecipientValue's ck_endpoint_destination comment takes.
+            // Unreachable in practice: the router sends a message only to the
+            // delivery that answers for its channel. Defended anyway rather than
+            // assumed, the same posture resolveRecipientValue's
+            // ck_endpoint_destination comment takes.
             return null;
         }
 
@@ -142,10 +146,7 @@ public class CampaignTelegramDeliveryService implements CampaignMessagePort {
     }
 
     @Override
-    public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel) {
-        if (!MESSAGING_APP_CHANNEL.equals(channel)) {
-            return Map.of();
-        }
+    public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey) {
         Map<String, String> bodies = new LinkedHashMap<>();
         for (MessageLocale locale : MessageLocale.required()) {
             var resolution = templates.resolve(tenantId, brandId, templateKey, NotificationChannel.TELEGRAM, locale);
@@ -159,20 +160,7 @@ public class CampaignTelegramDeliveryService implements CampaignMessagePort {
     }
 
     @Override
-    public boolean isWired(String channel) {
-        return MESSAGING_APP_CHANNEL.equals(channel);
-    }
-
-    @Override
-    public OptionalDouble campaignRatePerSecond(String channel) {
-        return MESSAGING_APP_CHANNEL.equals(channel)
-                ? pacer.ratePerSecond(NotificationChannel.TELEGRAM.name())
-                : OptionalDouble.empty();
-    }
-
-    @Override
-    public int countSuppressedForNotSending(UUID tenantId, UUID campaignId, Instant since) {
-        return notifications.countSuppressed(
-                tenantId, CAMPAIGN_SUBJECT_TYPE, campaignId, SuppressionReason.CAMPAIGN_NOT_SENDING.name(), since);
+    public OptionalDouble ratePerSecond() {
+        return pacer.ratePerSecond(NotificationChannel.TELEGRAM.name());
     }
 }
