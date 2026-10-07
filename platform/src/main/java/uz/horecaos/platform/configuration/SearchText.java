@@ -64,7 +64,7 @@ public final class SearchText {
             Map.entry('ю', "iu"),
             Map.entry('я', "ia"),
             // Uzbek Cyrillic
-            Map.entry('ў', "u"),
+            Map.entry('ў', "o"),
             Map.entry('қ', "k"),
             Map.entry('ғ', "g"),
             Map.entry('ҳ', "h"),

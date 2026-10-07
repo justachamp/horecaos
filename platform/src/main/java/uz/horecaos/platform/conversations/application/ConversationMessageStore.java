@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -107,7 +108,10 @@ class ConversationMessageStore {
             @Nullable String actorPrincipalId,
             @Nullable UUID assistantTurnId,
             String body) {
-        UUID id = UUID.randomUUID();
+        // ADR 0076: a new row's id is time-ordered, and within one replica strictly increasing, so two
+        // messages written in the same millisecond -- a customer's and the assistant's answer to it --
+        // keep the order they were written in when history sorts by (occurred_at, id).
+        UUID id = Ids.newId();
         String protectedBody = protection
                 .protect(tenantId, DataClass.PERSONAL, new RecordRef(TABLE, BODY_COLUMN, id), body)
                 .serialize();

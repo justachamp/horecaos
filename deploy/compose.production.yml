@@ -385,6 +385,13 @@ services:
       HORECAOS_MAIL_SMTP_SECURITY: ${HORECAOS_MAIL_SMTP_SECURITY:-STARTTLS}
       HORECAOS_MAIL_SMTP_USERNAME: ${HORECAOS_MAIL_SMTP_USERNAME:-}
       HORECAOS_MAIL_SMTP_PASSWORD_REF: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:-}
+      # ADR 0069: the grounded assistant's model provider. Empty means the
+      # assistant takes no turns. The key is never a value here: the reference
+      # names it in OpenBao, for example
+      # horecaos:production:provider_assistant:platform:anthropic, stored with
+      #   bao kv put horecaos/production/provider_assistant/platform/anthropic value=...
+      HORECAOS_ASSISTANT_SECRET_REF: ${HORECAOS_ASSISTANT_SECRET_REF:-}
+      HORECAOS_ASSISTANT_MODEL_ID: ${HORECAOS_ASSISTANT_MODEL_ID:-claude-sonnet-5-5}
       # Where an invitation's link points: the operations console the owner
       # sets their password in. The control-plane origin is here for ADR 0098's
       # password reset, which comes back to whichever console asked for it —

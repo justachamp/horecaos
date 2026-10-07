@@ -55,6 +55,7 @@ public class AssistantUsageController {
             long ceilingUsdCents,
             boolean ceilingReached,
             boolean entitled,
+            boolean switchedOn,
             boolean providerConfigured,
             long publishedKnowledgeEntries) {
 
@@ -74,6 +75,7 @@ public class AssistantUsageController {
                     report.ceilingUsdCents(),
                     report.ceilingReached(),
                     report.entitled(),
+                    report.switchedOn(),
                     report.providerConfigured(),
                     report.publishedKnowledgeEntries());
         }

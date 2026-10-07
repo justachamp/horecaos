@@ -49,13 +49,24 @@ public final class PiiEgressGuard {
     /**
      * A marker word that introduces an address, then up to two words, then a token
      * carrying a digit. The digit is what keeps "street food" and "дом" in a
-     * sentence about a house special from being mistaken for an address.
+     * sentence about a house special from being mistaken for an address, and the
+     * lookahead after the marker keeps "домашний" from being read as "дом".
      */
     private static final Pattern ADDRESS_PATTERN = Pattern.compile(
             "(?iu)(?<![\\p{L}\\p{N}])(?:улица|ул|проспект|пр-т|переулок|пер|дом|д|квартира|кв|подъезд|этаж|"
                     + "mahalla|mfy|kocha|ko['\\u2018\\u2019\\u02BB\\u02BC`]?cha|uy|xonadon|"
-                    + "street|st|avenue|ave|apartment|apt|flat|floor|block)"
+                    + "street|st|avenue|ave|apartment|apt|flat|floor|block)(?![\\p{L}\\p{N}])"
                     + "\\.?\\s*(?:\\u2116|#|no\\.?)?\\s*(?:[\\p{L}\\-]+\\s+){0,2}[\\p{L}\\p{N}\\-/]*\\d[\\p{L}\\p{N}\\-/]*");
+
+    /**
+     * A street named before its marker, the English and Uzbek order ("Amir Temur
+     * street 7", "Navoiy ko'chasi 12"): one to three capitalised words, the marker,
+     * and a number. The capitals and the number are what keep "the street food
+     * stall" and "a short street" out.
+     */
+    private static final Pattern NAMED_STREET_PATTERN = Pattern.compile(
+            "(?u)(?:\\p{Lu}[\\p{L}\\-]*\\s+){1,3}(?i:street|st|avenue|ave|road|rd|ko['\\u2018\\u2019\\u02BB\\u02BC`]?cha\\p{L}*|mahalla\\p{L}*)"
+                    + "(?![\\p{L}\\p{N}])\\.?\\s*(?:\\u2116|#|no\\.?)?\\s*\\d[\\p{L}\\p{N}\\-/]*");
 
     private PiiEgressGuard() {}
 
@@ -63,6 +74,7 @@ public final class PiiEgressGuard {
     public static String redact(String text) {
         String redacted = EMAIL_PATTERN.matcher(text).replaceAll(EMAIL);
         redacted = HANDLE_PATTERN.matcher(redacted).replaceAll(HANDLE);
+        redacted = NAMED_STREET_PATTERN.matcher(redacted).replaceAll(ADDRESS);
         redacted = ADDRESS_PATTERN.matcher(redacted).replaceAll(ADDRESS);
         redacted = LONG_NUMBER.matcher(redacted).replaceAll(PHONE);
         return redacted;

@@ -150,6 +150,44 @@ class VoiceModuleIntegrationTest {
     }
 
     @Test
+    void theQueryPortReportsOnlyOperatorsMarkedOnlineAtThatBranch() {
+        // ADR 0069: the assistant tells a customer whether anyone is there to receive a handoff, and
+        // this port is how it knows. Paused and wrapping-up operators are not available to take one.
+        presence.setPresence(
+                TENANT, BRAND, LOCATION, "operator-a", OperatorPresenceState.ONLINE, null, userActor(), "cap", "q-1");
+        presence.setPresence(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "operator-b",
+                OperatorPresenceState.PAUSED,
+                "Lunch",
+                userActor(),
+                "cap",
+                "q-2");
+        presence.setPresence(
+                TENANT, BRAND, LOCATION, "operator-c", OperatorPresenceState.WRAP_UP, null, userActor(), "cap", "q-3");
+        presence.setPresence(
+                TENANT, BRAND, LOCATION, "operator-d", OperatorPresenceState.OFFLINE, null, userActor(), "cap", "q-4");
+        OperatorPresenceQueryAdapter query = new OperatorPresenceQueryAdapter(store);
+
+        assertThat(query.online(TENANT, LOCATION))
+                .extracting(
+                        uz.horecaos.platform.voice.api.OperatorPresenceQueryPort.OnlineOperator::operatorPrincipalId)
+                .containsExactly("operator-a");
+        assertThat(query.online(TENANT, UUID.randomUUID()))
+                .as("another branch has nobody")
+                .isEmpty();
+        assertThat(query.online(UUID.randomUUID(), LOCATION))
+                .as("another tenant's query never sees this tenant's operators")
+                .isEmpty();
+
+        presence.setPresence(
+                TENANT, BRAND, LOCATION, "operator-a", OperatorPresenceState.OFFLINE, null, userActor(), "cap", "q-5");
+        assertThat(query.online(TENANT, LOCATION)).isEmpty();
+    }
+
+    @Test
     void settingPresenceWritesAFieldLevelDiffFromWhatItWasBefore() {
         presence.setPresence(
                 TENANT, BRAND, LOCATION, OPERATOR, OperatorPresenceState.ONLINE, null, userActor(), "cap", "diff-1");

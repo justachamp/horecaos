@@ -266,6 +266,11 @@ public final class EntitlementKeys {
      * decides which named plan carries it, because no plan catalogue exists
      * to say.
      *
+     * <p>Like every feature key here, it cannot refuse while the pilot runs
+     * meter-only (ADR 0021: a tenant outside its plan is counted and allowed), so
+     * until enforcement is raised the per-tenant switch {@code assistant.enabled},
+     * which also defaults off, is what keeps the assistant dark.
+     *
      * <p>Answering needs this <em>and</em> {@link #TELEGRAM_CONVERSATIONS_ENABLED}
      * (the assistant is a participant in ADR 0059's conversations, not a second
      * bot) <em>and</em> the per-tenant switch {@code assistant.enabled}

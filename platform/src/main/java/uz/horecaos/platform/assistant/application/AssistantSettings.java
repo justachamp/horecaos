@@ -17,7 +17,17 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
  * the tenant holds {@code telegram.conversations.enabled} -- the assistant is a
  * participant in ADR 0059's conversations and has nowhere to speak without them --
  * and the switch {@code assistant.enabled} is on for the brand. Each defaults off.
- * An entitlement is never an authorization decision (ADR 0021); nothing here
+ *
+ * <p><strong>Which of the three is the brake, today.</strong> ADR 0021's pilot runs
+ * meter-only, and under meter-only {@code featureEnabled} answers true for a
+ * feature the plan does not include (it is "over, unbilled", counted and allowed:
+ * a check that began refusing because a plan was misconfigured would be an outage
+ * HorecaOS caused). So the two entitlement checks do not hold the assistant dark
+ * until enforcement is raised; the per-tenant switch does, and it is off until
+ * somebody turns it on. Both are still checked, so raising enforcement closes the
+ * plan gate without a change here.
+ *
+ * <p>An entitlement is never an authorization decision (ADR 0021); nothing here
  * grants a capability and nothing the assistant does escapes one.
  */
 @Component
@@ -41,6 +51,12 @@ public class AssistantSettings {
     public boolean switchedOn(UUID tenantId, UUID brandId) {
         return Boolean.TRUE.equals(
                 configuration.value(AssistantConfigurationKeys.ENABLED, ResourceScope.brand(tenantId, brandId)));
+    }
+
+    /** The switch as it reads at tenant scope: what the usage screen shows, since a brand may differ. */
+    public boolean switchedOnForTenant(UUID tenantId) {
+        return Boolean.TRUE.equals(
+                configuration.value(AssistantConfigurationKeys.ENABLED, ResourceScope.tenant(tenantId)));
     }
 
     public long monthlySpendCeilingUsdCents(UUID tenantId) {

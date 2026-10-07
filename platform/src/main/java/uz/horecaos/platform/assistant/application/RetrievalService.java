@@ -118,8 +118,20 @@ public class RetrievalService {
         if (classification.kinds().contains(RetrievalKind.ORDER_STATUS)) {
             orderFacts(facts, tenantId, brandId, customerAccountId, allBranches, locale);
         }
-        if (classification.needsMenu() && !classification.dishTerms().isEmpty()) {
-            menuFacts(facts, tenantId, brandId, inScope, classification, locale, localeOrder, priceChannelCode);
+        // A branch's name in the question ("...at Yunusabad") scopes the answer and is not
+        // part of what the dish is called, so it is not searched for in the menu.
+        List<String> dishTerms = withoutBranchWords(classification.dishTerms(), allBranches);
+        if (classification.needsMenu() && !dishTerms.isEmpty()) {
+            menuFacts(
+                    facts,
+                    tenantId,
+                    brandId,
+                    inScope,
+                    classification,
+                    dishTerms,
+                    locale,
+                    localeOrder,
+                    priceChannelCode);
         }
         if (classification.kinds().contains(RetrievalKind.BRANCHES)) {
             branchFacts(facts, scopedForListing(allBranches, inScope), locale);
@@ -157,6 +169,24 @@ public class RetrievalService {
         return named.isEmpty() ? all : named;
     }
 
+    /** The terms that are not a word of some branch's own name, district or landmark. */
+    static List<String> withoutBranchWords(List<String> terms, List<Branch> all) {
+        List<String> kept = new ArrayList<>();
+        for (String term : terms) {
+            boolean branchWord = false;
+            for (Branch branch : all) {
+                if (namesBranch(branch, List.of(term))) {
+                    branchWord = true;
+                    break;
+                }
+            }
+            if (!branchWord) {
+                kept.add(term);
+            }
+        }
+        return kept;
+    }
+
     private static boolean namesBranch(Branch branch, List<String> questionWords) {
         List<String> nameWords = new ArrayList<>();
         nameWords.addAll(SearchText.tokens(branch.name()));
@@ -192,6 +222,7 @@ public class RetrievalService {
             UUID brandId,
             List<Branch> inScope,
             QuestionClassification classification,
+            List<String> dishTerms,
             String locale,
             List<String> localeOrder,
             String channelCode) {
@@ -205,13 +236,39 @@ public class RetrievalService {
         Map<UUID, Dish> dishes = new LinkedHashMap<>();
         for (Branch branch : queried) {
             MenuSearchResult found = menu.search(
-                    tenantId,
-                    brandId,
-                    branch.locationId(),
-                    channelCode,
-                    localeOrder,
-                    classification.dishTerms(),
-                    MAX_DISHES);
+                    tenantId, brandId, branch.locationId(), channelCode, localeOrder, dishTerms, MAX_DISHES);
+            boolean partial = false;
+            if (found.hits().isEmpty() && found.menuPublished() && dishTerms.size() > 1) {
+                // Customers add words that are not the dish ("a big plov, please"). Before
+                // giving up, look for each word on its own -- and say so in the fact, so the
+                // reply can never present a partial match as the whole of what was asked for.
+                List<Dish> union = new ArrayList<>();
+                String partialCurrency = found.currency();
+                for (String term : dishTerms) {
+                    if (term.length() < 4) {
+                        continue;
+                    }
+                    MenuSearchResult single = menu.search(
+                            tenantId,
+                            brandId,
+                            branch.locationId(),
+                            channelCode,
+                            localeOrder,
+                            List.of(term),
+                            MAX_DISHES);
+                    partialCurrency = single.currency();
+                    for (Dish candidate : single.hits()) {
+                        if (union.stream().noneMatch(known -> known.productId().equals(candidate.productId()))) {
+                            union.add(candidate);
+                        }
+                    }
+                }
+                if (!union.isEmpty()) {
+                    found = new MenuSearchResult(
+                            true, partialCurrency, union.size() > MAX_DISHES ? union.subList(0, MAX_DISHES) : union);
+                    partial = true;
+                }
+            }
             String currency = found.currency();
             for (Dish dish : found.hits()) {
                 dishes.putIfAbsent(dish.productId(), dish);
@@ -225,7 +282,8 @@ public class RetrievalService {
                             form.amountMinor(),
                             currency,
                             form.orderable(),
-                            form.onSaleNow());
+                            form.onSaleNow(),
+                            partial);
                     byForm.computeIfAbsent(key, ignored -> new FormAt(form, new ArrayList<>()))
                             .branches()
                             .add(branch);
@@ -247,6 +305,9 @@ public class RetrievalService {
             attributes.put(
                     "branch", everywhere && queried.size() > 1 ? "every branch asked about" : branchNames(where));
             attributes.put("availability", availability(form));
+            if (key.partial()) {
+                attributes.put("matching", "partial: only some of the words the customer used match this item's name");
+            }
             if (form.remainingQuantity() != null) {
                 attributes.put(
                         "remaining",
@@ -314,7 +375,8 @@ public class RetrievalService {
             @Nullable Long amountMinor,
             @Nullable String currency,
             boolean orderable,
-            boolean onSaleNow) {}
+            boolean onSaleNow,
+            boolean partial) {}
 
     private record FormAt(Form form, List<Branch> branches) {}
 

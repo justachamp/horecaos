@@ -280,6 +280,31 @@ horecaos:
       url: ${HORECAOS_OPENBAO_URL:http://localhost:8200}
       token: ${HORECAOS_OPENBAO_TOKEN:}
       mount: ${HORECAOS_OPENBAO_MOUNT:horecaos}
+  # ADR 0069: the grounded assistant's model provider -- the platform's own
+  # account, because the provider is a processor the tenant did not choose.
+  # With no secret reference the assistant takes no turns and conversations
+  # behave exactly as they did before it existed. The reference names the key
+  # in the ADR 0028 manager (for example
+  # horecaos:production:provider_assistant:platform:anthropic); it is never a
+  # value here, and the endpoint is the approved provider environment
+  # `anthropic-production` of integration.provider_environments, never a URL.
+  # The model id, and the two request parameters the provider ties to it
+  # (thinking, effort), are configuration: change all three together, blank
+  # to omit. The prices are the model's list prices in millionths of a US
+  # dollar per token (one dollar per million tokens is one per token) and are
+  # what the per-tenant spend ceiling is counted in -- a stale price silently
+  # understates spend, so a model swap updates them in the same change.
+  assistant:
+    provider:
+      secret-reference: ${HORECAOS_ASSISTANT_SECRET_REF:}
+      environment-code: ${HORECAOS_ASSISTANT_ENVIRONMENT_CODE:anthropic-production}
+      model-id: ${HORECAOS_ASSISTANT_MODEL_ID:claude-sonnet-5-5}
+      thinking: ${HORECAOS_ASSISTANT_THINKING:between_tools}
+      effort: ${HORECAOS_ASSISTANT_EFFORT:low}
+      max-output-tokens: ${HORECAOS_ASSISTANT_MAX_OUTPUT_TOKENS:700}
+      timeout: ${HORECAOS_ASSISTANT_TIMEOUT:PT20S}
+      input-usd-micros-per-token: ${HORECAOS_ASSISTANT_INPUT_USD_MICROS_PER_TOKEN:2}
+      output-usd-micros-per-token: ${HORECAOS_ASSISTANT_OUTPUT_USD_MICROS_PER_TOKEN:10}
   # ADR 0097: the platform's own email, over SMTP submission to a hosted
   # provider. With no host set nothing is sent, and whatever wanted to send
   # waits and says so, instead of failing. The password is never a value

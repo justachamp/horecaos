@@ -194,9 +194,11 @@ public class AssistantTurnService implements ConversationParticipant {
         Instant now = clock.instant();
         UUID turnId = Ids.newId();
         TurnContext context = contextOf(offered, turnId, now);
+        // Classified on the redacted text: a phone number, an email or a street the customer
+        // typed beside the question is not a dish and must not be searched for as one.
         QuestionClassification classification = offered.sharedLocation() != null
                 ? locationShare()
-                : QuestionClassifier.classify(offered.customerText());
+                : QuestionClassifier.classify(PiiEgressGuard.redact(offered.customerText()));
 
         // 2. Rate limit. A limited turn is dropped and nothing is sent: a customer
         // flooding the bot is not owed a conversation per message.
@@ -238,7 +240,7 @@ public class AssistantTurnService implements ConversationParticipant {
                 brandId,
                 channel.customerAccountId(),
                 classification,
-                offered.customerText(),
+                PiiEgressGuard.redact(offered.customerText()),
                 context.locale(),
                 context.localeOrder(),
                 settings.priceChannelCode(tenantId, brandId),

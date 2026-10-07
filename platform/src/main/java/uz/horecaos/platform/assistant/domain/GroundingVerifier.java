@@ -2,7 +2,6 @@ package uz.horecaos.platform.assistant.domain;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -80,33 +79,41 @@ public final class GroundingVerifier {
 
         Matcher matcher = NUMBER.matcher(reply);
         while (matcher.find()) {
-            String figure = canonical(matcher.group());
-            boolean money = figure.length() >= 4
+            String figure = digitsOf(matcher.group());
+            String stripped = stripLeadingZeros(figure);
+            boolean money = stripped.length() >= 4
                     || CURRENCY_WORD.matcher(reply.substring(matcher.end())).find()
                     || CURRENCY_BEFORE
                             .matcher(reply.substring(0, matcher.start()))
                             .find();
+            // Counted on the digits as written, zeros included: "02:00" is a time a fact
+            // must state, and stripped to "2" it would slip under the single-digit rule.
             boolean twoOrMoreDigits = figure.length() >= 2;
-            if ((money || twoOrMoreDigits) && !allowed.contains(figure)) {
+            boolean known = allowed.contains(figure) || allowed.contains(stripped);
+            if ((money || twoOrMoreDigits) && !known) {
                 return GroundingVerdict.refused(RefusalReason.UNGROUNDED_REPLY);
             }
         }
         return GroundingVerdict.ok(cited);
     }
 
-    /** Every figure in a fact value, canonicalised. */
+    /** Every figure in a fact value, as written and with its leading zeros dropped. */
     static Set<String> figuresIn(String text) {
         Set<String> figures = new HashSet<>();
         Matcher matcher = NUMBER.matcher(text);
         while (matcher.find()) {
-            figures.add(canonical(matcher.group()));
+            String digits = digitsOf(matcher.group());
+            figures.add(digits);
+            figures.add(stripLeadingZeros(digits));
         }
         return figures;
     }
 
-    private static String canonical(String figure) {
-        String digits = figure.replaceAll("[ \\u00A0\\u202F]", "");
-        String stripped = digits.replaceFirst("^0+(?=\\d)", "");
-        return stripped.toLowerCase(Locale.ROOT);
+    private static String digitsOf(String figure) {
+        return figure.replaceAll("[ \\u00A0\\u202F]", "");
+    }
+
+    private static String stripLeadingZeros(String digits) {
+        return digits.replaceFirst("^0+(?=\\d)", "");
     }
 }

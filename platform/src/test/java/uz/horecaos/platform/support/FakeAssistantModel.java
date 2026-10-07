@@ -37,7 +37,8 @@ public final class FakeAssistantModel implements AssistantModelPort {
     private final List<AssistantModelRequest> requests = new CopyOnWriteArrayList<>();
     private final AtomicInteger calls = new AtomicInteger();
     private volatile boolean configured = true;
-    private volatile Function<AssistantModelRequest, AssistantModelResponse> behaviour = FakeAssistantModel::composeFromFacts;
+    private volatile Function<AssistantModelRequest, AssistantModelResponse> behaviour =
+            FakeAssistantModel::composeFromFacts;
     private volatile @Nullable AssistantModelUnavailableException failure;
     private volatile TokenUsage usage = DEFAULT_USAGE;
 
@@ -128,6 +129,11 @@ public final class FakeAssistantModel implements AssistantModelPort {
 
     // ------------------------------------------------------------ the honest model
 
+    private static String v(Map<String, String> attributes, String key) {
+        String value = attributes.get(key);
+        return value == null ? "" : value;
+    }
+
     /** One line per fact, copying its rendered values, citing every fact used. */
     static AssistantModelResponse composeFromFacts(AssistantModelRequest request) {
         List<String> lines = new ArrayList<>();
@@ -136,18 +142,23 @@ public final class FakeAssistantModel implements AssistantModelPort {
             Map<String, String> a = fact.attributes();
             String line =
                     switch (fact.kind()) {
-                        case "PRICE" -> a.get("item") + ": " + a.get("price")
-                                + (a.get("availability") != null && !"available".equals(a.get("availability"))
-                                        ? " (" + a.get("availability") + ")"
-                                        : "");
-                        case "AVAILABILITY" -> a.get("item") + ": " + a.get("availability");
-                        case "BRANCH" -> a.get("branch") + ": " + a.getOrDefault("address", "");
-                        case "HOURS" -> a.get("branch") + ": " + a.getOrDefault("pickupHours", a.getOrDefault("rightNow", ""));
-                        case "COVERAGE" -> a.getOrDefault("branch", "") + " " + a.getOrDefault("result", a.getOrDefault("note", ""));
-                        case "ORDER" -> a.containsKey("orderNumber")
-                                ? "Order " + a.get("orderNumber") + ": " + a.get("statusMeaning")
-                                : a.getOrDefault("note", "");
-                        case "KNOWLEDGE" -> a.get("answer");
+                        case "PRICE" ->
+                            v(a, "item") + ": " + v(a, "price")
+                                    + (!v(a, "availability").isEmpty() && !"available".equals(v(a, "availability"))
+                                            ? " (" + v(a, "availability") + ")"
+                                            : "");
+                        case "AVAILABILITY" -> v(a, "item") + ": " + v(a, "availability");
+                        case "BRANCH" -> v(a, "branch") + ": " + v(a, "address");
+                        case "HOURS" ->
+                            v(a, "branch") + ": "
+                                    + (a.containsKey("pickupHours") ? v(a, "pickupHours") : v(a, "rightNow"));
+                        case "COVERAGE" ->
+                            v(a, "branch") + " " + (a.containsKey("result") ? v(a, "result") : v(a, "note"));
+                        case "ORDER" ->
+                            a.containsKey("orderNumber")
+                                    ? "Order " + v(a, "orderNumber") + ": " + v(a, "statusMeaning")
+                                    : v(a, "note");
+                        case "KNOWLEDGE" -> v(a, "answer");
                         default -> "";
                     };
             if (!line.isBlank()) {

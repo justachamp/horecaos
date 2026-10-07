@@ -69,6 +69,7 @@ public class AssistantUsageService {
                 ceilingCents,
                 usage.costUsdMicros() >= Math.multiplyExact(ceilingCents, 10_000L),
                 settings.entitled(tenantId),
+                settings.switchedOnForTenant(tenantId),
                 port != null && port.configured(),
                 knowledge.countPublished(tenantId));
     }
@@ -78,7 +79,11 @@ public class AssistantUsageService {
      * @param costUsdMicros millionths of a US dollar; one cent is 10 000
      * @param ceilingUsdCents what the platform will pay for this tenant this month
      * @param ceilingReached whether the assistant is currently refusing for that reason
-     * @param entitled whether the plan includes the assistant and the conversations it speaks in
+     * @param entitled whether the plan includes the assistant and the conversations it speaks in. Under the
+     *                 pilot's meter-only enforcement ADR 0021 says a feature check cannot refuse, so this
+     *                 reads true for a tenant with no plan; it is {@code switchedOn} that keeps the
+     *                 assistant dark
+     * @param switchedOn whether {@code assistant.enabled} is on at tenant scope (a brand may still differ)
      * @param providerConfigured whether the platform has a model provider to call at all
      */
     public record Report(
@@ -96,6 +101,7 @@ public class AssistantUsageService {
             long ceilingUsdCents,
             boolean ceilingReached,
             boolean entitled,
+            boolean switchedOn,
             boolean providerConfigured,
             long publishedKnowledgeEntries) {}
 }

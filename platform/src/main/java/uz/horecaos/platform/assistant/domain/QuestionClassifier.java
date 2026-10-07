@@ -433,8 +433,12 @@ public final class QuestionClassifier {
 
     private QuestionClassifier() {}
 
+    /** The placeholders {@code PiiEgressGuard} leaves in redacted text: they are not words anybody asked. */
+    private static final java.util.regex.Pattern PLACEHOLDER =
+            java.util.regex.Pattern.compile("\\[(?:phone|email|handle|address)]");
+
     public static QuestionClassification classify(String text) {
-        String skeleton = SearchText.normalize(text);
+        String skeleton = SearchText.normalize(PLACEHOLDER.matcher(text).replaceAll(" "));
 
         EscalationTopic escalation = escalationOf(skeleton);
         Set<RetrievalKind> kinds = EnumSet.of(RetrievalKind.KNOWLEDGE);
@@ -466,7 +470,7 @@ public final class QuestionClassifier {
      * what a customer's question is about, compared on equal terms.
      */
     public static List<String> significantTerms(String text) {
-        return dishTerms(SearchText.normalize(text));
+        return dishTerms(SearchText.normalize(PLACEHOLDER.matcher(text).replaceAll(" ")));
     }
 
     private static @Nullable EscalationTopic escalationOf(String skeleton) {
