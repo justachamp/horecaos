@@ -283,7 +283,8 @@ reporting.fact_station_load        -- not partitioned: grain is date x station x
   tickets integer NOT NULL CHECK (tickets >= 0),
   boundary_version integer NOT NULL, metric_calculation_version integer NOT NULL,
   PRIMARY KEY (tenant_id, business_date, location_id, station_id, operating_hour)
-  FK (tenant_id, location_id) -> tenant.locations; no FK to kitchen.stations (a derived copy, like fact_order_line.category_id)
+  no foreign keys, as every reporting fact: station_id, location_id and the station's code and role are derived copies
+  (like fact_order_line.category_id), so a renamed or archived station never rewrites a closed day
   GRANT SELECT, INSERT, UPDATE, DELETE ON ... TO horecaos_application;  GRANT SELECT ... TO horecaos_reporting_read
 ```
 

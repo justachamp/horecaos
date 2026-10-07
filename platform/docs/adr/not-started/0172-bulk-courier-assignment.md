@@ -31,7 +31,7 @@
 - Date decided: —
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0014, ADR 0025, ADR 0027, ADR 0029, ADR 0031, ADR 0039, ADR 0042,
-  ADR 0045, ADR 0105, ADR 0142
+  ADR 0045, ADR 0105, ADR 0142, ADR 0144
 - Supersedes / Superseded by: — (amends ADR 0039, which is not edited: it adds the one
   member its "Bulk actions" section names and its `BulkActionType` Javadoc leaves out,
   `ASSIGN_COURIER`. ADR 0039's closed set, its 200-order cap, its one-transaction-per-item
