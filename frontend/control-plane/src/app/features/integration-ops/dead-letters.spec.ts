@@ -7,18 +7,33 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { DeadLetters } from './dead-letters';
 import { FailureSummary, InboxFailureSummary, IntegrationOpsApi } from './integration-ops-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 /** Exactly the fields FailureOperationsService.FailureSummary serialises to -- the ones the old type got wrong. */
 const OUTBOX: FailureSummary = {
-  id: 'ev-out-1', tenantId: 'tenant-1', status: 'DEAD_LETTER', eventType: 'OrderPlaced',
-  attemptCount: 10, errorCode: 'TRANSIENT_PROVIDER', lastError: 'timeout',
+  id: 'ev-out-1',
+  tenantId: 'tenant-1',
+  status: 'DEAD_LETTER',
+  eventType: 'OrderPlaced',
+  attemptCount: 10,
+  errorCode: 'TRANSIENT_PROVIDER',
+  lastError: 'timeout',
 };
-const INBOX: InboxFailureSummary = { ...OUTBOX, id: 'ev-in-1', eventType: 'TenantCreated', consumerName: 'reporting.tenant-summary' };
+const INBOX: InboxFailureSummary = {
+  ...OUTBOX,
+  id: 'ev-in-1',
+  eventType: 'TenantCreated',
+  consumerName: 'reporting.tenant-summary',
+};
 
 class FakeOpsApi {
   readonly outboxFailures = vi.fn().mockResolvedValue({ items: [OUTBOX], nextCursor: null });
-  readonly inboxFailuresAcrossConsumers = vi.fn().mockResolvedValue({ items: [INBOX], nextCursor: null });
+  readonly inboxFailuresAcrossConsumers = vi
+    .fn()
+    .mockResolvedValue({ items: [INBOX], nextCursor: null });
   readonly outboxFailure = vi.fn();
   readonly inboxFailure = vi.fn();
   readonly retryOutbox = vi.fn();
@@ -42,7 +57,12 @@ describe('DeadLetters', () => {
         { provide: IntegrationOpsApi, useValue: api },
         {
           provide: TenantsApi,
-          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [{ id: 'tenant-1', displayName: 'Oshxona', slug: 'oshxona' }], nextCursor: null }) },
+          useValue: {
+            listTenants: vi.fn().mockResolvedValue({
+              items: [{ id: 'tenant-1', displayName: 'Oshxona', slug: 'oshxona' }],
+              nextCursor: null,
+            }),
+          },
         },
       ],
     }).compileComponents();
@@ -62,7 +82,9 @@ describe('DeadLetters', () => {
   }
 
   function button(within: HTMLElement, label: string): HTMLButtonElement {
-    return (Array.from(within.querySelectorAll('button')) as HTMLButtonElement[]).find((b) => b.textContent?.trim() === label)!;
+    return (Array.from(within.querySelectorAll('button')) as HTMLButtonElement[]).find(
+      (b) => b.textContent?.trim() === label,
+    )!;
   }
 
   async function type(name: string, value: string, event = 'input'): Promise<void> {
@@ -89,10 +111,16 @@ describe('DeadLetters', () => {
     button(queue('inbox'), ru['deadLetters.retry.action']).click();
     await settle();
     await type('reason', 'handler fixed in release a1b2c3d');
-    (fixture.nativeElement.querySelector('.actForm button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.actForm button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
-    expect(api.retryInbox).toHaveBeenCalledWith('reporting.tenant-summary', 'ev-in-1', 'handler fixed in release a1b2c3d');
+    expect(api.retryInbox).toHaveBeenCalledWith(
+      'reporting.tenant-summary',
+      'ev-in-1',
+      'handler fixed in release a1b2c3d',
+    );
     expect(queue('inbox').textContent).toContain(ru['deadLetters.inbox.empty']);
     expect(fixture.nativeElement.textContent).toContain(ru['deadLetters.retry.succeeded']);
   });
@@ -105,19 +133,34 @@ describe('DeadLetters', () => {
     await settle();
     await type('category', 'UNCERTAIN_EXTERNAL_OUTCOME', 'change');
     await type('reason', 'provider confirmed by phone');
-    const submit = fixture.nativeElement.querySelector('.actForm button[type="submit"]') as HTMLButtonElement;
+    const submit = fixture.nativeElement.querySelector(
+      '.actForm button[type="submit"]',
+    ) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
     await type('evidence', 'ticket PAY-1234');
-    (fixture.nativeElement.querySelector('.actForm button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.actForm button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
-    expect(api.resolveOutbox).toHaveBeenCalledWith('ev-out-1', 'UNCERTAIN_EXTERNAL_OUTCOME', 'provider confirmed by phone', 'ticket PAY-1234');
+    expect(api.resolveOutbox).toHaveBeenCalledWith(
+      'ev-out-1',
+      'UNCERTAIN_EXTERNAL_OUTCOME',
+      'provider confirmed by phone',
+      'ticket PAY-1234',
+    );
   });
 
   it('shows a failure’s routing facts, never its payload', async () => {
     await create();
-    api.outboxFailure.mockResolvedValue({ topic: 'ordering.events', aggregateType: 'Order', aggregateId: 'order-9', correlationId: 'corr-1', lastError: 'Read timed out' });
+    api.outboxFailure.mockResolvedValue({
+      topic: 'ordering.events',
+      aggregateType: 'Order',
+      aggregateId: 'order-9',
+      correlationId: 'corr-1',
+      lastError: 'Read timed out',
+    });
 
     button(queue('outbox'), ru['deadLetters.details']).click();
     await settle();

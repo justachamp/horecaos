@@ -7,7 +7,6 @@ import { MigrationApi, ProgramView, ScopeView } from './migration-api';
 import { capabilityKey, stateKey } from './migration-labels';
 import { rememberProgram, rememberedProgram } from './program-memory';
 
-
 /**
  * Choosing a migration scope by program, tenant and capability rather than by
  * pasting its id. Remembers the program across screens for the session.
@@ -19,19 +18,36 @@ import { rememberProgram, rememberedProgram } from './program-memory';
     <div class="scopePicker">
       <label class="field">
         <span class="q-caption">{{ i18n.t('migrationPicker.program') }}</span>
-        <select class="q-body-sm" name="program" (change)="chooseProgram($any($event.target).value)">
-          <option value="" [selected]="programId() === ''">{{ i18n.t('migrationPicker.chooseProgram') }}</option>
+        <select
+          class="q-body-sm"
+          name="program"
+          (change)="chooseProgram($any($event.target).value)"
+        >
+          <option value="" [selected]="programId() === ''">
+            {{ i18n.t('migrationPicker.chooseProgram') }}
+          </option>
           @for (program of programs(); track program.id) {
-            <option [value]="program.id" [selected]="program.id === programId()">{{ program.name }}</option>
+            <option [value]="program.id" [selected]="program.id === programId()">
+              {{ program.name }}
+            </option>
           }
         </select>
       </label>
       <label class="field">
         <span class="q-caption">{{ i18n.t('migrationPicker.scope') }}</span>
-        <select class="q-body-sm" name="scope" [disabled]="scopes().length === 0" (change)="chooseScope($any($event.target).value)">
-          <option value="" [selected]="scopeId() === ''">{{ i18n.t('migrationPicker.chooseScope') }}</option>
+        <select
+          class="q-body-sm"
+          name="scope"
+          [disabled]="scopes().length === 0"
+          (change)="chooseScope($any($event.target).value)"
+        >
+          <option value="" [selected]="scopeId() === ''">
+            {{ i18n.t('migrationPicker.chooseScope') }}
+          </option>
           @for (scope of scopes(); track scope.id) {
-            <option [value]="scope.id" [selected]="scope.id === scopeId()">{{ label(scope) }}</option>
+            <option [value]="scope.id" [selected]="scope.id === scopeId()">
+              {{ label(scope) }}
+            </option>
           }
         </select>
       </label>

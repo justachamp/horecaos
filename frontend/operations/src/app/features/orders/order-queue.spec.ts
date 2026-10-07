@@ -1079,18 +1079,23 @@ describe('OrderQueue: reasoned cancel from CONFIRMED onward (H2)', () => {
         deliveryCancellation: null,
       }),
     );
+    // The `preparing` tab is severity-ordered, oldest first, and this test clicks the rows by
+    // position, so each order carries its own `createdAt` in the order the rows must appear
+    // (A, then B) rather than two `new Date()` defaults that only tie.
     configureWithActions(
       [
         order({
           orderId: 'order-A',
           status: 'CONFIRMED',
           version: 2,
+          createdAt: minutesAgoIso(2),
           actions: [{ action: 'CANCEL' }],
         }),
         order({
           orderId: 'order-B',
           status: 'CONFIRMED',
           version: 5,
+          createdAt: minutesAgoIso(1),
           actions: [{ action: 'CANCEL' }],
         }),
       ],
@@ -2537,18 +2542,22 @@ describe('OrderQueue: COMPLETE row action (orders.md §4.6, row 1.1e)', () => {
         updatedAt: new Date().toISOString(),
       },
     ];
+    // The `delivering` tab is severity-ordered, oldest first, and this test clicks the rows by
+    // position -- see the cancel counterpart above for why each order carries its own `createdAt`.
     configureWithActions(
       [
         order({
           orderId: 'order-A',
           status: 'FULFILLING',
           version: 2,
+          createdAt: minutesAgoIso(2),
           actions: [{ action: 'COMPLETE' }],
         }),
         order({
           orderId: 'order-B',
           status: 'FULFILLING',
           version: 6,
+          createdAt: minutesAgoIso(1),
           actions: [{ action: 'COMPLETE' }],
         }),
       ],

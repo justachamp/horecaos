@@ -18,7 +18,13 @@ interface EvidenceLine {
 
 type Decision = 'decide' | 'rollback';
 
-const READY_STATES = new Set(['CUTOVER_READY', 'TARGET_OWNED', 'ROLLBACK_WINDOW', 'LEGACY_READ_ONLY', 'RETIRED']);
+const READY_STATES = new Set([
+  'CUTOVER_READY',
+  'TARGET_OWNED',
+  'ROLLBACK_WINDOW',
+  'LEGACY_READ_ONLY',
+  'RETIRED',
+]);
 const BLOCKED_STATES = new Set(['BLOCKED_RECONCILIATION', 'PAUSED', 'ROLLING_BACK']);
 const MAX_EVIDENCE = 32;
 
@@ -82,7 +88,9 @@ export class CutoverChecklist {
       const page = await this.api.listPrograms();
       this.programs.set(page.items);
       const remembered = rememberedProgram();
-      const chosen = page.items.find((p) => p.id === remembered) ?? (page.items.length === 1 ? page.items[0] : null);
+      const chosen =
+        page.items.find((p) => p.id === remembered) ??
+        (page.items.length === 1 ? page.items[0] : null);
       if (chosen) {
         await this.chooseProgram(chosen.id);
       }
@@ -127,7 +135,9 @@ export class CutoverChecklist {
   }
 
   protected canRollBack(scope: ScopeView): boolean {
-    return scope.nextStates.includes('ROLLING_BACK') && this.session.has('MIGRATION_CUTOVER_APPROVE');
+    return (
+      scope.nextStates.includes('ROLLING_BACK') && this.session.has('MIGRATION_CUTOVER_APPROVE')
+    );
   }
 
   /**
@@ -154,7 +164,9 @@ export class CutoverChecklist {
     }
     try {
       const runs = (await this.api.listRuns(scope)).items;
-      const reconciled = runs.find((run) => run.runType === 'RECONCILIATION' && run.status === 'COMPLETED');
+      const reconciled = runs.find(
+        (run) => run.runType === 'RECONCILIATION' && run.status === 'COMPLETED',
+      );
       const lines: EvidenceLine[] = [];
       if (reconciled) {
         lines.push({ key: 'reconciliationRunId', value: reconciled.id });
@@ -172,7 +184,9 @@ export class CutoverChecklist {
   }
 
   protected updateEvidence(index: number, change: Partial<EvidenceLine>): void {
-    this.evidence.update((lines) => lines.map((line, at) => (at === index ? { ...line, ...change } : line)));
+    this.evidence.update((lines) =>
+      lines.map((line, at) => (at === index ? { ...line, ...change } : line)),
+    );
   }
 
   protected addEvidence(): void {
@@ -194,7 +208,13 @@ export class CutoverChecklist {
       if (key.length === 0 && value.length === 0) {
         continue;
       }
-      if (key.length === 0 || value.length === 0 || key.length > 64 || value.length > 512 || key in map) {
+      if (
+        key.length === 0 ||
+        value.length === 0 ||
+        key.length > 64 ||
+        value.length > 512 ||
+        key in map
+      ) {
         return null;
       }
       map[key] = value;
@@ -225,9 +245,12 @@ export class CutoverChecklist {
         evidence,
         reason: this.reason().trim(),
       });
-      return this.i18n.t(decision === 'approve' ? 'cutoverChecklist.approved' : 'cutoverChecklist.refused', {
-        tenant: this.directory.nameOf(scope.tenantId),
-      });
+      return this.i18n.t(
+        decision === 'approve' ? 'cutoverChecklist.approved' : 'cutoverChecklist.refused',
+        {
+          tenant: this.directory.nameOf(scope.tenantId),
+        },
+      );
     });
   }
 
@@ -238,7 +261,9 @@ export class CutoverChecklist {
     }
     await this.run(async () => {
       await this.api.rollBackScope(scope, reason);
-      return this.i18n.t('cutoverChecklist.rolledBack', { tenant: this.directory.nameOf(scope.tenantId) });
+      return this.i18n.t('cutoverChecklist.rolledBack', {
+        tenant: this.directory.nameOf(scope.tenantId),
+      });
     });
   }
 

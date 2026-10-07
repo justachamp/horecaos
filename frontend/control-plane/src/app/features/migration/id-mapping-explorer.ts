@@ -25,7 +25,14 @@ export class IdMappingExplorer {
 
   protected readonly scope = signal<ScopeView | null>(null);
   protected readonly entityType = signal('');
-  protected readonly entityTypes = ['ORDER', 'CUSTOMER', 'PRODUCT', 'CATEGORY', 'BRAND', 'LOCATION'];
+  protected readonly entityTypes = [
+    'ORDER',
+    'CUSTOMER',
+    'PRODUCT',
+    'CATEGORY',
+    'BRAND',
+    'LOCATION',
+  ];
 
   protected readonly loading = signal(false);
   protected readonly loadError = signal<string | null>(null);
@@ -52,7 +59,11 @@ export class IdMappingExplorer {
     this.loadError.set(null);
     this.searched.set(true);
     try {
-      const page = await this.api.listEntityMappings(scope.id, scope.tenantId, this.entityType().trim().toUpperCase());
+      const page = await this.api.listEntityMappings(
+        scope.id,
+        scope.tenantId,
+        this.entityType().trim().toUpperCase(),
+      );
       this.mappings.set(page.items);
     } catch (error) {
       this.loadError.set(this.i18n.describe(error as ApiError));

@@ -335,7 +335,13 @@ export interface ArrearsBoardView {
   readonly subscriptions: readonly ArrearView[];
 }
 
-export const BILLING_UNITS = ['PER_TENANT', 'PER_BRAND', 'PER_LOCATION', 'PER_UNIT', 'ONE_OFF'] as const;
+export const BILLING_UNITS = [
+  'PER_TENANT',
+  'PER_BRAND',
+  'PER_LOCATION',
+  'PER_UNIT',
+  'ONE_OFF',
+] as const;
 
 export const BILLING_PERIODS = ['MONTHLY', 'QUARTERLY', 'YEARLY', 'NONE'] as const;
 export const ENFORCEMENT_MODES = ['METER_ONLY', 'SOFT', 'HARD', 'DISABLED'] as const;
@@ -396,11 +402,18 @@ export class CommerceApi {
 
   async createPlan(code: string, name: string, reason: string): Promise<{ planId: string }> {
     return firstValueFrom(
-      this.api.post<{ planId: string }>('/api/v1/platform-admin/commercial/plans', { code, name, reason }),
+      this.api.post<{ planId: string }>('/api/v1/platform-admin/commercial/plans', {
+        code,
+        name,
+        reason,
+      }),
     );
   }
 
-  async draftVersion(planId: string, request: DraftVersionRequest): Promise<{ planVersionId: string }> {
+  async draftVersion(
+    planId: string,
+    request: DraftVersionRequest,
+  ): Promise<{ planVersionId: string }> {
     return firstValueFrom(
       this.api.post<{ planVersionId: string }>(
         `/api/v1/platform-admin/commercial/plans/${planId}/versions`,
@@ -412,9 +425,12 @@ export class CommerceApi {
   /** Irreversible, and refused when the approver drafted the version. */
   async activateVersion(planVersionId: string, reason: string): Promise<void> {
     await firstValueFrom(
-      this.api.post<void>(`/api/v1/platform-admin/commercial/plan-versions/${planVersionId}/activation`, {
-        reason,
-      }),
+      this.api.post<void>(
+        `/api/v1/platform-admin/commercial/plan-versions/${planVersionId}/activation`,
+        {
+          reason,
+        },
+      ),
     );
   }
 
@@ -498,19 +514,25 @@ export class CommerceApi {
   }
 
   async draftModule(request: DraftModuleRequest): Promise<{ moduleId: string }> {
-    return firstValueFrom(this.api.post<{ moduleId: string }>('/api/v1/platform-admin/commercial/modules', request));
+    return firstValueFrom(
+      this.api.post<{ moduleId: string }>('/api/v1/platform-admin/commercial/modules', request),
+    );
   }
 
   /** Irreversible, and refused when the approver drafted the module. */
   async activateModule(moduleId: string, reason: string): Promise<void> {
     await firstValueFrom(
-      this.api.post<void>(`/api/v1/platform-admin/commercial/modules/${moduleId}/activation`, { reason }),
+      this.api.post<void>(`/api/v1/platform-admin/commercial/modules/${moduleId}/activation`, {
+        reason,
+      }),
     );
   }
 
   async retireModule(moduleId: string, reason: string): Promise<void> {
     await firstValueFrom(
-      this.api.post<void>(`/api/v1/platform-admin/commercial/modules/${moduleId}/retirement`, { reason }),
+      this.api.post<void>(`/api/v1/platform-admin/commercial/modules/${moduleId}/retirement`, {
+        reason,
+      }),
     );
   }
 
@@ -562,18 +584,26 @@ export class CommerceApi {
 
   async statement(tenantId: string, statementId: string): Promise<StatementView> {
     return firstValueFrom(
-      this.api.get<StatementView>(`/api/v1/control-plane/tenants/${tenantId}/statements/${statementId}`),
+      this.api.get<StatementView>(
+        `/api/v1/control-plane/tenants/${tenantId}/statements/${statementId}`,
+      ),
     );
   }
 
   /** The issued statement as CSV text, for the accounting system. */
   async exportStatement(tenantId: string, statementId: string): Promise<string> {
     return firstValueFrom(
-      this.api.getText(`/api/v1/control-plane/tenants/${tenantId}/statements/${statementId}/export`),
+      this.api.getText(
+        `/api/v1/control-plane/tenants/${tenantId}/statements/${statementId}/export`,
+      ),
     );
   }
 
-  async issueStatement(tenantId: string, periodKey: string, reason: string): Promise<{ statementId: string; number: string }> {
+  async issueStatement(
+    tenantId: string,
+    periodKey: string,
+    reason: string,
+  ): Promise<{ statementId: string; number: string }> {
     return firstValueFrom(
       this.api.post<{ statementId: string; number: string }>(
         `/api/v1/platform-admin/commercial/tenants/${tenantId}/statements`,
@@ -595,11 +625,16 @@ export class CommerceApi {
 
   /** Both balances and how the tenant is collected. */
   async wallet(tenantId: string): Promise<WalletOverviewView> {
-    return firstValueFrom(this.api.get<WalletOverviewView>(`/api/v1/control-plane/tenants/${tenantId}/wallet`));
+    return firstValueFrom(
+      this.api.get<WalletOverviewView>(`/api/v1/control-plane/tenants/${tenantId}/wallet`),
+    );
   }
 
   /** The ledger, newest first. One page is enough for a screen; the cursor is there for more. */
-  async walletLedger(tenantId: string, cursor?: string): Promise<{ items: WalletEntryView[]; nextCursor: string | null }> {
+  async walletLedger(
+    tenantId: string,
+    cursor?: string,
+  ): Promise<{ items: WalletEntryView[]; nextCursor: string | null }> {
     return firstValueFrom(
       this.api.get<{ items: WalletEntryView[]; nextCursor: string | null }>(
         `/api/v1/control-plane/tenants/${tenantId}/wallet/ledger`,
@@ -618,14 +653,20 @@ export class CommerceApi {
   /** Each issued statement's paid and due amounts, derived from the ledger. */
   async statementPayments(tenantId: string): Promise<StatementPaymentView[]> {
     return firstValueFrom(
-      this.api.get<StatementPaymentView[]>(`/api/v1/control-plane/tenants/${tenantId}/wallet/statements`),
+      this.api.get<StatementPaymentView[]>(
+        `/api/v1/control-plane/tenants/${tenantId}/wallet/statements`,
+      ),
     );
   }
 
   /** One person's audited act: the bank reference is what proves it. */
   async recordTransfer(
     tenantId: string,
-    request: { readonly amountMinor: number; readonly bankReference: string; readonly reason: string },
+    request: {
+      readonly amountMinor: number;
+      readonly bankReference: string;
+      readonly reason: string;
+    },
   ): Promise<{ entryId: string }> {
     return firstValueFrom(
       this.api.post<{ entryId: string }>(
@@ -680,7 +721,11 @@ export class CommerceApi {
 
   async proposeRefund(
     tenantId: string,
-    request: { readonly amountMinor: number; readonly payoutReference: string; readonly reason: string },
+    request: {
+      readonly amountMinor: number;
+      readonly payoutReference: string;
+      readonly reason: string;
+    },
   ): Promise<WalletChangeResponse> {
     return firstValueFrom(
       this.api.post<WalletChangeResponse>(
@@ -692,7 +737,11 @@ export class CommerceApi {
 
   async setPaymentMethod(
     tenantId: string,
-    request: { readonly paymentMethod: string; readonly cardTokenReference?: string; readonly reason: string },
+    request: {
+      readonly paymentMethod: string;
+      readonly cardTokenReference?: string;
+      readonly reason: string;
+    },
   ): Promise<void> {
     await firstValueFrom(
       this.api.post<void>(

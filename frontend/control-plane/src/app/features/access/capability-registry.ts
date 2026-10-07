@@ -46,7 +46,8 @@ export class CapabilityRegistry {
     }
     return this.capabilities().filter(
       (capability) =>
-        capability.code.toLowerCase().includes(term) || capability.resourceType.toLowerCase().includes(term),
+        capability.code.toLowerCase().includes(term) ||
+        capability.resourceType.toLowerCase().includes(term),
     );
   }
 }

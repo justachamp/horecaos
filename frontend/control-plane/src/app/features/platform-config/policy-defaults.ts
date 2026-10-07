@@ -30,7 +30,9 @@ export class PolicyDefaults {
   protected readonly loadError = signal<string | null>(null);
   private readonly keys = signal<readonly ConfigurationKeyView[]>([]);
 
-  protected readonly tenantVisibleKeys = computed(() => this.keys().filter((key) => key.tenantVisible));
+  protected readonly tenantVisibleKeys = computed(() =>
+    this.keys().filter((key) => key.tenantVisible),
+  );
 
   constructor() {
     void this.load();

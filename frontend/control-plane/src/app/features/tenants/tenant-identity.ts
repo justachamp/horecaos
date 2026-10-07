@@ -69,7 +69,9 @@ export class TenantIdentity {
     this.linking.set(true);
     this.linkError.set(null);
     try {
-      this.tenant.set(await this.tenantsApi.linkKeycloakOrganization(this.tenantId, organizationId));
+      this.tenant.set(
+        await this.tenantsApi.linkKeycloakOrganization(this.tenantId, organizationId),
+      );
       this.linked.set(true);
     } catch (error) {
       this.linkError.set(this.i18n.describe(error as ApiError));

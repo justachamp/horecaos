@@ -37,7 +37,11 @@ interface ReferenceData {
 
 interface SlaBuckets {
   readonly version: number;
-  readonly buckets: readonly { code: string; fromMinutes: number; toMinutesExclusive: number | null }[];
+  readonly buckets: readonly {
+    code: string;
+    fromMinutes: number;
+    toMinutesExclusive: number | null;
+  }[];
 }
 
 /**
@@ -95,7 +99,9 @@ export class ReferenceDataScreen {
     try {
       const [data, sla] = await Promise.all([
         firstValueFrom(this.api.get<ReferenceData>('/api/v1/control-plane/reference-data')),
-        firstValueFrom(this.api.get<SlaBuckets>('/api/v1/control-plane/reference-data/sla-buckets')),
+        firstValueFrom(
+          this.api.get<SlaBuckets>('/api/v1/control-plane/reference-data/sla-buckets'),
+        ),
       ]);
       this.data.set(data);
       this.sla.set(sla);
@@ -135,8 +141,15 @@ export class ReferenceDataScreen {
   }
 
   protected canAdd(): boolean {
-    const when = this.recurring() ? this.monthDay() !== null : /^\d{4}-\d{2}-\d{2}$/.test(this.holidayDate());
-    return !this.busy() && when && this.holidayName().trim().length > 0 && this.holidayReason().trim().length > 0;
+    const when = this.recurring()
+      ? this.monthDay() !== null
+      : /^\d{4}-\d{2}-\d{2}$/.test(this.holidayDate());
+    return (
+      !this.busy() &&
+      when &&
+      this.holidayName().trim().length > 0 &&
+      this.holidayReason().trim().length > 0
+    );
   }
 
   protected async add(event: Event): Promise<void> {
@@ -171,7 +184,9 @@ export class ReferenceDataScreen {
     }
     await this.run(async () => {
       await firstValueFrom(
-        this.api.delete(`/api/v1/control-plane/reference-data/holidays/${holiday.holidayId}`, { reason }),
+        this.api.delete(`/api/v1/control-plane/reference-data/holidays/${holiday.holidayId}`, {
+          reason,
+        }),
       );
       this.removing.set(null);
     });

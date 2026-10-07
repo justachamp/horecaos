@@ -5,33 +5,83 @@ import { describe, expect, it, vi } from 'vitest';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { ru } from '../../core/i18n/messages.ru';
 import { TenantLegalEntities } from './tenant-legal-entities';
-import { BrandView, LegalEntityView, LocationFiscalAssignmentView, LocationView, TenantsApi } from './tenants-api';
+import {
+  BrandView,
+  LegalEntityView,
+  LocationFiscalAssignmentView,
+  LocationView,
+  TenantsApi,
+} from './tenants-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const BRAND: BrandView = {
-  id: 'brand-1', tenantId: 'tenant-1', code: 'OSHXONA', slug: 'oshxona', displayName: 'Oshxona', status: 'DRAFT', version: 0,
+  id: 'brand-1',
+  tenantId: 'tenant-1',
+  code: 'OSHXONA',
+  slug: 'oshxona',
+  displayName: 'Oshxona',
+  status: 'DRAFT',
+  version: 0,
 };
 
 function location(id: string, name: string): LocationView {
   return {
-    id, tenantId: 'tenant-1', brandId: 'brand-1', code: name.toUpperCase(), slug: name.toLowerCase(), displayName: name,
-    timezone: 'Asia/Tashkent', status: 'DRAFT', addressLine: null, district: null, city: null, landmark: null,
-    contactPhone: null, latitude: null, longitude: null, coordinateSource: 'NOT_GEOCODED', version: 0,
+    id,
+    tenantId: 'tenant-1',
+    brandId: 'brand-1',
+    code: name.toUpperCase(),
+    slug: name.toLowerCase(),
+    displayName: name,
+    timezone: 'Asia/Tashkent',
+    status: 'DRAFT',
+    addressLine: null,
+    district: null,
+    city: null,
+    landmark: null,
+    contactPhone: null,
+    latitude: null,
+    longitude: null,
+    coordinateSource: 'NOT_GEOCODED',
+    version: 0,
   };
 }
 
 function entity(id: string, name: string, status: LegalEntityView['status']): LegalEntityView {
   return {
-    id, code: name.toUpperCase(), legalName: name, shortName: null, tin: '123456789', vatRegistered: false,
-    vatCertificateReference: null, taxProfileId: null, registeredAddress: null, contactPhone: null, status, version: 0,
+    id,
+    code: name.toUpperCase(),
+    legalName: name,
+    shortName: null,
+    tin: '123456789',
+    vatRegistered: false,
+    vatCertificateReference: null,
+    taxProfileId: null,
+    registeredAddress: null,
+    contactPhone: null,
+    status,
+    version: 0,
   };
 }
 
-function assignment(locationId: string, entityId: string, from: string): LocationFiscalAssignmentView {
+function assignment(
+  locationId: string,
+  entityId: string,
+  from: string,
+): LocationFiscalAssignmentView {
   return {
-    id: `a-${locationId}`, brandId: 'brand-1', locationId, legalEntityId: entityId, effectiveFrom: from,
-    effectiveUntil: null, approvedBy: 'platform-admin', approvalReference: null, version: 0,
+    id: `a-${locationId}`,
+    brandId: 'brand-1',
+    locationId,
+    legalEntityId: entityId,
+    effectiveFrom: from,
+    effectiveUntil: null,
+    approvedBy: 'platform-admin',
+    approvalReference: null,
+    version: 0,
   };
 }
 
@@ -39,8 +89,10 @@ class FakeTenantsApi {
   readonly getLegalEntities = vi.fn<() => Promise<LegalEntityView[]>>();
   readonly getBrands = vi.fn<() => Promise<BrandView[]>>();
   readonly getLocations = vi.fn<() => Promise<LocationView[]>>();
-  readonly getLocationAssignments = vi.fn<(...args: string[]) => Promise<LocationFiscalAssignmentView[]>>();
-  readonly assignLegalEntity = vi.fn<(...args: unknown[]) => Promise<LocationFiscalAssignmentView>>();
+  readonly getLocationAssignments =
+    vi.fn<(...args: string[]) => Promise<LocationFiscalAssignmentView[]>>();
+  readonly assignLegalEntity =
+    vi.fn<(...args: unknown[]) => Promise<LocationFiscalAssignmentView>>();
   readonly activateLegalEntity = vi.fn();
   readonly registerLegalEntity = vi.fn();
 }
@@ -58,14 +110,19 @@ describe('TenantLegalEntities', () => {
     api.getLegalEntities.mockResolvedValue(entities);
     api.getBrands.mockResolvedValue(locations.length ? [BRAND] : []);
     api.getLocations.mockResolvedValue(locations);
-    api.getLocationAssignments.mockImplementation(async (_t, _b, locationId) => assignments[locationId] ?? []);
+    api.getLocationAssignments.mockImplementation(
+      async (_t, _b, locationId) => assignments[locationId] ?? [],
+    );
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [TenantLegalEntities],
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: TenantsApi, useValue: api },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(TenantLegalEntities);
@@ -80,9 +137,9 @@ describe('TenantLegalEntities', () => {
   }
 
   function button(label: string): HTMLButtonElement {
-    return (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]).find(
-      (b) => b.textContent?.trim() === label,
-    )!;
+    return (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim() === label)!;
   }
 
   it('shows which entity each location sells as, and flags the ones that would fail onboarding', async () => {
@@ -92,7 +149,9 @@ describe('TenantLegalEntities', () => {
       { 'l-1': [assignment('l-1', 'e-1', '2026-01-01')] },
     );
 
-    const rows = Array.from(fixture.nativeElement.querySelectorAll('.locations tbody tr')) as HTMLElement[];
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('.locations tbody tr'),
+    ) as HTMLElement[];
     expect(rows[0].textContent).toContain('Oshxona › Chilonzor');
     expect(rows[0].textContent).toContain('Oshxona Savdo');
     expect(rows[0].textContent).toContain(ru['legalEntities.locations.inactive']);
@@ -100,21 +159,29 @@ describe('TenantLegalEntities', () => {
   });
 
   it('assigns an entity to a location picked from the list, never a typed id', async () => {
-    await createWith([entity('e-1', 'Oshxona Savdo', 'ACTIVE')], [location('l-1', 'Chilonzor')], {});
+    await createWith(
+      [entity('e-1', 'Oshxona Savdo', 'ACTIVE')],
+      [location('l-1', 'Chilonzor')],
+      {},
+    );
     api.assignLegalEntity.mockResolvedValue(assignment('l-1', 'e-1', '2026-09-10'));
     api.getLocationAssignments.mockResolvedValue([assignment('l-1', 'e-1', '2026-09-10')]);
 
     button(ru['legalEntities.assign.action']).click();
     await settle();
     expect(fixture.nativeElement.querySelector('.drawer input[type="text"]')).toBeNull();
-    const date = fixture.nativeElement.querySelector('.drawer input[type="date"]') as HTMLInputElement;
+    const date = fixture.nativeElement.querySelector(
+      '.drawer input[type="date"]',
+    ) as HTMLInputElement;
     expect(date.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const select = fixture.nativeElement.querySelector('.drawer select') as HTMLSelectElement;
     select.value = 'brand-1/l-1';
     select.dispatchEvent(new Event('change'));
     await settle();
-    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
     expect(api.assignLegalEntity).toHaveBeenCalledWith('tenant-1', 'e-1', {
@@ -131,6 +198,8 @@ describe('TenantLegalEntities', () => {
     button(ru['legalEntities.assign.action']).click();
     await settle();
 
-    expect(fixture.nativeElement.querySelector('.drawer').textContent).toContain(ru['legalEntities.assign.noLocations']);
+    expect(fixture.nativeElement.querySelector('.drawer').textContent).toContain(
+      ru['legalEntities.assign.noLocations'],
+    );
   });
 });

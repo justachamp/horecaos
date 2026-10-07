@@ -43,7 +43,9 @@ export class SessionContextService {
 
   async load(): Promise<void> {
     try {
-      this.context.set(await firstValueFrom(this.api.get<SessionContext>('/api/v1/session/context')));
+      this.context.set(
+        await firstValueFrom(this.api.get<SessionContext>('/api/v1/session/context')),
+      );
     } catch {
       // Left null. The shell renders a degraded state rather than an empty
       // navigation that looks like a permissions problem.

@@ -171,7 +171,9 @@ export class Staff {
       this.tenantRoles.set(roles);
       this.tenantBrands.set(brands);
       this.pending.set(pending.items);
-      const perBrand = await Promise.all(brands.map((brand) => this.tenantsApi.getLocations(tenantId, brand.id)));
+      const perBrand = await Promise.all(
+        brands.map((brand) => this.tenantsApi.getLocations(tenantId, brand.id)),
+      );
       this.tenantLocations.set(perBrand.flat());
     } catch (error) {
       this.tenantError.set(this.i18n.describe(error as ApiError));
@@ -182,7 +184,9 @@ export class Staff {
 
   /** The scope the chosen job is granted at: the whole tenant, one brand, or one location. */
   protected chosenRoleScope(): string | null {
-    return this.tenantRoles().find((role) => role.code === this.tenantRoleCode())?.scopeType ?? null;
+    return (
+      this.tenantRoles().find((role) => role.code === this.tenantRoleCode())?.scopeType ?? null
+    );
   }
 
   protected locationsOfChosenBrand(): readonly LocationView[] {
@@ -196,10 +200,16 @@ export class Staff {
   /** A brand or location grant's place, by name; the id only when it no longer resolves. */
   protected scopeName(grant: TenantGrantView): string {
     if (grant.scopeType === 'BRAND') {
-      return this.tenantBrands().find((brand) => brand.id === grant.scopeId)?.displayName ?? grant.scopeId;
+      return (
+        this.tenantBrands().find((brand) => brand.id === grant.scopeId)?.displayName ??
+        grant.scopeId
+      );
     }
     if (grant.scopeType === 'LOCATION') {
-      return this.tenantLocations().find((location) => location.id === grant.scopeId)?.displayName ?? grant.scopeId;
+      return (
+        this.tenantLocations().find((location) => location.id === grant.scopeId)?.displayName ??
+        grant.scopeId
+      );
     }
     return '';
   }

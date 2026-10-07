@@ -7,8 +7,15 @@
 
 <form class="picker" (submit)="search($event)">
   <label class="q-caption">{{ i18n.t('fiscalReference.query') }}</label>
-  <input class="q-body-sm" type="text" [value]="query()" (input)="query.set($any($event.target).value)" />
-  <button type="submit" [disabled]="query().trim().length < 2">{{ i18n.t('entitlements.load') }}</button>
+  <input
+    class="q-body-sm"
+    type="text"
+    [value]="query()"
+    (input)="query.set($any($event.target).value)"
+  />
+  <button type="submit" [disabled]="query().trim().length < 2">
+    {{ i18n.t('entitlements.load') }}
+  </button>
 </form>
 
 @if (loading()) {

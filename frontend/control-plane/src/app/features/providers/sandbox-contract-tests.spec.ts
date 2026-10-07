@@ -7,18 +7,37 @@ import { ru } from '../../core/i18n/messages.ru';
 import { PlatformInstallationView, ProviderEnvironment, ProvidersApi } from './providers-api';
 import { SandboxContractTests } from './sandbox-contract-tests';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const ENVIRONMENTS: ProviderEnvironment[] = [
-  { code: 'click-test', category: 'PAYMENT', providerType: 'CLICK', production: false, notes: 'CLICK test merchant' },
+  {
+    code: 'click-test',
+    category: 'PAYMENT',
+    providerType: 'CLICK',
+    production: false,
+    notes: 'CLICK test merchant',
+  },
   { code: 'click-prod', category: 'PAYMENT', providerType: 'CLICK', production: true, notes: null },
 ];
 
 function installation(id: string, environmentCode: string): PlatformInstallationView {
   return {
-    id, tenantId: 'tenant-1', tenantSlug: 'oshxona', tenantDisplayName: 'Oshxona', category: 'PAYMENT', providerType: 'CLICK',
-    environmentCode, displayName: 'CLICK', status: 'ACTIVE', secretReference: null, lastConnectionStatus: null,
-    adapterVersion: null, lastSecretRotatedAt: null,
+    id,
+    tenantId: 'tenant-1',
+    tenantSlug: 'oshxona',
+    tenantDisplayName: 'Oshxona',
+    category: 'PAYMENT',
+    providerType: 'CLICK',
+    environmentCode,
+    displayName: 'CLICK',
+    status: 'ACTIVE',
+    secretReference: null,
+    lastConnectionStatus: null,
+    adapterVersion: null,
+    lastSecretRotatedAt: null,
   };
 }
 
@@ -40,7 +59,10 @@ describe('SandboxContractTests', () => {
           useValue: {
             environments: vi.fn().mockResolvedValue(ENVIRONMENTS),
             listInstallations: vi.fn().mockResolvedValue({
-              items: [installation('inst-sandbox', 'click-test'), installation('inst-live', 'click-prod')],
+              items: [
+                installation('inst-sandbox', 'click-test'),
+                installation('inst-live', 'click-prod'),
+              ],
               nextCursor: null,
             }),
             checkConnection,
@@ -73,7 +95,10 @@ describe('SandboxContractTests', () => {
     (fixture.nativeElement.querySelector('button.check') as HTMLButtonElement).click();
     await settle();
 
-    expect(checkConnection).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ id: 'inst-sandbox' }));
+    expect(checkConnection).toHaveBeenCalledWith(
+      'tenant-1',
+      expect.objectContaining({ id: 'inst-sandbox' }),
+    );
     expect(fixture.nativeElement.querySelector('tbody tr').textContent).toContain(
       ru['installationsExplorer.check.result'].replace('{status}', 'SUCCEEDED'),
     );

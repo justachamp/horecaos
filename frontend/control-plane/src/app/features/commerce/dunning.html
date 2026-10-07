@@ -18,7 +18,11 @@
       <li class="stage" [attr.data-stage]="stage.status">
         <h2 class="q-subhead">{{ i18n.t(statusKey(stage.status)) }}</h2>
         <p class="q-caption">
-          {{ i18n.t(stage.planEntitlementsApply ? 'dunning.stage.planApplies' : 'dunning.stage.planLapses') }}
+          {{
+            i18n.t(
+              stage.planEntitlementsApply ? 'dunning.stage.planApplies' : 'dunning.stage.planLapses'
+            )
+          }}
         </p>
         @if (stage.additionsBlocked) {
           <p class="q-caption warn">{{ i18n.t('dunning.stage.additionsBlocked') }}</p>
@@ -45,18 +49,33 @@
         <tbody>
           @for (arrear of view.subscriptions; track arrear.subscriptionId) {
             <tr [attr.data-tenant]="arrear.tenantId" [attr.data-status]="arrear.status">
-              <td class="q-body-sm"><a [routerLink]="['/tenants', arrear.tenantId]">{{ arrear.tenantName }}</a></td>
+              <td class="q-body-sm">
+                <a [routerLink]="['/tenants', arrear.tenantId]">{{ arrear.tenantName }}</a>
+              </td>
               <td class="q-body-sm">
                 <span class="chip">{{ i18n.t(statusKey(arrear.status)) }}</span>
-                <div class="q-caption muted q-tnum">{{ i18n.t('dunning.days', { days: arrear.daysInStatus, since: i18n.day(asDate(arrear.since)) }) }}</div>
+                <div class="q-caption muted q-tnum">
+                  {{
+                    i18n.t('dunning.days', {
+                      days: arrear.daysInStatus,
+                      since: i18n.day(asDate(arrear.since)),
+                    })
+                  }}
+                </div>
                 @if (arrear.suspensionReason) {
                   <div class="q-caption muted">{{ arrear.suspensionReason }}</div>
                 }
               </td>
-              <td class="q-body-sm q-tnum">{{ arrear.planCode }} v{{ arrear.planVersionNumber }}</td>
+              <td class="q-body-sm q-tnum">
+                {{ arrear.planCode }} v{{ arrear.planVersionNumber }}
+              </td>
               <td class="q-body-sm q-tnum">
                 @if (arrear.latestStatement; as latest) {
-                  <a [routerLink]="['/commerce/invoices']" [queryParams]="{ tenantId: arrear.tenantId }">{{ latest.number }}</a>
+                  <a
+                    [routerLink]="['/commerce/invoices']"
+                    [queryParams]="{ tenantId: arrear.tenantId }"
+                    >{{ latest.number }}</a
+                  >
                   · {{ i18n.money(latest.total) }}
                 } @else {
                   —
@@ -65,7 +84,14 @@
               <td class="q-body-sm actions">
                 @if (session.has('COMMERCIAL_SUBSCRIPTION_MANAGE')) {
                   @for (to of moves(arrear); track to) {
-                    <button type="button" class="moveToggle" [attr.data-to]="to" (click)="open(arrear, to)">{{ i18n.t('dunning.moveTo', { status: i18n.t(statusKey(to)) }) }}</button>
+                    <button
+                      type="button"
+                      class="moveToggle"
+                      [attr.data-to]="to"
+                      (click)="open(arrear, to)"
+                    >
+                      {{ i18n.t('dunning.moveTo', { status: i18n.t(statusKey(to)) }) }}
+                    </button>
                   }
                 }
               </td>
@@ -75,10 +101,29 @@
                 <td colspan="5">
                   <span class="confirm">
                     @if (moving()?.to === 'SUSPENDED') {
-                      <input class="q-body-sm" name="suspensionReason" [placeholder]="i18n.t('dunning.suspensionReason')" [value]="suspensionReason()" (input)="suspensionReason.set($any($event.target).value)" />
+                      <input
+                        class="q-body-sm"
+                        name="suspensionReason"
+                        [placeholder]="i18n.t('dunning.suspensionReason')"
+                        [value]="suspensionReason()"
+                        (input)="suspensionReason.set($any($event.target).value)"
+                      />
                     }
-                    <input class="q-body-sm" name="moveReason" [placeholder]="i18n.t('common.reason')" [value]="reason()" (input)="reason.set($any($event.target).value)" />
-                    <button type="button" class="confirmMove activateConfirm" [disabled]="!canMove()" (click)="confirm(arrear)">{{ i18n.t('dunning.confirm') }}</button>
+                    <input
+                      class="q-body-sm"
+                      name="moveReason"
+                      [placeholder]="i18n.t('common.reason')"
+                      [value]="reason()"
+                      (input)="reason.set($any($event.target).value)"
+                    />
+                    <button
+                      type="button"
+                      class="confirmMove activateConfirm"
+                      [disabled]="!canMove()"
+                      (click)="confirm(arrear)"
+                    >
+                      {{ i18n.t('dunning.confirm') }}
+                    </button>
                   </span>
                 </td>
               </tr>

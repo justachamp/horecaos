@@ -20,16 +20,31 @@
       <div class="grid2">
         <label class="field">
           <span class="q-caption">{{ i18n.t('moduleCatalog.draft.code') }}</span>
-          <input class="q-body-sm" name="moduleCode" autocomplete="off" [value]="code()" (input)="code.set($any($event.target).value.toLowerCase())" />
+          <input
+            class="q-body-sm"
+            name="moduleCode"
+            autocomplete="off"
+            [value]="code()"
+            (input)="code.set($any($event.target).value.toLowerCase())"
+          />
           <span class="q-caption muted">{{ i18n.t('moduleCatalog.draft.codeHint') }}</span>
         </label>
         <label class="field">
           <span class="q-caption">{{ i18n.t('moduleCatalog.draft.name') }}</span>
-          <input class="q-body-sm" name="moduleName" [value]="name()" (input)="name.set($any($event.target).value)" />
+          <input
+            class="q-body-sm"
+            name="moduleName"
+            [value]="name()"
+            (input)="name.set($any($event.target).value)"
+          />
         </label>
         <label class="field">
           <span class="q-caption">{{ i18n.t('moduleCatalog.draft.unit') }}</span>
-          <select class="q-body-sm" name="moduleUnit" (change)="unit.set($any($event.target).value)">
+          <select
+            class="q-body-sm"
+            name="moduleUnit"
+            (change)="unit.set($any($event.target).value)"
+          >
             @for (u of units; track u) {
               <option [value]="u" [selected]="u === unit()">{{ i18n.t(unitKey(u)) }}</option>
             }
@@ -38,8 +53,18 @@
         <label class="field">
           <span class="q-caption">{{ i18n.t('moduleCatalog.draft.price') }}</span>
           <span class="priceRow">
-            <input class="q-body-sm" name="modulePrice" inputmode="decimal" [value]="price()" (input)="price.set($any($event.target).value)" />
-            <select class="q-body-sm" name="moduleCurrency" (change)="currency.set($any($event.target).value)">
+            <input
+              class="q-body-sm"
+              name="modulePrice"
+              inputmode="decimal"
+              [value]="price()"
+              (input)="price.set($any($event.target).value)"
+            />
+            <select
+              class="q-body-sm"
+              name="moduleCurrency"
+              (change)="currency.set($any($event.target).value)"
+            >
               @for (c of currencies; track c) {
                 <option [value]="c" [selected]="c === currency()">{{ c }}</option>
               }
@@ -49,13 +74,23 @@
       </div>
       <label class="field">
         <span class="q-caption">{{ i18n.t('moduleCatalog.draft.description') }}</span>
-        <input class="q-body-sm" name="moduleDescription" [value]="description()" (input)="description.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="moduleDescription"
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+        />
       </label>
       <fieldset class="features">
         <legend class="q-caption">{{ i18n.t('moduleCatalog.draft.features') }}</legend>
         @for (key of features(); track key.code) {
           <label class="q-body-sm check">
-            <input type="checkbox" [attr.name]="'feature-' + key.code" [checked]="chosenFeatures().has(key.code)" (change)="toggleFeature(key.code, $any($event.target).checked)" />
+            <input
+              type="checkbox"
+              [attr.name]="'feature-' + key.code"
+              [checked]="chosenFeatures().has(key.code)"
+              (change)="toggleFeature(key.code, $any($event.target).checked)"
+            />
             <span class="q-tnum">{{ key.code }}</span>
           </label>
         }
@@ -63,9 +98,16 @@
       </fieldset>
       <label class="field">
         <span class="q-caption">{{ i18n.t('common.reason') }}</span>
-        <input class="q-body-sm" name="moduleReason" [value]="draftReason()" (input)="draftReason.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="moduleReason"
+          [value]="draftReason()"
+          (input)="draftReason.set($any($event.target).value)"
+        />
       </label>
-      <button type="submit" [disabled]="!canDraft()">{{ i18n.t('moduleCatalog.draft.submit') }}</button>
+      <button type="submit" [disabled]="!canDraft()">
+        {{ i18n.t('moduleCatalog.draft.submit') }}
+      </button>
     </form>
   }
 }
@@ -93,28 +135,49 @@
         @for (module of modules(); track module.moduleId) {
           <tr [attr.data-module]="module.code">
             <td class="q-body-sm">
-              <strong>{{ module.name }}</strong> <span class="q-caption muted q-tnum">{{ module.code }}</span>
+              <strong>{{ module.name }}</strong>
+              <span class="q-caption muted q-tnum">{{ module.code }}</span>
               @if (module.description) {
                 <div class="q-caption muted">{{ module.description }}</div>
               }
             </td>
             <td class="q-body-sm">{{ i18n.t(unitKey(module.billingUnit)) }}</td>
             <td class="q-body-sm q-tnum">{{ i18n.money(module.unitPrice) }}</td>
-            <td class="q-caption q-tnum">{{ module.featureKeys.length > 0 ? module.featureKeys.join(', ') : '—' }}</td>
+            <td class="q-caption q-tnum">
+              {{ module.featureKeys.length > 0 ? module.featureKeys.join(', ') : '—' }}
+            </td>
             <td class="q-body-sm">
-              <span class="chip" [class.live]="module.status === 'ACTIVE'">{{ i18n.t(statusKey(module.status)) }}</span>
-              <div class="q-caption muted">{{ i18n.t('moduleCatalog.draftedBy', { who: who(module.createdBy) }) }}</div>
+              <span class="chip" [class.live]="module.status === 'ACTIVE'">{{
+                i18n.t(statusKey(module.status))
+              }}</span>
+              <div class="q-caption muted">
+                {{ i18n.t('moduleCatalog.draftedBy', { who: who(module.createdBy) }) }}
+              </div>
             </td>
             <td class="q-body-sm actions">
               @if (module.status === 'DRAFT' && session.has('COMMERCIAL_PLAN_ACTIVATE')) {
                 @if (draftedByMe(module)) {
-                  <span class="q-caption muted">{{ i18n.t('moduleCatalog.activate.notYours') }}</span>
+                  <span class="q-caption muted">{{
+                    i18n.t('moduleCatalog.activate.notYours')
+                  }}</span>
                 } @else {
-                  <button type="button" class="activateToggle" (click)="open(module.moduleId, 'activate')">{{ i18n.t('moduleCatalog.activate.open') }}</button>
+                  <button
+                    type="button"
+                    class="activateToggle"
+                    (click)="open(module.moduleId, 'activate')"
+                  >
+                    {{ i18n.t('moduleCatalog.activate.open') }}
+                  </button>
                 }
               }
               @if (module.status === 'ACTIVE' && session.has('COMMERCIAL_PLAN_MANAGE')) {
-                <button type="button" class="retireToggle" (click)="open(module.moduleId, 'retire')">{{ i18n.t('moduleCatalog.retire.open') }}</button>
+                <button
+                  type="button"
+                  class="retireToggle"
+                  (click)="open(module.moduleId, 'retire')"
+                >
+                  {{ i18n.t('moduleCatalog.retire.open') }}
+                </button>
               }
             </td>
           </tr>
@@ -122,9 +185,26 @@
             <tr>
               <td colspan="6">
                 <div class="confirm">
-                  <input class="q-body-sm" name="moduleActReason" [placeholder]="i18n.t('common.reason')" [value]="actingReason()" (input)="actingReason.set($any($event.target).value)" />
-                  <button type="button" class="confirmModule activateConfirm" [disabled]="busy() || actingReason().trim().length === 0" (click)="confirmModule(module)">
-                    {{ i18n.t(isActing(module.moduleId, 'activate') ? 'moduleCatalog.activate.submit' : 'moduleCatalog.retire.submit') }}
+                  <input
+                    class="q-body-sm"
+                    name="moduleActReason"
+                    [placeholder]="i18n.t('common.reason')"
+                    [value]="actingReason()"
+                    (input)="actingReason.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="confirmModule activateConfirm"
+                    [disabled]="busy() || actingReason().trim().length === 0"
+                    (click)="confirmModule(module)"
+                  >
+                    {{
+                      i18n.t(
+                        isActing(module.moduleId, 'activate')
+                          ? 'moduleCatalog.activate.submit'
+                          : 'moduleCatalog.retire.submit'
+                      )
+                    }}
                   </button>
                 </div>
               </td>
@@ -147,24 +227,54 @@
     } @else {
       <ul class="held">
         @for (held of tenantModules(); track held.tenantModuleId) {
-          <li class="q-body-sm" [class.ended]="held.endedAt !== null" [attr.data-held]="held.moduleCode">
+          <li
+            class="q-body-sm"
+            [class.ended]="held.endedAt !== null"
+            [attr.data-held]="held.moduleCode"
+          >
             <strong>{{ held.moduleName }}</strong>
             <span class="q-caption muted">
-              {{ i18n.t(unitKey(held.billingUnit)) }}@if (held.quantity !== null) { × {{ held.quantity }} } · {{ i18n.money(held.unitPrice) }}
+              {{ i18n.t(unitKey(held.billingUnit)) }}
+              @if (held.quantity !== null) {
+                × {{ held.quantity }}
+              }
+              · {{ i18n.money(held.unitPrice) }}
             </span>
             <span class="q-caption muted">
               @if (held.endedAt) {
-                {{ i18n.t('moduleCatalog.tenant.endedOn', { from: i18n.day(asDate(held.startedAt)), to: i18n.day(asDate(held.endedAt)) }) }}
+                {{
+                  i18n.t('moduleCatalog.tenant.endedOn', {
+                    from: i18n.day(asDate(held.startedAt)),
+                    to: i18n.day(asDate(held.endedAt)),
+                  })
+                }}
               } @else {
-                {{ i18n.t('moduleCatalog.tenant.since', { from: i18n.day(asDate(held.startedAt)) }) }}
+                {{
+                  i18n.t('moduleCatalog.tenant.since', { from: i18n.day(asDate(held.startedAt)) })
+                }}
               }
             </span>
             @if (held.endedAt === null && session.has('COMMERCIAL_SUBSCRIPTION_MANAGE')) {
-              <button type="button" class="endToggle" (click)="open(held.tenantModuleId, 'end')">{{ i18n.t('moduleCatalog.tenant.end') }}</button>
+              <button type="button" class="endToggle" (click)="open(held.tenantModuleId, 'end')">
+                {{ i18n.t('moduleCatalog.tenant.end') }}
+              </button>
               @if (isActing(held.tenantModuleId, 'end')) {
                 <span class="confirm">
-                  <input class="q-body-sm" name="endReason" [placeholder]="i18n.t('common.reason')" [value]="actingReason()" (input)="actingReason.set($any($event.target).value)" />
-                  <button type="button" class="confirmEnd" [disabled]="busy() || actingReason().trim().length === 0" (click)="end(held)">{{ i18n.t('moduleCatalog.tenant.end') }}</button>
+                  <input
+                    class="q-body-sm"
+                    name="endReason"
+                    [placeholder]="i18n.t('common.reason')"
+                    [value]="actingReason()"
+                    (input)="actingReason.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="confirmEnd"
+                    [disabled]="busy() || actingReason().trim().length === 0"
+                    (click)="end(held)"
+                  >
+                    {{ i18n.t('moduleCatalog.tenant.end') }}
+                  </button>
                 </span>
               }
             }
@@ -174,17 +284,40 @@
     }
     @if (session.has('COMMERCIAL_SUBSCRIPTION_MANAGE') && onSale().length > 0) {
       <form class="addForm" (submit)="add($event)">
-        <select class="q-body-sm" name="addModule" (change)="addModule.set($any($event.target).value)">
-          <option value="" [selected]="addModule() === ''">{{ i18n.t('moduleCatalog.tenant.choose') }}</option>
+        <select
+          class="q-body-sm"
+          name="addModule"
+          (change)="addModule.set($any($event.target).value)"
+        >
+          <option value="" [selected]="addModule() === ''">
+            {{ i18n.t('moduleCatalog.tenant.choose') }}
+          </option>
           @for (module of onSale(); track module.moduleId) {
-            <option [value]="module.moduleId" [selected]="module.moduleId === addModule()">{{ module.name }}</option>
+            <option [value]="module.moduleId" [selected]="module.moduleId === addModule()">
+              {{ module.name }}
+            </option>
           }
         </select>
         @if (chosenForAdd()?.billingUnit === 'PER_UNIT') {
-          <input class="q-body-sm qty" name="addQuantity" inputmode="numeric" [placeholder]="i18n.t('moduleCatalog.tenant.quantity')" [value]="addQuantity()" (input)="addQuantity.set($any($event.target).value)" />
+          <input
+            class="q-body-sm qty"
+            name="addQuantity"
+            inputmode="numeric"
+            [placeholder]="i18n.t('moduleCatalog.tenant.quantity')"
+            [value]="addQuantity()"
+            (input)="addQuantity.set($any($event.target).value)"
+          />
         }
-        <input class="q-body-sm" name="addReason" [placeholder]="i18n.t('common.reason')" [value]="addReason()" (input)="addReason.set($any($event.target).value)" />
-        <button type="submit" [disabled]="!canAdd()">{{ i18n.t('moduleCatalog.tenant.add') }}</button>
+        <input
+          class="q-body-sm"
+          name="addReason"
+          [placeholder]="i18n.t('common.reason')"
+          [value]="addReason()"
+          (input)="addReason.set($any($event.target).value)"
+        />
+        <button type="submit" [disabled]="!canAdd()">
+          {{ i18n.t('moduleCatalog.tenant.add') }}
+        </button>
       </form>
     }
   }

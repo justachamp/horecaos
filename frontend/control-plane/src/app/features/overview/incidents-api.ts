@@ -27,16 +27,22 @@ export class IncidentsApi {
 
   async list(includeResolved: boolean): Promise<IncidentView[]> {
     return firstValueFrom(
-      this.api.get<IncidentView[]>('/api/v1/control-plane/incidents', { query: { includeResolved, limit: 200 } }),
+      this.api.get<IncidentView[]>('/api/v1/control-plane/incidents', {
+        query: { includeResolved, limit: 200 },
+      }),
     );
   }
 
   /** Answers with no body; the caller reads the incident back. */
   async acknowledge(id: string, note: string): Promise<void> {
-    await firstValueFrom(this.api.post<void>(`/api/v1/control-plane/incidents/${id}/acknowledgement`, { note }));
+    await firstValueFrom(
+      this.api.post<void>(`/api/v1/control-plane/incidents/${id}/acknowledgement`, { note }),
+    );
   }
 
   async resolve(id: string, note: string): Promise<void> {
-    await firstValueFrom(this.api.post<void>(`/api/v1/control-plane/incidents/${id}/resolution`, { note }));
+    await firstValueFrom(
+      this.api.post<void>(`/api/v1/control-plane/incidents/${id}/resolution`, { note }),
+    );
   }
 }
