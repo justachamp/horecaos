@@ -82,7 +82,7 @@ export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
     'uz-Latn': 'Mijozlar bilan suhbat',
     en: 'Conversations',
   },
-  assistant: { ru: 'Помощник в чате', uz: 'Chat yordamchisi', en: 'Chat assistant' },
+  assistant: { ru: 'Помощник в чате', 'uz-Latn': 'Chat yordamchisi', en: 'Chat assistant' },
 };
 
 /** Every capability code the eight tenant-visible jobs can carry — see this file's own doc. */
@@ -382,7 +382,7 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
   'geo.lookup': {
     area: 'delivery',
     ru: 'Искать адреса на карте',
-    uz: 'Xaritada manzillarni qidirish',
+    'uz-Latn': 'Xaritada manzillarni qidirish',
     en: 'Look up addresses on the map',
   },
   'delivery.zone.manage': {
@@ -450,7 +450,7 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
   'order.points.reveal': {
     area: 'order',
     ru: 'Открывать на карте точки доставки сегодняшних заказов',
-    uz: 'Bugungi buyurtmalar yetkazish nuqtalarini xaritada ochish',
+    'uz-Latn': 'Bugungi buyurtmalar yetkazish nuqtalarini xaritada ochish',
     en: "Open the day's delivery points on the map",
   },
   'courier.duty.manage': {
@@ -523,7 +523,7 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
   'kitchen.display.read': {
     area: 'kitchen',
     ru: 'Видеть экран выдачи кухни',
-    uz: 'Oshxona berish ekranini koʻrish',
+    'uz-Latn': 'Oshxona berish ekranini koʻrish',
     en: 'View the kitchen display board',
   },
   'kitchen.station.manage': {
@@ -940,14 +940,14 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
   'assistant.read': {
     area: 'assistant',
     ru: 'Смотреть заметки помощника, его расход и то, на чём основан его ответ',
-    uz: 'Yordamchi yozuvlarini, sarfini va javobi nimaga asoslanganini koʻrish',
+    'uz-Latn': 'Yordamchi yozuvlarini, sarfini va javobi nimaga asoslanganini koʻrish',
     en: 'See the chat assistant’s notes, its spend, and what an answer was based on',
   },
 
   'assistant.knowledge.manage': {
     area: 'assistant',
     ru: 'Писать и обновлять заметки, по которым отвечает помощник',
-    uz: 'Yordamchi javob beradigan yozuvlarni yozish va yangilash',
+    'uz-Latn': 'Yordamchi javob beradigan yozuvlarni yozish va yangilash',
     en: 'Write and update the notes the chat assistant answers from',
   },
 };

@@ -12,6 +12,7 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { MapArea, MapCanvas } from '../../shared/ui/map/map-canvas';
 import { LatLng } from '../../shared/ui/map/map-provider';
@@ -76,6 +77,7 @@ export class ZoneDensity {
   private readonly reporting = inject(ReportingApi);
   private readonly zonesApi = inject(DeliveryZonesApi);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   /** The branch whose deliveries are counted; also the brand whose zones are drawn. */
   readonly scope = input.required<LocationScope>();
@@ -197,7 +199,7 @@ export class ZoneDensity {
   private nameOf(zoneId: string): string {
     const zone = this.zones().find((candidate) => candidate.zoneId === zoneId);
     if (zone) {
-      return localisedName(this.i18n.locale(), zone);
+      return localisedName(this.i18n.locale(), zone, this.registry.fallbackOrder());
     }
     const outline = this.outlines().find((candidate) => candidate.zoneId === zoneId);
     return outline?.code ?? this.i18n.t('reports.geography.density.zoneUnknown');

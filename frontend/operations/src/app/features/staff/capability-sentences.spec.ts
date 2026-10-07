@@ -172,7 +172,7 @@ describe('CAPABILITY_SENTENCES', () => {
     expect(CAPABILITY_SENTENCES['assistant.knowledge.manage'].area).toBe('assistant');
     expect(CAPABILITY_SENTENCES['assistant.read'].en).toContain('what an answer was based on');
     expect(CAPABILITY_SENTENCES['assistant.knowledge.manage'].ru).toContain('заметки');
-    expect(CAPABILITY_AREAS['assistant'].uz).toBe('Chat yordamchisi');
+    expect(CAPABILITY_AREAS['assistant']['uz-Latn']).toBe('Chat yordamchisi');
   });
 
   it('has a build-time-equivalent entry for every capability a tenant-visible job can carry', () => {
