@@ -28,11 +28,22 @@
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0041,
   ADR 0043
-- Supersedes / Superseded by: — (amends ADR 0041 and ADR 0043 by adding to them, and
-  reopens exactly one line of ADR 0041's "What was not built": «Cook headcount
-  output … stays a product-policy gap». Neither record is edited. ADR 0041's
-  station-level ceiling model, its rule that a ceiling "never rejects an order", and
-  ADR 0043's "deliberately unsophisticated" forecast all stand.)
+- Supersedes / Superseded by: — (adds to ADR 0041 and ADR 0043 and departs from two of
+  their claims; each is named here and neither record is edited. (1) ADR 0041, in its
+  Implementation status line and again in its "What was not built" list, says «it needs a
+  demand forecast and a portions-per-cook ratio, and neither exists anywhere in this
+  platform»: this record supersedes that one claim in both places (its forecast half
+  stopped being true when V0367 landed; its ratio half is answered by an empty tenant
+  policy, never by a number the platform supplies). (2) ADR 0043 "Forecasting" says «Every
+  row stores its `model_version` and run, and the actual is written back after the day
+  closes, so `absolute_percentage_error` is a stored fact»: at station grain the plan is
+  computed on read, with no stored run, no `model_version` and no write-back of actuals,
+  and this record supersedes that sentence for the station grain only; the branch forecast
+  (V0367, `reporting.forecast_run` and `fact_forecast`) keeps all three. ADR 0043's «The
+  recut does not write» is not reopened: the recut only compares, and the one backfill is a
+  fact-scoped rebuild of a fact that has no earlier figure for anyone to have acted on
+  (Decision 1). ADR 0041's station-level ceiling model, its rule that a ceiling «never
+  rejects an order», and ADR 0043's "deliberately unsophisticated" forecast all stand.)
 - Open inputs: each is closed on its proposed default if the owner accepts the
   record as written; the ones that name a person other than the owner stay with that
   person and the work they block is marked.
@@ -47,13 +58,19 @@
     mean of the most recent four qualifying occurrences of the same weekday, per
     operating-day hour, with ADR 0043's `HolidayMode` (default `INCLUDE`), an 80%
     band from the sample standard deviation, refused below three qualifying dates —
-    applied to a new station-grain fact. No machine learning, no external signal.
+    applied to a new station-grain fact, computed on read, with no stored run (the
+    branch forecast keeps its run; see Supersedes). No machine learning, no external signal.
   - **Which instant a portion counts at** (operations). Proposed default: the
     ticket's fire instant, `released_at`, because that is when a cook starts work;
     not the order's creation, which would put a 20:00 pre-order in the 11:00 hour.
   - **Which stations count** (operations). Proposed default: every station role
     except `EXPO` (the pass is not a cooking station, ADR 0041); a role the tenant
     gives a figure for is planned, a role it does not is shown without one.
+  - **Whether a line cancelled after a cook started it counts** (operations).
+    Proposed default: it counts, because the labour was spent, and a line struck before
+    any cook started it does not (`ti.status <> 'CANCELLED' OR ti.started_at IS NOT NULL`,
+    Decision 1). The alternative is the ceiling read's plain `ti.status <> 'CANCELLED'`,
+    which drops it; choose it by deleting the `started_at` clause.
   - **Rounding** (engineering). Proposed default: `ceil`, to whole cooks, shown
     for the expected demand and for the top of the band.
   - **Capability names** (platform owner). Proposed default: `kitchen.headcount.read`
@@ -147,22 +164,47 @@ supplies no productivity number, and says the output is a planning aid.**
 1. **A new fact, `reporting.fact_station_load`, one row per business date,
    location, station and operating-day hour** — the portions fired. The day close
    reads `kitchen.ticket_items` joined to `kitchen.tickets` for tickets with
-   `released_at` set (a ticket voided after it fired still cost the labour, and
-   keeps its `released_at`), bucketed by the hour of `released_at` in the tenant's
-   business day. It stores the station's `code` and `role` as they were that day, so
-   renaming or archiving a station does not rewrite last quarter's planning. It is
-   written in the same transaction as the other facts and rewritten with them on a
-   recut, never by a second job. This extends the close job's one stated exception
-   ("reads `ordering` and `payments`") by one source, `kitchen`, exactly as ADR 0115
-   did for tenders; ADR 0043's rules on boundary version and calculation version
-   apply unchanged.
+   `released_at` set, bucketed by the hour of `released_at` in the tenant's business
+   day. **Which items count, exactly:** a `ticket_items` row counts when its ticket has
+   `released_at` set and (`ti.status <> 'CANCELLED' OR ti.started_at IS NOT NULL`). Work a
+   cook began keeps its portions even if the line was then struck or its ticket voided (the
+   labour was spent, and a voided ticket keeps its `released_at`; no code voids a fired
+   ticket today, so the rule is stated for the day one does). A line struck before anyone
+   touched it does not count, which is what an amendment does to the line it replaces
+   (`KitchenTicketService.syncAmendedLines` moves a `QUEUED` or `STARTED` item to
+   `CANCELLED` and queues the replacement on the same ticket): a replaced line is counted
+   once, as its replacement, in the hour of the ticket's own `released_at`. A ticket voided
+   before it fired has no `released_at` and counts nothing. This is deliberately not the
+   ceiling read in `JdbcKitchenStore` (`ti.status <> 'CANCELLED' AND t.status <> 'VOIDED'`):
+   that one asks what is still to be cooked in a window, this one what was cooked. The fact
+   stores the station's `code` and `role` as they were that day, so renaming or archiving a
+   station does not rewrite last quarter's planning. **Who writes it:**
+   `DayCloseService.close` writes it in the same transaction as the other facts, once per
+   closed day going forward; this extends the close job's one stated exception ("reads
+   `ordering` and `payments`") by one source, `kitchen`, exactly as ADR 0115 did for
+   tenders, and ADR 0043's rules on boundary version and calculation version apply
+   unchanged. **A recut never writes it**: ADR 0043's «The recut does not write» holds.
+   `recut()` gains one comparison, `kitchen_station_portions` (version 1), per location and
+   station for the day, in thousandths of a portion (`portions` has three decimals and the
+   divergence columns are `bigint`, so it is exact), and a difference is a divergence row and
+   nothing else. **The one other writer is a fact-scoped rebuild**,
+   `DayCloseService.rebuildStationLoad(tenantId, businessDate)`: it deletes and rewrites
+   `reporting.fact_station_load` for that one date, never calls `clearDay`, and touches no
+   other fact and no aggregate, so no figure a manager acted on moves. It is allowed because
+   the fact is new: a closed day has no earlier figure for anybody to have acted on, which is
+   the reason ADR 0043 gives for the recut's rule. It takes the boundary version the day
+   closed under (recorded on that date's `CLOSE` run) and refuses a date whose version
+   differs from the tenant's current one (`BOUNDARY_CHANGED`), leaving the date without rows,
+   which the plan skips as a non-qualifying date. Only the one-time backfill below calls it;
+   no schedule does.
 2. **A new metric id, `kitchen_station_portions.v1`**, registered in
    `MetricRegistry` (ADR 0043: a number on a screen is a registered metric), sum of
    `portions`, grain day × location × station × operating hour, append-only. The
    headcount read and any later report take it from there; nothing reads
    `kitchen.ticket_items` on a request path.
-3. **The forecast is the one ADR 0043 describes, run at station grain and
-   computed on read.** For a location, a weekday and a station: take the most recent
+3. **The forecast is the method ADR 0043 describes, run at station grain and
+   computed on read, with no stored run (see Supersedes).** For a location, a
+   weekday and a station: take the most recent
    `sampleSize` (default 4, ceiling 12) qualifying dates of that weekday, where a
    date qualifies when the location fired at least one ticket that day, per
    operating hour; `mean` is the mean (holiday-weighted under `WEIGHT` exactly as
@@ -202,7 +244,7 @@ supplies no productivity number, and says the output is a planning aid.**
    output is performance management, and it would put a metric about a named
    employee on a screen). It does not change `release_at`, the capacity offset, or
    any ceiling: ADR 0041's rule that a ceiling "never rejects an order" and "never
-   holds a ticket past its promise" is untouched. It does not see a known future
+   quietly holds a ticket past its promise" is untouched. It does not see a known future
    spike: tickets already `HELD` in the buffer for the target date are not added.
    It does not model weather, events, promotions or opening-hour changes, beyond
    `HolidayMode`. It does not plan stations a tenant has not given a figure, the
@@ -240,8 +282,9 @@ supplies no productivity number, and says the output is a planning aid.**
 - No new job, no new store of forecasts, no new dependency: one fact beside the
   others, one policy in the existing mechanism, one read.
 - A tenant that never publishes a figure is not misled: the screen says "no policy".
-- The row's "stale" claims (the capacity-page comment, ADR 0041's pointer, the gap
-  map's text) become fixable, because the forecast's existence is now stated once.
+- The forecast's existence is stated once, here: the stale `capacity-page.ts` comment is
+  corrected, and ADR 0041's two sentences and the gap map's text are superseded by this
+  record's Supersedes line and left for the owner's next re-audit.
 
 ### Negative
 
@@ -291,11 +334,16 @@ reporting.fact_station_load        -- not partitioned: grain is date x station x
 `reporting.ensure_fact_partition` refuses tables it does not manage by name, so the
 table is unpartitioned on purpose, the shape V0367 chose for `fact_forecast` for the
 same reason. The producer is `JdbcReportingStore` (a `readSourceStationLoad` beside
-`readSourceTenders`), written from `DayCloseService.close`. A one-time backfill
-re-derives the last 56 days from `kitchen.tickets` by the same query, through the
-close job's own recut path (ADR 0043: a recut re-derives a closed day from source)
-and never by a migration (a migration does not read tenants' data). The next free migration number is taken across every active
-worktree, per `AGENTS.md`.
+`readSourceTenders`), written from `DayCloseService.close`, rebuilt for one date by
+`DayCloseService.rebuildStationLoad`, and compared (never written) by `recut`.
+**The 56-day backfill** is a one-shot job, `StationLoadBackfill`, started by an operator
+and never scheduled, and never a migration (a migration does not read tenants' data). It
+takes the cutover date (the first business date the live close wrote the fact) as an
+argument and, per tenant, calls `rebuildStationLoad` for each of the 56 business dates
+before it, oldest first, one transaction per date. It refuses a date on or after the
+cutover, so a day a manager has planned from is never rewritten, and a date refused for
+`BOUNDARY_CHANGED` is listed in its report. It can be re-run. The next free migration
+number is taken across every active worktree, per `AGENTS.md`.
 
 `kitchen.station_productivity` is a policy: **no table**. `PolicyKey<StationProductivity>`
 owned by `kitchen`, scopes `TENANT`, `BRAND`, `LOCATION`, empty document as the
@@ -352,10 +400,20 @@ and this reads one branch's kitchen.
 ### Testing
 
 - **The fact:** a ticket fired at 19:30 for a 20:00 promise counts in the 19:00
-  hour; a ticket voided after firing still counts; a ticket voided before firing
-  does not; two items on two stations split by `station_id`; decimal quantities sum
-  (`0.5` plus `1`); recomputing a closed day reproduces byte-identical rows; the
-  09:00 to 09:00 tenant's operating hours are relative to its own business day.
+  hour; a ticket voided after firing still counts (a fixture row: no code voids a
+  fired ticket today); a ticket voided before firing does not; two items on two
+  stations split by `station_id`; decimal quantities sum (`0.5` plus `1`); a line an
+  amendment replaced before any cook started it counts once, as its replacement, in the
+  hour of the ticket's `released_at`; a line cancelled after a cook started it counts;
+  the 09:00 to 09:00 tenant's operating hours are relative to its own business day.
+- **The rebuild, the recut and the backfill:** re-running `rebuildStationLoad` over
+  unchanged tickets reproduces byte-identical rows and leaves every other fact and
+  aggregate for that date byte-identical (`clearDay` is never called); a ticket changed
+  after close makes `recut` emit a `kitchen_station_portions` divergence row and write no
+  fact, and over unchanged tickets it reports none; the backfill rebuilds the 56 dates
+  before the cutover oldest first, refuses a date on or after the cutover and a date closed
+  under another boundary version (`BOUNDARY_CHANGED`, listed in its report), and a second
+  run changes nothing.
 - **The plan:** a hand-computed fixture (four Fridays, two stations) gives
   `cooksExpected` and `cooksAtPeakOfBand`; `TOO_FEW_DATES` below three; `NO_POLICY`
   with an empty document; a station override beats a role; a brand document
@@ -370,21 +428,27 @@ and this reads one branch's kitchen.
 
 ## Rollout and rollback
 
-Ship the fact and its metric first: it only adds rows and changes no screen, and the
-56-day backfill proves the numbers against a pilot branch's board before anyone
-reads them. Then the policy key and its editor, empty, so nothing changes. Then
-the plan read and Card 2. Correct the three stale statements (the `capacity-page.ts`
-comment, ADR 0041's pointer, row `2.6a`'s text) in the same change that ships the
-card; the gap map is the owner's document and this record does not edit it.
-Rollback at any step is hiding Card 2: the fact is inert, the policy is unread, and
-`KitchenTicketService.capacityOffsetSeconds` is untouched throughout.
+Ship the fact and its metric first: it only adds rows and changes no screen. Then run
+the one-shot backfill (`StationLoadBackfill`, started by an operator, per tenant, with the
+cutover date as its argument) so the 56 business dates before the cutover have rows before
+anyone reads a plan: without it the first three same-weekday dates after ship answer
+`TOO_FEW_DATES`. The backfilled numbers are proved against a pilot branch's board before
+anyone reads them. Then the policy key and its editor, empty, so nothing changes. Then
+the plan read and Card 2. Correct the stale `capacity-page.ts` comment in the same change
+that ships the card. ADR 0041's two sentences are superseded by the Supersedes line and
+are not edited (an Accepted record's argument is not rewritten), and the gap map is the
+owner's document: this record does not edit it, and the owner updates row `2.6a`'s text at
+the next re-audit. Rollback at any step is hiding Card 2: the fact is inert, the policy is
+unread, and `KitchenTicketService.capacityOffsetSeconds` is untouched throughout.
 
 ## Implementation checklist
 
 - [ ] Owner answers (or accepts the defaults for) the open inputs above.
 - [ ] Migration for `reporting.fact_station_load` with GRANTs; `MetricRegistry`
       entry `kitchen_station_portions.v1`; `JdbcReportingStore` source read and
-      `DayCloseService` write; the recut and the 56-day backfill through it.
+      `DayCloseService` write; `DayCloseService.rebuildStationLoad` (fact-scoped,
+      never `clearDay`); `fact_station_load` in `recut()`'s compare list; the one-shot,
+      operator-run `StationLoadBackfill` over the 56 dates before the cutover.
 - [ ] `ModularArchitectureTests` green with the close reading `kitchen` (a SQL read,
       the ADR 0115 precedent; a `kitchen.api` port only if that test objects).
 - [ ] `PolicyKey` `kitchen.station_productivity`, document type, validator (range
@@ -394,8 +458,9 @@ Rollback at any step is hiding Card 2: the fact is inert, the policy is unread, 
       station ceilings) and its two controllers; capabilities and role bundles.
 - [ ] Card 2 on `CapacityPage`; the productivity editor on `q-inherited-field`;
       ru / uz-latn / en strings including the not-a-rota sentence.
-- [ ] Correct `capacity-page.ts`'s comment and ADR 0041's pointer to say the
-      forecast exists at branch grain and this record adds it at station grain.
+- [ ] Correct `capacity-page.ts`'s comment to say the forecast exists at branch grain
+      and this record adds it at station grain. ADR 0041 and the gap map are not edited
+      (see Supersedes; the owner updates the gap map at the next re-audit).
 - [ ] Tests listed under Testing, each seen failing first.
 
 ## Exit criteria
@@ -405,8 +470,10 @@ hot line and the bar the portions expected in each hour with their band and the 
 they came from; a station the tenant has stated a figure for shows cooks needed per
 hour and the peak, and flags the hour where the station's own ceiling is below the
 forecast; a station with no figure says so and shows no number; the page says it is a
-planning aid and not a rota. The same day's fact rows reproduce byte-identically on a
-recut. Gap-map row `2.6a` can be marked `BUILT` for tenants that have published a
+planning aid and not a rota. Re-running `rebuildStationLoad` over unchanged tickets
+reproduces the same day's fact rows byte-identically and leaves every other fact for that
+date untouched, and `recut` reports zero `kitchen_station_portions` divergences over the
+same day. Gap-map row `2.6a` can be marked `BUILT` for tenants that have published a
 figure.
 
 ## References
