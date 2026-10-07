@@ -13,8 +13,9 @@
   render `NotBuiltPage`. *Nothing served:* both storefronts' `MenuService` return
   `offer: null`, `populars: []`, `populars_count: 0` and say in a comment that
   "nothing on the platform produces either"; `frontend/storefront`'s home template
-  still carries a block guarded by `offerData()` with a hard-coded
-  `/assets/home-promo.jpg` tile that therefore never renders;
+  still carries a block guarded by `offerData()` (`CustomerUiResponse.offer`, the
+  `OfferItem` / `CustomerUiOffer` wire type ADR 0112 says it will back) with a
+  hard-coded `/assets/home-promo.jpg` tile that therefore never renders;
   `frontend/storefront-milliy`'s home has no content area at all. *Media is
   image-only:* `media.assets` (V0015) admits owner scopes `TENANT`, `BRAND` and
   `LOCATION`; `MediaAssetService` allows only `image/jpeg`, `image/png`,
@@ -30,7 +31,9 @@
   fixed slugs (`about`, `contacts`, `delivery-terms`, `privacy-offer`) as
   insert-only, versioned, plain-text bodies the storefront escapes. *Console
   primitives, per the gap map:* `q-localized-field-group` (`X.5`, BUILT),
-  `q-tree-view` with drag-reorder (`X.23`, BUILT), `q-rich-text` with its
+  `q-tree-view` with drag-reorder (`X.23`, BUILT), `q-rule-list` (`X.25`, BUILT: a flat
+  priority list with move-up and move-down and native drag, and an enable switch on every
+  row), `q-rich-text` with its
   sanitizer (`X.31`, BUILT; it emits an HTML string), `q-phone-frame`, and
   `q-media-uploader` (`X.12`, PARTIAL: it exports JPEG at a 960 px long edge and
   refuses a video with `videoNotSupported` before any network call). *Languages:*
@@ -45,22 +48,65 @@
 - Depends on: ADR 0010, ADR 0016, ADR 0021, ADR 0024, ADR 0025, ADR 0027,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0033, ADR 0034, ADR 0035,
   ADR 0036, ADR 0044, ADR 0056, ADR 0057, ADR 0070, ADR 0073, ADR 0101,
-  ADR 0112, ADR 0135, ADR 0140, ADR 0149
-- Supersedes / Superseded by: — (amends ADR 0044 and edits nothing in it. It
-  reopens exactly two things there: the `## Alternatives considered` row "A
-  general editorial CMS with tenant-authored HTML" — only its *editorial scope*;
-  tenant-authored markup stays rejected in every form — and the closing sentence of
-  "Merchandising slots", "Not built, per the parity analysis: static pages, news,
-  galleries, recipes, tenders, and job postings", of which this record takes news,
-  galleries, recipes and a vacancy *listing* and leaves static pages (row `10.5`,
-  built), tenders and applications out. It also moves the slot tables ADR 0044
-  sketches under `marketing` into a new `content` module, and it reopens the two
-  exclusion rows of `docs/delever-parity-matrix.md` ("Recruiting module: vacancies
-  and candidate pipeline" and "General-purpose editorial CMS with tenant-authored
-  raw HTML") to the extent Decision 7 states. It does not reopen ADR 0112: that
-  record's personalised `presented_offers` become one more source of the home
-  carousel later, and ADR 0112's claim that `marketing.offers` backs the storefront's
-  `OfferItem` type is narrowed to the personalised part by Decision 5.)
+  ADR 0112, ADR 0135, ADR 0140, ADR 0149. Three notes on that list. ADR 0034 is
+  `Superseded` by ADR 0073, which restates only its residency determination; this
+  record relies on two ADR 0034 rules that ADR 0073 does not restate and nothing
+  replaces (the CDN edge caches no personal data, and a processor is recorded against
+  the data classes it sees), reads them from ADR 0034 and keeps them, and takes the
+  one-machine budget and the international-payment obstacle from ADR 0073. ADR 0149 is
+  itself Not started: Release 1 reads the brand's languages through `BrandLocaleLookup`
+  and adopts ADR 0149's registry when it lands (Rollout). ADR 0035, ADR 0036 and
+  ADR 0101 are used where they are cited: the Angular storefronts (Front ends), the
+  channel system types (Decision 3) and the console's shared component library
+  (Decision 11).
+- Supersedes / Superseded by: — (amends ADR 0044 and supersedes nothing. The ADR 0044
+  text it reopens is the list below and nothing else, so that nothing in the body
+  overrides ADR 0044 unannounced; it does not reopen ADR 0112. This record's own commit edits
+  nothing in ADR 0044: the Release 1 commit annotates ADR 0044's status line, its
+  `marketing` module descriptor note and its open checklist item "Implement slots with
+  the link-target allowlist, attribution links and referral edges, and reviews", and
+  the later releases annotate the rest as they land.
+  1. *The decision that there is no editorial CMS*, in its editorial scope only:
+     the Decision sentence "Qoida does not build an editorial CMS. It builds four
+     bounded merchandising placements ... and an optional audience", the Context
+     sentence "Whether Qoida ships an editorial CMS at all is also decided here", and
+     the `## Alternatives considered` row "A general editorial CMS with tenant-authored
+     HTML". Tenant-authored markup stays rejected in every form.
+  2. *The closing sentence of "Merchandising slots"*, "Not built, per the parity
+     analysis: static pages, news, galleries, recipes, tenders, and job postings", of
+     which this record takes news, galleries, recipes and a vacancy *listing* and
+     leaves static pages (row `10.5`, built), tenders and applications out.
+  3. *Who owns slots.* The Decision's list "A `marketing` module owns audiences,
+     campaigns, triggers, merchandising slots, ..." loses "merchandising slots", and
+     the `marketing.slot_items` / `marketing.slot_item_locales` sketch is replaced by
+     the `content` tables (Decision 1).
+  4. *Fields of the sketch that are dropped or changed*, each with its revisit trigger
+     in Alternatives: `audience_id` (no audience targeting), `location_scope` (no
+     branch scope in Release 1; Release 4 adds only a branch *order*), the
+     `COLLECTION` link type, and `translation_source` `ACCEPTED_SUGGESTION` (the only
+     value is `AUTHORED`, Decision 4). `priority` and `sequence` become one
+     `sort_key`.
+  5. *The storefront endpoint* `GET /api/v1/storefront/merchandising/slots` is
+     replaced by `GET .../content/home` (Decision 9).
+  6. *The capability* `merchandising.publish` is replaced by the four `content.*`
+     capabilities (Capabilities and roles).
+  7. *The checklist.* The slot half of the open item "Implement slots with the
+     link-target allowlist, attribution links and referral edges, and reviews" moves to
+     this record's Release 1; attribution links, referral edges and reviews stay
+     ADR 0044's.
+  It also reopens two exclusion rows of `docs/delever-parity-matrix.md` ("Recruiting
+  module: vacancies and candidate pipeline" and "General-purpose editorial CMS with
+  tenant-authored raw HTML") to the extent Decision 7 states.
+
+  ADR 0112 is not reopened. Its `presented_offers` and the `OfferItem` /
+  `CustomerUiOffer` wire type it backs (the ADR 0112 paragraph that says one
+  `OfferItem` is one `presented_offers` row joined to its `offers` banner fields) stay
+  exactly as decided and remain an authenticated, per-guest read. A carousel item here
+  is not an offer: it has no guest, decision log or contact policy, so ADR 0112's
+  reason for reusing one wire type, to avoid "a second, incompatible offer
+  representation" of the same offer, does not apply, and Decision 5 states the
+  boundary. A later record that wants personalised items *inside* the carousel
+  reopens that paragraph of ADR 0112 and Decision 5 here, and says so.)
 - Open inputs: each is closed on its proposed default if the owner accepts the
   record as written; the ones that name a person other than the owner stay with
   that person and the work they block is marked.
@@ -79,8 +125,10 @@
   - **Which external hosts a link may point at** (platform owner, security).
     Proposed default: a brand may link to the tenant's own verified channel
     hostnames and nothing else; an author with `content.manage` adds a host one at a
-    time (no wildcards, `https` only), and each addition is an audited security fact. `t.me`,
-    `instagram.com` and similar are not preloaded.
+    time (no wildcards, `https` only), and each addition and removal is an audited
+    security fact. A host that stops being allowed stops being linked within one cache
+    window, because the read checks it again. `t.me`, `instagram.com` and similar are
+    not preloaded.
   - **Whether video ships, and its caps** (platform owner, product). Proposed
     default: MP4 with an H.264 video track, at most 12 MiB, 20 seconds and 1920 px on
     the long edge, `moov` before `mdat`, an operator-supplied poster image, played
@@ -116,7 +164,9 @@
     text and the audit evidence of what customers were shown); media owned only by
     superseded revisions is released 90 days after the revision was superseded
     (`content.revision_media_retention_days`); republishing an older revision whose
-    media was released is refused with a stated reason.
+    media was released is refused with a stated reason. The sweeper that releases the
+    media ships with Release 3 (Rollout); until then superseded creatives are kept and
+    metered by the storage entitlement.
   - **Whether any rule of the market's advertising law must be enforced by the
     platform rather than by the tenant's own terms** (legal counsel). Proposed
     default: none is enforced by the platform; the tenant is the advertiser of
@@ -125,8 +175,9 @@
     the promotion is not live.
   - **Whether the brand switcher and the marketplace layout are built** (product).
     Proposed default: not built until one tenant runs two brands on one storefront
-    and asks; the `MARKETPLACE` layout value is reserved and refused, and the switcher
-    has a sketch below and no migration.
+    and asks; no layout field, key or value exists before then (Release 4 defines where
+    a layout choice lives, in its own physical model), and the switcher has a sketch
+    below and no migration.
   - **What becomes of the legacy `ui_elements` rows** (platform owner, migration
     program, ADR 0024). Proposed default: the mapping in Decision 13, applied only
     after production is profiled; everything imports as `DRAFT`, nothing is
@@ -160,7 +211,7 @@ BUILT, `X.23` (SortableList / TreeView with drag-reorder) BUILT and `X.31`
 the four rows is therefore three things only: the tables and the decision about their
 shape, an owner decision on editorial scope, and a video path. This record decides
 all three and adds no design-system component the console does not already have, with
-one change to two existing ones (Decision 11).
+a small change to three existing ones (Decision 11).
 
 **What the code says about the customer side.** The platform's storefront contract is
 a published OpenAPI group, `storefront`, and ADR 0070 makes a storefront a client of
@@ -173,7 +224,8 @@ promo banner carousel and a "populars" rail, both assembled by the legacy backen
 first five products "is a lie the screen tells confidently". So the honest state is
 a storefront with a place to put content and nothing to put in it.
 
-**What earlier records already decided, and this one does not reopen.** ADR 0044
+**What earlier records already decided, and this one keeps, except where Supersedes
+lists it.** ADR 0044
 says the platform builds "four bounded merchandising placements — home carousel,
 story rail, promo grid, entry modal — each a typed record with localised strings,
 one media reference, a closed union of link targets, a schedule, and an optional
@@ -277,32 +329,42 @@ product groups, authored in the console and read by both storefronts.**
    stored states are `DRAFT`, `PUBLISHED`, `WITHDRAWN` and `ARCHIVED`. **"Scheduled",
    "live" and "expired" are never stored**: they are computed from the live revision's
    `starts_at` and `ends_at` at the moment of every read, so no sweeper exists that can
-   fail and leave a banner up past its end. Publishing with nothing changed is refused.
-   Order within a placement is a number on the item, changed by an audited reorder that
-   takes effect at once and is not a revision. A platform administrator holds the same
+   fail and leave a banner up past its end. Publishing with nothing changed is refused,
+   and "nothing" includes the schedule, the channel set, the promotion and the location,
+   not only the document (`content_hash`, Physical model), so extending a banner's end
+   date is an ordinary publish. Order within a placement is a number on the item,
+   changed by an audited reorder that takes effect at once and is not a revision. A platform administrator holds the same
    `content.publish` capability and can withdraw any item as a takedown; there is no
    moderation queue and no automatic review.
 3. **Scope is brand and channel; targeting is not personal.** An item belongs to one
    brand and names the channel codes it appears on (empty means every content-capable
-   channel): channels of system type `WEB`, `IOS`, `ANDROID` and `TELEGRAM`. A
-   `QR_TABLE` channel shows the menu only and `KIOSK`, `AGGREGATOR`, `POS` and
+   channel): channels whose ADR 0036 `system_type` is `WEB`, `IOS`, `ANDROID` or
+   `TELEGRAM`. A `QR_TABLE` channel shows the menu only and `KIOSK`, `AGGREGATOR`, `POS` and
    `CALL_CENTRE` are refused as targets until a decision gives them a surface. There
    is no audience targeting and no per-branch scope in Release 1: both make the read
    differ per visitor or per location, and the public read is deliberately the same
    for everyone (Decision 9). A link is a closed union: `NONE`, `PRODUCT`,
    `CATEGORY`, `CART`, `PROMOTION` or `EXTERNAL`, mapping the four legacy actions plus
    the one the IA adds. An `EXTERNAL` link is `https`, carries no credentials, and its
-   host must be on the brand's allowlist at publish time; the storefront opens it in a
-   new context with `rel="noopener noreferrer"` and the platform never redirects.
+   host must be on the brand's effective allowlist at publish time **and is checked
+   again on every read**: a link whose host has since left the allowlist (a removed
+   host, a released channel hostname) is served as `NONE`, the item stays live, and
+   the console's health read flags it, so the allowlist is the open-redirect control
+   at the moment a customer is shown the link and not only on the day it was authored.
+   The storefront opens the link in a new context with `rel="noopener noreferrer"` and
+   the platform never redirects.
 4. **Languages are the brand's languages.** Texts are authored per locale in
-   `tenant.brand_locales` and keyed by the BCP 47 tag ADR 0149's registry defines
-   (`uz-Latn`, never a bare `uz`; the alias is accepted at the API boundary and never
-   stored). Publishing requires text in the brand's **default** locale; other brand
-   locales may be empty and the console's completeness indicator says so. A reader
-   whose language the item lacks receives the brand default and is told which language
-   the text is in; where that too is missing, the registry fallback; never another
-   arbitrary language and never an error. A brand may make completeness mandatory with
-   the policy `content.publishing` (`requireAllBrandLocales`). No text is machine
+   `tenant.brand_locales` and keyed by the BCP 47 tag (`uz-Latn`, never a bare `uz`;
+   the alias is accepted at the API boundary and never stored). Release 1 reads the
+   brand's languages through `BrandLocaleLookup` and the tags it carries today (`ru`,
+   `uz-Latn`, `en`), and adopts ADR 0149's registry when that record lands (Rollout).
+   Publishing requires text in the brand's **default** locale; other brand locales may
+   be empty and the console's completeness indicator says so. A reader whose language
+   the item lacks receives the brand default and is told which language the text is in;
+   where that too is missing, the registry fallback (until ADR 0149 lands, the platform
+   default `TenantLocaleSet.PLATFORM_DEFAULT_LOCALE`, `ru`); never another arbitrary
+   language and never an error. A brand may make completeness mandatory with the policy
+   `content.publishing` (`requireAllBrandLocales`). No text is machine
    translated; the `source` of every text is `AUTHORED`. A creative whose image
    carries its own words may name a different image per locale.
 5. **The home screen is items, and the offer carousel is a placement, not a second
@@ -317,11 +379,20 @@ product groups, authored in the console and read by both storefronts.**
    live (`ACTIVE` and inside its window), and inherits the promotion's window when its
    own is empty — the IA's "ads cannot drift out of sync with pricing" made a
    property, not a habit. The platform never injects a coupon code into a card; an
-   author who wants one shown types it. ADR 0112's personalised `presented_offers`
-   will join the same `carousel` array as an authenticated-only source when that
-   record is built; this record does not change its tables. **The brand switcher and
-   the marketplace layout are not built** until a tenant runs two brands on one
-   storefront and asks; `home_layout = MARKETPLACE` is reserved and refused.
+   author who wants one shown types it. **ADR 0112's personalised offers stay a
+   separate, authenticated read and never enter `content/home`**, which is anonymous
+   and public-cacheable (Decision 9): they are served by ADR 0112's own `customers.ui`
+   controller in the existing `OfferItem` / `CustomerUiOffer` wire type, or by its
+   `presented_offers` poll, whichever that record builds, and the storefront composes
+   the two client-side, each its own list with its own cache and `ETag`. A carousel
+   item is *content*, not an offer: the brand chose it for everyone and it has no guest,
+   decision log or contact policy, so it is deliberately a different representation from
+   `OfferItem`, and this record neither changes ADR 0112's tables or wire type nor
+   reopens its text. The storefront's `CustomerUiResponse.offer` and `offerData`
+   therefore stay, as ADR 0112's slot, and only the hard-coded tile leaves (Front
+   ends). **The brand switcher and the marketplace layout are not built** until a
+   tenant runs two brands on one storefront and asks; no layout field exists before
+   then.
 6. **Editorial text is a typed block document, never markup.** Wherever tier 2 needs a
    body, it is a JSON document of a closed set of block types (paragraph, heading,
    list, quote, image, divider) over plain-text runs with `bold`, `italic` and `href`
@@ -358,7 +429,9 @@ product groups, authored in the console and read by both storefronts.**
    channel code and a locale and returns the live items for that brand and channel at
    this instant, in order, with ready-made image rendition URLs. It is additive to the
    `storefront` OpenAPI group (ADR 0057, ADR 0070), carries no personal data, is
-   computed per request from two indexed queries, and is protected by a body-digest
+   computed per request from two indexed content queries and one bounded batch each of
+   the catalog, pricing and media lookups, is opened to anonymous callers on purpose in
+   `SecurityConfiguration` (Caching and performance), and is protected by a body-digest
    `ETag` and `Cache-Control: public, max-age=60`. **No new cache is registered**;
    a 30-second in-process entry is added only if the measured budget is missed
    (Specification). A failure of this read never blanks the menu: the storefront
@@ -369,14 +442,18 @@ product groups, authored in the console and read by both storefronts.**
     device* and published in the document, because an anonymous browser has no
     identity the server could count against; view counts are anonymous per-day
     counters the storefront reports, shown in the console as client-reported.
-11. **The console gets two screens and two changed primitives.** `/marketing/content`
+11. **The console gets two screens and three changed primitives.** `/marketing/content`
     (row `6.7`) lists, filters, reorders, edits, previews and publishes items;
-    `/marketing/storefront` (row `6.8`) edits home groups. The editor reuses
-    `q-localized-field-group`, `q-media-uploader`, `q-tree-view` as a flat sortable
-    list, `q-date-range-picker`, `q-combobox`, `q-phone-frame` and `q-diff-viewer`; the
-    two changes are `q-media-uploader` (a per-use export edge, because it exports at
-    960 px today, and video with poster capture in Release 3) and `q-rich-text` (a
-    block-document mode in Release 5).
+    `/marketing/storefront` (row `6.8`) edits home groups. The editor reuses the shared
+    library of ADR 0101: `q-localized-field-group`, `q-media-uploader`, `q-rule-list`
+    as the flat placement order, `q-date-range-picker`, `q-combobox`, `q-phone-frame`
+    and `q-diff-viewer`. The three changes are `q-media-uploader` (a per-use export
+    edge, because it exports at 960 px today, and video with poster capture in Release
+    3), `q-rule-list` (a `showToggle` input, on by default so every current host renders
+    as before, because publication and not an enable switch decides visibility here) and
+    `q-rich-text` (a block-document mode in Release 5). `q-tree-view` is not used for a
+    flat order: its native drag reparents onto whatever row a node is dropped on, and
+    its only switch, `allowReparentToRoot`, merely hides the root drop zone.
 12. **Smallest first, then on demand.** Release 1: `BANNER`, `PROMO_CARD` and
     `PRODUCT_GROUP` for the home carousel and home groups, image-only, brand and
     channel scope, both storefronts, the console. Release 2: stories, pop-ups and
@@ -399,11 +476,11 @@ product groups, authored in the console and read by both storefronts.**
 
 | Option | Why not chosen | Revisit when |
 |---|---|---|
-| Build the slots inside `marketing`, as ADR 0044 sketches (`marketing.slot_items`) | `marketing` exists to select, cost and never send; a slot is read by an anonymous storefront on its own cadence and cache and has no consent or audience semantics. Editorial is not marketing at all. The sketch also has no draft and no revision | The `content` module is still a single kind a year after Release 1 and its boundary costs more than it earns |
-| Edit live in place with a status flag, no revisions | The smallest thing to build, and what ADR 0044's sketch implies. A banner half-edited is in front of customers, there is no rollback, and nothing records what a customer was shown when a promo claim is disputed | Operators report that the publish step is skipped so often that live edits are wanted; then add a per-placement auto-publish, keeping the revisions |
+| Build the slots inside `marketing`, as ADR 0044 sketches (`marketing.slot_items`) | `marketing` exists to select, cost and never send; a slot is read by an anonymous storefront on its own cadence and cache and has no consent or audience semantics. Editorial is not marketing at all. The sketch also has no draft and no revision | A second kind is still not built a year after Release 1, and the publish, read and audit code that `content` and `marketing` duplicate exceeds 500 lines (a proposed figure, counted by the module owner in review) |
+| Edit live in place with a status flag, no revisions | The smallest thing to build, and what ADR 0044's sketch implies. A banner half-edited is in front of customers, there is no rollback, and nothing records what a customer was shown when a promo claim is disputed | More than 20% of items that carry a draft differing from the live revision still do so after 7 days (drafts older than 7 days over published items; a proposed figure); then add a per-placement auto-publish, keeping the revisions |
 | Brand-wide immutable publication snapshots, like the menu (ADR 0016) | Gives atomic go-live of a coordinated launch. But items here schedule themselves, a one-banner change would become a publication ceremony, and one unfinished draft would hold every other item back | Merchants ask for coordinated launches the schedule cannot express; add a bundle that groups items' go-live rather than snapshotting the brand |
 | One table per kind (banners, stories, pop-ups, news, ...) | Nine copies of draft, revision, window, locale and audit code, and nine places for a rule to drift. Kind-specific facts live in the typed document, which the server validates per kind | Two kinds diverge so far (for instance, relational queries on story slides) that the document is the wrong container for one of them |
-| Do nothing for editorial: an `EXTERNAL` link to the tenant's own site or Telegram channel (the status quo of row `6.7a`) | Free, safe, and the right answer for a tenant that already has a site. It fails the tenant that has none and keeps news out of the storefront's own surface. This is the fallback while tier 2 is off, which is why tier 2 is last and off by default | Never as a replacement; it stays the answer for any brand that leaves tier 2 off |
+| Do nothing for editorial: an `EXTERNAL` link to the tenant's own site or Telegram channel (the status quo of row `6.7a`) | Free, safe, and the right answer for a tenant that already has a site. It fails the tenant that has none and keeps news out of the storefront's own surface. This is the fallback while tier 2 is off, which is why tier 2 is last and off by default | Status quo, not rejected: this is what every brand has until it switches tier 2 on, and it stays the answer for any brand that leaves tier 2 off. There is no trigger, because nothing replaces it |
 | Embed a hosted CMS behind an allowlisted iframe (ADR 0044's own fallback) | A vendor and a billing relationship per tenant (ADR 0073 records international payment as "a real obstacle"), no connection to brand locales, frames inside Telegram and mobile webviews, and a third party on every customer's page | A tenant already runs a CMS it will not leave, and a link (already supported) is not enough |
 | Store sanitized HTML (the output of the existing `q-rich-text`) | Allowlist sanitizers have a long history of bypasses by mutation, and a client-side sanitizer is not evidence about what arrived. Storing markup also ties storage to one renderer. A document of known blocks has nothing to sanitize | A customer-facing need for formatting the block set cannot express appears; then add a block type, never a markup path |
 | Store a Markdown subset (as `tenant.channel_pages` does) | Cheap to author, but two parsers (server and every storefront) must agree on every edge case, and links and images in Markdown are the XSS surface the exclusion was about | The block editor proves too heavy for authors and one shared, fuzz-tested Markdown subset exists on both sides |
@@ -411,13 +488,15 @@ product groups, authored in the console and read by both storefronts.**
 | Transcode every video on the VM (ffmpeg or similar) | A native decoder run on hostile input, on a machine with about 13 GB of 16 GB already budgeted and one operator; a queue that competes with order-taking for CPU | More than a fifth of video uploads in a month are refused for codec or layout reasons, *and* a separate worker machine or a payable managed service exists |
 | Use a managed video service or an embedded third-party player | Per-minute fees nobody can pay from Uzbekistan today (ADR 0073), and third-party script and cookies on customer pages (ADR 0034 processors) | International payment is solved and a processor assessment is written |
 | Also accept WebM (VP8/VP9) | A second container, a second probe, and unmeasured support across the webviews customers use; H.264 in MP4 is the one format every target is expected to play | A measured device census shows WebM plays on every target and operators are blocked by MP4 export |
-| Images only, no video | The cheapest, and the whole of Release 1 and 2. Row `X.12` and the IA's "image *or* video" banner stay open, and a merchant's phone video of a new dish has nowhere to go | Never as a final answer; Release 3 is behind an entitlement and can stay off |
+| Images only, no video | The cheapest, and the whole of Release 1 and 2. Row `X.12` and the IA's "image *or* video" banner stay open, and a merchant's phone video of a new dish has nowhere to go | Status quo of Releases 1 and 2, not rejected: Release 3 is behind an entitlement and the platform owner may leave it off indefinitely. Video is revisited when a tenant asks for it and the owner switches `content.video.enabled` on for that tenant |
 | Audience-targeted content (ADR 0044's `audience_id`) | Makes the public read differ per visitor, forces customer identity before browse, and makes the response uncacheable at an edge (ADR 0034 allows no personal data cached). ADR 0112 owns personalised offers | ADR 0112's `presented_offers` is built and the carousel still needs a segment filter it cannot express |
+| Per-branch scope for an item (ADR 0044's `location_scope`) | Makes the public read differ per location, so every location would re-fetch banners that are identical for most of them and the cache key would multiply; no tenant has asked, and Release 4's branch *order* is a different thing | The first tenant with two or more branches asks for an item shown at only some of them; then add `location_ids` to the revision and a `location` parameter to the read, with its own cache key and a measured response size |
+| A `COLLECTION` link type (ADR 0044) | The catalog has no collection or tag entity a link could name; a hand-picked set is a `PRODUCT_GROUP` item and a link to a category covers the rest, so the type would name nothing | The catalog gains a collection or tag entity; then add the type to the closed union in a new `schemaVersion` |
 | Count pop-up frequency per customer on the server | An anonymous browser has no identity to count; a per-customer counter would need sign-in before the first screen | The storefront gains a durable anonymous visitor identity decided in ADR 0015/0051 terms |
-| Machine-translate a missing language at read time | ADR 0149 rules out a silent machine fallback; dish names here are transliterated, not translated, and an automatic rendering is the error a customer screenshots | The owner picks a provider and a review rule (row `X.5`) |
+| Machine-translate a missing language at read time, or offer a suggestion a human accepts (ADR 0044's `ACCEPTED_SUGGESTION`) | ADR 0149 rules out a silent machine fallback; dish names here are transliterated, not translated, and an automatic rendering is the error a customer screenshots. A suggestion flow also needs a provider and a review rule that do not exist | The owner picks a provider and a review rule (row `X.5`) |
 | Reuse `tenant.channel_pages` for editorial | Four fixed slugs, one document per slug per channel, plain-text body, no list, no window, no images, per channel not per brand | The four pages need a window or an image; then move them onto the block document, not the reverse |
-| Serve content inside the menu document | One round trip. But the menu is per location, its `ETag` digests live stock, and every stop would re-send every banner; third-party storefronts want to fetch the two independently | The measured cost of the second request exceeds the first-paint budget at the 75th percentile on a slow mobile profile |
-| Register an in-process cache for the content read now | The read is two indexed queries over a few dozen rows; ADR 0033 wants a cache registered, bounded and justified | The measured server time exceeds the budget in Specification; then register a 30-second entry invalidated by publish and withdraw |
+| Serve content inside the menu document | One round trip. But the menu is per location, its `ETag` digests live stock, and every stop would re-send every banner; third-party storefronts want to fetch the two independently | The measured cost of the second request exceeds the proposed first-paint budget in Caching and performance |
+| Register an in-process cache for the content read now | The read is two indexed content queries over a few dozen rows plus one bounded batch each of the catalog, pricing and media lookups; ADR 0033 wants a cache registered, bounded and justified | The measured server time exceeds the budget in Caching and performance; then register a 30-second entry invalidated by publish and withdraw |
 
 ## Consequences
 
@@ -469,6 +548,10 @@ product groups, authored in the console and read by both storefronts.**
   search engines see less of them than a CMS would show.
 - A withdrawn item stays in browser and edge caches until they revalidate, within the
   minute.
+- A link whose host leaves the allowlist is served as `NONE` from the next read, within
+  the cache window; the item stays live without its link, and `health` says so.
+- Superseded creatives are kept, and metered by the storage entitlement, until Release 3's
+  sweeper exists.
 
 ## Specification
 
@@ -477,11 +560,10 @@ product groups, authored in the console and read by both storefronts.**
 `uz.horecaos.platform.content` with `api`, `application`, `domain`,
 `infrastructure.persistence` and `web`, declared with
 `@ApplicationModule(displayName = "Content")` when Release 1 starts (`AGENTS.md`).
-Allowed edges, all one way: `media.api` (`MediaAvailability.allDisplayable`, and a new
-narrow `MediaRenditions` read that says which renditions of an asset exist);
-`tenancy.api` (`BrandLocaleLookup`, `SalesChannelLookup`, `PolicyResolver`,
-`ConfigurationResolver`); `iam.api` (`Capability`, `CurrentActor`, `EntitlementGate`);
-`audit.api`. There is no edge to `catalog` or `pricing`: the two ports below are declared
+Allowed edges, all one way: `media.api` (the creative read and, in Release 3, the
+release port below); `tenancy.api` (`BrandLocaleLookup`, `SalesChannelLookup`,
+`PolicyResolver`, `ConfigurationResolver`); `iam.api` (`Capability`, `CurrentActor`,
+`EntitlementGate`); `audit.api`. There is no edge to `catalog` or `pricing`: the two ports below are declared
 in `content.api` and implemented by those modules, exactly as `catalog.api`'s lookups
 are implemented by `inventory` and `pricing`. The two ports `content` declares:
 
@@ -491,6 +573,36 @@ ContentTargetLookup     existing(tenantId, brandId, channelCode, productIds, cat
 PromotionLiveLookup     live(tenantId, brandId, promotionIds, at) -> the subset ACTIVE and
                         inside their window at that instant                      (pricing)
 ```
+
+The media seam is three small ports declared in `media.api`, because the one that exists
+is too narrow for a creative: `MediaAvailability.allDisplayable` answers a single boolean
+about existence, tenant and status, while the gates and the assembler also need the pixel
+size (`CONTENT_MEDIA_ASPECT_MISMATCH`, and the response's `widthPx` and `heightPx`), the
+visibility (the storefront redirect serves only a `PUBLIC` asset) and which renditions
+exist. `content` therefore calls `MediaCreativeLookup` and not `MediaAvailability`.
+
+```text
+MediaCreativeLookup     describe(tenantId, assetIds) -> for each asset that exists for the
+                        tenant: status, visibility, widthPx, heightPx, the renditions that
+                        exist (variant, widthPx) and, from Release 3, kind IMAGE | VIDEO and
+                        durationMs                                              (media; Release 1)
+MediaRelease            requestRelease(tenantId, assetIds) -> the subset marked
+                        DELETION_REQUESTED: only a PUBLIC, brand-owned asset that every
+                        MediaUsageProbe reports unused                          (media; Release 3)
+MediaUsageProbe         inUse(tenantId, assetId) -> boolean, declared in media.api and
+                        implemented by the module that owns a relation table:
+                        content (revision_media of live revisions, and the assets of every
+                        draft), catalog (media_relations, channel_media_overrides) and
+                        tenancy (brand_media)                                   (Release 3)
+```
+
+No port in `media.api` can request a deletion today: the only caller of the store's
+`requestDeletion` is `StaffPhotoAdapter`, which implements `iam`'s `StaffPhotos` for a
+private staff photo and refuses anything else. The sweeper (Media and video) therefore
+needs a port of its own. A catalog test in the style of `TenantScopedReferenceCatalogTests` fails
+when a table outside `media` has a column holding a media asset id that neither a probe nor
+a recorded exemption covers (courier evidence and staff photos, which are private and not
+brand-owned), so a later relation table cannot be forgotten.
 
 `ModularArchitectureTests` stays green and nothing outside `content` imports its
 internals. No provider adapter is introduced by this record: there is no transcoder,
@@ -530,8 +642,11 @@ content.items                      -- identity, lifecycle, order; no DELETE gran
 
 content.item_drafts                -- the one mutable copy; one row per item at most
   item_id PK, tenant_id, brand_id, based_on_revision_no null
+  FK (item_id, tenant_id, brand_id) -> content.items (id, tenant_id, brand_id)
   document jsonb, channel_codes varchar(32)[], starts_at, ends_at
-  promotion_id uuid null, updated_by, updated_at, version
+  promotion_id uuid null    FK (promotion_id, tenant_id, brand_id) -> pricing.promotions
+  location_id uuid null     FK (tenant_id, brand_id, location_id) -> tenant.locations  -- VACANCY
+  updated_by, updated_at, version         -- carries the six values a revision hashes
   GRANT SELECT, INSERT, UPDATE, DELETE
 
 content.item_revisions             -- insert-only; what a customer may have been shown
@@ -542,7 +657,12 @@ content.item_revisions             -- insert-only; what a customer may have been
   starts_at timestamptz null, ends_at timestamptz null
   promotion_id uuid null    FK (promotion_id, tenant_id, brand_id) -> pricing.promotions
   location_id uuid null     FK (tenant_id, brand_id, location_id) -> tenant.locations  -- VACANCY
-  content_hash char(64), published_by varchar(255), published_at timestamptz
+  content_hash char(64) NOT NULL          -- SHA-256 (hex) over the canonical serialisation of
+                                          -- (document, channel_codes, starts_at, ends_at,
+                                          -- promotion_id, location_id); see below
+  published_by varchar(255), published_at timestamptz
+  UNIQUE (item_id, revision_no, tenant_id)  -- the tenant-scoped key revision_media and
+                                            -- item_daily_stats reference
   CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at)
   CHECK (octet_length(document::text) <= 262144)
   GRANT SELECT, INSERT                     -- no UPDATE, no DELETE: immutability by grant
@@ -551,18 +671,20 @@ content.revision_media             -- which asset each revision uses; one row pe
   item_id, revision_no, tenant_id, media_asset_id
   role PRIMARY | POSTER | SLIDE | AVATAR | BODY_IMAGE | ALBUM_IMAGE, position integer
   PK (item_id, revision_no, media_asset_id, role)
-  FK (item_id, revision_no) -> content.item_revisions
+  FK (item_id, revision_no, tenant_id) -> content.item_revisions (item_id, revision_no, tenant_id)
   FK (media_asset_id, tenant_id) -> media.assets (asset_id, tenant_id)
   GRANT SELECT, INSERT
 
 content.allowed_hosts              -- the external-link allowlist, per brand
-  tenant_id, brand_id, host varchar(253), created_by, created_at   PK (brand_id, host)
+  tenant_id, brand_id, host varchar(253), created_by, created_at   PK (tenant_id, brand_id, host)
+  FK (tenant_id, brand_id) -> tenant.brands
   CHECK (host ~ lowercase DNS labels; no wildcard, no port, no userinfo)
   GRANT SELECT, INSERT, DELETE
 
 content.item_daily_stats           -- Release 2; anonymous counters only
   tenant_id, brand_id, item_id, revision_no, day date (tenant timezone), channel_code
   impressions bigint, clicks bigint, dismissals bigint, completions bigint
+  FK (item_id, revision_no, tenant_id) -> content.item_revisions (item_id, revision_no, tenant_id)
   PK (item_id, revision_no, day, channel_code); GRANT SELECT, INSERT, UPDATE
 ```
 
@@ -575,9 +697,25 @@ no customer point is known and as the tie-break after distance
 (`JdbcStorefrontPickupLocationStore` orders by distance today); that column is the one
 asked for by `brands-and-locations.md`'s "Порядок в списке" row, "IA 6.8, no ADR".
 
+**`content_hash`** is what makes "nothing to publish" mean nothing. The window, the channel
+set, the promotion and the location live in columns beside the document, and an edit to any
+of them is a real change, so the hash covers all of them: SHA-256, in hex, over a canonical
+serialisation of the draft's `(document, channel_codes, starts_at, ends_at, promotion_id,
+location_id)`: JSON with object keys sorted and no insignificant whitespace (RFC 8785's
+rules), `channel_codes` sorted and de-duplicated (an empty set stays empty and is not
+the same as a list of every channel), instants as UTC ISO-8601 with microseconds, and
+absent values as `null`. It excludes the revision number, the author and the publication
+time, which differ on every publish by construction. The hash is computed once, by the
+publish service, and stored with the revision; a draft has no hash column, because it is
+compared only at the moment it is published.
+
 The effective allowlist for a brand is its `content.allowed_hosts` rows plus the tenant's
 verified `tenant.channel_hostnames`, read through `tenancy.api` and never copied, so an
-unverified or released hostname cannot be linked to.
+unverified or released hostname cannot be linked to. It is consulted at publish and again
+on every read of a live item that carries an `EXTERNAL` link or a block `href`.
+
+The only existing tables this record changes are two in `media` (Storefront API, Media):
+a widened constraint and one nullable column, both in Release 1.
 
 Why a typed `jsonb` document and not a table per fact: the read is the whole document
 of a few dozen items, nothing queries inside it, and the kinds differ in shape. What
@@ -630,8 +768,9 @@ At most 50,000 characters of text per locale (the figure `ChannelPageService` al
 uses). Text is a plain string: C0 controls other than newline, `U+2028`/`U+2029` and
 the bidirectional override and isolate controls (`U+202A`-`U+202E`, `U+2066`-`U+2069`,
 which spoof text direction) are refused. An `href` is `https` with a host on the
-allowlist, or `tel:`, or `mailto:`; `http`, `javascript:`, `data:` and relative links are
-refused. Each `IMAGE` asset must be `PUBLIC`, `AVAILABLE` and the tenant's. The
+allowlist (checked at publish and again on every read, as for an `EXTERNAL` link), or
+`tel:`, or `mailto:`; `http`, `javascript:`, `data:` and relative links are refused.
+Each `IMAGE` asset must be `PUBLIC`, `AVAILABLE` and the tenant's. The
 storefront renders one Angular component per block type with text through
 interpolation, never `innerHTML` or a trust-bypass call, and sets `href` only after
 applying the same scheme check again; a build-time test forbids both in the renderer.
@@ -640,17 +779,26 @@ applying the same scheme check again; a build-time test forbids both in the rend
 
 Publish is one transaction. It refuses, with `422 UNPROCESSABLE_STATE` and `errors[].code`
 from this closed list, when: `CONTENT_DEFAULT_LOCALE_MISSING`, `CONTENT_LOCALE_INCOMPLETE`
-(only when `requireAllBrandLocales`), `CONTENT_MEDIA_NOT_DISPLAYABLE`,
+(only when `requireAllBrandLocales`), `CONTENT_MEDIA_NOT_DISPLAYABLE` (an asset that does
+not exist for the tenant, is not `AVAILABLE`, or is not `PUBLIC`, in every role and in every
+release, read through `MediaCreativeLookup`),
 `CONTENT_MEDIA_ASPECT_MISMATCH` (more than 3% from the placement's ratio; minimum width
 960 px for `BANNER`, 600 px for `PROMO_CARD`, 720 px for a story slide, read from
-`media.assets.width_px`/`height_px`), `CONTENT_TARGET_NOT_FOUND`,
+`media.assets.width_px`/`height_px` through the same lookup), `CONTENT_TARGET_NOT_FOUND`,
 `CONTENT_PROMOTION_NOT_FOUND`, `CONTENT_LINK_HOST_NOT_ALLOWED`,
 `CONTENT_CHANNEL_NOT_A_CONTENT_SURFACE`, `CONTENT_PLACEMENT_FULL` (platform guardrails,
 code constants: carousel 10, promo grid 12, story groups 20, home groups 8, pop-ups 1,
-non-archived items per brand 500), `CONTENT_NOTHING_TO_PUBLISH` (the document hash
-equals the live revision's), `CONTENT_VIDEO_NOT_ENABLED`, `CONTENT_VIDEO_LIMIT`,
-`CONTENT_POSTER_REQUIRED`, `CONTENT_EDITORIAL_NOT_ENABLED` and
-`CONTENT_REVISION_MEDIA_RELEASED`. The same checks run, as warnings, on every draft
+non-archived items per brand 500), `CONTENT_NOTHING_TO_PUBLISH` (the draft's content
+hash, computed as the Physical model defines it over the document *and* the channel set,
+window, promotion and location, equals the live revision's `content_hash`; an item with no
+live revision, `DRAFT` or `WITHDRAWN`, has nothing to equal and this gate never refuses it),
+`CONTENT_VIDEO_LIMIT`, `CONTENT_POSTER_REQUIRED` and `CONTENT_REVISION_MEDIA_RELEASED`. The
+two entitlement refusals are not on this list: a video, or an editorial kind, for a tenant
+without `content.video.enabled` or `content.editorial.enabled` is refused with
+`ENTITLEMENT_REQUIRED` (403) through `EntitlementGate`, because ADR 0031 keeps
+`INSUFFICIENT_CAPABILITY` and `ENTITLEMENT_REQUIRED` as different codes with different
+remediation and this record does not re-decide that; an empty answer from the gate (an
+unknown key) is read as not entitled. The same checks run, as warnings, on every draft
 save and feed the console's per-item problem list.
 
 ### Staff API (surface `operations`, ADR 0031)
@@ -673,7 +821,7 @@ on every change (`STALE_VERSION` on a mismatch):
 | `POST /items/{itemId}/revisions/{n}/republications` | `content.author` | Clones revision `n` into the draft; publish is separate |
 | `PUT /placements/{placement}/order` | `content.publish` | Body: ordered ids and an order token; `STALE_VERSION` if the order moved |
 | `GET /preview?channel=&locale=&asOf=` | `content.read` | The storefront document built from drafts, by the same assembler |
-| `GET /health` | `content.read` | Live items with an unresolved target, a promotion not live, missing locales |
+| `GET /health` | `content.read` | Live items with an unresolved target, a promotion not live, a link host no longer allowed, missing locales |
 | `GET /allowed-hosts`, `POST /allowed-hosts`, `DELETE /allowed-hosts/{host}` | `content.read`, `content.manage` | Audited as security facts |
 | `GET /items/{itemId}/stats` | `content.read` | Release 2 |
 
@@ -682,7 +830,7 @@ on every change (`STALE_VERSION` on a mismatch):
 | Request | Notes |
 |---|---|
 | `GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/home?channel=&locale=` | Anonymous. `channel` is the tenant's channel code (as the menu read takes it); `locale` is a BCP 47 tag, a bare `uz` read as `uz-Latn`. Unknown brand or tenant mismatch is `404` |
-| `POST .../content/events` | Release 2. Anonymous counters; a batch of at most 20 `{itemId, revisionNo, event}`; rate-limited; never stores an identifier |
+| `POST .../content/events` | Release 2. Anonymous counters; a batch of at most 20 `{itemId, revisionNo, event}`; rate-limited; never stores an identifier. A mutating endpoint with no principal: opened in `SecurityConfiguration` and a named exemption in `EndpointCapabilityDeclarationTests` (Capabilities and roles) |
 | `GET .../content/features` | Release 5. Which editorial kinds are on for this brand |
 | `GET .../content/news`, `.../news/{slug}`, `.../gallery`, `.../gallery/{slug}`, `.../recipes`, `.../recipes/{slug}`, `.../careers`, `.../careers/{slug}` | Release 5; cursor pagination, newest first, `ETag` by body digest |
 
@@ -711,18 +859,40 @@ or holds the channel, `starts_at <= now`, `now < ends_at` (start inclusive, end
 exclusive, from the injected `Clock`); for promo cards bound to a promotion, ask
 `PromotionLiveLookup` and drop the card if it is not live; resolve link targets with
 `ContentTargetLookup` and degrade an unresolved `PRODUCT`/`CATEGORY` link to `NONE`
-while keeping the item (the console's `health` flags it); resolve each text through
-brand locale, brand default, registry fallback; attach only the renditions `MediaRenditions` says exist;
-order by placement, `sort_key`, `created_at`, `id`. A fixture test gives every item an
-explicit, distinct `sort_key` and timestamp so ordering never depends on insertion
-time (repeated `now()` fixtures tie locally and reorder under CI load).
+while keeping the item (the console's `health` flags it); re-check the host of every
+`EXTERNAL` link against the effective allowlist and degrade a link whose host is no longer
+allowed to `NONE` the same way (the allowlist is read only when a live item carries such a
+link); resolve each text through brand locale, brand default, registry fallback; attach
+only the renditions `MediaCreativeLookup` says exist; order by placement, `sort_key`,
+`created_at`, `id`. A fixture test gives every item an explicit, distinct `sort_key` and
+timestamp so ordering never depends on insertion time (repeated `now()` fixtures tie
+locally and reorder under CI load).
 
 Media: the storefront media redirect gains an optional `variant` parameter (additive),
 and the closed rendition set gains one member, `HERO` (`w1600`), because a 3:1 banner
-on a desktop channel needs more than `DETAIL`'s 800 px. The read model returns
-rendition URLs, never the original, so a 10 MiB source cannot reach a phone's home
-screen. `q-media-uploader` exports 960 px on the long edge today; it gains an input for
-the export edge (1600 for `BANNER`).
+on a desktop channel needs more than `DETAIL`'s 800 px. This is the one place Release 1
+changes an existing table, in one migration: `media.derivatives`'
+`ck_media_derivative_variant` admits only `THUMBNAIL`, `CARD` and `DETAIL` today and is
+widened to admit `HERO` (add the wider constraint `NOT VALID`, validate it, drop the old
+one), and `media.assets` gains a nullable `rendition_profile varchar(16)` (`CREATIVE`, or
+null). **`HERO` is rendered only for an asset allocated with the `CREATIVE` profile, which
+the console's content upload sets.** `MediaDerivativeService.renderMissing` loops
+`DerivativeVariant.values()` today, so a bare new enum member would be rendered as a
+fourth JPEG for every catalog and staff upload on the one 8 vCPU machine (ADR 0073); the
+loop becomes the three standard variants, plus `HERO` when the asset's profile is
+`CREATIVE`. An asset with no `HERO` (everything uploaded before this release, or not
+uploaded for content) is not an error: the assembler lists the renditions that exist and a
+client falls back to the largest, `DETAIL`. The read model returns rendition URLs, never
+the original, so a 10 MiB source cannot reach a phone's home screen. `q-media-uploader`
+exports 960 px on the long edge today; it gains an input for the export edge (1600 for
+`BANNER`).
+
+**Creatives are `PUBLIC`.** The storefront redirect answers 404 for any asset that is not
+`PUBLIC` and displayable, and never says which, so the console allocates every content
+creative with visibility `PUBLIC` and owner scope `BRAND`, and
+`CONTENT_MEDIA_NOT_DISPLAYABLE` refuses a `PRIVATE` asset in every role and release. Without that, a banner on a private
+asset would pass the gate and show every customer a broken image, the failure
+`MediaAvailability`'s own contract exists to prevent.
 
 ### Capabilities and roles (ADR 0025)
 
@@ -730,8 +900,21 @@ Four code-owned capabilities, all at brand scope: `content.read`, `content.autho
 `content.publish`, `content.manage`. Bundles: tenant owner, tenant administrator and
 brand manager hold the first three; owner and administrator also hold `content.manage`;
 no location role holds any. A platform administrator already holds every capability.
-`EndpointCapabilityDeclarationTests` and the role-bundle tests enforce the table; the
-storefront endpoints declare none, like the menu.
+`EndpointCapabilityDeclarationTests` and the role-bundle tests enforce the table. The
+storefront reads declare no capability, like the menu, and are opened to anonymous callers
+on purpose in `SecurityConfiguration.apiSecurity`, which permits storefront `GET`s one path
+at a time and ends in `anyRequest().authenticated()`: `content/home` is added there in
+Release 1 (and the Release 5 reads when they land, Implementation checklist), because
+without that line an anonymous visitor is answered `401` whatever the edge does. The
+Release 2 `POST .../content/events` is a mutating endpoint with no principal, so it is a
+named, exact-path exemption in `EndpointCapabilityDeclarationTests`, in both
+`everyMutatingEndpointDeclaresHowItIsAuthorized` and
+`everyResourceCreatingEndpointDeclaresReplayProtection`, as the delivery-fee preview and the
+pickup-location search are, and it takes no `Idempotency-Key`: `IdempotencyInterceptor`
+scopes a key by the calling subject and an anonymous caller has none, and the counters are
+client-reported, labelled so and inflatable by anyone (Accepted trade-offs), so a retried
+batch counting twice is inside what is already accepted. The controls are the batch cap of
+20 and the per-IP limit on the `@storefront_browse` path list (Caching and performance).
 
 ### Entitlements, policy and configuration keys (ADR 0021, ADR 0030)
 
@@ -744,9 +927,13 @@ storefront endpoints declare none, like the menu.
 | `content.revision_media_retention_days` | configuration, integer | 90 | Release of superseded revisions' media |
 | `content.video.max_live_per_brand` | configuration, integer | 5 | Live videos |
 
-Each configuration key is declared in `content.api` and mirrored in the tenancy
-registry, with the drift test `OrderingConfigurationKeys` documents. Both policies
-publish through ADR 0030's author, which audits and evicts its own cache. The
+Both entitlement keys are declared in `commercial.api.EntitlementKeys`, as feature keys
+owned by `content` with `safeDefault(Boolean.FALSE)` (as `TELEGRAM_DIGESTS_ENABLED` is),
+because `EntitlementGate.checkFeature` answers empty for a code `EntitlementKeys` does not
+know; `content` names the two codes as strings through the gate, so Decision 1's "no edge
+to `commercial`" holds. Each configuration key is declared in `content.api` and mirrored in
+the tenancy registry, with the drift test `OrderingConfigurationKeys` documents. Both
+policies publish through ADR 0030's author, which audits and evicts its own cache. The
 `content.publishing` document has no `requireApproval` field in Release 1: a field that
 parses and does nothing is worse than no field, so a four-eyes path (ADR 0027's approval
 service, `content.publish` as the approving capability, a different principal as
@@ -820,23 +1007,41 @@ can still carry a hostile stream; the customer's decoder is the exposure, the sa
 tenant-uploaded video, reduced by H.264-in-MP4 only and an authenticated uploader. The
 `MalwareScanner` port stays without an adapter, as ADR 0010 left it.
 
-A superseded revision's media is released (`DELETION_REQUESTED`, then the existing
-`MediaAssetDeletionWorker`) by a `ContentRevisionMediaSweeper` once it has been
-superseded for `content.revision_media_retention_days` and no live or draft revision uses
-the asset; the check is a query over `content.revision_media`.
+A superseded revision's media is released by a `ContentRevisionMediaSweeper` (Release 3)
+once the revision has been superseded for `content.revision_media_retention_days`. The
+sweeper marks nothing itself: it calls `MediaRelease.requestRelease`, which marks
+`DELETION_REQUESTED` (the existing `MediaAssetDeletionWorker` then removes the objects)
+only for a `PUBLIC`, brand-owned asset that every `MediaUsageProbe` reports unused. It is
+not enough that no live or draft revision of *content* uses the asset: `tenant.brand_media`
+(V0243), `catalog.media_relations` and `catalog.channel_media_overrides` (V0451) can point
+at the same asset, so they are asked too. `content`'s own probe answers from
+`content.revision_media` (every live revision) and from the assets of every draft,
+extracted by the same extractor that fills `revision_media` at publish (at most 500 drafts
+per brand). Until Release 3 nothing is released, and superseded creatives are metered by
+the storage entitlement.
 
 ### Caching and performance (ADR 0033)
 
 `Cache-Control: public, max-age=60` and a body-digest `ETag` (the digest approach
 `StorefrontCatalogController` uses), `304` on a matching `If-None-Match`. The read is two
-queries (items with live revisions; one media-rendition lookup) and a bounded in-memory
-assembly. **Proposed budget, unmeasured:** server time under 50 ms at the 95th percentile
-at 50 requests a second on the reference machine, response under 64 KiB. If it is missed,
-register one `CacheRegistry` entry (30 seconds, bounded by brand and channel and locale,
-invalidated in-process by publish, withdraw, archive and reorder). The read is added to
-the `@storefront_browse` path list in both Caddyfiles
-(`deploy/infra/caddy/Caddyfile`, `platform/infra/production/caddy/Caddyfile`), which sets
-its per-IP limit; `check_storefront_api_routing` must still pass.
+content queries (items joined to their live revisions; the brand's effective allowlist,
+only when a live item carries an `EXTERNAL` link) and one bounded batch each of
+`ContentTargetLookup`, `PromotionLiveLookup` and `MediaCreativeLookup`, plus the
+brand-locale lookup and, from Release 3, the video entitlement check, then a bounded
+in-memory assembly; the budget below is for all of it. **Proposed budget, unmeasured:**
+server time under 50 ms at the 95th percentile at 50 requests a second on the reference
+machine, response under 64 KiB. **Proposed first-paint budget, unmeasured:** the content
+request is issued in parallel with the menu's, never blocks the menu's render, and moves
+the home's largest contentful paint by at most 200 ms at the 75th percentile on a
+throttled slow-mobile profile; the carousel may arrive after the menu has painted. If the
+server budget is missed, register one `CacheRegistry` entry (30 seconds, bounded by brand
+and channel and locale, invalidated in-process by publish, withdraw, archive and reorder).
+Two edges have to be told about the read, and the checklist names both: the read is added
+to the `@storefront_browse` path list in both Caddyfiles (`deploy/infra/caddy/Caddyfile`,
+`platform/infra/production/caddy/Caddyfile`), which sets its per-IP limit, and
+`check_storefront_api_routing` must still pass; and `SecurityConfiguration.apiSecurity`
+permits `GET /api/v1/storefront/tenants/*/brands/*/content/home` (Capabilities and
+roles), without which an anonymous visitor is answered `401`.
 
 ### Front ends
 
@@ -844,21 +1049,26 @@ its per-IP limit; `check_storefront_api_routing` must still pass.
 `NotBuiltPage` and load lazily; nothing joins the initial chunk. The list shows a
 derived pill (`LIVE`, `SCHEDULED`, `EXPIRED`, `DRAFT`, `WITHDRAWN`), problem badges, an
 "unpublished changes" marker and a flat drag-reorder of the placement
-(`q-tree-view` with reparenting off). The editor: language tabs with the completeness dot
-(`q-localized-field-group`), the uploader with the placement's ratio, a link picker
-(`q-combobox` over products, categories and live promotions, or an allowlisted URL), a
-schedule (`q-date-range-picker`), a channel chip set, a `q-phone-frame` preview from the
-preview endpoint, revision history with `q-diff-viewer`, and publish, withdraw and archive
-behind `q-confirm-dialog`. Home groups: manual member search or a category with an
-order and a limit. All strings typed in ru, uz-Latn and en.
+(`q-rule-list`, the flat priority list, with its enable switch hidden). The editor:
+language tabs with the completeness dot (`q-localized-field-group`), the uploader with the
+placement's ratio, a link picker (`q-combobox` over products, categories and live
+promotions, or an allowlisted URL), a schedule (`q-date-range-picker`), a channel chip
+set, a `q-phone-frame` preview from the preview endpoint, revision history with
+`q-diff-viewer`, and publish, withdraw and archive behind `q-confirm-dialog`. Home groups:
+manual member search or a category with an order and a limit. All strings typed in ru,
+uz-Latn and en.
 
-*Storefronts* (`frontend/storefront`, `frontend/storefront-milliy`). A `ContentService`
-reads the document once per session start and on revalidation; the carousel is
-scroll-snap with `srcset` from the renditions; groups join their ids against the menu the
-page already holds and skip an id the menu lacks; a failed read renders no content and
-leaves the menu untouched. The hard-coded `home-promo.jpg` tile leaves the template when
-the carousel lands. Video is `muted playsinline preload="metadata"` with the poster, and
-poster only under `prefers-reduced-motion`. Pop-up caps are kept in `localStorage` under a
+*Storefronts* (`frontend/storefront`, `frontend/storefront-milliy`, the Angular
+applications ADR 0035 adopts). A `ContentService` reads the document once per session
+start and on revalidation; the carousel is scroll-snap with `srcset` from the renditions;
+groups join their ids against the menu the page already holds and skip an id the menu
+lacks; a failed read renders no content and leaves the menu untouched. The hard-coded
+`home-promo.jpg` tile leaves the template when the carousel lands;
+`CustomerUiResponse.offer`, `offerData` and the `@if (offerData())` block stay as
+ADR 0112's slot for a personalised offer, which renders nothing while `offer` is null (as
+it is today), and the content carousel is a new section beside it, not a reuse of that
+wire type (Decision 5). Video is `muted playsinline preload="metadata"` with the poster,
+and poster only under `prefers-reduced-motion`. Pop-up caps are kept in `localStorage` under a
 key of item and revision (every read and write in `try/catch`, the page correct without
 it), so editing the item resets the cap.
 
@@ -875,18 +1085,34 @@ never a title. The health read above is the operator's view of the same problems
   `item_revisions` refuses `UPDATE` and `DELETE` for the application role.
 - Assembler tests against a real PostgreSQL with a controlled `Clock`: window start
   inclusive and end exclusive, channel scope, empty means all, promotion not live, an
-  unresolved link degrading, locale fallback order, rendition filtering, ordering with
-  explicit timestamps.
+  unresolved link degrading, an `EXTERNAL` link whose host was removed from the allowlist
+  (or whose channel hostname was released) degrading to `NONE` on the next read and
+  appearing in `health`, locale fallback order, rendition filtering with an asset that has
+  no `HERO` falling back to `DETAIL`, ordering with explicit timestamps.
 - Gate tests, one per code in the list above; two concurrent publishes, exactly one
-  winner and a `409`; republish after media release.
+  winner and a `409`; republish after media release. For `content_hash`: changing only
+  `ends_at`, only `channel_codes`, only `promotion_id` or only `location_id` is publishable,
+  republishing an unchanged draft returns `CONTENT_NOTHING_TO_PUBLISH`, and an unchanged
+  draft of a `WITHDRAWN` item is publishable. A `PRIVATE` asset is refused as
+  `CONTENT_MEDIA_NOT_DISPLAYABLE` in every role, and a tenant without
+  `content.video.enabled` is answered `ENTITLEMENT_REQUIRED` (403), not `422`.
 - Document tests: unknown keys, nesting and size limits, every refused `href` scheme, a
   bidi control, a `<script>` string rendered as text in the storefront renderer, and a
   corpus run asserting the renderer creates no element or attribute outside the block set.
 - Video probe tests over fixtures: a valid faststart H.264 file, `moov` at the end, HEVC,
   a truncated file, a box whose size lies, a nesting bomb, a zero dimension, a huge
   duration; the probe never reads past 256 KiB.
+- Media tests: the migration widens `ck_media_derivative_variant` to admit `HERO`; an upload
+  without the `CREATIVE` profile gets no `HERO` rendition and one with it does; the rollback
+  statement deletes only the `HERO` rows; from Release 3, `MediaRelease` leaves an asset
+  that any probe reports in use, and the catalog test fails for a media-asset-id column
+  that no probe or recorded exemption covers.
 - Contract tests: the OpenAPI baseline is additive (`make openapi-baseline` reviewed),
-  `EndpointCapabilityDeclarationTests`, event schema, catalogue and classification tests.
+  `EndpointCapabilityDeclarationTests`, event schema, catalogue and classification tests;
+  an anonymous `GET` of `content/home` is `200` through `SecurityConfiguration` while an
+  unlisted storefront path stays `401`; the events `POST` is exempt by exact path only;
+  `EntitlementKeys` declares both keys and `EntitlementGate.checkFeature` answers non-empty
+  for them.
 - Front end: console specs for the editor, reorder and preview; storefront specs for
   render, skip-unknown, failure isolation and the pop-up cap with storage unavailable.
 
@@ -899,32 +1125,46 @@ onboarding rows, and the releases are independent after the first.
   groups and the offer carousel).** The module, `content.items`, `item_drafts`,
   `item_revisions`, `revision_media`, `allowed_hosts`; `BANNER`, `PROMO_CARD` and
   `PRODUCT_GROUP`; image only; brand and channel scope; the four capabilities; the
-  publish gates; the events and audit facts; the `HERO` rendition and the storefront
-  `variant` parameter; the storefront read; both storefronts' home; the two console
-  screens. *Does not:* stories, pop-ups, counters, video, location scope, editorial,
-  switcher, marketplace layout. Ships dark: with no item published the storefront
+  publish gates; the events and audit facts; the `HERO` rendition for `CREATIVE` assets
+  with its `media` migration, `MediaCreativeLookup` and the storefront `variant`
+  parameter; the `SecurityConfiguration` opening; the storefront read; both storefronts'
+  home; the two console screens. *Does not:* stories, pop-ups, counters, video, location
+  scope, editorial, switcher, marketplace layout. Ships dark: with no item published the storefront
   document is empty and the home looks as it does today. *Rollback:* withdraw items;
-  the storefront renders nothing for an empty document; the schema is additive and
-  stays. A bad release is reverted by redeploying the previous image; no existing
-  table changes.
+  the storefront renders nothing for an empty document; the `content` schema is additive
+  and stays. A bad release is reverted by redeploying the previous image, with one
+  precaution: Release 1 does change two existing `media` tables, additively (the widened
+  `ck_media_derivative_variant` admitting `HERO`, and the nullable `rendition_profile`),
+  and the previous image lists derivatives with `DerivativeVariant.valueOf`, which throws
+  on a `HERO` row. So the rollback first runs `DELETE FROM media.derivatives WHERE variant
+  = 'HERO'` (the rows are re-renderable, and only creatives have any); the widened
+  constraint and the new column stay.
 - **Release 2 — stories and pop-ups, with counters (rest of `6.7`).** `STORY_GROUP`,
   `POPUP`, `PROMO_GRID`, the daily window and the cap hint, `item_daily_stats` and the
   events endpoint. Images only. *Rollback:* withdraw the kinds; the storefront ignores
   unknown fields; the counters endpoint is turned off at the edge.
 - **Release 3 — video (row `X.12`'s video half; `6.7`'s "image or video").** The probe,
   the video cap, `duration_ms`, the 30-minute presign window, the poster flow, the
-  uploader's video mode, `content.video.enabled`, the revision-media sweeper. Behind the
-  entitlement, off for every tenant until the platform owner turns it on. *Rollback:*
-  turn the entitlement off; live videos stop being returned (the assembler drops a video
-  item when the entitlement is off), uploads of video are refused, nothing is deleted.
+  uploader's video mode, `content.video.enabled`, the revision-media sweeper with
+  `MediaRelease` and the `MediaUsageProbe` implementations. Behind the entitlement, off
+  for every tenant until the platform owner turns it on. *Rollback:* turn the entitlement
+  off; live videos stop being returned (the assembler drops a video item when the
+  entitlement is off), uploads of video are refused, nothing is deleted.
 - **Release 4 — brand switcher, marketplace layout, branch order (rest of `6.8`).**
-  Built only when a tenant runs two brands on one storefront and asks. *Rollback:* drop
-  the entries; `home_layout` stays `RESTAURANT`.
+  Built only when a tenant runs two brands on one storefront and asks; it defines where
+  a layout choice lives, and this record reserves no field for it. *Rollback:* drop the
+  entries; nothing else changes.
 - **Release 5 — editorial tier (`6.7a`).** `NEWS`, `GALLERY_ALBUM`, `RECIPE`, then
   `VACANCY` last, behind `content.editorial.enabled` and the `content.editorial` policy;
   the block document and the editor's block mode; the storefront routes. Built only on
   the owner's instruction or the first tenant's request. *Rollback:* turn the policy off;
   the kinds disappear from the storefront and the console, and the rows stay.
+
+*Languages.* Release 1 resolves a brand's languages through `BrandLocaleLookup` and the
+tags it carries today (`ru`, `uz-Latn`, `en`), with `ru` as the platform default. ADR 0149
+is Not started; its registry is adopted by the first release built after it lands. No
+content migration is expected, because the keys stored in a document are already the
+canonical BCP 47 tags the registry will define (a bare `uz` is never stored).
 
 Whatever the release, a tenant that never publishes sees no change, and a withdrawal
 reaches customers within one cache window. The legacy import (Decision 13) is a
@@ -939,42 +1179,59 @@ before it is run.
       tenant-scoped foreign keys; `ModularArchitectureTests` and
       `TenantScopedReferenceCatalogTests` green.
 - [ ] `content.api` ports (`ContentTargetLookup`, `PromotionLiveLookup`) with their
-      `catalog` and `pricing` implementations; `media.api` `MediaRenditions`.
+      `catalog` and `pricing` implementations; `media.api` `MediaCreativeLookup` (status,
+      visibility, pixel size, existing renditions).
 - [ ] Capabilities `content.read`, `content.author`, `content.publish`, `content.manage`
       in `Capability` and the role bundles; `EndpointCapabilityDeclarationTests`.
 - [ ] Authoring, publication, reorder, preview and health services and controllers;
-      the publish gates and their error codes; the typed documents with strict decoding
-      and the omitted-optional-flag test.
+      the publish gates and their error codes; `content_hash` and its canonical
+      serialisation; the typed documents with strict decoding and the omitted-optional-flag
+      test.
 - [ ] The assembler (one implementation, two sources) and the storefront read; the
-      `variant` parameter on the storefront media redirect; the `HERO` rendition.
+      `variant` parameter on the storefront media redirect; the `HERO` rendition and the
+      migration that widens `ck_media_derivative_variant` and adds
+      `media.assets.rendition_profile`, with `MediaDerivativeService` rendering `HERO`
+      only for `CREATIVE` assets; the console allocating creatives `PUBLIC`; the
+      host re-check on read.
+- [ ] `SecurityConfiguration.apiSecurity` permits `GET .../content/home` (the Release 5
+      reads when they land) and a test proves an anonymous `200`; `EntitlementKeys`
+      declares `content.video.enabled` and `content.editorial.enabled` (`safeDefault`
+      false, owned by `content`) and the two refusals use `ENTITLEMENT_REQUIRED`.
 - [ ] `content.events` topic, two event types, schemas, catalogue and
       `docs/domains/events.md` rows; audit facts; entitlement and policy keys declared in
       both registries with the drift test.
 - [ ] Both Caddyfiles' `@storefront_browse` list; `check_storefront_api_routing` passes;
       the OpenAPI baseline and generated clients refreshed and reviewed.
 - [ ] Operations `/marketing/content` and `/marketing/storefront`; `q-media-uploader`
-      export-edge input; ru, uz-Latn and en strings; initial-bundle budget unchanged.
+      export-edge input; `q-rule-list` `showToggle` input; ru, uz-Latn and en strings;
+      initial-bundle budget unchanged.
 - [ ] Both storefronts: `ContentService`, carousel, groups, failure isolation; the
-      hard-coded promo tile removed.
+      hard-coded promo tile removed; `CustomerUiResponse.offer`, `offerData` and the block
+      they guard kept for ADR 0112 (it renders nothing while `offer` is null).
 - [ ] Release 2: story and pop-up documents, the device-local cap, counters and the
-      events endpoint, the stats view.
+      events endpoint (with its two named exemptions in `EndpointCapabilityDeclarationTests`
+      and its `SecurityConfiguration` entry), the stats view.
 - [ ] Release 3: `VideoProbe` and its fixtures, `video/mp4` in `MediaAssetService`,
       `duration_ms`, the derivative job skip, the presign window, poster capture,
-      `content.video.enabled`, the sweeper.
-- [ ] Release 4 (on request): switcher entries, reserved `MARKETPLACE` refused,
+      `content.video.enabled`, the sweeper with `MediaRelease`, the three
+      `MediaUsageProbe` implementations and the catalog test that every media-asset-id
+      column has a probe or a recorded exemption.
+- [ ] Release 4 (on request): switcher entries, the home of the layout choice,
       `storefront_sort_order`.
 - [ ] Release 5 (on request): the block document and its renderer test corpus,
       `q-rich-text` block mode, the four kinds, the storefront routes, `content.editorial`.
 - [ ] Update `docs/operations-gap-map.md` rows `6.7`, `6.7a`, `6.8` and `X.12` against the
       code as each release lands (never from a wave report), the IA's struck-through `6.7`
       sub-features, and the `ui_elements` row of `docs/domains/legacy-mapping.md`.
-- [ ] ADR 0044's status line and `marketing` module descriptor note that slots moved here.
+- [ ] The Release 1 commit annotates ADR 0044's status line, its checklist item and the
+      `marketing` module descriptor note: slots moved here (Supersedes).
 - [ ] Add `content` to ADR 0056's RLS enrolment list when that rollout reaches it.
 
 ## Exit criteria
 
 An operator with `content.publish` uploads a 3:1 image, writes a title in the brand's
-default language, links it to a category, schedules it for a week and publishes it; both
+default language, links it to a category, schedules it for a week and publishes it, and
+can extend the schedule by a week and publish again as a new revision; both
 storefronts show it in the home carousel on the next revalidation, in the customer's
 language where it exists and the brand default where it does not, from a rendition and
 not the original; withdrawing it removes it within a minute. A promo card bound to a
@@ -982,7 +1239,8 @@ promotion disappears when the promotion is suspended. A "Popular" group of hand-
 dishes shows on the home screen and silently skips a dish the menu no longer holds. An
 older revision can be read and republished. No publish writes text into the audit
 history, `UPDATE` on `item_revisions` is refused, and a request to publish an `EXTERNAL`
-link to a host not on the allowlist is refused. For Release 3: an MP4 of the stated
+link to a host not on the allowlist is refused, while a live link whose host later
+leaves the allowlist is served as `NONE`. For Release 3: an MP4 of the stated
 shape plays muted on both storefronts, and an HEVC file, a file with `moov` at the end and
 a 13 MiB file are each refused with the named code and a sentence that says how to fix
 it. For Release 5: with the entitlement and the policy on, a news post written with the
@@ -994,8 +1252,9 @@ either off, no editorial route exists.
 - ADR 0007, ADR 0010 (media lifecycle, CDN origin not built), ADR 0016 (immutable
   publication), ADR 0021 (entitlements, storage meter), ADR 0024 and ADR 0055
   (legacy migration, greenfield scope), ADR 0025, ADR 0026, ADR 0027, ADR 0029,
-  ADR 0030, ADR 0031, ADR 0032, ADR 0033, ADR 0034 (processors, CDN edge), ADR 0035,
-  ADR 0036 (channels), ADR 0044 (placements, the editorial exclusion), ADR 0056,
+  ADR 0030, ADR 0031, ADR 0032, ADR 0033, ADR 0034 (Superseded by ADR 0073; its
+  processor and CDN-edge rules are kept), ADR 0035 (Angular storefronts), ADR 0036
+  (channels), ADR 0044 (placements, the editorial exclusion), ADR 0056,
   ADR 0057, ADR 0070 (storefront as a client of a published contract), ADR 0073 (the
   one machine, international payment), ADR 0101, ADR 0112 (personalised offers),
   ADR 0135, ADR 0140 (promotions), ADR 0149 (brand languages)
@@ -1013,15 +1272,21 @@ either off, no editorial route exists.
 - `platform/docs/operations-spec/brands-and-locations.md` ("Порядок в списке")
 - `platform/docs/domains/legacy-profile-findings.md` §11 and
   `platform/docs/domains/legacy-mapping.md` (`ui_elements`, `ui_element_items`, `ui_offers`)
-- `V0015` (`media.assets`), `V0093` (`pricing.promotions`), `V0242`
-  (`tenant.brand_locales`), `V0243` (`tenant.brand_media`), `V0404`
-  (`tenant.channel_pages`), `V0451` (`catalog.channel_media_overrides`)
-- `MediaAssetService`, `ImageProbe`, `DerivativeVariant`, `StorefrontMediaController`,
-  `MalwareScanner`, `MediaUsageMeterTrigger`, `StorefrontCatalogController`,
-  `ChannelPageService`, `JdbcStorefrontPickupLocationStore`, `OrderingConfigurationKeys`
+- `V0015` (`media.assets`), `V0058` (`media.derivatives`), `V0093`
+  (`pricing.promotions`), `V0242` (`tenant.brand_locales`), `V0243`
+  (`tenant.brand_media`), `V0404` (`tenant.channel_pages`), `V0451`
+  (`catalog.channel_media_overrides`)
+- `MediaAssetService`, `MediaAvailability`, `MediaDerivativeService`, `ImageProbe`,
+  `DerivativeVariant`, `StorefrontMediaController`, `StaffPhotoAdapter`, `MalwareScanner`,
+  `MediaUsageMeterTrigger`, `StorefrontCatalogController`, `ChannelPageService`,
+  `JdbcStorefrontPickupLocationStore`, `OrderingConfigurationKeys`, `TenantLocaleSet`,
+  `SecurityConfiguration`, `EndpointCapabilityDeclarationTests`, `EntitlementKeys`,
+  `EntitlementGate`
 - `frontend/storefront/src/app/services/menu.service.ts`,
+  `frontend/storefront/src/app/types/home.types.ts`,
+  `frontend/storefront/src/app/pages/home/home.component.ts`,
   `frontend/storefront/src/app/pages/home/home.component.html`,
   `frontend/storefront-milliy/src/app/services/menu.service.ts`,
   `frontend/operations/src/app/app.routes.ts`,
   `frontend/operations/src/app/shared/ui/` (`localized-field-group`, `media-uploader`,
-  `rich-text`, `rich-text-sanitizer`, `tree-view`, `phone-frame`)
+  `rich-text`, `rich-text-sanitizer`, `tree-view`, `rule-list`, `phone-frame`)
