@@ -149,6 +149,12 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.overview.mix.byRevenue': 'По выручке',
   'reports.overview.mix.fulfilment': 'Тип получения',
   'reports.overview.mix.payment': 'Оплата',
+  'reports.paymentMix.provisional':
+    'Предварительно: финансы ещё не подписали определение этого показателя.',
+  'reports.paymentMix.openQuestion':
+    'Считается по сумме, записанной при оплате. То, что платёжный провайдер перечислит за вычетом своей комиссии, здесь не учитывается.',
+  'reports.paymentMix.notCutBy':
+    'Эта разбивка не делится по каналу и типу получения; она учитывает фильтры периода, филиала, юрлица и способа оплаты.',
   'reports.overview.funnel.title': 'Итоги по заказам',
   'reports.overview.funnel.completed': 'Завершено',
   'reports.overview.funnel.notCompleted': 'Не завершено',
@@ -289,6 +295,7 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.branches.channels.empty': 'Нет заказов за этот период.',
   'reports.branches.payments.title': 'Способы оплаты',
   'reports.branches.payments.column.method': 'Способ оплаты',
+  'reports.branches.payments.column.legalEntity': 'Юрлицо',
   'reports.branches.payments.column.count': 'Операций',
   'reports.branches.payments.column.amount': 'Сумма',
   'reports.branches.payments.empty': 'Нет операций за этот период.',

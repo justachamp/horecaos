@@ -147,6 +147,12 @@ export const reportsEn = {
   'reports.overview.mix.byRevenue': 'By revenue',
   'reports.overview.mix.fulfilment': 'Fulfilment type',
   'reports.overview.mix.payment': 'Payment',
+  'reports.paymentMix.provisional':
+    'Provisional: finance has not signed the definition of this figure yet.',
+  'reports.paymentMix.openQuestion':
+    'Counted at the amount recorded as tendered. What a card or wallet provider remits after its own commission is not netted out here.',
+  'reports.paymentMix.notCutBy':
+    'This split is not cut by channel or fulfilment type; it follows the period, branch, legal entity and payment method filters.',
   'reports.overview.funnel.title': 'Outcome',
   'reports.overview.funnel.completed': 'Completed',
   'reports.overview.funnel.notCompleted': 'Not completed',
@@ -287,6 +293,7 @@ export const reportsEn = {
   'reports.branches.channels.empty': 'No orders in this range.',
   'reports.branches.payments.title': 'Payment methods',
   'reports.branches.payments.column.method': 'Method',
+  'reports.branches.payments.column.legalEntity': 'Legal entity',
   'reports.branches.payments.column.count': 'Tenders',
   'reports.branches.payments.column.amount': 'Amount',
   'reports.branches.payments.empty': 'No tenders in this range.',

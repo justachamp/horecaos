@@ -235,7 +235,9 @@ export interface PaymentMixRowResponse {
 /**
  * P39 (7.1c/7.3b): `payment_mix.amount.v1` — the cash-collection control
  * figure. `overview` is what the business-overview card renders; `byLocation`
- * is what a future branch report (7.3b) would split by.
+ * is what the branch report's payment table (7.3b, Table D) splits by. Both
+ * keep one row per legal entity (ADR 0038): this is money, and two taxpayers'
+ * takings are never summed into one figure.
  */
 export interface PaymentMixResponse {
   readonly overview: readonly PaymentMixRowResponse[];
@@ -902,6 +904,8 @@ export class ReportingApi {
       readonly to: string;
       readonly locationId?: readonly string[];
       readonly paymentMethodCode?: readonly string[];
+      /** ADR 0038: narrows both halves to one taxpayer; absent keeps every entity, each on its own rows. */
+      readonly legalEntityId?: readonly string[];
     },
   ): Promise<PaymentMixResponse> {
     const result = await firstValueFrom(
@@ -911,6 +915,7 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           paymentMethodCode: params.paymentMethodCode,
+          legalEntityId: params.legalEntityId,
         },
       }),
     );

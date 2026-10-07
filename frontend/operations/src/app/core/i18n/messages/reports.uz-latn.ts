@@ -149,6 +149,11 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.overview.mix.byRevenue': 'Tushum boʻyicha',
   'reports.overview.mix.fulfilment': 'Olish turi',
   'reports.overview.mix.payment': 'Toʻlov',
+  'reports.paymentMix.provisional': 'Dastlabki: moliya bu koʻrsatkich taʻrifini hali imzolamagan.',
+  'reports.paymentMix.openQuestion':
+    'Toʻlov paytida yozilgan summa boʻyicha hisoblanadi. Karta yoki hamyon provayderi oʻz komissiyasini ushlab qolgach oʻtkazadigan summa bu yerda hisobga olinmaydi.',
+  'reports.paymentMix.notCutBy':
+    'Bu boʻlinish kanal va olish turi boʻyicha ajratilmaydi; u davr, filial, yuridik shaxs va toʻlov usuli filtrlariga amal qiladi.',
   'reports.overview.funnel.title': 'Buyurtmalar natijasi',
   'reports.overview.funnel.completed': 'Yakunlangan',
   'reports.overview.funnel.notCompleted': 'Yakunlanmagan',
@@ -290,6 +295,7 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.branches.channels.empty': 'Bu davrda buyurtmalar yoʻq.',
   'reports.branches.payments.title': 'Toʻlov usullari',
   'reports.branches.payments.column.method': 'Usul',
+  'reports.branches.payments.column.legalEntity': 'Yuridik shaxs',
   'reports.branches.payments.column.count': 'Operatsiyalar',
   'reports.branches.payments.column.amount': 'Summa',
   'reports.branches.payments.empty': 'Bu davrda operatsiyalar yoʻq.',
