@@ -54,6 +54,13 @@ export class CallRecorder {
   protected readonly blockingReasons = BLOCKING_REASONS;
   protected readonly nextActions = NEXT_ACTIONS;
 
+  /**
+   * One call is one attempt id, minted when the form opens and sent with every submit of it. The
+   * journal keeps one row per (tenant, attempt id), so a submit retried after the answer was lost
+   * lands on the row the first one wrote instead of recording the same call twice.
+   */
+  private readonly attemptId = crypto.randomUUID();
+
   protected readonly direction = signal<ContactDirection>('OUTBOUND');
   protected readonly outcome = signal<ContactOutcome>('CONNECTED');
   protected readonly blockingReason = signal<BlockingReason>('NO_CONSENT');
@@ -107,6 +114,7 @@ export class CallRecorder {
     this.submitted.emit({
       direction: this.direction(),
       outcome: this.outcome(),
+      attemptId: this.attemptId,
       blockingReason: this.blocked() ? this.blockingReason() : undefined,
       nextAction: next === '' ? undefined : next,
       nextActionAt: next !== '' && at ? new Date(at).toISOString() : undefined,

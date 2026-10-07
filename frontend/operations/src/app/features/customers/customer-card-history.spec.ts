@@ -185,6 +185,7 @@ describe('CustomerCardHistory', () => {
       {
         direction: 'OUTBOUND',
         outcome: 'CONNECTED',
+        attemptId: expect.any(String),
         blockingReason: undefined,
         nextAction: undefined,
         nextActionAt: undefined,

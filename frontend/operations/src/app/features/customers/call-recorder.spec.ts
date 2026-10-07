@@ -38,11 +38,38 @@ describe('CallRecorder', () => {
       {
         direction: 'OUTBOUND',
         outcome: 'CONNECTED',
+        attemptId: expect.any(String),
         blockingReason: undefined,
         nextAction: undefined,
         nextActionAt: undefined,
       },
     ]);
+  });
+
+  it('names one attempt for one form, so a submit retried after a lost answer is not a second call', () => {
+    submit();
+    submit();
+
+    expect(submitted).toHaveLength(2);
+    const [first, second] = submitted;
+    expect(first.attemptId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second.attemptId).toBe(first.attemptId);
+  });
+
+  it('names a different attempt for the next form', async () => {
+    submit();
+    const other = TestBed.createComponent(CallRecorder);
+    const otherSubmitted: RecordContactAttemptRequest[] = [];
+    other.componentInstance.submitted.subscribe((request) => otherSubmitted.push(request));
+    other.detectChanges();
+    (
+      (other.nativeElement as HTMLElement).querySelector(
+        '[data-testid="recorder-submit"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    expect(otherSubmitted).toHaveLength(1);
+    expect(otherSubmitted[0].attemptId).not.toBe(submitted[0].attemptId);
   });
 
   it('asks why only for an attempt that was refused, and sends the reason with it', () => {
