@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -59,10 +60,12 @@ public class AutomationFiringService {
     private final JdbcAudienceStore audiences;
     private final JdbcEngagementStore engagement;
     private final MarketingEligibility eligibility;
+    private final @Nullable ContactPolicyService contactPolicy;
     private final CampaignMessagePort messages;
     private final AuditRecorder audit;
     private final Clock clock;
 
+    /** The shape every caller used before ADR 0112: the platform's quiet hours, and no tenant contact policy. */
     public AutomationFiringService(
             JdbcAutomationRunStore runs,
             JdbcAudienceStore audiences,
@@ -71,6 +74,20 @@ public class AutomationFiringService {
             CampaignMessagePort messages,
             AuditRecorder audit,
             Clock clock) {
+        this(runs, audiences, engagement, eligibility, null, messages, audit, clock);
+    }
+
+    @Autowired
+    public AutomationFiringService(
+            JdbcAutomationRunStore runs,
+            JdbcAudienceStore audiences,
+            JdbcEngagementStore engagement,
+            MarketingEligibility eligibility,
+            @Nullable ContactPolicyService contactPolicy,
+            CampaignMessagePort messages,
+            AuditRecorder audit,
+            Clock clock) {
+        this.contactPolicy = contactPolicy;
         this.runs = runs;
         this.audiences = audiences;
         this.engagement = engagement;
@@ -156,8 +173,26 @@ public class AutomationFiringService {
             return FireOutcome.REFUSED;
         }
 
-        boolean quiet = policy.isQuiet(now);
-        Instant deliverAt = quiet ? policy.nextOpenBoundary(now) : now;
+        Instant deliverAt;
+        if (contactPolicy == null) {
+            deliverAt = policy.isQuiet(now) ? policy.nextOpenBoundary(now) : now;
+        } else {
+            // ADR 0112: the brand's own caps and quiet hours, asked as an explicit decision. A
+            // refusal says which rule and what the numbers were, on the run row, so "why did this
+            // guest not get the message" is a row and not a guess. The guard key stays claimed, as
+            // it does for every other refusal on this path: a trigger is not retried.
+            ContactPolicyService.ContactDecision decision = contactPolicy.decide(
+                    new ContactPolicyService.ContactRequest(
+                            rule.tenantId(), rule.brandId(), customerAccountId, channel, rule.consentPurpose()),
+                    now);
+            if (!decision.allowed()) {
+                RefusalReason reason =
+                        decision.reason() == null ? RefusalReason.FREQUENCY_CAP_REACHED : decision.reason();
+                runs.markRefused(rule.tenantId(), runId, reason.name(), decision.reasonText());
+                return FireOutcome.REFUSED;
+            }
+            deliverAt = decision.deliverAt() == null ? now : decision.deliverAt();
+        }
         String idempotencyKey = "automation:%s:%s:%s".formatted(rule.id(), customerAccountId, guardKey);
 
         UUID notificationId = messages.enqueue(new MarketingMessage(

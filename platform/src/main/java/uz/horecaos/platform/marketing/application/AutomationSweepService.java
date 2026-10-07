@@ -20,23 +20,22 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMet
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
 import uz.horecaos.platform.ordering.api.AbandonedCartDirectory;
 import uz.horecaos.platform.ordering.api.AbandonedCartDirectory.AbandonedCart;
+import uz.horecaos.platform.ordering.api.LateOrderDirectory;
+import uz.horecaos.platform.ordering.api.LateOrderDirectory.LateOrder;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 
 /**
- * The three candidate sweeps this slice of gap-map row 6.5 builds (ADR 0044
- * Triggers): {@link #sweepBirthday}, {@link #sweepInactivity}, and {@link
- * #sweepCartAbandonment}. Each walks its own active rules and funnels every
- * candidate through {@link AutomationFiringService#attemptFire}, which owns
- * eligibility, quiet hours, and the guard.
+ * The candidate sweeps of gap-map row 6.5 (ADR 0044 Triggers): {@link #sweepBirthday},
+ * {@link #sweepInactivity}, {@link #sweepCartAbandonment} and {@link
+ * #sweepLateOrderApology}. Each walks its own active rules and funnels every candidate
+ * through {@link AutomationFiringService#attemptFire}, which owns eligibility, the contact
+ * policy, quiet hours, and the guard.
  *
- * <p>{@code CASHBACK_CHANGE} has no sweep here either, but for a different
- * reason than it used to: it is offered now (V0421), and it is event-driven —
- * {@link uz.horecaos.platform.marketing.application.LoyaltyBalanceChangeAutomationTrigger}
- * consumes {@code loyalty.api.LoyaltyBalanceChanged} the moment loyalty's own
- * transaction commits, rather than being discovered by a periodic candidate
- * query the way a birthday or a day count is. {@code LATE_ORDER_APOLOGY} has
- * no sweep for the original reason — see {@link AutomationTriggerType}'s own
- * doc for why it is still not offered as an authorable rule at all.
+ * <p>{@code CASHBACK_CHANGE} has no sweep here: it is event-driven — {@link
+ * uz.horecaos.platform.marketing.application.LoyaltyBalanceChangeAutomationTrigger} consumes
+ * {@code loyalty.api.LoyaltyBalanceChanged} the moment loyalty's own transaction commits,
+ * rather than being discovered by a periodic candidate query the way a birthday or a day
+ * count is.
  */
 @Service
 public class AutomationSweepService {
@@ -48,11 +47,27 @@ public class AutomationSweepService {
 
     private static final int CANDIDATE_LIMIT = 2_000;
 
+    /**
+     * How long an order has been closed before it can be apologised for. Support gets first
+     * refusal: a person handling a late-delivery complaint records an ADR 0013 remedy within
+     * this time, and the apology that would otherwise sit beside it is cancelled instead
+     * (see {@link AutomationTriggerType}).
+     */
+    static final Duration APOLOGY_SETTLE_DELAY = Duration.ofMinutes(30);
+
+    /**
+     * How far back a sweep looks for a late order. An apology for something that happened
+     * last week reads as a mistake, and a rule armed today must not message every late order
+     * since the restaurant opened.
+     */
+    static final Duration APOLOGY_LOOKBACK = Duration.ofHours(48);
+
     private final JdbcAutomationRuleStore rules;
     private final JdbcCustomerMetricStore metrics;
     private final JdbcEngagementStore engagement;
     private final AbandonedCartDirectory abandonedCarts;
     private final OrderDirectory orderDirectory;
+    private final LateOrderDirectory lateOrders;
     private final AutomationFiringService firing;
     private final Clock clock;
 
@@ -62,6 +77,7 @@ public class AutomationSweepService {
             JdbcEngagementStore engagement,
             AbandonedCartDirectory abandonedCarts,
             OrderDirectory orderDirectory,
+            LateOrderDirectory lateOrders,
             AutomationFiringService firing,
             Clock clock) {
         this.rules = rules;
@@ -69,6 +85,7 @@ public class AutomationSweepService {
         this.engagement = engagement;
         this.abandonedCarts = abandonedCarts;
         this.orderDirectory = orderDirectory;
+        this.lateOrders = lateOrders;
         this.firing = firing;
         this.clock = clock;
     }
@@ -192,6 +209,66 @@ public class AutomationSweepService {
                 orderDirectory.recentForCustomer(tenantId, brandId, cart.customerAccountId(), 1);
         if (!recent.isEmpty() && recent.get(0).placedAt().isAfter(cart.abandonedAt())) {
             return "Customer placed an order after this cart was abandoned";
+        }
+        return null;
+    }
+
+    /**
+     * @return how many late orders this pass attempted to apologise for (fired, refused, or
+     *         cancelled because a remedy was already recorded), across every active
+     *         LATE_ORDER_APOLOGY rule
+     */
+    public int sweepLateOrderApology() {
+        int attempted = 0;
+        for (AutomationRuleRow rule :
+                rules.activeByTriggerType(AutomationTriggerType.LATE_ORDER_APOLOGY.name(), RULE_LIMIT)) {
+            try {
+                attempted += fireLateOrderApology(rule);
+            } catch (RuntimeException failure) {
+                log.error("Automation rule {} (LATE_ORDER_APOLOGY) could not be swept", rule.id(), failure);
+            }
+        }
+        return attempted;
+    }
+
+    private int fireLateOrderApology(AutomationRuleRow rule) {
+        Instant now = clock.instant();
+        List<LateOrder> candidates = lateOrders.completedLate(
+                rule.tenantId(),
+                rule.brandId(),
+                rule.configValue(),
+                now.minus(APOLOGY_LOOKBACK),
+                now.minus(APOLOGY_SETTLE_DELAY),
+                CANDIDATE_LIMIT);
+
+        for (LateOrder order : candidates) {
+            // Identifiers and a number the guest was given: nothing personal reaches the message.
+            Map<String, String> variables = Map.of(
+                    "orderNumber", order.publicOrderNumber(),
+                    "lateByMinutes", Long.toString(order.lateByMinutes()));
+            // Read by attemptFire itself, inside its own transaction and after the guard key is
+            // claimed, so a remedy committed up to that point is seen: the check is not a value
+            // staled by the gap between this sweep reading candidates and that firing.
+            firing.attemptFire(
+                    rule,
+                    order.customerAccountId(),
+                    AutomationGuardKeys.order(order.orderId()),
+                    order.orderId(),
+                    variables,
+                    () -> remedyRecorded(order));
+        }
+        return candidates.size();
+    }
+
+    /**
+     * ADR 0013 reconciliation: an order that already has a remedy is not apologised to a
+     * second time by marketing.
+     *
+     * @return the cancellation reason, or null when no remedy is recorded
+     */
+    private @Nullable String remedyRecorded(LateOrder order) {
+        if (lateOrders.hasRemedy(order.tenantId(), order.orderId())) {
+            return "A remedy is already recorded for this order (ADR 0013), so marketing does not apologise a second time";
         }
         return null;
     }

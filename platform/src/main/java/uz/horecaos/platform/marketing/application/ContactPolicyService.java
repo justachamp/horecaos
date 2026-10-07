@@ -130,16 +130,17 @@ public class ContactPolicyService {
         OverrideRow after = overrides
                 .find(tenantId, brandId, channel.name(), request.campaignPurpose(), period.name())
                 .orElseThrow();
+        Map<String, Object> change = ChangeDocuments.created(snapshot(after));
+        if (before != null) {
+            change = ChangeDocuments.diff(snapshot(before), snapshot(after));
+        }
         audit.record(AuditFact.of("MARKETING_CONTACT_POLICY_SET", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("MarketingContactPolicyOverride", overrideId(after))
                 .targetVersion((long) version)
                 .because(request.statedReason())
-                .changed(
-                        before == null
-                                ? ChangeDocuments.created(snapshot(after))
-                                : ChangeDocuments.diff(snapshot(before), snapshot(after)))
+                .changed(change)
                 .usingCapability("marketing.contact_policy.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(now)

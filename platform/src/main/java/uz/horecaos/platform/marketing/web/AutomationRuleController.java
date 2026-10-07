@@ -340,6 +340,7 @@ public class AutomationRuleController {
             UUID customerAccountId,
             String status,
             @Nullable String refusalReason,
+            @Nullable String refusalDetail,
             @Nullable String cancelledReason,
             Instant firedAt) {
         static AutomationRunResponse of(AutomationRunRow row) {
@@ -348,6 +349,7 @@ public class AutomationRuleController {
                     row.customerAccountId(),
                     row.status(),
                     row.refusalReason(),
+                    row.refusalDetail(),
                     row.cancelledReason(),
                     row.firedAt());
         }

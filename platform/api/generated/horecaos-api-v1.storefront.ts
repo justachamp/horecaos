@@ -86,6 +86,14 @@ export interface BalanceResponse {
   spendable?: ApiMoney;
 }
 
+export interface Banner {
+  imageReference?: string;
+  name?: string;
+  offerId?: string;
+  presentedOfferId?: string;
+  priority?: number;
+}
+
 export interface CartLineResponse {
   comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
@@ -878,6 +886,8 @@ export interface Operations {
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
   "reorderPlan": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
+  "poll_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { surface?: string } } }; responses: { "200": Array<Banner> } };
+  "dismiss": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals"; request: { parameters: { path: { brandId: string; presentedOfferId: string; tenantId: string } } }; responses: { "200": unknown } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
   "myReviews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontReviewControllerReviewResponse } };

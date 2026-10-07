@@ -73,8 +73,8 @@ public class ContactPolicyController {
             description = "The bounds are what an override is measured against: a cap above its ceiling, or "
                     + "quiet hours that start later or end earlier than the platform's, is a loosening and "
                     + "is refused.")
-    public ResponseEntity<PolicyResponse> read(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return ResponseEntity.ok(new PolicyResponse(
+    public ResponseEntity<ContactPolicyResponse> read(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok(new ContactPolicyResponse(
                 new PlatformBounds(
                         EngagementPolicy.DEFAULT_QUIET_START,
                         EngagementPolicy.DEFAULT_QUIET_END,
@@ -231,7 +231,7 @@ public class ContactPolicyController {
             int rolling7DayCapCeiling,
             int rolling30DayCapCeiling) {}
 
-    public record PolicyResponse(PlatformBounds platform, List<OverrideResponse> overrides) {}
+    public record ContactPolicyResponse(PlatformBounds platform, List<OverrideResponse> overrides) {}
 
     public record DefaultsResponse(
             List<String> channelPriorityOrder, int inAppShowCapPerDay, int controlGroupPercentDefault) {}

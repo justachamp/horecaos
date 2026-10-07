@@ -103,7 +103,8 @@ public class OfferService {
                 actor,
                 created,
                 "A draft offer was created",
-                ChangeDocuments.created(snapshot(created)),
+                null,
+                snapshot(created),
                 correlationId,
                 now);
         return created;
@@ -135,7 +136,8 @@ public class OfferService {
                 actor,
                 created,
                 "A new draft version of an offer was created",
-                ChangeDocuments.diff(snapshot(source), snapshot(created)),
+                snapshot(source),
+                snapshot(created),
                 correlationId,
                 now);
         return created;
@@ -172,7 +174,8 @@ public class OfferService {
                 actor,
                 after,
                 "A draft offer was rewritten",
-                ChangeDocuments.diff(snapshot(before), snapshot(after)),
+                snapshot(before),
+                snapshot(after),
                 correlationId,
                 now);
         return after;
@@ -215,7 +218,8 @@ public class OfferService {
                 actor,
                 after,
                 "An offer version was published",
-                ChangeDocuments.diff(snapshot(before), snapshot(after)),
+                snapshot(before),
+                snapshot(after),
                 correlationId,
                 now);
         events.publishEvent(new OfferPublished(Ids.newId(), tenantId, brandId, offerId, after.versionNumber(), now));
@@ -241,14 +245,7 @@ public class OfferService {
             throw ApiException.staleVersion(expectedRowVersion, before.rowVersion());
         }
         OfferRow after = require(tenantId, brandId, offerId);
-        record(
-                "MARKETING_OFFER_RETIRED",
-                actor,
-                after,
-                reason,
-                ChangeDocuments.diff(snapshot(before), snapshot(after)),
-                correlationId,
-                now);
+        record("MARKETING_OFFER_RETIRED", actor, after, reason, snapshot(before), snapshot(after), correlationId, now);
         return after;
     }
 
@@ -433,16 +430,22 @@ public class OfferService {
             ActorRef actor,
             OfferRow offer,
             String reason,
-            Map<String, Object> changes,
+            @Nullable Map<String, Object> before,
+            Map<String, Object> after,
             String correlationId,
             Instant now) {
+        // A creation has no prior state to diff against; everything else is a before and an after.
+        Map<String, Object> change = ChangeDocuments.created(after);
+        if (before != null) {
+            change = ChangeDocuments.diff(before, after);
+        }
         audit.record(AuditFact.of(action, AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.brand(offer.tenantId(), offer.brandId()))
                 .target("MarketingOffer", offer.id())
                 .targetVersion((long) offer.rowVersion())
                 .because(reason)
-                .changed(changes)
+                .changed(change)
                 .usingCapability("marketing.offer.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
