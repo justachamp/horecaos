@@ -260,18 +260,6 @@ class ProviderHttpClientTests {
         assertThat(outcome.normalized()).containsEntry(ProviderHttpClient.STATUS_KEY, 404);
     }
 
-    @Test
-    @DisplayName("a bare JSON array is readable, held under one key")
-    void aBareArrayIsReadable() {
-        answer("/list", 200, "  [{\"id\":1}]");
-
-        ProviderOutcome outcome =
-                client.get(call(Duration.ofSeconds(5)), "/list", Map.of(), body -> ProviderOutcome.success(body, null));
-
-        assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
-        assertThat(outcome.normalized().get(ProviderHttpClient.ARRAY_BODY)).isInstanceOf(java.util.List.class);
-    }
-
     private void answer(String path, int status, String body) {
         server.createContext(path, exchange -> {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

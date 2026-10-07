@@ -6,7 +6,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -337,15 +336,15 @@ class EInvoicingRouteTests {
     }
 
     @Test
-    @DisplayName("a bare JSON array answer is readable, not an unreadable response")
-    void aBareArrayIsReadable() {
-        server.reply("GET", "/list", 200, "[{\"id\":1,\"code\":\"Archived\"}]");
+    @DisplayName("an answer that is not the JSON object an adapter expects is uncertain, never believed")
+    void anAnswerThatIsNotAnObjectIsUncertain() {
+        server.reply("GET", "/list", 200, "[{\"id\":1}]");
 
         ProviderOutcome outcome = transport.exchange(
                 call(server.baseUrl(), "/list", credential -> EInvoicingApiCall.Request.of(Map.of())));
 
-        assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
-        assertThat(outcome.normalized().get(ProviderHttpClient.ARRAY_BODY)).isInstanceOf(List.class);
+        assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.UNCERTAIN);
+        assertThat(outcome.errorCode()).isEqualTo("RESPONSE_UNREADABLE");
     }
 
     @Test

@@ -52,11 +52,6 @@ public class ProviderHttpClient {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    private static final TypeReference<List<Object>> ARRAY_TYPE = new TypeReference<>() {};
-
-    /** The key a bare JSON array answer is held under in the parsed map. */
-    public static final String ARRAY_BODY = "$array";
-
     /** The key the HTTP status is held under when the caller asked to hear a non-2xx status as an answer. */
     public static final String STATUS_KEY = "$status";
 
@@ -422,20 +417,11 @@ public class ProviderHttpClient {
     }
 
     /**
-     * A JSON object as a map, and a JSON array as a map holding it under {@link #ARRAY_BODY}.
-     *
-     * <p>Some providers answer a list as a bare array (Faktura.uz's status dictionary);
-     * reading it as an object would classify a perfectly good answer as unreadable, which
-     * for a mutating call is the difference between a safe retry and a reconciliation.
+     * A JSON object as a map. Anything else -- an array, a scalar, HTML -- is unreadable, and for a
+     * call that may have acted that is {@code UNCERTAIN}: an adapter that expects an object and
+     * is answered with an array has not been told what happened (see Noor's unreadable-200 test).
      */
     private Map<String, Object> parse(byte[] raw) {
-        int first = 0;
-        while (first < raw.length && Character.isWhitespace(raw[first])) {
-            first++;
-        }
-        if (first < raw.length && raw[first] == '[') {
-            return Map.of(ARRAY_BODY, objectMapper.readValue(raw, ARRAY_TYPE));
-        }
         return objectMapper.readValue(raw, MAP_TYPE);
     }
 
