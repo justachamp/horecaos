@@ -16,7 +16,10 @@ import { I18n } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { PhonePipe } from '../../../core/format/phone.pipe';
+import { LatLng, MapBounds } from '../../../shared/ui/map/map-provider';
+import { MapPin } from '../../../shared/ui/map/map-pin';
 import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
+import { FALLBACK_MAP_CENTRE, MapRegionService } from '../../delivery/map-region';
 import { describeApiError } from '../../orders/order-errors';
 import { FloorPlanPane } from './floor-plan-pane';
 import { LocationContactPersons } from './location-contact-persons';
@@ -59,9 +62,13 @@ const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
  * (new, operations surface) and writes address/phone/landmark through
  * `TenantControlPlaneController`'s existing `place` endpoint, cross-surface.
  * name/code/slug/timezone/status stay read-only — nothing writes them.
- * The map pin itself has no editor here yet (10.2b's own named gap) — but
- * wave P32 fixed the data-loss bug that made every save here erase it: see
- * `savePlace`'s own doc.
+ * **The map pin (row `10.2b`, ADR 0145).** The pin is shown on a map and can be moved: click the
+ * map, drag the pin or type the two numbers (`q-map-pin`, which keeps the numbers beside the map
+ * so a branch can be placed with no map at all). It is never removable here: a branch without a
+ * point cannot be measured from or have a zone drawn around it (ADR 0037), so the screen offers
+ * moving it and not deleting it. Wave P32 had fixed the data-loss bug that made every save erase
+ * the point, and that fix still holds: see `savePlace`'s own doc, which sends a point only when
+ * the person moved it.
  *
  * **Tabs 2 and 3 (Часы, Загрузка и приготовление)** read the new
  * `service-summary` endpoint — the manual override, every bound schedule's
@@ -96,6 +103,7 @@ const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
     NgTemplateOutlet,
     FloorPlanPane,
     LocationContactPersons,
+    MapPin,
   ],
   templateUrl: './location-detail-pane.html',
   styleUrl: './location-detail-pane.css',
@@ -106,6 +114,7 @@ export class LocationDetailPane {
   private readonly baseLocation = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
   private readonly localeSet = inject(LocaleSet);
+  private readonly mapRegions = inject(MapRegionService);
 
   /** Route param, bound by `withComponentInputBinding()` — see `order-detail-pane.ts` for the same idiom. */
   readonly locationId = input.required<string>();
@@ -125,6 +134,26 @@ export class LocationDetailPane {
   protected readonly draftCity = signal('');
   protected readonly draftContactPhone = signal('');
   protected readonly draftLandmark = signal('');
+
+  // ------------------------------------------------------ 10.2b: the map pin
+  /** The pin as the person has it now; `null` only for a branch that never had one. */
+  protected readonly draftPoint = signal<LatLng | null>(null);
+
+  /** The branch's saved point, or `null` when it has none. */
+  protected readonly savedPoint = computed<LatLng | null>(() => {
+    const current = this.profile();
+    return current?.latitude != null && current.longitude != null
+      ? { latitude: current.latitude, longitude: current.longitude }
+      : null;
+  });
+
+  /** Where a map with no point to look at opens: the tenant's region, else Tashkent. */
+  protected readonly pinCentre = computed<LatLng>(
+    () => this.savedPoint() ?? this.mapRegions.primary()?.centre ?? FALLBACK_MAP_CENTRE,
+  );
+  protected readonly pinRegion = computed<MapBounds | null>(
+    () => this.mapRegions.primary()?.bounds ?? null,
+  );
 
   // ------------------------------------------------------- 10.2b: venue facts
   /**
@@ -213,6 +242,26 @@ export class LocationDetailPane {
       const id = this.locationId();
       void this.load(id);
     });
+    // The region's box is what warns that a pin was placed outside it; reading it never blocks the page.
+    void this.mapRegions.ensureLoaded();
+  }
+
+  protected onPinMoved(point: LatLng | null): void {
+    // The pin is not removable on this screen, so `null` cannot arrive; ignoring it is the guard
+    // that keeps a future change to that from erasing a branch's point silently.
+    if (point !== null) {
+      this.draftPoint.set(point);
+    }
+  }
+
+  /** Whether the person moved the pin away from where the branch has it. */
+  private pinMoved(): boolean {
+    const draft = this.draftPoint();
+    const saved = this.savedPoint();
+    return (
+      draft !== null &&
+      (saved === null || draft.latitude !== saved.latitude || draft.longitude !== saved.longitude)
+    );
   }
 
   protected selectTab(tab: LocationTab): void {
@@ -226,6 +275,7 @@ export class LocationDetailPane {
     this.draftCity.set(current?.city ?? '');
     this.draftContactPhone.set(current?.contactPhone ?? '');
     this.draftLandmark.set(current?.landmark ?? '');
+    this.draftPoint.set(this.savedPoint());
     this.draftSortOrder.set(current?.sortOrder ?? 0);
     this.draftSeats.set(current?.seats != null ? String(current.seats) : '');
     this.draftAverageChequeAmount.set(
@@ -262,13 +312,16 @@ export class LocationDetailPane {
   }
 
   /**
-   * P32: latitude/longitude/coordinateSource are deliberately never sent from
-   * here. The backend now carries the existing point through whenever a
+   * P32: latitude/longitude/coordinateSource are not sent unless the person
+   * moved the pin. The backend carries the existing point through whenever a
    * write is silent about it (`DescribeLocationCommand.toPlace`'s own doc) —
    * before that fix, this form's own omission of them was exactly what
-   * erased a surveyed branch's map pin on every address or phone edit.
-   * `landmark` used to be omitted the same way; it is sent now that this
-   * form has a field for it.
+   * erased a surveyed branch's map pin on every address or phone edit. Row
+   * 10.2b keeps that: an edit that did not touch the pin stays silent about
+   * it, and a moved pin is sent as `MERCHANT_PIN` (the tenant's own staff
+   * placed it, which is what that source means), with both coordinates and
+   * never one without the other. `landmark` used to be omitted the same
+   * way; it is sent now that this form has a field for it.
    *
    * **Clearing the landmark.** An emptied `draftLandmark` collapses to
    * `landmark: undefined` on the wire, which the backend reads as "this
@@ -296,6 +349,7 @@ export class LocationDetailPane {
     this.placeSaving.set(true);
     this.placeError.set(null);
     try {
+      const pin = this.pinMoved() ? this.draftPoint() : null;
       const trimmedLandmark = this.draftLandmark().trim();
       const clearLandmark = trimmedLandmark === '' && !!this.profile()?.landmark;
       const seats = this.draftSeats().trim();
@@ -344,6 +398,13 @@ export class LocationDetailPane {
         contactPhone: this.draftContactPhone().trim() || undefined,
         landmark: trimmedLandmark || undefined,
         clearLandmark: clearLandmark || undefined,
+        ...(pin === null
+          ? {}
+          : {
+              latitude: pin.latitude,
+              longitude: pin.longitude,
+              coordinateSource: 'MERCHANT_PIN' as const,
+            }),
         sortOrder: this.draftSortOrder(),
         seats: seats === '' ? undefined : Number(seats),
         clearSeats: clearSeats || undefined,

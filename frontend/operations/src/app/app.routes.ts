@@ -321,8 +321,9 @@ export const routes: Routes = [
             children: [
               {
                 path: ':locationId',
-                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen).
-                canActivate: [messagesGuard('staff', 'orders')],
+                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen);
+                // `map` for the branch's pin (row 10.2b, ADR 0145).
+                canActivate: [messagesGuard('staff', 'orders', 'map')],
                 loadComponent: () =>
                   import('./features/settings/locations/location-detail-pane').then(
                     (m) => m.LocationDetailPane,
