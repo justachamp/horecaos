@@ -513,7 +513,7 @@ export interface CandidateView {
 
 export interface CapabilityCatalogueView {
   capabilities?: Array<string>;
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   installationId?: string;
   providerType?: string;
 }
@@ -859,7 +859,7 @@ export interface ConnectField {
 }
 
 export interface ConnectFieldDeclarationView {
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   environments?: Array<ConnectFieldEnvironment>;
   fields?: Array<ConnectField>;
   providerType?: string;
@@ -1147,6 +1147,7 @@ export interface DeliveryTariffControllerDraftTariffVersionRequest {
   roadFactorBasisPoints?: number;
   routingProviderInstallationId?: string;
   timeRules?: Array<TimeRuleRequest>;
+  usePlatformRouting?: boolean;
 }
 
 export interface DeliveryTariffControllerVersionView {
@@ -1584,7 +1585,7 @@ export interface IncidentView {
 }
 
 export interface InstallRequest {
-  category: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   displayName: string;
   environmentCode: string;
   externalAccountReference?: string;
@@ -2694,7 +2695,7 @@ export interface ProjectedVariant {
 }
 
 export interface ProviderConnectDeclaration {
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   fields?: Array<ConnectField>;
   providerType?: string;
 }
@@ -2970,6 +2971,22 @@ export interface RotateSecretResponse {
 export interface RotateSecretValueRequest {
   reason: string;
   value: string;
+}
+
+export interface RoutingView {
+  basis?: string;
+  basisEvidence?: string;
+  engineDatasetVersion?: string;
+  engineEnabled?: boolean;
+  fallbackFees?: number;
+  installationStatus?: string;
+  lastDatasetVersion?: string;
+  lastDistanceSource?: string;
+  lastResolvedAt?: string;
+  provider?: string;
+  roadFactorBasisPoints?: number;
+  roadFees?: number;
+  windowHours?: number;
 }
 
 export interface RowEntry {
@@ -3358,6 +3375,7 @@ export interface SuspendScopeRequest {
 
 export interface TariffDetailResponse {
   activeVersion?: ActiveVersionResponse;
+  routing?: RoutingView;
   tariff?: TariffSummaryResponse;
 }
 

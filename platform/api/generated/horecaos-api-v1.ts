@@ -1313,7 +1313,7 @@ export interface CandidateView {
 
 export interface CapabilityCatalogueView {
   capabilities?: Array<string>;
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   installationId?: string;
   providerType?: string;
 }
@@ -2023,7 +2023,7 @@ export interface ConnectField {
 }
 
 export interface ConnectFieldDeclarationView {
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   environments?: Array<ConnectFieldEnvironment>;
   fields?: Array<ConnectField>;
   providerType?: string;
@@ -3108,6 +3108,7 @@ export interface DeliveryTariffControllerDraftTariffVersionRequest {
   roadFactorBasisPoints?: number;
   routingProviderInstallationId?: string;
   timeRules?: Array<TimeRuleRequest>;
+  usePlatformRouting?: boolean;
 }
 
 export interface DeliveryTariffControllerVersionView {
@@ -3607,7 +3608,9 @@ export interface EvidenceView {
   reasonCode?: string;
   resolutionId?: string;
   resolutionVersion?: number;
+  routingDatasetVersion?: string;
   routingProvider?: string;
+  routingSeconds?: number;
   tariffId?: string;
   tariffVersion?: number;
   timeRuleSequence?: number;
@@ -4161,7 +4164,7 @@ export interface IngestResponse {
 }
 
 export interface InstallRequest {
-  category: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   displayName: string;
   environmentCode: string;
   externalAccountReference?: string;
@@ -5349,6 +5352,7 @@ export interface OperationsDeliveryTariffControllerDraftTariffVersionRequest {
   roadFactorBasisPoints?: number;
   routingProviderInstallationId?: string;
   timeRules?: Array<TimeRuleRequest>;
+  usePlatformRouting?: boolean;
 }
 
 export interface OperationsDispatchRulesControllerRuleBody {
@@ -7223,7 +7227,7 @@ export interface ProvenanceResponse {
 }
 
 export interface ProviderConnectDeclaration {
-  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "OTHER";
+  category?: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "OTHER";
   fields?: Array<ConnectField>;
   providerType?: string;
 }
@@ -8310,6 +8314,11 @@ export interface RoundResponse {
   sessionId?: string;
 }
 
+export interface RoutingEngineResponse {
+  datasetVersion?: string;
+  engineEnabled?: boolean;
+}
+
 export interface RoutingRuleDetailResponse {
   brandRule?: RoutingRuleView;
   locationRule?: RoutingRuleView;
@@ -8345,6 +8354,22 @@ export interface RoutingSubscriptionRequest {
 export interface RoutingSubscriptionResponse {
   enabled?: boolean;
   eventClass?: string;
+}
+
+export interface RoutingView {
+  basis?: string;
+  basisEvidence?: string;
+  engineDatasetVersion?: string;
+  engineEnabled?: boolean;
+  fallbackFees?: number;
+  installationStatus?: string;
+  lastDatasetVersion?: string;
+  lastDistanceSource?: string;
+  lastResolvedAt?: string;
+  provider?: string;
+  roadFactorBasisPoints?: number;
+  roadFees?: number;
+  windowHours?: number;
 }
 
 export interface RowEntry {
@@ -9544,6 +9569,7 @@ export interface TariffAuditRowResponse {
 
 export interface TariffDetailResponse {
   activeVersion?: ActiveVersionResponse;
+  routing?: RoutingView;
   tariff?: TariffSummaryResponse;
 }
 
@@ -10840,6 +10866,7 @@ export interface Operations {
   "takeover": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/takeover"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
   "list_23": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };
   "create_9": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTariffRequest }; responses: { "200": TariffView } };
+  "routingEngine": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/routing-engine"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": RoutingEngineResponse } };
   "detail_3": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } } }; responses: { "200": TariffDetailResponse } };
   "bind_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: DeliveryTariffControllerBindLocationRequest }; responses: { "200": unknown } };
   "draftVersion_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: OperationsDeliveryTariffControllerDraftTariffVersionRequest }; responses: { "200": DeliveryTariffControllerVersionView } };

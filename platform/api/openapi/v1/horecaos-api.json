@@ -4150,7 +4150,7 @@
             "type" : "array"
           },
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "OTHER" ],
             "type" : "string"
           },
           "installationId" : {
@@ -6373,7 +6373,7 @@
       "ConnectFieldDeclarationView" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "OTHER" ],
             "type" : "string"
           },
           "environments" : {
@@ -9880,6 +9880,9 @@
               "$ref" : "#/components/schemas/TimeRuleRequest"
             },
             "type" : "array"
+          },
+          "usePlatformRouting" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
@@ -11469,8 +11472,15 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "routingDatasetVersion" : {
+            "type" : "string"
+          },
           "routingProvider" : {
             "type" : "string"
+          },
+          "routingSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
           },
           "tariffId" : {
             "format" : "uuid",
@@ -13187,7 +13197,7 @@
       "InstallRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "OTHER" ],
             "type" : "string"
           },
           "displayName" : {
@@ -16874,6 +16884,9 @@
               "$ref" : "#/components/schemas/TimeRuleRequest"
             },
             "type" : "array"
+          },
+          "usePlatformRouting" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "bands", "currency", "distanceMode", "feeSource" ],
@@ -22830,7 +22843,7 @@
       "ProviderConnectDeclaration" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "OTHER" ],
             "type" : "string"
           },
           "fields" : {
@@ -26316,6 +26329,17 @@
         },
         "type" : "object"
       },
+      "RoutingEngineResponse" : {
+        "properties" : {
+          "datasetVersion" : {
+            "type" : "string"
+          },
+          "engineEnabled" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "RoutingRuleDetailResponse" : {
         "properties" : {
           "brandRule" : {
@@ -26412,6 +26436,55 @@
           },
           "eventClass" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RoutingView" : {
+        "properties" : {
+          "basis" : {
+            "type" : "string"
+          },
+          "basisEvidence" : {
+            "type" : "string"
+          },
+          "engineDatasetVersion" : {
+            "type" : "string"
+          },
+          "engineEnabled" : {
+            "type" : "boolean"
+          },
+          "fallbackFees" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "installationStatus" : {
+            "type" : "string"
+          },
+          "lastDatasetVersion" : {
+            "type" : "string"
+          },
+          "lastDistanceSource" : {
+            "type" : "string"
+          },
+          "lastResolvedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "roadFactorBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "roadFees" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "windowHours" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -30160,6 +30233,9 @@
         "properties" : {
           "activeVersion" : {
             "$ref" : "#/components/schemas/ActiveVersionResponse"
+          },
+          "routing" : {
+            "$ref" : "#/components/schemas/RoutingView"
           },
           "tariff" : {
             "$ref" : "#/components/schemas/TariffSummaryResponse"
@@ -40223,7 +40299,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
       "get" : {
-        "description" : "activeVersion is absent for a tariff drafted but never activated.",
+        "description" : "activeVersion is absent for a tariff drafted but never activated. routing says what a ROAD version's distance is measured by right now: the road engine, or the straight line times the detour factor because routing is not answering, from the recent fees when there are any and from configuration when there are not (ADR 0147).",
         "operationId" : "detail_6",
         "parameters" : [ {
           "in" : "path",
@@ -49387,9 +49463,46 @@
         "tags" : [ "Delivery tariffs" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/routing-engine" : {
+      "get" : {
+        "description" : "What the tariff editor shows next to \"use platform routing\" before any version has priced a fee (ADR 0147). Reads configuration and never calls the engine, so opening the editor is not a routing request.",
+        "operationId" : "routingEngine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutingEngineResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the platform routing engine is switched on, and the dataset it holds",
+        "tags" : [ "Delivery tariffs" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
       "get" : {
-        "description" : "activeVersion is absent for a tariff drafted but never activated.",
+        "description" : "activeVersion is absent for a tariff drafted but never activated. routing says what a ROAD version's distance is measured by right now (ADR 0147).",
         "operationId" : "detail_3",
         "parameters" : [ {
           "in" : "path",
@@ -60256,7 +60369,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/quotes/{quoteId}/delivery-fee-evidence" : {
       "get" : {
-        "description" : "Zone version, tariff version, band, time rule, distance, distance source, and the zones that contained the address and lost the ranking. Carries no address and no coordinates (ADR 0029).",
+        "description" : "Zone version, tariff version, band, time rule, distance, distance source, the routing provider, dataset version and free-flow travel time behind a road distance (ADR 0147), and the zones that contained the address and lost the ranking. Carries no address and no coordinates (ADR 0029).",
         "operationId" : "evidence",
         "parameters" : [ {
           "in" : "path",
