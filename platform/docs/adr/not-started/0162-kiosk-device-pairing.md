@@ -40,7 +40,7 @@
   [ADR 0082](../built/0082-a-feature-flag-is-a-boolean-configuration-key.md),
   [ADR 0087](../built/0087-a-module-is-sold-on-its-own-unit-and-switches-features-on.md),
   [ADR 0119](../partial/0119-wave-p17-device-shell-auth-and-qr-pairing.md),
-  [ADR 0151](../not-started/0151-a-wall-display-device-class.md),
+  [ADR 0151](../built/0151-a-wall-display-device-class.md),
   [ADR 0155](../not-started/0155-terminals-and-staff-pins.md) (still Proposed: see the
   open input on accepting this record before it)
 - Supersedes / Superseded by: Supersedes ADR 0079's note that `roleCode` is a parameter of

@@ -1263,7 +1263,7 @@ either off, no editorial route exists.
 - [ADR 0044](../partial/0044-marketing-campaigns-audiences-and-engagement.md),
   [ADR 0010](../partial/0010-s3-media-lifecycle-and-filesystem-migration.md),
   [ADR 0112](../not-started/0112-campaigns-offers-and-contact-policy.md),
-  [ADR 0149](../not-started/0149-languages-beyond-ru-uz-latn-and-en.md),
+  [ADR 0149](../partial/0149-languages-beyond-ru-uz-latn-and-en.md),
   [ADR 0070](../not-started/0070-a-storefront-is-a-client-of-a-published-contract.md)
 - `platform/docs/operations-gap-map.md` rows `6.7`, `6.7a`, `6.8`, `X.5`, `X.12`,
   `X.23`, `X.31`, `10.5`
