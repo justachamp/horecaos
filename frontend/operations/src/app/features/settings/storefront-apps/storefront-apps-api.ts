@@ -51,7 +51,7 @@ export interface BrandAuthorisation {
 }
 
 /**
- * 10.14 Storefront apps (ADR 0070, `OperationsStorefrontAppController`) — the tenant's own choice of
+ * 10.15 Storefront apps (ADR 0070, `OperationsStorefrontAppController`) — the tenant's own choice of
  * storefront: which registered apps may serve a brand. `STOREFRONT_APP_AUTHORISE` is held by the owner
  * and the administrator at tenant scope, which is why every call takes a bare tenant and brand.
  */

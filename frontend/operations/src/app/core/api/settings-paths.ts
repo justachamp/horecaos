@@ -804,7 +804,7 @@ export const settingsPaths = {
     return `${this.termsDocuments(tenantId, brandId)}/${version}`;
   },
 
-  // ---------------------------------------------------------- 10.14 Storefront apps (ADR 0070)
+  // ---------------------------------------------------------- 10.15 Storefront apps (ADR 0070)
 
   /**
    * `OperationsStorefrontAppController` — the registered storefront apps this brand can choose, and

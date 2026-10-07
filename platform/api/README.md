@@ -58,3 +58,64 @@ is skipped.
 `make openapi-baseline` refreshes and checks in all five baselines and clients
 together, from one Maven run; `make openapi-client-check` (what CI runs)
 regenerates all five and fails on any undocumented drift.
+
+## The storefront contract (ADR 0070)
+
+The `storefront` group is not an application's private API: it is the contract a
+tenant or a vendor builds a storefront against, and our own storefront is a
+client of it like any other. The group document says so itself — its
+`info.description` carries everything below, so a vendor reading only the
+generated document has the same facts as a reader of this file.
+
+**Which storefront is asking.** Every request names its app in
+`X-Storefront-App-Id`, in addition to the customer's own session and never
+instead of it. Anonymous browsing stays anonymous for the *customer* and
+requires an app identity all the same, so the platform can meter, rate-limit
+and revoke. An app is registered once by the platform (control plane,
+*Providers → Storefront apps*) and authorised per brand by its tenant
+(operations, *Settings → Storefront apps*). A refused app is told which thing
+is wrong: `APP_UNREGISTERED`, `APP_SUSPENDED`, `APP_NOT_AUTHORISED`,
+`APP_REVOKED`, `APP_ORIGIN_MISMATCH`, `APP_SECRET_INVALID` or
+`APP_IDENTITY_REQUIRED`. Revoking or suspending takes effect on the app's next
+request: the check reads the registry and the authorisation every time.
+
+**Public and confidential clients.** A *public* client is a browser-only
+storefront. It holds no secret, because a browser keeps none; the platform
+checks each request's `Origin` (or, for a same-origin read that carries none,
+the origin of its `Referer`) against the allowlist the app registered. That
+makes it attributable and revocable. It does **not** make it authenticated, and
+no response or screen says it does. A *confidential* client is server-backed:
+it registers a secret, sent in `X-Storefront-App-Secret`, which the platform
+mints, shows once, and keeps only as an ADR 0028 reference
+(`horecaos:<env>:provider_storefront_app:platform-storefront-apps:<id>`).
+
+**What is promised.** Each operation in the group document carries
+`x-horecaos-surface`:
+
+| Marker | Meaning |
+|---|---|
+| `published` | The guaranteed public surface. A published path is never removed within `v1`; change is additive only. `OpenApiContractTests` holds every one of them to that on every build. |
+| `internal` | Channel-specific and not promised: the Telegram link, mini-app and sign-in routes, the dine-in QR exchange and guest session, and the cart's table binding. It stays in the document and the generated client, and the compatibility gate does not hold it. |
+
+The decision is a list a person edits on purpose
+(`configuration/StorefrontPublishedSurface.java`), not a property a controller
+has by being mounted under `/api/v1/storefront/`; a path in neither list fails
+`StorefrontContractDocumentTests`, so a new storefront endpoint is never
+published, or promised, by accident. Only the *released* baseline's marker
+counts for the gate, so an operation cannot be exempted in the same change that
+reshapes it.
+
+**Deprecation policy.** A breaking change to a published path is a new major
+version served alongside the old one. The old version keeps working for at
+least **12 months** from the day its replacement is announced (the figure is
+`StorefrontContractPolicy.DEPRECATION_WINDOW_MONTHS`; ADR 0070 names no number,
+so this one is a decision of the build and the single place to change it), and
+an operation scheduled for removal is marked `deprecated` in the document from
+that day.
+
+**Rollout.** `horecaos.storefront.app-identity.required` (default `false`) is
+ADR 0070's switch between stage one and stage three. While it is `false` a
+request without the header still works and is counted
+(`horecaos.storefront.app.requests{outcome="unattributed"}`); the identity is
+made required only once that count has stayed at zero for a stated period, and
+setting the property back to `false` is the whole of the rollback.

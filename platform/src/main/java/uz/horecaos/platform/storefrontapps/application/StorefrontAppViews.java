@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.storefrontapps.api.StorefrontAppClientType;
 import uz.horecaos.platform.storefrontapps.domain.AuthorisationStatus;
 import uz.horecaos.platform.storefrontapps.domain.ConformanceStatus;
@@ -25,7 +27,13 @@ public final class StorefrontAppViews {
             ConformanceStatus status,
             @Nullable String contractVersion,
             @Nullable Instant recordedAt,
-            @Nullable String note) {}
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "What the platform's own staff wrote about one conformance run of a vendor's"
+                            + " app: no customer, and no person the vendor employs, is named in it.")
+            @Nullable
+            String note) {}
 
     public record StorefrontAppView(
             UUID id,
@@ -34,8 +42,17 @@ public final class StorefrontAppViews {
             StorefrontAppClientType clientType,
             boolean firstParty,
             List<String> originAllowlist,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "Only whether a confidential client has a secret, never the secret or its"
+                            + " reference; the name heuristic reads the word and nothing else.")
             boolean secretConfigured,
-            @Nullable Instant secretRotatedAt,
+
+            @Classified(value = DataClass.INTERNAL, reason = "When the secret last changed. A time, not the secret.")
+            @Nullable
+            Instant secretRotatedAt,
+
             StorefrontAppStatus status,
             StorefrontAppConformance conformance,
             long version,

@@ -148,7 +148,7 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         builtRoute: true,
       },
       {
-        // 10.14 Storefront apps (ADR 0070): which registered storefronts may serve each brand.
+        // 10.15 Storefront apps (ADR 0070): which registered storefronts may serve each brand.
         path: 'storefront-apps',
         label: 'settings.nav.storefrontApps',
         description: 'settings.home.description.storefrontApps',

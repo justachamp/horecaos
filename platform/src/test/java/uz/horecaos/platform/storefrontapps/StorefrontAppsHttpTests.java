@@ -640,6 +640,104 @@ class StorefrontAppsHttpTests {
     }
 
     @Test
+    @DisplayName("a secret shown once is kept nowhere: not in the idempotency record, and a retry is told why")
+    void aSecretShownOnceIsNotKeptByTheIdempotencyRecord() throws Exception {
+        String registerKey = "one-time-register";
+        MvcResult first = mvc.perform(post(REGISTRY)
+                        .with(tokenFor(ADMIN))
+                        .header(IDEMPOTENCY, registerKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("Kept Nowhere", "Acme Server", "CONFIDENTIAL", List.of())))
+                .andReturn();
+        assertThat(first.getResponse().getStatus()).isEqualTo(201);
+        JsonNode body = JSON.readTree(first.getResponse().getContentAsString());
+        String secret = body.path("secretValue").asString();
+        String appId = body.path("app").path("id").asString();
+        assertThat(secret).startsWith("sfs_");
+
+        assertThat(jdbc.sql("""
+                                SELECT count(*) FROM platform.idempotency_records
+                                 WHERE idempotency_key = :key AND response_body IS NOT NULL
+                                """).param("key", registerKey).query(Long.class).single())
+                .as("the record bars a second execution and keeps no copy of the answer")
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM platform.idempotency_records WHERE idempotency_key = :key")
+                        .param("key", registerKey)
+                        .query(Long.class)
+                        .single())
+                .isOne();
+
+        MvcResult retry = mvc.perform(post(REGISTRY)
+                        .with(tokenFor(ADMIN))
+                        .header(IDEMPOTENCY, registerKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("Kept Nowhere", "Acme Server", "CONFIDENTIAL", List.of())))
+                .andReturn();
+        assertThat(retry.getResponse().getStatus()).isEqualTo(409);
+        assertThat(retry.getResponse().getContentAsString())
+                .contains("RESOURCE_CONFLICT")
+                .doesNotContain(secret)
+                .doesNotContain("secretValue");
+        assertThat(jdbc.sql("SELECT count(*) FROM storefront_app.apps WHERE name = 'Kept Nowhere'")
+                        .query(Long.class)
+                        .single())
+                .as("the retry did not mint a second app or a second secret")
+                .isOne();
+
+        // The same holds for a rotation's secret.
+        String rotateKey = "one-time-rotate";
+        MvcResult rotated = mvc.perform(post(REGISTRY + "/" + appId + "/secret-rotations")
+                        .with(tokenFor(ADMIN))
+                        .header(IDEMPOTENCY, rotateKey)
+                        .header(HttpHeaders.IF_MATCH, "W/\"0\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"routine\"}"))
+                .andReturn();
+        assertThat(rotated.getResponse().getStatus()).isEqualTo(200);
+        String replacement = JSON.readTree(rotated.getResponse().getContentAsString())
+                .path("secretValue")
+                .asString();
+        assertThat(jdbc.sql("""
+                                SELECT count(*) FROM platform.idempotency_records
+                                 WHERE idempotency_key = :key AND response_body IS NOT NULL
+                                """).param("key", rotateKey).query(Long.class).single())
+                .isZero();
+        MvcResult rotateRetry = mvc.perform(post(REGISTRY + "/" + appId + "/secret-rotations")
+                        .with(tokenFor(ADMIN))
+                        .header(IDEMPOTENCY, rotateKey)
+                        .header(HttpHeaders.IF_MATCH, "W/\"0\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"routine\"}"))
+                .andReturn();
+        assertThat(rotateRetry.getResponse().getStatus()).isEqualTo(409);
+        assertThat(rotateRetry.getResponse().getContentAsString()).doesNotContain(replacement);
+    }
+
+    @Test
+    void aRejectedRegistrationIsReplayedLikeAnyOther() throws Exception {
+        String key = "rejected-register";
+        String invalid = registerBody("Needs An Origin", "Acme", "PUBLIC", List.of());
+        MvcResult first = mvc.perform(post(REGISTRY)
+                        .with(tokenFor(ADMIN))
+                        .header(IDEMPOTENCY, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalid))
+                .andReturn();
+        MvcResult again = mvc.perform(post(REGISTRY)
+                        .with(tokenFor(ADMIN))
+                        .header(IDEMPOTENCY, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalid))
+                .andReturn();
+
+        assertThat(first.getResponse().getStatus()).isEqualTo(400);
+        assertThat(again.getResponse().getStatus()).isEqualTo(400);
+        assertThat(again.getResponse().getHeader("Idempotency-Replayed")).isEqualTo("true");
+        assertThat(again.getResponse().getContentAsString())
+                .isEqualTo(first.getResponse().getContentAsString());
+    }
+
+    @Test
     void aPublicClientHasNoSecretToRotateAndOneItSendsIsNotWhatAdmitsIt() throws Exception {
         String appId = registerAndAuthorisePublic("Browser Only", SHOP_ORIGIN);
 

@@ -34,6 +34,7 @@ import uz.horecaos.platform.storefrontapps.domain.ConformanceStatus;
 import uz.horecaos.platform.storefrontapps.domain.StorefrontAppStatus;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
+import uz.horecaos.platform.web.idempotency.OneTimeResponse;
 
 /**
  * The platform's registry of storefront apps (ADR 0070): the control plane's own screen over
@@ -92,6 +93,7 @@ public class StorefrontAppRegistryController {
                     + "allowlist the platform enforces — attributable and revocable, not authenticated. A "
                     + "CONFIDENTIAL client is server-backed: the platform mints its secret, keeps only an "
                     + "ADR 0028 reference, and returns the value exactly once, in this response.")
+    @OneTimeResponse
     ResponseEntity<RegisteredAppResponse> registerStorefrontApp(@Valid @RequestBody RegisterAppRequest request) {
         Registered registered = registry.register(
                 new RegisterCommand(
@@ -146,6 +148,7 @@ public class StorefrontAppRegistryController {
             summary = "Rotate a confidential client's secret",
             description = "Mints a fresh secret and returns it exactly once. The previous one stops "
                     + "working with this response; a public client has none to rotate.")
+    @OneTimeResponse
     ResponseEntity<RegisteredAppResponse> rotateStorefrontAppSecret(
             @PathVariable UUID appId, HttpServletRequest http, @Valid @RequestBody ReasonRequest request) {
         Registered rotated =

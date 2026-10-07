@@ -432,7 +432,7 @@ export const routes: Routes = [
               ),
           },
           {
-            // 10.14 Storefront apps (ADR 0070): the tenant's own choice of storefront, with its
+            // 10.15 Storefront apps (ADR 0070): the tenant's own choice of storefront, with its
             // own brand picker for the reason `terms` has one.
             path: 'storefront-apps',
             loadComponent: () =>

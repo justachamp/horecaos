@@ -18,7 +18,7 @@ interface Pending {
 }
 
 /**
- * 10.14 Storefront apps (ADR 0070) — the tenant's own choice of storefront.
+ * 10.15 Storefront apps (ADR 0070) — the tenant's own choice of storefront.
  *
  * **Tenant-scoped with its own brand picker, not `CurrentLocation`.** The owner and the administrator
  * hold `STOREFRONT_APP_AUTHORISE` through a `TENANT`-scoped bundle, which carries no `BRAND` or `LOCATION`
