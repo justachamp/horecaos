@@ -176,6 +176,13 @@ export const SECTIONS: readonly Section[] = [
     capability: 'COMMERCIAL_USAGE_READ',
   },
   {
+    id: 'billingSetup',
+    labelKey: 'nav.billingSetup',
+    route: '/commerce/billing-setup',
+    group: 'nav.group.commerce',
+    capability: 'COMMERCIAL_WALLET_READ',
+  },
+  {
     id: 'dunning',
     labelKey: 'nav.dunning',
     route: '/commerce/dunning',

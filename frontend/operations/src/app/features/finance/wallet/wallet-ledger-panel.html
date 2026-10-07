@@ -1,0 +1,105 @@
+<section class="panel" data-testid="wallet-ledger-panel">
+  <h2 class="q-subhead">{{ 'finance.wallet.statements.title' | t }}</h2>
+  <p class="q-body-sm panel-lead">{{ 'finance.wallet.statements.lead' | t }}</p>
+
+  @if (error(); as message) {
+    <div class="band band--error" role="alert" data-testid="wallet-ledger-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+
+  <table class="table" data-testid="wallet-statements-table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'finance.wallet.statements.number' | t }}</th>
+        <th class="q-caption">{{ 'finance.wallet.statements.period' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.statements.total' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.paid' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.due' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (statement of statements(); track statement.statementId) {
+        <tr [attr.data-statement]="statement.number">
+          <td class="q-body-sm q-mono">{{ statement.number }}</td>
+          <td class="q-body-sm">{{ statement.periodKey }}</td>
+          <td class="q-body-sm q-tnum num">{{ money(statement.total) }}</td>
+          <td class="q-body-sm q-tnum num">{{ money(statement.paid) }}</td>
+          <td class="q-body-sm q-tnum num">
+            @if (settled(statement)) {
+              <span class="status-badge status-badge--good">{{
+                'finance.wallet.statements.settled' | t
+              }}</span>
+            } @else {
+              {{ money(statement.due) }}
+            }
+          </td>
+        </tr>
+      } @empty {
+        @if (loaded()) {
+          <tr>
+            <td class="q-body-sm empty" colspan="5">{{ 'finance.wallet.statements.empty' | t }}</td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+
+  <h2 class="q-subhead ledger-title">{{ 'finance.wallet.ledger.title' | t }}</h2>
+  <p class="q-body-sm panel-lead">{{ 'finance.wallet.ledger.lead' | t }}</p>
+  <table class="table" data-testid="wallet-ledger-table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'finance.wallet.column.when' | t }}</th>
+        <th class="q-caption">{{ 'finance.wallet.ledger.entry' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.amount' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (entry of entries(); track entry.entryId) {
+        <tr [attr.data-entry]="entry.entryType">
+          <td class="q-body-sm q-tnum">{{ time(entry.createdAt) }}</td>
+          <td class="q-body-sm">
+            {{ entryLabel(entry.entryType) }}
+            <span class="status-badge" [class.status-badge--warn]="entry.moneyKind === 'BONUS'">{{
+              kindLabel(entry.moneyKind)
+            }}</span>
+          </td>
+          <td class="q-body-sm q-tnum num">{{ money(entry.amount) }}</td>
+        </tr>
+      } @empty {
+        @if (loaded()) {
+          <tr>
+            <td class="q-body-sm empty" colspan="3">{{ 'finance.wallet.ledger.empty' | t }}</td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+  @if (cursor() !== null) {
+    <div class="form">
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="loadingMore()"
+        (click)="loadMore()"
+        data-testid="wallet-ledger-more"
+      >
+        {{
+          (loadingMore() ? 'finance.wallet.ledger.loadingMore' : 'finance.wallet.ledger.loadMore')
+            | t
+        }}
+      </button>
+    </div>
+  }
+  @if (entries().length > 0) {
+    <p class="q-caption muted" data-testid="wallet-ledger-note">
+      {{
+        (cursor() === null
+          ? 'finance.wallet.ledger.appendOnly'
+          : 'finance.wallet.ledger.appendOnlyTruncated'
+        ) | t: { count: entries().length }
+      }}
+    </p>
+  }
+</section>

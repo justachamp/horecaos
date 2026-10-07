@@ -45,8 +45,16 @@ const BOARD: ArrearsBoardView = {
         total: { amountMinor: 1_200_000, currency: 'UZS' },
         issuedAt: '2026-09-01T05:00:00Z',
       },
+      owed: { due: { amountMinor: 300_000, currency: 'UZS' }, openStatements: 1 },
+      paidInFull: false,
     },
   ],
+};
+
+/** The same tenant after it paid everything it owed: nothing moved, and nothing will by itself. */
+const PAID_BOARD: ArrearsBoardView = {
+  ...BOARD,
+  subscriptions: [{ ...BOARD.subscriptions[0], owed: null, paidInFull: true }],
 };
 
 describe('Dunning', () => {
@@ -136,5 +144,24 @@ describe('Dunning', () => {
     await create({ ...BOARD, subscriptions: [] });
 
     expect(fixture.nativeElement.textContent).toContain(ru['dunning.empty']);
+  });
+  it('shows what a late tenant still owes, and does not call it ready to restore', async () => {
+    await create();
+    const row = el('[data-tenant="tenant-1"]');
+
+    expect(row.querySelector('.owed')?.textContent).toContain('300 000');
+    expect(row.querySelector('.paidInFull')).toBeNull();
+  });
+
+  it('tells whoever restores a tenant that it has paid in full, and moves nothing itself (ADR 0089)', async () => {
+    await create(PAID_BOARD);
+    const row = el('[data-tenant="tenant-1"]');
+
+    expect(row.querySelector('.paidInFull')?.textContent).toContain(ru['dunning.paidInFull']);
+    expect(row.querySelector('.owed')?.textContent).not.toContain('300 000');
+    // Still in the stage it was in, with the same moves on offer: paying changed nothing but the cue.
+    expect(row.getAttribute('data-status')).toBe('PAST_DUE');
+    expect(row.querySelector('[data-to="ACTIVE"]')).not.toBeNull();
+    expect(api.transitionSubscription).not.toHaveBeenCalled();
   });
 });

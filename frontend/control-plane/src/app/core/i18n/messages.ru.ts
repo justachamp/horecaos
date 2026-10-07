@@ -1584,8 +1584,8 @@ export const ru: Messages = {
     'Записывается с причиной и в журнал аудита. Токен карты — это ссылка у провайдера; номер карты здесь не хранится никогда.',
   'wallet.method.submit': 'Изменить',
   'wallet.method.done': 'Теперь способ оплаты — {method}.',
-  'wallet.card.notConnected':
-    'Списание с карты не подключено: у HorecaOS пока нет своего мерчант-аккаунта, поэтому остаток такого клиента остаётся к оплате так же, как по счёту.',
+  'wallet.card.note':
+    'Оплата картой списывает деньги с карты клиента через собственный мерчант-аккаунт HorecaOS, когда он активен. Пока его нет, остаток этого клиента остаётся к оплате так же, как по счёту; см. «Настройка оплаты». Карту добавляет сам клиент.',
   'wallet.transfer.open': 'Записать банковский перевод',
   'wallet.transfer.note':
     'Действие одного человека под аудитом, как выпуск счёта. Подтверждение — банковская ссылка. Перевод сразу гасит самый старый открытый счёт.',
@@ -1613,7 +1613,6 @@ export const ru: Messages = {
   'wallet.field.bankReference': 'Банковская ссылка',
   'wallet.field.payoutReference': 'Ссылка на выплату',
   'wallet.field.expiresOn': 'Сгорает',
-  'wallet.field.cardToken': 'Ссылка на токен карты',
   'wallet.kind.PAID': 'Оплаченные',
   'wallet.kind.BONUS': 'Бонусные',
   'wallet.change.awaiting':
@@ -1637,7 +1636,7 @@ export const ru: Messages = {
   'wallet.column.entry': 'Запись',
   'wallet.column.reference': 'Ссылка',
   'wallet.column.who': 'Записал',
-  'wallet.entry.TOP_UP': 'Получен перевод',
+  'wallet.entry.TOP_UP': 'Получены деньги',
   'wallet.entry.DEPOSIT': 'Активационный депозит',
   'wallet.entry.BONUS_GRANT': 'Начислен бонус',
   'wallet.entry.BONUS_EXPIRY': 'Бонус сгорел',
@@ -1903,4 +1902,99 @@ export const ru: Messages = {
   'error.ROUTE_NOT_FOUND': 'Такого адреса на платформе нет.',
   'error.UNKNOWN': 'Что-то пошло не так.',
   'error.correlation': 'Идентификатор {correlationId}',
+  // ---------------------------------------------- счета на предоплату, пополнение картой, настройка оплаты (ADR 0095)
+  'nav.billingSetup': 'Настройка оплаты',
+  'wallet.field.paysInvoice': 'Оплачивает счёт',
+  'wallet.field.paysNoInvoice': 'Без счёта',
+  'wallet.method.cardOwn':
+    'Карту добавляет сам клиент, в собственной форме платёжного провайдера. Сотрудник HorecaOS ввести её не может.',
+  'wallet.invoice.title': 'Счета на предоплату',
+  'wallet.invoice.none': 'Этот клиент не запрашивал счёт на предоплату.',
+  'wallet.invoice.number': 'Номер',
+  'wallet.invoice.validUntil': 'Действует до',
+  'wallet.invoice.note':
+    'Требования оплаты без налогов, а не налоговые счета-фактуры. Сколько оплачено по каждому — сумма записей журнала, которые на него ссылаются, поэтому записывайте перевод на тот счёт, который он оплачивает.',
+  'wallet.invoice.status.OPEN': 'Ждёт оплаты',
+  'wallet.invoice.status.PARTIALLY_PAID': 'Оплачен частично',
+  'wallet.invoice.status.PAID': 'Оплачен',
+  'wallet.invoice.status.EXPIRED': 'Срок истёк',
+  'wallet.invoice.status.CANCELLED': 'Отозван',
+  'wallet.invoice.cancel.open': 'Отозвать',
+  'wallet.invoice.cancel.submit': 'Отозвать счёт',
+  'wallet.invoice.cancel.done': 'Счёт {number} отозван.',
+  'wallet.topUp.title': 'Пополнения картой',
+  'wallet.topUp.none': 'Этот клиент не пополнял кошелёк картой.',
+  'wallet.topUp.note':
+    'Ожидающее пополнение — списание, на которое провайдер ещё не ответил. Платформа выясняет его судьбу запросом под тем же ключом, поэтому повторного списания не будет.',
+  'wallet.topUp.outcome.PENDING': 'Ожидает',
+  'wallet.topUp.outcome.SUCCEEDED': 'Зачислено',
+  'wallet.topUp.outcome.FAILED': 'Отклонено',
+  'wallet.topUp.outcome.NOT_CONFIGURED': 'Не подключено',
+  'billing.lead':
+    'Что HorecaOS настраивает для себя, чтобы ему можно было платить: банковские реквизиты на каждом счёте и мерчант-аккаунт, через который списываются карты. Ни то, ни другое не принадлежит клиенту.',
+  'billing.bank.title': 'Банковские реквизиты на счетах',
+  'billing.bank.propose': 'Предложить новые реквизиты',
+  'billing.bank.placeholder':
+    'Это заглушки. Пока второй человек не одобрит настоящие реквизиты, ни одному клиенту нельзя выставить счёт.',
+  'billing.bank.beneficiary': 'Получатель',
+  'billing.bank.bankName': 'Банк',
+  'billing.bank.account': 'Расчётный счёт',
+  'billing.bank.mfo': 'МФО',
+  'billing.bank.taxId': 'ИНН',
+  'billing.bank.who': 'Предложил {proposer}, одобрил {approver}, {date}.',
+  'billing.bank.frozen':
+    'Счёт сохраняет реквизиты того дня, когда он выставлен. Изменение этих реквизитов выставленные счета не переписывает.',
+  'billing.bank.note':
+    'Номер счёта — то, что подписывает одобряющий: он видит здесь все поля, скрыта только ваша причина. Пока другой человек не одобрит, ничего не меняется; после этого отправьте то же предложение ещё раз.',
+  'billing.bank.approvalsNote': 'Предложение ждёт одобрения второго человека.',
+  'billing.bank.submit': 'Предложить',
+  'billing.bank.awaiting':
+    'Предложено. Ничего не изменилось: нужно одобрение другого человека. Когда он одобрит, отправьте то же предложение ещё раз, чтобы применить его.',
+  'billing.bank.changed': 'Банковские реквизиты на всех новых счетах заменены.',
+  'billing.bank.declined': 'Предложение отклонено. Ничего не изменилось.',
+  'billing.installation.title': 'Мерчант-аккаунт для карт',
+  'billing.installation.lead':
+    'Собственный аккаунт HorecaOS у провайдера карточных платежей, объявленный как любая другая установка. Учётные данные — только ссылка на секрет, никогда не значение, и не показываются. Активна не более чем одна.',
+  'billing.installation.add': 'Объявить аккаунт',
+  'billing.installation.noAccess':
+    'Реквизиты вам видны, а мерчант-аккаунт для карт — нет: для него нужно право управлять установками интеграций.',
+  'billing.installation.noneActive':
+    'Ни один аккаунт для карт не активен, поэтому каждый клиент с оплатой картой собирается как клиент со счётом: остаток остаётся к оплате, пока он не заплатит переводом или не пополнит кошелёк.',
+  'billing.installation.none': 'Аккаунт для карт пока не объявлен.',
+  'billing.installation.column.name': 'Название',
+  'billing.installation.column.provider': 'Тип провайдера',
+  'billing.installation.column.environment': 'Окружение',
+  'billing.installation.column.credential': 'Учётные данные',
+  'billing.installation.column.status': 'Статус',
+  'billing.installation.credential.named': 'Секрет указан',
+  'billing.installation.credential.none': 'Нет',
+  'billing.installation.status.DRAFT': 'Черновик',
+  'billing.installation.status.ACTIVE': 'Активен',
+  'billing.installation.status.SUSPENDED': 'Приостановлен',
+  'billing.installation.activate': 'Активировать',
+  'billing.installation.suspend': 'Приостановить',
+  'billing.installation.activate.note':
+    'Карты, добавленные под другим аккаунтом, клиентам придётся добавить заново. Тестовый двойник вне локального или тестового запуска отклоняется.',
+  'billing.installation.suspend.note':
+    'Все клиенты с оплатой картой собираются как клиенты со счётом, пока не активен какой-нибудь аккаунт.',
+  'billing.installation.activated': '{name} теперь аккаунт, через который списываются карты.',
+  'billing.installation.suspended': '{name} приостановлен. Ни одна карта не списывается.',
+  'billing.installation.created': 'Аккаунт объявлен, в черновике.',
+  'billing.installation.note':
+    'Принимается только тип провайдера с адаптером в этой сборке, а сейчас это тестовый двойник, который нельзя активировать вне локального или тестового запуска. Подключение настоящего мерчант-аккаунта описано в docs/runbooks/connect-card-merchant-account.md.',
+  'billing.installation.secretReference': 'Ссылка на секрет',
+  'billing.installation.secretReference.placeholder': 'ссылка на секрет provider_payment, не значение',
+  'billing.installation.externalAccount': 'Аккаунт у провайдера',
+  'billing.installation.submit': 'Объявить',
+  'dunning.column.owed': 'Долг',
+  'dunning.owed': '{amount}, выписок: {count}',
+  'dunning.paidInFull': 'Оплачено полностью: можно вернуть',
+  'dunning.paidInFull.hint':
+    'Клиента ничто не переводит само: оплата снимает долг, а этап остаётся прежним — решает человек.',
+  'platformApprovals.action.commercial_billing_bank-details': 'Банковские реквизиты на счетах',
+  'platformApprovals.subject.field.beneficiary': 'Получатель',
+  'platformApprovals.subject.field.bankName': 'Банк',
+  'platformApprovals.subject.field.account': 'Расчётный счёт',
+  'platformApprovals.subject.field.mfo': 'МФО',
+  'platformApprovals.subject.field.taxId': 'ИНН',
 };

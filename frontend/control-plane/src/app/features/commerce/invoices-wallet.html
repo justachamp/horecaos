@@ -243,7 +243,7 @@
       </div>
 
       @if (balances.paymentMethod === 'CARD') {
-        <p class="q-caption muted cardNote">{{ i18n.t('wallet.card.notConnected') }}</p>
+        <p class="q-caption muted cardNote">{{ i18n.t('wallet.card.note') }}</p>
       }
 
       @if (session.has('COMMERCIAL_WALLET_MANAGE')) {
@@ -286,6 +286,31 @@
                 [value]="reference()"
                 (input)="reference.set($any($event.target).value)"
               />
+              <!--
+                [selected] on each option, for the reason the method form gives below: an option list built by
+                @for is materialised after the select's own bindings run.
+              -->
+              <label class="q-caption payesInvoice">
+                {{ i18n.t('wallet.field.paysInvoice') }}
+                <select
+                  class="q-body-sm"
+                  name="prepaymentInvoiceNumber"
+                  [value]="invoiceNumber()"
+                  (change)="invoiceNumber.set($any($event.target).value)"
+                >
+                  <option value="" [selected]="invoiceNumber() === ''">
+                    {{ i18n.t('wallet.field.paysNoInvoice') }}
+                  </option>
+                  @for (invoice of payableInvoices(); track invoice.invoiceId) {
+                    <option
+                      [value]="invoice.number"
+                      [selected]="invoice.number === invoiceNumber()"
+                    >
+                      {{ invoice.number }} · {{ i18n.moneyOrRaw(invoice.due) }}
+                    </option>
+                  }
+                </select>
+              </label>
               <input
                 class="q-body-sm"
                 name="reason"
@@ -461,13 +486,7 @@
                 }
               </select>
               @if (method() === 'CARD') {
-                <input
-                  class="q-body-sm"
-                  name="cardTokenReference"
-                  [placeholder]="i18n.t('wallet.field.cardToken')"
-                  [value]="cardToken()"
-                  (input)="cardToken.set($any($event.target).value)"
-                />
+                <span class="q-caption muted cardOwn">{{ i18n.t('wallet.method.cardOwn') }}</span>
               }
               <input
                 class="q-body-sm"
@@ -488,6 +507,116 @@
             i18n.t('wallet.approvals.link')
           }}</a>
         </p>
+      }
+
+      @if (prepaymentError(); as message) {
+        <p class="q-body-sm state error">{{ message }}</p>
+      }
+
+      <h3 class="q-caption invoicesTitle">{{ i18n.t('wallet.invoice.title') }}</h3>
+      @if (invoices().length === 0) {
+        <p class="q-body-sm muted noInvoices">{{ i18n.t('wallet.invoice.none') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table invoicesTable">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('wallet.invoice.number') }}</th>
+                <th class="q-caption">{{ i18n.t('statements.column.status') }}</th>
+                <th class="q-caption num">{{ i18n.t('statements.column.amount') }}</th>
+                <th class="q-caption num">{{ i18n.t('statements.column.paid') }}</th>
+                <th class="q-caption num">{{ i18n.t('statements.column.due') }}</th>
+                <th class="q-caption">{{ i18n.t('wallet.invoice.validUntil') }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (invoice of invoices(); track invoice.invoiceId) {
+                <tr [attr.data-invoice]="invoice.number" [attr.data-status]="invoice.status">
+                  <td class="q-body-sm q-tnum">{{ invoice.number }}</td>
+                  <td class="q-body-sm">
+                    <span class="chip" [class.live]="invoice.status === 'PAID'">{{
+                      invoiceStatusLabel(invoice.status)
+                    }}</span>
+                  </td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.moneyOrRaw(invoice.amount) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.moneyOrRaw(invoice.paid) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.moneyOrRaw(invoice.due) }}</td>
+                  <td class="q-body-sm q-tnum">{{ i18n.day(asDate(invoice.validUntil)) }}</td>
+                  <td class="q-body-sm rowActions">
+                    @if (invoice.status === 'OPEN' && session.has('COMMERCIAL_WALLET_MANAGE')) {
+                      <button
+                        type="button"
+                        class="cancelInvoiceToggle"
+                        (click)="openCancelInvoice(invoice)"
+                      >
+                        {{ i18n.t('wallet.invoice.cancel.open') }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+                @if (cancellingInvoice() === invoice.invoiceId) {
+                  <tr>
+                    <td colspan="7">
+                      <span class="confirm">
+                        <input
+                          class="q-body-sm"
+                          name="cancelReason"
+                          [placeholder]="i18n.t('common.reason')"
+                          [value]="cancelReason()"
+                          (input)="cancelReason.set($any($event.target).value)"
+                        />
+                        <button
+                          type="button"
+                          class="confirmCancelInvoice"
+                          [disabled]="!canCancelInvoice()"
+                          (click)="confirmCancelInvoice(invoice)"
+                        >
+                          {{ i18n.t('wallet.invoice.cancel.submit') }}
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="q-caption muted">{{ i18n.t('wallet.invoice.note') }}</p>
+      }
+
+      <h3 class="q-caption topUpsTitle">{{ i18n.t('wallet.topUp.title') }}</h3>
+      @if (cardTopUps().length === 0) {
+        <p class="q-body-sm muted noTopUps">{{ i18n.t('wallet.topUp.none') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table topUpsTable">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('wallet.column.when') }}</th>
+                <th class="q-caption num">{{ i18n.t('statements.column.amount') }}</th>
+                <th class="q-caption">{{ i18n.t('statements.column.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (topUp of cardTopUps(); track topUp.topUpId) {
+                <tr [attr.data-top-up]="topUp.topUpId" [attr.data-outcome]="topUp.outcome">
+                  <td class="q-body-sm">{{ i18n.dateTime(asDate(topUp.requestedAt)) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ i18n.moneyOrRaw(topUp.amount) }}</td>
+                  <td class="q-body-sm">
+                    <span class="chip" [class.live]="topUp.outcome === 'SUCCEEDED'">{{
+                      topUpOutcomeLabel(topUp.outcome)
+                    }}</span>
+                    @if (topUpNote(topUp); as note) {
+                      <div class="q-caption muted">{{ note }}</div>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="q-caption muted">{{ i18n.t('wallet.topUp.note') }}</p>
       }
 
       @if (grants().length > 0) {

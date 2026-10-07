@@ -315,4 +315,51 @@ describe('PlatformApprovals', () => {
 
     expect(fixture.nativeElement.textContent).toContain(ru['platformApprovals.empty']);
   });
+  it('shows a proposal to change the bank details in full, and does not claim a tenant is missing', async () => {
+    const proposal: PlatformPendingApproval = {
+      tenantId: null,
+      request: {
+        id: 'req-bank',
+        actionCode: 'commercial.billing.bank-details',
+        parametersHash: 'h',
+        scopeType: 'PLATFORM',
+        scopeId: null,
+        thresholdDescription: 'Every change of the bank details an invoice carries',
+        policyVersion: 1,
+        requiredApproverCapability: 'commercial.wallet.manage',
+        requestedBy: 'finance-1',
+        requestedAt: '2026-10-07T08:00:00Z',
+        expiresAt: '2026-10-08T08:00:00Z',
+        mayDecide: true,
+        subjectTenantId: null,
+        subjectTenantName: null,
+        subject: {
+          beneficiary: 'HorecaOS LLC',
+          bankName: 'Example Bank',
+          account: '20208000100000000001',
+          mfo: '00014',
+          taxId: '300000001',
+        },
+      },
+    };
+    await create([proposal]);
+    const line = fixture.nativeElement.querySelector('[data-request="req-bank"]') as HTMLElement;
+
+    expect(line.textContent).toContain(ru['platformApprovals.action.commercial_billing_bank-details']);
+    // The approver signs the account number, so every component of it is in front of them, labelled.
+    for (const [key, value] of [
+      ['beneficiary', 'HorecaOS LLC'],
+      ['bankName', 'Example Bank'],
+      ['account', '20208000100000000001'],
+      ['mfo', '00014'],
+      ['taxId', '300000001'],
+    ]) {
+      const field = line.querySelector(`[data-subject-field="${key}"]`) as HTMLElement;
+      expect(field.textContent, key).toContain(value);
+      expect(field.textContent, key).toContain(ru[`platformApprovals.subject.field.${key}` as keyof typeof ru]);
+    }
+    // No money moves and no tenant is concerned: not an alarm about a missing tenant.
+    expect(line.textContent).not.toContain(ru['platformApprovals.subject.unknownTenant']);
+    expect(line.textContent).toContain(ru['platformApprovals.platformScoped']);
+  });
 });

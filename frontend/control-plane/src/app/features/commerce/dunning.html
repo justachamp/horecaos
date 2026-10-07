@@ -43,6 +43,7 @@
             <th class="q-caption">{{ i18n.t('dunning.column.stage') }}</th>
             <th class="q-caption">{{ i18n.t('dunning.column.plan') }}</th>
             <th class="q-caption">{{ i18n.t('dunning.column.lastStatement') }}</th>
+            <th class="q-caption">{{ i18n.t('dunning.column.owed') }}</th>
             <th class="q-caption"></th>
           </tr>
         </thead>
@@ -81,6 +82,18 @@
                   —
                 }
               </td>
+              <td class="q-body-sm q-tnum owed">
+                @if (arrear.owed; as owed) {
+                  {{ i18n.t('dunning.owed', { amount: i18n.moneyOrRaw(owed.due), count: owed.openStatements }) }}
+                } @else if (arrear.paidInFull) {
+                  <!--
+                    The cue, not the act: ADR 0089 says nothing moves a subscription by itself, so a tenant that
+                    has paid what it owed keeps its stage until a person decides, and this is how that person is told.
+                  -->
+                  <span class="chip live paidInFull">{{ i18n.t('dunning.paidInFull') }}</span>
+                  <div class="q-caption muted">{{ i18n.t('dunning.paidInFull.hint') }}</div>
+                }
+              </td>
               <td class="q-body-sm actions">
                 @if (session.has('COMMERCIAL_SUBSCRIPTION_MANAGE')) {
                   @for (to of moves(arrear); track to) {
@@ -98,7 +111,7 @@
             </tr>
             @if (moving()?.subscriptionId === arrear.subscriptionId) {
               <tr>
-                <td colspan="5">
+                <td colspan="6">
                   <span class="confirm">
                     @if (moving()?.to === 'SUSPENDED') {
                       <input

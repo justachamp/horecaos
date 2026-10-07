@@ -11,8 +11,10 @@ import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
 import {
   BonusGrantView,
+  CardTopUpView,
   CommerceApi,
   PAYMENT_METHODS,
+  PrepaymentInvoiceView,
   StatementPaymentView,
   StatementView,
   WalletChangeResponse,
@@ -47,6 +49,19 @@ export type WalletForm = 'transfer' | 'deposit' | 'adjustment' | 'grant' | 'refu
  * stored. Recording a bank transfer is one person's audited act; a
  * correction, a bonus grant and a refund are proposed here and wait for a
  * different person to approve them under Approvals.
+ *
+ * **Prepayment invoices and card top-ups (ADR 0095, wave 19).** A tenant asks
+ * for an invoice to pay money in advance and tops its wallet up by card; both
+ * are listed here, because finance reconciles against them. A bank transfer is
+ * recorded against the invoice it pays — naming its number makes the ledger
+ * entry say so, and the invoice's paid figure is then the ledger's own sum,
+ * never a field somebody typed. An invoice nothing has paid may be withdrawn,
+ * with a reason. HorecaOS's own bank details and card merchant account are not
+ * per-tenant and live on Billing setup.
+ *
+ * **No card number or token is entered here.** A tenant puts its own card on
+ * file through the payment provider's form; staff have no card to type, and the
+ * payment-method form therefore only chooses how the tenant is collected.
  */
 @Component({
   selector: 'app-invoices-wallet',
@@ -107,7 +122,19 @@ export class InvoicesWallet {
   protected readonly grantId = signal('');
   protected readonly expiresOn = signal('');
   protected readonly method = signal<string>('INVOICE');
-  protected readonly cardToken = signal('');
+  /** The invoice number a transfer pays, or empty for money that pays no invoice. */
+  protected readonly invoiceNumber = signal('');
+
+  protected readonly invoices = signal<readonly PrepaymentInvoiceView[]>([]);
+  protected readonly cardTopUps = signal<readonly CardTopUpView[]>([]);
+  protected readonly prepaymentError = signal<string | null>(null);
+  protected readonly cancellingInvoice = signal<string | null>(null);
+  protected readonly cancelReason = signal('');
+
+  /** Invoices a transfer could still pay: open or part paid. */
+  protected readonly payableInvoices = computed(() =>
+    this.invoices().filter((invoice) => invoice.status === 'OPEN' || invoice.status === 'PARTIALLY_PAID'),
+  );
 
   /** The currency every wallet entry of this tenant is written in. */
   protected readonly currency = computed(() => this.wallet()?.paidBalance.currency ?? null);
@@ -166,6 +193,27 @@ export class InvoicesWallet {
     }
     await this.loadDraft();
     await this.loadWallet();
+    await this.loadPrepayment();
+  }
+
+  /**
+   * The tenant's prepayment invoices and card top-ups, read apart from the balances: a failure of
+   * either list must not take the wallet panel down with it, because the balances and the ledger are
+   * the state ADR 0095 exists to keep readable, and these two lists are reconciliation aids.
+   */
+  private async loadPrepayment(): Promise<void> {
+    this.prepaymentError.set(null);
+    const tenantId = this.tenantId();
+    const [invoices, topUps] = await Promise.allSettled([
+      this.api.prepaymentInvoices(tenantId),
+      this.api.cardTopUps(tenantId),
+    ]);
+    this.invoices.set(invoices.status === 'fulfilled' ? invoices.value : []);
+    this.cardTopUps.set(topUps.status === 'fulfilled' ? topUps.value : []);
+    const failure = [invoices, topUps].find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') {
+      this.prepaymentError.set(this.i18n.describe(failure.reason as ApiError));
+    }
   }
 
   /**
@@ -190,7 +238,6 @@ export class InvoicesWallet {
       this.grants.set(grants);
       this.payments.set(payments);
       this.method.set(wallet.paymentMethod);
-      this.cardToken.set(wallet.cardTokenReference ?? '');
     } catch (error) {
       this.wallet.set(null);
       this.ledger.set([]);
@@ -358,6 +405,45 @@ export class InvoicesWallet {
     return this.i18n.hasMessage(key) ? this.i18n.t(key) : method;
   }
 
+  protected invoiceStatusLabel(status: string): string {
+    const key = `wallet.invoice.status.${status}`;
+    return this.i18n.hasMessage(key) ? this.i18n.t(key) : status;
+  }
+
+  protected topUpOutcomeLabel(outcome: string): string {
+    const key = `wallet.topUp.outcome.${outcome}`;
+    return this.i18n.hasMessage(key) ? this.i18n.t(key) : outcome;
+  }
+
+  /** A decline's reason is the provider's code; it is shown as it came, never translated into a guess. */
+  protected topUpNote(topUp: CardTopUpView): string {
+    return topUp.reason ?? '';
+  }
+
+  protected openCancelInvoice(invoice: PrepaymentInvoiceView): void {
+    this.cancellingInvoice.set(
+      this.cancellingInvoice() === invoice.invoiceId ? null : invoice.invoiceId,
+    );
+    this.cancelReason.set('');
+    this.actionError.set(null);
+    this.actionMessage.set(null);
+  }
+
+  protected canCancelInvoice(): boolean {
+    return !this.busy() && this.cancelReason().trim().length > 0;
+  }
+
+  protected async confirmCancelInvoice(invoice: PrepaymentInvoiceView): Promise<void> {
+    if (!this.canCancelInvoice()) {
+      return;
+    }
+    await this.run(async () => {
+      await this.api.cancelPrepaymentInvoice(this.tenantId(), invoice.invoiceId, this.cancelReason().trim());
+      this.cancellingInvoice.set(null);
+      return this.i18n.t('wallet.invoice.cancel.done', { number: invoice.number });
+    });
+  }
+
   /** What this statement has been paid and what is still due, or null while the wallet has not loaded. */
   protected payment(statement: StatementView): StatementPaymentView | null {
     return this.payments().find((payment) => payment.statementId === statement.statementId) ?? null;
@@ -386,6 +472,7 @@ export class InvoicesWallet {
     this.grantId.set(this.grants()[0]?.grantId ?? '');
     this.moneyKind.set('PAID');
     this.expiresOn.set('');
+    this.invoiceNumber.set('');
     this.actionError.set(null);
     this.actionMessage.set(null);
   }
@@ -395,6 +482,7 @@ export class InvoicesWallet {
     this.amount.set('');
     this.reference.set('');
     this.reason.set('');
+    this.invoiceNumber.set('');
   }
 
   protected chooseKind(moneyKind: string): void {
@@ -436,10 +524,13 @@ export class InvoicesWallet {
       return;
     }
     await this.run(async () => {
+      const invoice = this.invoiceNumber().trim();
       await this.api.recordTransfer(this.tenantId(), {
         amountMinor,
         bankReference: this.reference().trim(),
         reason: this.reason().trim(),
+        // Only when the transfer pays one: an absent field is a transfer that pays none.
+        ...(invoice.length > 0 ? { prepaymentInvoiceNumber: invoice } : {}),
       });
       this.closeForm();
       return this.i18n.t('wallet.transfer.done');
@@ -522,11 +613,11 @@ export class InvoicesWallet {
       return;
     }
     const method = this.method();
-    const token = this.cardToken().trim();
     await this.run(async () => {
+      // No card token: the tenant puts its own card on file through the provider's form (ADR 0095),
+      // so choosing CARD here only chooses how the tenant is collected.
       await this.api.setPaymentMethod(this.tenantId(), {
         paymentMethod: method,
-        cardTokenReference: method === 'CARD' && token.length > 0 ? token : undefined,
         reason: this.reason().trim(),
       });
       this.closeForm();

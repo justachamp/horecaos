@@ -8,7 +8,9 @@ import { ru } from '../../core/i18n/messages.ru';
 import { TenantsApi } from '../tenants/tenants-api';
 import {
   BonusGrantView,
+  CardTopUpView,
   CommerceApi,
+  PrepaymentInvoiceView,
   StatementPaymentView,
   StatementView,
   WalletEntryView,
@@ -147,6 +149,60 @@ const PAYMENTS: readonly StatementPaymentView[] = [
   },
 ];
 
+const PAYMENT_DETAILS = {
+  configured: true,
+  beneficiary: 'HorecaOS LLC',
+  bankName: 'Example Bank',
+  account: '20208000100000000001',
+  mfo: '00014',
+  taxId: '300000001',
+};
+
+const OPEN_INVOICE: PrepaymentInvoiceView = {
+  invoiceId: 'inv-1',
+  number: 'PI-202608-000001',
+  status: 'OPEN',
+  amount: UZS(1_000_000),
+  paid: UZS(0),
+  due: UZS(1_000_000),
+  validUntil: '2026-09-20T09:00:00Z',
+  issuedAt: '2026-09-06T09:00:00Z',
+  cancelledAt: null,
+  paymentDetails: PAYMENT_DETAILS,
+  paymentPurpose: 'PI-202608-000001',
+  beforeTax: true,
+};
+
+const PART_PAID_INVOICE: PrepaymentInvoiceView = {
+  ...OPEN_INVOICE,
+  invoiceId: 'inv-2',
+  number: 'PI-202607-000004',
+  status: 'PARTIALLY_PAID',
+  paid: UZS(400_000),
+  due: UZS(600_000),
+};
+
+const CARD_TOP_UPS: readonly CardTopUpView[] = [
+  {
+    topUpId: 'tu-1',
+    amount: UZS(150_000),
+    outcome: 'SUCCEEDED',
+    reason: null,
+    walletEntryId: 'w-9',
+    requestedAt: '2026-09-07T09:00:00Z',
+    settledAt: '2026-09-07T09:00:02Z',
+  },
+  {
+    topUpId: 'tu-2',
+    amount: UZS(90_000),
+    outcome: 'FAILED',
+    reason: 'INSUFFICIENT_FUNDS',
+    walletEntryId: null,
+    requestedAt: '2026-09-06T09:00:00Z',
+    settledAt: '2026-09-06T09:00:03Z',
+  },
+];
+
 class FakeCommerceApi {
   readonly listStatements = vi.fn().mockResolvedValue([ISSUED]);
   readonly draftStatement = vi.fn().mockResolvedValue(DRAFT);
@@ -172,6 +228,9 @@ class FakeCommerceApi {
     .fn()
     .mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-3' });
   readonly setPaymentMethod = vi.fn().mockResolvedValue(undefined);
+  readonly prepaymentInvoices = vi.fn().mockResolvedValue([OPEN_INVOICE, PART_PAID_INVOICE]);
+  readonly cardTopUps = vi.fn().mockResolvedValue(CARD_TOP_UPS);
+  readonly cancelPrepaymentInvoice = vi.fn().mockResolvedValue({ ...OPEN_INVOICE, status: 'CANCELLED' });
 }
 
 describe('InvoicesWallet', () => {
@@ -584,7 +643,7 @@ describe('InvoicesWallet', () => {
     await fixture.componentInstance['load']();
     await settle();
 
-    expect(el('.cardNote').textContent).toContain(ru['wallet.card.notConnected']);
+    expect(el('.cardNote').textContent).toContain(ru['wallet.card.note']);
     expect(el('.methodName').textContent).toContain(ru['wallet.method.CARD']);
 
     TestBed.resetTestingModule();
@@ -593,5 +652,151 @@ describe('InvoicesWallet', () => {
     expect(el('.openRefund')).toBeNull();
     expect(el('.openMethod')).toBeNull();
     expect(el('.ledger')).not.toBeNull();
+  });
+  // ------------------------------------------ ADR 0095, wave 19: invoices and card top-ups
+
+  it('lists the tenant’s prepayment invoices with what the ledger says each has been paid', async () => {
+    await create();
+    expect(api.prepaymentInvoices).toHaveBeenCalledWith('tenant-1');
+
+    const open = el('[data-invoice="PI-202608-000001"]');
+    expect(open.textContent).toContain(ru['wallet.invoice.status.OPEN']);
+    expect(open.textContent).toContain('1 000 000');
+    const part = el('[data-invoice="PI-202607-000004"]');
+    expect(part.textContent).toContain(ru['wallet.invoice.status.PARTIALLY_PAID']);
+    expect(part.textContent).toContain('400 000');
+    expect(part.textContent).toContain('600 000');
+    expect(el('.invoicesTable').parentElement?.nextElementSibling?.textContent).toContain(
+      ru['wallet.invoice.note'],
+    );
+  });
+
+  it('lists card top-ups with the provider’s reason for a decline, as it came', async () => {
+    await create();
+    expect(api.cardTopUps).toHaveBeenCalledWith('tenant-1');
+    expect(el('[data-top-up="tu-1"]').textContent).toContain(ru['wallet.topUp.outcome.SUCCEEDED']);
+    const declined = el('[data-top-up="tu-2"]');
+    expect(declined.textContent).toContain(ru['wallet.topUp.outcome.FAILED']);
+    expect(declined.textContent).toContain('INSUFFICIENT_FUNDS');
+  });
+
+  it('records a transfer against the invoice it pays, offering only the invoices that can still be paid', async () => {
+    await create();
+    api.prepaymentInvoices.mockResolvedValue([
+      OPEN_INVOICE,
+      PART_PAID_INVOICE,
+      { ...OPEN_INVOICE, invoiceId: 'inv-3', number: 'PI-202606-000002', status: 'PAID', due: UZS(0) },
+    ]);
+    await fixture.componentInstance['load']();
+    await settle();
+    el<HTMLButtonElement>('.openTransfer').click();
+    await settle();
+
+    const options = [...fixture.nativeElement.querySelectorAll('.transferForm [name="prepaymentInvoiceNumber"] option')].map(
+      (option) => (option as HTMLOptionElement).value,
+    );
+    expect(options).toEqual(['', 'PI-202608-000001', 'PI-202607-000004']);
+
+    await type('.transferForm [name="amount"]', '1 000 000');
+    await type('.transferForm [name="bankReference"]', 'MT103-9001');
+    await type('.transferForm [name="prepaymentInvoiceNumber"]', 'PI-202608-000001', 'change');
+    await type('.transferForm [name="reason"]', 'paid against the invoice');
+    el<HTMLButtonElement>('.transferForm button[type="submit"]').click();
+    await settle();
+
+    expect(api.recordTransfer).toHaveBeenCalledWith('tenant-1', {
+      amountMinor: 1_000_000,
+      bankReference: 'MT103-9001',
+      reason: 'paid against the invoice',
+      prepaymentInvoiceNumber: 'PI-202608-000001',
+    });
+  });
+
+  it('says nothing of an invoice for a transfer that pays none', async () => {
+    await create();
+    el<HTMLButtonElement>('.openTransfer').click();
+    await settle();
+    await type('.transferForm [name="amount"]', '500 000');
+    await type('.transferForm [name="bankReference"]', 'MT103-9002');
+    await type('.transferForm [name="reason"]', 'unreferenced wire');
+    el<HTMLButtonElement>('.transferForm button[type="submit"]').click();
+    await settle();
+
+    expect('prepaymentInvoiceNumber' in api.recordTransfer.mock.calls[0][1]).toBe(false);
+  });
+
+  it('withdraws an open invoice with a reason, and offers it only on an open one', async () => {
+    await create();
+    expect(el('[data-invoice="PI-202607-000004"] .cancelInvoiceToggle')).toBeNull();
+    el<HTMLButtonElement>('[data-invoice="PI-202608-000001"] .cancelInvoiceToggle').click();
+    await settle();
+    expect(el<HTMLButtonElement>('.confirmCancelInvoice').disabled).toBe(true);
+    await type('[name="cancelReason"]', 'asked for the wrong amount');
+    el<HTMLButtonElement>('.confirmCancelInvoice').click();
+    await settle();
+
+    expect(api.cancelPrepaymentInvoice).toHaveBeenCalledWith('tenant-1', 'inv-1', 'asked for the wrong amount');
+    expect(fixture.nativeElement.textContent).toContain('PI-202608-000001');
+  });
+
+  it('offers no withdrawal to someone who may only read', async () => {
+    await create(false);
+    expect(el('.cancelInvoiceToggle')).toBeNull();
+    expect(el('.invoicesTable')).not.toBeNull();
+  });
+
+  it('keeps the wallet when the invoice or top-up lists cannot be read, and says so', async () => {
+    api = new FakeCommerceApi();
+    api.prepaymentInvoices.mockRejectedValue(new Error('boom'));
+    api.cardTopUps.mockRejectedValue(new Error('boom'));
+    TestBed.resetTestingModule();
+    localStorage.clear();
+    sessionStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [InvoicesWallet],
+      providers: [
+        { provide: APP_CONFIG, useValue: CONFIG },
+        { provide: CommerceApi, useValue: api },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(InvoicesWallet);
+    await settle();
+
+    expect(el('.paidBalance').textContent).toContain('300 000');
+    expect(el('.ledger')).not.toBeNull();
+    expect(el('.noInvoices')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.state.error')).not.toBeNull();
+  });
+
+  it('has no field for a card token: the tenant puts its own card on file, and staff only choose how it is collected', async () => {
+    await create();
+    api.wallet.mockResolvedValue({ ...WALLET, paymentMethod: 'INVOICE', cardTokenReference: 'vault:pilot' });
+    await fixture.componentInstance['load']();
+    await settle();
+    el<HTMLButtonElement>('.openMethod').click();
+    await settle();
+    await type('.methodForm [name="paymentMethod"]', 'CARD', 'change');
+
+    expect(el('.methodForm [name="cardTokenReference"]')).toBeNull();
+    expect(el('.methodForm .cardOwn').textContent).toContain(ru['wallet.method.cardOwn']);
+    // Whatever the overview carried is neither shown nor sent.
+    expect(fixture.nativeElement.textContent).not.toContain('vault:pilot');
+    await type('.methodForm [name="reason"]', 'the tenant chose to be charged by card');
+    el<HTMLButtonElement>('.methodForm button[type="submit"]').click();
+    await settle();
+    expect(api.setPaymentMethod).toHaveBeenCalledWith('tenant-1', {
+      paymentMethod: 'CARD',
+      reason: 'the tenant chose to be charged by card',
+    });
+    expect('cardTokenReference' in api.setPaymentMethod.mock.calls[0][1]).toBe(false);
   });
 });

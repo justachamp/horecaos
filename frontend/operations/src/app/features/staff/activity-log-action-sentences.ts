@@ -435,6 +435,31 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Изменён канал продаж',
       'uz-Latn': 'Savdo kanali tahrirlandi',
     },
+    'commercial.arrears.paid_in_full': {
+      en: 'Overdue balance paid in full',
+      ru: 'Просроченный долг оплачен полностью',
+      'uz-Latn': 'Muddati oʻtgan qarz toʻliq toʻlandi',
+    },
+    'commercial.billing.bank_details_changed': {
+      en: 'Bank details for invoices changed',
+      ru: 'Изменены банковские реквизиты для счетов',
+      'uz-Latn': 'Hisob-fakturalar uchun bank rekvizitlari oʻzgartirildi',
+    },
+    'commercial.card_installation.active': {
+      en: 'Card payment account activated',
+      ru: 'Платёжный аккаунт для карт активирован',
+      'uz-Latn': 'Karta uchun toʻlov hisobi faollashtirildi',
+    },
+    'commercial.card_installation.created': {
+      en: 'Card payment account added',
+      ru: 'Добавлен платёжный аккаунт для карт',
+      'uz-Latn': 'Karta uchun toʻlov hisobi qoʻshildi',
+    },
+    'commercial.card_installation.suspended': {
+      en: 'Card payment account suspended',
+      ru: 'Платёжный аккаунт для карт приостановлен',
+      'uz-Latn': 'Karta uchun toʻlov hisobi toʻxtatildi',
+    },
     'commercial.entitlement_override.granted': {
       en: 'Commercial entitlement override granted',
       ru: 'Коммерция право доступа переопределение предоставлено',
@@ -505,6 +530,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Коммерция кошелёк карта попытка заменено',
       'uz-Latn': 'Tijorat hamyon karta urinish almashtirildi',
     },
+    'commercial.wallet.card_bound': {
+      en: 'Card put on file',
+      ru: 'Карта добавлена',
+      'uz-Latn': 'Karta qoʻshildi',
+    },
     'commercial.wallet.card_charge_after_supersede': {
       en: 'Commercial wallet card charge after supersede',
       ru: 'Коммерция кошелёк карта списание после заменить',
@@ -525,6 +555,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Коммерция кошелёк карта списано',
       'uz-Latn': 'Tijorat hamyon karta yechildi',
     },
+    'commercial.wallet.card_removed': {
+      en: 'Card taken off file',
+      ru: 'Карта удалена',
+      'uz-Latn': 'Karta oʻchirildi',
+    },
+    'commercial.wallet.card_top_up_declined': {
+      en: 'Card top-up declined',
+      ru: 'Пополнение картой отклонено',
+      'uz-Latn': 'Karta orqali toʻldirish rad etildi',
+    },
+    'commercial.wallet.card_topped_up': {
+      en: 'Wallet topped up by card',
+      ru: 'Кошелёк пополнен картой',
+      'uz-Latn': 'Hamyon karta orqali toʻldirildi',
+    },
     'commercial.wallet.deposit_recorded': {
       en: 'Commercial wallet deposit recorded',
       ru: 'Коммерция кошелёк депозит зафиксировано',
@@ -539,6 +584,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Commercial wallet payment method changed',
       ru: 'Коммерция кошелёк платёж способ изменено',
       'uz-Latn': 'Tijorat hamyon toʻlov usul oʻzgartirildi',
+    },
+    'commercial.wallet.prepayment_invoice_cancelled': {
+      en: 'Prepayment invoice withdrawn',
+      ru: 'Счёт на предоплату отозван',
+      'uz-Latn': 'Oldindan toʻlov hisob-fakturasi bekor qilindi',
+    },
+    'commercial.wallet.prepayment_invoice_issued': {
+      en: 'Prepayment invoice issued',
+      ru: 'Выставлен счёт на предоплату',
+      'uz-Latn': 'Oldindan toʻlov hisob-fakturasi chiqarildi',
     },
     'commercial.wallet.refunded': {
       en: 'Commercial wallet refunded',

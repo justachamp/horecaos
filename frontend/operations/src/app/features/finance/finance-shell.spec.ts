@@ -16,7 +16,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('FinanceShell', () => {
-  it('renders a sub-nav link for every Finance screen this app builds — 8.1/8.2 (tier P) plus 8.3-8.6 (tier 2, wave 39)', async () => {
+  it('renders a sub-nav link for every Finance screen this app builds — 8.1/8.2 (tier P) plus 8.3-8.6 (tier 2, wave 39) and 8.6’s wallet tab (ADR 0095)', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
@@ -43,6 +43,7 @@ describe('FinanceShell', () => {
       'Стоимость доставки',
       'Выплаты курьерам',
       'Подписка',
+      'Кошелёк',
     ]);
   });
 });

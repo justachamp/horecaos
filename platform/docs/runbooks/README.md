@@ -42,6 +42,7 @@ That shapes them more than any style guide would.
 | [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md) | Measuring, building, deploying, refreshing and rolling back the road-distance engine's dataset; and the two routing digest alerts (ADR 0147) |
 | [scenario-guest-did-not-get-a-message.md](scenario-guest-did-not-get-a-message.md) | A marketer asks why a guest did not get a step of a scenario, why a marketing text is refused, or why a late order was not apologised for (ADR 0112) |
 | [late-order-threshold-stored-values.md](late-order-threshold-stored-values.md) | Before the ADR 0150 release: which tenants saved a «late after» number while it did nothing, what it will now do to their unpromised orders, and how to tell them |
+| [connect-card-merchant-account.md](connect-card-merchant-account.md) | Connecting HorecaOS's own card merchant account (ADR 0095): the installation to fill, the adapter it needs, replacing an account, and an unanswered charge |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

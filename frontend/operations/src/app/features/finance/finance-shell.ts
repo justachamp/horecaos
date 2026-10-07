@@ -16,6 +16,12 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * billing reads ADR 0021's plan/entitlement/usage machinery, honestly short
  * of the period close and invoices that module's own status line says do not
  * exist yet. See `operations-spec/finance.md` §0 for 8.1/8.2's own history.
+ *
+ * 8.6 is two tabs, not one: Subscription (what the plan and its modules cost,
+ * the statements, the arrears banner) and Wallet (what has been paid in advance
+ * and how to pay more, ADR 0095). The IA names both under one row; they are
+ * split because each is a screen's worth and the banner on the first links to
+ * the second.
  */
 @Component({
   selector: 'q-finance-shell',

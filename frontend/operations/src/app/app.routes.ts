@@ -596,6 +596,12 @@ export const routes: Routes = [
                 (m) => m.SubscriptionPage,
               ),
           },
+          {
+            // 8.6's prepaid half (ADR 0095): balances, top-up by card or invoice, the card on file.
+            path: 'wallet',
+            loadComponent: () =>
+              import('./features/finance/wallet/wallet-page').then((m) => m.WalletPage),
+          },
         ],
       },
       {

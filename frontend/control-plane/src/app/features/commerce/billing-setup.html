@@ -1,0 +1,312 @@
+<h1 class="q-title">{{ i18n.t('nav.billingSetup') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('billing.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else {
+  <section class="panel bank">
+    <header class="planHeader">
+      <h2 class="q-subhead">{{ i18n.t('billing.bank.title') }}</h2>
+      @if (session.has('COMMERCIAL_WALLET_MANAGE')) {
+        <button type="button" class="openBankDetails" (click)="openForm('bankDetails')">
+          {{ i18n.t('billing.bank.propose') }}
+        </button>
+      }
+    </header>
+
+    @if (bankError(); as message) {
+      <p class="q-body-sm state error">{{ message }}</p>
+    } @else if (bank(); as details) {
+      @if (!details.configured) {
+        <p class="q-body-sm warning placeholder">{{ i18n.t('billing.bank.placeholder') }}</p>
+      }
+      <dl class="details bankDetails" [class.isPlaceholder]="!details.configured">
+        <dt class="q-caption">{{ i18n.t('billing.bank.beneficiary') }}</dt>
+        <dd class="q-body-sm">{{ details.beneficiary }}</dd>
+        <dt class="q-caption">{{ i18n.t('billing.bank.bankName') }}</dt>
+        <dd class="q-body-sm">{{ details.bankName }}</dd>
+        <dt class="q-caption">{{ i18n.t('billing.bank.account') }}</dt>
+        <dd class="q-body-sm q-tnum">{{ details.account }}</dd>
+        <dt class="q-caption">{{ i18n.t('billing.bank.mfo') }}</dt>
+        <dd class="q-body-sm q-tnum">{{ details.mfo }}</dd>
+        <dt class="q-caption">{{ i18n.t('billing.bank.taxId') }}</dt>
+        <dd class="q-body-sm q-tnum">{{ details.taxId }}</dd>
+      </dl>
+      @if (details.configured) {
+        <p class="q-caption muted bankWho">
+          {{
+            i18n.t('billing.bank.who', {
+              proposer: details.updatedBy,
+              approver: details.approvedBy ?? '—',
+              date: i18n.dateTime(asDate(details.updatedAt)),
+            })
+          }}
+        </p>
+      }
+      <p class="q-caption muted">{{ i18n.t('billing.bank.frozen') }}</p>
+    }
+
+    @if (form() === 'bankDetails') {
+      <form class="setupForm bankForm" (submit)="proposeBankDetails($event)">
+        <p class="q-caption muted">{{ i18n.t('billing.bank.note') }}</p>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.bank.beneficiary') }}
+          <input
+            class="q-body-sm"
+            name="beneficiary"
+            [value]="beneficiary()"
+            (input)="beneficiary.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.bank.bankName') }}
+          <input
+            class="q-body-sm"
+            name="bankName"
+            [value]="bankName()"
+            (input)="bankName.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.bank.account') }}
+          <input
+            class="q-body-sm"
+            name="account"
+            [value]="account()"
+            (input)="account.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.bank.mfo') }}
+          <input
+            class="q-body-sm"
+            name="mfo"
+            [value]="mfo()"
+            (input)="mfo.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.bank.taxId') }}
+          <input
+            class="q-body-sm"
+            name="taxId"
+            [value]="taxId()"
+            (input)="taxId.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('common.reason') }}
+          <input
+            class="q-body-sm"
+            name="reason"
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+          />
+        </label>
+        <button type="submit" [disabled]="!canProposeBankDetails()">
+          {{ i18n.t('billing.bank.submit') }}
+        </button>
+      </form>
+      <p class="q-caption muted approvalsNote">
+        {{ i18n.t('billing.bank.approvalsNote') }}
+        <a class="approvalsLink" [routerLink]="['/compliance/approvals']">{{
+          i18n.t('wallet.approvals.link')
+        }}</a>
+      </p>
+    }
+  </section>
+
+  <section class="panel accounts">
+    <header class="planHeader">
+      <h2 class="q-subhead">{{ i18n.t('billing.installation.title') }}</h2>
+      @if (session.has('INTEGRATION_INSTALLATION_MANAGE')) {
+        <button type="button" class="openInstallation" (click)="openForm('installation')">
+          {{ i18n.t('billing.installation.add') }}
+        </button>
+      }
+    </header>
+    <p class="q-body-sm muted">{{ i18n.t('billing.installation.lead') }}</p>
+
+    @if (!mayReadAccounts()) {
+      <p class="q-body-sm muted noAccess">{{ i18n.t('billing.installation.noAccess') }}</p>
+    } @else if (installationsError(); as message) {
+      <p class="q-body-sm state error">{{ message }}</p>
+    } @else {
+      @if (active() === null) {
+        <p class="q-body-sm warning noneActive">{{ i18n.t('billing.installation.noneActive') }}</p>
+      }
+      @if (installations().length === 0) {
+        <p class="q-body-sm muted noInstallations">{{ i18n.t('billing.installation.none') }}</p>
+      } @else {
+        <div class="scroll">
+          <table class="table installations">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ i18n.t('billing.installation.column.name') }}</th>
+                <th class="q-caption">{{ i18n.t('billing.installation.column.provider') }}</th>
+                <th class="q-caption">{{ i18n.t('billing.installation.column.environment') }}</th>
+                <th class="q-caption">{{ i18n.t('billing.installation.column.credential') }}</th>
+                <th class="q-caption">{{ i18n.t('billing.installation.column.status') }}</th>
+                <th class="q-caption"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (installation of installations(); track installation.installationId) {
+                <tr
+                  [attr.data-installation]="installation.installationId"
+                  [attr.data-status]="installation.status"
+                >
+                  <td class="q-body-sm">
+                    {{ installation.displayName }}
+                    @if (installation.externalAccountReference) {
+                      <div class="q-caption muted">{{ installation.externalAccountReference }}</div>
+                    }
+                  </td>
+                  <td class="q-body-sm q-tnum">{{ installation.providerType }}</td>
+                  <td class="q-body-sm">{{ installation.environmentCode ?? '—' }}</td>
+                  <td class="q-body-sm">
+                    {{
+                      i18n.t(
+                        installation.secretConfigured
+                          ? 'billing.installation.credential.named'
+                          : 'billing.installation.credential.none'
+                      )
+                    }}
+                  </td>
+                  <td class="q-body-sm">
+                    <span class="chip" [class.live]="installation.status === 'ACTIVE'">{{
+                      installationStatusLabel(installation.status)
+                    }}</span>
+                  </td>
+                  <td class="q-body-sm rowActions">
+                    @if (session.has('INTEGRATION_INSTALLATION_MANAGE')) {
+                      @if (moveFor(installation); as move) {
+                        <button
+                          type="button"
+                          class="moveToggle"
+                          [attr.data-move]="move"
+                          (click)="openMove(installation, move)"
+                        >
+                          {{
+                            i18n.t(
+                              move === 'activation'
+                                ? 'billing.installation.activate'
+                                : 'billing.installation.suspend'
+                            )
+                          }}
+                        </button>
+                      }
+                    }
+                  </td>
+                </tr>
+                @if (moving()?.id === installation.installationId) {
+                  <tr>
+                    <td colspan="6">
+                      <span class="confirm">
+                        @if (moving()?.move === 'activation') {
+                          <span class="q-caption muted">{{
+                            i18n.t('billing.installation.activate.note')
+                          }}</span>
+                        } @else {
+                          <span class="q-caption muted">{{
+                            i18n.t('billing.installation.suspend.note')
+                          }}</span>
+                        }
+                        <input
+                          class="q-body-sm"
+                          name="moveReason"
+                          [placeholder]="i18n.t('common.reason')"
+                          [value]="moveReason()"
+                          (input)="moveReason.set($any($event.target).value)"
+                        />
+                        <button
+                          type="button"
+                          class="confirmMove activateConfirm"
+                          [disabled]="!canMove()"
+                          (click)="confirmMove(installation)"
+                        >
+                          {{ i18n.t('dunning.confirm') }}
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    @if (form() === 'installation') {
+      <form class="setupForm installationForm" (submit)="createInstallation($event)">
+        <p class="q-caption muted">{{ i18n.t('billing.installation.note') }}</p>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.installation.column.provider') }}
+          <input
+            class="q-body-sm"
+            name="providerType"
+            [value]="providerType()"
+            (input)="providerType.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.installation.column.name') }}
+          <input
+            class="q-body-sm"
+            name="displayName"
+            [value]="displayName()"
+            (input)="displayName.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.installation.column.environment') }}
+          <input
+            class="q-body-sm"
+            name="environmentCode"
+            [value]="environmentCode()"
+            (input)="environmentCode.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.installation.secretReference') }}
+          <input
+            class="q-body-sm"
+            name="secretReference"
+            [placeholder]="i18n.t('billing.installation.secretReference.placeholder')"
+            [value]="secretReference()"
+            (input)="secretReference.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('billing.installation.externalAccount') }}
+          <input
+            class="q-body-sm"
+            name="externalAccountReference"
+            [value]="externalAccountReference()"
+            (input)="externalAccountReference.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field q-caption"
+          >{{ i18n.t('common.reason') }}
+          <input
+            class="q-body-sm"
+            name="reason"
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+          />
+        </label>
+        <button type="submit" [disabled]="!canCreateInstallation()">
+          {{ i18n.t('billing.installation.submit') }}
+        </button>
+      </form>
+    }
+  </section>
+}
