@@ -193,8 +193,14 @@ public class KitchenDeviceDisplayService {
                 .filter(device -> device.deviceClass() == DevicePrincipalClass.KITCHEN_VDU)
                 .filter(device -> device.tenantId().equals(tenantId)
                         && device.locationId().equals(locationId))
-                .flatMap(device -> displays.find(tenantId, device.id())
-                        .map(row -> new WallCaller(device.id(), device.locationId(), row.stationId())));
+                // A wall without a configuration row (approval writes one in the same transaction, so this
+                // is a row somebody deleted) is still a wall: the whole branch, never the request's station.
+                .map(device -> new WallCaller(
+                        device.id(),
+                        device.locationId(),
+                        displays.find(tenantId, device.id())
+                                .map(DisplayRow::stationId)
+                                .orElse(null)));
     }
 
     /** Stamps the wall's read (at most once a minute) and counts the outcome. */

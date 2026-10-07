@@ -336,6 +336,25 @@ class KitchenDeviceDisplayServiceTests {
     }
 
     @Test
+    @DisplayName(
+            "a wall whose configuration row is gone is still a wall: the whole branch, never the request's station")
+    void aWallWithoutARowIsStillAWall() {
+        DevicePrincipalView wall = enrol(DevicePrincipalClass.KITCHEN_VDU, DevicePrincipalClass.KITCHEN_VDU);
+        jdbc.sql("DELETE FROM kitchen.device_displays WHERE device_id = :id")
+                .param("id", wall.id())
+                .update();
+
+        WallCaller caller =
+                displays.wallCaller(subjectOf(wall), TENANT, LOCATION).orElseThrow();
+
+        assertThat(caller.deviceId()).isEqualTo(wall.id());
+        assertThat(caller.stationId())
+                .as("null means the whole branch; the controller applies it instead of the request's")
+                .isNull();
+        displays.recordWallRead(caller, TENANT);
+    }
+
+    @Test
     @DisplayName("a read stamps last_read_at at most once a minute and never moves the version a manager edits against")
     void theWallsReadIsStampedAtMostOncePerMinuteWithoutMovingTheVersion() {
         DevicePrincipalView wall = enrol(DevicePrincipalClass.KITCHEN_VDU, DevicePrincipalClass.KITCHEN_VDU);

@@ -384,6 +384,10 @@ class JdbcAuthorizationServiceTests {
                 Capability.DELIVERY_DISPATCH_RULES_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
+                // ADR 0151: the wall's one capability. It reads the same tickets KITCHEN_TICKET_READ
+                // reads, through the same projection, so a suspended tenant's wall keeps showing the
+                // kitchen exactly as its staff's board does; it takes nothing out.
+                Capability.KITCHEN_DISPLAY_READ,
                 Capability.RESERVATION_READ,
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,

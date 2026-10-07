@@ -521,6 +521,62 @@ class DeviceEnrolmentServiceTests {
                 .update();
     }
 
+    @Test
+    void theDatabaseNamesTheTwoClassesAndNoThirdOnTheDevice() {
+        // The CHECK is evaluated before the foreign keys, so a class it refuses fails on the class and a
+        // class it allows gets as far as the (deliberately absent) tenant: the row is never written.
+        assertThatThrownBy(() -> insertDevicePrincipalOfClass("KITCHEN_EXPO"))
+                .hasMessageContaining("ck_device_principal_class");
+        assertThatThrownBy(() -> insertDevicePrincipalOfClass("KITCHEN_VDU"))
+                .hasMessageContaining("fk_device_principal_location")
+                .hasMessageNotContaining("ck_device_principal_class");
+        assertThatThrownBy(() -> insertDevicePrincipalOfClass("KITCHEN_KDS"))
+                .hasMessageContaining("fk_device_principal_location")
+                .hasMessageNotContaining("ck_device_principal_class");
+    }
+
+    @Test
+    void theDatabaseNamesTheTwoClassesAndNoThirdOnTheRequest() {
+        assertThatThrownBy(() -> insertPendingRequestOfClass("KITCHEN_EXPO", "AAAA-1111"))
+                .hasMessageContaining("ck_device_enrolment_class");
+        insertPendingRequestOfClass("KITCHEN_VDU", "AAAA-2222");
+        insertPendingRequestOfClass("KITCHEN_KDS", "AAAA-3333");
+
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.device_enrolment_requests WHERE user_code LIKE 'AAAA-%'")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2L);
+    }
+
+    private void insertDevicePrincipalOfClass(String deviceClass) {
+        jdbc.sql("""
+                INSERT INTO iam.device_principals (id, tenant_id, brand_id, location_id, device_class, display_name,
+                    keycloak_client_internal_id, keycloak_client_id, principal_subject, grant_id, enrolled_by)
+                VALUES (:id, :tenant, :brand, :location, :deviceClass, 'check probe',
+                    'internal-probe', 'client-probe', 'subject-probe', :grant, 'probe')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", UUID.randomUUID())
+                .param("brand", UUID.randomUUID())
+                .param("location", UUID.randomUUID())
+                .param("deviceClass", deviceClass)
+                .param("grant", UUID.randomUUID())
+                .update();
+    }
+
+    private void insertPendingRequestOfClass(String requestedClass, String userCode) {
+        jdbc.sql("""
+                INSERT INTO iam.device_enrolment_requests (id, device_code_hash, user_code, requested_class, expires_at)
+                VALUES (:id, :hash, :userCode, :requestedClass, :expires)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("hash", "probe-" + userCode)
+                .param("userCode", userCode)
+                .param("requestedClass", requestedClass)
+                .param("expires", java.sql.Timestamp.from(NOW.plus(Duration.ofMinutes(10))))
+                .update();
+    }
+
     /** A clock a test can move forward, for the expiry window ADR 0079 gives an enrolment code. */
     private static final class TickingClock extends Clock {
 
