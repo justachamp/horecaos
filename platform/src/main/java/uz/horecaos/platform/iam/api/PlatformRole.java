@@ -332,6 +332,8 @@ public enum PlatformRole {
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
                     PARTNER_API_CLIENT_MANAGE,
+                    // ADR 0070: choosing which registered storefront may serve a brand.
+                    STOREFRONT_APP_AUTHORISE,
                     POS_SYNC_READ,
                     POS_SYNC_EXECUTE,
                     POS_SYNC_APPLY,
@@ -541,6 +543,8 @@ public enum PlatformRole {
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
                     PARTNER_API_CLIENT_MANAGE,
+                    // ADR 0070: choosing which registered storefront may serve a brand.
+                    STOREFRONT_APP_AUTHORISE,
                     POS_SYNC_READ,
                     POS_SYNC_EXECUTE,
                     POS_SYNC_APPLY,

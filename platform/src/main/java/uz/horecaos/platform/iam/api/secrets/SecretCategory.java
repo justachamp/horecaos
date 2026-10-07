@@ -24,6 +24,19 @@ public enum SecretCategory {
      */
     PROVIDER_MARKETPLACE,
 
+    /**
+     * ADR 0070: the secret a CONFIDENTIAL storefront app presents beside its app
+     * id. The platform mints the value, writes it here once, and the vendor is
+     * shown it once; what the registry keeps is this reference. Unlike the other
+     * {@code PROVIDER_*} categories the application does resolve it, on every
+     * request that carries the app's secret header, to compare in constant time.
+     *
+     * <p>Written through the same door as the rest, by the control plane's
+     * registration and rotation and by nothing a tenant reaches: the owner scope
+     * is a platform-derived constant, never a tenant's.
+     */
+    PROVIDER_STOREFRONT_APP,
+
     /** Keycloak service-account credentials, per ADR 0009. */
     IDENTITY_ADMIN,
 
@@ -48,6 +61,7 @@ public enum SecretCategory {
                 || this == PROVIDER_DELIVERY
                 || this == PROVIDER_NOTIFICATION
                 || this == PROVIDER_VOICE
-                || this == PROVIDER_MARKETPLACE;
+                || this == PROVIDER_MARKETPLACE
+                || this == PROVIDER_STOREFRONT_APP;
     }
 }

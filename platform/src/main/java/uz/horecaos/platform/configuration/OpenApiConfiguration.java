@@ -70,7 +70,14 @@ public class OpenApiConfiguration {
      */
     @Bean
     GroupedOpenApi storefrontOpenApi() {
-        return groupedOpenApi(OpenApiSurface.STOREFRONT);
+        // ADR 0070: the storefront group is a product surface, so it carries its own contract —
+        // the public/confidential distinction, the app identity headers, which operations are
+        // promised, and the deprecation policy — in the document itself.
+        return GroupedOpenApi.builder()
+                .group(OpenApiSurface.STOREFRONT.id())
+                .pathsToMatch(OpenApiSurface.STOREFRONT.pathPatterns().toArray(new String[0]))
+                .addOpenApiCustomizer(StorefrontContract::describe)
+                .build();
     }
 
     @Bean
