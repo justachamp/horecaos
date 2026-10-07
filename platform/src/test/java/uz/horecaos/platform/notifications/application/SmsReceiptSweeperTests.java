@@ -213,19 +213,26 @@ class SmsReceiptSweeperTests {
         return fixture.acceptedAttempt(TENANT, BRAND, binding, providerType, messageId, null, requestedAt);
     }
 
+    /**
+     * A report the provider made an hour before the test clock's {@code NOW}. Not the database's {@code
+     * now()}: the sweeper stamps what it writes with the test clock, so a fixture row stamped with the
+     * wall clock sorts after it whenever the wall clock is past {@code NOW}, which it is for every run
+     * after the day this test was written.
+     */
     private void event(UUID attemptId, String providerEventId, String normalizedStatus) {
         JdbcClient.create(db.dataSource())
                 .sql("""
                         INSERT INTO notifications.delivery_status_events (
                             id, tenant_id, attempt_id, provider_event_id, normalized_status, provider_status,
                             occurred_at, recorded_at)
-                        VALUES (:id, :tenantId, :attemptId, :eventId, :status, :status, now(), now())
+                        VALUES (:id, :tenantId, :attemptId, :eventId, :status, :status, :at, :at)
                         """)
                 .param("id", UUID.randomUUID())
                 .param("tenantId", TENANT)
                 .param("attemptId", attemptId)
                 .param("eventId", providerEventId)
                 .param("status", normalizedStatus)
+                .param("at", java.sql.Timestamp.from(NOW.minus(Duration.ofHours(1))))
                 .update();
     }
 

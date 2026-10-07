@@ -392,6 +392,11 @@ class JdbcAuthorizationServiceTests {
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,
                 Capability.CUSTOMER_READ,
+                // ADR 0111: the callback queue and one lead's detail. Like CUSTOMER_READ it never
+                // decrypts -- the queue shows a masked number, and the number itself stays behind
+                // CUSTOMER_PII_REVEAL -- so a suspended tenant's call centre may still see who is
+                // waiting for a call; it takes nothing out.
+                Capability.CUSTOMER_LEAD_READ,
                 Capability.POS_SYNC_READ,
                 Capability.POS_EXPORT_READ,
                 // ADR 0139: a suspended tenant's managers may still look at who
