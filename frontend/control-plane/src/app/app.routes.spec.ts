@@ -2,6 +2,8 @@ import { Route } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 
 import { routes } from './app.routes';
+import { authGuard } from './core/auth/guards';
+import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { ROUTED_SECTIONS, SECTIONS } from './layout/sections';
 
 /**
@@ -106,9 +108,9 @@ describe('routes', () => {
     }
   });
 
-  it('guards the whole console behind authentication', () => {
+  it('guards the whole console behind authentication, and reads the language registry before it draws', () => {
     const shell = routes.find((route) => route.path === '');
-    expect(shell?.canActivate).toHaveLength(1);
+    expect(shell?.canActivate).toEqual([authGuard, platformLocalesGuard]);
   });
 
   it('leaves the login page outside the guard', () => {

@@ -669,9 +669,6 @@ export const ru: Messages = {
   'onboarding.invitation.expiresAt': 'Ссылка действует до',
   'onboarding.invitation.resendReason': 'Почему отправляем снова',
   'onboarding.invitation.sameLanguage': 'Тот же язык',
-  'onboarding.invitation.locale.uz': 'Узбекский',
-  'onboarding.invitation.locale.ru': 'Русский',
-  'onboarding.invitation.locale.en': 'Английский',
   'onboarding.invitation.resend': 'Отправить снова',
   'onboarding.invitation.none':
     'Учётная запись владельца была привязана до появления приглашений, поэтому письмо не отправлялось. Отправьте его, чтобы владелец мог задать пароль.',

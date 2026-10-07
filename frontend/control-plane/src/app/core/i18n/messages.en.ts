@@ -679,9 +679,6 @@ export const en = {
   'onboarding.invitation.expiresAt': 'Link expires',
   'onboarding.invitation.resendReason': 'Why it is sent again',
   'onboarding.invitation.sameLanguage': 'Same language',
-  'onboarding.invitation.locale.uz': 'Uzbek',
-  'onboarding.invitation.locale.ru': 'Russian',
-  'onboarding.invitation.locale.en': 'English',
   'onboarding.invitation.resend': 'Send again',
   'onboarding.invitation.none':
     'The owner’s account was linked before invitations existed, so no email was sent. Send one so they can set a password.',

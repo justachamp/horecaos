@@ -57,10 +57,22 @@ const PHYSICAL = [
   ],
 ];
 
-const BASELINE_FILE = path.join(__dirname, '..', 'physical-direction-baseline.json');
+/**
+ * One baseline per app, because a path in it is relative to that app: the operations console's
+ * is `physical-direction-baseline.json`, any other app's is `physical-direction-baseline.<app>.json`
+ * beside it (the control plane shares this plugin). An app with no baseline file has no exceptions.
+ */
+function baselineFileFor(app) {
+  const name =
+    app === 'operations'
+      ? 'physical-direction-baseline.json'
+      : `physical-direction-baseline.${app}.json`;
+  return path.join(__dirname, '..', name);
+}
 
-function loadBaseline() {
-  return new Set(JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8')));
+function loadBaseline(app = path.basename(process.cwd())) {
+  const file = baselineFileFor(app);
+  return new Set(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []);
 }
 
 /** The path the baseline lists: relative to `frontend/operations`, forward slashes. */
@@ -90,7 +102,7 @@ module.exports = {
   findPhysical,
   baselineKey,
   loadBaseline,
-  BASELINE_FILE,
+  baselineFileFor,
   meta: {
     type: 'problem',
     docs: {
@@ -100,7 +112,7 @@ module.exports = {
     schema: [],
     messages: {
       physicalDirection:
-        'Physical direction ("{{found}}") is a layout that does not follow the writing direction. Use the logical property ({{logical}}); or, to leave a stylesheet as it is, it must be listed in tools/eslint-plugin-horecaos/physical-direction-baseline.json.',
+        'Physical direction ("{{found}}") is a layout that does not follow the writing direction. Use the logical property ({{logical}}); or, to leave a stylesheet as it is, it must be listed in its app baseline (frontend/operations/tools/eslint-plugin-horecaos/physical-direction-baseline*.json).',
     },
   },
   create(context) {

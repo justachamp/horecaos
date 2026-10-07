@@ -72,34 +72,41 @@ ruleTester.run('no-physical-direction', rule, {
   ],
 });
 
-// The ratchet: every file on the baseline exists and still needs to be there.
-const baseline = rule.loadBaseline();
-const stale = [];
-const missing = [];
-for (const file of baseline) {
-  if (!fs.existsSync(file)) {
-    missing.push(file);
-    continue;
+// The ratchet, per app: every file on a baseline exists and still needs to be there.
+const apps = [
+  { app: 'operations', dir: process.cwd() },
+  { app: 'control-plane', dir: path.join(process.cwd(), '..', 'control-plane') },
+];
+const sizes = [];
+for (const { app, dir } of apps) {
+  const baseline = rule.loadBaseline(app);
+  const stale = [];
+  const missing = [];
+  for (const file of baseline) {
+    const full = path.join(dir, file);
+    if (!fs.existsSync(full)) {
+      missing.push(file);
+      continue;
+    }
+    if (rule.findPhysical(fs.readFileSync(full, 'utf8')).length === 0) {
+      stale.push(file);
+    }
   }
-  if (rule.findPhysical(fs.readFileSync(file, 'utf8')).length === 0) {
-    stale.push(file);
-  }
+  assert.deepStrictEqual(
+    missing,
+    [],
+    `${app}'s physical-direction baseline names files that do not exist: ${missing}`,
+  );
+  assert.deepStrictEqual(
+    stale,
+    [],
+    `${app}'s physical-direction baseline lists stylesheets that no longer use a physical direction; remove them so the list only shrinks: ${stale}`,
+  );
+  // Sorted and free of duplicates, so a diff of it reads as additions and removals only.
+  assert.deepStrictEqual([...baseline], [...baseline].sort(), `${app}'s baseline must stay sorted`);
+  sizes.push(`${app} ${baseline.size}`);
 }
-assert.deepStrictEqual(
-  missing,
-  [],
-  `physical-direction-baseline.json names files that do not exist: ${missing}`,
-);
-assert.deepStrictEqual(
-  stale,
-  [],
-  `physical-direction-baseline.json lists stylesheets that no longer use a physical direction; remove them so the list only shrinks: ${stale}`,
-);
-
-// And it is sorted and free of duplicates, so a diff of it reads as additions and removals only.
-const sorted = [...baseline].sort();
-assert.deepStrictEqual([...baseline], sorted, 'physical-direction-baseline.json must stay sorted');
 
 console.log(
-  `no-physical-direction: fixtures pass; ${baseline.size} stylesheets remain on the baseline and none of them is stale.`,
+  `no-physical-direction: fixtures pass; stylesheets remaining on the baselines (${sizes.join(', ')}) and none of them is stale.`,
 );

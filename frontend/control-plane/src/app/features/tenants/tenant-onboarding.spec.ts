@@ -225,7 +225,7 @@ describe('TenantOnboarding', () => {
     reason.value = 'the owner asked for Uzbek';
     reason.dispatchEvent(new Event('input'));
     const language = invitation.querySelector('select[name="resendLocale"]') as HTMLSelectElement;
-    language.value = 'uz';
+    language.value = 'uz-Latn';
     language.dispatchEvent(new Event('change'));
     await settle();
     (invitation.querySelector('button[type="submit"]') as HTMLButtonElement).click();
@@ -234,7 +234,7 @@ describe('TenantOnboarding', () => {
     expect(api.resendOwnerInvitation).toHaveBeenCalledWith(
       'tenant-1',
       'the owner asked for Uzbek',
-      'uz',
+      'uz-Latn',
     );
     expect(fixture.nativeElement.textContent).toContain(ru['onboarding.invitation.resent']);
   });

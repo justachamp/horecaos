@@ -678,9 +678,6 @@ export const uzLatn: Messages = {
   'onboarding.invitation.expiresAt': 'Havola amal qiladi',
   'onboarding.invitation.resendReason': 'Nega qayta yuborilmoqda',
   'onboarding.invitation.sameLanguage': 'Shu til',
-  'onboarding.invitation.locale.uz': 'O‘zbekcha',
-  'onboarding.invitation.locale.ru': 'Ruscha',
-  'onboarding.invitation.locale.en': 'Inglizcha',
   'onboarding.invitation.resend': 'Qayta yuborish',
   'onboarding.invitation.none':
     'Egasining hisobi taklifnomalar paydo bo‘lishidan oldin bog‘langan, shuning uchun xat yuborilmagan. Parol o‘rnatishi uchun taklifnoma yuboring.',

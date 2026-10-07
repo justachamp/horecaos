@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { authGuard, requiresCapability } from './core/auth/guards';
+import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { ConsoleShell } from './layout/console-shell';
 import { Overview } from './features/overview/overview';
 
@@ -52,7 +53,8 @@ export const routes: Routes = [
   {
     path: '',
     component: ConsoleShell,
-    canActivate: [authGuard],
+    // The registry is read before anything beneath the shell draws (ADR 0149).
+    canActivate: [authGuard, platformLocalesGuard],
     children: [
       { path: '', component: Overview },
 
