@@ -388,6 +388,20 @@ public enum Capability {
     /** ADR 0037: reading zones, their versions, and the rate tables bound to them. */
     DELIVERY_ZONE_READ("delivery.zone.read", "delivery", "zone.read"),
 
+    /**
+     * ADR 0145: asking the map provider to suggest, find or name an address.
+     *
+     * <p>One capability for three endpoints that serve three different tasks: New order's
+     * address pane ({@code order.place} at a branch), the zone and region editors
+     * ({@code delivery.zone.read}) and the branch pin ({@code location.write}). The record's own
+     * rule is that where an endpoint is shared the build adds a single code-owned capability
+     * "instead of picking the widest" — picking {@code location.write} would shut a cashier out
+     * of address search, and picking {@code order.place} would hand a zone editor a capability
+     * that places orders. A lookup writes nothing and returns what a map would show anybody, so
+     * it is held by exactly the roles that hold one of the three tasks.
+     */
+    GEO_LOOKUP("geo.lookup", "geo", "lookup"),
+
     /** ADR 0037: drawing zones and authoring new versions of them, all of which stay DRAFT. */
     DELIVERY_ZONE_MANAGE("delivery.zone.manage", "delivery", "zone.manage"),
 

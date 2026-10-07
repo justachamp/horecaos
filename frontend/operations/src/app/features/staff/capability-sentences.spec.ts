@@ -68,6 +68,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'dinein.session.read',
   'fiscal.document.read',
   'fiscal.document.resolve',
+  'geo.lookup',
   'iam.grant.manage',
   'integration.binding.activate',
   'integration.failure.read',

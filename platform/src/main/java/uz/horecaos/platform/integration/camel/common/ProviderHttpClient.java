@@ -131,7 +131,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "POST", path, headers, body, onSuccess);
+        return exchange(call, "POST", path, "", headers, body, onSuccess);
     }
 
     public ProviderOutcome patch(
@@ -140,7 +140,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "PATCH", path, headers, body, onSuccess);
+        return exchange(call, "PATCH", path, "", headers, body, onSuccess);
     }
 
     public ProviderOutcome put(
@@ -149,7 +149,7 @@ public class ProviderHttpClient {
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "PUT", path, headers, body, onSuccess);
+        return exchange(call, "PUT", path, "", headers, body, onSuccess);
     }
 
     public ProviderOutcome get(
@@ -157,7 +157,48 @@ public class ProviderHttpClient {
             String path,
             Map<String, String> headers,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "GET", path, headers, null, onSuccess);
+        return exchange(call, "GET", path, "", headers, null, onSuccess);
+    }
+
+    /**
+     * A GET whose request is carried in the query string, for a provider that offers no other
+     * way to ask (a geocoder reads its address from {@code ?geocode=} and has no body).
+     *
+     * <p><strong>The query is never logged and never reaches an outcome.</strong> It is kept
+     * apart from {@code path} for exactly that reason: this class's own failure logging names the
+     * path, and a path that carried an address and a key would put both into the log aggregator
+     * on the first timeout. The query is percent-encoded here, so a malformed one cannot raise
+     * an {@code IllegalArgumentException} whose message is the request URI.
+     *
+     * <p>{@code query} keeps its iteration order, so a caller that wants a stable URL passes a
+     * {@code LinkedHashMap}.
+     */
+    public ProviderOutcome get(
+            ProviderCall call,
+            String path,
+            Map<String, String> query,
+            Map<String, String> headers,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        return exchange(call, "GET", path, encodeQuery(query), headers, null, onSuccess);
+    }
+
+    private static String encodeQuery(Map<String, String> query) {
+        if (query.isEmpty()) {
+            return "";
+        }
+        StringBuilder encoded = new StringBuilder("?");
+        query.forEach((name, value) -> {
+            if (encoded.length() > 1) {
+                encoded.append('&');
+            }
+            // URLEncoder writes a space as '+', which is right inside a form body and ambiguous
+            // inside a URI; %20 is unambiguous everywhere.
+            encoded.append(java.net.URLEncoder.encode(name, java.nio.charset.StandardCharsets.UTF_8))
+                    .append('=')
+                    .append(java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8)
+                            .replace("+", "%20"));
+        });
+        return encoded.toString();
     }
 
     /**
@@ -173,13 +214,14 @@ public class ProviderHttpClient {
             String path,
             Map<String, String> headers,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
-        return exchange(call, "DELETE", path, headers, null, onSuccess);
+        return exchange(call, "DELETE", path, "", headers, null, onSuccess);
     }
 
     private ProviderOutcome exchange(
             ProviderCall call,
             String method,
             String path,
+            String query,
             Map<String, String> headers,
             @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
@@ -189,7 +231,7 @@ public class ProviderHttpClient {
             Duration deadline = call.timeout() == null ? Duration.ofSeconds(30) : call.timeout();
 
             HttpRequest.Builder request = HttpRequest.newBuilder()
-                    .uri(URI.create(call.baseUrl() + path))
+                    .uri(URI.create(call.baseUrl() + path + query))
                     .timeout(deadline)
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")

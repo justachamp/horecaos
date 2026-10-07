@@ -266,6 +266,7 @@ public enum PlatformRole {
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
                     DELIVERY_ZONE_READ,
+                    GEO_LOOKUP,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_ZONE_ACTIVATE,
                     DELIVERY_TARIFF_READ,
@@ -476,6 +477,7 @@ public enum PlatformRole {
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
                     DELIVERY_ZONE_READ,
+                    GEO_LOOKUP,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_ZONE_ACTIVATE,
                     DELIVERY_TARIFF_READ,
@@ -692,6 +694,7 @@ public enum PlatformRole {
                     // person who drew a polygon is not the only one who ever reads it.
                     // The brand manager draws; the tenant decides it governs sales.
                     DELIVERY_ZONE_READ,
+                    GEO_LOOKUP,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
@@ -754,6 +757,7 @@ public enum PlatformRole {
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
                     ORDER_PLACE,
+                    GEO_LOOKUP,
                     ORDER_AMEND,
                     ORDER_CANCEL,
                     // ADR 0039: bulk-applying ORDER_ADVANCE or ORDER_CANCEL to a
@@ -842,6 +846,7 @@ public enum PlatformRole {
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
                     ORDER_PLACE,
+                    GEO_LOOKUP,
                     // ADR 0039: taking a phone order starts with finding the caller.
                     // The New order screen's customer pane looks a returning customer
                     // up by phone before ORDER_PLACE ever creates anything, so the same

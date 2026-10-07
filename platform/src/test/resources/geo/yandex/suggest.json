@@ -1,0 +1,27 @@
+{
+  "suggest_reqid": "1760000000000-0000000000-fixture",
+  "results": [
+    {
+      "title": {"text": "Fixture ko'chasi", "hl": [{"begin": 0, "end": 7}]},
+      "subtitle": {"text": "Ташкент, Узбекистан"},
+      "tags": ["street"],
+      "distance": {"text": "1,2 км", "value": 1234.5},
+      "address": {
+        "formatted_address": "Узбекистан, Ташкент, Fixture ko'chasi",
+        "component": [
+          {"name": "Узбекистан", "kind": ["COUNTRY"]},
+          {"name": "Ташкент", "kind": ["LOCALITY"]},
+          {"name": "Fixture ko'chasi", "kind": ["STREET"]}
+        ]
+      },
+      "uri": "ymapsbm1://geo?data=FixtureOne"
+    },
+    {
+      "title": {"text": "Fixture ko'chasi, 12"},
+      "subtitle": {"text": "Ташкент, Узбекистан"},
+      "tags": ["house"],
+      "uri": "ymapsbm1://geo?data=FixtureTwo"
+    },
+    {"subtitle": {"text": "a result with no title is dropped"}}
+  ]
+}

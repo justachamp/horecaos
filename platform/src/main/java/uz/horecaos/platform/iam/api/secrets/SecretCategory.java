@@ -24,6 +24,21 @@ public enum SecretCategory {
      */
     PROVIDER_MARKETPLACE,
 
+    /**
+     * ADR 0145 decision 4: the platform's one key for the map provider's server-side geocoder
+     * (suggest, geocode, reverse geocode).
+     *
+     * <p>Platform-owned, and so deliberately <em>not</em> {@link #tenantWritable()}: one licence
+     * serves every tenant, no tenant holds a relationship with the vendor, and a door that let a
+     * tenant write here would let a tenant administrator replace the key every other tenant's
+     * address search runs on. The owner writes it as an operator, the same way the database
+     * password and the object-storage credentials are written
+     * ({@code bao kv put horecaos/production/provider_geocoding/platform/<id> value=...}), and
+     * the application only ever reads it. The browser key is a different thing: it is public by
+     * construction, is delivered by {@code GET .../map-config}, and is plain configuration.
+     */
+    PROVIDER_GEOCODING,
+
     /** Keycloak service-account credentials, per ADR 0009. */
     IDENTITY_ADMIN,
 

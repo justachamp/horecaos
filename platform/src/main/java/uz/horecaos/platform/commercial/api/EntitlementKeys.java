@@ -73,6 +73,21 @@ public final class EntitlementKeys {
             .describedAs("Notification messages included per billing period. Each carries a real per-message cost.")
             .build();
 
+    /**
+     * ADR 0145: provider geocoder calls made on a tenant's behalf (a suggest, a geocode or a
+     * reverse geocode that went to the map provider, not one answered from the response
+     * cache). Metered from the first call and priced by nothing: ADR 0145's own words are
+     * "metered from the first call as a usage counter, not priced until the licence cost is
+     * known", so no plan carries an allowance for it and the default can never refuse.
+     */
+    public static final EntitlementKey<Long> GEOCODE_REQUESTS = EntitlementKey.counted("geocode.requests", "request")
+            .resetting(ResetPeriod.BILLING_PERIOD)
+            .ownedBy("fulfillment")
+            .withDimensions("operation")
+            .describedAs(
+                    "Geocoder calls to the map provider (suggest, geocode, reverse). Metered, not priced (ADR 0145).")
+            .build();
+
     public static final EntitlementKey<Long> MEDIA_STORAGE_BYTES_INCLUDED = EntitlementKey.counted(
                     "media.storage_bytes_included", "byte")
             .ownedBy("media")
@@ -261,6 +276,7 @@ public final class EntitlementKeys {
             POS_INSTALLATIONS_MAX_COUNT,
             ORDERS_MONTHLY_INCLUDED,
             NOTIFICATIONS_MONTHLY_INCLUDED,
+            GEOCODE_REQUESTS,
             MEDIA_STORAGE_BYTES_INCLUDED,
             POS_INTEGRATIONS_ENABLED,
             DELIVERY_PARTNER_INTEGRATIONS_ENABLED,
