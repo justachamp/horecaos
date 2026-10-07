@@ -1549,8 +1549,8 @@ export const en = {
     'Recorded with a reason and audited. A card token is a reference held by the provider; a card number is never stored here.',
   'wallet.method.submit': 'Change',
   'wallet.method.done': 'Collected by {method} from now on.',
-  'wallet.card.notConnected':
-    'Card charging is not connected: HorecaOS has no merchant account of its own yet, so this tenant’s remainder stays due exactly as an invoiced one does.',
+  'wallet.card.note':
+    'Card collection charges the tenant’s card through HorecaOS’s own merchant account once one is active. With none active, this tenant’s remainder stays due exactly as an invoiced one does; see Billing setup. The card itself is put on file by the tenant.',
   'wallet.transfer.open': 'Record a bank transfer',
   'wallet.transfer.note':
     'One person’s audited act, like issuing a statement. The bank’s reference is what proves it. It pays the oldest open statement at once.',
@@ -1578,7 +1578,6 @@ export const en = {
   'wallet.field.bankReference': 'Bank reference',
   'wallet.field.payoutReference': 'Payout reference',
   'wallet.field.expiresOn': 'Lapses on',
-  'wallet.field.cardToken': 'Card token reference',
   'wallet.kind.PAID': 'Paid',
   'wallet.kind.BONUS': 'Bonus',
   'wallet.change.awaiting':
@@ -1602,7 +1601,7 @@ export const en = {
   'wallet.column.entry': 'Entry',
   'wallet.column.reference': 'Reference',
   'wallet.column.who': 'Recorded by',
-  'wallet.entry.TOP_UP': 'Transfer received',
+  'wallet.entry.TOP_UP': 'Money received',
   'wallet.entry.DEPOSIT': 'Activation deposit',
   'wallet.entry.BONUS_GRANT': 'Bonus granted',
   'wallet.entry.BONUS_EXPIRY': 'Bonus lapsed',
@@ -1866,6 +1865,100 @@ export const en = {
   'error.ROUTE_NOT_FOUND': 'That address does not exist on the platform.',
   'error.UNKNOWN': 'Something went wrong.',
   'error.correlation': 'Reference {correlationId}',
+  // ---------------------------------------------- prepayment invoices, card top-ups, billing setup (ADR 0095)
+  'nav.billingSetup': 'Billing setup',
+  'wallet.field.paysInvoice': 'Pays invoice',
+  'wallet.field.paysNoInvoice': 'No invoice',
+  'wallet.method.cardOwn':
+    'A card is put on file by the tenant itself, through the payment provider’s own form. Staff cannot enter one.',
+  'wallet.invoice.title': 'Prepayment invoices',
+  'wallet.invoice.none': 'This tenant has not asked for an invoice to pay in advance.',
+  'wallet.invoice.number': 'Number',
+  'wallet.invoice.validUntil': 'Valid until',
+  'wallet.invoice.note':
+    'Requests for payment before tax, not tax invoices. What each has been paid is the sum of the ledger entries that name it, so record a transfer against the invoice it pays.',
+  'wallet.invoice.status.OPEN': 'Waiting for payment',
+  'wallet.invoice.status.PARTIALLY_PAID': 'Part paid',
+  'wallet.invoice.status.PAID': 'Paid',
+  'wallet.invoice.status.EXPIRED': 'Expired',
+  'wallet.invoice.status.CANCELLED': 'Withdrawn',
+  'wallet.invoice.cancel.open': 'Withdraw',
+  'wallet.invoice.cancel.submit': 'Withdraw invoice',
+  'wallet.invoice.cancel.done': 'Invoice {number} withdrawn.',
+  'wallet.topUp.title': 'Card top-ups',
+  'wallet.topUp.none': 'This tenant has not topped up by card.',
+  'wallet.topUp.note':
+    'A pending top-up is a charge the provider has not answered yet. The platform resolves it by asking under the same key, so the tenant is never charged twice.',
+  'wallet.topUp.outcome.PENDING': 'Pending',
+  'wallet.topUp.outcome.SUCCEEDED': 'Credited',
+  'wallet.topUp.outcome.FAILED': 'Declined',
+  'wallet.topUp.outcome.NOT_CONFIGURED': 'Not connected',
+  'billing.lead':
+    'What HorecaOS itself sets up so it can be paid: the bank details every invoice carries, and the card merchant account it charges through. Neither belongs to a tenant.',
+  'billing.bank.title': 'Bank details on invoices',
+  'billing.bank.propose': 'Propose new details',
+  'billing.bank.placeholder':
+    'These are placeholders. No tenant can be given an invoice until real details are approved by a second person.',
+  'billing.bank.beneficiary': 'Beneficiary',
+  'billing.bank.bankName': 'Bank',
+  'billing.bank.account': 'Account',
+  'billing.bank.mfo': 'MFO',
+  'billing.bank.taxId': 'Tax ID (INN)',
+  'billing.bank.who': 'Proposed by {proposer}, approved by {approver}, {date}.',
+  'billing.bank.frozen':
+    'An invoice keeps the details of the day it was issued. Changing these never rewrites one.',
+  'billing.bank.note':
+    'The account number is what an approver signs: they see every field here and only your reason is withheld. Nothing changes until a different person approves it; then submit the identical proposal again.',
+  'billing.bank.submit': 'Propose',
+  'billing.bank.awaiting':
+    'Proposed. Nothing has changed: a different person must approve it. Once they have, submit the same proposal again to apply it.',
+  'billing.bank.changed': 'The bank details every new invoice carries have been replaced.',
+  'billing.bank.declined': 'The proposal was declined. Nothing has changed.',
+  'billing.installation.title': 'Card merchant account',
+  'billing.installation.lead':
+    'HorecaOS’s own account with a card payment provider, declared like any other installation. Its credential is only ever a reference to a secret, never a value, and is never shown. At most one is active.',
+  'billing.installation.add': 'Declare an account',
+  'billing.installation.noAccess':
+    'You can read the bank details but not the card merchant account; that needs permission to manage integration installations.',
+  'billing.installation.noneActive':
+    'No card account is active, so every tenant collected by card is collected like an invoice tenant: its remainder stays due until it pays by transfer or tops up.',
+  'billing.installation.none': 'No card account has been declared yet.',
+  'billing.installation.column.name': 'Name',
+  'billing.installation.column.provider': 'Provider type',
+  'billing.installation.column.environment': 'Environment',
+  'billing.installation.column.credential': 'Credential',
+  'billing.installation.column.status': 'Status',
+  'billing.installation.credential.named': 'Secret named',
+  'billing.installation.credential.none': 'None',
+  'billing.installation.status.DRAFT': 'Draft',
+  'billing.installation.status.ACTIVE': 'Active',
+  'billing.installation.status.SUSPENDED': 'Suspended',
+  'billing.installation.activate': 'Activate',
+  'billing.installation.suspend': 'Suspend',
+  'billing.installation.activate.note':
+    'Cards bound under another account will have to be added again by their tenants. A test double is refused outside a local or test run.',
+  'billing.installation.suspend.note':
+    'Every card tenant is collected like an invoice tenant until an account is active again.',
+  'billing.installation.activated': '{name} is now the account cards are charged through.',
+  'billing.installation.suspended': '{name} is suspended. No card is charged.',
+  'billing.installation.created': 'The account was declared, in draft.',
+  'billing.installation.note':
+    'Only a provider type with an adapter in this build is accepted, and for now that is a test double that cannot be activated outside a local or test run. Connecting a real merchant account is written up in docs/runbooks/connect-card-merchant-account.md.',
+  'billing.installation.secretReference': 'Secret reference',
+  'billing.installation.secretReference.placeholder': 'provider_payment secret reference, never the value',
+  'billing.installation.externalAccount': 'Account at the provider',
+  'billing.installation.submit': 'Declare',
+  'dunning.column.owed': 'Owed',
+  'dunning.owed': '{amount}, {count} statement(s)',
+  'dunning.paidInFull': 'Paid in full: ready to restore',
+  'dunning.paidInFull.hint':
+    'Nothing moves a tenant by itself: paying clears what it owes and leaves its stage as it was, for a person to decide.',
+  'platformApprovals.action.commercial_billing_bank-details': 'Bank details on invoices',
+  'platformApprovals.subject.field.beneficiary': 'Beneficiary',
+  'platformApprovals.subject.field.bankName': 'Bank',
+  'platformApprovals.subject.field.account': 'Account',
+  'platformApprovals.subject.field.mfo': 'MFO',
+  'platformApprovals.subject.field.taxId': 'Tax ID (INN)',
 };
 
 /** Every key the application may ask for. */

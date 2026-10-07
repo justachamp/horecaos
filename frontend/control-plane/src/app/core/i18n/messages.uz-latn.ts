@@ -1559,8 +1559,8 @@ export const uzLatn: Messages = {
     'Sabab bilan yoziladi va auditga tushadi. Karta tokeni — provayderdagi havola; karta raqami bu yerda hech qachon saqlanmaydi.',
   'wallet.method.submit': 'O‘zgartirish',
   'wallet.method.done': 'Endi to‘lov usuli — {method}.',
-  'wallet.card.notConnected':
-    'Kartadan yechish ulanmagan: HorecaOS’ning o‘z merchant hisobi hali yo‘q, shuning uchun bunday mijozning qoldig‘i hisob bo‘yicha kabi to‘lanmagan qoladi.',
+  'wallet.card.note':
+    'Karta orqali to‘lov faol bo‘lgach, HorecaOS’ning o‘z merchant hisobi orqali mijozning kartasidan yechadi. Faol hisob bo‘lmaguncha bu mijozning qoldig‘i hisob-faktura bo‘yicha kabi to‘lanmagan qoladi; «To‘lov sozlamalari» ga qarang. Kartani mijozning o‘zi qo‘shadi.',
   'wallet.transfer.open': 'Bank o‘tkazmasini yozish',
   'wallet.transfer.note':
     'Hisob chiqarish kabi bir kishining audit qilinadigan ishi. Isbot — bankning havolasi. O‘tkazma eng eski ochiq hisobni darhol yopadi.',
@@ -1588,7 +1588,6 @@ export const uzLatn: Messages = {
   'wallet.field.bankReference': 'Bank havolasi',
   'wallet.field.payoutReference': 'To‘lov havolasi',
   'wallet.field.expiresOn': 'Kuyadi',
-  'wallet.field.cardToken': 'Karta tokeni havolasi',
   'wallet.kind.PAID': 'To‘langan',
   'wallet.kind.BONUS': 'Bonus',
   'wallet.change.awaiting':
@@ -1612,7 +1611,7 @@ export const uzLatn: Messages = {
   'wallet.column.entry': 'Yozuv',
   'wallet.column.reference': 'Havola',
   'wallet.column.who': 'Kim yozdi',
-  'wallet.entry.TOP_UP': 'O‘tkazma keldi',
+  'wallet.entry.TOP_UP': 'Pul qabul qilindi',
   'wallet.entry.DEPOSIT': 'Faollashtirish depoziti',
   'wallet.entry.BONUS_GRANT': 'Bonus berildi',
   'wallet.entry.BONUS_EXPIRY': 'Bonus kuydi',
@@ -1882,4 +1881,98 @@ export const uzLatn: Messages = {
   'error.ROUTE_NOT_FOUND': 'Platformada bunday manzil yo‘q.',
   'error.UNKNOWN': 'Nimadir noto‘g‘ri ketdi.',
   'error.correlation': 'Havola {correlationId}',
+  // ---------------------------------------------- oldindan to‘lov hisob-fakturalari, karta orqali to‘ldirish, to‘lov sozlamalari (ADR 0095)
+  'nav.billingSetup': 'To‘lov sozlamalari',
+  'wallet.field.paysInvoice': 'Qaysi hisob-fakturani to‘laydi',
+  'wallet.field.paysNoInvoice': 'Hisob-fakturasiz',
+  'wallet.method.cardOwn':
+    'Kartani mijozning o‘zi to‘lov provayderining o‘z shaklida qo‘shadi. HorecaOS xodimi karta kirita olmaydi.',
+  'wallet.invoice.title': 'Oldindan to‘lov hisob-fakturalari',
+  'wallet.invoice.none': 'Bu mijoz oldindan to‘lash uchun hisob-faktura so‘ramagan.',
+  'wallet.invoice.number': 'Raqam',
+  'wallet.invoice.validUntil': 'Amal qiladi',
+  'wallet.invoice.note':
+    'Soliqsiz to‘lov talablari, soliq hisob-fakturalari emas. Har biriga qancha to‘langani unga havola qilgan jurnal yozuvlari yig‘indisi, shuning uchun o‘tkazmani u to‘layotgan hisob-fakturaga yozing.',
+  'wallet.invoice.status.OPEN': 'To‘lovni kutmoqda',
+  'wallet.invoice.status.PARTIALLY_PAID': 'Qisman to‘langan',
+  'wallet.invoice.status.PAID': 'To‘langan',
+  'wallet.invoice.status.EXPIRED': 'Muddati tugagan',
+  'wallet.invoice.status.CANCELLED': 'Bekor qilingan',
+  'wallet.invoice.cancel.open': 'Bekor qilish',
+  'wallet.invoice.cancel.submit': 'Hisob-fakturani bekor qilish',
+  'wallet.invoice.cancel.done': '{number} hisob-fakturasi bekor qilindi.',
+  'wallet.topUp.title': 'Karta orqali to‘ldirishlar',
+  'wallet.topUp.none': 'Bu mijoz hamyonni karta orqali to‘ldirmagan.',
+  'wallet.topUp.note':
+    'Kutilayotgan to‘ldirish — provayder hali javob bermagan yechish. Platforma uni o‘sha kalit bilan so‘rab aniqlaydi, shuning uchun mijozdan ikki marta yechilmaydi.',
+  'wallet.topUp.outcome.PENDING': 'Kutilmoqda',
+  'wallet.topUp.outcome.SUCCEEDED': 'Qo‘shildi',
+  'wallet.topUp.outcome.FAILED': 'Rad etildi',
+  'wallet.topUp.outcome.NOT_CONFIGURED': 'Ulanmagan',
+  'billing.lead':
+    'HorecaOS o‘ziga to‘lov qilish mumkin bo‘lishi uchun nimalarni sozlaydi: har bir hisob-fakturadagi bank rekvizitlari va kartalar yechiladigan merchant hisobi. Ikkalasi ham mijozniki emas.',
+  'billing.bank.title': 'Hisob-fakturalardagi bank rekvizitlari',
+  'billing.bank.propose': 'Yangi rekvizitlarni taklif qilish',
+  'billing.bank.placeholder':
+    'Bular o‘rin to‘ldiruvchilar. Ikkinchi odam haqiqiy rekvizitlarni tasdiqlamaguncha hech bir mijozga hisob-faktura chiqarib bo‘lmaydi.',
+  'billing.bank.beneficiary': 'Oluvchi',
+  'billing.bank.bankName': 'Bank',
+  'billing.bank.account': 'Hisob raqami',
+  'billing.bank.mfo': 'MFO',
+  'billing.bank.taxId': 'STIR',
+  'billing.bank.who': '{proposer} taklif qildi, {approver} tasdiqladi, {date}.',
+  'billing.bank.frozen':
+    'Hisob-faktura chiqarilgan kundagi rekvizitlarni saqlaydi. Bularni o‘zgartirish chiqarilganlarni qayta yozmaydi.',
+  'billing.bank.note':
+    'Tasdiqlovchi hisob raqamini imzolaydi: u bu yerdagi barcha maydonlarni ko‘radi, faqat sizning sababingiz yashirin. Boshqa odam tasdiqlamaguncha hech narsa o‘zgarmaydi; keyin xuddi shu taklifni yana yuboring.',
+  'billing.bank.submit': 'Taklif qilish',
+  'billing.bank.awaiting':
+    'Taklif qilindi. Hech narsa o‘zgarmadi: boshqa odam tasdiqlashi kerak. U tasdiqlagach, qo‘llash uchun xuddi shu taklifni yana yuboring.',
+  'billing.bank.changed': 'Barcha yangi hisob-fakturalardagi bank rekvizitlari almashtirildi.',
+  'billing.bank.declined': 'Taklif rad etildi. Hech narsa o‘zgarmadi.',
+  'billing.installation.title': 'Kartalar uchun merchant hisobi',
+  'billing.installation.lead':
+    'HorecaOS’ning karta to‘lovlari provayderidagi o‘z hisobi, boshqa o‘rnatmalar kabi e’lon qilinadi. Uning kaliti faqat sirga havola, hech qachon qiymat emas va ko‘rsatilmaydi. Ko‘pi bilan bittasi faol.',
+  'billing.installation.add': 'Hisob e’lon qilish',
+  'billing.installation.noAccess':
+    'Siz bank rekvizitlarini ko‘rasiz, lekin kartalar uchun merchant hisobini ko‘rmaysiz: buning uchun integratsiya o‘rnatmalarini boshqarish huquqi kerak.',
+  'billing.installation.noneActive':
+    'Hech bir karta hisobi faol emas, shuning uchun karta bilan to‘lovchi har bir mijoz hisob-faktura bo‘yicha mijoz kabi yig‘iladi: qoldiq u o‘tkazma qilmaguncha yoki hamyonni to‘ldirmaguncha to‘lanmagan qoladi.',
+  'billing.installation.none': 'Karta hisobi hali e’lon qilinmagan.',
+  'billing.installation.column.name': 'Nomi',
+  'billing.installation.column.provider': 'Provayder turi',
+  'billing.installation.column.environment': 'Muhit',
+  'billing.installation.column.credential': 'Kalit',
+  'billing.installation.column.status': 'Holat',
+  'billing.installation.credential.named': 'Sir ko‘rsatilgan',
+  'billing.installation.credential.none': 'Yo‘q',
+  'billing.installation.status.DRAFT': 'Qoralama',
+  'billing.installation.status.ACTIVE': 'Faol',
+  'billing.installation.status.SUSPENDED': 'To‘xtatilgan',
+  'billing.installation.activate': 'Faollashtirish',
+  'billing.installation.suspend': 'To‘xtatish',
+  'billing.installation.activate.note':
+    'Boshqa hisob ostida bog‘langan kartalarni mijozlar qayta qo‘shishi kerak bo‘ladi. Test o‘rnini bosuvchi lokal yoki test ishga tushirishdan tashqarida rad etiladi.',
+  'billing.installation.suspend.note':
+    'Biror hisob qayta faollashmaguncha karta bilan to‘lovchi barcha mijozlar hisob-faktura bo‘yicha mijoz kabi yig‘iladi.',
+  'billing.installation.activated': '{name} endi kartalar yechiladigan hisob.',
+  'billing.installation.suspended': '{name} to‘xtatildi. Hech bir karta yechilmaydi.',
+  'billing.installation.created': 'Hisob qoralama sifatida e’lon qilindi.',
+  'billing.installation.note':
+    'Faqat shu yig‘ilmada adapteri bor provayder turi qabul qilinadi, hozir bu lokal yoki test ishga tushirishdan tashqarida faollashtirib bo‘lmaydigan test o‘rnini bosuvchi. Haqiqiy merchant hisobini ulash docs/runbooks/connect-card-merchant-account.md da yozilgan.',
+  'billing.installation.secretReference': 'Sirga havola',
+  'billing.installation.secretReference.placeholder': 'provider_payment sirga havola, qiymat emas',
+  'billing.installation.externalAccount': 'Provayderdagi hisob',
+  'billing.installation.submit': 'E’lon qilish',
+  'dunning.column.owed': 'Qarz',
+  'dunning.owed': '{amount}, hisoblar: {count}',
+  'dunning.paidInFull': 'To‘liq to‘langan: tiklash mumkin',
+  'dunning.paidInFull.hint':
+    'Mijozni hech narsa o‘zi o‘tkazmaydi: to‘lov qarzni yopadi, bosqichi esa avvalgicha qoladi — qarorni odam qabul qiladi.',
+  'platformApprovals.action.commercial_billing_bank-details': 'Hisob-fakturalardagi bank rekvizitlari',
+  'platformApprovals.subject.field.beneficiary': 'Oluvchi',
+  'platformApprovals.subject.field.bankName': 'Bank',
+  'platformApprovals.subject.field.account': 'Hisob raqami',
+  'platformApprovals.subject.field.mfo': 'MFO',
+  'platformApprovals.subject.field.taxId': 'STIR',
 };

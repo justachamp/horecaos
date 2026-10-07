@@ -112,12 +112,18 @@ export class PlatformApprovals {
       return '';
     }
     const subject = row.request.subject;
+    const amount = this.signedAmount(subject);
+    if (amount === null && row.request.subjectTenantId === null && row.request.subjectTenantName === null) {
+      // A decision about HorecaOS itself, such as the bank details every invoice carries (ADR 0095): it
+      // names no tenant and moves no money, so "tenant not named on this request" would be a false alarm.
+      // The detail lines beneath carry the whole proposal, and the Tenant column already says whose it is.
+      return '';
+    }
     const tenant =
       row.request.subjectTenantName ??
       (row.request.subjectTenantId === null
         ? this.i18n.t('platformApprovals.subject.unknownTenant')
         : this.directory.nameOf(row.request.subjectTenantId));
-    const amount = this.signedAmount(subject);
     if (amount === null) {
       return tenant;
     }

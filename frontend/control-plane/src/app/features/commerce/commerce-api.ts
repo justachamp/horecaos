@@ -300,6 +300,112 @@ export interface WalletChangeResponse {
 
 export const PAYMENT_METHODS = ['INVOICE', 'WALLET', 'CARD'] as const;
 
+/** `PrepaymentInvoice.java`'s statuses; read from the ledger, never stored. */
+export type PrepaymentInvoiceStatus =
+  | 'OPEN'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | (string & {});
+
+/** The five things an invoice prints about where to pay. */
+export interface PaymentDetailsView {
+  readonly configured: boolean;
+  readonly beneficiary: string;
+  readonly bankName: string;
+  readonly account: string;
+  readonly mfo: string;
+  readonly taxId: string;
+}
+
+/**
+ * A request for payment of money to be held in a tenant's wallet (ADR 0095),
+ * frozen at issue with the bank details of that moment. Before tax, and not a
+ * tax invoice.
+ */
+export interface PrepaymentInvoiceView {
+  readonly invoiceId: string;
+  readonly number: string;
+  readonly status: PrepaymentInvoiceStatus;
+  readonly amount: Money;
+  readonly paid: Money;
+  readonly due: Money;
+  readonly validUntil: string;
+  readonly issuedAt: string;
+  readonly cancelledAt: string | null;
+  readonly paymentDetails: PaymentDetailsView;
+  readonly paymentPurpose: string;
+  readonly beforeTax: boolean;
+}
+
+/** One attempt to charge a tenant's card for money to hold in its wallet. */
+export interface CardTopUpView {
+  readonly topUpId: string;
+  readonly amount: Money;
+  readonly outcome: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'NOT_CONFIGURED' | (string & {});
+  /** The provider's reason code, on a decline only. */
+  readonly reason: string | null;
+  readonly walletEntryId: string | null;
+  readonly requestedAt: string;
+  readonly settledAt: string | null;
+}
+
+/** The bank details every invoice carries now, and who put them there. */
+export interface BankDetailsView {
+  /** False while the row still holds the placeholder; no invoice is issued until it is replaced. */
+  readonly configured: boolean;
+  readonly beneficiary: string;
+  readonly bankName: string;
+  readonly account: string;
+  readonly mfo: string;
+  readonly taxId: string;
+  readonly version: number;
+  readonly updatedBy: string;
+  readonly updatedAt: string;
+  readonly approvedBy: string | null;
+}
+
+export interface BankDetailsProposal {
+  readonly beneficiary: string;
+  readonly bankName: string;
+  readonly account: string;
+  readonly mfo: string;
+  readonly taxId: string;
+  readonly reason: string;
+}
+
+/** `PlatformCardInstallation.java`'s statuses. */
+export type CardInstallationStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | (string & {});
+
+/**
+ * HorecaOS's own card merchant account in the shape of an ADR 0026 installation.
+ * The secret reference is never returned: `secretConfigured` says whether one is named.
+ */
+export interface CardInstallationView {
+  readonly installationId: string;
+  readonly providerType: string;
+  readonly environmentCode: string | null;
+  readonly displayName: string;
+  readonly status: CardInstallationStatus;
+  readonly secretConfigured: boolean;
+  readonly externalAccountReference: string | null;
+  readonly configuration: Readonly<Record<string, unknown>>;
+  readonly version: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CardInstallationRequest {
+  readonly providerType: string;
+  readonly environmentCode?: string;
+  readonly displayName: string;
+  /** A `provider_payment` secret reference. Never a credential value. */
+  readonly secretReference?: string;
+  readonly externalAccountReference?: string;
+  readonly reason: string;
+}
+
 /** What one arrears stage does to a tenant. */
 export interface ArrearsStageView {
   readonly status: string;
@@ -328,6 +434,17 @@ export interface ArrearView {
     readonly total: Money;
     readonly issuedAt: string;
   } | null;
+  /**
+   * What the tenant still owes on issued statements and on how many, or null
+   * when it owes nothing.
+   */
+  readonly owed: { readonly due: Money; readonly openStatements: number } | null;
+  /**
+   * True when the tenant owes nothing: the cue that whoever restores it can
+   * now do so. Nothing moves a subscription by itself (ADR 0089), so this is
+   * only a signal.
+   */
+  readonly paidInFull: boolean;
 }
 
 export interface ArrearsBoardView {
@@ -622,10 +739,43 @@ export class CommerceApi {
     );
   }
 
-  /** One person's audited act: the bank reference is what proves it. */
+  /** The tenant's prepayment invoices, newest first. */
+  async prepaymentInvoices(tenantId: string): Promise<PrepaymentInvoiceView[]> {
+    return firstValueFrom(
+      this.api.get<PrepaymentInvoiceView[]>(`/api/v1/control-plane/tenants/${tenantId}/wallet/invoices`),
+    );
+  }
+
+  /** The tenant's recent card top-ups, newest first. */
+  async cardTopUps(tenantId: string): Promise<CardTopUpView[]> {
+    return firstValueFrom(
+      this.api.get<CardTopUpView[]>(`/api/v1/control-plane/tenants/${tenantId}/wallet/top-ups`),
+    );
+  }
+
+  /** Withdraws an invoice nothing has paid; refused once any money names it. */
+  async cancelPrepaymentInvoice(tenantId: string, invoiceId: string, reason: string): Promise<PrepaymentInvoiceView> {
+    return firstValueFrom(
+      this.api.post<PrepaymentInvoiceView>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/invoices/${invoiceId}/cancel`,
+        { reason },
+      ),
+    );
+  }
+
+  /**
+   * One person's audited act: the bank reference is what proves it. Naming the
+   * prepayment invoice it pays makes the ledger entry say so, and the invoice's
+   * paid figure is then the ledger's own sum.
+   */
   async recordTransfer(
     tenantId: string,
-    request: { readonly amountMinor: number; readonly bankReference: string; readonly reason: string },
+    request: {
+      readonly amountMinor: number;
+      readonly bankReference: string;
+      readonly reason: string;
+      readonly prepaymentInvoiceNumber?: string;
+    },
   ): Promise<{ entryId: string }> {
     return firstValueFrom(
       this.api.post<{ entryId: string }>(
@@ -698,6 +848,67 @@ export class CommerceApi {
       this.api.post<void>(
         `/api/v1/platform-admin/commercial/tenants/${tenantId}/wallet/payment-method`,
         request,
+      ),
+    );
+  }
+
+  // ------------------------------------------------------- billing setup
+
+  /** The bank details every invoice carries now. */
+  async bankDetails(): Promise<BankDetailsView> {
+    return firstValueFrom(this.api.get<BankDetailsView>('/api/v1/control-plane/billing/bank-details'));
+  }
+
+  /**
+   * Proposed by one person; the identical call again after a different person
+   * approves it under Approvals writes the details and spends the signature.
+   */
+  async proposeBankDetails(request: BankDetailsProposal): Promise<WalletChangeResponse> {
+    return firstValueFrom(
+      this.api.post<WalletChangeResponse>('/api/v1/platform-admin/commercial/billing/bank-details', request),
+    );
+  }
+
+  /** HorecaOS's own card merchant accounts. At most one is ACTIVE. */
+  async cardInstallations(): Promise<CardInstallationView[]> {
+    return firstValueFrom(
+      this.api.get<CardInstallationView[]>('/api/v1/control-plane/billing/card-installations'),
+    );
+  }
+
+  async createCardInstallation(request: CardInstallationRequest): Promise<{ installationId: string }> {
+    return firstValueFrom(
+      this.api.post<{ installationId: string }>(
+        '/api/v1/platform-admin/commercial/billing/card-installations',
+        request,
+      ),
+    );
+  }
+
+  /** Refused while another is active, and for a test double outside a local or test run. */
+  async activateCardInstallation(
+    installationId: string,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<CardInstallationView> {
+    return firstValueFrom(
+      this.api.post<CardInstallationView>(
+        `/api/v1/platform-admin/commercial/billing/card-installations/${installationId}/activation`,
+        { expectedVersion, reason },
+      ),
+    );
+  }
+
+  /** Every card tenant is then collected like an invoice tenant until an account is active. */
+  async suspendCardInstallation(
+    installationId: string,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<CardInstallationView> {
+    return firstValueFrom(
+      this.api.post<CardInstallationView>(
+        `/api/v1/platform-admin/commercial/billing/card-installations/${installationId}/suspension`,
+        { expectedVersion, reason },
       ),
     );
   }

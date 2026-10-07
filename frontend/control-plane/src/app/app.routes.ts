@@ -207,6 +207,14 @@ export const routes: Routes = [
           import('./features/commerce/invoices-wallet').then((m) => m.InvoicesWallet),
       },
       {
+        // HorecaOS's own bank details and card merchant account (ADR 0095): not per tenant, so not on
+        // Invoices & wallet, whose every control starts from a tenant.
+        path: 'commerce/billing-setup',
+        canActivate: [requiresCapability('COMMERCIAL_WALLET_READ')],
+        loadComponent: () =>
+          import('./features/commerce/billing-setup').then((m) => m.BillingSetup),
+      },
+      {
         path: 'commerce/dunning',
         canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
         loadComponent: () => import('./features/commerce/dunning').then((m) => m.Dunning),
