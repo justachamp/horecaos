@@ -25,14 +25,36 @@
 - Date proposed: 2026-10-07
 - Date decided: —
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
-- Depends on: ADR 0003, ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0033,
-  ADR 0062, ADR 0098, ADR 0139, ADR 0148
-- Supersedes / Superseded by: — (amends no record and edits none. It stays inside ADR
-  0139's boundary row "Password, MFA, sessions: Keycloak, its own flow" and inside ADR
-  0062's direct grant. It reopens exactly one line of ADR 0139, "What this record
-  deliberately does not decide: MFA state and active-session projection
-  (`staff-and-access.md` §11.6 and §11.9)", for sessions only; MFA state is ADR 0148's
-  and is not touched here)
+- Depends on: ADR 0003, ADR 0007, ADR 0009, ADR 0025, ADR 0027, ADR 0029, ADR 0030,
+  ADR 0031, ADR 0033, ADR 0057, ADR 0062, ADR 0098, ADR 0139, ADR 0148
+- Supersedes / Superseded by: — (edits no record's text, but it reopens one line of ADR
+  0139 and one rejected row of ADR 0098 and changes how ADR 0098's reset is implemented;
+  each is named here. It stays inside ADR 0139's boundary row "Password, MFA, sessions:
+  Keycloak, its own flow" and inside ADR 0062's direct grant.
+  (1) One line of ADR 0139, "What this record deliberately does not decide: MFA state
+  and active-session projection (`staff-and-access.md` §11.6 and §11.9)", is reopened
+  for sessions only; MFA state is ADR 0148's and is not touched here.
+  (2) One rejected row of ADR 0098 (Accepted), "List the account's offline sessions and
+  delete them one by one", is reopened for listing sessions and ending a single session
+  only. That row was rejected because resolving the sign-in client's UUID needs
+  `view-clients`, which the provisioning credential does not hold (probed live: `403`),
+  and its revisit trigger is "The provisioning credential gains client-read roles for
+  another reason". That trigger has not fired: `infra/keycloak/README.md` still lists
+  only `manage-organizations`, `manage-users`, `view-users` and `query-users` for
+  `horecaos-provisioning`, and this record grants nothing. So this record does not claim
+  the trigger; it avoids the reason, by reading the client UUID from the deployment
+  property `horecaos.keycloak.staff-login-client-uuid` instead of calling
+  `view-clients`. What stays unproven is whether the list and delete endpoints accept
+  `view-users` and `manage-users` alone, and the probe (first open input) establishes
+  it: if either refuses them, the row stays rejected, no role is granted to make it
+  work, and only the history table and «Выйти везде» ship.
+  (3) How ADR 0098's reset is implemented changes, not what it decides:
+  `PasswordResetService` calls `StaffSessionLedger` only after `logoutEverywhere` has
+  succeeded, and marks every row of that subject, in every tenant, `PASSWORD_RESET` only
+  when `sessionsEnded` is true. When `logoutEverywhere` fails, the rows stay as they are
+  and ADR 0098's `sessionsEnded: false` answer and `iam.password_reset.sessions_not_ended`
+  fact stand untouched, because a history that says sessions ended when they did not is
+  the failure ADR 0098 calls worse than none)
 - Open inputs: each is closed on its proposed default if the owner accepts the record
   as written; the ones that name a person other than the owner stay with that person
   and the work they block is marked.
@@ -45,11 +67,14 @@
     ADR 0098 proved `logoutEverywhere` against the live 26.7 realm and nothing else
     here. Proposed default: a throwaway-container probe in the manner of
     `infra/keycloak/spikes/mfa-lockout-probe.py`, written first and re-run when the
-    pinned image changes. If the listing does not work, the screen shows the platform's
-    own rows with a state derived from them and says so; if `sid` is absent, no row is
-    marked as the current session; if the single delete does not work, only
-    «Выйти везде» is offered. The build of the history table and of «Выйти везде»
-    waits on none of the three.
+    pinned image changes. The probe also asks whether those two calls accept the
+    provisioning credential as it is (`view-users` and `manage-users`, no client role).
+    If the listing does not work, including a `403` for want of a client role, which
+    this record does not cure by granting one (ADR 0098's rejected row then stays
+    rejected), the screen shows the platform's own rows with a state derived from them
+    and says so; if `sid` is absent, no row is marked as the current session; if the
+    single delete does not work or is refused, only «Выйти везде» is offered. The build
+    of the history table and of «Выйти везде» waits on none of the three.
   - **How the platform learns the staff-login client's internal id** (engineering,
     operations). The offline-session endpoint takes the client's UUID, not its
     `clientId`, and the provisioning credential that backs `KeycloakStaffAccounts`
@@ -57,7 +82,8 @@
     role (`infra/keycloak/README.md`). Proposed default: a deployment property,
     `horecaos.keycloak.staff-login-client-uuid`, written by
     `infra/keycloak/create-staff-login-client.sh` and read at startup; no new realm role
-    is granted to any service account.
+    is granted to any service account. It is also how this record avoids the `view-clients`
+    `403` that ADR 0098's rejected row records (Supersedes).
   - **How long a sign-in row is kept** (legal, security). Proposed default: 180 days
     from `signed_in_at`, an ADR 0030 key (`iam.staff_sign_in_retention_days`, range 30 to
     730, platform and tenant), swept in report-only mode first as ADR 0029 requires for
@@ -190,13 +216,18 @@ and give them one audited action to end them all.**
    closed list and never typed. Rows in other tenants are not touched: they read as
    ended because Keycloak no longer lists the session, and the sweeper closes them by
    age. Ending one session at a time is built only if the open input about
-   `DELETE /sessions/{id}` is closed in its favour.
+   `DELETE /sessions/{id}` is closed in its favour, which is what reopens the row of ADR
+   0098 named under Supersedes.
 
 7. **History is operational, not evidence.** A sign-in is not an ADR 0027 fact; the
    rows are kept 180 days and swept, and nothing audits a sign-in. What is audited is the
    one act that changes the state of an account's sessions. Every path that ends all of
-   an account's sessions goes through one application service so that history says why,
-   including ADR 0098's reset, which records `PASSWORD_RESET`.
+   an account's sessions marks the rows through one application service so that history
+   says why. ADR 0098's reset is one of them, on one condition: it marks rows
+   `PASSWORD_RESET` only after `logoutEverywhere` has succeeded and its `sessionsEnded`
+   is true, and then for the subject's rows in every tenant, because the unauthenticated
+   reset path has no tenant. If Keycloak did not end the sessions, the rows are left
+   open and ADR 0098's `sessions_not_ended` fact is the only record, as it is today.
 
 8. **No failed attempts, no notifications, no network address in v1.** Each is named in
    the Alternatives table with what would reopen it.
@@ -233,7 +264,7 @@ and give them one audited action to end them all.**
 - The platform records no address, no raw `User-Agent` and no position, so the table
   holds no personal data beyond the subject id.
 - Every path that ends an account's sessions says why in the history, including the
-  password reset that already existed.
+  password reset that already existed, when it did end them.
 
 ### Negative
 
@@ -266,10 +297,12 @@ and give them one audited action to end them all.**
 adapter `KeycloakStaffSessions` sits beside `KeycloakStaffAccounts`, uses the same
 provisioning credential and the same timeouts, and has a recorded fake (ADR 0007's
 discipline, as the other adapters have). `StaffSessionLedger` is the application service
-that writes sign-in rows, updates `last_seen_at`, marks rows ended, and is the single path
-that ends all sessions (the sign-out-everywhere route and `PasswordResetService` both
-call it, so the reason is always recorded). `StaffAuthService` calls the ledger after a
-token is issued and after a refresh.
+that writes sign-in rows, updates `last_seen_at`, and is the single place rows are marked
+ended, so the reason is always recorded: the sign-out-everywhere route calls it to end the
+account's sessions and mark the caller's rows in this tenant, and `PasswordResetService`
+calls its marking operation for the subject in every tenant after, and only after, its own
+`logoutEverywhere` has succeeded (Audit, below). `StaffAuthService` calls the ledger after
+a token is issued and after a refresh.
 
 ### Physical model
 
@@ -332,8 +365,9 @@ The route is in the `operations` OpenAPI surface group (ADR 0057).
 `list` calls `GET /admin/realms/{realm}/users/{id}/offline-sessions/{clientUuid}` and,
 because a person may also hold an online session, `GET /users/{id}/sessions`, and merges
 them by id; `end` calls `DELETE /sessions/{id}?isOffline=true` (or the online form). All
-use `manage-users` or `view-users` on the provisioning credential and need no new realm
-role. The client UUID is the deployment property named in the open inputs. Keycloak's
+are expected to need only `manage-users` or `view-users`, which the provisioning credential
+holds, and no new realm role; that is an expectation the probe tests (first open input), not
+a fact the repository establishes. The client UUID is the deployment property named in the open inputs. Keycloak's
 address field in a session is never copied out of the adapter. A call is made on demand
 when the screen opens and never in a loop.
 
@@ -352,8 +386,18 @@ report-only mode first and logs only a count.
   reason code; `before` and `after` carry the count of active sessions and nothing
   about a device. The activity log needs a sentence per code in ru, uz-Latn and en
   (`activity-log-action-codes-coverage.spec.ts` fails the build without them).
-- ADR 0098's reset gains the same ledger call and records `PASSWORD_RESET` as the end
-  reason, so one reason vocabulary covers both.
+- ADR 0098's `PasswordResetService` calls `StaffSessionLedger` only after
+  `logoutEverywhere` has succeeded. When `sessionsEnded` is true it marks every row of
+  that subject, in every tenant (the reset path is unauthenticated and has no tenant),
+  `PASSWORD_RESET`, so one reason vocabulary covers both acts. When `logoutEverywhere`
+  fails it does not call the ledger: the rows and ADR 0098's existing
+  `iam.password_reset.sessions_not_ended` fact are left exactly as they are, and the
+  answer stays `sessionsEnded: false`. No new fact is written for the reset; the
+  `iam.password_reset.accepted` fact already carries `sessionsEnded`. The call runs
+  outside the reset's transaction, as `logoutEverywhere` does, and a failure of the
+  marking itself is logged and counted and changes neither the answer nor the fact: the
+  rows then read as ended because Keycloak no longer lists the session, and the sweeper
+  closes them by age.
 - No Kafka event: nothing consumes one, and ADR 0139 made the same choice for the same
   reason. A future event would carry no label and no subject.
 - The table holds no `PERSONAL` field. `StaffSessionLedger` and the parser never log the
@@ -398,7 +442,12 @@ Each assertion says what would still be true if the code were broken.
   refresh answers 400 afterwards), is idempotent under a repeated key, writes exactly one
   fact in the same transaction as the row update, and rolls both back together; the rate
   limit refuses the sixth in an hour; Keycloak down ends nothing and says so.
-- **Reset path**: a completed password reset marks the rows `PASSWORD_RESET`.
+- **Reset path**: a completed password reset whose `logoutEverywhere` succeeds marks
+  every row of that subject, in two tenants, `PASSWORD_RESET`; one whose
+  `logoutEverywhere` fails (the recorded fake refuses the call) leaves every row open,
+  still answers `sessionsEnded: false`, still records `sessions_not_ended`, and never
+  calls the ledger; a ledger that throws after a successful logout changes neither the
+  answer nor the fact.
 - **Front end**: the card's states (loading, list, unavailable, empty, error), the
   confirmation naming a count, and tokens cleared after success.
 
@@ -420,7 +469,8 @@ Rollback is removing the screen and the recording call: the table is additive an
       `create-staff-login-client.sh`, read at startup, documented in the production runbook.
 - [ ] Migration for `iam.staff_sign_ins`; `GRANT`s; the closed-set checks.
 - [ ] `StaffSessionLedger`, the device-label parser and its vectors; `StaffAuthService`
-      calls it after sign-in and refresh; `PasswordResetService` routes through it.
+      calls it after sign-in and refresh; `PasswordResetService` calls it after, and only
+      after, `logoutEverywhere` succeeds.
 - [ ] `StaffSessions` port, `KeycloakStaffSessions` adapter and its fake.
 - [ ] The three routes; rate limits; idempotency; OpenAPI baselines for all five
       documents and the generated clients.
@@ -437,15 +487,19 @@ browser, system and form and the times, with «Это устройство» on 
 page; the refresh token of the other device then answers 400; the history shows both
 sessions ended with the reason; the activity log shows one fact for the act with a count
 and no device; and no row, fact or log line in the system contains an address or a raw
-`User-Agent`. A password reset ends sessions and the history says `PASSWORD_RESET`. With
-Keycloak unreachable the card says so, offers the action, and ends nothing.
+`User-Agent`. A password reset that ends the sessions makes the history say
+`PASSWORD_RESET` for every tenant of that person; one whose session end fails leaves the
+history as it was and keeps ADR 0098's `sessionsEnded: false` answer. With Keycloak
+unreachable the card says so, offers the action, and ends nothing.
 
 ## References
 
-- ADR 0003, ADR 0009, ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0033, ADR
-  0062 (staff sign-in inside the platform), ADR 0081 (support sessions), ADR 0098
-  (`logoutEverywhere`, offline tokens), ADR 0139 (Keycloak boundary, self strategy),
-  ADR 0146, ADR 0148 (MFA, session-lifetime input)
+- ADR 0003, ADR 0007 (recorded fakes), ADR 0009 (a person in two tenants), ADR 0025,
+  ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0033, ADR 0057 (the `operations` surface
+  group), ADR 0062 (staff sign-in inside the platform), ADR 0081 (support sessions), ADR
+  0098 (`logoutEverywhere`, offline tokens, the rejected one-by-one row, the reset's
+  `sessionsEnded`), ADR 0139 (Keycloak boundary, self strategy), ADR 0146, ADR 0148
+  (MFA, session-lifetime input)
 - `platform/docs/operations-gap-map.md` row `X.5` of §9 (and `0.2c`)
 - `platform/docs/operations-spec/staff-and-access.md` §3 (tab 4), §10, §11.6, §11.7, §11.9
 - `StaffSessionController`, `StaffAuthService`, `StaffDirectGrantClient` (`SCOPE`,
