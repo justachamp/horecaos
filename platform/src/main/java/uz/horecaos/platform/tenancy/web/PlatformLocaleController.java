@@ -33,16 +33,16 @@ public class PlatformLocaleController {
             summary = "The platform's languages (operations)",
             description = "Every declared language, live or not, with the tiers it is live in "
                     + "(CONTENT, MESSAGES, STAFF_UI), its script, direction, face and names. A read of code.")
-    public LocalesResponse operations() {
-        return LocalesResponse.current();
+    public PlatformLocalesResponse operations() {
+        return PlatformLocalesResponse.current();
     }
 
     @GetMapping("/api/v1/control-plane/locales")
     @Operation(
             summary = "The platform's languages (control plane)",
             description = "The same answer as the operations surface, for the control plane's own client.")
-    public LocalesResponse controlPlane() {
-        return LocalesResponse.current();
+    public PlatformLocalesResponse controlPlane() {
+        return PlatformLocalesResponse.current();
     }
 
     @GetMapping("/api/v1/storefront/locales")
@@ -50,18 +50,20 @@ public class PlatformLocaleController {
             summary = "The platform's languages (storefront)",
             description = "The same answer as the operations surface, readable before an account exists, "
                     + "for the storefronts' and the mobile app's own clients.")
-    public LocalesResponse storefront() {
-        return LocalesResponse.current();
+    public PlatformLocalesResponse storefront() {
+        return PlatformLocalesResponse.current();
     }
 
     /**
      * @param fallback the tag every reader falls back to when a customer or a brand names none
      */
-    public record LocalesResponse(List<LocaleResponse> locales, String fallback) {
+    public record PlatformLocalesResponse(List<PlatformLocaleEntryResponse> locales, String fallback) {
 
-        static LocalesResponse current() {
-            return new LocalesResponse(
-                    PlatformLocales.all().stream().map(LocaleResponse::of).toList(),
+        static PlatformLocalesResponse current() {
+            return new PlatformLocalesResponse(
+                    PlatformLocales.all().stream()
+                            .map(PlatformLocaleEntryResponse::of)
+                            .toList(),
                     PlatformLocales.fallback().tag());
         }
     }
@@ -73,7 +75,7 @@ public class PlatformLocaleController {
      * @param inputAliases spellings the platform reads and never stores
      * @param tiers where the language is live; empty means declared, not live
      */
-    public record LocaleResponse(
+    public record PlatformLocaleEntryResponse(
             String tag,
             String catalogCode,
             List<String> inputAliases,
@@ -84,8 +86,8 @@ public class PlatformLocaleController {
             List<String> tiers,
             Map<String, String> names) {
 
-        static LocaleResponse of(PlatformLocale locale) {
-            return new LocaleResponse(
+        static PlatformLocaleEntryResponse of(PlatformLocale locale) {
+            return new PlatformLocaleEntryResponse(
                     locale.tag(),
                     locale.catalogCode(),
                     locale.inputAliases().stream().sorted().toList(),

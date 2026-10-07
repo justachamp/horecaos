@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.StopListPort;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.VariantAvailabilityRow;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The {@code catalog.api} face of the 86 list's read side (ADR 0060 §3),
@@ -23,7 +24,8 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 @Component
 public class StopListPortAdapter implements StopListPort {
 
-    private static final String DEFAULT_LOCALE = "ru";
+    /** The registry's fallback language (ADR 0149): a stop list read for a bot has no customer to ask. */
+    private static final String DEFAULT_LOCALE = PlatformLocales.fallback().tag();
 
     /** One page's worth of a location's 86 list, rendered as one chat message (ADR 0060 §3). */
     private static final int MAX_ITEMS = 50;

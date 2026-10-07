@@ -1715,6 +1715,62 @@
         },
         "type" : "object"
       },
+      "PlatformLocaleEntryResponse" : {
+        "properties" : {
+          "catalogCode" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "face" : {
+            "type" : "string"
+          },
+          "fallbackRank" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "inputAliases" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "script" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "tiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformLocalesResponse" : {
+        "properties" : {
+          "fallback" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformLocaleEntryResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "PricedCartResponse" : {
         "properties" : {
           "appliedPromotions" : {
@@ -2758,6 +2814,26 @@
         },
         "summary" : "Attach a just-placed order to the table's bill",
         "tags" : [ "QR dine-in" ]
+      }
+    },
+    "/api/v1/storefront/locales" : {
+      "get" : {
+        "description" : "The same answer as the operations surface, readable before an account exists, for the storefronts' and the mobile app's own clients.",
+        "operationId" : "storefront",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformLocalesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform's languages (storefront)",
+        "tags" : [ "Locales" ]
       }
     },
     "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}" : {
@@ -5775,6 +5851,9 @@
   }, {
     "description" : "A branch's own published name and address",
     "name" : "Storefront location profile"
+  }, {
+    "description" : "The languages the platform knows and where each is live (ADR 0149)",
+    "name" : "Locales"
   }, {
     "description" : "Row 10.5: a channel's public SEO facts and static pages",
     "name" : "Storefront channel presentation"

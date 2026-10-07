@@ -567,6 +567,23 @@ export interface PickupLocations {
   locations?: Array<PickupLocation>;
 }
 
+export interface PlatformLocaleEntryResponse {
+  catalogCode?: string;
+  direction?: string;
+  face?: string;
+  fallbackRank?: number;
+  inputAliases?: Array<string>;
+  names?: { [key: string]: string };
+  script?: string;
+  tag?: string;
+  tiers?: Array<string>;
+}
+
+export interface PlatformLocalesResponse {
+  fallback?: string;
+  locales?: Array<PlatformLocaleEntryResponse>;
+}
+
 export interface PricedCartResponse {
   appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
@@ -831,6 +848,7 @@ export interface Operations {
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "addRound": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } }; body: AddRoundRequest }; responses: { "200": GuestBillResponse } };
+  "storefront": { method: "GET"; path: "/api/v1/storefront/locales"; request: { parameters: Record<string, never> }; responses: { "200": PlatformLocalesResponse } };
   "balance": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": BalanceResponse } };
   "entries": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyStorefrontControllerEntryResponse> } };
   "nearbyPickupLocations": { method: "POST"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: Record<string, never>; body: PickupLocationSearchRequest }; responses: { "200": PickupLocations } };
