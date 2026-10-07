@@ -5,6 +5,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import org.apache.camel.CamelContext;
+import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -17,12 +19,17 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.fulfillment.api.RoadDistancePort;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
+import uz.horecaos.platform.integration.camel.routing.CamelRoadDistancePort;
+import uz.horecaos.platform.integration.camel.routing.RoadDistanceRouteBuilder;
 import uz.horecaos.platform.support.FakeOsrmEngine;
 import uz.horecaos.platform.support.RoadDistancePortContract;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.cache.CacheRegistry;
 
-/** The OSRM adapter held to the contract every {@link RoadDistancePort} owes the resolver. */
+/**
+ * The OSRM adapter, reached through the road-distance route exactly as the resolver reaches
+ * it, held to the contract every {@link RoadDistancePort} owes the resolver.
+ */
 class OsrmAdapterPortContractTests extends RoadDistancePortContract {
 
     private static final UUID TENANT = UUID.randomUUID();
@@ -30,7 +37,8 @@ class OsrmAdapterPortContractTests extends RoadDistancePortContract {
     private static TestDatabase.Handle db;
 
     private FakeOsrmEngine engine;
-    private OsrmRoadDistanceAdapter adapter;
+    private CamelContext camel;
+    private RoadDistancePort port;
     private UUID installation;
 
     @BeforeAll
@@ -65,23 +73,36 @@ class OsrmAdapterPortContractTests extends RoadDistancePortContract {
 
         JdbcRoutingInstallations installations = new JdbcRoutingInstallations(jdbc);
         installation = installations.insertPlatformRouting(TENANT).orElseThrow();
-        adapter = new OsrmRoadDistanceAdapter(
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        OsrmRoadDistanceAdapter adapter = new OsrmRoadDistanceAdapter(
                 new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier()),
                 OsrmProperties.enabledWith("2026-10-01"),
                 installations,
                 new ConcurrentMapCacheManager(CacheRegistry.ROUTING_ROAD_ROUTES.cacheName()),
-                new SimpleMeterRegistry(),
+                meters,
                 Clock.fixed(Instant.parse("2026-10-08T06:00:00Z"), ZoneOffset.UTC));
+
+        // The route the resolver goes through, started for real: what is held to the
+        // contract is the port the application wires, not the adapter behind it.
+        camel = new DefaultCamelContext();
+        try {
+            camel.addRoutes(new RoadDistanceRouteBuilder(adapter, meters));
+            camel.start();
+        } catch (Exception failure) {
+            throw new IllegalStateException("The road-distance route did not start", failure);
+        }
+        port = new CamelRoadDistancePort(camel.createProducerTemplate());
     }
 
     @AfterEach
     void tearDown() {
+        camel.stop();
         engine.close();
     }
 
     @Override
     protected RoadDistancePort port() {
-        return adapter;
+        return port;
     }
 
     @Override

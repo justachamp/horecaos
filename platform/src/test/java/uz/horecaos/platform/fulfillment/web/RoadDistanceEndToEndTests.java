@@ -44,7 +44,7 @@ import uz.horecaos.platform.fulfillment.api.RoutingInstallationPort;
 import uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
-import uz.horecaos.platform.integration.provider.routing.OsrmRoadDistanceAdapter;
+import uz.horecaos.platform.integration.camel.routing.CamelRoadDistancePort;
 import uz.horecaos.platform.integration.provider.routing.PlatformRoutingInstallations;
 import uz.horecaos.platform.support.FakeOsrmEngine;
 import uz.horecaos.platform.support.TestDatabase;
@@ -160,12 +160,12 @@ class RoadDistanceEndToEndTests {
 
     @Test
     @DisplayName(
-            "the running application's road distance is the OSRM adapter, and its installations are the platform's")
-    void theRealContextUsesTheOsrmAdapter() {
+            "the running application's road distance is the routing route, and its installations are the platform's")
+    void theRealContextUsesTheRoutingRoute() {
         // The unbound default registers only when nothing else supplies the port. If this
         // ever reads the default, every ROAD fee in production is a fallback and the only
         // symptom is a metric nobody is looking at.
-        assertThat(roadDistance).isInstanceOf(OsrmRoadDistanceAdapter.class);
+        assertThat(roadDistance).isInstanceOf(CamelRoadDistancePort.class);
         assertThat(routingInstallations).isInstanceOf(PlatformRoutingInstallations.class);
     }
 

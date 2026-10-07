@@ -110,7 +110,8 @@ class OsrmRoadDistanceAdapterTests {
     void aKnownPairReturnsTheKnownRoute() {
         engine.routeOf(4_321.7, 468.2);
 
-        Optional<RoadRoute> route = adapter(OsrmProperties.enabledWith(DATASET)).route(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> route =
+                adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
 
         // Rounded to the nearest metre and second, and attributed to the map that
         // measured it: a road figure with no dataset cannot be reproduced after a refresh.
@@ -121,7 +122,7 @@ class OsrmRoadDistanceAdapterTests {
     @Test
     @DisplayName("the request is the engine's route service, longitude first, with no geometry")
     void theRequestIsWhatTheEngineExpects() {
-        adapter(OsrmProperties.enabledWith(DATASET)).route(BRANCH, DOORSTEP, installation);
+        adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
 
         // OSRM takes longitude before latitude. A swapped pair is a valid request for a
         // point in the Indian Ocean, and the engine answers it without complaint.
@@ -138,7 +139,8 @@ class OsrmRoadDistanceAdapterTests {
     void metresAreRoundedToTheNearest() {
         engine.routeOf(1_234.5, 99.5);
 
-        Optional<RoadRoute> route = adapter(OsrmProperties.enabledWith(DATASET)).route(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> route =
+                adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
 
         assertThat(route).map(RoadRoute::meters).contains(1_235);
         assertThat(route).map(RoadRoute::seconds).contains(100);
@@ -152,7 +154,7 @@ class OsrmRoadDistanceAdapterTests {
 
         for (int i = 0; i < 40; i++) {
             GeoPoint elsewhere = new GeoPoint(41.33 + i * 0.001, 69.26);
-            assertThat(adapter.route(BRANCH, elsewhere, installation)).isEmpty();
+            assertThat(adapter.measure(BRANCH, elsewhere, installation)).isEmpty();
         }
 
         // "No route" is the engine working. Counting it as a fault would take a healthy
@@ -160,7 +162,7 @@ class OsrmRoadDistanceAdapterTests {
         assertThat(count("no_route")).isEqualTo(40.0);
         assertThat(count("breaker_open")).isZero();
         engine.routeOf(2_000, 200);
-        assertThat(adapter.route(BRANCH, DOORSTEP, installation)).isPresent();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, installation)).isPresent();
     }
 
     @Test
@@ -168,7 +170,7 @@ class OsrmRoadDistanceAdapterTests {
     void aCoordinateOffTheNetworkIsEmpty() {
         engine.noSegment();
 
-        assertThat(adapter(OsrmProperties.enabledWith(DATASET)).route(BRANCH, DOORSTEP, installation))
+        assertThat(adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation))
                 .isEmpty();
         assertThat(count("no_route")).isEqualTo(1.0);
     }
@@ -182,7 +184,7 @@ class OsrmRoadDistanceAdapterTests {
         OsrmRoadDistanceAdapter adapter = adapter(withTimeout(Duration.ofMillis(200)));
 
         long started = System.nanoTime();
-        Optional<RoadRoute> route = adapter.route(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> route = adapter.measure(BRANCH, DOORSTEP, installation);
         Duration took = Duration.ofNanos(System.nanoTime() - started);
 
         assertThat(route).isEmpty();
@@ -201,13 +203,13 @@ class OsrmRoadDistanceAdapterTests {
         OsrmRoadDistanceAdapter adapter = adapter(properties);
 
         for (int i = 0; i < 5; i++) {
-            assertThat(adapter.route(BRANCH, new GeoPoint(41.33 + i * 0.001, 69.26), installation))
+            assertThat(adapter.measure(BRANCH, new GeoPoint(41.33 + i * 0.001, 69.26), installation))
                     .isEmpty();
         }
         int hitsWhenItOpened = engine.hits();
 
         long started = System.nanoTime();
-        Optional<RoadRoute> afterwards = adapter.route(BRANCH, new GeoPoint(41.40, 69.30), installation);
+        Optional<RoadRoute> afterwards = adapter.measure(BRANCH, new GeoPoint(41.40, 69.30), installation);
         Duration took = Duration.ofNanos(System.nanoTime() - started);
 
         assertThat(afterwards).isEmpty();
@@ -224,16 +226,16 @@ class OsrmRoadDistanceAdapterTests {
         OsrmRoadDistanceAdapter adapter = adapter(properties);
 
         engine.serverError();
-        assertThat(adapter.route(BRANCH, new GeoPoint(41.331, 69.26), installation))
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.331, 69.26), installation))
                 .isEmpty();
-        assertThat(adapter.route(BRANCH, new GeoPoint(41.332, 69.26), installation))
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.332, 69.26), installation))
                 .isEmpty();
         engine.garbage();
-        assertThat(adapter.route(BRANCH, new GeoPoint(41.333, 69.26), installation))
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.333, 69.26), installation))
                 .isEmpty();
 
         int hits = engine.hits();
-        assertThat(adapter.route(BRANCH, new GeoPoint(41.334, 69.26), installation))
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.334, 69.26), installation))
                 .isEmpty();
         assertThat(engine.hits()).isEqualTo(hits);
         assertThat(count("error")).isEqualTo(3.0);
@@ -247,10 +249,10 @@ class OsrmRoadDistanceAdapterTests {
     void theSamePairTwiceIsOneEngineCall() {
         OsrmRoadDistanceAdapter adapter = adapter(OsrmProperties.enabledWith(DATASET));
 
-        Optional<RoadRoute> first = adapter.route(BRANCH, DOORSTEP, installation);
-        Optional<RoadRoute> second = adapter.route(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> first = adapter.measure(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> second = adapter.measure(BRANCH, DOORSTEP, installation);
         // Four decimals is about eleven metres: 41.330904 and 41.3309 are one doorstep.
-        Optional<RoadRoute> nextToIt = adapter.route(BRANCH, new GeoPoint(41.330904, 69.264098), installation);
+        Optional<RoadRoute> nextToIt = adapter.measure(BRANCH, new GeoPoint(41.330904, 69.264098), installation);
 
         assertThat(engine.hits()).isEqualTo(1);
         assertThat(second).isEqualTo(first);
@@ -262,7 +264,7 @@ class OsrmRoadDistanceAdapterTests {
                 .isEqualTo(2.0);
 
         engine.routeOf(9_000, 900);
-        Optional<RoadRoute> furtherAway = adapter.route(BRANCH, new GeoPoint(41.3312, 69.2641), installation);
+        Optional<RoadRoute> furtherAway = adapter.measure(BRANCH, new GeoPoint(41.3312, 69.2641), installation);
         assertThat(engine.hits())
                 .as("a different doorstep is a different question")
                 .isEqualTo(2);
@@ -275,9 +277,9 @@ class OsrmRoadDistanceAdapterTests {
         OsrmRoadDistanceAdapter october = adapter(OsrmProperties.enabledWith("2026-10-01"));
         OsrmRoadDistanceAdapter november = adapter(OsrmProperties.enabledWith("2026-11-01"));
 
-        Optional<RoadRoute> before = october.route(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> before = october.measure(BRANCH, DOORSTEP, installation);
         engine.routeOf(4_410, 470);
-        Optional<RoadRoute> after = november.route(BRANCH, DOORSTEP, installation);
+        Optional<RoadRoute> after = november.measure(BRANCH, DOORSTEP, installation);
 
         assertThat(engine.hits()).isEqualTo(2);
         assertThat(before).map(RoadRoute::datasetVersion).contains("2026-10-01");
@@ -292,8 +294,8 @@ class OsrmRoadDistanceAdapterTests {
                 installations.insertPlatformRouting(OTHER_TENANT).orElseThrow();
         OsrmRoadDistanceAdapter adapter = adapter(OsrmProperties.enabledWith(DATASET));
 
-        adapter.route(BRANCH, DOORSTEP, installation);
-        adapter.route(BRANCH, DOORSTEP, otherInstallation);
+        adapter.measure(BRANCH, DOORSTEP, installation);
+        adapter.measure(BRANCH, DOORSTEP, otherInstallation);
 
         assertThat(engine.hits()).isEqualTo(2);
     }
@@ -304,7 +306,7 @@ class OsrmRoadDistanceAdapterTests {
     @DisplayName("suspending the installation is the rollback: it stops answering at once, cached or not")
     void suspendingTheInstallationStopsTheAnswer() {
         OsrmRoadDistanceAdapter adapter = adapter(OsrmProperties.enabledWith(DATASET));
-        assertThat(adapter.route(BRANCH, DOORSTEP, installation)).isPresent();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, installation)).isPresent();
 
         jdbc.sql("UPDATE integration.installations SET status = 'SUSPENDED' WHERE id = :id")
                 .param("id", installation)
@@ -312,14 +314,14 @@ class OsrmRoadDistanceAdapterTests {
 
         // The route is in the cache, and the installation is read before the cache is:
         // a cache that outlived the rollback would make the rollback slower than the incident.
-        assertThat(adapter.route(BRANCH, DOORSTEP, installation)).isEmpty();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, installation)).isEmpty();
         assertThat(count("unavailable")).isEqualTo(1.0);
         assertThat(engine.hits()).isEqualTo(1);
 
         jdbc.sql("UPDATE integration.installations SET status = 'ACTIVE' WHERE id = :id")
                 .param("id", installation)
                 .update();
-        assertThat(adapter.route(BRANCH, DOORSTEP, installation)).isPresent();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, installation)).isPresent();
     }
 
     @Test
@@ -330,8 +332,8 @@ class OsrmRoadDistanceAdapterTests {
         OsrmProperties unnamed =
                 new OsrmProperties(true, null, Duration.ofMillis(500), 1_000, 10, Duration.ofSeconds(30));
 
-        assertThat(adapter(off).route(BRANCH, DOORSTEP, installation)).isEmpty();
-        assertThat(adapter(unnamed).route(BRANCH, DOORSTEP, installation)).isEmpty();
+        assertThat(adapter(off).measure(BRANCH, DOORSTEP, installation)).isEmpty();
+        assertThat(adapter(unnamed).measure(BRANCH, DOORSTEP, installation)).isEmpty();
 
         // A fee must name the map that measured it, so an engine with no dataset tag
         // answers nothing rather than answering anonymously.
@@ -355,9 +357,9 @@ class OsrmRoadDistanceAdapterTests {
                 """).param("id", imposter).param("tenantId", TENANT).update();
         OsrmRoadDistanceAdapter adapter = adapter(OsrmProperties.enabledWith(DATASET));
 
-        assertThat(adapter.route(BRANCH, DOORSTEP, null)).isEmpty();
-        assertThat(adapter.route(BRANCH, DOORSTEP, imposter)).isEmpty();
-        assertThat(adapter.route(BRANCH, DOORSTEP, UUID.randomUUID())).isEmpty();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, null)).isEmpty();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, imposter)).isEmpty();
+        assertThat(adapter.measure(BRANCH, DOORSTEP, UUID.randomUUID())).isEmpty();
         assertThat(engine.hits()).isZero();
     }
 
@@ -371,7 +373,7 @@ class OsrmRoadDistanceAdapterTests {
         GeoPoint customer = new GeoPoint(41.330912, 69.264177);
 
         List<ILoggingEvent> logged = captureLogs(() -> {
-            assertThat(adapter(OsrmProperties.enabledWith(DATASET)).route(BRANCH, customer, installation))
+            assertThat(adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, customer, installation))
                     .isEmpty();
         });
 

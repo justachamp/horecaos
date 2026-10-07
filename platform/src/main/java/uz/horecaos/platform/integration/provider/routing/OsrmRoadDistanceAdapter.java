@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
-import uz.horecaos.platform.fulfillment.api.RoadDistancePort;
 import uz.horecaos.platform.fulfillment.api.RoadRoute;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -35,7 +34,8 @@ import uz.horecaos.platform.web.cache.CacheRegistry;
 /**
  * Road distance from the platform's own OSRM engine (ADR 0147, ADR 0037).
  *
- * <p>The first adapter behind {@link RoadDistancePort}. It asks the engine's
+ * <p>The first adapter behind the road-distance route, which is what implements
+ * {@code RoadDistancePort} for fulfillment ({@code CamelRoadDistancePort}). It asks the engine's
  * {@code route} service for one origin and one destination with no geometry, no
  * steps and no alternatives, through {@link ProviderHttpClient} and so inside the
  * ADR 0007 outcome vocabulary, and answers with the metres, the engine's free-flow
@@ -64,7 +64,7 @@ import uz.horecaos.platform.web.cache.CacheRegistry;
  * installation takes effect at once.
  */
 @Component
-public class OsrmRoadDistanceAdapter implements RoadDistancePort {
+public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
 
     private static final Logger log = LoggerFactory.getLogger(OsrmRoadDistanceAdapter.class);
 
@@ -123,7 +123,7 @@ public class OsrmRoadDistanceAdapter implements RoadDistancePort {
     }
 
     @Override
-    public Optional<RoadRoute> route(GeoPoint origin, GeoPoint destination, @Nullable UUID installationId) {
+    public Optional<RoadRoute> measure(GeoPoint origin, GeoPoint destination, @Nullable UUID installationId) {
         String dataset = properties.datasetVersion();
         if (installationId == null || !properties.answering() || dataset == null) {
             return unavailable();
