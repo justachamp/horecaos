@@ -68,6 +68,7 @@ class OrderLatenessTenantSettingsHttpTests {
     private static final String CONFIG = "/api/v1/operations/tenants/" + TENANT + "/configuration";
     private static final String AT_RISK = "ordering.at_risk_before_minutes";
     private static final String LATE_COLOUR = "ordering.late_colour";
+    private static final String LATE_THRESHOLD = "ordering.late_order_threshold_minutes";
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -125,7 +126,7 @@ class OrderLatenessTenantSettingsHttpTests {
         // The fixture reuses one tenant id across tests and truncates the table underneath the
         // resolver's cache, so an earlier test's value would otherwise keep resolving here for up
         // to the cache's TTL -- a stale read the production writer never leaves (it evicts on set).
-        for (String code : List.of(AT_RISK, LATE_COLOUR)) {
+        for (String code : List.of(AT_RISK, LATE_COLOUR, LATE_THRESHOLD)) {
             configurationCache.evict(code, ResourceScope.tenant(TENANT));
             configurationCache.evict(code, ResourceScope.brand(TENANT, BRAND));
             configurationCache.evict(code, ResourceScope.location(TENANT, BRAND, LOCATION));
@@ -320,6 +321,102 @@ class OrderLatenessTenantSettingsHttpTests {
 
         assertThat(stale.getResponse().getStatus()).isEqualTo(409);
         assertThat(latenessPolicy(LOCATION).get("lateColour").asText()).isEqualTo("#8a3ffc");
+    }
+
+    // ---------------------------- ADR 0150: the late-order threshold is the no-promise default
+
+    @Test
+    @DisplayName("with the late-order threshold unset an unpromised order is late at forty-five minutes: today's line")
+    void theNoPromiseFallbackIsFortyFiveMinutesUntilATenantSetsTheThreshold() throws Exception {
+        JsonNode policy = latenessPolicy(LOCATION);
+
+        for (String mode : List.of("delivery", "pickup", "dineIn")) {
+            assertThat(policy.get(mode).get("noPromiseFallbackSeconds").asInt())
+                    .as(mode)
+                    .isEqualTo(2700);
+        }
+    }
+
+    @Test
+    @DisplayName("a tenant-wide threshold of 20 moves the no-promise fallback of every mode and nothing else")
+    void aTenantThresholdIsTheNoPromiseFallbackOfEveryModeAndNothingElse() throws Exception {
+        setValue(LATE_THRESHOLD, "TENANT", null, "{\"integerValue\":20}", "aggregator orders go red sooner");
+
+        JsonNode policy = latenessPolicy(LOCATION);
+        for (String mode : List.of("delivery", "pickup", "dineIn")) {
+            assertThat(policy.get(mode).get("noPromiseFallbackSeconds").asInt())
+                    .as(mode)
+                    .isEqualTo(1200);
+            assertThat(policy.get(mode).get("lateAfterSeconds").asInt())
+                    .as("a promised order's grace is not the scalar's to move")
+                    .isZero();
+            assertThat(policy.get(mode).get("atRiskBeforeSeconds").asInt()).isEqualTo(300);
+        }
+    }
+
+    @Test
+    @DisplayName("a threshold written at a scope reaches the resolutions already cached beneath it")
+    void aScalarWriteIsNotMaskedByTheResolutionsCachedBeneathIt() throws Exception {
+        // Both locations are read first, so each holds a cached answer under its own key. A write that
+        // evicted only the key it wrote would leave them serving forty-five minutes for up to a minute.
+        assertThat(fallbackOf(latenessPolicy(LOCATION))).isEqualTo(2700);
+        assertThat(fallbackOf(latenessPolicy(SIBLING_LOCATION))).isEqualTo(2700);
+
+        setValue(LATE_THRESHOLD, "TENANT", null, "{\"integerValue\":20}", "tenant-wide");
+        assertThat(fallbackOf(latenessPolicy(LOCATION))).isEqualTo(1200);
+        assertThat(fallbackOf(latenessPolicy(SIBLING_LOCATION))).isEqualTo(1200);
+
+        setValue(LATE_THRESHOLD, "BRAND", null, "{\"integerValue\":30}", "this brand is slower");
+        assertThat(fallbackOf(latenessPolicy(LOCATION))).isEqualTo(1800);
+        assertThat(fallbackOf(latenessPolicy(SIBLING_LOCATION))).isEqualTo(1800);
+    }
+
+    @Test
+    @DisplayName("a narrower scope's threshold wins, and reverting it restores the one above")
+    void aNarrowerScopesThresholdWinsAndRevertRestoresTheOneAbove() throws Exception {
+        setValue(LATE_THRESHOLD, "TENANT", null, "{\"integerValue\":30}", "tenant-wide");
+        MvcResult located = setValue(LATE_THRESHOLD, "LOCATION", LOCATION, "{\"integerValue\":10}", "a small counter");
+        long version = JSON.readTree(located.getResponse().getContentAsString())
+                .get("version")
+                .asLong();
+
+        assertThat(fallbackOf(latenessPolicy(LOCATION))).isEqualTo(600);
+        assertThat(fallbackOf(latenessPolicy(SIBLING_LOCATION)))
+                .as("the sibling still inherits the tenant's thirty minutes")
+                .isEqualTo(1800);
+
+        MvcResult reverted = mvc.perform(post(CONFIG + "/keys/" + LATE_THRESHOLD + "/values")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "revert-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("LOCATION", LOCATION, "{\"explicitNull\":true}", version, "back to the tenant")))
+                .andReturn();
+        assertThat(reverted.getResponse().getStatus())
+                .as(reverted.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(fallbackOf(latenessPolicy(LOCATION))).isEqualTo(1800);
+    }
+
+    @Test
+    @DisplayName("a threshold outside one minute to a day is refused at write time")
+    void anOutOfRangeLateOrderThresholdIsRefused() throws Exception {
+        for (long bad : new long[] {0, -1, 601, 100_000}) {
+            MvcResult refused = mvc.perform(post(CONFIG + "/keys/" + LATE_THRESHOLD + "/values")
+                            .with(tokenFor(OWNER))
+                            .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "range-" + UUID.randomUUID())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body("TENANT", null, "{\"integerValue\":" + bad + "}", null, "attempt")))
+                    .andReturn();
+            assertThat(refused.getResponse().getStatus()).as("value " + bad).isEqualTo(400);
+        }
+        assertThat(fallbackOf(latenessPolicy(LOCATION))).isEqualTo(2700);
+    }
+
+    private static int fallbackOf(JsonNode policy) {
+        int delivery = policy.get("delivery").get("noPromiseFallbackSeconds").asInt();
+        assertThat(policy.get("pickup").get("noPromiseFallbackSeconds").asInt()).isEqualTo(delivery);
+        assertThat(policy.get("dineIn").get("noPromiseFallbackSeconds").asInt()).isEqualTo(delivery);
+        return delivery;
     }
 
     // ---------------------------------------------------------------- helpers

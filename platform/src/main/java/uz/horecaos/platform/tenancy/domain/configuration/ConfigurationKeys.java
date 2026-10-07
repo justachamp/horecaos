@@ -426,7 +426,18 @@ public final class ConfigurationKeys {
             .defaultValue(45)
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
+            .describedAs("Minutes from creation after which an order with no promised time counts as late.")
+            .build();
+
+    /**
+     * ADR 0151: declared identically in {@code kitchen.api.KitchenConfigurationKeys}, where it is consumed
+     * (this registry is internal to tenancy and a reference the other way would make the modules cyclic).
+     */
+    public static final ConfigurationKey<Integer> KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES = ConfigurationKey.of(
+                    "kitchen.display.not_seen_after_minutes", Integer.class)
+            .defaultValue(5)
+            .ownedBy("kitchen")
+            .describedAs("Minutes without a read after which a kitchen wall display is shown as not seen.")
             .build();
 
     public static final ConfigurationKey<Integer> ORDERING_AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
@@ -774,6 +785,7 @@ public final class ConfigurationKeys {
             ORDERING_AVERAGE_ORDER_MINUTES,
             ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
+            KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES,
             ORDERING_AT_RISK_BEFORE_MINUTES,
             ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,

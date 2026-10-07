@@ -294,6 +294,7 @@ public enum PlatformRole {
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -513,6 +514,7 @@ public enum PlatformRole {
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -788,6 +790,7 @@ public enum PlatformRole {
                     // undoes or delays something the line has already reported.
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -885,6 +888,7 @@ public enum PlatformRole {
                     // readiness the pass may have acted on, and a release decides when
                     // a kitchen cooks, so neither belongs on this bundle.
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     // ADR 0047: the waiter and the host stand. Session manage stops
                     // short of closing a table that still owes money.
@@ -908,8 +912,9 @@ public enum PlatformRole {
     /**
      * ADR 0079: the whole of what a kitchen display device may do — reading
      * its branch's board and starting or readying its own lines. Not a
-     * person's bundle: no staff member is ever granted this role, and no
-     * device is ever granted any other. A strict subset of {@link
+     * person's bundle: no staff member is ever granted this role, and each
+     * device class is granted exactly one role (ADR 0151: a touch KDS this one,
+     * a wall display {@link #KITCHEN_VDU_DEVICE}), never a second. A strict subset of {@link
      * #LOCATION_STAFF}'s own two kitchen capabilities, which is deliberate —
      * a device holds nothing {@code location-staff} does not already hold,
      * and holds far less of it. Every other kitchen power ({@code
@@ -920,7 +925,23 @@ public enum PlatformRole {
      * could do what a manager can do is the exact failure ADR 0079 exists to
      * end, wearing a different name.
      */
-    KITCHEN_DEVICE("kitchen-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_TICKET_ADVANCE)),
+    KITCHEN_DEVICE(
+            "kitchen-device",
+            ScopeType.LOCATION,
+            EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_DISPLAY_READ, KITCHEN_TICKET_ADVANCE)),
+
+    /**
+     * ADR 0151: the whole of what a kitchen wall display (a VDU) may do — read the VDU projection
+     * and nothing else. Exactly one capability, {@code kitchen.display.read}: it cannot call the
+     * touch board's read ({@code kitchen.ticket.read}), a single ticket, the station list, the
+     * lateness policy under {@code order.read} or the push stream, and it cannot advance anything,
+     * because a screen mounted above the pass is not one a passing cook or a customer should be able
+     * to act from. The lateness policy the wall colours its tickets from rides in the projection
+     * itself. Not a person's bundle and not offered by {@link TenantRoleCatalog}: only {@code
+     * KitchenDeviceService.approve} grants it, as the fixed consequence of approving an enrolment as
+     * {@code KITCHEN_VDU}, and never to a staff member.
+     */
+    KITCHEN_VDU_DEVICE("kitchen-vdu-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_DISPLAY_READ)),
 
     /**
      * ADR 0081: what a HorecaOS support person may see inside one tenant during
@@ -945,6 +966,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     CUSTOMER_READ,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     DELIVERY_PLAN_READ,
                     FISCAL_DOCUMENT_READ,
                     POS_EXPORT_READ,
@@ -981,6 +1003,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     CUSTOMER_READ,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     DELIVERY_PLAN_READ,
                     FISCAL_DOCUMENT_READ,
                     POS_EXPORT_READ,

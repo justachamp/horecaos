@@ -149,6 +149,31 @@ class OrderLatenessPolicyAuthoringServiceTests {
     }
 
     @Test
+    void aBlankFallbackFollowsTheLateOrderThresholdAndSaysSo() {
+        serviceWith(Map.of("ordering.late_order_threshold_minutes", 20));
+
+        Editor published = authoring.author(TENANT_SCOPE, uniform(null, 0, null), null, OWNER, "default everywhere");
+
+        assertThat(published.noPromiseDefault().seconds()).isEqualTo(1200);
+        assertThat(published.noPromiseDefault().source())
+                .isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.SCALAR);
+        assertThat(published.document().delivery().noPromiseFallbackSeconds()).isNull();
+        assertThat(published.effective().delivery().noPromiseFallbackSeconds()).isEqualTo(1200);
+        assertThat(reads.resolve(TENANT, BRAND, LOCATION).policy().pickup().noPromiseFallbackSeconds())
+                .isEqualTo(1200);
+    }
+
+    @Test
+    void aBlankFallbackWithNoThresholdSetIsThePlatformsFortyFive() {
+        Editor published = authoring.author(TENANT_SCOPE, uniform(null, 0, null), null, OWNER, "blank");
+
+        assertThat(published.noPromiseDefault().seconds()).isEqualTo(2700);
+        assertThat(published.noPromiseDefault().source())
+                .isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.PLATFORM_DEFAULT);
+        assertThat(published.effective()).isEqualTo(OrderLatenessPolicy.platformDefault());
+    }
+
+    @Test
     void aSecondVersionSupersedesTheFirstForNewResolutions() {
         authoring.author(TENANT_SCOPE, uniform(300, 0, 2700), null, OWNER, "first");
 
@@ -206,6 +231,10 @@ class OrderLatenessPolicyAuthoringServiceTests {
         assertThat(view.effective()).isEqualTo(OrderLatenessPolicy.platformDefault());
         assertThat(view.atRiskDefault().source())
                 .isEqualTo(OrderLatenessPolicyService.AtRiskDefault.Source.PLATFORM_DEFAULT);
+        assertThat(view.document().delivery().noPromiseFallbackSeconds()).isNull();
+        assertThat(view.noPromiseDefault().seconds()).isEqualTo(2700);
+        assertThat(view.noPromiseDefault().source())
+                .isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.PLATFORM_DEFAULT);
     }
 
     // --------------------------------------------------------------------- CAS
@@ -398,7 +427,7 @@ class OrderLatenessPolicyAuthoringServiceTests {
     // ----------------------------------------------------------------- helpers
 
     private static OrderLatenessDocument uniform(
-            @Nullable Integer atRiskSeconds, int lateAfterSeconds, int fallbackSeconds) {
+            @Nullable Integer atRiskSeconds, int lateAfterSeconds, @Nullable Integer fallbackSeconds) {
         ModeThresholds mode = new ModeThresholds(atRiskSeconds, lateAfterSeconds, fallbackSeconds);
         return new OrderLatenessDocument(mode, mode, mode);
     }

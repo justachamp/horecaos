@@ -127,7 +127,7 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.overview.tile.averageCheck': 'Oʻrtacha chek',
   'reports.overview.tile.cancelled': 'Bekor qilinganlar',
   'reports.overview.tile.cancelled.subtitle': 'yakunlangan buyurtmalarga nisbatan ulushi: {share}',
-  'reports.overview.tile.late': 'Kechikishlar',
+  'reports.overview.tile.late': 'Belgilangan vaqtdan keyingi kechikishlar',
   'reports.overview.tile.late.subtitle': 'mediana {minutes}',
   'reports.overview.tile.distance': 'Yetkazib berish masofasi',
   'reports.overview.tile.deltaSuffix': 'bir hafta oldingi shu davrga nisbatan',
@@ -181,14 +181,14 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.orders.tab.commercial': 'Buyurtmalar',
   'reports.orders.tab.daily': 'Kunlik',
   'reports.orders.tab.summary': 'Yigʻma',
-  'reports.orders.tab.late': 'Kechikishlar',
+  'reports.orders.tab.late': 'Belgilangan vaqtdan keyingi kechikishlar',
   'reports.orders.boundedNote':
     'Chegara ichida eng yomon qatorlar koʻrsatilmoqda — juda keng davr uchun toʻliq roʻyxat emas.',
   'reports.orders.commercial.piiNote':
     'Mijoz, operator va kuryer alohida, tekshiriladigan manbadan (order.read) olinadi — hisobotning oʻzi shaxsiy maʻlumot saqlamaydi (ADR 0029). Telefon maskalangan; bu maʻlumotni eksport qilish tekshiriladigan PII chiqishi hisoblanadi.',
   'reports.orders.late.empty': 'Tanlangan davrda kechikishlar yoʻq',
   'reports.orders.late.summary':
-    'Davr uchun: {count} kechikish · mediana {median} · eng yomoni {worst}',
+    'Davr uchun: belgilangan vaqtdan keyin topshirilgan {count} buyurtma · mediana {median} · eng yomoni {worst}',
 
   'reports.orders.column.orderId': 'Buyurtma',
   'reports.orders.column.date': 'Sana',

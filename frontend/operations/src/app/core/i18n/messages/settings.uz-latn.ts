@@ -484,9 +484,12 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.businessDayStartHour': 'Ish kuni boshlanishi (soat)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.notApplied.hint':
+    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish hech narsani oʻzgartirmaydi.',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes':
+    'Belgilangan vaqti yoʻq buyurtma kechikadi (daqiqa)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
-    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish buyurtma qachon kechikkan hisoblanishiga taʻsir qilmaydi. Buyurtma qachon kechikkan hisoblanishi quyidagi «Buyurtma qachon kechikkan hisoblanadi» blokida belgilanadi.',
+    'Faqat belgilangan vaqti yoʻq buyurtmalar uchun (masalan, agregatorlardan): buyurtma yaratilganidan necha daqiqa oʻtgach kechikkan hisoblanadi. Belgilangan vaqti bor buyurtma quyidagi chegaralar boʻyicha kechikadi, bu son unga taʻsir qilmaydi. Quyidagi kechikish chegaralarida oʻz qiymati boʻlmagan buyurtma turi uchun standart qiymat.',
   'settings.orderPolicy.field.atRiskBeforeMinutes':
     'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
@@ -532,6 +535,10 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.latenessPolicy.field.atRisk': 'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.latenessPolicy.field.lateAfter': 'Belgilangan vaqtdan keyin kechikish (soniya)',
   'settings.latenessPolicy.field.fallback': 'Vaʻdasiz: kechikish (daqiqa)',
+  'settings.latenessPolicy.blankFallbackMeansDefault':
+    '“Vaʻdasiz: kechikish” maydonini standart qiymat uchun boʻsh qoldiring: {minutes} daqiqa ({source}).',
+  'settings.latenessPolicy.fallbackDefault.scalar':
+    'yuqoridagi “Belgilangan vaqti yoʻq buyurtma kechikadi” qiymati',
   'settings.latenessPolicy.blankMeansDefault':
     '“Belgilangan vaqtdan oldin ogohlantirish” maydonini standart qiymat uchun boʻsh qoldiring: {minutes} daqiqa ({source}).',
   'settings.latenessPolicy.default.scalar':

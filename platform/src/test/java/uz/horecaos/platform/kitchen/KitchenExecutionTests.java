@@ -893,7 +893,13 @@ class KitchenExecutionTests {
                 .noneMatch(row -> row.id().equals(ticket.id()));
 
         KitchenBoardController board = new KitchenBoardController(
-                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
+                tickets,
+                cookAtSiblingBranch(),
+                refusesEverything(),
+                noCourierEtas(),
+                noOrderTables(),
+                noDisplays(),
+                noLatenessPolicy());
 
         KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
                 board.eventsForOrder(TENANT, BRAND, branch, orderId).getBody());
@@ -910,7 +916,13 @@ class KitchenExecutionTests {
     @DisplayName("an order that never opened a ticket answers empty, not an error")
     void anOrderWithNoTicketAnswersEmptyEvents() {
         KitchenBoardController board = new KitchenBoardController(
-                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
+                tickets,
+                cookAtSiblingBranch(),
+                refusesEverything(),
+                noCourierEtas(),
+                noOrderTables(),
+                noDisplays(),
+                noLatenessPolicy());
 
         KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
                 board.eventsForOrder(TENANT, BRAND, branch, UUID.randomUUID()).getBody());
@@ -928,7 +940,13 @@ class KitchenExecutionTests {
         tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
         KitchenBoardController board = new KitchenBoardController(
-                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
+                tickets,
+                cookAtSiblingBranch(),
+                refusesEverything(),
+                noCourierEtas(),
+                noOrderTables(),
+                noDisplays(),
+                noLatenessPolicy());
 
         Throwable refusal = catchThrowable(() -> board.eventsForOrder(TENANT, BRAND, siblingBranch, orderId));
 
@@ -1270,7 +1288,13 @@ class KitchenExecutionTests {
         TicketItemStatus before = item.status();
 
         KitchenBoardController board = new KitchenBoardController(
-                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
+                tickets,
+                cookAtSiblingBranch(),
+                refusesEverything(),
+                noCourierEtas(),
+                noOrderTables(),
+                noDisplays(),
+                noLatenessPolicy());
 
         Throwable refusal = catchThrowable(() -> board.start(TENANT, BRAND, siblingBranch, item.id()));
 
@@ -1301,6 +1325,18 @@ class KitchenExecutionTests {
     /** No order here was seated at a table, so the dine-in lookup has nothing to answer. */
     private OrderTablesPort noOrderTables() {
         return (tenantId, orderIds) -> java.util.Map.of();
+    }
+
+    /**
+     * The actions under test are the events read and the station actions; neither is a wall display's
+     * read, so a stand-in that is never asked proves they do not quietly start depending on one.
+     */
+    private uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService noDisplays() {
+        return org.mockito.Mockito.mock(uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService.class);
+    }
+
+    private uz.horecaos.platform.ordering.api.LatenessPolicyPort noLatenessPolicy() {
+        return org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.LatenessPolicyPort.class);
     }
 
     /**

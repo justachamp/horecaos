@@ -31,10 +31,15 @@ public final class ConfigurationValueRules {
     /** A day: past it a threshold is a typo, not a policy. */
     private static final int MAXIMUM_MINUTES = 1_440;
 
+    /** The late-order threshold the order-policy card has always allowed: a minute to ten hours (ADR 0150). */
+    private static final int MAXIMUM_LATE_ORDER_THRESHOLD_MINUTES = 600;
+
     private static final Map<String, Consumer<Object>> RULES = Map.of(
             "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
             "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode);
+            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode,
+            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
+            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes);
 
     private ConfigurationValueRules() {}
 
@@ -79,6 +84,31 @@ public final class ConfigurationValueRules {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "ordering.at_risk_before_minutes must be between 0 and " + MAXIMUM_MINUTES);
+        }
+    }
+
+    /**
+     * Not zero and not negative: the threshold is the no-promise fallback of the lateness policy
+     * (ADR 0150), a minimum of one minute everywhere a document may set it, and a value the reader
+     * would have to ignore is a control that changes nothing.
+     */
+    private static void requireLateOrderThreshold(Object value) {
+        int minutes = ((Number) value).intValue();
+        if (minutes < 1 || minutes > MAXIMUM_LATE_ORDER_THRESHOLD_MINUTES) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "ordering.late_order_threshold_minutes must be between 1 and "
+                            + MAXIMUM_LATE_ORDER_THRESHOLD_MINUTES);
+        }
+    }
+
+    /** At least a minute (a wall stamps its read at most once a minute) and at most a day. */
+    private static void requireNotSeenAfterMinutes(Object value) {
+        int minutes = ((Number) value).intValue();
+        if (minutes < 1 || minutes > MAXIMUM_MINUTES) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "kitchen.display.not_seen_after_minutes must be between 1 and " + MAXIMUM_MINUTES);
         }
     }
 }

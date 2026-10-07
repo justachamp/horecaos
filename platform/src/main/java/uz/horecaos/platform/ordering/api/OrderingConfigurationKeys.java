@@ -92,6 +92,11 @@ public final class OrderingConfigurationKeys {
      * figure a kitchen display or an ETA quote would read, once one reads
      * this key. 30: a common full-service estimate; a quick-service branch
      * overrides it narrower at LOCATION scope.
+     *
+     * <p>Still read by nothing (ADR 0150 decision 5): it overlaps the
+     * preparation bands that already produce the promise, and the order-policy
+     * card says so beside the field («Пока не применяется») until a record names a
+     * reader or removes it.
      */
     public static final ConfigurationKey<Integer> AVERAGE_ORDER_MINUTES = ConfigurationKey.of(
                     AVERAGE_ORDER_MINUTES_CODE, Integer.class)
@@ -105,10 +110,15 @@ public final class OrderingConfigurationKeys {
     public static final String MAXIMUM_ORDER_MINUTES_CODE = "ordering.maximum_order_minutes";
 
     /**
-     * Minutes beyond which an order is unambiguously overdue, distinct from
-     * {@link #LATE_ORDER_THRESHOLD_MINUTES}'s earlier warning line — settings.md
-     * §10.3 card 2 lists both because a queue needs a "getting late" colour
-     * and a "this is late" colour, not one threshold doing both jobs.
+     * Minutes beyond which an order is unambiguously overdue — settings.md
+     * §10.3 card 2 lists it beside the late threshold because a queue might want
+     * a "getting late" colour and a "this is late" colour.
+     *
+     * <p>Still read by nothing (ADR 0150 decision 5): it would be a fourth
+     * severity beyond {@code BLOCKED}, {@code LATE} and {@code AT_RISK}, which
+     * orders.md §2.7 does not have and which needs a design for its tier. The
+     * order-policy card says so beside the field («Пока не применяется») until a
+     * record names a reader or removes it.
      */
     public static final ConfigurationKey<Integer> MAXIMUM_ORDER_MINUTES = ConfigurationKey.of(
                     MAXIMUM_ORDER_MINUTES_CODE, Integer.class)
@@ -122,18 +132,27 @@ public final class OrderingConfigurationKeys {
     public static final String LATE_ORDER_THRESHOLD_MINUTES_CODE = "ordering.late_order_threshold_minutes";
 
     /**
-     * Minutes after acceptance at which an order is coloured late on the
-     * order board. Settings.md §10.3 names this the single most-used value
-     * on the whole screen. Lateness is a computed overlay on the order, never
-     * a status of its own (IA Part 4) — this key only sets the threshold the
-     * overlay compares against; nothing here creates a state.
+     * Card 2's «Заказ без обещанного времени опаздывает через» (ADR 0150): the tenant-wide default
+     * for the {@code ordering.lateness} document's no-promise fallback -- how many minutes from
+     * creation an order <em>with no promised time</em> (every marketplace order, and a native one no
+     * preparation band covered) runs before it counts as late. A mode's own document value wins; a
+     * blank in the document takes this when it was <em>set</em> somewhere in the chain; the platform's
+     * forty-five otherwise. 45: exactly the document's platform default of 2700 seconds, so the
+     * reader changes nothing for a tenant that never set it, and a resolved default is never read as
+     * something a tenant chose.
+     *
+     * <p>Not a second late line and not measured from acceptance: the promise starts at checkout
+     * (ADR 0036) and acceptance never starts or shortens a lateness clock, so an order awaiting
+     * approval and a scheduled order are late by the same rule as any other. A promised order's late
+     * line is the document's {@code lateAfterSeconds}, and this key does nothing for it. Lateness is
+     * a computed overlay on the order, never a status of its own (IA Part 4).
      */
     public static final ConfigurationKey<Integer> LATE_ORDER_THRESHOLD_MINUTES = ConfigurationKey.of(
                     LATE_ORDER_THRESHOLD_MINUTES_CODE, Integer.class)
             .defaultValue(45)
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
+            .describedAs("Minutes from creation after which an order with no promised time counts as late.")
             .build();
 
     /** Row {@code X.39}: how far ahead of the promise the boards start warning. */
@@ -188,9 +207,9 @@ public final class OrderingConfigurationKeys {
     /**
      * Wave P06 (gap map rows {@code 1.1g}/{@code X.39}): the policy document
      * orders.md §2.7 actually specifies, and the one both the order board and
-     * the kitchen ticket queue read — unlike {@link #LATE_ORDER_THRESHOLD_MINUTES}
-     * above, which is card 2's single settings-screen scalar and has no reader
-     * yet. This is a {@link PolicyKey}, not a {@link ConfigurationKey}, because
+     * the kitchen ticket queue read. {@link #LATE_ORDER_THRESHOLD_MINUTES} is
+     * card 2's scalar for the one part of it a promise cannot cover (ADR 0150).
+     * This is a {@link PolicyKey}, not a {@link ConfigurationKey}, because
      * §2.7 needs three numbers per {@link
      * uz.horecaos.platform.tenancy.api.FulfillmentMode}
      * (at-risk-before/late-after/no-promise-fallback), and ADR 0030 draws the
@@ -200,7 +219,9 @@ public final class OrderingConfigurationKeys {
      * 10.3b}) ships the editor on the order-policy card, over {@code
      * OrderLatenessPolicyAuthoringService}. The document type is {@link
      * OrderLatenessDocument} — the authored form, whose per-mode at-risk window
-     * is optional and falls back to {@link #AT_RISK_BEFORE_MINUTES} — while what
+     * is optional and falls back to {@link #AT_RISK_BEFORE_MINUTES}, and whose
+     * per-mode no-promise fallback is optional and falls back to {@link
+     * #LATE_ORDER_THRESHOLD_MINUTES} — while what
      * the boards read is the concrete {@code OrderLatenessPolicy} that service
      * resolves from it.
      */

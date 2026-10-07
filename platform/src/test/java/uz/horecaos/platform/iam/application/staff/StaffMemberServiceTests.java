@@ -855,13 +855,19 @@ class StaffMemberServiceTests {
     @Test
     @DisplayName("a machine job is not a colleague: a device grant is neither revoked nor counted as access")
     void aDeviceGrantIsNotAStaffJob() {
-        UUID id = kit.activeMember(StaffKit.TENANT_A, "device-ish", "Not", "ADevice", null);
-        kit.grant(StaffKit.TENANT_A, "device-ish", PlatformRole.KITCHEN_DEVICE, "LOCATION", StaffKit.LOCATION_1);
+        // The touch KDS (ADR 0079) and the wall display (ADR 0151) are both machines: a role added to
+        // the closed device set that StaffMembers.MACHINE_ROLE_CODES forgot would make a TV a colleague.
+        for (PlatformRole device : List.of(PlatformRole.KITCHEN_DEVICE, PlatformRole.KITCHEN_VDU_DEVICE)) {
+            String subject = "device-ish-" + device.code();
+            UUID id = kit.activeMember(StaffKit.TENANT_A, subject, "Not", "ADevice", null);
+            kit.grant(StaffKit.TENANT_A, subject, device, "LOCATION", StaffKit.LOCATION_1);
 
-        assertThat(kit.members
-                        .detail(StaffKit.TENANT_A, Reach.tenant(null, null), id)
-                        .hasActiveAccess())
-                .isFalse();
+            assertThat(kit.members
+                            .detail(StaffKit.TENANT_A, Reach.tenant(null, null), id)
+                            .hasActiveAccess())
+                    .as(device.code())
+                    .isFalse();
+        }
         assertThat(kit.members.list(
                         StaffKit.TENANT_A, Reach.location(StaffKit.BRAND_1, StaffKit.LOCATION_1), null, null))
                 .isEmpty();

@@ -369,7 +369,12 @@ class OpenApiContractTests {
         assertThat(newRequired)
                 .as("schema for %s cannot make an existing optional field required", context)
                 .isSubsetOf(oldRequired);
-        assertThat(oldRequired)
+        // The one exception is a relaxation an Accepted ADR made on purpose (ADR 0150's optional
+        // no-promise fallback), named and kept narrow in AcceptedContractWidenings.
+        Set<String> mayBecomeOptional = AcceptedContractWidenings.mayBecomeOptional(context);
+        assertThat(oldRequired.stream()
+                        .filter(property -> !mayBecomeOptional.contains(property))
+                        .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make a published required field optional", context)
                 .isSubsetOf(newRequired);
         oldResolved.path("properties").fieldNames().forEachRemaining(property -> {

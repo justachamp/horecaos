@@ -125,3 +125,13 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ADR 0151: a wall that has gone quiet reads as a warning, not as an error: it may simply be off for the night. */
+.devices__notseen {
+  color: var(--q-warning-text);
+  font-weight: 600;
+}
+
+.devices__claim {
+  margin: 0;
+}

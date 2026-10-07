@@ -1050,6 +1050,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Кухня устройство зарегистрировано',
       'uz-Latn': 'Oshxona qurilma roʻyxatga olindi',
     },
+    'kitchen.device.display_configured': {
+      en: 'Kitchen wall display configured',
+      ru: 'Настроен настенный экран кухни',
+      'uz-Latn': 'Oshxonadagi devor ekrani sozlandi',
+    },
     'kitchen.device.revoked': {
       en: 'Kitchen device revoked',
       ru: 'Кухня устройство отозвано',

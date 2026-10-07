@@ -1,8 +1,17 @@
 # ADR 0153: Weighed orders paid through a provider
 
 - Decision status: Accepted
-- Implementation status: Not started — the interim rule is built, the real answer is
-  not. A line sold by weight (ADR 0137) is checked out at its nominal weight and
+- Implementation status: Partial — the state the owner decided on 2026-10-07 (a
+  provider-paid weighed order stays unsupported until a path is chosen and built) is the
+  state the platform is in, and every surface now says so: the storefronts' product and cart
+  notices and the console's New order basket, weighing panel and refusal say that an order
+  holding goods sold by weight is paid at handover and that online payment is not available
+  for it, and the weighing panel's refusal says it is decided and not pending. Not built:
+  paths A, B and C of decision 3 (a hold and capture, a settled difference, or money taken
+  after the weighing), none of which has been chosen, because each rests on what Payme and
+  Click can do with an amount that is not final (the provider facts the open inputs name),
+  and on a fiscal correction document that is ADR 0038's owner's. The interim rule itself: a
+  line sold by weight (ADR 0137) is checked out at its nominal weight and
   corrected at the scale. `CatchweightReconciliationService.reconcile` refuses a
   weight that moves the total of an order whose `payment_status_projection` is
   anything but `NOT_REQUIRED` (`PAYMENT_ALREADY_TAKEN`), and `OrderStateService`

@@ -55,4 +55,32 @@ class AcceptedContractWideningsTests {
         assertThat(AcceptedContractWidenings.permits(LINE + "quantity[]", "integer", "number"))
                 .isFalse();
     }
+
+    // ----------------------------------------------------- ADR 0150: an optional fallback
+
+    private static final String EDITOR_REQUEST =
+            "/api/v1/operations/tenants/{tenantId}/order-lateness-policy post request.";
+
+    @ParameterizedTest
+    @ValueSource(strings = {"delivery", "pickup", "dineIn"})
+    @DisplayName("each mode of the lateness editor's request may leave the no-promise fallback blank")
+    void theFallbackMayBecomeOptionalInEachMode(String mode) {
+        assertThat(AcceptedContractWidenings.mayBecomeOptional(EDITOR_REQUEST + mode))
+                .containsExactly("noPromiseFallbackSeconds");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/api/v1/operations/tenants/{tenantId}/order-lateness-policy post request",
+                "/api/v1/operations/tenants/{tenantId}/order-lateness-policy post request.reason",
+                "/api/v1/operations/tenants/{tenantId}/order-lateness-policy post request.delivery.lateAfterSeconds",
+                "/api/v1/operations/tenants/{tenantId}/order-lateness-policy get response 200.delivery",
+                "/api/v1/operations/tenants/{tenantId}/order-acceptance post request.delivery",
+                "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts post request.delivery"
+            })
+    @DisplayName("nothing else may make a required field optional: not the grace, not the reply, not another route")
+    void nothingElseMayBecomeOptional(String context) {
+        assertThat(AcceptedContractWidenings.mayBecomeOptional(context)).isEmpty();
+    }
 }

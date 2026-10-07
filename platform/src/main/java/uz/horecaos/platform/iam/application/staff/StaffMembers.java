@@ -8,8 +8,8 @@ final class StaffMembers {
 
     /**
      * The roles that are a grant without a colleague behind it: a kitchen
-     * display device (ADR 0079) and a HorecaOS support session (ADR 0081). A
-     * device or a support person is not a member of a tenant's staff, so a
+     * display device (ADR 0079), a kitchen wall display (ADR 0151) and a HorecaOS
+     * support session (ADR 0081). A device or a support person is not a member of a tenant's staff, so a
      * grant of one of these never makes a subject someone the tenant keeps a
      * record of -- the directory answers "no such member" for them and callers
      * keep their existing labelled rendering.
@@ -19,6 +19,7 @@ final class StaffMembers {
      */
     static final Set<String> MACHINE_ROLE_CODES = Set.of(
             PlatformRole.KITCHEN_DEVICE.code(),
+            PlatformRole.KITCHEN_VDU_DEVICE.code(),
             PlatformRole.SUPPORT_SESSION_VIEW.code(),
             PlatformRole.SUPPORT_SESSION_ASSIST.code());
 

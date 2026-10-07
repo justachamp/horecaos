@@ -30,7 +30,10 @@ import {
   LatenessPolicyEditorApi,
 } from './lateness-policy-editor-api';
 
-/** One mode's three inputs as the operator types them: minutes for the two windows, seconds for the grace. */
+/**
+ * One mode's three inputs as the operator types them: minutes for the two windows, seconds for the grace.
+ * A blank window or fallback is a real answer: «this kind of order has no value of its own».
+ */
 interface ModeDraft {
   readonly atRiskMinutes: string;
   readonly lateAfterSeconds: string;
@@ -94,8 +97,10 @@ const MAX_SECONDS = 86_400;
  * once (the new scope is read before anything is offered), while a re-read for any other reason
  * (the scalar above moved) refreshes the document and leaves an open draft alone.
  *
- * `ordering.late_order_threshold_minutes` (*Order is late after*) is deliberately not read by
- * anything and not touched here: what it should mean is an owner decision.
+ * **The second scalar is the default for the fallback** (ADR 0150). A blank no-promise fallback
+ * means "this kind of order has no value of its own", and it then takes the card's *Order with no
+ * promised time is late after* value when one was set, the platform's forty-five minutes otherwise
+ * — `noPromiseDefault.source` says which, and the form says it back beside the at-risk line.
  */
 @Component({
   selector: 'q-lateness-policy-card',
@@ -161,6 +166,17 @@ export class LatenessPolicyCard {
       : 'settings.latenessPolicy.default.platform',
   );
 
+  /** The default the blank fallback boxes stand for (ADR 0150), in whole-or-decimal minutes. */
+  protected readonly defaultFallbackMinutes = computed(() =>
+    formatMinutes(this.view()?.noPromiseDefault.seconds ?? 2700),
+  );
+
+  protected readonly fallbackDefaultSourceKey = computed<MessageKey>(() =>
+    this.view()?.noPromiseDefault.source === 'SCALAR'
+      ? 'settings.latenessPolicy.fallbackDefault.scalar'
+      : 'settings.latenessPolicy.default.platform',
+  );
+
   protected readonly errors = computed<Readonly<Record<LatenessMode, ModeErrors>>>(() => {
     const drafts = this.draft();
     return {
@@ -192,15 +208,17 @@ export class LatenessPolicyCard {
     }
     const minutes = (seconds: number): string =>
       this.i18n.t('settings.latenessPolicy.unit.minutes', { n: formatMinutes(seconds) });
+    const defaultMark = ` ${this.i18n.t('settings.latenessPolicy.summary.default')}`;
     const atRisk =
       minutes(value.effectiveAtRiskBeforeSeconds) +
-      (value.atRiskBeforeSeconds === null
-        ? ` ${this.i18n.t('settings.latenessPolicy.summary.default')}`
-        : '');
+      (value.atRiskBeforeSeconds === null ? defaultMark : '');
+    const fallback =
+      minutes(value.effectiveNoPromiseFallbackSeconds) +
+      (value.noPromiseFallbackSeconds === null ? defaultMark : '');
     return this.i18n.t('settings.latenessPolicy.summary', {
       atRisk,
       lateAfter: value.lateAfterSeconds,
-      fallback: minutes(value.noPromiseFallbackSeconds),
+      fallback,
     });
   };
 
@@ -398,7 +416,7 @@ export class LatenessPolicyCard {
 }
 
 function emptyDrafts(): Readonly<Record<LatenessMode, ModeDraft>> {
-  const blank: ModeDraft = { atRiskMinutes: '', lateAfterSeconds: '0', fallbackMinutes: '45' };
+  const blank: ModeDraft = { atRiskMinutes: '', lateAfterSeconds: '0', fallbackMinutes: '' };
   return { delivery: blank, pickup: blank, dineIn: blank };
 }
 
@@ -411,7 +429,8 @@ function draftOf(mode: LatenessModeView): ModeDraft {
   return {
     atRiskMinutes: mode.atRiskBeforeSeconds === null ? '' : formatMinutes(mode.atRiskBeforeSeconds),
     lateAfterSeconds: String(mode.lateAfterSeconds),
-    fallbackMinutes: formatMinutes(mode.noPromiseFallbackSeconds),
+    fallbackMinutes:
+      mode.noPromiseFallbackSeconds === null ? '' : formatMinutes(mode.noPromiseFallbackSeconds),
   };
 }
 
@@ -427,20 +446,20 @@ function errorsOf(draft: ModeDraft): ModeErrors {
     // Blank is a real answer ("take the default"), not an omission.
     atRiskMinutes: atRisk !== '' && !(isWhole(atRisk) && Number(atRisk) <= MAX_MINUTES),
     lateAfterSeconds: !(isWhole(lateAfter) && Number(lateAfter) <= MAX_SECONDS),
-    fallbackMinutes: !(
-      isWhole(fallback) &&
-      Number(fallback) >= 1 &&
-      Number(fallback) <= MAX_MINUTES
-    ),
+    // Blank is a real answer here too (ADR 0150): the tenant's late-order threshold, else forty-five minutes.
+    fallbackMinutes:
+      fallback !== '' &&
+      !(isWhole(fallback) && Number(fallback) >= 1 && Number(fallback) <= MAX_MINUTES),
   };
 }
 
 function inputOf(draft: ModeDraft): LatenessModeInput {
   const atRisk = draft.atRiskMinutes.trim();
+  const fallback = draft.fallbackMinutes.trim();
   return {
     atRiskBeforeSeconds: atRisk === '' ? null : Number(atRisk) * 60,
     lateAfterSeconds: Number(draft.lateAfterSeconds.trim()),
-    noPromiseFallbackSeconds: Number(draft.fallbackMinutes.trim()) * 60,
+    noPromiseFallbackSeconds: fallback === '' ? null : Number(fallback) * 60,
   };
 }
 

@@ -45,7 +45,7 @@ SELECT g.tenant_id, count(DISTINCT g.principal_subject) AS unbacked
   JOIN iam.roles r ON r.id = g.role_id
  WHERE g.tenant_id IS NOT NULL AND g.status = 'ACTIVE' AND r.status = 'ACTIVE'
    AND g.valid_from <= now() AND (g.valid_until IS NULL OR g.valid_until > now())
-   AND r.code NOT IN ('kitchen-device', 'support-session-view', 'support-session-assist')
+   AND r.code NOT IN ('kitchen-device', 'kitchen-vdu-device', 'support-session-view', 'support-session-assist')
    AND NOT EXISTS (
        SELECT 1 FROM iam.staff_members m
         WHERE m.tenant_id = g.tenant_id AND m.principal_subject = g.principal_subject)

@@ -89,7 +89,10 @@ public class OrderLatenessPolicyEditorController {
                     + "mode carries its own at-risk window -- null where it has none and takes "
                     + "atRiskDefault, the tenant's ordering.at_risk_before_minutes when one was set, "
                     + "the platform's five minutes otherwise -- plus effective, the number the boards "
-                    + "actually use. currentVersionAtScope is the version to send back as "
+                    + "actually use. The same holds for the no-promise fallback: null where the mode "
+                    + "has none of its own, taking noPromiseDefault (the tenant's "
+                    + "ordering.late_order_threshold_minutes when one was set, the platform's forty-five "
+                    + "minutes otherwise; ADR 0150). currentVersionAtScope is the version to send back as "
                     + "expectedVersion: 0 when this exact scope has authored nothing and merely "
                     + "inherits.")
     EditorResponse readLatenessPolicyEditor(
@@ -105,7 +108,8 @@ public class OrderLatenessPolicyEditorController {
     @Operation(
             summary = "Publish the next version of the lateness document at exactly one scope",
             description = "Whole-document replace: ADR 0030 versions the document as one unit, so all "
-                    + "three fulfilment modes are sent, an unset at-risk window as null. Never edits a "
+                    + "three fulfilment modes are sent, an unset at-risk window or no-promise fallback "
+                    + "as null. Never edits a "
                     + "version in force -- orders keep resolving the version they already did. "
                     + "expectedVersion must be the currentVersionAtScope a prior GET reported for this "
                     + "same scope (null or 0 when it had authored nothing), or the write is refused "
@@ -174,13 +178,16 @@ public class OrderLatenessPolicyEditorController {
      * @param atRiskBeforeSeconds      null to take the default (the tenant's scalar, else five minutes);
      *                                 a whole number of minutes, 0 to a day
      * @param lateAfterSeconds         grace past the promise before an order is late, 0 to a day
-     * @param noPromiseFallbackSeconds how long from creation an order with no promise runs before it
-     *                                 is late anyway; a whole number of minutes, one minute to a day
+     * @param noPromiseFallbackSeconds null to take the default (the tenant's
+     *                                 {@code ordering.late_order_threshold_minutes}, else forty-five
+     *                                 minutes; ADR 0150); otherwise how long from creation an order
+     *                                 with no promise runs before it is late anyway, a whole number of
+     *                                 minutes from one minute to a day
      */
     public record ModeRequest(
             @Nullable Integer atRiskBeforeSeconds,
             @NotNull Integer lateAfterSeconds,
-            @NotNull Integer noPromiseFallbackSeconds) {
+            @Nullable Integer noPromiseFallbackSeconds) {
 
         ModeThresholds toThresholds() {
             return new ModeThresholds(atRiskBeforeSeconds, lateAfterSeconds, noPromiseFallbackSeconds);
@@ -205,19 +212,24 @@ public class OrderLatenessPolicyEditorController {
     /**
      * @param atRiskBeforeSeconds          the mode's own window, null when it takes the default
      * @param effectiveAtRiskBeforeSeconds what the boards use for this mode
+     * @param noPromiseFallbackSeconds     the mode's own fallback, null when it takes the default
+     *                                     (ADR 0150)
+     * @param effectiveNoPromiseFallbackSeconds what the boards use for this mode
      */
     public record ModeResponse(
             @Nullable Integer atRiskBeforeSeconds,
             int effectiveAtRiskBeforeSeconds,
             int lateAfterSeconds,
-            int noPromiseFallbackSeconds) {
+            @Nullable Integer noPromiseFallbackSeconds,
+            int effectiveNoPromiseFallbackSeconds) {
 
         static ModeResponse of(ModeThresholds authored, LatenessThresholds effective) {
             return new ModeResponse(
                     authored.atRiskBeforeSeconds(),
                     effective.atRiskBeforeSeconds(),
                     authored.lateAfterSeconds(),
-                    authored.noPromiseFallbackSeconds());
+                    authored.noPromiseFallbackSeconds(),
+                    effective.noPromiseFallbackSeconds());
         }
     }
 
@@ -226,6 +238,14 @@ public class OrderLatenessPolicyEditorController {
      *               the chain, {@code PLATFORM_DEFAULT} when not
      */
     public record AtRiskDefaultResponse(int seconds, String source) {}
+
+    /**
+     * The fallback a mode with none of its own takes (ADR 0150).
+     *
+     * @param source {@code SCALAR} when {@code ordering.late_order_threshold_minutes} was set somewhere
+     *               in the chain, {@code PLATFORM_DEFAULT} when not
+     */
+    public record NoPromiseDefaultResponse(int seconds, String source) {}
 
     /**
      * One rung of the resolution ladder; {@code outcome} is {@code VALUE} or {@code NOT_SET}, as the
@@ -272,6 +292,7 @@ public class OrderLatenessPolicyEditorController {
             ModeResponse pickup,
             ModeResponse dineIn,
             AtRiskDefaultResponse atRiskDefault,
+            NoPromiseDefaultResponse noPromiseDefault,
             boolean isPlatformDefault,
             @Nullable ScopeType winningScope,
             @Nullable UUID policyId,
@@ -294,6 +315,9 @@ public class OrderLatenessPolicyEditorController {
                     new AtRiskDefaultResponse(
                             editor.atRiskDefault().seconds(),
                             editor.atRiskDefault().source().name()),
+                    new NoPromiseDefaultResponse(
+                            editor.noPromiseDefault().seconds(),
+                            editor.noPromiseDefault().source().name()),
                     editor.isPlatformDefault(),
                     editor.winningScope(),
                     editor.policyId(),

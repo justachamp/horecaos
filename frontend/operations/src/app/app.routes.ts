@@ -85,11 +85,14 @@ export const routes: Routes = [
     // for the same reason: `Shell`'s own children end in a catch-all
     // `redirectTo: 'today'` (`placeholderRoutes`'s own comment names this),
     // which would otherwise swallow this path if it were declared after.
-    // `DeviceShell` authenticates as `PlatformRole.KITCHEN_DEVICE` through
-    // its own ADR 0079 credential (`device/device-session.ts`) — never the
-    // staff Keycloak session `authGuard` checks, so this route carries none.
+    // `DeviceShell` authenticates as `PlatformRole.KITCHEN_DEVICE` (a touch
+    // KDS) or `PlatformRole.KITCHEN_VDU_DEVICE` (a wall display, ADR 0151)
+    // through its own ADR 0079 credential (`device/device-session.ts`) — never
+    // the staff Keycloak session `authGuard` checks, so this route carries none.
+    // A wall renders the shared `q-vdu-wall`, so the route loads the wallboard
+    // and kitchen message areas beside its own.
     path: 'device',
-    canActivate: [messagesGuard('device')],
+    canActivate: [messagesGuard('device', 'wallboard', 'kitchen')],
     loadComponent: () => import('./device/device-shell').then((m) => m.DeviceShell),
   },
   {

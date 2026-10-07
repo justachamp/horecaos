@@ -127,7 +127,7 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.overview.tile.averageCheck': 'Средний чек',
   'reports.overview.tile.cancelled': 'Отмены',
   'reports.overview.tile.cancelled.subtitle': 'доля от завершённых заказов: {share}',
-  'reports.overview.tile.late': 'Опоздания',
+  'reports.overview.tile.late': 'Опоздания после обещанного времени',
   'reports.overview.tile.late.subtitle': 'медиана {minutes}',
   'reports.overview.tile.distance': 'Дистанция доставки',
   'reports.overview.tile.deltaSuffix': 'к тому же периоду неделю назад',
@@ -181,13 +181,14 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.orders.tab.commercial': 'Заказы',
   'reports.orders.tab.daily': 'Посуточно',
   'reports.orders.tab.summary': 'Сводка',
-  'reports.orders.tab.late': 'Опоздания',
+  'reports.orders.tab.late': 'Опоздания после обещанного времени',
   'reports.orders.boundedNote':
     'Показаны наихудшие строки в пределах лимита — не полный список для очень широкого периода.',
   'reports.orders.commercial.piiNote':
     'Клиент, оператор и курьер получены из отдельного аудируемого источника (order.read) — сама отчётность не хранит персональных данных (ADR 0029). Телефон замаскирован; выгрузка этих данных — аудируемый вывоз ПДн.',
   'reports.orders.late.empty': 'Нет опозданий за выбранный период',
-  'reports.orders.late.summary': 'За период: {count} опозданий · медиана {median} · худший {worst}',
+  'reports.orders.late.summary':
+    'За период: {count} заказов выдано после обещанного времени · медиана {median} · худший {worst}',
 
   'reports.orders.column.orderId': 'ID заказа',
   'reports.orders.column.date': 'Дата',

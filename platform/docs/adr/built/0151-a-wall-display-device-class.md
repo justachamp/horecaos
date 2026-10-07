@@ -1,29 +1,28 @@
 # ADR 0151: A wall-display device class
 
 - Decision status: Accepted
-- Implementation status: Not started — a kitchen wall runs as a person. The
-  device primitive of ADR 0079 knows exactly one class:
-  `DevicePrincipalClass` has one constant, `KITCHEN_KDS`; `ck_device_principal_class`
-  and `ck_device_enrolment_class` (V0192) accept only that value;
-  `PlatformRole.KITCHEN_DEVICE` is `kitchen.ticket.read` plus
-  `kitchen.ticket.advance`; `KitchenDeviceService.approve` grants that role and no
-  other, "never a parameter". The read a wall needs exists and is narrow:
-  `GET …/kitchen/vdu` (`KitchenBoardController.vdu`, `KITCHEN_TICKET_READ` at
-  `LOCATION`) returns fired tickets with no order id, no buffer facts, no dish name
-  and no note, optionally narrowed to one station. The screen that shows it,
-  `/wallboard/vdu` (`WallboardVduPage`), is a sibling of the console shell guarded by
-  `authGuard`: it runs on a signed-in staff session, with the station chosen from a
-  local `<select>` that a reload forgets and a placeholder timezone
-  (`Asia/Tashkent`) in place of the branch's own. The projection is not the only
-  thing that page reads. It also resolves its location from `GET /session/context`,
-  lists the stations for that `<select>` (`kitchen.ticket.read`), reads the tenant's
-  lateness policy from `GET …/orders/lateness-policy` (`order.read`) to colour and
-  rank its tickets, and opens the push stream (`…/operations/streams`, which needs
-  `location.read`, and `kitchen.ticket.read` on the `kitchen_board` channel). The tablet shell `/device`
-  (ADR 0119) authenticates as a device but renders only the touch board with start
-  and ready. Gap-map row `2.4` records the choice honestly: "A dedicated VDU device
-  class is deliberately not added: ADR 0079 names `KITCHEN_KDS` as the only built
-  pairing class and explicitly defers a VDU/EXPO bundle."
+- Implementation status: Built — a kitchen wall is a listed, revocable, read-only principal.
+  `DevicePrincipalClass.KITCHEN_VDU` (V0501 restates both V0192 CHECKs), `PlatformRole.KITCHEN_VDU_DEVICE`
+  holding exactly `Capability.KITCHEN_DISPLAY_READ` (granted to every bundle that holds
+  `kitchen.ticket.read`, an invariant in `PlatformRoleTests`; excluded from `TenantRoleCatalog`
+  and from the staff directory's machine roles), `KitchenDeviceService.approve` taking the approved
+  class and refusing a request that would widen (`DevicePrincipalClass.mayBeApprovedAs`; the audit fact
+  names both classes), `kitchen.device_displays` (station, last read; a station of another branch
+  refused by composite key), `GET /api/v1/devices/me` (`KitchenDeviceSelfController`: a device
+  principal only, no secret), `PUT .../kitchen/devices/{deviceId}/display` (If-Match, audited),
+  `GET .../kitchen/devices/enrolments/{userCode}` (what a code claims), and `GET .../kitchen/vdu` on
+  `kitchen.display.read` applying the configured station for a wall and carrying the resolved
+  lateness policy (`ordering.api.LatenessPolicyPort`), with `horecaos.kitchen.display.reads` counting
+  outcomes. The console: the device shell asks the server what it is and runs a `KITCHEN_VDU` as a wall
+  (`q-vdu-wall`, no control, two requests only: its record and the projection, proved against the wire in
+  `device-wall-requests.spec.ts`), Kitchen → Devices shows class, requested class, station and last
+  seen and sets the station, and `/wallboard/vdu` says it is a preview. `KitchenWallDisplayHttpTests`
+  runs the real handshake and calls the real endpoints with a device's own subject. Not done: the
+  expo screen and the supervisor's live board stay as decision 7 left them; the wall has no push stream;
+  the Keycloak adapter behind a device is not exercised here (it is proven against a real realm
+  elsewhere); the not-seen period is `kitchen.display.not_seen_after_minutes` (default 5), a
+  platform-adjustable key and not a tenant setting; no wall has been enrolled on pre-prod, so the
+  exit criterion's power-cut and revoke walk has not been run on a real TV.
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -367,27 +366,27 @@ value and table are inert without rows.
 
 ## Implementation checklist
 
-- [ ] Owner accepts the record.
-- [ ] Flyway: both CHECKs restated; `kitchen.device_displays`; granted.
-- [ ] `DevicePrincipalClass.KITCHEN_VDU`; `PlatformRole.KITCHEN_VDU_DEVICE`;
+- [x] Owner accepts the record.
+- [x] Flyway: both CHECKs restated; `kitchen.device_displays`; granted.
+- [x] `DevicePrincipalClass.KITCHEN_VDU`; `PlatformRole.KITCHEN_VDU_DEVICE`;
       `Capability.KITCHEN_DISPLAY_READ` added to every bundle with the ticket read;
       `TenantRoleCatalog` exclusion; the `KITCHEN_DEVICE` Javadoc corrected.
-- [ ] `KitchenDeviceService.approve` takes the approved class and maps it to a role;
+- [x] `KitchenDeviceService.approve` takes the approved class and maps it to a role;
       the audit fact carries both classes.
-- [ ] `GET /api/v1/devices/me`; the display-configuration `PUT`; the `vdu` read applies
+- [x] `GET /api/v1/devices/me`; the display-configuration `PUT`; the `vdu` read applies
       the station for a device caller and records the last read.
-- [ ] `VduBoardResponse.lateness` and the `ordering.api` read port behind it; the
+- [x] `VduBoardResponse.lateness` and the `ordering.api` read port behind it; the
       preview page and wall mode take the policy from the projection and the wall no
       longer uses `LatenessPolicyTracker`; the `StreamChannel.KITCHEN_BOARD` Javadoc
       ("rather than a new capability ... nothing here for a fourth capability to
       separate") rewritten, because it is no longer true of a wall.
-- [ ] Device shell wall mode; Kitchen → Devices shows class, station and last seen and
+- [x] Device shell wall mode; Kitchen → Devices shows class, station and last seen and
       lets a manager set the station; the manager preview route says it is a preview.
-- [ ] ru / uz-latn / en strings; the key-parity spec green; the initial-bundle budget
+- [x] ru / uz-latn / en strings; the key-parity spec green; the initial-bundle budget
       unchanged (the device route is already lazy).
-- [ ] Update ADR 0079's status line (a second class), ADR 0041's rollout step 4 and
+- [x] Update ADR 0079's status line (a second class), ADR 0041's rollout step 4 and
       ADR 0119's open input (answered for kitchen devices).
-- [ ] Tests listed under Testing, each seen failing first.
+- [x] Tests listed under Testing, each seen failing first.
 
 ## Exit criteria
 

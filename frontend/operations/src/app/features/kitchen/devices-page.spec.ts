@@ -8,15 +8,24 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { DevicesPage } from './devices-page';
-import { KitchenDeviceView, KitchenDevicesApi } from './devices-api';
+import { KitchenDeviceView, KitchenDevicesApi, PendingEnrolmentView } from './devices-api';
+import { KitchenApi, StationResponse } from './kitchen-api';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+
+const PENDING_KDS: PendingEnrolmentView = {
+  requestedClass: 'KITCHEN_KDS',
+  requestedLabel: null,
+  expiresAt: '2026-09-14T08:10:00Z',
+};
+const PENDING_VDU: PendingEnrolmentView = { ...PENDING_KDS, requestedClass: 'KITCHEN_VDU' };
 
 function device(overrides: Partial<KitchenDeviceView> = {}): KitchenDeviceView {
   return {
     deviceId: 'device-1',
     locationId: 'l1',
     deviceClass: 'KITCHEN_KDS',
+    requestedClass: 'KITCHEN_KDS',
     displayName: 'Pass tablet',
     status: 'ACTIVE',
     enrolledBy: 'manager-subject',
@@ -26,6 +35,39 @@ function device(overrides: Partial<KitchenDeviceView> = {}): KitchenDeviceView {
     revokedReason: null,
     ...overrides,
   };
+}
+
+function station(overrides: Partial<StationResponse> = {}): StationResponse {
+  return {
+    stationId: 'station-grill',
+    code: 'GRILL',
+    role: 'GRILL',
+    displayNameRu: 'Гриль',
+    displayNameUz: 'Gril',
+    displayNameEn: 'Grill',
+    sortOrder: 1,
+    fallback: false,
+    status: 'ACTIVE',
+    version: 1,
+    ...overrides,
+  };
+}
+
+function wall(overrides: Partial<KitchenDeviceView> = {}): KitchenDeviceView {
+  return device({
+    deviceId: 'wall-1',
+    deviceClass: 'KITCHEN_VDU',
+    requestedClass: 'KITCHEN_VDU',
+    displayName: 'Grill TV',
+    display: {
+      station: null,
+      lastReadAt: '2026-09-14T08:05:00Z',
+      version: 3,
+      notSeen: false,
+      notSeenAfterMinutes: 5,
+    },
+    ...overrides,
+  });
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -39,6 +81,7 @@ describe('DevicesPage', () => {
   async function render(
     devicesApi: Partial<KitchenDevicesApi>,
     locationOverrides: { scope?: LocationScope | null; denied?: boolean } = {},
+    stations: readonly StationResponse[] = [],
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [DevicesPage],
@@ -54,6 +97,7 @@ describe('DevicesPage', () => {
           },
         },
         { provide: KitchenDevicesApi, useValue: devicesApi },
+        { provide: KitchenApi, useValue: { stations: vi.fn().mockResolvedValue(stations) } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -81,7 +125,8 @@ describe('DevicesPage', () => {
 
   it('approves a device by its typed user code, never a scan', async () => {
     const approve = vi.fn().mockReturnValue(of(device({ deviceId: 'device-new' })));
-    await render({ list: () => Promise.resolve([]), approve });
+    const pending = vi.fn().mockResolvedValue(PENDING_KDS);
+    await render({ list: () => Promise.resolve([]), approve, pending });
 
     const host = fixture.nativeElement as HTMLElement;
     const codeField = host.querySelector(
@@ -101,7 +146,7 @@ describe('DevicesPage', () => {
     fixture.detectChanges();
 
     expect(approve).toHaveBeenCalledTimes(1);
-    expect(approve).toHaveBeenCalledWith(SCOPE, 'ABCD-1234', 'Pass tablet');
+    expect(approve).toHaveBeenCalledWith(SCOPE, 'ABCD-1234', 'Pass tablet', 'KITCHEN_KDS');
     expect(host.querySelector('[data-testid="devices-form-error"]')).toBeNull();
     // The newly approved device is reflected without a page reload.
     expect(host.querySelector('[data-testid="devices-active-table"]')?.textContent).toContain(
@@ -124,7 +169,8 @@ describe('DevicesPage', () => {
   it('surfaces a refused (already-approved) user code without crashing', async () => {
     const error = new ApiError('RESOURCE_CONFLICT', 409, null, 'corr-1');
     const approve = vi.fn().mockReturnValue(throwError(() => error));
-    await render({ list: () => Promise.resolve([]), approve });
+    const pending = vi.fn().mockResolvedValue(PENDING_KDS);
+    await render({ list: () => Promise.resolve([]), approve, pending });
 
     const host = fixture.nativeElement as HTMLElement;
     (host.querySelector('[data-testid="devices-form-usercode"]') as HTMLInputElement).value =
@@ -210,5 +256,228 @@ describe('DevicesPage', () => {
 
     expect(host.querySelector('[data-testid="devices-revoke-reason-device-1"]')).toBeNull();
     expect(revoke).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------
+  // ADR 0151: the class a device asked for, the class it is approved as, a wall's station and silence
+  // ---------------------------------------------------------------------
+
+  function type(testid: string, value: string): void {
+    const field = (fixture.nativeElement as HTMLElement).querySelector(
+      `[data-testid="${testid}"]`,
+    ) as HTMLInputElement;
+    field.value = value;
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function click(testid: string): void {
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        `[data-testid="${testid}"]`,
+      ) as HTMLButtonElement
+    ).click();
+  }
+
+  it('shows the approver what a typed code claims before they choose the class to approve it as', async () => {
+    const pending = vi.fn().mockResolvedValue(PENDING_KDS);
+    await render({ list: () => Promise.resolve([]), pending });
+
+    type('devices-form-usercode', 'ABCD-1234');
+    click('devices-form-lookup');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(pending).toHaveBeenCalledWith(SCOPE, 'ABCD-1234');
+    expect(host.querySelector('[data-testid="devices-form-claim"]')?.textContent).toContain(
+      'Cook’s touch board',
+    );
+    const options = Array.from(
+      host.querySelectorAll<HTMLOptionElement>('[data-testid="devices-form-class"] option'),
+    ).map((option) => option.value);
+    expect(options, 'a touch request may be approved as itself or as less').toEqual([
+      'KITCHEN_KDS',
+      'KITCHEN_VDU',
+    ]);
+  });
+
+  it('offers a wall request only the wall: an approval narrows and never widens', async () => {
+    const pending = vi.fn().mockResolvedValue(PENDING_VDU);
+    await render({ list: () => Promise.resolve([]), pending });
+
+    type('devices-form-usercode', 'WALL-0001');
+    click('devices-form-lookup');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '[data-testid="devices-form-class"] option',
+      ),
+    ).map((option) => option.value);
+    expect(options).toEqual(['KITCHEN_VDU']);
+  });
+
+  it('approves a tablet as a wall display when the approver chooses less than it asked for', async () => {
+    const approve = vi.fn().mockReturnValue(of(wall({ requestedClass: 'KITCHEN_KDS' })));
+    const pending = vi.fn().mockResolvedValue(PENDING_KDS);
+    await render({ list: () => Promise.resolve([]), pending, approve });
+
+    type('devices-form-usercode', 'ABCD-1234');
+    click('devices-form-lookup');
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="devices-form-class"]',
+    ) as HTMLSelectElement;
+    select.value = 'KITCHEN_VDU';
+    select.dispatchEvent(new Event('change'));
+    type('devices-form-displayname', 'Grill TV');
+    click('devices-form-submit');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(approve).toHaveBeenCalledWith(SCOPE, 'ABCD-1234', 'Grill TV', 'KITCHEN_VDU');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="devices-class-wall-1"]')?.textContent).toContain(
+      'Wall display',
+    );
+    expect(host.querySelector('[data-testid="devices-requested-as"]')?.textContent).toContain(
+      'Cook’s touch board',
+    );
+  });
+
+  it('does not approve a code nothing is waiting on, and says so', async () => {
+    const approve = vi.fn();
+    const pending = vi.fn().mockResolvedValue(null);
+    await render({ list: () => Promise.resolve([]), pending, approve });
+
+    type('devices-form-usercode', 'NOPE-0000');
+    type('devices-form-displayname', 'Grill TV');
+    click('devices-form-submit');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(approve).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="devices-form-notfound"]'),
+    ).not.toBeNull();
+  });
+
+  it('forgets a claim when the code changes: it described the old code', async () => {
+    const pending = vi.fn().mockResolvedValue(PENDING_VDU);
+    await render({ list: () => Promise.resolve([]), pending });
+    type('devices-form-usercode', 'WALL-0001');
+    click('devices-form-lookup');
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="devices-form-claim"]'),
+    ).not.toBeNull();
+
+    type('devices-form-usercode', 'WALL-0002');
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="devices-form-claim"]'),
+    ).toBeNull();
+  });
+
+  it('lets a manager point a wall at a station, sending the version the form was opened at as If-Match', async () => {
+    const configureDisplay = vi.fn().mockReturnValue(
+      of({
+        station: {
+          stationId: 'station-grill',
+          code: 'GRILL',
+          displayNameRu: 'Гриль',
+          displayNameUz: 'Gril',
+          displayNameEn: 'Grill',
+        },
+        lastReadAt: '2026-09-14T08:05:00Z',
+        version: 4,
+        notSeen: false,
+        notSeenAfterMinutes: 5,
+      }),
+    );
+    await render({ list: () => Promise.resolve([wall()]), configureDisplay }, {}, [station()]);
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="devices-station-wall-1"]',
+    ) as HTMLSelectElement;
+    expect(select.value, 'the whole branch until a station is chosen').toBe('');
+    select.value = 'station-grill';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    click('devices-station-save-wall-1');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(configureDisplay).toHaveBeenCalledWith(SCOPE, 'wall-1', 'station-grill', 3);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="devices-station-save-wall-1"]',
+      ),
+      'saved: nothing left to save',
+    ).toBeNull();
+  });
+
+  it('offers a touch display no station, and no save until a station is chosen', async () => {
+    await render({ list: () => Promise.resolve([device(), wall()]) }, {}, [station()]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="devices-station-device-1"]')).toBeNull();
+    expect(host.querySelector('[data-testid="devices-station-wall-1"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="devices-station-save-wall-1"]')).toBeNull();
+  });
+
+  it('reloads and says so when another manager changed the wall first (STALE_VERSION)', async () => {
+    const stale = new ApiError('STALE_VERSION', 409, null, 'corr-1');
+    const configureDisplay = vi.fn().mockReturnValue(throwError(() => stale));
+    const list = vi.fn().mockResolvedValue([wall()]);
+    await render({ list, configureDisplay }, {}, [station()]);
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="devices-station-wall-1"]',
+    ) as HTMLSelectElement;
+    select.value = 'station-grill';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    click('devices-station-save-wall-1');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="devices-station-error"]')
+        ?.textContent,
+    ).toContain('Someone else changed this display');
+  });
+
+  it('says when a wall was last seen, and warns when it has gone quiet', async () => {
+    await render({
+      list: () =>
+        Promise.resolve([
+          wall(),
+          wall({
+            deviceId: 'wall-2',
+            displayName: 'Bar TV',
+            display: {
+              station: null,
+              lastReadAt: null,
+              version: 1,
+              notSeen: true,
+              notSeenAfterMinutes: 5,
+            },
+          }),
+        ]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="devices-lastseen-wall-1"]')?.textContent).toContain(
+      'Seen 14.09.2026 08:05',
+    );
+    const quiet = host.querySelector('[data-testid="devices-lastseen-wall-2"]') as HTMLElement;
+    expect(quiet.textContent).toContain('Not seen');
+    expect(quiet.classList.contains('devices__notseen')).toBe(true);
   });
 });

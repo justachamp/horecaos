@@ -4,6 +4,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import type { LatenessPolicyResponse } from '../../core/lateness-policy-api';
 import { OrderTableView } from '../../shared/ui/order-table-chip/order-table-chip';
 
 /**
@@ -194,6 +195,14 @@ export interface VduTicketResponse {
 
 export interface VduBoardResponse {
   readonly tickets: readonly VduTicketResponse[];
+  /**
+   * The `ordering.lateness` policy resolved at the location of the call (ADR 0151), in the shape
+   * `GET .../orders/lateness-policy` serves. A wall display holds one capability and cannot call that
+   * endpoint, so the projection carries it; read it with `latenessPolicyFromWire`. Optional only so
+   * that a response from a server that predates ADR 0151 still parses (the screen then uses the
+   * platform default and says nothing — exactly what it did before).
+   */
+  readonly lateness?: LatenessPolicyResponse;
 }
 
 export interface StationResponse {
