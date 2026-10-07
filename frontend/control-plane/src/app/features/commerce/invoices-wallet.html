@@ -113,6 +113,9 @@
                 </td>
                 <td class="q-body-sm actions">
                   <button type="button" class="exportCsv" (click)="exportCsv(statement)">{{ i18n.t('statements.export') }}</button>
+                  @if (statement.status === 'ISSUED' && session.has('COMMERCIAL_USAGE_READ')) {
+                    <a class="einvoiceLink" routerLink="/commerce/einvoicing" [queryParams]="{ tenantId: tenantId() }">{{ i18n.t('einvoicing.link') }}</a>
+                  }
                   @if (statement.status === 'ISSUED' && session.has('COMMERCIAL_STATEMENT_ISSUE')) {
                     <button type="button" class="voidToggle" (click)="openVoid(statement)">{{ i18n.t('statements.void.open') }}</button>
                   }

@@ -1,0 +1,544 @@
+<h1 class="q-title">{{ i18n.t('nav.einvoicing') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('einvoicing.lead') }}</p>
+
+@if (message(); as text) {
+  <p class="q-body-sm state ok" role="status">{{ text }}</p>
+}
+@if (failure(); as text) {
+  <p class="q-body-sm state error" role="alert">{{ text }}</p>
+}
+
+<!-- ------------------------------------------------------------ accounts -->
+<section class="panel accounts">
+  <header class="planHeader">
+    <h2 class="q-subhead">{{ i18n.t('einvoicing.accounts.title') }}</h2>
+  </header>
+  <p class="q-body-sm muted">{{ i18n.t('einvoicing.accounts.lead') }}</p>
+
+  @if (loading()) {
+    <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+  } @else if (loadError(); as text) {
+    <p class="q-body-sm state error">{{ text }}</p>
+  } @else {
+    @for (account of accounts(); track account.installationId) {
+      <article class="account" [attr.data-account]="account.provider">
+        <header class="accountHeader">
+          <h3 class="q-body-sm">
+            <strong>{{ providerLabel(account.provider) }}</strong>
+          </h3>
+          <span class="chip" [class.live]="account.connected" [attr.data-status]="account.status">
+            {{ i18n.t(statusKey(account.status)) }}
+          </span>
+          <span class="q-caption muted">
+            {{
+              account.production
+                ? i18n.t('einvoicing.account.production')
+                : i18n.t('einvoicing.account.nonProduction')
+            }}
+            @if (account.baseUrl) {
+              · {{ account.baseUrl }}
+            }
+          </span>
+        </header>
+
+        @if (!account.connected) {
+          <div class="warning notConnected" role="note">
+            {{
+              i18n.t('einvoicing.account.notConnected', {
+                operator: providerLabel(account.provider),
+              })
+            }}
+            <ul class="needs">
+              @for (need of account.missing; track need) {
+                <li>{{ i18n.t(needKey(need)) }}</li>
+              }
+            </ul>
+          </div>
+        }
+        @if (!account.adapterWired) {
+          <p class="q-caption muted">{{ i18n.t('einvoicing.account.noAdapter') }}</p>
+        }
+        <p class="q-caption muted">
+          {{
+            account.secretBound
+              ? i18n.t('einvoicing.account.secretBound')
+              : i18n.t('einvoicing.account.secretNone')
+          }}
+        </p>
+
+        @if (account.config['sellerName']) {
+          <p class="q-body-sm">
+            {{ account.config['sellerName'] }} · {{ account.config['sellerTaxpayerNumber'] }}
+          </p>
+        }
+
+        @if (canManage()) {
+          <div class="actions left">
+            <button type="button" class="editAccount" (click)="editAccount(account)">
+              {{ i18n.t('einvoicing.account.edit') }}
+            </button>
+            @if (account.status !== 'ACTIVE') {
+              <button
+                type="button"
+                class="activate"
+                [disabled]="busy()"
+                (click)="startMove(account, 'activate')"
+              >
+                {{ i18n.t('einvoicing.account.activate') }}
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="suspend"
+                [disabled]="busy()"
+                (click)="startMove(account, 'suspend')"
+              >
+                {{ i18n.t('einvoicing.account.suspend') }}
+              </button>
+            }
+          </div>
+        }
+
+        @if (moving()?.id === account.installationId) {
+          <span class="confirm">
+            <input
+              class="q-body-sm"
+              name="moveReason"
+              [placeholder]="i18n.t('common.reason')"
+              [value]="moveReason()"
+              (input)="moveReason.set($any($event.target).value)"
+            />
+            <button
+              type="button"
+              class="confirmMove"
+              [disabled]="busy() || moveReason().trim().length === 0"
+              (click)="confirmMove(account)"
+            >
+              {{
+                i18n.t(
+                  moving()?.to === 'activate'
+                    ? 'einvoicing.account.activate'
+                    : 'einvoicing.account.suspend'
+                )
+              }}
+            </button>
+          </span>
+        }
+
+        @if (editingAccount() === account.installationId) {
+          <form class="accountForm" (submit)="saveAccount($event, account)">
+            <label class="field q-caption">
+              {{ i18n.t('einvoicing.account.field.displayName') }}
+              <input
+                name="displayName"
+                [value]="accountForm().displayName"
+                (input)="setAccountField('displayName', $any($event.target).value)"
+              />
+            </label>
+            <label class="field q-caption">
+              {{ i18n.t('einvoicing.account.field.secretReference') }}
+              <input
+                name="secretReference"
+                autocomplete="off"
+                [value]="accountForm().secretReference"
+                [disabled]="accountForm().clearSecret"
+                (input)="setAccountField('secretReference', $any($event.target).value)"
+              />
+              <span class="q-caption muted">{{ i18n.t('einvoicing.account.secretHint') }}</span>
+            </label>
+            @if (account.secretBound) {
+              <label class="q-caption confirmBox">
+                <input
+                  type="checkbox"
+                  name="clearSecret"
+                  [checked]="accountForm().clearSecret"
+                  (change)="setClearSecret($any($event.target).checked)"
+                />
+                {{ i18n.t('einvoicing.account.clearSecret') }}
+              </label>
+            }
+            @for (field of configFields; track field) {
+              <label class="field q-caption">
+                {{ i18n.t(fieldKey(field)) }}
+                <input
+                  [attr.name]="field"
+                  [value]="accountForm().config[field]"
+                  (input)="setConfigField(field, $any($event.target).value)"
+                />
+              </label>
+            }
+            <p class="q-caption muted">{{ i18n.t('einvoicing.account.vatHint') }}</p>
+            <input
+              class="q-body-sm"
+              name="accountReason"
+              [placeholder]="i18n.t('common.reason')"
+              [value]="accountForm().reason"
+              (input)="setAccountField('reason', $any($event.target).value)"
+            />
+            <button type="submit" class="saveAccount" [disabled]="!canSaveAccount()">
+              {{ i18n.t('einvoicing.account.save') }}
+            </button>
+          </form>
+        }
+      </article>
+    }
+  }
+</section>
+
+<!-- ----------------------------------------------------- classifications -->
+<section class="panel classifications">
+  <header class="planHeader">
+    <h2 class="q-subhead">{{ i18n.t('einvoicing.classification.title') }}</h2>
+  </header>
+  <p class="q-body-sm muted">{{ i18n.t('einvoicing.classification.lead') }}</p>
+  @if (!loading() && loadError() === null) {
+    <div class="scroll">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('einvoicing.classification.column.kind') }}</th>
+            <th class="q-caption">{{ i18n.t('einvoicing.classification.column.label') }}</th>
+            <th class="q-caption">{{ i18n.t('einvoicing.classification.column.catalog') }}</th>
+            <th class="q-caption">{{ i18n.t('einvoicing.classification.column.package') }}</th>
+            <th class="q-caption">{{ i18n.t('einvoicing.classification.column.vat') }}</th>
+            <th class="q-caption">{{ i18n.t('einvoicing.classification.column.state') }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of classifications(); track row.lineKind) {
+            <tr [attr.data-kind]="row.lineKind">
+              <td class="q-body-sm">{{ i18n.t(kindKey(row.lineKind)) }}</td>
+              <td class="q-body-sm">{{ row.itemLabel }}</td>
+              <td class="q-body-sm q-tnum">
+                {{ row.catalogCode }}
+                <div class="q-caption muted">{{ row.catalogName }}</div>
+              </td>
+              <td class="q-body-sm">
+                {{ row.packageName }} <span class="q-caption muted">{{ row.packageCode }}</span>
+              </td>
+              <td class="q-body-sm q-tnum">{{ percentOf(row.vatRateBp) }} %</td>
+              <td class="q-body-sm">
+                @if (row.provisional) {
+                  <span class="chip provisional">{{
+                    i18n.t('einvoicing.classification.provisional')
+                  }}</span>
+                } @else {
+                  <span class="chip live confirmedChip">
+                    {{
+                      i18n.t('einvoicing.classification.confirmed', {
+                        who: row.confirmedBy ?? '',
+                        when: row.confirmedAt ? i18n.day(asDate(row.confirmedAt)) : '',
+                      })
+                    }}
+                  </span>
+                }
+              </td>
+              <td class="q-body-sm actions">
+                @if (canManage()) {
+                  <button
+                    type="button"
+                    class="editClassification"
+                    (click)="editClassification(row)"
+                  >
+                    {{ i18n.t('einvoicing.classification.edit') }}
+                  </button>
+                }
+              </td>
+            </tr>
+            @if (editingKind() === row.lineKind) {
+              <tr>
+                <td colspan="7">
+                  <form class="accountForm" (submit)="saveClassification($event, row)">
+                    <label class="field q-caption">
+                      {{ i18n.t('einvoicing.classification.field.itemLabel') }}
+                      <input
+                        name="itemLabel"
+                        [value]="classForm().itemLabel"
+                        (input)="setClassField('itemLabel', $any($event.target).value)"
+                      />
+                    </label>
+                    <label class="field q-caption">
+                      {{ i18n.t('einvoicing.classification.field.catalogCode') }}
+                      <input
+                        name="catalogCode"
+                        [value]="classForm().catalogCode"
+                        (input)="setClassField('catalogCode', $any($event.target).value)"
+                      />
+                    </label>
+                    <label class="field q-caption">
+                      {{ i18n.t('einvoicing.classification.field.catalogName') }}
+                      <input
+                        name="catalogName"
+                        [value]="classForm().catalogName"
+                        (input)="setClassField('catalogName', $any($event.target).value)"
+                      />
+                    </label>
+                    <label class="field q-caption">
+                      {{ i18n.t('einvoicing.classification.field.packageCode') }}
+                      <input
+                        name="packageCode"
+                        [value]="classForm().packageCode"
+                        (input)="setClassField('packageCode', $any($event.target).value)"
+                      />
+                    </label>
+                    <label class="field q-caption">
+                      {{ i18n.t('einvoicing.classification.field.packageName') }}
+                      <input
+                        name="packageName"
+                        [value]="classForm().packageName"
+                        (input)="setClassField('packageName', $any($event.target).value)"
+                      />
+                    </label>
+                    <label class="field q-caption">
+                      {{ i18n.t('einvoicing.classification.field.vatPercent') }}
+                      <input
+                        name="vatPercent"
+                        inputmode="decimal"
+                        [value]="classForm().vatPercent"
+                        (input)="setClassField('vatPercent', $any($event.target).value)"
+                      />
+                    </label>
+                    <label class="q-caption confirmBox">
+                      <input
+                        type="checkbox"
+                        name="confirmed"
+                        [checked]="classForm().confirmed"
+                        (change)="setClassField('confirmed', $any($event.target).checked)"
+                      />
+                      {{ i18n.t('einvoicing.classification.confirm') }}
+                    </label>
+                    <input
+                      class="q-body-sm"
+                      name="classReason"
+                      [placeholder]="i18n.t('common.reason')"
+                      [value]="classForm().reason"
+                      (input)="setClassField('reason', $any($event.target).value)"
+                    />
+                    <button
+                      type="submit"
+                      class="saveClassification"
+                      [disabled]="!canSaveClassification()"
+                    >
+                      {{ i18n.t('einvoicing.classification.save') }}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<!-- ----------------------------------------------------------- statements -->
+<section class="panel sentStatements">
+  <header class="planHeader">
+    <h2 class="q-subhead">{{ i18n.t('einvoicing.statements.title') }}</h2>
+  </header>
+  <p class="q-body-sm muted">{{ i18n.t('einvoicing.statements.lead') }}</p>
+  <app-tenant-picker [value]="tenantId()" (tenantChange)="chooseTenant($event)" />
+
+  @if (tenantId().length > 0) {
+    @if (tenantLoading()) {
+      <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+    } @else if (tenantError(); as text) {
+      <p class="q-body-sm state error">{{ text }}</p>
+    } @else if (statements().length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('einvoicing.statements.none') }}</p>
+    } @else {
+      @for (entry of statements(); track entry.statement.statementId) {
+        <article class="statement" [attr.data-statement]="entry.statement.number">
+          <header class="accountHeader">
+            <h3 class="q-body-sm q-tnum">
+              <strong>{{ entry.statement.number }}</strong>
+            </h3>
+            <span class="q-caption muted">{{ entry.statement.periodKey }}</span>
+            <span class="q-body-sm q-tnum">{{
+              entry.statement.total ? i18n.money(entry.statement.total) : '—'
+            }}</span>
+            @if (canSend() && live(entry) === null) {
+              <button type="button" class="openSend" (click)="openSend(entry)">
+                {{ i18n.t('einvoicing.send.open') }}
+              </button>
+            }
+          </header>
+
+          @if (entry.attempts.length === 0) {
+            <p class="q-caption muted">{{ i18n.t('einvoicing.statement.none') }}</p>
+          }
+          @for (attempt of entry.attempts; track attempt.einvoiceId) {
+            <div
+              class="attempt"
+              [attr.data-einvoice]="attempt.einvoiceId"
+              [class.dead]="!attempt.live"
+            >
+              <div class="attemptHeader">
+                <strong class="q-body-sm">{{ providerLabel(attempt.provider) }}</strong>
+                <span
+                  class="chip delivery"
+                  [class.live]="attempt.delivery === 'SUBMITTED'"
+                  [attr.data-delivery]="attempt.delivery"
+                >
+                  {{ i18n.t(deliveryKey(attempt.delivery)) }}
+                </span>
+                @if (attempt.operatorState) {
+                  <span
+                    class="chip state"
+                    [class.live]="attempt.operatorState === 'SIGNED'"
+                    [attr.data-state]="attempt.operatorState"
+                  >
+                    {{ i18n.t(stateKey(attempt.operatorState)) }}
+                  </span>
+                }
+                @if (attempt.classificationProvisional) {
+                  <span class="chip provisional">{{
+                    i18n.t('einvoicing.attempt.provisional')
+                  }}</span>
+                }
+              </div>
+              <p class="q-caption muted">
+                {{
+                  i18n.t('einvoicing.attempt.amounts', {
+                    net: i18n.money(attempt.net),
+                    vat: i18n.money(attempt.vat),
+                    total: i18n.money(attempt.total),
+                  })
+                }}
+                · {{ attempt.buyerName }}
+              </p>
+              <p class="q-caption muted">
+                {{
+                  i18n.t('einvoicing.attempt.sentBy', {
+                    who: attempt.sentBy,
+                    when: i18n.dateTime(asDate(attempt.createdAt)),
+                  })
+                }}
+                @if (attempt.operatorDocumentId) {
+                  · {{ i18n.t('einvoicing.attempt.document', { id: attempt.operatorDocumentId }) }}
+                }
+                @if (attempt.stateCheckedAt) {
+                  ·
+                  {{
+                    i18n.t('einvoicing.attempt.checked', {
+                      when: i18n.dateTime(asDate(attempt.stateCheckedAt)),
+                    })
+                  }}
+                }
+              </p>
+              @if (attempt.failureCode) {
+                <p class="q-caption failure">
+                  {{ attempt.failureCode }}
+                  @if (attempt.failureDetail) {
+                    · {{ attempt.failureDetail }}
+                  }
+                </p>
+              }
+              <div class="actions left">
+                @if (
+                  canSend() &&
+                  (attempt.delivery === 'SUBMITTED' || attempt.delivery === 'UNCERTAIN')
+                ) {
+                  <button
+                    type="button"
+                    class="refresh"
+                    [disabled]="busy()"
+                    (click)="refresh(attempt)"
+                  >
+                    {{ i18n.t('einvoicing.refresh') }}
+                  </button>
+                }
+                <button type="button" class="link showDetail" (click)="showDetail(attempt)">
+                  {{ attempt.documentNumber }}
+                </button>
+              </div>
+              @if (detail(); as sent) {
+                @if (sent.einvoiceId === attempt.einvoiceId) {
+                  <table class="innerTable">
+                    <tbody>
+                      @for (line of sent.lines ?? []; track line.lineNumber) {
+                        <tr>
+                          <td class="q-body-sm">{{ line.name }}</td>
+                          <td class="q-body-sm q-tnum">
+                            {{ line.quantity }} × {{ i18n.money(line.unitPrice) }}
+                          </td>
+                          <td class="q-body-sm q-tnum">{{ percentOf(line.vatRateBp) }} %</td>
+                          <td class="q-body-sm q-tnum num">{{ i18n.money(line.gross) }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              }
+            </div>
+          }
+
+          @if (sending() === entry.statement.statementId) {
+            <form class="sendForm" (submit)="send($event, entry)">
+              <label class="field q-caption">
+                {{ i18n.t('einvoicing.send.operator') }}
+                <select
+                  name="provider"
+                  [value]="sendForm().provider"
+                  (change)="setSendField('provider', $any($event.target).value)"
+                >
+                  @for (operator of operators; track operator) {
+                    <option [value]="operator" [selected]="sendForm().provider === operator">
+                      {{ providerLabel(operator) }}
+                    </option>
+                  }
+                </select>
+              </label>
+              @if (!providerConnected(sendForm().provider)) {
+                <p class="warning notConnectedSend" role="note">
+                  {{
+                    i18n.t('einvoicing.send.notConnected', {
+                      operator: providerLabel(sendForm().provider),
+                    })
+                  }}
+                </p>
+              }
+              @if (legalEntities().length > 1) {
+                <label class="field q-caption">
+                  {{ i18n.t('einvoicing.send.buyer') }}
+                  <select
+                    name="legalEntityId"
+                    [value]="sendForm().legalEntityId"
+                    (change)="setSendField('legalEntityId', $any($event.target).value)"
+                  >
+                    <option value="" [selected]="sendForm().legalEntityId === ''">—</option>
+                    @for (entity of legalEntities(); track entity.id) {
+                      <option
+                        [value]="entity.id"
+                        [selected]="sendForm().legalEntityId === entity.id"
+                      >
+                        {{ entity.legalName }} ({{ entity.tin }})
+                      </option>
+                    }
+                  </select>
+                </label>
+              }
+              @if (classificationsProvisional()) {
+                <p class="q-caption muted">{{ i18n.t('einvoicing.send.provisional') }}</p>
+              }
+              <input
+                class="q-body-sm"
+                name="sendReason"
+                [placeholder]="i18n.t('common.reason')"
+                [value]="sendForm().reason"
+                (input)="setSendField('reason', $any($event.target).value)"
+              />
+              <button type="submit" class="confirmSend" [disabled]="!canSubmitSend(entry)">
+                {{
+                  i18n.t('einvoicing.send.submit', { operator: providerLabel(sendForm().provider) })
+                }}
+              </button>
+            </form>
+          }
+        </article>
+      }
+    }
+  }
+</section>

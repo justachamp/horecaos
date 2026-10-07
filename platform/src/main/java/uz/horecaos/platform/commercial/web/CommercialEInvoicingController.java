@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.commercial.api.EInvoiceDocument;
@@ -30,6 +30,7 @@ import uz.horecaos.platform.commercial.domain.StatementEInvoice;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiMoney;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -69,9 +70,10 @@ public class CommercialEInvoicingController {
             summary = "HorecaOS's own accounts with the e-invoicing operators",
             description = "One row per operator account: whether it is connected, and what it still needs "
                     + "while it is not. Never a credential or a secret reference.")
-    public ResponseEntity<List<InstallationView>> installations() {
-        return ResponseEntity.ok(
-                einvoicing.installations().stream().map(InstallationView::of).toList());
+    public ResponseEntity<List<EInvoicingAccountView>> installations() {
+        return ResponseEntity.ok(einvoicing.installations().stream()
+                .map(EInvoicingAccountView::of)
+                .toList());
     }
 
     @GetMapping("/api/v1/control-plane/einvoicing/line-classifications")
@@ -80,9 +82,9 @@ public class CommercialEInvoicingController {
             summary = "What each kind of statement line is invoiced as",
             description = "The classification code, unit and VAT rate per line kind, and whether finance "
                     + "has confirmed it (a provisional row has not).")
-    public ResponseEntity<List<ClassificationView>> classifications() {
+    public ResponseEntity<List<EInvoicingClassificationView>> classifications() {
         return ResponseEntity.ok(einvoicing.classifications().stream()
-                .map(ClassificationView::of)
+                .map(EInvoicingClassificationView::of)
                 .toList());
     }
 
@@ -127,7 +129,7 @@ public class CommercialEInvoicingController {
                     + "or UNCERTAIN). 422 OPERATOR_NOT_CONNECTED while HorecaOS has no connected account "
                     + "with that operator. A statement has at most one live invoice across both operators.")
     public ResponseEntity<EInvoiceView> send(
-            @PathVariable UUID tenantId, @PathVariable UUID statementId, @Valid @RequestBody SendRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID statementId, @Valid @RequestBody EInvoiceSendRequest body) {
         StatementEInvoice sent = einvoicing.send(
                 new EInvoicingService.SendRequest(
                         tenantId, statementId, body.provider(), body.legalEntityId(), body.reason()),
@@ -143,10 +145,10 @@ public class CommercialEInvoicingController {
             description = "Records the state the operator reports (sent, signed by the buyer, refused, "
                     + "cancelled). Also how an invoice whose send had no answer is resolved: by asking, "
                     + "never by sending again.")
-    public ResponseEntity<RefreshView> refresh(@PathVariable UUID tenantId, @PathVariable UUID einvoiceId) {
+    public ResponseEntity<EInvoiceRefreshView> refresh(@PathVariable UUID tenantId, @PathVariable UUID einvoiceId) {
         EInvoicingService.Refreshed refreshed = einvoicing.refresh(tenantId, einvoiceId, actor(), correlationId());
         return ResponseEntity.ok(
-                new RefreshView(EInvoiceView.summary(refreshed.einvoice()), refreshed.unavailableCode()));
+                new EInvoiceRefreshView(EInvoiceView.summary(refreshed.einvoice()), refreshed.unavailableCode()));
     }
 
     // ------------------------------------------------- the accounts (finance)
@@ -156,12 +158,14 @@ public class CommercialEInvoicingController {
     @Operation(
             summary = "Set up HorecaOS's account with an operator",
             description = "The reference to the login in the secrets manager (the value is put there with "
-                    + "`bao kv put`, never sent here) and the seller's public identity. A missing setting is "
-                    + "cleared. 409 STALE_VERSION when the account moved since expectedVersion was read.")
-    public ResponseEntity<InstallationView> update(
+                    + "`bao kv put`, never sent here; absent keeps the one on file, blank clears it) and the "
+                    + "seller's public identity. A missing setting is cleared. Requires If-Match carrying the version the account was read at; 409 "
+                    + "STALE_VERSION when it has moved since.")
+    public ResponseEntity<EInvoicingAccountView> update(
             @PathVariable UUID installationId,
-            @RequestParam long expectedVersion,
-            @Valid @RequestBody InstallationUpdate body) {
+            @Valid @RequestBody EInvoicingAccountUpdate body,
+            HttpServletRequest request) {
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
         EInvoicingInstallation updated = einvoicing.updateInstallation(
                 installationId,
                 expectedVersion,
@@ -171,21 +175,22 @@ public class CommercialEInvoicingController {
                 actor(),
                 body.reason(),
                 correlationId());
-        return ResponseEntity.ok(InstallationView.of(einvoicing.installationDetail(updated.id())));
+        return installation(updated.id());
     }
 
     @PostMapping(ACCOUNTS + "/{installationId}/activation")
     @RequiresCapability(value = Capability.COMMERCIAL_EINVOICING_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(
             summary = "Connect an operator account",
-            description = "422 OPERATOR_NOT_CONNECTED, naming what is missing, while the account has no "
-                    + "secret reference or no seller identity.")
-    public ResponseEntity<InstallationView> activate(
+            description = "Requires If-Match. 422 OPERATOR_NOT_CONNECTED, naming what is missing, while the "
+                    + "account has no secret reference or no seller identity.")
+    public ResponseEntity<EInvoicingAccountView> activate(
             @PathVariable UUID installationId,
-            @RequestParam long expectedVersion,
-            @Valid @RequestBody ReasonRequest body) {
+            @Valid @RequestBody EInvoicingReasonRequest body,
+            HttpServletRequest request) {
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
         einvoicing.activateInstallation(installationId, expectedVersion, actor(), body.reason(), correlationId());
-        return ResponseEntity.ok(InstallationView.of(einvoicing.installationDetail(installationId)));
+        return installation(installationId);
     }
 
     @PostMapping(ACCOUNTS + "/{installationId}/suspension")
@@ -193,13 +198,14 @@ public class CommercialEInvoicingController {
     @Operation(
             summary = "Stop sending through an operator account",
             description = "The rollback ADR 0096 names: nothing more is sent through the account. Documents "
-                    + "already sent keep their last known state.")
-    public ResponseEntity<InstallationView> suspend(
+                    + "already sent keep their last known state. Requires If-Match.")
+    public ResponseEntity<EInvoicingAccountView> suspend(
             @PathVariable UUID installationId,
-            @RequestParam long expectedVersion,
-            @Valid @RequestBody ReasonRequest body) {
+            @Valid @RequestBody EInvoicingReasonRequest body,
+            HttpServletRequest request) {
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
         einvoicing.suspendInstallation(installationId, expectedVersion, actor(), body.reason(), correlationId());
-        return ResponseEntity.ok(InstallationView.of(einvoicing.installationDetail(installationId)));
+        return installation(installationId);
     }
 
     @PutMapping(CLASSIFICATIONS + "/{lineKind}")
@@ -207,12 +213,13 @@ public class CommercialEInvoicingController {
     @Operation(
             summary = "State what a kind of statement line is invoiced as",
             description = "The classification code, unit and VAT rate. confirmed=true records that finance "
-                    + "has stated it, who and when, and clears the provisional flag.")
-    public ResponseEntity<ClassificationView> classify(
+                    + "has stated it, who and when, and clears the provisional flag. Requires If-Match.")
+    public ResponseEntity<EInvoicingClassificationView> classify(
             @PathVariable String lineKind,
-            @RequestParam long expectedVersion,
-            @Valid @RequestBody ClassificationUpdate body) {
-        return ResponseEntity.ok(ClassificationView.of(einvoicing.updateClassification(
+            @Valid @RequestBody EInvoicingClassificationUpdate body,
+            HttpServletRequest request) {
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
+        EInvoicingClassificationView view = EInvoicingClassificationView.of(einvoicing.updateClassification(
                 lineKind,
                 expectedVersion,
                 body.itemLabel(),
@@ -224,10 +231,17 @@ public class CommercialEInvoicingController {
                 Boolean.TRUE.equals(body.confirmed()),
                 actor(),
                 body.reason(),
-                correlationId())));
+                correlationId()));
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(view.version())).body(view);
     }
 
     // --------------------------------------------------------------- helpers
+
+    /** One account as it now stands, with its version as an ETag to send back as If-Match. */
+    private ResponseEntity<EInvoicingAccountView> installation(UUID installationId) {
+        EInvoicingAccountView view = EInvoicingAccountView.of(einvoicing.installationDetail(installationId));
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(view.version())).body(view);
+    }
 
     private ActorRef actor() {
         return ActorRef.user(currentActor.get().subject(), null);
@@ -247,25 +261,27 @@ public class CommercialEInvoicingController {
     // ----------------------------------------------------------- wire records
 
     /** The statement to send, to which operator, to which of the tenant's companies. */
-    public record SendRequest(
+    public record EInvoiceSendRequest(
             @NotBlank @Pattern(regexp = "DIDOX|FAKTURA_UZ") String provider,
             @Nullable UUID legalEntityId,
             @NotBlank @Size(max = 1000) String reason) {}
 
-    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
+    public record EInvoicingReasonRequest(
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * An account's editable fields. {@code secretReference} is the ADR 0028 reference, not a
-     * value; {@code config} holds the seller's public identity (taxpayer number, name, address,
-     * VAT registration code, bank) and the login language.
+     * value: absent keeps the one on file (the screen never learns it, so it cannot send it back),
+     * blank clears it. {@code config} holds the seller's public identity (taxpayer number, name,
+     * address, VAT registration code, bank) and the login language, and is replaced whole.
      */
-    public record InstallationUpdate(
+    public record EInvoicingAccountUpdate(
             @NotBlank @Size(max = 200) String displayName,
             @Nullable @Size(max = 512) String secretReference,
             @Nullable Map<String, String> config,
             @NotBlank @Size(max = 1000) String reason) {}
 
-    public record ClassificationUpdate(
+    public record EInvoicingClassificationUpdate(
             @NotBlank @Size(max = 200) String itemLabel,
             @NotBlank @Size(max = 32) String catalogCode,
             @NotBlank @Size(max = 200) String catalogName,
@@ -280,7 +296,7 @@ public class CommercialEInvoicingController {
      * matters; {@code missing} says what is still needed while it is false. The secret
      * reference itself is never returned, only whether one is bound.
      */
-    public record InstallationView(
+    public record EInvoicingAccountView(
             UUID installationId,
             String provider,
             String displayName,
@@ -298,9 +314,9 @@ public class CommercialEInvoicingController {
             String updatedBy,
             String updatedAt) {
 
-        static InstallationView of(InstallationDetail detail) {
+        static EInvoicingAccountView of(InstallationDetail detail) {
             EInvoicingInstallation installation = detail.installation();
-            return new InstallationView(
+            return new EInvoicingAccountView(
                     installation.id(),
                     installation.providerType(),
                     installation.displayName(),
@@ -320,7 +336,7 @@ public class CommercialEInvoicingController {
         }
     }
 
-    public record ClassificationView(
+    public record EInvoicingClassificationView(
             String lineKind,
             String itemLabel,
             String catalogCode,
@@ -335,8 +351,8 @@ public class CommercialEInvoicingController {
             String updatedBy,
             String updatedAt) {
 
-        static ClassificationView of(EInvoicingLineClassification classification) {
-            return new ClassificationView(
+        static EInvoicingClassificationView of(EInvoicingLineClassification classification) {
+            return new EInvoicingClassificationView(
                     classification.lineKind(),
                     classification.itemLabel(),
                     classification.catalogCode(),
@@ -382,7 +398,7 @@ public class CommercialEInvoicingController {
             String sentBy,
             String createdAt,
             long version,
-            @Nullable List<LineView> lines) {
+            @Nullable List<EInvoiceLineView> lines) {
 
         static EInvoiceView summary(StatementEInvoice row) {
             return of(row, null);
@@ -393,11 +409,11 @@ public class CommercialEInvoicingController {
             return of(
                     row,
                     row.sentDocument().lines().stream()
-                            .map(line -> LineView.of(line, currency))
+                            .map(line -> EInvoiceLineView.of(line, currency))
                             .toList());
         }
 
-        private static EInvoiceView of(StatementEInvoice row, @Nullable List<LineView> lines) {
+        private static EInvoiceView of(StatementEInvoice row, @Nullable List<EInvoiceLineView> lines) {
             String currency = row.currency();
             return new EInvoiceView(
                     row.id(),
@@ -431,7 +447,7 @@ public class CommercialEInvoicingController {
         }
     }
 
-    public record LineView(
+    public record EInvoiceLineView(
             int lineNumber,
             String name,
             String classificationCode,
@@ -442,8 +458,8 @@ public class CommercialEInvoicingController {
             ApiMoney vat,
             ApiMoney gross) {
 
-        static LineView of(EInvoiceDocument.Line line, String currency) {
-            return new LineView(
+        static EInvoiceLineView of(EInvoiceDocument.Line line, String currency) {
+            return new EInvoiceLineView(
                     line.number(),
                     line.name(),
                     line.classificationCode(),
@@ -457,6 +473,6 @@ public class CommercialEInvoicingController {
     }
 
     /** The document as it stands after asking, and why nothing could be learned if the operator did not answer. */
-    public record RefreshView(
+    public record EInvoiceRefreshView(
             EInvoiceView einvoice, @Nullable String unavailableCode) {}
 }

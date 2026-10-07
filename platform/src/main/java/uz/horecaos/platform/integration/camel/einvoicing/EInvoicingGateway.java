@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -53,10 +54,24 @@ public class EInvoicingGateway {
     private final SecretResolver secrets;
     private final ProviderHttpClient http;
 
+    private final Duration defaultTimeout;
+
+    @Autowired
     public EInvoicingGateway(EgressAllowlist egress, SecretResolver secrets, ProviderHttpClient http) {
+        this(egress, secrets, http, DEFAULT_TIMEOUT);
+    }
+
+    /**
+     * The deadline is a parameter so a test can produce the case that matters here -- the
+     * operator takes the request and never answers -- without holding a suite still for twenty
+     * seconds.
+     */
+    EInvoicingGateway(
+            EgressAllowlist egress, SecretResolver secrets, ProviderHttpClient http, Duration defaultTimeout) {
         this.egress = egress;
         this.secrets = secrets;
         this.http = http;
+        this.defaultTimeout = defaultTimeout;
     }
 
     public ProviderOutcome invoke(EInvoicingApiCall call) {
@@ -119,7 +134,7 @@ public class EInvoicingGateway {
                 call.baseUrl(),
                 credential.reveal(),
                 call.correlationId(),
-                call.timeout() == null ? DEFAULT_TIMEOUT : call.timeout());
+                call.timeout() == null ? defaultTimeout : call.timeout());
 
         Map<String, String> headers = request.headers();
         return switch (call.method()) {

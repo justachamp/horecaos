@@ -194,6 +194,84 @@ class ProviderHttpClientTests {
         assertThat(outcome.detail()).doesNotContain("Amir Temur").contains("not a JSON object");
     }
 
+    @Test
+    @DisplayName("a form post is form-encoded and percent-encodes what would otherwise split the body")
+    void aFormBodyIsPercentEncoded() {
+        java.util.concurrent.atomic.AtomicReference<String> contentType =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<String> received =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        server.createContext("/token", exchange -> {
+            contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+            received.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] bytes = "{\"access_token\":\"t\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(bytes);
+            }
+        });
+        server.start();
+
+        java.util.LinkedHashMap<String, String> form = new java.util.LinkedHashMap<>();
+        form.put("grant_type", "password");
+        form.put("password", "p&ss=w+rd é");
+        ProviderOutcome outcome = client.postForm(
+                call(Duration.ofSeconds(5)), "/token", Map.of(), form, body -> ProviderOutcome.success(body, null));
+
+        assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
+        assertThat(contentType.get()).isEqualTo("application/x-www-form-urlencoded");
+        assertThat(received.get()).isEqualTo("grant_type=password&password=p%26ss%3Dw%2Brd+%C3%A9");
+    }
+
+    @Test
+    @DisplayName(
+            "a status the caller asked to hear as an answer is delivered with its status, and any other 4xx is still a refusal")
+    void anAcceptedStatusIsAnAnswer() {
+        answer("/missing", 404, "{\"message\":\"no such document\"}");
+
+        ProviderOutcome asked = client.getAccepting(
+                call(Duration.ofSeconds(5)),
+                "/missing",
+                Map.of(),
+                java.util.Set.of(404),
+                body -> ProviderOutcome.success(body, null));
+        ProviderOutcome notAsked = client.get(
+                call(Duration.ofSeconds(5)), "/missing", Map.of(), body -> ProviderOutcome.success(body, null));
+
+        assertThat(asked.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
+        assertThat(asked.normalized()).containsEntry(ProviderHttpClient.STATUS_KEY, 404);
+        assertThat(notAsked.status()).isEqualTo(ProviderOutcome.Status.REJECTED);
+    }
+
+    @Test
+    @DisplayName("an accepted status whose body is not JSON is still an answer")
+    void anAcceptedStatusWithAnHtmlBody() {
+        answer("/html", 404, "<html>not found</html>");
+
+        ProviderOutcome outcome = client.getAccepting(
+                call(Duration.ofSeconds(5)),
+                "/html",
+                Map.of(),
+                java.util.Set.of(404),
+                body -> ProviderOutcome.success(body, null));
+
+        assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
+        assertThat(outcome.normalized()).containsEntry(ProviderHttpClient.STATUS_KEY, 404);
+    }
+
+    @Test
+    @DisplayName("a bare JSON array is readable, held under one key")
+    void aBareArrayIsReadable() {
+        answer("/list", 200, "  [{\"id\":1}]");
+
+        ProviderOutcome outcome =
+                client.get(call(Duration.ofSeconds(5)), "/list", Map.of(), body -> ProviderOutcome.success(body, null));
+
+        assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
+        assertThat(outcome.normalized().get(ProviderHttpClient.ARRAY_BODY)).isInstanceOf(java.util.List.class);
+    }
+
     private void answer(String path, int status, String body) {
         server.createContext(path, exchange -> {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

@@ -177,7 +177,8 @@ public class EInvoicingService {
      * identity. The value behind the reference is put there by an operator with
      * {@code bao kv put} (ADR 0028); this stores the reference only.
      *
-     * @param secretReference null or blank clears it
+     * @param secretReference null keeps the reference on file (the screen never learns it, so it
+     *                        cannot send it back); blank clears it; anything else replaces it
      * @param config          every seller field to keep; a missing or blank key is cleared
      */
     public EInvoicingInstallation updateInstallation(
@@ -190,13 +191,15 @@ public class EInvoicingService {
             String reason,
             String correlationId) {
         Map<String, String> cleaned = cleanConfig(config);
-        String reference = cleanReference(secretReference);
+        boolean keepReference = secretReference == null;
+        String requestedReference = keepReference ? null : cleanReference(secretReference);
         if (displayName.isBlank()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "An account has a name");
         }
         return unitOfWork.execute(status -> {
             EInvoicingInstallation current = requireInstallation(installationId);
             checkVersion(current.version(), expectedVersion);
+            String reference = keepReference ? current.secretReference() : requestedReference;
 
             Map<String, Object> before = new LinkedHashMap<>();
             Map<String, Object> after = new LinkedHashMap<>();
