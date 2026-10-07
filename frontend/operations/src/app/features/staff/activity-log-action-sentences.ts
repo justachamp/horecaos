@@ -875,6 +875,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Контактные лица филиала изменены',
       'uz-Latn': 'Filialning aloqa shaxslari oʻzgartirildi',
     },
+    'integration.installation_created': {
+      en: 'Provider installation created',
+      ru: 'Подключение провайдера создано',
+      'uz-Latn': 'Provayder ulanmasi yaratildi',
+    },
     'integration.secret_written': {
       en: 'Integration secret written',
       ru: 'Интеграция секрет записано',

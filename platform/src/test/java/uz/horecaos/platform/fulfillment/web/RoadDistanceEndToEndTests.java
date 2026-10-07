@@ -309,7 +309,7 @@ class RoadDistanceEndToEndTests {
         assertThat(engineStatus.path("datasetVersion").asString()).isEqualTo("2026-10-01");
         assertThat(engine.hits())
                 .as("reading the editor is not a routing request")
-                .isZero();
+                .isEqualTo(hitsBefore);
 
         // The read is capability-gated like every other read of a rate table.
         MvcResult refused = mvc.perform(get(tariffsPath() + "/routing-engine")

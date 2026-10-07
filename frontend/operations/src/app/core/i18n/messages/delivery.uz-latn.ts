@@ -418,17 +418,17 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.tariffs.detail.basis.ROAD': 'Yoʻl boʻyicha, platformaning marshrut xizmati orqali',
   'delivery.tariffs.detail.basis.STRAIGHT_LINE_FALLBACK':
     'Toʻgʻri chiziq boʻyicha aylanma koeffitsiyenti bilan (marshrut xizmati javob bermayapti)',
-  'delivery.tariffs.detail.dataset': 'Marshrut maʼlumotlar toʻplami',
+  'delivery.tariffs.detail.dataset': 'Marshrut maʻlumotlar toʻplami',
   'delivery.tariffs.detail.basisEvidence.FEES':
     'Bu versiya oxirgi {hours} soatda hisoblagan toʻlovlar boʻyicha: {road} ta yoʻl boʻyicha, {fallback} ta toʻgʻri chiziq boʻyicha.',
   'delivery.tariffs.detail.basisEvidence.CONFIGURATION':
     'Sozlamalar boʻyicha kutilmoqda: oxirgi {hours} soatda bu versiya birorta toʻlov hisoblamagan.',
   'delivery.tariffs.draft.usePlatformRouting':
-    'Platforma marshrutidan foydalanish (tavsiya etiladi): yoʻlni platformaning oʻz xizmati oʻlchaydi, kirish maʼlumotlarini sozlash shart emas',
+    'Platforma marshrutidan foydalanish (tavsiya etiladi): yoʻlni platformaning oʻz xizmati oʻlchaydi, kirish maʻlumotlarini sozlash shart emas',
   'delivery.tariffs.draft.basis.STRAIGHT_LINE':
     'Masofa filialdan toʻgʻri chiziq boʻyicha hisoblanadi.',
   'delivery.tariffs.draft.basis.ROAD_ON':
-    'Masofa yoʻl boʻyicha platformaning marshrut xizmati bilan oʻlchanadi, maʼlumotlar toʻplami {dataset}.',
+    'Masofa yoʻl boʻyicha platformaning marshrut xizmati bilan oʻlchanadi, maʻlumotlar toʻplami {dataset}.',
   'delivery.tariffs.draft.basis.ROAD_OFF':
     'Platformaning marshrut xizmati hali yoqilmagan. U yoqilmaguncha toʻlov toʻgʻri chiziq boʻyicha {factor} koeffitsiyenti bilan hisoblanadi va har bir hisobda RADIUS_FALLBACK belgisi boʻladi.',
   'delivery.tariffs.draft.basis.ROAD_UNKNOWN':

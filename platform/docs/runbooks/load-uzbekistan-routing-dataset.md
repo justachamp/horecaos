@@ -79,14 +79,15 @@ endpoints, or the GPS track of delivered orders (the track is evidence for this 
 never pays a courier, ADR 0042). The sample is coordinates only: no address, no order id.
 
 ```bash
-docker run -d --name osrm-gate -p 5000:5000 -v "$PWD/routing-data:/data:ro" \
-  ghcr.io/project-osrm/osrm-backend:v6.0.0@sha256:729461bcc9ae9e6aafa92c0f93db9b060a32e85d5e72092c01ae4a4a9f1eb564 \
-  osrm-routed --algorithm mld --ip 0.0.0.0 --port 5000 /data/uzbekistan-latest.osrm
-python3 platform/tools/routing/accuracy_gate.py sample.csv --engine http://localhost:5000
-docker rm -f osrm-gate
+deploy/routing/build-dataset.sh --tag 2026-10-01 --gate sample.csv
 ```
 
-**Check:** exit status 0 and `gate  HOLDS`. Exit 1 is a map that is not good enough for
+The script builds the dataset, starts the pinned engine on the new files, runs
+`platform/tools/routing/accuracy_gate.py` against it, and stops there if the gate fails:
+nothing is pushed. (To run the gate by hand against any engine:
+`python3 platform/tools/routing/accuracy_gate.py sample.csv --engine http://localhost:5000`.)
+
+**Check:** exit status 0 and `gate                 HOLDS` in the report. Exit 1 is a map that is not good enough for
 fees: do not publish this dataset to production, and either improve the extract or
 take ADR 0147's route to a hosted API. Exit 2 is an unusable sample or an engine that did
 not answer, which is not the same as failing it.

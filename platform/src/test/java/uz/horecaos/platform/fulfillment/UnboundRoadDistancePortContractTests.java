@@ -3,7 +3,6 @@ package uz.horecaos.platform.fulfillment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.fulfillment.api.RoadDistancePort;
@@ -16,23 +15,38 @@ import uz.horecaos.platform.support.RoadDistancePortContract;
  * answering. This is the rollback, so it has to be as well-behaved as the adapter it
  * stands in for.
  */
-class UnboundRoadDistancePortContractTests extends RoadDistancePortContract {
+class UnboundRoadDistancePortContractTests {
 
     private final RoadDistancePort unbound = new DeliveryRoutingConfiguration().unboundRoadDistancePort();
 
-    @Override
-    protected RoadDistancePort port() {
-        return unbound;
+    @Test
+    @DisplayName("a tariff with no routing installation gets no answer")
+    void noInstallationIsNoAnswer() {
+        RoadDistancePortContract.noInstallationIsNoAnswer(unbound);
     }
 
-    @Override
-    protected @Nullable UUID answeringInstallation() {
-        return null;
+    @Test
+    @DisplayName("an installation the port has never heard of gets no answer, not an exception")
+    void anUnknownInstallationIsNoAnswer() {
+        RoadDistancePortContract.anUnknownInstallationIsNoAnswer(unbound);
+    }
+
+    @Test
+    @DisplayName("the same question is answered the same way twice")
+    void theSameQuestionTwiceIsTheSameAnswer() {
+        RoadDistancePortContract.theSameQuestionTwiceIsTheSameAnswer(unbound, UUID.randomUUID());
+    }
+
+    @Test
+    @DisplayName("two points on opposite sides of the earth are a question, never a thrown exception")
+    void aNonsenseQuestionDoesNotThrow() {
+        RoadDistancePortContract.aNonsenseQuestionDoesNotThrow(unbound, UUID.randomUUID());
     }
 
     @Test
     @DisplayName("it answers nothing for any installation, so every ROAD fee says RADIUS_FALLBACK")
     void itNeverAnswers() {
-        assertThat(unbound.route(BRANCH, DOORSTEP, UUID.randomUUID())).isEmpty();
+        assertThat(unbound.route(RoadDistancePortContract.BRANCH, RoadDistancePortContract.DOORSTEP, UUID.randomUUID()))
+                .isEmpty();
     }
 }

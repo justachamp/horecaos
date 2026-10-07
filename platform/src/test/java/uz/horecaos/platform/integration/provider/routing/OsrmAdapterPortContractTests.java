@@ -12,6 +12,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
@@ -30,7 +32,7 @@ import uz.horecaos.platform.web.cache.CacheRegistry;
  * The OSRM adapter, reached through the road-distance route exactly as the resolver reaches
  * it, held to the contract every {@link RoadDistancePort} owes the resolver.
  */
-class OsrmAdapterPortContractTests extends RoadDistancePortContract {
+class OsrmAdapterPortContractTests {
 
     private static final UUID TENANT = UUID.randomUUID();
 
@@ -100,13 +102,39 @@ class OsrmAdapterPortContractTests extends RoadDistancePortContract {
         engine.close();
     }
 
-    @Override
-    protected RoadDistancePort port() {
-        return port;
+    @Test
+    @DisplayName("a tariff with no routing installation gets no answer")
+    void noInstallationIsNoAnswer() {
+        RoadDistancePortContract.noInstallationIsNoAnswer(port);
     }
 
-    @Override
-    protected UUID answeringInstallation() {
-        return installation;
+    @Test
+    @DisplayName("an installation the port has never heard of gets no answer, not an exception")
+    void anUnknownInstallationIsNoAnswer() {
+        RoadDistancePortContract.anUnknownInstallationIsNoAnswer(port);
+    }
+
+    @Test
+    @DisplayName("an answer names its provider and dataset and carries no negative figure")
+    void anAnswerIsAttributedAndSane() {
+        RoadDistancePortContract.anAnswerIsAttributedAndSane(port, installation);
+    }
+
+    @Test
+    @DisplayName("the same question is answered the same way twice")
+    void theSameQuestionTwiceIsTheSameAnswer() {
+        RoadDistancePortContract.theSameQuestionTwiceIsTheSameAnswer(port, installation);
+    }
+
+    @Test
+    @DisplayName("two points on opposite sides of the earth are a question, never a thrown exception")
+    void aNonsenseQuestionDoesNotThrow() {
+        RoadDistancePortContract.aNonsenseQuestionDoesNotThrow(port, installation);
+    }
+
+    @Test
+    @DisplayName("a present answer is never a placeholder")
+    void aPresentAnswerIsNeverAPlaceholder() {
+        RoadDistancePortContract.aPresentAnswerIsNeverAPlaceholder(port, installation);
     }
 }

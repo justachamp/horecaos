@@ -37,10 +37,19 @@
   `customer_delivery_fee_minor` and `delivery_fee_resolution_id`, and
   `DeliveryPlanningService` copies both off the order through
   `ordering.JdbcDeliveryOrderPort` rather than re-running the resolver at plan
-  creation. Not built: any routing provider —
-  `DeliveryRoutingConfiguration` registers a `RoadDistancePort` that answers empty
-  on every call, so a `ROAD` tariff always prices at straight-line distance times
-  its detour factor and records `RADIUS_FALLBACK`; the promise's travel component;
+  creation. **Routing provider chosen and built behind a switch (ADR 0147,
+  operations batch 19, 2026-10-07):** `RoadDistancePort` lives in `fulfillment.api` and
+  answers a `RoadRoute` (metres, free-flow seconds, provider, dataset version); the
+  self-hosted OSRM adapter sits behind the `routing.road-distance.v1` route, and a
+  `ROAD` tariff priced while the engine is on records `distance_source = ROAD`, the
+  provider, the dataset version and the seconds on `delivery_fee_resolutions` (V0493).
+  `DeliveryRoutingConfiguration` still registers the port that answers empty, and it
+  is what answers in any context without the route, and what every `ROAD` tariff gets
+  while `horecaos.routing.osrm.enabled` is off — which is the default everywhere, so a
+  `ROAD` tariff still prices at straight-line distance times its detour factor and
+  records `RADIUS_FALLBACK` until a deployment runs the engine and switches it on (ADR
+  0147's runbook). Not built: the engine has never run in any environment, and the
+  promise's travel component;
   serviceability *search* across branches (the resolver answers one named branch at
   a time, and nothing returns candidate branches for an address); legacy zone
   import with map rendering and shadow comparison, of which only the pure tariff
