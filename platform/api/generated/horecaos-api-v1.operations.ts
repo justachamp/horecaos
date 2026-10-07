@@ -2281,6 +2281,7 @@ export interface EditorResponse {
   dineIn?: ModeResponse;
   inspectedLevels?: Array<LevelResponse>;
   isPlatformDefault?: boolean;
+  noPromiseDefault?: NoPromiseDefaultResponse;
   pickup?: ModeResponse;
   policyId?: string;
   policyVersion?: number;
@@ -3213,12 +3214,13 @@ export interface ModeBindingResponse {
 export interface ModeRequest {
   atRiskBeforeSeconds?: number;
   lateAfterSeconds: number;
-  noPromiseFallbackSeconds: number;
+  noPromiseFallbackSeconds?: number;
 }
 
 export interface ModeResponse {
   atRiskBeforeSeconds?: number;
   effectiveAtRiskBeforeSeconds?: number;
+  effectiveNoPromiseFallbackSeconds?: number;
   lateAfterSeconds?: number;
   noPromiseFallbackSeconds?: number;
 }
@@ -3273,6 +3275,11 @@ export interface NewRateCardRequest {
   courierTypeId?: string;
   currency?: string;
   locationId?: string;
+}
+
+export interface NoPromiseDefaultResponse {
+  seconds?: number;
+  source?: string;
 }
 
 export interface NoteResponse {

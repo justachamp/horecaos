@@ -70,6 +70,9 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 600,
+    // Stored, read by nothing (ADR 0150 decision 5): the screen says so until a record names a reader.
+    hintKey: 'settings.orderPolicy.averageOrderMinutes.hint',
+    hintWhileEditing: true,
   },
   {
     code: 'ordering.maximum_order_minutes',
@@ -77,6 +80,8 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 600,
+    hintKey: 'settings.orderPolicy.maximumOrderMinutes.hint',
+    hintWhileEditing: true,
   },
   {
     code: 'ordering.late_order_threshold_minutes',
@@ -84,8 +89,9 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 600,
-    // Stored, read by nothing: what it should mean is an owner decision, so the screen says so
-    // rather than letting a saved number look like it moved the line (the boundaries card below does).
+    // ADR 0150: the tenant-wide default for the no-promise fallback of the boundaries card below,
+    // and nothing else. The hint says which orders it governs (those with no promised time), not
+    // that it is inert -- it is read now.
     hintKey: 'settings.orderPolicy.lateOrderThresholdMinutes.hint',
     hintWhileEditing: true,
   },
@@ -606,9 +612,12 @@ export class OrderPolicyPage {
     );
   }
 
-  /** The lateness card shows this scalar as its default, so it re-reads when the scalar changes. */
+  /** The lateness card shows these two scalars as its defaults, so it re-reads when either changes. */
   private noteFieldChanged(code: string): void {
-    if (code === 'ordering.at_risk_before_minutes') {
+    if (
+      code === 'ordering.at_risk_before_minutes' ||
+      code === 'ordering.late_order_threshold_minutes'
+    ) {
       this.latenessReloadToken.update((token) => token + 1);
     }
   }

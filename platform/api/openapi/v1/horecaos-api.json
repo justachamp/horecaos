@@ -10970,6 +10970,9 @@
           "isPlatformDefault" : {
             "type" : "boolean"
           },
+          "noPromiseDefault" : {
+            "$ref" : "#/components/schemas/NoPromiseDefaultResponse"
+          },
           "pickup" : {
             "$ref" : "#/components/schemas/ModeResponse"
           },
@@ -15777,7 +15780,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "lateAfterSeconds", "noPromiseFallbackSeconds" ],
+        "required" : [ "lateAfterSeconds" ],
         "type" : "object"
       },
       "ModeResponse" : {
@@ -15787,6 +15790,10 @@
             "type" : "integer"
           },
           "effectiveAtRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "effectiveNoPromiseFallbackSeconds" : {
             "format" : "int32",
             "type" : "integer"
           },
@@ -16222,6 +16229,18 @@
           }
         },
         "required" : [ "brandId", "code", "components" ],
+        "type" : "object"
+      },
+      "NoPromiseDefaultResponse" : {
+        "properties" : {
+          "seconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "NoteRequest" : {
@@ -58898,7 +58917,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/order-lateness-policy" : {
       "get" : {
-        "description" : "Resolves ordering.lateness through the ADR 0030 chain (LOCATION, BRAND, TENANT, platform default) at TENANT, BRAND or LOCATION scope. Each fulfilment mode carries its own at-risk window -- null where it has none and takes atRiskDefault, the tenant's ordering.at_risk_before_minutes when one was set, the platform's five minutes otherwise -- plus effective, the number the boards actually use. currentVersionAtScope is the version to send back as expectedVersion: 0 when this exact scope has authored nothing and merely inherits.",
+        "description" : "Resolves ordering.lateness through the ADR 0030 chain (LOCATION, BRAND, TENANT, platform default) at TENANT, BRAND or LOCATION scope. Each fulfilment mode carries its own at-risk window -- null where it has none and takes atRiskDefault, the tenant's ordering.at_risk_before_minutes when one was set, the platform's five minutes otherwise -- plus effective, the number the boards actually use. The same holds for the no-promise fallback: null where the mode has none of its own, taking noPromiseDefault (the tenant's ordering.late_order_threshold_minutes when one was set, the platform's forty-five minutes otherwise; ADR 0150). currentVersionAtScope is the version to send back as expectedVersion: 0 when this exact scope has authored nothing and merely inherits.",
         "operationId" : "readLatenessPolicyEditor",
         "parameters" : [ {
           "in" : "path",
@@ -58949,7 +58968,7 @@
         "tags" : [ "Order lateness policy editor" ]
       },
       "post" : {
-        "description" : "Whole-document replace: ADR 0030 versions the document as one unit, so all three fulfilment modes are sent, an unset at-risk window as null. Never edits a version in force -- orders keep resolving the version they already did. expectedVersion must be the currentVersionAtScope a prior GET reported for this same scope (null or 0 when it had authored nothing), or the write is refused with STALE_VERSION naming both versions. At-risk and no-promise windows are whole minutes; every window is at most a day.",
+        "description" : "Whole-document replace: ADR 0030 versions the document as one unit, so all three fulfilment modes are sent, an unset at-risk window or no-promise fallback as null. Never edits a version in force -- orders keep resolving the version they already did. expectedVersion must be the currentVersionAtScope a prior GET reported for this same scope (null or 0 when it had authored nothing), or the write is refused with STALE_VERSION naming both versions. At-risk and no-promise windows are whole minutes; every window is at most a day.",
         "operationId" : "authorLatenessPolicy",
         "parameters" : [ {
           "in" : "path",

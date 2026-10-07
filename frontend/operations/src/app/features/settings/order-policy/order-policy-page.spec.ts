@@ -55,21 +55,25 @@ const LATENESS_DEFAULT: LatenessEditorView = {
     atRiskBeforeSeconds: null,
     effectiveAtRiskBeforeSeconds: 300,
     lateAfterSeconds: 0,
-    noPromiseFallbackSeconds: 2700,
+    noPromiseFallbackSeconds: null,
+    effectiveNoPromiseFallbackSeconds: 2700,
   },
   pickup: {
     atRiskBeforeSeconds: null,
     effectiveAtRiskBeforeSeconds: 300,
     lateAfterSeconds: 0,
-    noPromiseFallbackSeconds: 2700,
+    noPromiseFallbackSeconds: null,
+    effectiveNoPromiseFallbackSeconds: 2700,
   },
   dineIn: {
     atRiskBeforeSeconds: null,
     effectiveAtRiskBeforeSeconds: 300,
     lateAfterSeconds: 0,
-    noPromiseFallbackSeconds: 2700,
+    noPromiseFallbackSeconds: null,
+    effectiveNoPromiseFallbackSeconds: 2700,
   },
   atRiskDefault: { seconds: 300, source: 'PLATFORM_DEFAULT' },
+  noPromiseDefault: { seconds: 2700, source: 'PLATFORM_DEFAULT' },
   isPlatformDefault: true,
   winningScope: null,
   policyId: null,
@@ -365,29 +369,49 @@ describe('OrderPolicyPage', () => {
     );
   });
 
-  // "Order is late after" is stored and read by nothing: what it should mean is an owner decision.
-  // It stays editable, but the screen must not let a saved number look like it moved the line.
+  // ADR 0150: «An order with no promised time is late after» is the tenant-wide default for the no-promise
+  // fallback of the boundaries card; it is read now. The screen says which orders it governs and carries
+  // «Not applied yet» only on the two siblings no record has given a reader.
+  const AVERAGE_ROW = 1;
+  const MAXIMUM_ROW = 2;
   const LATE_THRESHOLD_ROW = 3;
 
-  it('says on the “Order is late after” scalar that it is not applied yet, and points at the boundaries card', () => {
+  it('words the late-order scalar for the orders it governs, and says it is read', () => {
     const row = rowAt(LATE_THRESHOLD_ROW);
 
-    expect(row.textContent).toContain('Order is late after (minutes)');
-    expect(row.textContent).toContain('Not applied yet');
-    expect(row.textContent).toContain('When an order counts as late');
+    expect(row.textContent).toContain('An order with no promised time is late after (minutes)');
+    expect(row.textContent).toContain('Only for orders with no promised time');
+    expect(row.textContent).toContain('does not touch it');
+    expect(row.textContent).not.toContain('Not applied yet');
   });
 
-  it('keeps that note in front of the operator while the scalar is being edited', () => {
+  it('keeps that wording in front of the operator while the scalar is being edited, still without the old note', () => {
     (rowAt(LATE_THRESHOLD_ROW).querySelector('.field__action') as HTMLButtonElement).click();
     fixture.detectChanges();
 
     expect(rowAt(LATE_THRESHOLD_ROW).querySelector('input')).not.toBeNull();
-    expect(rowAt(LATE_THRESHOLD_ROW).textContent).toContain('Not applied yet');
+    expect(rowAt(LATE_THRESHOLD_ROW).textContent).toContain(
+      'Only for orders with no promised time',
+    );
+    expect(rowAt(LATE_THRESHOLD_ROW).textContent).not.toContain('Not applied yet');
+  });
+
+  it('says «Not applied yet» on the average and maximum order time, which nothing reads, beside and while editing', () => {
+    expect(rowAt(AVERAGE_ROW).textContent).toContain('Average order time (minutes)');
+    expect(rowAt(AVERAGE_ROW).textContent).toContain('Not applied yet');
+    expect(rowAt(MAXIMUM_ROW).textContent).toContain('Maximum order time (minutes)');
+    expect(rowAt(MAXIMUM_ROW).textContent).toContain('Not applied yet');
+
+    (rowAt(AVERAGE_ROW).querySelector('.field__action') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(rowAt(AVERAGE_ROW).querySelector('input')).not.toBeNull();
+    expect(rowAt(AVERAGE_ROW).textContent).toContain('Not applied yet');
   });
 
   it('puts no such note on the scalars that are applied', () => {
     expect(rowAt(AT_RISK_ROW).textContent).not.toContain('Not applied yet');
     expect(rowAt(0).textContent).not.toContain('Not applied yet');
+    expect(rowAt(LATE_THRESHOLD_ROW).textContent).not.toContain('Not applied yet');
   });
 
   it('sets the at-risk threshold at the scope bar’s scope, sending the version it read as the concurrency check', async () => {
@@ -612,12 +636,30 @@ describe('OrderPolicyPage', () => {
     expect(latenessApi.get).toHaveBeenCalledTimes(1);
   });
 
-  it('does not re-read the lateness document for an unrelated field', async () => {
+  it('re-reads the lateness document when the late-order threshold it defaults to is saved (ADR 0150)', async () => {
     latenessApi.get.mockClear();
     (rowAt(3).querySelector('.field__action') as HTMLButtonElement).click(); // late threshold
     fixture.detectChanges();
     type('[id="field-ordering.late_order_threshold_minutes"]', '20');
-    type('[id="field-reason-ordering.late_order_threshold_minutes"]', 'unrelated');
+    type('[id="field-reason-ordering.late_order_threshold_minutes"]', 'aggregator orders sooner');
+    publishButton().click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_order_threshold_minutes',
+      expect.objectContaining({ integerValue: 20 }),
+    );
+    expect(latenessApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-read the lateness document for an unrelated field', async () => {
+    latenessApi.get.mockClear();
+    (rowAt(0).querySelector('.field__action') as HTMLButtonElement).click(); // business day start
+    fixture.detectChanges();
+    type('[id="field-ordering.business_day_start_hour"]', '5');
+    type('[id="field-reason-ordering.business_day_start_hour"]', 'unrelated');
     publishButton().click();
     await flushMicrotasks();
 

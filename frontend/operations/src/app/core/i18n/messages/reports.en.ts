@@ -125,7 +125,7 @@ export const reportsEn = {
   'reports.overview.tile.averageCheck': 'Average check',
   'reports.overview.tile.cancelled': 'Cancelled',
   'reports.overview.tile.cancelled.subtitle': 'share of terminal orders: {share}',
-  'reports.overview.tile.late': 'Late',
+  'reports.overview.tile.late': 'Late after the promise',
   'reports.overview.tile.late.subtitle': 'median {minutes}',
   'reports.overview.tile.distance': 'Delivery distance',
   'reports.overview.tile.deltaSuffix': 'vs. same period a week back',
@@ -179,13 +179,14 @@ export const reportsEn = {
   'reports.orders.tab.commercial': 'Orders',
   'reports.orders.tab.daily': 'Daily',
   'reports.orders.tab.summary': 'Summary',
-  'reports.orders.tab.late': 'Late',
+  'reports.orders.tab.late': 'Late after the promise',
   'reports.orders.boundedNote':
     'Showing the worst rows up to this view’s limit — not a complete list for a very wide range.',
   'reports.orders.commercial.piiNote':
     'Customer, operator and courier come from a separate, audited read (order.read) — reporting itself keeps no personal data at all (ADR 0029). The phone is masked; exporting this data is an audited PII egress.',
   'reports.orders.late.empty': 'No late orders in the selected period',
-  'reports.orders.late.summary': '{count} late orders · median {median} · worst {worst}',
+  'reports.orders.late.summary':
+    '{count} orders handed over after the promise · median {median} · worst {worst}',
 
   'reports.orders.column.orderId': 'Order',
   'reports.orders.column.date': 'Date',

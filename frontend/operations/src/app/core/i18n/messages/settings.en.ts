@@ -480,10 +480,15 @@ export const settingsEn = {
   'settings.orderPolicy.card5.title': 'Operator order entry',
   'settings.orderPolicy.field.businessDayStartHour': 'Business day starts at (hour)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
+  'settings.orderPolicy.averageOrderMinutes.hint':
+    'Not applied yet: nothing reads this number, so changing it changes nothing.',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
-  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Order is late after (minutes)',
+  'settings.orderPolicy.maximumOrderMinutes.hint':
+    'Not applied yet: nothing reads this number, so changing it changes nothing.',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes':
+    'An order with no promised time is late after (minutes)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
-    'Not applied yet: nothing reads this number, so changing it does not change when an order is marked late. When an order counts as late is set in “When an order counts as late” below.',
+    'Only for orders with no promised time (aggregator orders, for example): how many minutes after it was created an order counts as late. An order with a promised time is late by the boundaries below, and this number does not touch it. The default for any kind of order with no value of its own in the lateness boundaries below.',
   'settings.orderPolicy.field.atRiskBeforeMinutes': 'Warn before the promised time (minutes)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
     'How far ahead of the promised time an order shows as at risk. The default for any kind of order with no value of its own in the lateness boundaries below. Shown on the order board and the kitchen board.',
@@ -526,6 +531,10 @@ export const settingsEn = {
   'settings.latenessPolicy.field.atRisk': 'Warn before the promise (min)',
   'settings.latenessPolicy.field.lateAfter': 'Late after the promise (sec)',
   'settings.latenessPolicy.field.fallback': 'No promise: late after (min)',
+  'settings.latenessPolicy.blankFallbackMeansDefault':
+    'Leave “No promise: late after” empty to use the default: {minutes} min ({source}).',
+  'settings.latenessPolicy.fallbackDefault.scalar':
+    'the “An order with no promised time is late after” value above',
   'settings.latenessPolicy.blankMeansDefault':
     'Leave “Warn before the promise” empty to use the default: {minutes} min ({source}).',
   'settings.latenessPolicy.default.scalar': 'the “Warn before the promised time” value above',

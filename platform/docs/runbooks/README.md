@@ -38,6 +38,7 @@ That shapes them more than any style guide would.
 | [control-band-response.md](control-band-response.md) | A control band breached and an agent wrote an `intent.md` to triage |
 | [staff-member-backfill.md](staff-member-backfill.md) | The tenant's own staff record against Keycloak: how many active staff have no row, what the reconciler says, the drift gauge, and when the retention sweeper may enforce (ADR 0139) |
 | [catalog-offering-listing-backfill.md](catalog-offering-listing-backfill.md) | A pre-existing tenant's offerings were set `AVAILABLE` before the auto-listing fix and still read as unsellable |
+| [late-order-threshold-stored-values.md](late-order-threshold-stored-values.md) | Before the ADR 0150 release: which tenants saved a «late after» number while it did nothing, what it will now do to their unpromised orders, and how to tell them |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

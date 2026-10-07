@@ -19,6 +19,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyService.AtRiskDefault;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyService.Authored;
+import uz.horecaos.platform.ordering.application.OrderLatenessPolicyService.NoPromiseDefault;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument.ModeThresholds;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
@@ -38,9 +39,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>Before this, the document existed, every board read it, and nothing could write it -- a
  * tenant could move the at-risk edge and the colour (batch 15's two scalars) but not the line
  * where late itself begins. The scalar {@code ordering.late_order_threshold_minutes} (card 2's
- * "order is late after") is deliberately <em>not</em> read here or anywhere: what it means -- a
- * grace past the promise, or a limit from acceptance -- is an owner decision this row does not
- * make, so the document's own {@code lateAfterSeconds} is the only late line the boards draw.
+ * «Заказ без обещанного времени опаздывает через») is the tenant-wide default for the document's
+ * no-promise fallback (ADR 0150), exactly as {@code ordering.at_risk_before_minutes} is for the
+ * at-risk window: a mode's own value wins, a blank takes the scalar when one was set anywhere in
+ * the chain, and the platform's forty-five minutes otherwise. It is not a second late line, and
+ * acceptance never starts or shortens a lateness clock -- the document's own {@code
+ * lateAfterSeconds} is the only late line the boards draw for an order with a promise.
  *
  * <p><strong>Versioned as one unit, checked as one unit.</strong> The document is replaced whole
  * (ADR 0030: a policy is a document, not a merge of fields), so a form built from a stale read
@@ -161,6 +165,7 @@ public class OrderLatenessPolicyAuthoringService {
             @Nullable ScopeType winningScope,
             int versionAtScope) {
         AtRiskDefault atRiskDefault = reads.atRiskDefaultAt(scope);
+        NoPromiseDefault noPromiseDefault = reads.noPromiseDefaultAt(scope);
         List<Level> levels = new ArrayList<>();
         for (ResourceScope level : scope.chain()) {
             boolean authored = level.type() == scope.type()
@@ -176,8 +181,9 @@ public class OrderLatenessPolicyAuthoringService {
         }
         return new Editor(
                 document,
-                document.effective(atRiskDefault.seconds()),
+                document.effective(atRiskDefault.seconds(), noPromiseDefault.seconds()),
                 atRiskDefault,
+                noPromiseDefault,
                 policyId == null,
                 winningScope,
                 policyId,
@@ -220,6 +226,9 @@ public class OrderLatenessPolicyAuthoringService {
      * @param effective      what the boards actually evaluate, defaults filled in
      * @param atRiskDefault  the window a mode with none of its own gets, and whether that is the
      *                       tenant's scalar or the platform's five minutes
+     * @param noPromiseDefault the no-promise fallback a mode with none of its own gets, and whether that
+     *                       is the tenant's {@code ordering.late_order_threshold_minutes} or the
+     *                       platform's forty-five minutes (ADR 0150)
      * @param policyId       the document in force, null when the platform default applied
      * @param winningScope   the scope that supplied it, null for the platform default
      * @param versionAtScope the latest version authored at exactly the requested scope (0 when the
@@ -230,6 +239,7 @@ public class OrderLatenessPolicyAuthoringService {
             OrderLatenessDocument document,
             OrderLatenessPolicy effective,
             AtRiskDefault atRiskDefault,
+            NoPromiseDefault noPromiseDefault,
             boolean isPlatformDefault,
             @Nullable ScopeType winningScope,
             @Nullable UUID policyId,

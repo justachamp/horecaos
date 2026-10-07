@@ -426,7 +426,7 @@ public final class ConfigurationKeys {
             .defaultValue(45)
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
+            .describedAs("Minutes from creation after which an order with no promised time counts as late.")
             .build();
 
     public static final ConfigurationKey<Integer> ORDERING_AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(

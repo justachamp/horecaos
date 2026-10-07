@@ -479,10 +479,15 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.card5.title': 'Оформление заказа оператором',
   'settings.orderPolicy.field.businessDayStartHour': 'Начало торгового дня (час)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
+  'settings.orderPolicy.averageOrderMinutes.hint':
+    'Пока не применяется: это значение нигде не используется, поэтому его изменение ничего не меняет.',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
-  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Заказ опаздывает с (минуты)',
+  'settings.orderPolicy.maximumOrderMinutes.hint':
+    'Пока не применяется: это значение нигде не используется, поэтому его изменение ничего не меняет.',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes':
+    'Заказ без обещанного времени опаздывает через (минуты)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
-    'Пока не применяется: это значение нигде не используется, поэтому его изменение не влияет на то, когда заказ считается опаздывающим. Когда заказ считается опаздывающим, задаётся в блоке «Когда заказ считается опаздывающим» ниже.',
+    'Только для заказов без обещанного времени (например, от агрегаторов): через сколько минут после создания заказ считается опаздывающим. Заказ с обещанным временем опаздывает по границам ниже, и это число на него не влияет. Значение по умолчанию для типа заказа, у которого нет своего значения в границах опоздания ниже.',
   'settings.orderPolicy.field.atRiskBeforeMinutes': 'Предупреждать до обещанного времени (минуты)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
     'За сколько минут до обещанного времени заказ помечается как «под риском». Значение по умолчанию для типа заказа, у которого нет своего значения в границах опоздания ниже. Действует на доске заказов и на кухонной доске.',
@@ -525,6 +530,10 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.latenessPolicy.field.atRisk': 'Предупреждать до обещанного времени (мин)',
   'settings.latenessPolicy.field.lateAfter': 'Опоздание после обещанного времени (сек)',
   'settings.latenessPolicy.field.fallback': 'Без обещания: опоздание через (мин)',
+  'settings.latenessPolicy.blankFallbackMeansDefault':
+    'Оставьте поле «Без обещания: опоздание через» пустым, чтобы взять значение по умолчанию: {minutes} мин ({source}).',
+  'settings.latenessPolicy.fallbackDefault.scalar':
+    'значение «Заказ без обещанного времени опаздывает через» выше',
   'settings.latenessPolicy.blankMeansDefault':
     'Оставьте поле «Предупреждать до обещанного времени» пустым, чтобы взять значение по умолчанию: {minutes} мин ({source}).',
   'settings.latenessPolicy.default.scalar': 'значение «Предупреждать до обещанного времени» выше',
