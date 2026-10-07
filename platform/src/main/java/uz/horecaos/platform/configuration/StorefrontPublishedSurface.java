@@ -42,6 +42,8 @@ final class StorefrontPublishedSurface {
     static final Set<String> PUBLISHED = Set.of(
             // Who and where: resolving a storefront's tenant from its hostname, and the tenant's own presentation.
             ROOT + "/channel-hostnames/{hostname}",
+            // The languages the platform offers, from the registry (ADR 0149): a vendor's language picker.
+            ROOT + "/locales",
             TENANT + "/channels/{channel}/pages/{slug}",
             TENANT + "/channels/{channel}/presentation",
             BRAND + "/analytics",
@@ -84,6 +86,8 @@ final class StorefrontPublishedSurface {
             ME + "/erasure-request/cancel",
             ME + "/favourites",
             ME + "/favourites/{productId}",
+            // Asking the restaurant to ring back (ADR 0111): a lead, not an order.
+            ME + "/callback-requests",
             // Orders, paying for them, and what follows.
             BRAND + "/orders",
             ORDER,
@@ -96,7 +100,10 @@ final class StorefrontPublishedSurface {
             ROOT + "/loyalty/tenants/{tenantId}/accounts/{accountId}",
             ROOT + "/loyalty/tenants/{tenantId}/accounts/{accountId}/entries",
             BRAND + "/referrals/me",
-            BRAND + "/referrals/redemptions");
+            BRAND + "/referrals/redemptions",
+            // The banners the restaurant chose to show this guest, and the guest's own dismissal (ADR 0112).
+            BRAND + "/presented-offers",
+            BRAND + "/presented-offers/{presentedOfferId}/dismissals");
 
     private StorefrontPublishedSurface() {}
 

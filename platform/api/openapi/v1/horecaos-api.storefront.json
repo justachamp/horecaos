@@ -2910,7 +2910,7 @@
         },
         "summary" : "The platform's languages (storefront)",
         "tags" : [ "Locales" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}" : {
@@ -4658,7 +4658,7 @@
         },
         "summary" : "Ask the restaurant to call me back",
         "tags" : [ "Customer self-service" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request" : {
@@ -5257,7 +5257,7 @@
         },
         "summary" : "The banners to show this customer now",
         "tags" : [ "Presented offers" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals" : {
@@ -5295,7 +5295,7 @@
         },
         "summary" : "The customer closed a banner; it is not shown again",
         "tags" : [ "Presented offers" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
