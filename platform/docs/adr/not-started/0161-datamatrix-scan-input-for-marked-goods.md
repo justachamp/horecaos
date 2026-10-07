@@ -28,8 +28,8 @@
   exists yet (marking is not built)", `OrderStateService` holds `FULFILLING` and
   `COMPLETED` behind `CATCHWEIGHT_NOT_RECONCILED` and behind nothing about marks,
   `ordering.order_lines` carries no marking fact, and `AmendmentCommandType`
-  refuses `REMOVE_LINES`. One live hazard follows from the gaps: a tenant can
-  already set `marking_required` on a variant through
+  refuses `REMOVE_LINES`. One live hazard follows from the gaps: a tenant
+  administrator can already set `marking_required` on a variant through
   `PUT .../variants/{id}/fiscal-classification` and sell it, with no capture, to a
   customer paying through Payme. No tenant sells a marked SKU today (V0028 says
   so), which is the only reason it has not mattered.
@@ -175,10 +175,14 @@ beside it. Its initial bundle is a budget, cut from 832 kB to 434 kB in batch 18
 so a vendor decoder in the initial chunk is not available. A kitchen display
 (`/device`, `PlatformRole.KITCHEN_DEVICE`) holds a device token with a deliberately
 narrow grant and is not where a unit is scanned. The staff Flutter app of ADR
-0060 is not built, and ADR 0055 holds Flutter out of the launch scope. Inventory (ADR 0017) is an availability counter: `BINARY` and
-`UNTRACKED` are built, `QUANTITY` throws `UnsupportedTrackingModeException`, there
-is no goods receipt and no per-unit stock, and the IA excludes ingredient-level
-stock, costing and waste.
+0060 is not built, and ADR 0055 holds Flutter out of the launch scope. Inventory
+(ADR 0017) is a count and an availability switch, not a ledger of units:
+`BINARY`, `UNTRACKED` and, where `catalog.use_stock_logic` is on, `QUANTITY`, a
+number per stock item that an operator sets with
+`PUT .../variants/{variantId}/on-hand`, where "a physical recount, a delivery
+received, breakage found" is one `CORRECTION` movement with a reason. There is
+no goods-receipt document, no unit identity and no per-unit stock, and the IA
+excludes ingredient-level stock, costing and waste.
 
 ## Decision
 
@@ -221,9 +225,9 @@ that projection exist.**
    `CatchweightReconciliationService` already treats as weighable, and
    `FULFILLING` and later are refused for the same reason that service gives). A
    counter pickup, a table delivery and a courier collecting at the branch all
-   pass through the same screen. **Inventory is not a scan point in v1**: there is
-   no goods receipt, no per-unit stock and no `QUANTITY` mode for a scan to
-   write to. The courier's own app, the kitchen display and both storefronts
+   pass through the same screen. **Inventory is not a scan point in v1**: a
+   delivery is a counted adjustment of a number, so a scan has no unit to attach
+   to. The courier's own app, the kitchen display and both storefronts
    never scan.
 
 4. **The scan input is one shared component that never keeps what it reads.**
@@ -258,8 +262,9 @@ that projection exist.**
    builds one `FiscalReceiptLine` per marked order line with `quantity = N` and
    `markingCodes` in sequence order, decrypting once per document under one
    audited purpose. A marked order **never takes the synthetic line**:
-   `PartnerFiscalizationBridge` opens the document `BLOCKED` with
-   `CLASSIFICATION_MISSING` rather than submit an aggregate that drops the codes.
+   `PartnerFiscalizationBridge` refuses to build it for an order with a marked
+   line, and the document is `BLOCKED` with `CLASSIFICATION_MISSING` rather than
+   submitted without its codes.
    `FiscalReasonCode.MARKS_INCOMPLETE` gets its first producer, as defence in
    depth for an order that completed through a path the guard did not see.
 
@@ -312,7 +317,7 @@ that projection exist.**
 | Bundle a JavaScript or WebAssembly decoder for camera scanning as the primary path | Spends the initial-bundle budget batch 18 just won back, adds a supply-chain dependency the platform must keep patched, and a pass has a scanner on the counter anyway | The pilot's devices lack `BarcodeDetector` support for `data_matrix` and the tenant will not buy imagers; the decoder is then lazy-loaded behind the same component |
 | Verify every code online with the state system before accepting it | The repository holds no retailer API to build against; it needs a new provider category ADR 0026 declined for fiscal reasons; and it makes handover depend on a third party's availability | The operator publishes a retailer API, counsel confirms HorecaOS may call it for a tenant, and a tenant asks |
 | Allow a hand-keyed code as the fallback for a damaged symbol | The printed text omits the cryptographic tail, so the keyed code is not the code; a fallback that cannot be right invites a plausible wrong one | The state system documents a manual procedure |
-| Scan at inventory receiving and stock count in v1 | No goods receipt, no per-unit stock, no `QUANTITY` mode: a scan would have no row to write to | ADR 0017's `QUANTITY` mode and a receiving flow exist and a tenant must confirm receipt of marked goods in the state system |
+| Scan at inventory receiving and stock count in v1 | A delivery is `PUT .../on-hand`, a number with a reason; there is no receipt document and no unit identity, so a scan would have no row to write to | A receiving document with per-unit identity is added to ADR 0017's ledger and a tenant must confirm receipt of marked goods in the state system |
 | The courier scans at pickup, in a native app | The staff Flutter app of ADR 0060 is not built and ADR 0055 holds Flutter out of the launch scope; a courier outside the branch also cannot fix a damaged symbol | ADR 0060's app is built; it then calls the same endpoints under the same capability |
 | A supervisor bypass for `MARKS_INCOMPLETE`, as a damaged-code escape | It is the breach, with a button; catchweight has none either | Counsel states a lawful exception and its evidence |
 | Store only a hash of each code | A receipt has to carry the code, and a hash cannot be sent to Click | Never |
@@ -372,13 +377,13 @@ that projection exist.**
 ### Physical model
 
 One Flyway migration at the next free number after `V0489` (the gap map's PART C
-allocates numbers so parallel waves cannot collide); no earlier migration is
-edited. Every row carries `tenant_id`, every foreign key is composite on
+allocates numbers so parallel waves cannot collide, and every active worktree's
+`db/migration/` is checked before one is named); no earlier migration is edited. Every row carries `tenant_id`, every foreign key is composite on
 `(.., tenant_id)`, and the table gets the ADR 0056 row-level-security policy.
 
 ```sql
 CREATE TABLE ordering.order_line_marks (
-    id                  uuid PRIMARY KEY,            -- time-ordered, ADR 0076
+    id                  uuid PRIMARY KEY,            -- Ids.newId(), time-ordered, ADR 0076
     tenant_id           uuid NOT NULL,
     order_id            uuid NOT NULL,
     order_line_id       uuid NOT NULL,
@@ -453,7 +458,7 @@ required on every mutation, the code only ever in a request body.
 |---|---|---|
 | `POST .../orders/{orderId}/lines/{lineId}/marks` body `{ code, entryMethod }` | `order.advance`, `LOCATION`, mutating | Takes `FOR UPDATE` on the order row, the row `advance` locks, so a scan and a status change serialise. Replaying the same `Idempotency-Key` returns the first answer. A new key with a code already live on this line answers `MARKING_CODE_ALREADY_CAPTURED` with `onThisLine = true` so the panel says "already scanned" rather than "duplicate". 201 returns `{ markId, sequence, gtin, captured, required, orderMarksComplete, gtinChecked }` |
 | `POST .../orders/{orderId}/lines/{lineId}/marks/{markId}/removals` body `{ reasonCode }` | `order.advance`, `LOCATION`, mutating | Releases, never deletes. Refused once the order is `FULFILLING` or later. Reason codes are a code-owned list; no free text, because free text is where a customer's name arrives |
-| `GET .../orders/{orderId}/marks` | the order-read capability the board already uses | Per marked line: `required`, `captured`, and the marks as `{ markId, sequence, gtin, stage, capturedAt, capturedBy }`. Never a code |
+| `GET .../orders/{orderId}/marks` | `order.read`, `LOCATION` | Per marked line: `required`, `captured`, and the marks as `{ markId, sequence, gtin, stage, capturedAt, capturedBy }`. Never a code |
 
 Refusals, all 409 unless stated: `FEATURE_DISABLED` (404-shaped to a tenant that
 does not have it), `MARKING_CODE_MALFORMED` (400), `MARKING_CODE_WRONG_PRODUCT`,
