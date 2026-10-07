@@ -410,6 +410,43 @@ class ModulesStatementsAndArrearsTests {
     }
 
     @Test
+    void anInvoiceStandingAtAnOperatorKeepsItsStatementFromBeingVoidedUntilTheOperatorReleasesIt() {
+        // ADR 0096: the invoice is cancelled at the operator, by its own signers; the statement is
+        // voided only after the operator says it is cancelled or refused.
+        startOnBasicPlan();
+        clock.set(SEPTEMBER);
+        StatementService.IssuedRef issued = statements.issue(PILOT, "2026-08", AUTHOR, "August close", "corr");
+        jdbc.sql("""
+                INSERT INTO commercial.statement_einvoices (
+                    id, tenant_id, statement_id, installation_id, provider_type, legal_entity_id, buyer_tin,
+                    buyer_name, seller_tin, document_number, document_date, currency, net_minor, vat_minor,
+                    total_minor, classification_provisional, sent_document, delivery, operator_document_id,
+                    operator_state, send_reason, sent_by, created_at, updated_at, version)
+                VALUES (:id, :tenant, :statement, '018f9c10-5000-7000-8000-0000000000d1', 'DIDOX', :company,
+                    '301234567', 'Non uyi', '305000001', 'S-2026-08', '2026-09-11', 'UZS', 100, 12, 112, true,
+                    '{}'::jsonb, 'SUBMITTED', 'DOC-1', 'SENT', 'r', 'finance.staff', now(), now(), 0)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", PILOT)
+                .param("statement", issued.statementId())
+                .param("company", UUID.randomUUID())
+                .update();
+
+        assertThatThrownBy(() -> statements.voidStatement(PILOT, issued.statementId(), AUTHOR, "wrong plan", "corr"))
+                .isInstanceOfSatisfying(ApiException.class, refused -> {
+                    assertThat(refused.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+                    assertThat(refused.properties()).containsEntry("reason", "EINVOICE_LIVE");
+                });
+        assertThat(statements.find(PILOT, issued.statementId()).status()).isEqualTo(Statement.ISSUED);
+
+        jdbc.sql("UPDATE commercial.statement_einvoices SET operator_state = 'CANCELLED', version = version + 1")
+                .update();
+        statements.voidStatement(PILOT, issued.statementId(), AUTHOR, "wrong plan", "corr");
+
+        assertThat(statements.find(PILOT, issued.statementId()).status()).isEqualTo(Statement.VOID);
+    }
+
+    @Test
     void aMonthWithNothingToBillIsNotIssued() {
         clock.set(SEPTEMBER);
 
