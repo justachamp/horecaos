@@ -50,12 +50,18 @@ assertions against the real adapter's sandbox before activating it.
    {"expectedVersion": 0, "reason": "merchant account approved"}
    ```
 
-   Check: the response says `ACTIVE`, and a tenant that opens Subscription & billing now sees
-   card payments as available (`cardPaymentsAvailable: true`).
+   Check: the response says `ACTIVE`, and a tenant that opens Finance → Wallet now sees card
+   payments as available (`cardPaymentsAvailable: true`): "Add a card" and "Top up by card" stop
+   saying the account is not connected.
 5. **Walk one real card through.** With a test tenant: add a card, top up a small amount,
    check the ledger holds one `TOP_UP` whose reference is the provider's own, and that the
    provider's dashboard shows exactly one charge. Then choose CARD and issue its statement.
 6. **To stop charging**, suspend the installation (`.../{id}/suspension`). Cards stay on file.
+
+Steps 2, 4 and 6 are also on the control plane's Billing setup screen (Commerce → Billing
+setup): "Declare an account", then Activate or Suspend with a reason. The screen sends the
+`version` it read, never shows the secret reference (only whether one is named), and says in
+words that with no account active every card tenant is collected like an invoice tenant.
 
 ## Replacing an account
 

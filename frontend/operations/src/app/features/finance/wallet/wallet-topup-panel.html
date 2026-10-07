@@ -68,6 +68,10 @@
         <dt class="q-caption">{{ 'finance.wallet.details.taxId' | t }}</dt>
         <dd class="q-body-sm q-mono">{{ details.taxId }}</dd>
       </dl>
+    } @else {
+      <p class="q-caption muted" data-testid="wallet-bank-details-unread">
+        {{ 'finance.wallet.transfer.detailsUnread' | t }}
+      </p>
     }
   } @else {
     <div class="band band--warn" data-testid="wallet-bank-not-available">

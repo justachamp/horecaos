@@ -561,6 +561,8 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'Запросите счёт на нужную сумму, оплатите его из банка и укажите номер счёта в назначении платежа. Финансовая служба HorecaOS зачисляет деньги в кошелёк, когда они поступят, а не раньше.',
   'finance.wallet.transfer.notAvailable':
     'HorecaOS ещё не опубликовал реквизиты, поэтому выставить счёт нельзя. Чтобы заплатить заранее, свяжитесь с HorecaOS.',
+  'finance.wallet.transfer.detailsUnread':
+    'Сейчас не удалось прочитать банковские реквизиты. Они указаны в каждом запрошенном счёте.',
   'finance.wallet.transfer.submit': 'Запросить счёт',
   'finance.wallet.transfer.issued':
     'Счёт {number} на {amount} выставлен. Укажите {number} в назначении платежа. Кошелёк пополнится, когда деньги поступят.',

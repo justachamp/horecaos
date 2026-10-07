@@ -134,6 +134,22 @@ describe('WalletPage', () => {
     expect(q('wallet-bank-details')?.textContent).toContain('Example Bank');
   });
 
+  it('says the details could not be read, and still lets the tenant ask for an invoice that carries them', async () => {
+    api.paymentDetails.mockRejectedValue(
+      new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, 'corr-8'),
+    );
+    await open();
+    expect(q('wallet-bank-details')).toBeNull();
+    expect(q('wallet-bank-details-unread')?.textContent).toContain(
+      'Every invoice you ask for carries them',
+    );
+    expect(q('wallet-bank-not-connected-banner')).toBeNull();
+    (q('wallet-invoice-amount') as HTMLInputElement).value = '500000';
+    (q('wallet-invoice-amount') as HTMLInputElement).dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect((q('wallet-invoice-submit') as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('does not show details the server still marks as the placeholder', async () => {
     api.paymentDetails.mockResolvedValue({
       ...PAYMENT_DETAILS,

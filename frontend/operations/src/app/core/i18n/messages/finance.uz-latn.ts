@@ -564,6 +564,8 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
     'Kerakli summaga hisob-faktura soʻrang, uni bankdan toʻlang va toʻlov maqsadiga hisob-faktura raqamini yozing. HorecaOS moliya xizmati hamyonni pul kelgach toʻldiradi, oldin emas.',
   'finance.wallet.transfer.notAvailable':
     'HorecaOS bank rekvizitlarini hali eʻlon qilmagan, shuning uchun hisob-faktura chiqarib boʻlmaydi. Oldindan toʻlash uchun HorecaOS bilan bogʻlaning.',
+  'finance.wallet.transfer.detailsUnread':
+    'Bank rekvizitlarini hozir oʻqib boʻlmadi. Ular siz soʻragan har bir hisob-fakturada koʻrsatilgan.',
   'finance.wallet.transfer.submit': 'Hisob-faktura soʻrash',
   'finance.wallet.transfer.issued':
     '{amount} miqdoridagi {number} hisob-fakturasi chiqarildi. Toʻlov maqsadiga {number} ni yozing. Pul kelgach hamyon toʻldiriladi.',

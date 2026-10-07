@@ -558,6 +558,8 @@ export const financeEn = {
     'Ask for an invoice for the amount, pay it from your bank, and write the invoice number in the payment’s purpose. HorecaOS finance credits the wallet when the money arrives, not before.',
   'finance.wallet.transfer.notAvailable':
     'HorecaOS has not published its bank details yet, so an invoice cannot be issued. Contact HorecaOS to pay in advance.',
+  'finance.wallet.transfer.detailsUnread':
+    'The bank details could not be read just now. Every invoice you ask for carries them.',
   'finance.wallet.transfer.submit': 'Ask for an invoice',
   'finance.wallet.transfer.issued':
     'Invoice {number} for {amount} was issued. Write {number} in the payment’s purpose. The wallet is credited when the money arrives.',

@@ -634,6 +634,13 @@ them. Rolling back leaves the ledger in place and unread.
 - [x] A payment that clears a past-due tenant is said so (activity log and
       dunning board) and moves nothing: ADR 0089 (wave 19)
 - [x] The tenant sees the credit about to lapse (`lapsingGrants`)
+- [x] The merchant's own wallet screen: both balances, the credit about to lapse, top-up by card or by
+      invoice, the card put on file through the provider's form, how the remainder is collected, the
+      invoices and what each statement has been paid (operations, Finance → Wallet; wave 19 step 2)
+- [x] The arrears banner says what is owed and which ways of paying exist, and links to the wallet
+- [x] The control plane shows a tenant's prepayment invoices and card top-ups, takes a transfer against
+      the invoice it pays, proposes the bank details for a second person's approval and manages the card
+      merchant account (Invoices & wallet, Billing setup)
 - [ ] A real card provider adapter and the activated installation behind it
       (waits for the merchant account; finance, operations)
 
@@ -702,3 +709,35 @@ the choices that follow from decisions already made rather than from a new one.
   valid 14 days with at most 10 open at once; a declined card is retried after 24 hours and given up on
   after 3 declines since it last worked; an unanswered top-up is resolved after 2 minutes; the credit-expiry
   warning looks 14 days ahead. None is in a record; each is the least surprising value.
+
+### 2026-10-07 — wave 19, step 2: the console
+
+The Decision above is unchanged. This note records the screens, and what they deliberately do not do.
+
+- **Operations, Finance → Wallet** (`frontend/operations/src/app/features/finance/wallet/`): a tab beside
+  Subscription, because the subscription page is what the plan and its modules cost and this is what has
+  been paid and how to pay more. It shows the paid and the spendable bonus balance (the ledger sum beside
+  it only while the two differ), the credit about to lapse, what is owed, and the card top-up and the
+  invoice request. The Subscription tab carries the wallet at a glance and the same lapsing warning, and
+  its arrears banner now says what is owed and which ways of paying exist.
+- **Not connected is said, not hidden.** `cardPaymentsAvailable` and `bankTransferAvailable` come from the
+  server; while either is false the matching entry points are disabled with the reason beside them, and
+  nothing is offered that would only be refused. The day an account or bank details exist the screen needs
+  no change. No provider is named on the screen: the IA names Click and Atmos and this record Click or
+  Payme, and which one the owner connects is not decided.
+- **The card number never reaches the console.** "Add a card" opens a session; the cardholder types the
+  card into the provider's own form, and the console forwards two things only: what that form hands back
+  and the code the bank texts. Today those are typed in, because no real adapter exists to say how a form
+  hands a token to a browser (a page message, a redirect); wiring that handoff belongs with the adapter.
+  The built-in test provider says so on the screen and names its test values.
+- **A retry never charges twice.** A top-up, an invoice request and a card confirmation hold their
+  `Idempotency-Key` until the server has answered; the same click after a lost answer replays.
+- **Choosing CARD is a consent**, worded as one, and asked for before anything is sent (decision 3).
+- **Paying is a signal, not a switch** (ADR 0089): the arrears banner never offers to restore the
+  subscription, and the control plane's dunning board shows `paidInFull` as a cue beside the stage's own
+  moves.
+- **The control plane** lists invoices and card top-ups on Invoices & wallet and takes a transfer against
+  the invoice it pays. HorecaOS's own bank details and card merchant account are not per tenant, so they
+  have a screen of their own (Billing setup); a proposal of bank details stays filled after it is made
+  so that the identical second submission, after a different person approves it, is one click. Staff no
+  longer type a card token: the tenant puts its own card on file.
