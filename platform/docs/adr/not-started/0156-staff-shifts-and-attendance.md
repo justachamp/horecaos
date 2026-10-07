@@ -29,18 +29,27 @@
 - Date decided: —
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0033,
-  ADR 0042, ADR 0043, ADR 0056, ADR 0057, ADR 0079, ADR 0139
+  ADR 0042, ADR 0043, ADR 0050, ADR 0056, ADR 0057, ADR 0079, ADR 0131, ADR 0139
 - Supersedes / Superseded by: — (amends no record and edits none. It fills the hole
   ADR 0139 names in "What this record deliberately does not decide: staff rosters
   and attendance", and it closes ADR 0139's open input "whether terminals and PINs
   (row `X.3`) and staff rosters (row `X.2`) stay separate records or are folded in"
-  for rosters on its proposed default, separate. It reopens, for staff who are
-  employees and for nobody else, two rejected rows of ADR 0042: "Manager-controlled
-  shift state" and "Pay hours from the roster a manager authored". Both were
-  rejected because a courier is self-employed and a manager who directs the hours
-  of a self-employed person reclassifies the engagement; neither reason applies to a
-  person the tenant employs. For couriers both stay rejected, and ADR 0042's
-  trigger for them, an `EMPLOYEE` engagement type, has not fired)
+  for rosters on its proposed default, separate. It reopens exactly one rejected row
+  of ADR 0042, "Manager-controlled shift state", and only for staff who are
+  employees. That row gave two grounds: directing when a self-employed person works
+  reclassifies the engagement, and "a manager who can create shift state can create
+  paid hours for someone who was at home". The first ground does not apply to a person
+  the tenant employs. The second still does, and this record does not pretend
+  otherwise: it answers it with controls and not with a ban, namely the closed-list
+  reason code on every manager-authored or past-dated entry, the ADR 0027 audit fact
+  carrying the old and new times, the `workforce.shift.retroactive_edit_days` window,
+  and approval by `staff.shift.approve` of any variance over the threshold. The row's
+  stated trigger, an `EMPLOYEE` engagement type, has not fired for couriers, so for
+  couriers the row stays rejected and `fulfillment.courier_shifts` is untouched. "Pay
+  hours from the roster a manager authored" is not reopened but reaffirmed: its
+  trigger in ADR 0042 is "Never for pay", and the Alternatives row "Pay from the
+  roster (planned hours)" below rejects it again. Here, paid hours come from the
+  shift, the fact, and never from the roster)
 - Open inputs: each is closed on its proposed default if the owner accepts the
   record as written; the ones that name a person other than the owner stay with that
   person and the work they block is marked.
@@ -72,7 +81,17 @@
     `LOCATION_MANAGER`, with `TENANT_FINANCE` added to read; `staff.shift.export` for
     `TENANT_OWNER`, `TENANT_ADMIN` and `TENANT_FINANCE`; `staff.shift.clock` for
     `LOCATION_MANAGER` and `LOCATION_STAFF`. ADR 0103 (who manages grants) is not
-    decided here.
+    decided here. One consequence is named so the owner accepts it knowingly:
+    `staff.shift.export` makes `TENANT_FINANCE` a reader of staff names and employee
+    numbers, which no finance job can read today. ADR 0139 puts the employee number
+    behind `staff.profile.manage`, and `TENANT_FINANCE` holds neither
+    `staff.profile.read` nor `staff.profile.manage` (`TENANT_ADMIN` holds both). The
+    identity group reaches finance only inside an audited export file and never through
+    a profile route; the customer PII group is the contrast, since `customer.pii.export`
+    is held by `TENANT_OWNER` alone. Accepting the record as written accepts that
+    finance receives the identity group. If the owner declines, `staff.shift.export`
+    stays with `TENANT_OWNER` and `TENANT_ADMIN`, and finance receives the file keyed
+    by `S-0142` references, which a manager translates.
   - **The variance threshold, the retroactive-edit window and the maximum open
     shift** (finance, operations). Proposed default: 30 minutes (the spec's own
     number), 7 days and 14 hours, all ADR 0030 keys a tenant changes without a
@@ -93,6 +112,13 @@
   - **The payroll file** (finance). Proposed default: a CSV from ADR 0043's export
     machinery with the columns in Specification and no vendor-specific layout, to be
     revised when a tenant names the system that receives it.
+  - **The payroll export's row ceiling** (engineering, finance). The export centre's
+    quotas (5,000 rows, 2,000 with a PII group; ADR 0131) fit a customer list and not
+    one row per shift: a tenant of 100 people working 22 shifts a month writes about
+    2,200 rows a month. Proposed default: `STAFF_ATTENDANCE` declares a platform-fixed
+    ceiling of 20,000 rows, with or without its identity group (about nine months of
+    that tenant in one file), and a range over it is refused with the count and never
+    truncated. A tenant-settable ceiling is not built. Blocks: nothing in the build.
 
 **To accept as written:** say "accept 0156". Every open input above is then closed on
 its proposed default.
@@ -191,11 +217,12 @@ ADR 0043 facts and a code-owned export, not pay.**
 
 2. **A new module `workforce` owns the schema `workforce`.** Two tables:
    `workforce.staff_roster_entries` and `workforce.staff_shifts`. `iam` stays the
-   identity and authorization module and gains nothing but the capabilities. The
-   module depends on `iam.api.staff` (`StaffDirectory` for names, only in the export
-   adapter) and on `tenancy.api` (locations), declares the ports it needs from
-   others, and is consumed by `reporting` through a port, the way `pricing` is
-   consumed for promotion redemptions.
+   identity and authorization module and gains nothing but the capabilities and one
+   read port, `StaffPayrollIdentity`. The module depends on `iam.api.staff`
+   (`StaffPayrollIdentity` for names and employee numbers, only in the export adapter)
+   and on `tenancy.api` (locations), declares the ports it needs from others, and is
+   consumed by `reporting` through a port, the way `pricing` is consumed for promotion
+   redemptions.
 
 3. **The roster is a rota, not an offer.** An entry runs `DRAFT → PUBLISHED →
    CONSUMED | MISSED | CANCELLED` (and `DRAFT → CANCELLED`). There is no `ACCEPTED`
@@ -254,10 +281,10 @@ ADR 0043 facts and a code-owned export, not pay.**
 9. **Nothing is closed with invented hours.** A shift left open longer than
    `workforce.shift.max_open_hours` (default 14) is flagged on the manager's screen
    as «Смена не закрыта» and is never closed by a job. An export whose range holds
-   such a shift, or one still `AWAITING_APPROVAL`, refuses with a new stable
-   `ErrorCode`, `ATTENDANCE_UNRESOLVED_SHIFTS`, and a count, unless the caller asks to
-   include unresolved shifts, in which case they appear with their status and null paid
-   seconds.
+   such a shift, or one still `AWAITING_APPROVAL`, refuses before the request is queued
+   (Specification, Facts) with a new stable `ErrorCode`, `ATTENDANCE_UNRESOLVED_SHIFTS`,
+   and a count, unless the caller asks to include unresolved shifts, in which case they
+   appear with their status and null paid seconds.
 
 10. **Payroll receives hours, not pay.** The day close builds
     `reporting.fact_staff_shift` from a `workforce` port; the registry gains the
@@ -278,15 +305,15 @@ ADR 0043 facts and a code-owned export, not pay.**
 
 | Option | Why not chosen | Revisit when |
 |---|---|---|
-| Amend ADR 0042 and widen `fulfillment.courier_shifts` and `courier_roster_entries` to staff | Two `NOT NULL` courier foreign keys, a constraint that forbids the manager path, a settlement consumer of `paid_seconds`, and a `fulfillment` module that owns dispatch would each become conditional on a person's class. ADR 0042's own reasons for manager-closed shifts being refused are about self-employment and would have to be re-argued row by row | Couriers are employed as `EMPLOYEE` (ADR 0042's own trigger) and payroll needs one hours record per human |
+| Amend ADR 0042 and widen `fulfillment.courier_shifts` and `courier_roster_entries` to staff | Two `NOT NULL` courier foreign keys, a constraint that forbids the manager path, a settlement consumer of `paid_seconds`, and a `fulfillment` module that owns dispatch would each become conditional on a person's class. ADR 0042's own reasons for refusing manager-controlled shift state (self-employment, and paid hours for someone at home) would have to be re-argued row by row | Couriers are employed as `EMPLOYEE` (ADR 0042's own trigger) and payroll needs one hours record per human |
 | Make shifts a section of ADR 0139 and a table in `iam` beside `staff_members` | ADR 0139 rejected folding shifts into the person record for reasons that still hold. `iam` is the identity and authorization module, and a time record has another change rate, another volume and a consumer (`reporting`) the identity module should not know | `workforce` stays at two tables with one consumer for two releases and the module boundary costs more than it protects |
 | Gate order or kitchen actions on an open shift, as for couriers | Spec §7: it "stops service to enforce a timesheet". The rota is often not published and a cook off the clock who marks a dish ready has done the restaurant a favour | Never as a default. If a tenant asks for a reminder, an `ADVISORY` mode that only warns on the manager's screen can be added; a mode that refuses work is not offered |
-| Pay from the roster (planned hours) | Pays a person who did not come, and the author of the roster is usually the one approving. ADR 0042 rejected the same for the same reason | Never for pay |
+| Pay from the roster (planned hours) | Pays a person who did not come, and the author of the roster is usually the one approving. ADR 0042 rejected the same for the same reason, with the trigger "Never for pay"; this record reaffirms that row and does not reopen it (Supersedes) | Never for pay |
 | Derive hours from activity (order attribution, audit facts, sign-in) with no clock-in | Kitchen work names no human today, and a sign-in says a session exists, not that a person is at the pass. It would turn a guess into hours someone is paid for | Per-action human attribution on shared devices exists (row `X.3`); even then it strengthens «Работает без смены» and does not become pay |
 | Integrate a third-party timekeeping or payroll provider now | No provider is chosen and no tenant names one. An adapter is built against a provider's real contract, not a guessed one | A tenant names its system. The export is the seam; the adapter follows ADR 0026 and ADR 0007 with a recorded fake |
 | Clock-in with GPS or a geofence, as couriers do | A cook is on a branch PC or a tablet; there is no radius to be inside, and a position of an employee is `PERSONAL_SENSITIVE` data with a purpose nobody here needs | A tenant needs remote sign-in and legal accepts the data (not before) |
 | Per-break clocking | Staff do not tap for a break, and ADR 0042's break rows exist because a courier's duty state depends on them. A planned break on the roster entry, adjustable by the manager, serves a timesheet | A tenant must evidence mandatory rest periods (legal) |
-| Route variance approval through ADR 0027's `ApprovalService` | The shared model resolves a policy per tenant and, for a new action, defaults to `ALLOW_WITHOUT_APPROVAL`, which would silently remove the gate; the console has no screen that authors an approval policy (the gap-map `9.4` residue). A state machine with `staff.shift.approve` gives the guarantee the spec asks for, that a person looked, with no policy to configure | An approval-policy console exists and a tenant wants two signatures on hours |
+| Route variance approval through ADR 0027's `ApprovalService` | The shared model resolves a policy per tenant, and ADR 0050 makes every new `ApprovalAction` declare its missing-policy behaviour, with no default. `ALLOW_WITHOUT_APPROVAL` would let a shift settle with no second person until someone authors a policy, which silently removes the gate; `REQUIRE_CONFIGURED_POLICY` would answer `APPROVAL_POLICY_REQUIRED` (409) for every tenant until a policy is authored, and the console has no screen that authors one (the gap-map `9.4` residue). A state machine with `staff.shift.approve` gives the guarantee the spec asks for, that a person looked, with no policy to configure | An approval-policy console exists and a tenant wants two signatures on hours |
 | Lock a pay period against edits | Needs a period definition nobody has supplied, and a locked month with a wrong hour needs a correction mechanism this record would then have to build. ADR 0043's recut already alerts on a closed day that changes | A tenant reports a payroll dispute caused by an edit after export |
 | Build payroll: wage rates, overtime, deductions, payslips | A tax-filing and labour-law obligation in a market whose rules nobody here owns. ADR 0042 refused it for couriers for the same reason | A payroll ADR of its own, with legal's answers to the first open input |
 
@@ -336,16 +363,38 @@ ADR 0043 facts and a code-owned export, not pay.**
 ```text
 workforce (new module, schema workforce)
   api:       StaffShiftFactSource        reporting's day close reads closed-shift facts through it
-             StaffAttendanceExportPort   the export adapter; resolves identity through StaffDirectory
+             StaffAttendanceExportPort   the export adapter; resolves identity through StaffPayrollIdentity
              AttendanceBusinessDay       the tenant's business date for an instant; reporting implements it,
                                          as it does for ordering, courier, customers and inventory
-  uses:      iam.api.staff.StaffDirectory (names, export only), tenancy.api (locations, config keys)
+  uses:      iam.api.staff.StaffPayrollIdentity (new, in iam: name and employee number by member id,
+             export only), tenancy.api (locations, config keys)
   reads:     ordering.api.OperatorActivity  (new, in ordering): the subjects who created or accepted an
              order at a location in a window; backs «Работает без смены» and nothing else
 ```
 
 `ModularArchitectureTests` is the gate. `reporting` never reads a `workforce` table;
 it calls the port, as `DayCloseService` calls `PromotionRedemptionSource`.
+
+`iam.api.staff.StaffPayrollIdentity` is new and is the one thing `iam` gains beyond
+capabilities. It is a read port keyed by member id, a third beside ADR 0139's
+`StaffDirectory` and `StaffMemberCards`:
+
+```text
+Map<UUID, PayrollIdentity> identityOf(UUID tenantId, Collection<UUID> memberIds)
+record PayrollIdentity(@Nullable String name, @Nullable String employeeNumber)
+```
+
+It is not a fourth method on `StaffDirectory` because that port is keyed by Keycloak
+subject, answers "three questions and no others" (a name, a batch of names, a member
+id) and carries no employee number, and the shift and roster tables carry
+`staff_member_id` and no subject, so none of its methods has a key to be called with.
+`StaffMemberCards` is keyed by member id but returns a name and a phone, not an employee
+number. ADR 0139's Javadoc contract for `StaffDirectory` is untouched. Like both, the
+port performs no authorization: the export route does (`staff.shift.export`), an id of
+another tenant or one with no answer is absent from the result, the adapter decrypts the
+name and the employee number once per distinct member of the export (hundreds, not once
+per row), and the result goes into the file that route authorised and nowhere else, not
+a log line, a metric, an event or an audit fact.
 
 ### Lifecycle and arithmetic
 
@@ -432,7 +481,7 @@ shift stores no name, no phone, no position and no network address.
 | `staff.shift.read` | `TENANT_OWNER`, `TENANT_ADMIN`, `TENANT_FINANCE`, `BRAND_MANAGER`, `LOCATION_MANAGER` | `LOCATION` routes (one branch), `BRAND` and `TENANT` reads |
 | `staff.shift.manage` | `TENANT_OWNER`, `TENANT_ADMIN`, `BRAND_MANAGER`, `LOCATION_MANAGER` | `LOCATION` routes only; a broader grant covers them downward |
 | `staff.shift.approve` | the same four | `LOCATION` routes |
-| `staff.shift.export` | `TENANT_OWNER`, `TENANT_ADMIN`, `TENANT_FINANCE` | the export route's `TENANT` scope; the identity column group only |
+| `staff.shift.export` | `TENANT_OWNER`, `TENANT_ADMIN`, `TENANT_FINANCE` | the export route's `TENANT` scope; the identity column group only. Makes finance a reader of employee numbers (Open inputs) |
 | `staff.shift.clock` | `LOCATION_MANAGER`, `LOCATION_STAFF` | none: `@StaffSelfAuthorized(staff.shift.clock)` |
 
 Self routes follow ADR 0139's strategy: the capability is held at any scope in the
@@ -447,7 +496,8 @@ active grant at that branch, so it is no existence oracle, as ADR 0139's branch 
 ### APIs (ADR 0031: `If-Match` on updates, `Idempotency-Key` on creates; bodies box optional fields)
 
 ```text
-# one branch, LOCATION scope: .../tenants/{tenantId}/brands/{brandId}/locations/{locationId}
+# one branch, LOCATION scope; "..." below is
+#   /api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}
 GET  .../staff/roster?from=&to=                                   staff.shift.read      the «Неделя» grid
 POST .../staff/roster/entries                                     staff.shift.manage    create a DRAFT entry
 PUT  .../staff/roster/entries/{entryId}                           staff.shift.manage    If-Match
@@ -462,7 +512,9 @@ PUT  .../staff/shifts/{shiftId}           {startedAt?, endedAt?, breakSeconds?, 
 POST .../staff/shifts/{shiftId}/voidings  {reasonCode}                           staff.shift.manage
 POST .../staff/shifts/{shiftId}/approvals {reasonCode}                           staff.shift.approve  If-Match, one at a time
 
-# brand and tenant reads of the same lists: BRAND and TENANT scope, staff.shift.read
+# brand and tenant reads of the same lists: BRAND and TENANT scope, staff.shift.read, at
+#   /api/v1/operations/tenants/{tenantId}/brands/{brandId}/staff/... and
+#   /api/v1/operations/tenants/{tenantId}/staff/...
 
 # the caller's own row, @StaffSelfAuthorized(staff.shift.clock)
 GET  /api/v1/operations/tenants/{tenantId}/staff/me/attendance     open shift, next published entries, last shifts
@@ -481,6 +533,22 @@ and has no open shift; only order attribution can raise it), `OPEN_TOO_LONG`,
 `WORKING`, `CLOSED`. Every statement of "today" uses the tenant's business day, and a
 future day never renders as missed. The list is polled every thirty seconds; no
 realtime channel is added.
+
+Every manager route above and every self route is under `/api/v1/operations/**`, so ADR
+0057's `operations` document group holds it and
+`everyPublishedPathBelongsToExactlyOneSurfaceGroup` has nothing new to decide; the
+baselines and generated clients of all five documents change. The export route is not
+new and keeps `POST /api/v1/tenants/{tenantId}/reporting/exports`, which
+`/api/v1/tenants/**` already places in the `operations` group as well as in the full v1
+document.
+
+Limits (ADR 0033), per principal, answering `RATE_LIMIT_EXCEEDED` with the retry interval:
+clock-in and clock-out 10 a minute together, `GET .../staff/shifts/today` and
+`GET .../staff/me/attendance` 30 a minute each (the console polls `today` every thirty
+seconds, so one open screen costs two a minute). `POST .../clock-ins` and
+`POST .../clock-outs` require an `Idempotency-Key` (ADR 0031), so a double tap on a
+tablet replays the first answer and neither opens a second shift nor answers a spurious
+conflict.
 
 ### Console
 
@@ -527,19 +595,69 @@ applied. Until they are signed they report provisional, like every other metric.
 
 `STAFF_ATTENDANCE` is a new `ReportExportDefinition` with one new branch in
 `ReportExportService`, backed by `StaffAttendanceExportPort` so the identity columns
-are resolved in `workforce` through `StaffDirectory` and never in `reporting` (ADR
-0139). Columns: `staffDisplayReference`, `businessDate`, `locationId`,
+are resolved in `workforce`, through `StaffPayrollIdentity` (above), and never in
+`reporting` (ADR 0139). Columns: `staffDisplayReference`, `businessDate`, `locationId`,
 `plannedSeconds`, `workedSeconds`, `breakSeconds`, `paidSeconds`, `varianceSeconds`,
 `approvalStatus`, `startedAt`, `endedAt`, `timezone`, and the identity group
-`employeeNumber` and `staffName`, which the definition marks as its PII group. The
-definition gains one field, `piiCapability` (default `customer.pii.export`, so no
-existing report changes), and `STAFF_ATTENDANCE` names `staff.shift.export`; a caller
-without it receives the file without the identity group, as ADR 0043 already does.
+`employeeNumber` and `staffName`, which the definition marks as its PII group, one row
+per shift. The export centre is ADR 0131's and this record changes three things in it,
+none of which alters what an existing report does.
+
+1. **Which capability gates the identity group, and where that is decided.** The
+   definition gains `piiCapability` (default `customer.pii.export`, so no existing
+   report changes) and `STAFF_ATTENDANCE` names `staff.shift.export`. A caller without
+   it receives the file without the identity group. That omission is what the export
+   centre does today (`ReportExportController`'s description of `POST /exports` and
+   `ReportExportDefinition#effectiveColumns`, ADR 0131); ADR 0043's text says the
+   opposite, that such a request is rejected with `CAPABILITY_REQUIRED` naming the
+   column and not silently narrowed. This record follows the built behaviour and leaves
+   the disagreement for ADR 0043's next amendment to settle. The deciding boolean is
+   computed in three places today, each against the one capability
+   `customer.pii.export`: `ReportExportController#requestExport` (into
+   `ReportExportService#requestExport`) and `#reportExportStatus` and `#recentExports`
+   (each through `currentActorHoldsPiiCapability`, into `ReportExportService#status` and
+   `#recentExports`, whose `toView` redacts a row's PII columns and download URL for a
+   viewer who lacks the grant, because the history is tenant-wide). All three change,
+   so that redaction is by the viewed report's own `piiCapability`: the controller
+   resolves which of the registry's distinct PII capabilities the caller holds (two
+   today, one `authorization.has` each) and the service asks, per row, about that row's
+   report. Left as it is, a finance clerk holding `staff.shift.export` and not
+   `customer.pii.export` would see her own payroll export redacted in the history, and a
+   holder of `customer.pii.export` alone would be shown a payroll file's identity group
+   and download URL.
+
+2. **A row ceiling per report, and a refusal instead of truncation.** The built quotas
+   are constants in `ReportExportService`: `DEFAULT_ROW_QUOTA` (5,000) without a PII
+   group, and with one the port's `PII_ROW_LIMIT` (2,000), chosen by `rowQuotaFor`; a
+   result over the quota is written with `truncated=true`. That suits a customer list a
+   person skims and not a payroll file with a row per shift, where a tenant of 100 people
+   working 22 shifts a month writes about 2,200 rows a month, so a month with the
+   identity group would be cut short at 2,000 while the export's total is promised to
+   equal the fact's total. `ReportExportDefinition` therefore gains `rowQuota`,
+   `piiRowQuota` and `overQuota` (`TRUNCATE`, the default, or `REFUSE`); `rowQuotaFor`
+   reads them from the definition and returns, for the four existing reports, the numbers
+   it returns today. `STAFF_ATTENDANCE` declares 20,000 for both (Open inputs) and
+   `REFUSE`, and its identity group needs no lower ceiling because it costs one decrypt
+   per distinct member, not per row. A payroll export never completes with
+   `truncated=true`.
+
+3. **Where a refusal is raised.** `ATTENDANCE_UNRESOLVED_SHIFTS` (Decision 9) and a new
+   stable `ErrorCode`, `ATTENDANCE_EXPORT_TOO_LARGE` (carrying the row count and the
+   ceiling, so the caller can narrow the range or the branch), are raised
+   synchronously in `ReportExportService#requestExport`, on the request thread before
+   the `202` and before the job row is inserted, from a count read on
+   `StaffAttendanceExportPort`. `POST .../reporting/exports` answers `202` for every other
+   report because the work is asynchronous, and a payroll file that will be refused is
+   refused at the door and not found `FAILED` in the history a minute later. The worker
+   checks both again before it writes the object, because a shift can change between the
+   queueing and the run; a check that now fails ends the job `FAILED` with the same code
+   and writes no object.
+
 The port and the day close read one query owner (`StaffShiftHours`), and a test pins
 that the export's total equals the fact's total for the same range. The export is
-asynchronous, quota-bounded and audited with its row count, as ADR 0043 requires. Night
-and holiday premiums are not computed; the facts carry instants and the location's
-IANA zone so a payroll system can.
+asynchronous, bounded by its own refusing ceiling and audited with its row count, as ADR
+0043 requires. Night and holiday premiums are not computed; the facts carry instants and
+the location's IANA zone so a payroll system can.
 
 ### Audit (ADR 0027), events (ADR 0032), personal data (ADR 0029)
 
@@ -557,6 +675,10 @@ IANA zone so a payroll system can.
   id; identity lives in `iam.staff_members`, which is protected and anonymised in
   place. The export's identity group is the one place a name and an employee number
   meet hours, and it is gated and audited. No new `PERSONAL` column exists.
+  `employeeNumber` is already in ADR 0029's protected-term set (`ChangeDocuments`, added
+  by ADR 0139); this record adds `staffname`, the one identity column it names that no
+  term matches, so a key of either name is redacted wherever a change document or a log
+  line carries one, and a test pins both.
 
 ### Observability and testing
 
@@ -579,8 +701,16 @@ Tests, each asserting what would still be true if the code were broken:
   one millisecond tie locally and reorder in CI): the six statuses, the `isToday`
   guard, and a person who only cooks never raising `WORKING_WITHOUT_SHIFT`.
 - Export tests: the export total equals the fact total; an open or awaiting shift in
-  range refuses with its count; a caller without `staff.shift.export` gets no identity
-  columns; a recut after a post-close edit raises a divergence.
+  range refuses with its count, before the `202`; a range over the row ceiling answers
+  `ATTENDANCE_EXPORT_TOO_LARGE` with the count and queues nothing, a range that grows
+  past it between request and run ends the job `FAILED` with no object written, and no
+  completed `STAFF_ATTENDANCE` export has `truncated=true`; a caller without
+  `staff.shift.export` gets no identity columns; the export centre's history redacts
+  by the viewed report's own `piiCapability` at `requestExport`, `status` and
+  `recentExports` (the finance clerk sees her payroll export whole, a holder of
+  `customer.pii.export` alone does not see its identity group or download URL, and the
+  existing four reports behave as before); `StaffPayrollIdentity` answers an id of
+  another tenant as absent; a recut after a post-close edit raises a divergence.
 - Request DTO tests with the console's real JSON (Jackson 3 refuses a missing
   primitive), and the front-end specs for the grid's dashed cell and the clock card.
 
@@ -608,7 +738,13 @@ out of the courier tables, so there is nothing to migrate back.
 - [ ] `ordering.api.OperatorActivity` and the derived `today` list.
 - [ ] `AttendanceBusinessDay` implemented in `reporting`; `StaffShiftFactSource`;
       `reporting.fact_staff_shift`; the three metric definitions; the close and recut.
-- [ ] `STAFF_ATTENDANCE` export, `piiCapability`, `StaffAttendanceExportPort`.
+- [ ] `STAFF_ATTENDANCE` export, `StaffAttendanceExportPort`; `ReportExportDefinition`
+      gains `piiCapability`, `rowQuota`, `piiRowQuota` and `overQuota`, and the three
+      PII-boolean call sites (`requestExport`, `status`, `recentExports`) redact by the
+      viewed report; `ATTENDANCE_UNRESOLVED_SHIFTS` and `ATTENDANCE_EXPORT_TOO_LARGE`
+      raised in `ReportExportService#requestExport` and re-checked by the worker.
+- [ ] `iam.api.staff.StaffPayrollIdentity` and its `iam` implementation; `staffname` in
+      the protected-term set.
 - [ ] Sweeper that sets `MISSED`; the open-too-long flag.
 - [ ] Audit facts and their sentences in the activity log's action dictionary
       (`activity-log-action-codes-coverage.spec.ts` fails the build without them).
@@ -627,24 +763,28 @@ a shift open too long; a cook clocks in and out from the console and a manager c
 a forgotten clock-out with a reason, leaving an audit fact with the old and new times;
 a shift past the threshold waits for approval and stays out of the fact until approved;
 the day closes and `fact_staff_shift` matches the sum of the closed shifts; an export
-for a month produces a file whose total equals the fact total, carries names only for a
-caller holding `staff.shift.export`, and refuses with a count while a shift is still
-open. No order action anywhere is refused for want of a shift. With the flag off, the
+for a month produces a file whose total equals the fact total, carries names and
+employee numbers only for a caller holding `staff.shift.export`, refuses with a count
+while a shift is still open, and refuses, never truncates, a range over its row ceiling.
+No order action anywhere is refused for want of a shift. With the flag off, the
 routes, the screens and the export all answer as absent.
 
 ## References
 
-- ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0033, ADR 0042
-  (shifts, roster, variance, self-employment reasoning), ADR 0043 (facts, business
-  day, exports), ADR 0056, ADR 0057, ADR 0079 (shared device principal), ADR 0139
-  (person record, what it leaves out)
+- ADR 0025, ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0033 (rate limits),
+  ADR 0042 (shifts, roster, variance, self-employment reasoning), ADR 0043 (facts,
+  business day, exports), ADR 0050 (missing-policy behaviour), ADR 0056, ADR 0057
+  (the `operations` document group), ADR 0079 (shared device principal), ADR 0131 (the
+  export centre: job queue, row quota, PII omission), ADR 0139 (person record, what it
+  leaves out)
 - `platform/docs/operations-gap-map.md` row `X.2` of §9 (and `9.2`, `3.5`, `0.2`)
 - `platform/docs/operations-spec/staff-and-access.md` §3 (tab 3 «Смены»), §7 (screen
   9.6), §11.11 (rosters and shifts), §11.1
 - `V0040` (`courier_shifts`, `courier_shift_breaks`), `V0262` (`courier_roster_entries`),
   `V0453` (`iam.staff_members`), `V0025` (`btree_gist`), `V0029` (order attribution)
 - `CourierShiftController`, `OperationsCourierController`, `StaffDirectory`,
-  `StaffSelfController`, `DayCloseService`, `ReportExportRegistry`,
-  `ReportExportService`, `BusinessDayWindowsAdapter`, `OperatorTodayCountsService`
+  `StaffMemberCards`, `StaffSelfController`, `DayCloseService`, `ReportExportRegistry`,
+  `ReportExportDefinition`, `ReportExportService`, `ReportExportController`,
+  `ChangeDocuments`, `BusinessDayWindowsAdapter`, `OperatorTodayCountsService`
 - `frontend/operations/src/app/features/delivery/shifts-page`, `features/staff`
   (`staff-member-detail-pane`), `features/today/my-work-page`
