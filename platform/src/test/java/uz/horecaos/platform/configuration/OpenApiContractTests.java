@@ -209,12 +209,32 @@ class OpenApiContractTests {
         return node;
     }
 
-    private static void assertBackwardCompatible(JsonNode released, JsonNode generated) {
+    /**
+     * ADR 0070: an operation the released document itself marks {@code x-horecaos-surface:
+     * internal} was never promised, so the gate does not hold it. Only the released marker counts —
+     * an operation cannot be exempted by being marked internal in the same change that reshapes it.
+     */
+    static boolean isInternal(JsonNode operation) {
+        return "internal".equals(operation.path("x-horecaos-surface").asText());
+    }
+
+    static void assertBackwardCompatible(JsonNode released, JsonNode generated) {
         JsonNode oldPaths = released.path("paths");
         JsonNode newPaths = generated.path("paths");
         oldPaths.fieldNames().forEachRemaining(path -> {
             JsonNode oldPath = oldPaths.path(path);
             JsonNode newPath = newPaths.path(path);
+            boolean anythingPromised = false;
+            Iterator<String> methods = oldPath.fieldNames();
+            while (methods.hasNext()) {
+                String method = methods.next();
+                if (isHttpMethod(method) && !isInternal(oldPath.path(method))) {
+                    anythingPromised = true;
+                }
+            }
+            if (!anythingPromised) {
+                return;
+            }
             assertThat(newPath.isObject())
                     .as("published path %s must remain in v1", path)
                     .isTrue();
@@ -223,6 +243,9 @@ class OpenApiContractTests {
                     return;
                 }
                 JsonNode oldOperation = oldPath.path(method);
+                if (isInternal(oldOperation)) {
+                    return;
+                }
                 JsonNode newOperation = newPath.path(method);
                 assertThat(newOperation.isObject())
                         .as("published %s %s must remain in v1", method.toUpperCase(Locale.ROOT), path)
