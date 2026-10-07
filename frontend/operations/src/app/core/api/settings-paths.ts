@@ -804,6 +804,27 @@ export const settingsPaths = {
     return `${this.termsDocuments(tenantId, brandId)}/${version}`;
   },
 
+  // ---------------------------------------------------------- 10.14 Storefront apps (ADR 0070)
+
+  /**
+   * `OperationsStorefrontAppController` — the registered storefront apps this brand can choose, and
+   * what it has decided about each. Tenant and brand, with its own brand picker, for the reason
+   * `termsDocuments` gives: the owner holds this capability at tenant scope.
+   */
+  storefrontApps(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/brands/${enc(brandId)}/storefront-apps`;
+  },
+
+  /** Authorise one app for the brand (POST). */
+  storefrontAppAuthorisations(tenantId: string, brandId: string, appId: string): string {
+    return `${this.storefrontApps(tenantId, brandId)}/${enc(appId)}/authorisations`;
+  },
+
+  /** Withdraw the brand's authorisation of one app (POST, If-Match). */
+  storefrontAppRevocations(tenantId: string, brandId: string, appId: string): string {
+    return `${this.storefrontApps(tenantId, brandId)}/${enc(appId)}/revocations`;
+  },
+
   // ---------------------------------------------------------- 1.1/1.2 Scope bar + InheritedField
 
   /**

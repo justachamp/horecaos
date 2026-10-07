@@ -56,7 +56,7 @@ public class OperationsStorefrontAppController {
             description = "Every registered app that is not retired, with the brand's standing: "
                     + "NOT_AUTHORISED, AUTHORISED or REVOKED. The authorisationVersion is the If-Match "
                     + "value for revoking.")
-    List<StorefrontAppCatalogueEntry> catalogue(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    List<StorefrontAppCatalogueEntry> storefrontAppCatalogue(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return authorisations.catalogue(tenantId, brandId);
     }
 
@@ -66,7 +66,7 @@ public class OperationsStorefrontAppController {
             summary = "Authorise a storefront app for this brand",
             description = "Also authorises again an app the brand revoked. Refused for an app that is "
                     + "suspended or retired, and with a conflict when the brand already authorises it.")
-    ResponseEntity<StorefrontAppBrandAuthorisationView> authorise(
+    ResponseEntity<StorefrontAppBrandAuthorisationView> authoriseStorefrontApp(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID appId,
@@ -84,7 +84,7 @@ public class OperationsStorefrontAppController {
             summary = "Revoke this brand's authorisation of a storefront app",
             description = "Needs If-Match with the authorisation version read. Takes effect on the next "
                     + "storefront request the app makes for this brand, which is refused with APP_REVOKED.")
-    ResponseEntity<StorefrontAppBrandAuthorisationView> revoke(
+    ResponseEntity<StorefrontAppBrandAuthorisationView> revokeStorefrontApp(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID appId,

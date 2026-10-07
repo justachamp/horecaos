@@ -1,0 +1,95 @@
+.toolbar {
+  margin-top: 16px;
+}
+
+.panel {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+}
+
+.secret {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  box-shadow: inset 3px 0 0 var(--q-warning, #f1c21b);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.secretValue {
+  word-break: break-all;
+  padding: 8px 10px;
+  border: 1px dashed var(--q-hairline);
+}
+
+.dismissSecret {
+  align-self: flex-start;
+}
+
+.changeForm.stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.changeForm textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: inherit;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detailHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+}
+
+.facts dt {
+  color: var(--q-ink-muted);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.section {
+  margin-top: 24px;
+}
+
+.chip {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  white-space: nowrap;
+}
+
+tr[data-status='SUSPENDED'] td,
+tr[data-status='RETIRED'] td,
+tr[data-status='REVOKED'] td {
+  color: var(--q-ink-muted);
+}

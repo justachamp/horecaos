@@ -1323,4 +1323,44 @@ export const settingsEn = {
     'The limits above which a promotion or a large customer export waits for a second signature.',
   'settings.fiscalization.noAccess': 'No access',
   'settings.fiscalization.responsibility': 'Who issues the receipt',
+  'settings.nav.storefrontApps': 'Storefront apps',
+  'settings.home.description.storefrontApps':
+    'Choose which storefronts may take orders as this brand, and withdraw one at any time.',
+  'settings.storefrontApps.title': 'Storefront apps',
+  'settings.storefrontApps.lead':
+    'A storefront is an app that shows your menu and takes orders as your brand. Authorise one and it can serve this brand; revoke it and it stops on its next request. Your orders, prices and customers stay the same whichever storefront you choose.',
+  'settings.storefrontApps.loading': 'Loading storefronts…',
+  'settings.storefrontApps.empty': 'No storefront app is available to choose yet.',
+  'settings.storefrontApps.noBrands': 'This account has no brand to choose a storefront for.',
+  'settings.storefrontApps.brandPicker.label': 'Brand',
+  'settings.storefrontApps.by': 'By {vendor}',
+  'settings.storefrontApps.firstParty': 'made by HorecaOS',
+  'settings.storefrontApps.clientType.public': "Runs in the customer's browser",
+  'settings.storefrontApps.clientType.confidential': "Runs on its vendor's server",
+  'settings.storefrontApps.clientType.publicNote':
+    'It holds no secret, because a browser can keep none. HorecaOS knows which storefront is asking and can stop it, but cannot prove who is behind it.',
+  'settings.storefrontApps.clientType.confidentialNote':
+    'It proves its identity with a secret only its server holds.',
+  'settings.storefrontApps.conformance.label': 'Conformance check',
+  'settings.storefrontApps.conformance.passed': 'passed',
+  'settings.storefrontApps.conformance.failed': 'failed',
+  'settings.storefrontApps.conformance.expired': 'expired: the platform contract has moved on',
+  'settings.storefrontApps.conformance.notRun': 'not run yet',
+  'settings.storefrontApps.notActive':
+    'HorecaOS has paused or withdrawn this app. It cannot serve any brand until that changes.',
+  'settings.storefrontApps.standing.authorised': 'Authorised',
+  'settings.storefrontApps.standing.revoked': 'Revoked',
+  'settings.storefrontApps.standing.notAuthorised': 'Not authorised',
+  'settings.storefrontApps.authorise': 'Authorise',
+  'settings.storefrontApps.revoke': 'Revoke',
+  'settings.storefrontApps.cancel': 'Cancel',
+  'settings.storefrontApps.reason': 'Why you are doing this (recorded in the audit log)',
+  'settings.storefrontApps.confirm.authorise':
+    "This storefront will be able to show this brand's menu and take orders as it.",
+  'settings.storefrontApps.confirm.revoke':
+    'This storefront stops serving this brand on its next request.',
+  'settings.storefrontApps.authorised': '{name} is authorised.',
+  'settings.storefrontApps.revoked': '{name} is revoked; it can no longer serve this brand.',
+  'settings.storefrontApps.denied':
+    "Only the account's owner and administrators can choose storefront apps.",
 } as const;

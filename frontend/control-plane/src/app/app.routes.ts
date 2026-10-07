@@ -150,6 +150,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/providers/sandbox-contract-tests').then((m) => m.SandboxContractTests),
       },
+      {
+        // ADR 0070: the registry of storefront apps and each one's conformance status.
+        path: 'providers/storefront-apps',
+        canActivate: [requiresCapability('STOREFRONT_APP_REGISTRY_MANAGE')],
+        loadComponent: () =>
+          import('./features/storefront-apps/storefront-apps').then((m) => m.StorefrontApps),
+      },
 
       // IA §4 Integration operations
       {

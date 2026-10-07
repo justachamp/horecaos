@@ -68,7 +68,7 @@ public class StorefrontAppRegistryController {
                     + "one configured and when it last changed. The conformance result a row carries is "
                     + "read against the contract being served: a PASSED result recorded against another "
                     + "major version reads EXPIRED.")
-    List<StorefrontAppSummaryView> list() {
+    List<StorefrontAppSummaryView> listStorefrontApps() {
         return registry.list();
     }
 
@@ -77,7 +77,7 @@ public class StorefrontAppRegistryController {
     @Operation(
             summary = "One storefront app and every brand's standing with it",
             description = "The ETag is the version to send as If-Match on a change.")
-    ResponseEntity<StorefrontAppDetailView> get(@PathVariable UUID appId) {
+    ResponseEntity<StorefrontAppDetailView> getStorefrontApp(@PathVariable UUID appId) {
         StorefrontAppDetailView detail = registry.detail(appId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.app().version()))
@@ -92,7 +92,7 @@ public class StorefrontAppRegistryController {
                     + "allowlist the platform enforces — attributable and revocable, not authenticated. A "
                     + "CONFIDENTIAL client is server-backed: the platform mints its secret, keeps only an "
                     + "ADR 0028 reference, and returns the value exactly once, in this response.")
-    ResponseEntity<RegisteredAppResponse> register(@Valid @RequestBody RegisterAppRequest request) {
+    ResponseEntity<RegisteredAppResponse> registerStorefrontApp(@Valid @RequestBody RegisterAppRequest request) {
         Registered registered = registry.register(
                 new RegisterCommand(
                         request.name(),
@@ -115,7 +115,7 @@ public class StorefrontAppRegistryController {
             description = "Needs If-Match with the version read. The client type never changes: a public "
                     + "client cannot become confidential by an edit, because that is a different "
                     + "registration with a different secret.")
-    ResponseEntity<StorefrontAppView> update(
+    ResponseEntity<StorefrontAppView> updateStorefrontApp(
             @PathVariable UUID appId, HttpServletRequest http, @Valid @RequestBody UpdateAppRequest request) {
         StorefrontAppView updated = registry.update(
                 appId,
@@ -134,7 +134,7 @@ public class StorefrontAppRegistryController {
             summary = "Suspend, reinstate or retire an app",
             description = "SUSPENDED refuses the app for every tenant on its next request and can be lifted "
                     + "with ACTIVE. RETIRED is final.")
-    ResponseEntity<StorefrontAppView> changeStatus(
+    ResponseEntity<StorefrontAppView> changeStorefrontAppStatus(
             @PathVariable UUID appId, HttpServletRequest http, @Valid @RequestBody ChangeStatusRequest request) {
         return versioned(registry.changeStatus(
                 appId, AggregateVersion.requireIfMatch(http), request.status(), actor(), request.reason()));
@@ -146,7 +146,7 @@ public class StorefrontAppRegistryController {
             summary = "Rotate a confidential client's secret",
             description = "Mints a fresh secret and returns it exactly once. The previous one stops "
                     + "working with this response; a public client has none to rotate.")
-    ResponseEntity<RegisteredAppResponse> rotateSecret(
+    ResponseEntity<RegisteredAppResponse> rotateStorefrontAppSecret(
             @PathVariable UUID appId, HttpServletRequest http, @Valid @RequestBody ReasonRequest request) {
         Registered rotated =
                 registry.rotateSecret(appId, AggregateVersion.requireIfMatch(http), actor(), request.reason());
@@ -161,7 +161,7 @@ public class StorefrontAppRegistryController {
             summary = "Record the conformance suite's result for an app",
             description = "Recorded against the contract version being served; a PASSED result expires when "
                     + "the contract's major version moves.")
-    ResponseEntity<StorefrontAppView> recordConformance(
+    ResponseEntity<StorefrontAppView> recordStorefrontAppConformance(
             @PathVariable UUID appId, HttpServletRequest http, @Valid @RequestBody ConformanceRequest request) {
         return versioned(registry.recordConformance(
                 appId,

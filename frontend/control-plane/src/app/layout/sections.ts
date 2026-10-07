@@ -108,6 +108,14 @@ export const SECTIONS: readonly Section[] = [
     group: 'nav.group.providers',
     capability: 'INTEGRATION_INSTALLATION_MANAGE',
   },
+  {
+    // ADR 0070: who may build a storefront against the published contract.
+    id: 'storefrontApps',
+    labelKey: 'nav.storefrontApps',
+    route: '/providers/storefront-apps',
+    group: 'nav.group.providers',
+    capability: 'STOREFRONT_APP_REGISTRY_MANAGE',
+  },
 
   // IA §4 Integration operations
   {
