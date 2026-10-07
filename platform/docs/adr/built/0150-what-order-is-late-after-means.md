@@ -1,25 +1,32 @@
 # ADR 0150: What "order is late after" means
 
 - Decision status: Accepted
-- Implementation status: Not started — the setting exists and does nothing.
-  `ordering.late_order_threshold_minutes` (card 2, «Заказ опаздывает с») is
-  registered twice (`OrderingConfigurationKeys.LATE_ORDER_THRESHOLD_MINUTES` and
-  `ConfigurationKeys.ORDERING_LATE_ORDER_THRESHOLD_MINUTES`), defaults to 45,
-  accepts 1–600, is described as "minutes after acceptance at which an order is
-  coloured late on the board", is editable on the order-policy page (its field
-  carries the hint «Пока не применяется» while editing), and is read by nothing in
-  `src/main`: `OrderLatenessPolicyAuthoringService` says in its own header that it
-  is "deliberately not read here or anywhere", and `lateness-policy-card.ts` says
-  the same in the console. The line the boards actually draw is the
-  `ordering.lateness` document (ADR 0030): per fulfilment mode a window before the
-  promise (`atRiskBeforeSeconds`, optional, defaulting to the
-  `ordering.at_risk_before_minutes` scalar when that was set anywhere in the
-  chain), a grace after the promise (`lateAfterSeconds`, default 0) and, for an
-  order with no promise, a fallback from `created_at`
-  (`noPromiseFallbackSeconds`, default 2700 = 45 minutes). Two siblings on the same
-  card have the same status: `ordering.average_order_minutes` (30) and
-  `ordering.maximum_order_minutes` (60) have no reader either, and unlike the first
-  their fields do not say so.
+- Implementation status: Built — `ordering.late_order_threshold_minutes` (card 2, now
+  «Заказ без обещанного времени опаздывает через») is the tenant-wide default for the
+  `ordering.lateness` document's no-promise fallback, read by
+  `OrderLatenessPolicyService.noPromiseDefaultAt` exactly as the at-risk scalar is read: a
+  mode's own document value wins, a blank (the field is now optional, the stored JSON unchanged
+  and both generations reading) takes the scalar when one was set anywhere in the chain, the
+  narrowest scope winning, and the platform's 45 minutes otherwise; a resolved registry default
+  is never read as a choice, and an unusable value (under a minute, over ten hours) is ignored.
+  The order board's «Только опаздывающие», `GET .../{orderId}/lateness`, the kitchen queue, both
+  VDUs and the wallboard agree on one order at one instant
+  (`OrderLatenessScalarSurfacesHttpTests`), acceptance starts and shortens nothing
+  (`OrderLatenessPolicyTests`: awaiting-approval and scheduled orders), a scalar write drops the
+  cached resolutions beneath its scope (`ConfigurationValueCacheEvictor`; this was not true of a
+  scalar before), and the write is validated server-side to 1–600. The authored read reports
+  `noPromiseDefault {seconds, source}` beside `atRiskDefault`; card 2's label and hint are
+  reworded in ru / uz-Latn / en, «Пока не применяется» is removed from it and stands on every
+  card 2 field nothing reads (average, maximum, business-day start, VAT rate, routing poll
+  interval); the lateness card's fallback field takes a blank and says what a blank means; the
+  console words the late report metric «after the promise» (`orders.late.v1` is unchanged). The
+  migration note is `docs/runbooks/late-order-threshold-stored-values.md`, its SQL executed by
+  `LateOrderThresholdRunbookTests`. Not done: that runbook has not been run against pre-prod or
+  production, and no tenant has been told (operations, before the release is deployed);
+  `ordering.average_order_minutes` and `ordering.maximum_order_minutes` have no reader by this
+  record's own decision 5, and the key is still declared twice (`OrderingConfigurationKeys` and
+  `ConfigurationKeys`) because the registry is internal to tenancy and importing it would make
+  the modules cyclic (a drift test guards the pair).
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -275,16 +282,18 @@ to inert, which is its present state.
 
 ## Implementation checklist
 
-- [ ] Owner accepts the record; operations queries for explicit stored values.
-- [ ] `OrderLatenessDocument` nullable fallback and `effective(...)`; document
+- [~] Owner accepts the record (done 2026-10-07); operations queries for explicit stored values (the runbook and its tested SQL exist; not yet run against a real host).
+- [x] `OrderLatenessDocument` nullable fallback and `effective(...)`; document
       reading tolerant of both generations.
-- [ ] `OrderLatenessPolicyService.noPromiseDefaultAt` and its source in the authored
+- [x] `OrderLatenessPolicyService.noPromiseDefaultAt` and its source in the authored
       read; tests listed above, each seen failing first.
-- [ ] Card 2 label and hints (ru / uz-Latn / en); the same hint on the two sibling
+- [x] Card 2 label and hints (ru / uz-Latn / en); the same hint on the two sibling
       fields; the lateness card's fallback default line.
-- [ ] Remove the duplicate registration of the key if the two registries can share
-      one definition (`OrderingConfigurationKeys` and `ConfigurationKeys`).
-- [ ] Update `orders.md` §2.7 and `settings.md` card 2 where they say the scalar is
+- [x] Remove the duplicate registration of the key if the two registries can share
+      one definition (`OrderingConfigurationKeys` and `ConfigurationKeys`). They cannot:
+      the registry is internal to tenancy (importing it would make the modules cyclic), so
+      the pair stays and `OrderingConfigurationKeyTests` guards it.
+- [x] Update `orders.md` §2.7 and `settings.md` card 2 where they say the scalar is
       "still stored and read by nothing", and the two comments that name this record's
       question.
 
