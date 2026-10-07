@@ -337,6 +337,40 @@ class PlatformRoleTests {
                 .containsAll(PlatformRole.KITCHEN_DEVICE.capabilities());
     }
 
+    /**
+     * ADR 0111's two capabilities: the call centre's queue is read by those who run it and by support,
+     * and worked only by those who run it. A line cook holds neither, because the number to ring is
+     * behind {@code customer.pii.reveal} and a floor that cannot reveal it has no use for a queue of
+     * people to call.
+     */
+    @Test
+    void theLeadQueueIsWorkedByTheManagersAndReadBySupport() {
+        assertThat(rolesHolding(Capability.CUSTOMER_LEAD_MANAGE))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER);
+        assertThat(rolesHolding(Capability.CUSTOMER_LEAD_READ))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.SUPPORT_AGENT);
+        assertThat(Capability.CUSTOMER_LEAD_READ.isRead())
+                .as("a suspended tenant's people may still look at the queue, and may not work it")
+                .isTrue();
+        assertThat(Capability.CUSTOMER_LEAD_MANAGE.isRead()).isFalse();
+    }
+
+    private static List<PlatformRole> rolesHolding(Capability capability) {
+        return Arrays.stream(PlatformRole.values())
+                .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                .filter(role -> role.grants(capability))
+                .toList();
+    }
+
     @Test
     void integrationInstallationIsLimitedToTenantOwnerAndAdmin() {
         assertThat(Arrays.stream(PlatformRole.values())

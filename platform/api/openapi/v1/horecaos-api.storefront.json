@@ -226,6 +226,16 @@
         },
         "type" : "object"
       },
+      "CallbackRequestResponse" : {
+        "properties" : {
+          "leadId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "leadId" ],
+        "type" : "object"
+      },
       "CartLineResponse" : {
         "properties" : {
           "comboPicks" : {
@@ -516,6 +526,25 @@
           }
         },
         "required" : [ "channel", "fulfillmentMode", "locationId" ],
+        "type" : "object"
+      },
+      "CustomerCallbackRequest" : {
+        "properties" : {
+          "forCompany" : {
+            "type" : "boolean"
+          },
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "phone" ],
         "type" : "object"
       },
       "CustomerSessionResponse" : {
@@ -4422,6 +4451,53 @@
           }
         },
         "summary" : "Replace one of the caller's own addresses",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests" : {
+      "post" : {
+        "description" : "Creates one lead in the call centre's queue, linked to the caller's own account. 202: what was created is a work item for a person, not a call. The number to ring is in the body. A guest asking on behalf of a company says so with forCompany=true, which files it as a catering enquiry.",
+        "operationId" : "request",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CustomerCallbackRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CallbackRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask the restaurant to call me back",
         "tags" : [ "Customer self-service" ]
       }
     },

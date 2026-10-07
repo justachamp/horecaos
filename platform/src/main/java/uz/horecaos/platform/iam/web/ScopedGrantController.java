@@ -155,7 +155,7 @@ public class ScopedGrantController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID grantId,
-            @Valid @RequestBody ReasonRequest request) {
+            @Valid @RequestBody RevokeGrantRequest request) {
         boolean revoked = grants.revokeWithin(
                 ResourceScope.location(tenantId, brandId, locationId), grantId, subject(), request.reason());
         return ResponseEntity.ok(Map.of("changed", revoked, "outcome", revoked ? "revoked" : "no_change"));
@@ -223,7 +223,7 @@ public class ScopedGrantController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID grantId,
-            @Valid @RequestBody ReasonRequest request) {
+            @Valid @RequestBody RevokeGrantRequest request) {
         boolean revoked =
                 grants.revokeWithin(ResourceScope.brand(tenantId, brandId), grantId, subject(), request.reason());
         return ResponseEntity.ok(Map.of("changed", revoked, "outcome", revoked ? "revoked" : "no_change"));
@@ -259,5 +259,6 @@ public class ScopedGrantController {
             @NotBlank @Size(max = 1000) String reason,
             @Nullable Instant validUntil) {}
 
-    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
+    public record RevokeGrantRequest(
+            @NotBlank @Size(max = 1000) String reason) {}
 }

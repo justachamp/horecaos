@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/customers.events/LeadAssignedToLocation.v1.schema.json",
+  "title": "LeadAssignedToLocation v1 payload",
+  "description": "A lead was handed to a branch (ADR 0111 section 6): a hand-off is a field, not a workflow, so this carries only the lead and the branch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "leadId",
+    "locationId"
+  ],
+  "properties": {
+    "leadId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

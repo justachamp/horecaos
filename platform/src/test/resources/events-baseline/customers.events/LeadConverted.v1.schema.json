@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/customers.events/LeadConverted.v1.schema.json",
+  "title": "LeadConverted v1 payload",
+  "description": "A lead became the order or the reservation it was for (ADR 0111): exactly one of orderId and reservationId is present. A consumer resolves either through the authorized ordering or dine-in API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "leadId"
+  ],
+  "properties": {
+    "leadId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "reservationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    }
+  }
+}

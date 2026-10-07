@@ -308,6 +308,9 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: the call centre's callback queue, and the voice journal beside the card.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // Row 1.3a: CUSTOMER_MANAGE already covers everything
                     // CUSTOMER_CREATE grants on its own; held explicitly here
                     // too only so CustomerController#createManually's
@@ -517,6 +520,9 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: the call centre's callback queue, and the voice journal beside the card.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // Row 1.3a: CUSTOMER_MANAGE already covers everything
                     // CUSTOMER_CREATE grants on its own; held explicitly here
                     // too only so CustomerController#createManually's
@@ -678,6 +684,9 @@ public enum PlatformRole {
                     MARKETING_LINK_MANAGE,
                     // ADR 0042: delivery cost is a brand's own operating number.
                     DELIVERY_COST_READ,
+                    // ADR 0111: a brand's call-centre queue -- who works it, which branch gets which lead.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     BRAND_READ,
                     LOCATION_READ,
                     CATALOG_READ,
@@ -816,6 +825,10 @@ public enum PlatformRole {
                     // a caller nobody has seen before.
                     CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL,
+                    // ADR 0111: the callbacks assigned to her branch -- and the number to ring them on,
+                    // which is why this bundle and not the floor's holds the pair.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // ADR 0059 stage 2: the operator inbox — see
                     // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
                     // this and why, including the scope caveat that applies to this role
@@ -1053,6 +1066,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: support reads the queue to answer "did anyone call her back"; it never works it.
+                    CUSTOMER_LEAD_READ,
                     // Row 1.3a: see TENANT_OWNER's identical grant above for why.
                     CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL));

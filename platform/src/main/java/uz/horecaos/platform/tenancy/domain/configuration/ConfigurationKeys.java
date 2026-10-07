@@ -374,6 +374,21 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0111: minutes before its time a scheduled lead callback joins the call centre's
+     * needs-attention view again, declared identically in {@code
+     * customers.api.CustomerConfigurationKeys} (customers cannot import this registry without a
+     * cycle, and {@code CustomerConfigurationKeysTests} keeps the two identical).
+     */
+    public static final ConfigurationKey<Integer> CUSTOMER_LEAD_CALLBACK_REMINDER_MINUTES = ConfigurationKey.of(
+                    "customer.lead.callback_reminder_minutes", Integer.class)
+            .defaultValue(60)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Minutes before its time a scheduled lead callback joins the call centre's "
+                    + "needs-attention view again (ADR 0111).")
+            .build();
+
+    /**
      * ADR 0082: whether a tenant's operations app shows its administrators the
      * HorecaOS support visits to their account (ADR 0081), and lets them end
      * one. Off until turned on: the page is new, and the first tenants to see
@@ -702,6 +717,7 @@ public final class ConfigurationKeys {
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
+            CUSTOMER_LEAD_CALLBACK_REMINDER_MINUTES,
             FEATURE_SUPPORT_VISITS,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,
