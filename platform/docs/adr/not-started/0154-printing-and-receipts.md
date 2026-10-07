@@ -93,8 +93,8 @@
     `printing.document_locale` and defaulting to `ru`; never the customer's.
   - **Whether the QR encoder is a new dependency** (engineering, platform owner).
     Proposed default: yes, `com.google.zxing:core` (Apache-2.0, pure Java), because
-    `frontend/operations/src/app/shared/ui/q-qr-code` is a TypeScript component capped at
-    106 bytes (ADR 0119) and cannot run in a Java renderer.
+    `frontend/operations/src/app/shared/ui/qr-code.ts` and `qr-encode.ts` are a TypeScript
+    component capped at 106 bytes (ADR 0119) and cannot run in a Java renderer.
   - **The bundled font** (engineering). Proposed default: a monospaced face with
     Cyrillic and the Latin Extended letters Uzbek uses (including U+02BB) under the SIL
     Open Font License, vendored under `src/main/resources/printing/`; the glyph test in
@@ -222,9 +222,9 @@ capability to ADR 0011.**
    the stored `receipt_url`. A `FISCAL_RECEIPT` is created only for a document that is
    `ISSUED` and of type `SALE`; a manual request for any other state is refused naming
    the state. The platform never prints a facsimile. Every print after the first of one
-   document carries a copy marker. The word «чек» / «receipt» appears on an `ORDER_SLIP`
-   never; an order summary says it is not a fiscal document and states, in one line, the
-   fiscal status at render time.
+   document carries a copy marker. An `ORDER_SLIP` is never titled or headed as a
+   receipt: its header says it is not a fiscal document, and one line states the fiscal
+   status at render time, which is the only place the word «чек» / «receipt» appears on it.
 
 6. **What prints where is explicit, and nothing prints by default.** A printer belongs to
    a location. A route maps (location, document type, optional station) to a printer,
@@ -237,7 +237,7 @@ capability to ADR 0011.**
 7. **A job is a durable, leased, at-least-once row.** States `QUEUED`, `CLAIMED`,
    `PRINTED`, `HANDED_OFF` (browser path), `DEAD`, `CANCELLED`, `EXPIRED`. An agent
    claims with a lease; a lapsed lease returns the job to `QUEUED` with the attempt
-   counted; five attempts over about eight minutes end in `DEAD`; a `KITCHEN_TICKET`
+   counted; six attempts over about eight minutes end in `DEAD`; a `KITCHEN_TICKET`
    expires 30 minutes after it was queued rather than printing stale; a job printed on
    a retry says so on the paper. A manual reprint is a new job, linked to the first,
    with a reason and the requesting person, and writes a `BUSINESS` audit fact.
@@ -440,7 +440,7 @@ width and cached by asset id and width as an ADR 0033 registered accelerator.
 
 | Signal | Source | Creates |
 |---|---|---|
-| `OrderConfirmed` | `ordering.api` | `ORDER_SLIP` per route with `auto_print` whose trigger is order-confirmed |
+| `OrderConfirmed` | `ordering.api` | `ORDER_SLIP` per route with `auto_print`. The trigger is fixed by the document type, not a column on the route: a slip prints when the order is confirmed, a ticket when it is released, a receipt when its fiscal document is issued |
 | ticket released (a new in-process signal in a new `kitchen.api` package, no ADR 0032 entry) | kitchen, from `KitchenTicketService` and `KitchenReleaseWorker` | `KITCHEN_TICKET` per station route; a station with no route falls back to a route with a null station; a preorder prints at its own release instant, never at confirmation (the ADR 0041 rule that stopped a 20:00 order printing at 11:00) |
 | kitchen amendment | `KitchenAmendmentListener`'s ticket event (V0477) | an amendment `KITCHEN_TICKET` with `source_revision` raised, carrying the kitchen's own amendment fact |
 | `FiscalDocumentIssued` | `payments.api` | `FISCAL_RECEIPT` per route with `auto_print`; the evidence is read through the port `FiscalCustomerReceiptTrigger` uses, never the table |
@@ -455,8 +455,8 @@ hours.
 
 ```text
 QUEUED --claim--> CLAIMED --result PRINTED--> PRINTED
-   ^                 |  \--result FAILED, attempt < 5--> QUEUED (next_attempt_at: +5 s, +15 s, +45 s, +2 min, +5 min)
-   |                 |  \--result FAILED, attempt = 5--> DEAD
+   ^                 |  \--result FAILED, attempt < 6--> QUEUED (next_attempt_at: +5 s, +15 s, +45 s, +2 min, +5 min)
+   |                 |  \--result FAILED, attempt = 6--> DEAD
    +--lease lapses---+      QUEUED past expires_at --> EXPIRED      QUEUED --cancel--> CANCELLED
 ```
 
@@ -468,7 +468,8 @@ their order. The agent calls, all under the agent's own `LOCATION` grant and all
 POST /api/v1/tenants/{t}/brands/{b}/locations/{l}/print/claims                print.job.claim   Idempotency-Key
      body  { printers: [{ key, status }], maxJobs }       long-poll up to 20 s
      reply { jobs: [{ jobId, printerKey, documentType, leaseToken, leaseExpiresAt }] }
-     the reply first repeats this agent's own unexpired leases, so a retry after a lost reply returns what was claimed
+     the reply first repeats this agent's own unexpired leases, so a retry after a lost reply returns what was claimed;
+     the stored idempotent reply holds identifiers and 60-second lease tokens, never an artifact
 GET  .../print/jobs/{jobId}/artifact?lease=...                                print.job.claim
      reply the ESC/POS bytes for the bound printer's width, rendered now from the stored document
 POST .../print/jobs/{jobId}/results                                           print.job.report  Idempotency-Key
@@ -522,7 +523,7 @@ render protocol it used, so a reprint explains itself.
 
 ### Events, alerts and metrics
 
-No Kafka event is published. The three signals above are in-process (ADR 0032's
+No Kafka event is published. The signals above are in-process (ADR 0032's
 `FiscalDocumentIssued` precedent), and the two things an operator watches, a printer
 offline and a dead job, are operations alerts through `OperationsAlertPort`. If a consumer
 appears, the catalogue entry and schema precede the producer. Metrics carry only outcome
@@ -548,8 +549,8 @@ readable only with its live lease token and by the agent that holds it.
   refused; the auto path creates nothing.
 - The bitmap of a `FISCAL_RECEIPT` decodes (test-only ZXing reader) to exactly the stored
   `receipt_url`, and the receipt reference and fiscal sign render as stored.
-- An `ORDER_SLIP` never contains the receipt word in any locale, and says «not a fiscal
-  document».
+- An `ORDER_SLIP`'s header never says receipt or «чек» in any locale and says «not a fiscal
+  document»; its fiscal-status line is the only place either word appears.
 - A station's ticket carries none of another station's lines; a combo prints one header and
   only this station's components.
 - Glyph test: every string the three catalogues use on a document, and U+02BB, renders with no
@@ -557,7 +558,7 @@ readable only with its live lease token and by the agent that holds it.
 - The same `OrderConfirmed` delivered twice, and the sweeper after a lost listener, each
   produce one job per route.
 - A lapsed lease returns the job to `QUEUED` and the next print is marked as a retry; a
-  result with a stale token is refused and changes nothing; five failures end `DEAD`; a
+  result with a stale token is refused and changes nothing; six failures end `DEAD`; a
   kitchen ticket past its expiry becomes `EXPIRED` and is never claimed.
 - An agent at location A is refused at location B and at another tenant, at the endpoint
   and by the composite foreign keys.
@@ -645,5 +646,5 @@ the screen stops it within a request without signing anyone out.
   `TenantRoleCatalog`, `StaffMembers`, `V0192`; `tenant.brand_media` (`V0243`); `V0022`,
   `V0326`; `ConfigurationKeys`; `EndpointCapabilityDeclarationTests`
 - `frontend/operations/src/app/shared/ui/table-print-card/`,
-  `frontend/operations/src/app/shared/ui/q-qr-code`,
+  `frontend/operations/src/app/shared/ui/qr-code.ts`, `qr-encode.ts`,
   `frontend/operations/src/app/features/settings/settings-nav.ts`
