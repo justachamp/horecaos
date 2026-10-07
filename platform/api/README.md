@@ -113,6 +113,13 @@ so this one is a decision of the build and the single place to change it), and
 an operation scheduled for removal is marked `deprecated` in the document from
 that day.
 
+**Registration is free.** ADR 0070 leaves open whether registering an app is a
+commercial act and says the shop's own decision will settle it; until then
+registration costs nothing and is not gated on a plan. Nothing meters or limits
+the number of apps a tenant authorises yet (ADR 0021 and ADR 0033 are not wired
+to this tier), and a public client is allowed at launch: a browser-only
+storefront is a supported client, with the honest limits above.
+
 **Rollout.** `horecaos.storefront.app-identity.required` (default `false`) is
 ADR 0070's switch between stage one and stage three. While it is `false` a
 request without the header still works and is counted
