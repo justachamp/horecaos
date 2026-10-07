@@ -251,6 +251,7 @@ export const financeEn = {
   'finance.nav.deliveryCost': 'Delivery cost',
   'finance.nav.payouts': 'Payouts',
   'finance.nav.subscription': 'Subscription',
+  'finance.nav.wallet': 'Wallet',
 
   'finance.cash.title': 'Cash reconciliation',
   'finance.cash.subtitle': 'Every courier cash handover across the fleet, worst first.',
@@ -479,5 +480,239 @@ export const financeEn = {
   'finance.subscription.modules.end.done':
     '{name} has ended. It is billed up to and including the {period} statement, and not after.',
   'finance.subscription.notBuiltNote':
-    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095); a module HorecaOS assigned is ended by HorecaOS — contact HorecaOS to remove one.',
+    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); a module HorecaOS assigned is ended by HorecaOS — contact HorecaOS to remove one. The prepaid wallet, top-ups and invoices are in the Wallet tab.',
+  // ------------------------------------------------- 8.6 prepaid wallet (ADR 0095)
+  'finance.wallet.title': 'Prepaid wallet',
+  'finance.wallet.denied': 'You do not have access to the wallet.',
+  'finance.wallet.subtitle':
+    'Money you paid HorecaOS in advance, bonus credit HorecaOS gave you, and how whatever they do not cover is collected.',
+  'finance.wallet.paid': 'Paid balance',
+  'finance.wallet.paid.hint': 'Money you paid. It never lapses, and it is refunded if you leave.',
+  'finance.wallet.bonus': 'Bonus credit',
+  'finance.wallet.bonus.hint':
+    'Given by HorecaOS. A statement spends it first, and each grant lapses on its own date.',
+  'finance.wallet.bonus.inLedger':
+    'The ledger sums {amount}: a grant past its date is counted there until the lapse is recorded.',
+  'finance.wallet.collectedBy': 'Collected by',
+  'finance.wallet.collectedBy.hint':
+    'What pays a statement’s remainder once the wallet has been drawn on.',
+  'finance.wallet.footerLink': 'Plan, modules and statements',
+  'finance.wallet.notice.owed':
+    'You owe {amount}. Statements with an amount due: {count}. Money you add here pays the oldest first.',
+  'finance.wallet.notice.lapsing': 'Bonus credit that is about to lapse',
+  'finance.wallet.notice.lapsing.line': '{amount} lapses on {date}',
+  'finance.wallet.notice.lapsing.hint':
+    'A statement spends bonus credit first, the grant that lapses soonest first. Credit not spent by its date is lost.',
+  'finance.wallet.notice.pending':
+    'A card top-up of {amount} is waiting for the card provider’s answer. It is settled on its own; do not repeat it.',
+  'finance.wallet.notice.cardNotConnected':
+    'Card payments are not connected yet. HorecaOS has not connected its card payment account, so a card cannot be added or charged. Pay by bank transfer until it is; nothing is lost.',
+  'finance.wallet.notice.bankNotConnected':
+    'Bank transfer is not set up yet. HorecaOS finance has not published the bank details an invoice is paid into, so an invoice cannot be issued.',
+  'finance.wallet.column.when': 'When',
+  'finance.wallet.column.amount': 'Amount',
+  'finance.wallet.column.result': 'Result',
+  'finance.wallet.column.status': 'Status',
+  'finance.wallet.column.paid': 'Paid',
+  'finance.wallet.column.due': 'Due',
+  'finance.wallet.beforeTax':
+    'Every amount is before tax. An invoice here is a request for payment, not a tax invoice.',
+  'finance.wallet.details.beneficiary': 'Beneficiary',
+  'finance.wallet.details.bankName': 'Bank',
+  'finance.wallet.details.account': 'Account',
+  'finance.wallet.details.mfo': 'MFO',
+  'finance.wallet.details.taxId': 'Tax ID (INN)',
+
+  'finance.wallet.topUp.title': 'Top up the wallet',
+  'finance.wallet.topUp.lead':
+    'Money you add is yours: it never lapses, and a statement is paid from it at once, after any bonus credit.',
+  'finance.wallet.topUp.byCard': 'By card',
+  'finance.wallet.topUp.amount': 'Amount ({currency})',
+  'finance.wallet.topUp.submitCard': 'Top up by card',
+  'finance.wallet.topUp.blocked.notConnected':
+    'Top-up by card is not connected yet: HorecaOS has not connected its card payment account. Use a bank transfer below.',
+  'finance.wallet.topUp.blocked.noCard':
+    'Put a card on file first, under “Card and how you pay” below.',
+  'finance.wallet.topUp.blocked.lapsed':
+    'The card on file has expired. Replace it first, under “Card and how you pay” below.',
+  'finance.wallet.topUp.blocked.pending':
+    'A top-up is waiting for the card provider’s answer. It is settled on its own; do not repeat it.',
+  'finance.wallet.topUp.blocked.unscaled':
+    'This wallet is held in {currency}, which this screen cannot read amounts in yet. Ask HorecaOS to top it up.',
+  'finance.wallet.topUp.outcome.SUCCEEDED': 'Added',
+  'finance.wallet.topUp.outcome.PENDING': 'Waiting for the provider',
+  'finance.wallet.topUp.outcome.FAILED': 'Declined',
+  'finance.wallet.topUp.outcome.NOT_CONFIGURED': 'Not connected',
+  'finance.wallet.topUp.result.SUCCEEDED': '{amount} was added to your wallet.',
+  'finance.wallet.topUp.result.FAILED': 'The card was declined ({reason}). Nothing was charged.',
+  'finance.wallet.topUp.result.FAILED.noReason': 'The card was declined. Nothing was charged.',
+  'finance.wallet.topUp.result.PENDING':
+    'The card provider has not answered yet. HorecaOS settles this on its own and you will not be charged twice. Do not repeat it.',
+  'finance.wallet.topUp.result.NOT_CONFIGURED':
+    'Card payments are not connected yet. Nothing was charged.',
+  'finance.wallet.topUp.history': 'Recent card top-ups',
+  'finance.wallet.topUp.history.empty': 'No card top-ups yet.',
+  'finance.wallet.decline.INSUFFICIENT_FUNDS': 'insufficient funds',
+  'finance.wallet.transfer.title': 'By bank transfer',
+  'finance.wallet.transfer.lead':
+    'Ask for an invoice for the amount, pay it from your bank, and write the invoice number in the payment’s purpose. HorecaOS finance credits the wallet when the money arrives, not before.',
+  'finance.wallet.transfer.notAvailable':
+    'HorecaOS has not published its bank details yet, so an invoice cannot be issued. Contact HorecaOS to pay in advance.',
+  'finance.wallet.transfer.submit': 'Ask for an invoice',
+  'finance.wallet.transfer.issued':
+    'Invoice {number} for {amount} was issued. Write {number} in the payment’s purpose. The wallet is credited when the money arrives.',
+
+  'finance.wallet.method.title': 'Card and how you pay',
+  'finance.wallet.method.lead':
+    'The card HorecaOS may charge, and what collects a statement’s remainder after the wallet has paid what it can.',
+  'finance.wallet.card.title': 'Card on file',
+  'finance.wallet.card.none': 'No card on file.',
+  'finance.wallet.card.ending': '{brand} ending {last4}',
+  'finance.wallet.card.endingNoBrand': 'Card ending {last4}',
+  'finance.wallet.card.expires': 'expires {expiry}',
+  'finance.wallet.card.lapsed': 'Expired',
+  'finance.wallet.card.lapsesSoon': 'Expires soon',
+  'finance.wallet.card.add': 'Add a card',
+  'finance.wallet.card.replace': 'Replace card',
+  'finance.wallet.card.remove': 'Remove card',
+  'finance.wallet.card.added': 'The card ending {last4} is on file.',
+  'finance.wallet.card.removed': 'The card was removed.',
+  'finance.wallet.card.removedToInvoice':
+    'The card was removed, and you are now collected by invoice and bank transfer.',
+  'finance.wallet.card.notConnected':
+    'A card cannot be added yet: HorecaOS has not connected its card payment account.',
+  'finance.wallet.card.inFlight':
+    'A card charge is waiting for the provider’s answer; the card can be removed once it has one.',
+  'finance.wallet.card.neverStored':
+    'The card number is typed into the payment provider’s own form. It never reaches HorecaOS, and only the last four digits are kept to show you.',
+  'finance.wallet.card.remove.title': 'Remove this card?',
+  'finance.wallet.card.remove.body':
+    'HorecaOS can no longer charge it. Money you already added stays in your wallet.',
+  'finance.wallet.card.remove.bodyCard':
+    'HorecaOS can no longer charge it, and you are collected by card today, so you will be collected by invoice and bank transfer instead. Money you already added stays in your wallet.',
+  'finance.wallet.card.remove.confirm': 'Remove card',
+  'finance.wallet.card.remove.cancel': 'Keep it',
+  'finance.wallet.enrol.title': 'Add your card',
+  'finance.wallet.enrol.lead':
+    'Enter the card in the payment provider’s own form, then enter here the code that form gives back and the code your bank texts you.',
+  'finance.wallet.enrol.openForm': 'Open the card form',
+  'finance.wallet.enrol.testHint':
+    'This is the built-in test card provider. Enter tok_fake_approve as the form code (tok_fake_decline is declined) and 000000 as the bank code.',
+  'finance.wallet.enrol.token': 'Code from the card form',
+  'finance.wallet.enrol.code': 'Code from your bank (SMS)',
+  'finance.wallet.enrol.confirm': 'Add card',
+  'finance.wallet.enrol.cancel': 'Cancel',
+  'finance.wallet.enrol.expires': 'This session ends at {time}.',
+  'finance.wallet.collect.title': 'How what the wallet does not cover is collected',
+  'finance.wallet.collect.legend': 'Collected by',
+  'finance.wallet.collect.INVOICE': 'Invoice and bank transfer',
+  'finance.wallet.collect.INVOICE.hint':
+    'You pay each statement’s remainder by bank transfer against its invoice.',
+  'finance.wallet.collect.WALLET': 'Prepaid wallet',
+  'finance.wallet.collect.WALLET.hint':
+    'Statements are paid from money you top up; a remainder waits for your next top-up.',
+  'finance.wallet.collect.CARD': 'Card',
+  'finance.wallet.collect.CARD.hint':
+    'HorecaOS charges your card on file for each statement’s remainder, automatically.',
+  'finance.wallet.collect.cardNeedsCard': 'Collecting by card needs a card on file; add one first.',
+  'finance.wallet.collect.cardNotConnected':
+    'Card payments are not connected yet. Until they are, collecting by card works like an invoice: you pay by bank transfer.',
+  'finance.wallet.collect.save': 'Save',
+  'finance.wallet.collect.saved': 'You are now collected by: {method}.',
+  'finance.wallet.collect.consent.title': 'Charge your card automatically?',
+  'finance.wallet.collect.consent.body':
+    'You agree that HorecaOS charges {card} for the remainder of every statement the wallet does not cover, without you being present. You can switch back at any time.',
+  'finance.wallet.collect.consent.confirm': 'Charge my card',
+  'finance.wallet.collect.consent.cancel': 'Not now',
+
+  'finance.wallet.invoices.title': 'Invoices for prepaid money',
+  'finance.wallet.invoices.lead':
+    'Each is a request for payment before tax. Pay it by bank transfer and write its number in the payment’s purpose.',
+  'finance.wallet.invoices.number': 'Number',
+  'finance.wallet.invoices.validUntil': 'Valid until',
+  'finance.wallet.invoices.status.OPEN': 'Waiting for payment',
+  'finance.wallet.invoices.status.PARTIALLY_PAID': 'Partly paid',
+  'finance.wallet.invoices.status.PAID': 'Paid',
+  'finance.wallet.invoices.status.EXPIRED': 'Expired',
+  'finance.wallet.invoices.status.CANCELLED': 'Withdrawn',
+  'finance.wallet.invoices.download': 'Download CSV',
+  'finance.wallet.invoices.cancel': 'Withdraw',
+  'finance.wallet.invoices.purpose': 'Write in the payment’s purpose',
+  'finance.wallet.invoices.frozen': 'The bank details are those of the day it was issued, {date}.',
+  'finance.wallet.invoices.empty': 'No invoices yet.',
+  'finance.wallet.invoices.cancel.title': 'Withdraw this invoice?',
+  'finance.wallet.invoices.cancel.body':
+    'Invoice {number} is withdrawn. Nothing has been paid against it. You can ask for another at any time.',
+  'finance.wallet.invoices.cancel.confirm': 'Withdraw invoice',
+  'finance.wallet.invoices.cancel.keep': 'Keep it',
+
+  'finance.wallet.statements.title': 'What your statements have been paid',
+  'finance.wallet.statements.lead':
+    'A statement is paid from the wallet when it is issued, bonus credit first. What is left is collected by your payment method.',
+  'finance.wallet.statements.number': 'Statement',
+  'finance.wallet.statements.period': 'Period',
+  'finance.wallet.statements.total': 'Total',
+  'finance.wallet.statements.settled': 'Paid',
+  'finance.wallet.statements.empty': 'No statement has been issued yet.',
+  'finance.wallet.ledger.title': 'Ledger',
+  'finance.wallet.ledger.lead':
+    'Every movement of money in your wallet. An entry is written once and never edited or deleted.',
+  'finance.wallet.ledger.entry': 'Entry',
+  'finance.wallet.ledger.empty': 'Nothing has moved in this wallet yet.',
+  'finance.wallet.ledger.loadMore': 'Show more',
+  'finance.wallet.ledger.loadingMore': 'Loading…',
+  'finance.wallet.ledger.appendOnly':
+    'Every entry is written once. Nothing here is edited or deleted, and a balance above is the sum of these entries.',
+  'finance.wallet.ledger.appendOnlyTruncated':
+    'Every entry is written once. These are the newest {count} entries of a longer ledger, so a balance above is the sum of the whole ledger and not of the rows shown.',
+  'finance.wallet.entry.TOP_UP': 'Money received',
+  'finance.wallet.entry.DEPOSIT': 'Activation deposit',
+  'finance.wallet.entry.BONUS_GRANT': 'Bonus credit granted',
+  'finance.wallet.entry.BONUS_EXPIRY': 'Bonus credit lapsed',
+  'finance.wallet.entry.STATEMENT_PAYMENT': 'Paid a statement',
+  'finance.wallet.entry.STATEMENT_REVERSAL': 'Statement voided, returned to the wallet',
+  'finance.wallet.entry.ADJUSTMENT': 'Correction by HorecaOS',
+  'finance.wallet.entry.REFUND': 'Refund',
+  'finance.wallet.entry.DEPOSIT_REVERSAL': 'Deposit taken back',
+  'finance.wallet.kind.PAID': 'Paid money',
+  'finance.wallet.kind.BONUS': 'Bonus',
+
+  'finance.wallet.reason.CARDS_NOT_AVAILABLE':
+    'Card payments are not connected yet: HorecaOS has not connected its card payment account.',
+  'finance.wallet.reason.BANK_DETAILS_NOT_CONFIGURED':
+    'HorecaOS has not published its bank details yet, so an invoice cannot be issued.',
+  'finance.wallet.reason.TOO_MANY_OPEN_INVOICES':
+    'Too many invoices are waiting to be paid. Pay or withdraw one first.',
+  'finance.wallet.reason.INVOICE_HAS_PAYMENTS':
+    'Money has already been recorded against this invoice, so it cannot be withdrawn.',
+  'finance.wallet.reason.INVOICE_CANCELLED': 'This invoice has already been withdrawn.',
+  'finance.wallet.reason.NO_CARD_ON_FILE': 'There is no card on file. Add one first.',
+  'finance.wallet.reason.CHARGE_IN_FLIGHT':
+    'A card charge is still waiting for the provider’s answer. Try again once it has one.',
+  'finance.wallet.reason.TOP_UP_IN_FLIGHT':
+    'A top-up is already waiting for the provider’s answer. It is settled on its own; do not repeat it.',
+  'finance.wallet.reason.SESSION_UNKNOWN':
+    'The card form’s session is not recognised. Start again with “Add a card”.',
+  'finance.wallet.reason.SESSION_EXPIRED':
+    'The card form’s session has expired. Start again with “Add a card”.',
+  'finance.wallet.reason.WRONG_CODE': 'The code from your bank is wrong. Check it and try again.',
+  'finance.wallet.reason.UNKNOWN_CARD_TOKEN':
+    'The provider did not recognise the code from the card form. Check it and try again.',
+
+  'finance.subscription.arrears.pastDue':
+    'Payment is late. Nothing is restricted yet, but HorecaOS may restrict the account if it stays unpaid.',
+  'finance.subscription.arrears.owed':
+    'You owe {amount}. Statements with an amount due: {count}. A statement is paid from your wallet first.',
+  'finance.subscription.arrears.pay.card':
+    'You can pay by card: top up the wallet and it pays the oldest statement first.',
+  'finance.subscription.arrears.pay.bank':
+    'You can pay by bank transfer: ask for an invoice, pay it, and write its number in the payment’s purpose.',
+  'finance.subscription.arrears.pay.none':
+    'Neither card nor bank transfer is available right now. Contact HorecaOS to arrange payment.',
+  'finance.subscription.arrears.openWallet': 'Open the wallet',
+  'finance.subscription.wallet.title': 'Prepaid wallet',
+  'finance.subscription.wallet.open': 'Open the wallet',
+  'finance.subscription.wallet.balances': 'Paid balance {paid} · bonus credit {bonus}',
+  'finance.subscription.statements.paid': 'Paid',
+  'finance.subscription.statements.due': 'Due',
 } as const;

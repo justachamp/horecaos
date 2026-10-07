@@ -253,6 +253,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.nav.deliveryCost': 'Стоимость доставки',
   'finance.nav.payouts': 'Выплаты курьерам',
   'finance.nav.subscription': 'Подписка',
+  'finance.nav.wallet': 'Кошелёк',
 
   'finance.cash.title': 'Инкассация',
   'finance.cash.subtitle': 'Все передачи наличных по курьерам, начиная с самых важных.',
@@ -482,5 +483,240 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.subscription.modules.end.done':
     '{name} отключён. Он оплачивается по выписку за {period} включительно, дальше — нет.',
   'finance.subscription.notBuiltNote':
-    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095); модуль, назначенный HorecaOS, отключают сотрудники HorecaOS — обратитесь в HorecaOS, чтобы удалить его.',
+    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); модуль, назначенный HorecaOS, отключают сотрудники HorecaOS — обратитесь в HorecaOS, чтобы удалить его. Предоплаченный кошелёк, пополнения и счета — на вкладке «Кошелёк».',
+  // ------------------------------------------------- 8.6 предоплаченный кошелёк (ADR 0095)
+  'finance.wallet.title': 'Предоплаченный кошелёк',
+  'finance.wallet.denied': 'У вас нет доступа к кошельку.',
+  'finance.wallet.subtitle':
+    'Деньги, которые вы заранее заплатили HorecaOS, бонусы, которые HorecaOS вам начислил, и то, как собирается остаток, который они не покрывают.',
+  'finance.wallet.paid': 'Оплаченный баланс',
+  'finance.wallet.paid.hint':
+    'Деньги, которые заплатили вы. Они не сгорают и возвращаются, если вы уходите.',
+  'finance.wallet.bonus': 'Бонусы',
+  'finance.wallet.bonus.hint':
+    'Начислены HorecaOS. Выписка тратит их первыми, и каждое начисление сгорает в свою дату.',
+  'finance.wallet.bonus.inLedger':
+    'В журнале сумма {amount}: начисление с истёкшей датой учитывается там, пока сгорание не записано.',
+  'finance.wallet.collectedBy': 'Способ оплаты',
+  'finance.wallet.collectedBy.hint': 'Чем оплачивается остаток выписки после списания с кошелька.',
+  'finance.wallet.footerLink': 'Тариф, модули и выписки',
+  'finance.wallet.notice.owed':
+    'Вы должны {amount}. Выписок с долгом: {count}. Деньги, которые вы добавите здесь, сначала оплатят самую старую.',
+  'finance.wallet.notice.lapsing': 'Бонусы, которые скоро сгорят',
+  'finance.wallet.notice.lapsing.line': '{amount} сгорит {date}',
+  'finance.wallet.notice.lapsing.hint':
+    'Выписка тратит бонусы первыми, сначала те, что сгорают раньше. Бонусы, не потраченные к дате, пропадают.',
+  'finance.wallet.notice.pending':
+    'Пополнение картой на {amount} ждёт ответа платёжного провайдера. Оно завершится само; не повторяйте его.',
+  'finance.wallet.notice.cardNotConnected':
+    'Оплата картой пока не подключена. HorecaOS ещё не подключил свой платёжный аккаунт для карт, поэтому карту нельзя добавить или списать с неё. Пока платите банковским переводом; ничего не теряется.',
+  'finance.wallet.notice.bankNotConnected':
+    'Банковский перевод пока не настроен. Финансовая служба HorecaOS ещё не опубликовала реквизиты, на которые оплачивается счёт, поэтому выставить счёт нельзя.',
+  'finance.wallet.column.when': 'Когда',
+  'finance.wallet.column.amount': 'Сумма',
+  'finance.wallet.column.result': 'Результат',
+  'finance.wallet.column.status': 'Статус',
+  'finance.wallet.column.paid': 'Оплачено',
+  'finance.wallet.column.due': 'К оплате',
+  'finance.wallet.beforeTax':
+    'Все суммы без налогов. Счёт здесь — это требование оплаты, а не налоговая счёт-фактура.',
+  'finance.wallet.details.beneficiary': 'Получатель',
+  'finance.wallet.details.bankName': 'Банк',
+  'finance.wallet.details.account': 'Расчётный счёт',
+  'finance.wallet.details.mfo': 'МФО',
+  'finance.wallet.details.taxId': 'ИНН',
+
+  'finance.wallet.topUp.title': 'Пополнить кошелёк',
+  'finance.wallet.topUp.lead':
+    'Добавленные деньги — ваши: они не сгорают, и выписка оплачивается из них сразу, после бонусов.',
+  'finance.wallet.topUp.byCard': 'Картой',
+  'finance.wallet.topUp.amount': 'Сумма ({currency})',
+  'finance.wallet.topUp.submitCard': 'Пополнить картой',
+  'finance.wallet.topUp.blocked.notConnected':
+    'Пополнение картой пока не подключено: HorecaOS ещё не подключил свой платёжный аккаунт для карт. Воспользуйтесь банковским переводом ниже.',
+  'finance.wallet.topUp.blocked.noCard':
+    'Сначала добавьте карту в разделе «Карта и способ оплаты» ниже.',
+  'finance.wallet.topUp.blocked.lapsed':
+    'Срок действия карты истёк. Сначала замените её в разделе «Карта и способ оплаты» ниже.',
+  'finance.wallet.topUp.blocked.pending':
+    'Пополнение ждёт ответа платёжного провайдера. Оно завершится само; не повторяйте его.',
+  'finance.wallet.topUp.blocked.unscaled':
+    'Кошелёк ведётся в валюте {currency}, суммы в которой этот экран пока не умеет читать. Попросите HorecaOS пополнить его.',
+  'finance.wallet.topUp.outcome.SUCCEEDED': 'Зачислено',
+  'finance.wallet.topUp.outcome.PENDING': 'Ждёт провайдера',
+  'finance.wallet.topUp.outcome.FAILED': 'Отклонено',
+  'finance.wallet.topUp.outcome.NOT_CONFIGURED': 'Не подключено',
+  'finance.wallet.topUp.result.SUCCEEDED': '{amount} зачислено в кошелёк.',
+  'finance.wallet.topUp.result.FAILED': 'Карта отклонена ({reason}). Ничего не списано.',
+  'finance.wallet.topUp.result.FAILED.noReason': 'Карта отклонена. Ничего не списано.',
+  'finance.wallet.topUp.result.PENDING':
+    'Платёжный провайдер ещё не ответил. HorecaOS завершит операцию сам, и повторного списания не будет. Не повторяйте её.',
+  'finance.wallet.topUp.result.NOT_CONFIGURED':
+    'Оплата картой пока не подключена. Ничего не списано.',
+  'finance.wallet.topUp.history': 'Последние пополнения картой',
+  'finance.wallet.topUp.history.empty': 'Пополнений картой пока не было.',
+  'finance.wallet.decline.INSUFFICIENT_FUNDS': 'недостаточно средств',
+  'finance.wallet.transfer.title': 'Банковским переводом',
+  'finance.wallet.transfer.lead':
+    'Запросите счёт на нужную сумму, оплатите его из банка и укажите номер счёта в назначении платежа. Финансовая служба HorecaOS зачисляет деньги в кошелёк, когда они поступят, а не раньше.',
+  'finance.wallet.transfer.notAvailable':
+    'HorecaOS ещё не опубликовал реквизиты, поэтому выставить счёт нельзя. Чтобы заплатить заранее, свяжитесь с HorecaOS.',
+  'finance.wallet.transfer.submit': 'Запросить счёт',
+  'finance.wallet.transfer.issued':
+    'Счёт {number} на {amount} выставлен. Укажите {number} в назначении платежа. Кошелёк пополнится, когда деньги поступят.',
+
+  'finance.wallet.method.title': 'Карта и способ оплаты',
+  'finance.wallet.method.lead':
+    'Карта, с которой HorecaOS может списывать, и то, чем оплачивается остаток выписки после того, как кошелёк заплатил сколько мог.',
+  'finance.wallet.card.title': 'Карта',
+  'finance.wallet.card.none': 'Карта не добавлена.',
+  'finance.wallet.card.ending': '{brand}, оканчивается на {last4}',
+  'finance.wallet.card.endingNoBrand': 'Карта, оканчивается на {last4}',
+  'finance.wallet.card.expires': 'действует до {expiry}',
+  'finance.wallet.card.lapsed': 'Срок истёк',
+  'finance.wallet.card.lapsesSoon': 'Скоро истекает',
+  'finance.wallet.card.add': 'Добавить карту',
+  'finance.wallet.card.replace': 'Заменить карту',
+  'finance.wallet.card.remove': 'Удалить карту',
+  'finance.wallet.card.added': 'Карта, оканчивающаяся на {last4}, добавлена.',
+  'finance.wallet.card.removed': 'Карта удалена.',
+  'finance.wallet.card.removedToInvoice':
+    'Карта удалена, теперь оплата — счётом и банковским переводом.',
+  'finance.wallet.card.notConnected':
+    'Карту пока нельзя добавить: HorecaOS ещё не подключил свой платёжный аккаунт для карт.',
+  'finance.wallet.card.inFlight':
+    'Списание с карты ждёт ответа провайдера; карту можно удалить, когда он ответит.',
+  'finance.wallet.card.neverStored':
+    'Номер карты вводится в собственной форме платёжного провайдера. HorecaOS его не получает, и хранятся только последние четыре цифры, чтобы показать вам карту.',
+  'finance.wallet.card.remove.title': 'Удалить эту карту?',
+  'finance.wallet.card.remove.body':
+    'HorecaOS больше не сможет с неё списывать. Деньги, которые вы уже добавили, остаются в кошельке.',
+  'finance.wallet.card.remove.bodyCard':
+    'HorecaOS больше не сможет с неё списывать, а сейчас оплата идёт картой — поэтому дальше она будет счётом и банковским переводом. Деньги, которые вы уже добавили, остаются в кошельке.',
+  'finance.wallet.card.remove.confirm': 'Удалить карту',
+  'finance.wallet.card.remove.cancel': 'Оставить',
+  'finance.wallet.enrol.title': 'Добавьте карту',
+  'finance.wallet.enrol.lead':
+    'Введите карту в собственной форме платёжного провайдера, затем укажите здесь код, который выдаст форма, и код из SMS от вашего банка.',
+  'finance.wallet.enrol.openForm': 'Открыть форму карты',
+  'finance.wallet.enrol.testHint':
+    'Это встроенный тестовый провайдер карт. В поле кода формы введите tok_fake_approve (tok_fake_decline будет отклонён), а в поле кода банка — 000000.',
+  'finance.wallet.enrol.token': 'Код из формы карты',
+  'finance.wallet.enrol.code': 'Код от банка (SMS)',
+  'finance.wallet.enrol.confirm': 'Добавить карту',
+  'finance.wallet.enrol.cancel': 'Отмена',
+  'finance.wallet.enrol.expires': 'Сессия действует до {time}.',
+  'finance.wallet.collect.title': 'Чем оплачивается то, что не покрыл кошелёк',
+  'finance.wallet.collect.legend': 'Способ оплаты',
+  'finance.wallet.collect.INVOICE': 'Счёт и банковский перевод',
+  'finance.wallet.collect.INVOICE.hint':
+    'Остаток каждой выписки вы оплачиваете банковским переводом по её счёту.',
+  'finance.wallet.collect.WALLET': 'Предоплаченный кошелёк',
+  'finance.wallet.collect.WALLET.hint':
+    'Выписки оплачиваются из пополненных вами денег; остаток ждёт следующего пополнения.',
+  'finance.wallet.collect.CARD': 'Карта',
+  'finance.wallet.collect.CARD.hint':
+    'HorecaOS автоматически списывает остаток каждой выписки с вашей карты.',
+  'finance.wallet.collect.cardNeedsCard':
+    'Для оплаты картой нужна добавленная карта; сначала добавьте её.',
+  'finance.wallet.collect.cardNotConnected':
+    'Оплата картой пока не подключена. Пока этого нет, оплата картой работает как счёт: вы платите банковским переводом.',
+  'finance.wallet.collect.save': 'Сохранить',
+  'finance.wallet.collect.saved': 'Теперь способ оплаты: {method}.',
+  'finance.wallet.collect.consent.title': 'Списывать с карты автоматически?',
+  'finance.wallet.collect.consent.body':
+    'Вы соглашаетесь, что HorecaOS будет списывать с {card} остаток каждой выписки, которую не покрыл кошелёк, без вашего участия. Вернуться к другому способу можно в любой момент.',
+  'finance.wallet.collect.consent.confirm': 'Списывать с моей карты',
+  'finance.wallet.collect.consent.cancel': 'Не сейчас',
+
+  'finance.wallet.invoices.title': 'Счета на предоплату',
+  'finance.wallet.invoices.lead':
+    'Каждый — требование оплаты без налогов. Оплатите банковским переводом и укажите его номер в назначении платежа.',
+  'finance.wallet.invoices.number': 'Номер',
+  'finance.wallet.invoices.validUntil': 'Действует до',
+  'finance.wallet.invoices.status.OPEN': 'Ждёт оплаты',
+  'finance.wallet.invoices.status.PARTIALLY_PAID': 'Оплачен частично',
+  'finance.wallet.invoices.status.PAID': 'Оплачен',
+  'finance.wallet.invoices.status.EXPIRED': 'Срок истёк',
+  'finance.wallet.invoices.status.CANCELLED': 'Отозван',
+  'finance.wallet.invoices.download': 'Скачать CSV',
+  'finance.wallet.invoices.cancel': 'Отозвать',
+  'finance.wallet.invoices.purpose': 'Укажите в назначении платежа',
+  'finance.wallet.invoices.frozen': 'Реквизиты — на день выставления счёта, {date}.',
+  'finance.wallet.invoices.empty': 'Счетов пока нет.',
+  'finance.wallet.invoices.cancel.title': 'Отозвать этот счёт?',
+  'finance.wallet.invoices.cancel.body':
+    'Счёт {number} будет отозван. По нему ничего не оплачено. Новый счёт можно запросить в любой момент.',
+  'finance.wallet.invoices.cancel.confirm': 'Отозвать счёт',
+  'finance.wallet.invoices.cancel.keep': 'Оставить',
+
+  'finance.wallet.statements.title': 'Чем оплачены ваши выписки',
+  'finance.wallet.statements.lead':
+    'Выписка оплачивается из кошелька при выставлении, сначала бонусами. Остаток собирается выбранным способом оплаты.',
+  'finance.wallet.statements.number': 'Выписка',
+  'finance.wallet.statements.period': 'Период',
+  'finance.wallet.statements.total': 'Итого',
+  'finance.wallet.statements.settled': 'Оплачена',
+  'finance.wallet.statements.empty': 'Выписок пока не выставлялось.',
+  'finance.wallet.ledger.title': 'Журнал',
+  'finance.wallet.ledger.lead':
+    'Каждое движение денег в вашем кошельке. Запись создаётся один раз и никогда не меняется и не удаляется.',
+  'finance.wallet.ledger.entry': 'Запись',
+  'finance.wallet.ledger.empty': 'В этом кошельке пока ничего не двигалось.',
+  'finance.wallet.ledger.loadMore': 'Показать ещё',
+  'finance.wallet.ledger.loadingMore': 'Загрузка…',
+  'finance.wallet.ledger.appendOnly':
+    'Каждая запись создаётся один раз. Здесь ничего не меняется и не удаляется, а баланс выше — сумма этих записей.',
+  'finance.wallet.ledger.appendOnlyTruncated':
+    'Каждая запись создаётся один раз. Показаны новейшие {count} записей длинного журнала, поэтому баланс выше — сумма всего журнала, а не показанных строк.',
+  'finance.wallet.entry.TOP_UP': 'Получены деньги',
+  'finance.wallet.entry.DEPOSIT': 'Активационный депозит',
+  'finance.wallet.entry.BONUS_GRANT': 'Начислены бонусы',
+  'finance.wallet.entry.BONUS_EXPIRY': 'Бонусы сгорели',
+  'finance.wallet.entry.STATEMENT_PAYMENT': 'Оплата выписки',
+  'finance.wallet.entry.STATEMENT_REVERSAL': 'Выписка аннулирована, деньги вернулись в кошелёк',
+  'finance.wallet.entry.ADJUSTMENT': 'Корректировка HorecaOS',
+  'finance.wallet.entry.REFUND': 'Возврат',
+  'finance.wallet.entry.DEPOSIT_REVERSAL': 'Депозит возвращён',
+  'finance.wallet.kind.PAID': 'Оплаченные',
+  'finance.wallet.kind.BONUS': 'Бонусные',
+
+  'finance.wallet.reason.CARDS_NOT_AVAILABLE':
+    'Оплата картой пока не подключена: HorecaOS ещё не подключил свой платёжный аккаунт для карт.',
+  'finance.wallet.reason.BANK_DETAILS_NOT_CONFIGURED':
+    'HorecaOS ещё не опубликовал реквизиты, поэтому выставить счёт нельзя.',
+  'finance.wallet.reason.TOO_MANY_OPEN_INVOICES':
+    'Слишком много счетов ждут оплаты. Сначала оплатите или отзовите один.',
+  'finance.wallet.reason.INVOICE_HAS_PAYMENTS':
+    'По этому счёту уже записаны деньги, поэтому отозвать его нельзя.',
+  'finance.wallet.reason.INVOICE_CANCELLED': 'Этот счёт уже отозван.',
+  'finance.wallet.reason.NO_CARD_ON_FILE': 'Карта не добавлена. Сначала добавьте её.',
+  'finance.wallet.reason.CHARGE_IN_FLIGHT':
+    'Списание с карты ещё ждёт ответа провайдера. Повторите, когда он ответит.',
+  'finance.wallet.reason.TOP_UP_IN_FLIGHT':
+    'Пополнение уже ждёт ответа провайдера. Оно завершится само; не повторяйте его.',
+  'finance.wallet.reason.SESSION_UNKNOWN':
+    'Сессия формы карты не найдена. Начните заново с «Добавить карту».',
+  'finance.wallet.reason.SESSION_EXPIRED':
+    'Сессия формы карты истекла. Начните заново с «Добавить карту».',
+  'finance.wallet.reason.WRONG_CODE': 'Код от банка неверный. Проверьте его и повторите.',
+  'finance.wallet.reason.UNKNOWN_CARD_TOKEN':
+    'Провайдер не узнал код из формы карты. Проверьте его и повторите.',
+
+  'finance.subscription.arrears.pastDue':
+    'Платёж просрочен. Пока ничего не ограничено, но если долг останется, HorecaOS может ограничить аккаунт.',
+  'finance.subscription.arrears.owed':
+    'Вы должны {amount}. Выписок с долгом: {count}. Выписка сначала оплачивается из кошелька.',
+  'finance.subscription.arrears.pay.card':
+    'Можно заплатить картой: пополните кошелёк, и он сначала оплатит самую старую выписку.',
+  'finance.subscription.arrears.pay.bank':
+    'Можно заплатить банковским переводом: запросите счёт, оплатите его и укажите его номер в назначении платежа.',
+  'finance.subscription.arrears.pay.none':
+    'Сейчас недоступны ни карта, ни банковский перевод. Свяжитесь с HorecaOS, чтобы договориться об оплате.',
+  'finance.subscription.arrears.openWallet': 'Открыть кошелёк',
+  'finance.subscription.wallet.title': 'Предоплаченный кошелёк',
+  'finance.subscription.wallet.open': 'Открыть кошелёк',
+  'finance.subscription.wallet.balances': 'Оплаченный баланс {paid} · бонусы {bonus}',
+  'finance.subscription.statements.paid': 'Оплачено',
+  'finance.subscription.statements.due': 'К оплате',
 };

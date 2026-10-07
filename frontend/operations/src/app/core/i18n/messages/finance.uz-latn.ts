@@ -254,6 +254,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.nav.deliveryCost': 'Yetkazib berish tannarxi',
   'finance.nav.payouts': 'Kuryer toʻlovlari',
   'finance.nav.subscription': 'Obuna',
+  'finance.nav.wallet': 'Hamyon',
 
   'finance.cash.title': 'Naqd pulni solishtirish',
   'finance.cash.subtitle': 'Barcha kuryerlarning naqd pul topshirishlari, eng muhimidan boshlab.',
@@ -485,5 +486,240 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.subscription.modules.end.done':
     '{name} oʻchirildi. U {period} hisobotigacha (shu jumladan) hisoblanadi, undan keyin esa yoʻq.',
   'finance.subscription.notBuiltNote':
-    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095); HorecaOS tayinlagan modulni HorecaOS xodimlari oʻchiradi — uni olib tashlash uchun HorecaOS bilan bogʻlaning.',
+    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); HorecaOS tayinlagan modulni HorecaOS xodimlari oʻchiradi — uni olib tashlash uchun HorecaOS bilan bogʻlaning. Oldindan toʻlangan hamyon, toʻldirishlar va hisob-fakturalar “Hamyon” yorligʻida.',
+  // ------------------------------------------------- 8.6 oldindan toʻlangan hamyon (ADR 0095)
+  'finance.wallet.title': 'Oldindan toʻlangan hamyon',
+  'finance.wallet.denied': 'Sizda hamyonga kirish huquqi yoʻq.',
+  'finance.wallet.subtitle':
+    'Siz oldindan toʻlagan pul, HorecaOS bergan bonuslar va ular yopmagan qoldiq qanday undirilishi.',
+  'finance.wallet.paid': 'Toʻlangan balans',
+  'finance.wallet.paid.hint': 'Siz toʻlagan pul. U kuymaydi va ketsangiz qaytariladi.',
+  'finance.wallet.bonus': 'Bonuslar',
+  'finance.wallet.bonus.hint':
+    'HorecaOS bergan. Hisob avval shularni sarflaydi, har bir bonus oʻz sanasida kuyadi.',
+  'finance.wallet.bonus.inLedger':
+    'Jurnalda yigʻindi {amount}: sanasi oʻtgan bonus kuyishi yozilguncha shu yerda hisoblanadi.',
+  'finance.wallet.collectedBy': 'Toʻlov usuli',
+  'finance.wallet.collectedBy.hint':
+    'Hamyondan yechilgach, hisobning qoldigʻi nima bilan toʻlanadi.',
+  'finance.wallet.footerLink': 'Tarif, modullar va hisoblar',
+  'finance.wallet.notice.owed':
+    'Siz {amount} qarzdorsiz. Qarzi bor hisoblar soni: {count}. Bu yerga qoʻshgan pulingiz avval eng eski hisobni yopadi.',
+  'finance.wallet.notice.lapsing': 'Tez orada kuyadigan bonuslar',
+  'finance.wallet.notice.lapsing.line': '{amount} — {date} kuni kuyadi',
+  'finance.wallet.notice.lapsing.hint':
+    'Hisob avval bonuslarni sarflaydi, avval tezroq kuyadiganini. Sanagacha sarflanmagan bonus yoʻqoladi.',
+  'finance.wallet.notice.pending':
+    '{amount} miqdoridagi karta orqali toʻldirish toʻlov provayderining javobini kutmoqda. U oʻzi yakunlanadi; takrorlamang.',
+  'finance.wallet.notice.cardNotConnected':
+    'Karta orqali toʻlov hali ulanmagan. HorecaOS karta uchun toʻlov hisobini hali ulamagan, shuning uchun karta qoʻshib ham, undan yechib ham boʻlmaydi. Hozircha bank oʻtkazmasi bilan toʻlang; hech narsa yoʻqolmaydi.',
+  'finance.wallet.notice.bankNotConnected':
+    'Bank oʻtkazmasi hali sozlanmagan. HorecaOS moliya xizmati hisob-faktura toʻlanadigan bank rekvizitlarini hali eʻlon qilmagan, shuning uchun hisob-faktura chiqarib boʻlmaydi.',
+  'finance.wallet.column.when': 'Qachon',
+  'finance.wallet.column.amount': 'Summa',
+  'finance.wallet.column.result': 'Natija',
+  'finance.wallet.column.status': 'Holat',
+  'finance.wallet.column.paid': 'Toʻlangan',
+  'finance.wallet.column.due': 'Toʻlanishi kerak',
+  'finance.wallet.beforeTax':
+    'Barcha summalar soliqsiz. Bu yerdagi hisob-faktura toʻlov talabi, soliq hisob-fakturasi emas.',
+  'finance.wallet.details.beneficiary': 'Oluvchi',
+  'finance.wallet.details.bankName': 'Bank',
+  'finance.wallet.details.account': 'Hisob raqami',
+  'finance.wallet.details.mfo': 'MFO',
+  'finance.wallet.details.taxId': 'STIR',
+
+  'finance.wallet.topUp.title': 'Hamyonni toʻldirish',
+  'finance.wallet.topUp.lead':
+    'Qoʻshgan pulingiz sizniki: u kuymaydi va hisob darhol shundan toʻlanadi, bonuslardan keyin.',
+  'finance.wallet.topUp.byCard': 'Karta orqali',
+  'finance.wallet.topUp.amount': 'Summa ({currency})',
+  'finance.wallet.topUp.submitCard': 'Karta orqali toʻldirish',
+  'finance.wallet.topUp.blocked.notConnected':
+    'Karta orqali toʻldirish hali ulanmagan: HorecaOS karta uchun toʻlov hisobini hali ulamagan. Quyidagi bank oʻtkazmasidan foydalaning.',
+  'finance.wallet.topUp.blocked.noCard':
+    'Avval quyidagi “Karta va toʻlov usuli” boʻlimida karta qoʻshing.',
+  'finance.wallet.topUp.blocked.lapsed':
+    'Kartaning amal qilish muddati tugagan. Avval quyidagi “Karta va toʻlov usuli” boʻlimida uni almashtiring.',
+  'finance.wallet.topUp.blocked.pending':
+    'Toʻldirish toʻlov provayderining javobini kutmoqda. U oʻzi yakunlanadi; takrorlamang.',
+  'finance.wallet.topUp.blocked.unscaled':
+    'Hamyon {currency} valyutasida yuritiladi, bu ekran hozircha undagi summalarni oʻqiy olmaydi. Uni toʻldirish uchun HorecaOS bilan bogʻlaning.',
+  'finance.wallet.topUp.outcome.SUCCEEDED': 'Qoʻshildi',
+  'finance.wallet.topUp.outcome.PENDING': 'Provayderni kutmoqda',
+  'finance.wallet.topUp.outcome.FAILED': 'Rad etildi',
+  'finance.wallet.topUp.outcome.NOT_CONFIGURED': 'Ulanmagan',
+  'finance.wallet.topUp.result.SUCCEEDED': '{amount} hamyoningizga qoʻshildi.',
+  'finance.wallet.topUp.result.FAILED': 'Karta rad etildi ({reason}). Hech narsa yechilmadi.',
+  'finance.wallet.topUp.result.FAILED.noReason': 'Karta rad etildi. Hech narsa yechilmadi.',
+  'finance.wallet.topUp.result.PENDING':
+    'Toʻlov provayderi hali javob bermadi. HorecaOS buni oʻzi yakunlaydi va sizdan ikki marta yechilmaydi. Takrorlamang.',
+  'finance.wallet.topUp.result.NOT_CONFIGURED':
+    'Karta orqali toʻlov hali ulanmagan. Hech narsa yechilmadi.',
+  'finance.wallet.topUp.history': 'Karta orqali oxirgi toʻldirishlar',
+  'finance.wallet.topUp.history.empty': 'Karta orqali toʻldirish hali boʻlmagan.',
+  'finance.wallet.decline.INSUFFICIENT_FUNDS': 'mablagʻ yetarli emas',
+  'finance.wallet.transfer.title': 'Bank oʻtkazmasi orqali',
+  'finance.wallet.transfer.lead':
+    'Kerakli summaga hisob-faktura soʻrang, uni bankdan toʻlang va toʻlov maqsadiga hisob-faktura raqamini yozing. HorecaOS moliya xizmati hamyonni pul kelgach toʻldiradi, oldin emas.',
+  'finance.wallet.transfer.notAvailable':
+    'HorecaOS bank rekvizitlarini hali eʻlon qilmagan, shuning uchun hisob-faktura chiqarib boʻlmaydi. Oldindan toʻlash uchun HorecaOS bilan bogʻlaning.',
+  'finance.wallet.transfer.submit': 'Hisob-faktura soʻrash',
+  'finance.wallet.transfer.issued':
+    '{amount} miqdoridagi {number} hisob-fakturasi chiqarildi. Toʻlov maqsadiga {number} ni yozing. Pul kelgach hamyon toʻldiriladi.',
+
+  'finance.wallet.method.title': 'Karta va toʻlov usuli',
+  'finance.wallet.method.lead':
+    'HorecaOS yecha oladigan karta va hamyon imkon qadar toʻlagandan keyin hisob qoldigʻi nima bilan toʻlanishi.',
+  'finance.wallet.card.title': 'Saqlangan karta',
+  'finance.wallet.card.none': 'Karta qoʻshilmagan.',
+  'finance.wallet.card.ending': '{brand}, oxiri {last4}',
+  'finance.wallet.card.endingNoBrand': 'Karta, oxiri {last4}',
+  'finance.wallet.card.expires': 'amal qilish muddati {expiry}',
+  'finance.wallet.card.lapsed': 'Muddati tugagan',
+  'finance.wallet.card.lapsesSoon': 'Muddati tez orada tugaydi',
+  'finance.wallet.card.add': 'Karta qoʻshish',
+  'finance.wallet.card.replace': 'Kartani almashtirish',
+  'finance.wallet.card.remove': 'Kartani oʻchirish',
+  'finance.wallet.card.added': 'Oxiri {last4} boʻlgan karta qoʻshildi.',
+  'finance.wallet.card.removed': 'Karta oʻchirildi.',
+  'finance.wallet.card.removedToInvoice':
+    'Karta oʻchirildi, endi toʻlov hisob-faktura va bank oʻtkazmasi orqali.',
+  'finance.wallet.card.notConnected':
+    'Karta hozircha qoʻshilmaydi: HorecaOS karta uchun toʻlov hisobini hali ulamagan.',
+  'finance.wallet.card.inFlight':
+    'Kartadan yechish provayder javobini kutmoqda; u javob bergach kartani oʻchirish mumkin.',
+  'finance.wallet.card.neverStored':
+    'Karta raqami toʻlov provayderining oʻz shaklida kiritiladi. HorecaOS uni umuman olmaydi; sizga koʻrsatish uchun faqat oxirgi toʻrt raqam saqlanadi.',
+  'finance.wallet.card.remove.title': 'Bu karta oʻchirilsinmi?',
+  'finance.wallet.card.remove.body':
+    'HorecaOS endi undan yecha olmaydi. Siz allaqachon qoʻshgan pul hamyonda qoladi.',
+  'finance.wallet.card.remove.bodyCard':
+    'HorecaOS endi undan yecha olmaydi, hozir esa toʻlov karta orqali — shuning uchun keyin hisob-faktura va bank oʻtkazmasi boʻladi. Siz allaqachon qoʻshgan pul hamyonda qoladi.',
+  'finance.wallet.card.remove.confirm': 'Kartani oʻchirish',
+  'finance.wallet.card.remove.cancel': 'Qoldirish',
+  'finance.wallet.enrol.title': 'Kartangizni qoʻshing',
+  'finance.wallet.enrol.lead':
+    'Kartani toʻlov provayderining oʻz shaklida kiriting, soʻng shaklning bergan kodini va bankingiz SMS bilan yuborgan kodni shu yerga kiriting.',
+  'finance.wallet.enrol.openForm': 'Karta shaklini ochish',
+  'finance.wallet.enrol.testHint':
+    'Bu ichki test karta provayderi. Shakl kodi oʻrniga tok_fake_approve (tok_fake_decline rad etiladi), bank kodi oʻrniga 000000 kiriting.',
+  'finance.wallet.enrol.token': 'Karta shaklidagi kod',
+  'finance.wallet.enrol.code': 'Bankdan kod (SMS)',
+  'finance.wallet.enrol.confirm': 'Kartani qoʻshish',
+  'finance.wallet.enrol.cancel': 'Bekor qilish',
+  'finance.wallet.enrol.expires': 'Sessiya {time} gacha amal qiladi.',
+  'finance.wallet.collect.title': 'Hamyon yopmagan qism nima bilan toʻlanadi',
+  'finance.wallet.collect.legend': 'Toʻlov usuli',
+  'finance.wallet.collect.INVOICE': 'Hisob-faktura va bank oʻtkazmasi',
+  'finance.wallet.collect.INVOICE.hint':
+    'Har bir hisob qoldigʻini hisob-fakturasi boʻyicha bank oʻtkazmasi bilan toʻlaysiz.',
+  'finance.wallet.collect.WALLET': 'Oldindan toʻlangan hamyon',
+  'finance.wallet.collect.WALLET.hint':
+    'Hisoblar siz toʻldirgan puldan toʻlanadi; qoldiq keyingi toʻldirishni kutadi.',
+  'finance.wallet.collect.CARD': 'Karta',
+  'finance.wallet.collect.CARD.hint':
+    'HorecaOS har bir hisob qoldigʻini saqlangan kartangizdan avtomatik yechadi.',
+  'finance.wallet.collect.cardNeedsCard':
+    'Karta orqali toʻlash uchun saqlangan karta kerak; avval qoʻshing.',
+  'finance.wallet.collect.cardNotConnected':
+    'Karta orqali toʻlov hali ulanmagan. Ulanmaguncha karta orqali toʻlash hisob-faktura kabi ishlaydi: bank oʻtkazmasi bilan toʻlaysiz.',
+  'finance.wallet.collect.save': 'Saqlash',
+  'finance.wallet.collect.saved': 'Endi toʻlov usuli: {method}.',
+  'finance.wallet.collect.consent.title': 'Kartadan avtomatik yechilsinmi?',
+  'finance.wallet.collect.consent.body':
+    'Siz HorecaOS hamyon yopmagan har bir hisob qoldigʻini siz ishtirok etmasdan {card} dan yechishiga rozilik bildirasiz. Istalgan payt boshqa usulga qaytishingiz mumkin.',
+  'finance.wallet.collect.consent.confirm': 'Kartamdan yechilsin',
+  'finance.wallet.collect.consent.cancel': 'Hozir emas',
+
+  'finance.wallet.invoices.title': 'Oldindan toʻlov hisob-fakturalari',
+  'finance.wallet.invoices.lead':
+    'Har biri soliqsiz toʻlov talabi. Uni bank oʻtkazmasi bilan toʻlang va toʻlov maqsadiga raqamini yozing.',
+  'finance.wallet.invoices.number': 'Raqam',
+  'finance.wallet.invoices.validUntil': 'Amal qiladi',
+  'finance.wallet.invoices.status.OPEN': 'Toʻlovni kutmoqda',
+  'finance.wallet.invoices.status.PARTIALLY_PAID': 'Qisman toʻlangan',
+  'finance.wallet.invoices.status.PAID': 'Toʻlangan',
+  'finance.wallet.invoices.status.EXPIRED': 'Muddati tugagan',
+  'finance.wallet.invoices.status.CANCELLED': 'Bekor qilingan',
+  'finance.wallet.invoices.download': 'CSV yuklab olish',
+  'finance.wallet.invoices.cancel': 'Bekor qilish',
+  'finance.wallet.invoices.purpose': 'Toʻlov maqsadiga yozing',
+  'finance.wallet.invoices.frozen': 'Rekvizitlar chiqarilgan kunniki, {date}.',
+  'finance.wallet.invoices.empty': 'Hisob-fakturalar hali yoʻq.',
+  'finance.wallet.invoices.cancel.title': 'Bu hisob-faktura bekor qilinsinmi?',
+  'finance.wallet.invoices.cancel.body':
+    '{number} hisob-fakturasi bekor qilinadi. Unga hech narsa toʻlanmagan. Istalgan payt yangisini soʻrashingiz mumkin.',
+  'finance.wallet.invoices.cancel.confirm': 'Hisob-fakturani bekor qilish',
+  'finance.wallet.invoices.cancel.keep': 'Qoldirish',
+
+  'finance.wallet.statements.title': 'Hisoblaringiz nima bilan toʻlangan',
+  'finance.wallet.statements.lead':
+    'Hisob chiqarilganda hamyondan toʻlanadi, avval bonuslar. Qolgani toʻlov usulingiz bilan undiriladi.',
+  'finance.wallet.statements.number': 'Hisob',
+  'finance.wallet.statements.period': 'Davr',
+  'finance.wallet.statements.total': 'Jami',
+  'finance.wallet.statements.settled': 'Toʻlangan',
+  'finance.wallet.statements.empty': 'Hali hisob chiqarilmagan.',
+  'finance.wallet.ledger.title': 'Jurnal',
+  'finance.wallet.ledger.lead':
+    'Hamyoningizdagi pulning har bir harakati. Yozuv bir marta yoziladi va hech qachon oʻzgartirilmaydi yoki oʻchirilmaydi.',
+  'finance.wallet.ledger.entry': 'Yozuv',
+  'finance.wallet.ledger.empty': 'Bu hamyonda hali hech narsa harakatlanmagan.',
+  'finance.wallet.ledger.loadMore': 'Yana koʻrsatish',
+  'finance.wallet.ledger.loadingMore': 'Yuklanmoqda…',
+  'finance.wallet.ledger.appendOnly':
+    'Har bir yozuv bir marta yoziladi. Bu yerda hech narsa oʻzgartirilmaydi yoki oʻchirilmaydi, yuqoridagi balans esa shu yozuvlar yigʻindisi.',
+  'finance.wallet.ledger.appendOnlyTruncated':
+    'Har bir yozuv bir marta yoziladi. Bular uzun jurnalning eng yangi {count} ta yozuvi, shuning uchun yuqoridagi balans koʻrsatilgan qatorlarning emas, butun jurnalning yigʻindisi.',
+  'finance.wallet.entry.TOP_UP': 'Pul qabul qilindi',
+  'finance.wallet.entry.DEPOSIT': 'Faollashtirish depoziti',
+  'finance.wallet.entry.BONUS_GRANT': 'Bonus berildi',
+  'finance.wallet.entry.BONUS_EXPIRY': 'Bonus kuydi',
+  'finance.wallet.entry.STATEMENT_PAYMENT': 'Hisob toʻlandi',
+  'finance.wallet.entry.STATEMENT_REVERSAL': 'Hisob bekor qilindi, pul hamyonga qaytdi',
+  'finance.wallet.entry.ADJUSTMENT': 'HorecaOS tuzatishi',
+  'finance.wallet.entry.REFUND': 'Qaytarish',
+  'finance.wallet.entry.DEPOSIT_REVERSAL': 'Depozit qaytarildi',
+  'finance.wallet.kind.PAID': 'Toʻlangan',
+  'finance.wallet.kind.BONUS': 'Bonus',
+
+  'finance.wallet.reason.CARDS_NOT_AVAILABLE':
+    'Karta orqali toʻlov hali ulanmagan: HorecaOS karta uchun toʻlov hisobini hali ulamagan.',
+  'finance.wallet.reason.BANK_DETAILS_NOT_CONFIGURED':
+    'HorecaOS bank rekvizitlarini hali eʻlon qilmagan, shuning uchun hisob-faktura chiqarib boʻlmaydi.',
+  'finance.wallet.reason.TOO_MANY_OPEN_INVOICES':
+    'Toʻlovni kutayotgan hisob-fakturalar juda koʻp. Avval birini toʻlang yoki bekor qiling.',
+  'finance.wallet.reason.INVOICE_HAS_PAYMENTS':
+    'Bu hisob-fakturaga allaqachon pul yozilgan, shuning uchun uni bekor qilib boʻlmaydi.',
+  'finance.wallet.reason.INVOICE_CANCELLED': 'Bu hisob-faktura allaqachon bekor qilingan.',
+  'finance.wallet.reason.NO_CARD_ON_FILE': 'Karta qoʻshilmagan. Avval qoʻshing.',
+  'finance.wallet.reason.CHARGE_IN_FLIGHT':
+    'Kartadan yechish hali provayder javobini kutmoqda. U javob bergach qayta urining.',
+  'finance.wallet.reason.TOP_UP_IN_FLIGHT':
+    'Toʻldirish allaqachon provayder javobini kutmoqda. U oʻzi yakunlanadi; takrorlamang.',
+  'finance.wallet.reason.SESSION_UNKNOWN':
+    'Karta shaklining sessiyasi topilmadi. “Karta qoʻshish” dan qaytadan boshlang.',
+  'finance.wallet.reason.SESSION_EXPIRED':
+    'Karta shaklining sessiyasi tugagan. “Karta qoʻshish” dan qaytadan boshlang.',
+  'finance.wallet.reason.WRONG_CODE': 'Bankdan kelgan kod notoʻgʻri. Tekshirib, qayta urining.',
+  'finance.wallet.reason.UNKNOWN_CARD_TOKEN':
+    'Provayder karta shaklidagi kodni tanimadi. Tekshirib, qayta urining.',
+
+  'finance.subscription.arrears.pastDue':
+    'Toʻlov kechikkan. Hozircha hech narsa cheklanmagan, lekin qarz qolsa, HorecaOS hisobni cheklashi mumkin.',
+  'finance.subscription.arrears.owed':
+    'Siz {amount} qarzdorsiz. Qarzi bor hisoblar soni: {count}. Hisob avval hamyondan toʻlanadi.',
+  'finance.subscription.arrears.pay.card':
+    'Karta bilan toʻlash mumkin: hamyonni toʻldiring, u avval eng eski hisobni yopadi.',
+  'finance.subscription.arrears.pay.bank':
+    'Bank oʻtkazmasi bilan toʻlash mumkin: hisob-faktura soʻrang, toʻlang va toʻlov maqsadiga uning raqamini yozing.',
+  'finance.subscription.arrears.pay.none':
+    'Hozir na karta, na bank oʻtkazmasi mavjud. Toʻlovni kelishish uchun HorecaOS bilan bogʻlaning.',
+  'finance.subscription.arrears.openWallet': 'Hamyonni ochish',
+  'finance.subscription.wallet.title': 'Oldindan toʻlangan hamyon',
+  'finance.subscription.wallet.open': 'Hamyonni ochish',
+  'finance.subscription.wallet.balances': 'Toʻlangan balans {paid} · bonuslar {bonus}',
+  'finance.subscription.statements.paid': 'Toʻlangan',
+  'finance.subscription.statements.due': 'Toʻlanishi kerak',
 };
