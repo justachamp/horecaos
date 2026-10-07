@@ -133,7 +133,9 @@ export class InvoicesWallet {
 
   /** Invoices a transfer could still pay: open or part paid. */
   protected readonly payableInvoices = computed(() =>
-    this.invoices().filter((invoice) => invoice.status === 'OPEN' || invoice.status === 'PARTIALLY_PAID'),
+    this.invoices().filter(
+      (invoice) => invoice.status === 'OPEN' || invoice.status === 'PARTIALLY_PAID',
+    ),
   );
 
   /** The currency every wallet entry of this tenant is written in. */
@@ -438,7 +440,11 @@ export class InvoicesWallet {
       return;
     }
     await this.run(async () => {
-      await this.api.cancelPrepaymentInvoice(this.tenantId(), invoice.invoiceId, this.cancelReason().trim());
+      await this.api.cancelPrepaymentInvoice(
+        this.tenantId(),
+        invoice.invoiceId,
+        this.cancelReason().trim(),
+      );
       this.cancellingInvoice.set(null);
       return this.i18n.t('wallet.invoice.cancel.done', { number: invoice.number });
     });

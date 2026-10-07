@@ -230,7 +230,9 @@ class FakeCommerceApi {
   readonly setPaymentMethod = vi.fn().mockResolvedValue(undefined);
   readonly prepaymentInvoices = vi.fn().mockResolvedValue([OPEN_INVOICE, PART_PAID_INVOICE]);
   readonly cardTopUps = vi.fn().mockResolvedValue(CARD_TOP_UPS);
-  readonly cancelPrepaymentInvoice = vi.fn().mockResolvedValue({ ...OPEN_INVOICE, status: 'CANCELLED' });
+  readonly cancelPrepaymentInvoice = vi
+    .fn()
+    .mockResolvedValue({ ...OPEN_INVOICE, status: 'CANCELLED' });
 }
 
 describe('InvoicesWallet', () => {
@@ -685,16 +687,24 @@ describe('InvoicesWallet', () => {
     api.prepaymentInvoices.mockResolvedValue([
       OPEN_INVOICE,
       PART_PAID_INVOICE,
-      { ...OPEN_INVOICE, invoiceId: 'inv-3', number: 'PI-202606-000002', status: 'PAID', due: UZS(0) },
+      {
+        ...OPEN_INVOICE,
+        invoiceId: 'inv-3',
+        number: 'PI-202606-000002',
+        status: 'PAID',
+        due: UZS(0),
+      },
     ]);
     await fixture.componentInstance['load']();
     await settle();
     el<HTMLButtonElement>('.openTransfer').click();
     await settle();
 
-    const options = [...fixture.nativeElement.querySelectorAll('.transferForm [name="prepaymentInvoiceNumber"] option')].map(
-      (option) => (option as HTMLOptionElement).value,
-    );
+    const options = [
+      ...fixture.nativeElement.querySelectorAll(
+        '.transferForm [name="prepaymentInvoiceNumber"] option',
+      ),
+    ].map((option) => (option as HTMLOptionElement).value);
     expect(options).toEqual(['', 'PI-202608-000001', 'PI-202607-000004']);
 
     await type('.transferForm [name="amount"]', '1 000 000');
@@ -735,7 +745,11 @@ describe('InvoicesWallet', () => {
     el<HTMLButtonElement>('.confirmCancelInvoice').click();
     await settle();
 
-    expect(api.cancelPrepaymentInvoice).toHaveBeenCalledWith('tenant-1', 'inv-1', 'asked for the wrong amount');
+    expect(api.cancelPrepaymentInvoice).toHaveBeenCalledWith(
+      'tenant-1',
+      'inv-1',
+      'asked for the wrong amount',
+    );
     expect(fixture.nativeElement.textContent).toContain('PI-202608-000001');
   });
 
@@ -761,7 +775,10 @@ describe('InvoicesWallet', () => {
           provide: TenantsApi,
           useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
         },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
@@ -779,7 +796,11 @@ describe('InvoicesWallet', () => {
 
   it('has no field for a card token: the tenant puts its own card on file, and staff only choose how it is collected', async () => {
     await create();
-    api.wallet.mockResolvedValue({ ...WALLET, paymentMethod: 'INVOICE', cardTokenReference: 'vault:pilot' });
+    api.wallet.mockResolvedValue({
+      ...WALLET,
+      paymentMethod: 'INVOICE',
+      cardTokenReference: 'vault:pilot',
+    });
     await fixture.componentInstance['load']();
     await settle();
     el<HTMLButtonElement>('.openMethod').click();

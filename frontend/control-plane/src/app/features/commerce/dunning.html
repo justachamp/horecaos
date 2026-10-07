@@ -84,7 +84,12 @@
               </td>
               <td class="q-body-sm q-tnum owed">
                 @if (arrear.owed; as owed) {
-                  {{ i18n.t('dunning.owed', { amount: i18n.moneyOrRaw(owed.due), count: owed.openStatements }) }}
+                  {{
+                    i18n.t('dunning.owed', {
+                      amount: i18n.moneyOrRaw(owed.due),
+                      count: owed.openStatements,
+                    })
+                  }}
                 } @else if (arrear.paidInFull) {
                   <!--
                     The cue, not the act: ADR 0089 says nothing moves a subscription by itself, so a tenant that

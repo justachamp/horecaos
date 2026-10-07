@@ -345,7 +345,9 @@ describe('PlatformApprovals', () => {
     await create([proposal]);
     const line = fixture.nativeElement.querySelector('[data-request="req-bank"]') as HTMLElement;
 
-    expect(line.textContent).toContain(ru['platformApprovals.action.commercial_billing_bank-details']);
+    expect(line.textContent).toContain(
+      ru['platformApprovals.action.commercial_billing_bank-details'],
+    );
     // The approver signs the account number, so every component of it is in front of them, labelled.
     for (const [key, value] of [
       ['beneficiary', 'HorecaOS LLC'],
@@ -356,7 +358,9 @@ describe('PlatformApprovals', () => {
     ]) {
       const field = line.querySelector(`[data-subject-field="${key}"]`) as HTMLElement;
       expect(field.textContent, key).toContain(value);
-      expect(field.textContent, key).toContain(ru[`platformApprovals.subject.field.${key}` as keyof typeof ru]);
+      expect(field.textContent, key).toContain(
+        ru[`platformApprovals.subject.field.${key}` as keyof typeof ru],
+      );
     }
     // No money moves and no tenant is concerned: not an alarm about a missing tenant.
     expect(line.textContent).not.toContain(ru['platformApprovals.subject.unknownTenant']);
