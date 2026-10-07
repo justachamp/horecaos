@@ -107,3 +107,11 @@ horecaos:
       enabled: ${HORECAOS_FAKE_PROVIDERS_CLICK_ENABLED:true}
       port: ${HORECAOS_FAKE_PROVIDERS_CLICK_PORT:18089}
       secret: ${HORECAOS_FAKE_PROVIDERS_CLICK_SECRET:local-fixture-click-secret-key-not-a-real-credential}
+  commercial:
+    card:
+      # ADR 0095: lets the in-process card provider (FakeCardProvider) be activated as HorecaOS's own
+      # merchant account, so the whole recurring-token flow can be walked through the console without a
+      # Click or Payme account, which does not exist yet. Defaults to false everywhere else, and the
+      # gateway ignores an ACTIVE fake when it is false, so a database carried out of a laptop cannot
+      # make a deployment take "payments" from a double.
+      allow-fake: ${HORECAOS_COMMERCIAL_CARD_ALLOW_FAKE:true}

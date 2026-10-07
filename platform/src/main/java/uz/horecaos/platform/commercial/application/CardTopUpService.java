@@ -231,7 +231,12 @@ public class CardTopUpService {
                         current.requestedBy(),
                         actor,
                         opened.id());
-                topUps.settleSucceeded(tenantId, opened.id(), succeeded.providerReference(), entryId, now);
+                if (!topUps.settleSucceeded(tenantId, opened.id(), succeeded.providerReference(), entryId, now)) {
+                    // Cannot happen under the billing lock, after the PENDING check above; if it ever did, the
+                    // credit must not stand without the row that says it was made.
+                    throw new IllegalStateException(
+                            "card top-up " + opened.id() + " was resolved while it was being credited");
+                }
                 count("succeeded");
             }
             case CardCharger.Outcome.Failed failed -> {

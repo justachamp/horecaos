@@ -229,7 +229,8 @@ public class JdbcCardChargeAttemptStore {
      * key) or no reason to hold back.
      *
      * <p>The reasons to hold back are the two a collections process owes a card: a decline within {@code
-     * retryAfter} is not repeated, and {@code maxDeclines} declines under the card on file since the last
+     * retryAfter} under the card on file is not repeated (a new card is tried at once, the old one's decline
+     * says nothing about it), and {@code maxDeclines} declines under the card on file since the last
      * success stop the sweep until the card changes or a person triggers a pass — a card that was reported
      * lost does not get charged every day for ever. A person-triggered pass is not held back by either.
      */
@@ -253,6 +254,7 @@ public class JdbcCardChargeAttemptStore {
                                OR (
                                    NOT EXISTS (SELECT 1 FROM commercial.card_charge_attempts d
                                                 WHERE d.tenant_id = b.tenant_id AND d.outcome = 'FAILED'
+                                                  AND d.card_token_reference IS NOT DISTINCT FROM b.card_token_reference
                                                   AND d.settled_at > :retryCutoff)
                                    AND (SELECT COUNT(*) FROM commercial.card_charge_attempts d
                                          WHERE d.tenant_id = b.tenant_id AND d.outcome = 'FAILED'
@@ -270,5 +272,14 @@ public class JdbcCardChargeAttemptStore {
                 .param("limit", limit)
                 .query((row, number) -> row.getObject("tenant_id", UUID.class))
                 .list();
+    }
+
+    /** Whether any statement charge of this tenant is still waiting for the provider's answer. */
+    public boolean hasPending(UUID tenantId) {
+        return jdbc.sql(
+                        "SELECT EXISTS (SELECT 1 FROM commercial.card_charge_attempts WHERE tenant_id = :tenantId AND outcome = 'PENDING')")
+                .param("tenantId", tenantId)
+                .query(Boolean.class)
+                .single();
     }
 }

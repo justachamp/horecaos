@@ -445,9 +445,12 @@ public class CommercialOperationsWalletController {
             @Nullable UUID statementId,
             @Nullable UUID grantId,
             @Nullable String expiresAt,
-            String reason,
             String createdAt) {
 
+        /**
+         * No {@code reason}: what a HorecaOS staff member typed beside a correction or a refund is theirs and
+         * not the tenant's to read (ADR 0029), and the entry type already says what the line is.
+         */
         static LedgerEntryView of(WalletEntry entry) {
             return new LedgerEntryView(
                     entry.id(),
@@ -457,7 +460,6 @@ public class CommercialOperationsWalletController {
                     entry.statementId(),
                     entry.grantId(),
                     entry.expiresAt() == null ? null : entry.expiresAt().toString(),
-                    entry.reason(),
                     entry.createdAt().toString());
         }
     }

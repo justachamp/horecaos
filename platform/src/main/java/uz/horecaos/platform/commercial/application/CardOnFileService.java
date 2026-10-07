@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.domain.CardOnFile;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardTopUpStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -52,6 +53,7 @@ public class CardOnFileService {
 
     private final JdbcWalletStore wallet;
     private final JdbcCardTopUpStore topUps;
+    private final JdbcCardChargeAttemptStore attempts;
     private final CardEnrolment enrolment;
     private final AuditRecorder audit;
     private final TransactionTemplate unitOfWork;
@@ -60,12 +62,14 @@ public class CardOnFileService {
     public CardOnFileService(
             JdbcWalletStore wallet,
             JdbcCardTopUpStore topUps,
+            JdbcCardChargeAttemptStore attempts,
             CardEnrolment enrolment,
             AuditRecorder audit,
             TransactionTemplate unitOfWork,
             Clock clock) {
         this.wallet = wallet;
         this.topUps = topUps;
+        this.attempts = attempts;
         this.enrolment = enrolment;
         this.audit = audit;
         this.unitOfWork = unitOfWork;
@@ -171,14 +175,7 @@ public class CardOnFileService {
             throw new ApiException(
                     ErrorCode.UNPROCESSABLE_STATE, "There is no card on file", Map.of("reason", "NO_CARD_ON_FILE"));
         }
-        if (topUps.findPending(tenantId).isPresent()) {
-            // Revoking the reference while an attempt made under it is unresolved could make the provider
-            // forget the very charge the attempt is waiting to learn about.
-            throw new ApiException(
-                    ErrorCode.RESOURCE_CONFLICT,
-                    "A card top-up is still waiting for the provider's answer; remove the card once it has one",
-                    Map.of("reason", "TOP_UP_IN_FLIGHT"));
-        }
+        requireNoChargeInFlight(tenantId);
         CardOnFile before = wallet.findCardOnFile(tenantId).orElseGet(CardOnFile::unknown);
         wallet.clearCard(tenantId, subject(actor), now);
         PaymentMethod methodNow = wallet.findBilling(tenantId).orElseThrow().paymentMethod();
@@ -202,6 +199,11 @@ public class CardOnFileService {
     private void choose(UUID tenantId, PaymentMethod method, ActorRef actor, String correlationId) {
         Instant now = clock.instant();
         TenantBilling before = wallet.lockBilling(tenantId, now);
+        if (before.paymentMethod() == PaymentMethod.CARD && method != PaymentMethod.CARD) {
+            // A statement settlement only looks at CARD tenants, so a charge still waiting for its answer
+            // would never be resolved once the tenant stopped being one.
+            requireNoChargeInFlight(tenantId);
+        }
         if (method == PaymentMethod.CARD && before.cardTokenReference() == null) {
             throw new ApiException(
                     ErrorCode.UNPROCESSABLE_STATE,
@@ -220,6 +222,20 @@ public class CardOnFileService {
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
+    }
+
+    /**
+     * Neither removing the card nor leaving CARD while a charge asked under it has no answer yet. Revoking
+     * the reference could make the provider forget the very charge the attempt is waiting to learn about,
+     * and a charge nobody is looking for any more is money taken and never recorded.
+     */
+    private void requireNoChargeInFlight(UUID tenantId) {
+        if (topUps.findPending(tenantId).isPresent() || attempts.hasPending(tenantId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "A card charge is still waiting for the provider's answer; try again once it has one",
+                    Map.of("reason", "CHARGE_IN_FLIGHT"));
+        }
     }
 
     private void revokeBestEffort(UUID tenantId, String reference) {
