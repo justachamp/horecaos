@@ -709,6 +709,21 @@ export const operationsPaths = {
     return `${this.kitchenDevices(scope)}/enrolments/${encodeURIComponent(userCode)}/approve`;
   },
 
+  /** What a pending code claims (ADR 0151): the class the device asked for, read before approving. */
+  kitchenDeviceEnrolment(scope: LocationScope, userCode: string): string {
+    return `${this.kitchenDevices(scope)}/enrolments/${encodeURIComponent(userCode)}`;
+  },
+
+  /** A wall display's configuration (ADR 0151): which station it shows. */
+  kitchenDeviceDisplay(scope: LocationScope, deviceId: string): string {
+    return `${this.kitchenDevices(scope)}/${encodeURIComponent(deviceId)}/display`;
+  },
+
+  /** An enrolled kitchen device reads its own record (ADR 0151). Not under a branch: the device learns its branch from it. */
+  deviceSelf(): string {
+    return '/api/v1/devices/me';
+  },
+
   /** Revokes one enrolled device. Idempotent — revoking an already-revoked device is not an error. */
   kitchenDeviceRevoke(scope: LocationScope, deviceId: string): string {
     return `${this.kitchenDevices(scope)}/${encodeURIComponent(deviceId)}/revoke`;

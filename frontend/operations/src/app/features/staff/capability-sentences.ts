@@ -503,6 +503,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     en: 'Approve a courier shift variance',
   },
 
+  'kitchen.display.read': {
+    area: 'kitchen',
+    ru: 'Видеть экран выдачи кухни',
+    uz: 'Oshxona berish ekranini koʻrish',
+    en: 'View the kitchen display board',
+  },
   'kitchen.station.manage': {
     area: 'kitchen',
     ru: 'Настраивать станции кухни',

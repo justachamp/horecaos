@@ -5,6 +5,7 @@ import { DeviceAuthError, DeviceSession } from './device-session';
 
 const CREDENTIAL_KEY = 'horecaos.kds.credential';
 const SETUP_KEY = 'horecaos.kds.setup';
+const PROFILE_KEY = 'horecaos.kds.profile';
 
 function tokenResponse(accessToken: string, expiresIn = 300): Response {
   return new Response(JSON.stringify({ access_token: accessToken, expires_in: expiresIn }), {
@@ -37,6 +38,71 @@ describe('DeviceSession', () => {
       brandId: 'b1',
       locationId: 'l1',
     });
+  });
+
+  // ------------------------------------------------ ADR 0151: the server says what this device is
+
+  const WALL_PROFILE = {
+    deviceId: 'dev-1',
+    deviceClass: 'KITCHEN_VDU' as const,
+    displayName: 'Grill TV',
+    tenantId: 't1',
+    brandId: 'b1',
+    locationId: 'l1',
+    locationName: 'Chilanzar',
+    timezone: 'Asia/Tashkent',
+    station: null,
+  };
+
+  it('keeps the record the server gave, and makes its branch the branch every later read uses', () => {
+    const session = TestBed.inject(DeviceSession);
+    session.saveSetup({ tenantId: 'typed', brandId: 'typed', locationId: 'typed' });
+
+    session.saveProfile(WALL_PROFILE);
+
+    expect(session.profile()?.deviceClass).toBe('KITCHEN_VDU');
+    expect(session.setup()).toEqual({ tenantId: 't1', brandId: 'b1', locationId: 'l1' });
+    expect(JSON.parse(localStorage.getItem(PROFILE_KEY) ?? 'null').timezone).toBe('Asia/Tashkent');
+  });
+
+  it('survives a reload: a restarted wall still knows what it is before the server has answered', () => {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(WALL_PROFILE));
+
+    expect(TestBed.inject(DeviceSession).profile()?.locationName).toBe('Chilanzar');
+  });
+
+  it('forgets the record with the credential: a revoked device is nothing, whatever it was', () => {
+    const session = TestBed.inject(DeviceSession);
+    session.saveProfile(WALL_PROFILE);
+
+    session.forgetCredential();
+
+    expect(session.profile()).toBeNull();
+    expect(localStorage.getItem(PROFILE_KEY)).toBeNull();
+  });
+
+  it('begins an enrolment as the class the installer chose, a touch board by default', async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            deviceCode: 'c',
+            userCode: 'u',
+            expiresAt: 'x',
+            pollIntervalSeconds: 4,
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const session = TestBed.inject(DeviceSession);
+
+    await session.beginEnrolment(null, 'KITCHEN_VDU');
+    await session.beginEnrolment(null);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).deviceClass).toBe('KITCHEN_VDU');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).deviceClass).toBe('KITCHEN_KDS');
   });
 
   it('survives a reload: a fresh injector reads the same locally stored setup and credential', () => {

@@ -3,24 +3,25 @@ import {
   Component,
   DestroyRef,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 
-import { LocationScope } from '../core/api/operations-paths';
 import { ApiError } from '../core/api/problem-details';
 import { CurrentLocation } from '../core/auth/current-location';
-import { TimeZone, formatClock } from '../core/format/datetime';
+import { TimeZone } from '../core/format/datetime';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
-import { LatenessPolicyApi } from '../core/lateness-policy-api';
-import { LatenessPolicyTracker } from '../core/lateness-policy-tracker';
+import { latenessPolicyFromWire } from '../core/lateness-policy-api';
 import { I18n } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
 import { ConnectionStateBanner } from '../shared/ui/connection-state-banner';
 import { LiveBadge } from '../shared/ui/live-badge';
 import { KitchenApi, StationResponse, VduTicketResponse } from '../features/kitchen/kitchen-api';
-import { computeTicketSeverity } from '../features/kitchen/kitchen-ticket';
+import { VduWall, VduWallPhase, WallboardVduFreshness } from './vdu-wall';
+
+export type { WallboardVduFreshness } from './vdu-wall';
 
 /** The mandated polling fallback (ADR 0045) — the stream is only ever an accelerator on top of this. */
 const POLL_INTERVAL_MS = 10_000;
@@ -28,15 +29,23 @@ const FRESH_THRESHOLD_MS = POLL_INTERVAL_MS * 1.5;
 const STALE_THRESHOLD_MS = POLL_INTERVAL_MS * 3;
 const CLOCK_TICK_MS = 1_000;
 
-/** Every live location this console reaches is Tashkent today — same placeholder `kitchen-queue-page.ts`/`vdu-page.ts` already carry, until a location's own timezone reaches this response. */
+/**
+ * Every live location this console reaches is Tashkent today — same placeholder `kitchen-queue-page.ts`
+ * and `vdu-page.ts` carry. A real wall does not use it: the device shell reads its branch's own zone
+ * from `GET /api/v1/devices/me` (ADR 0151).
+ */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
-
-export type WallboardVduFreshness = 'loading' | 'fresh' | 'aging' | 'stale';
 
 /**
  * Row 2.4 — the VDU wall projection (ADR 0041 rollout step 4), hosted like
  * the wallboard (`wallboard-shell.ts`, IA `0.1e`) rather than inside the
  * operator console `Shell` the desk `vdu-page.ts` still renders in.
+ *
+ * **This is the manager's preview of a wall, not the wall (ADR 0151).** It runs on a signed-in staff
+ * session, with a station `<select>` a reload forgets, the realtime stream and the station list: all
+ * things a wall display does not have. A TV in a kitchen is enrolled as a `KITCHEN_VDU` device from
+ * Kitchen → Devices and runs in the device shell (`device/device-shell.ts`), which draws the same
+ * {@link VduWall} but reads only its own record and the projection. The page says so on screen.
  *
  * **A dedicated, narrower read**, `KitchenApi.vdu` / `KitchenBoardController
  * .vdu` — not the same `board()` call `vdu-page.ts` and `kitchen-queue-page
@@ -57,7 +66,7 @@ export type WallboardVduFreshness = 'loading' | 'fresh' | 'aging' | 'stale';
  */
 @Component({
   selector: 'q-wallboard-vdu-page',
-  imports: [TPipe, ConnectionStateBanner, LiveBadge],
+  imports: [TPipe, ConnectionStateBanner, LiveBadge, VduWall],
   templateUrl: './wallboard-vdu-page.html',
   styleUrl: './wallboard-vdu-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -65,7 +74,6 @@ export type WallboardVduFreshness = 'loading' | 'fresh' | 'aging' | 'stale';
 export class WallboardVduPage implements OnInit {
   private readonly kitchen = inject(KitchenApi);
   private readonly location = inject(CurrentLocation);
-  private readonly latenessPolicyApi = inject(LatenessPolicyApi);
   private readonly realtime = inject(RealtimeClient);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly i18n = inject(I18n);
@@ -82,16 +90,27 @@ export class WallboardVduPage implements OnInit {
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private clockHandle: ReturnType<typeof setInterval> | null = null;
-  /**
-   * The resolved `ordering.lateness` policy. A wall display is opened once and
-   * left up for days, so {@link refreshPolicy} re-reads it on the poll (at most
-   * once a minute) instead of holding the start-up copy for the page's lifetime.
-   */
-  private readonly policies = new LatenessPolicyTracker(this.latenessPolicyApi);
-  private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
-  /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
-  protected readonly lateColour = signal<string | null>(null);
+  /**
+   * The resolved `ordering.lateness` policy, **from the projection itself** (ADR 0151): every poll
+   * answers with the policy at the location of the call, so a screen opened once and left up for days
+   * follows an edit without a second request, and the page no longer holds a tracker of its own. A
+   * response without one (a server that predates ADR 0151) keeps the last policy this page read, or the
+   * platform default before the first.
+   */
+  protected readonly latenessPolicy = signal<LatenessPolicy>(PLATFORM_DEFAULT_LATENESS_POLICY);
+
+  protected readonly timeZone: TimeZone = PLACEHOLDER_TIME_ZONE;
+
+  protected readonly phase = computed<VduWallPhase>(() =>
+    this.denied() ? 'denied' : this.firstLoadComplete() ? 'ready' : 'loading',
+  );
+
+  protected readonly selectedStationLabel = computed<string | null>(() => {
+    const id = this.selectedStation();
+    const found = id ? this.stations().find((station) => station.stationId === id) : undefined;
+    return found ? this.stationLabel(found) : null;
+  });
 
   ngOnInit(): void {
     this.pollHandle = setInterval(() => void this.refresh(), POLL_INTERVAL_MS);
@@ -140,10 +159,11 @@ export class WallboardVduPage implements OnInit {
       return;
     }
     try {
-      const [board] = await Promise.all([
-        this.kitchen.vdu(scope, this.selectedStation() || undefined),
-        this.refreshPolicy(scope),
-      ]);
+      const board = await this.kitchen.vdu(scope, this.selectedStation() || undefined);
+      const policy = latenessPolicyFromWire(board.lateness);
+      if (policy) {
+        this.latenessPolicy.set(policy);
+      }
       this.tickets.set(
         [...board.tickets].sort((a, b) => statusRank(a.status) - statusRank(b.status)),
       );
@@ -160,13 +180,6 @@ export class WallboardVduPage implements OnInit {
     }
   }
 
-  /** Never rejects; a failed read leaves the last policy read, or the platform default before the first one. */
-  private async refreshPolicy(scope: LocationScope): Promise<void> {
-    await this.policies.refresh(scope);
-    this.latenessPolicy = this.policies.policy(scope.locationId);
-    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
-  }
-
   protected onStationChange(stationId: string): void {
     this.selectedStation.set(stationId);
     void this.refresh();
@@ -181,37 +194,6 @@ export class WallboardVduPage implements OnInit {
       default:
         return station.displayNameRu;
     }
-  }
-
-  protected targetReadyLabel(ticket: VduTicketResponse): string | null {
-    return ticket.targetReadyAt
-      ? formatClock(new Date(ticket.targetReadyAt), PLACEHOLDER_TIME_ZONE)
-      : null;
-  }
-
-  protected courierEtaLabel(ticket: VduTicketResponse): string | null {
-    return ticket.courierEtaAt
-      ? this.i18n.t('kitchen.ticket.courierEta', {
-          time: formatClock(new Date(ticket.courierEtaAt), PLACEHOLDER_TIME_ZONE),
-        })
-      : null;
-  }
-
-  /** A breached ticket takes the tenant's late colour; an at-risk one keeps the platform's amber. */
-  protected lateColourFor(ticket: VduTicketResponse): string | null {
-    return this.severityTone(ticket) === 'danger' ? this.lateColour() : null;
-  }
-
-  protected severityTone(ticket: VduTicketResponse): 'danger' | 'warning' | 'none' {
-    return computeTicketSeverity(
-      {
-        targetReadyAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
-        createdAt: new Date(ticket.createdAt),
-        fulfilmentMode: ticket.fulfilmentMode,
-      },
-      new Date(),
-      this.latenessPolicy,
-    ).tone;
   }
 
   protected freshnessState(): WallboardVduFreshness {

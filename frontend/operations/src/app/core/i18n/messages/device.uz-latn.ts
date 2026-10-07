@@ -21,7 +21,10 @@ export const deviceUzLatn: AreaMessages<typeof deviceEn> = {
   'device.enrol.title': 'Qurilmani ulash',
   'device.enrol.hint':
     'Menejer quyidagi kodni oʻqib, uni Oshxona → Qurilmalar boʻlimida tasdiqlaydi.',
-  'device.enrol.begin': 'Ulash kodini koʻrsatish',
+  'device.enrol.kindTitle': 'Bu qanday ekran?',
+  'device.enrol.begin': 'Oshpazning sensorli taxtasi',
+  'device.enrol.beginWall': 'Devordagi ekran (faqat koʻrish)',
+  'device.enrol.manual': 'Filialni qoʻlda kiritish',
   'device.enrol.beginning': 'Kod soʻralmoqda…',
   'device.enrol.userCodeLabel': 'Menejer uchun kod',
   'device.enrol.waiting': 'Menejer ushbu qurilmani tasdiqlashini kutmoqda…',
@@ -30,6 +33,9 @@ export const deviceUzLatn: AreaMessages<typeof deviceEn> = {
   'device.enrol.expired': 'Ulash kodi muddati tugadi. Qayta urinib koʻring.',
   'device.enrol.error': 'Platformaga ulanib boʻlmadi. Qayta urinib koʻring.',
   'device.enrol.retry': 'Qayta urinish',
+  'device.profile.loading': 'Qurilma yozuvi oʻqilmoqda…',
+  'device.profile.failed':
+    'Qurilma yozuvini oʻqib boʻlmadi. Aloqani tekshiring yoki filialni qoʻlda kiriting.',
   'device.board.loading': 'Navbat yuklanmoqda',
   'device.board.empty': 'Hozircha navbatda buyurtma yoʻq',
   'device.board.error': 'Navbatni yuklab boʻlmadi',

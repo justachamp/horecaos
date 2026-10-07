@@ -77,6 +77,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'integration.telegram-staff-link.issue',
   'inventory.adjust',
   'inventory.read',
+  'kitchen.display.read',
   'kitchen.station.manage',
   'kitchen.ticket.advance',
   'kitchen.ticket.read',
