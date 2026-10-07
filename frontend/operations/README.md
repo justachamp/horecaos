@@ -211,47 +211,54 @@ deployment. A shared terminal changes hands between operators mid-shift.
 Content names — dishes, brands, branches, people — are never message keys. They
 are tenant data in the language the tenant wrote them.
 
-**What a fourth locale (Kazakh or Georgian, per `X.40`'s own roadmap line)
-would actually cost** — recorded here rather than assumed, since a closed
-three-locale set is declared independently in more places than the frontend
-alone:
+**Which languages exist is the platform's to say, not this console's (ADR 0149).** One backend
+class, `PlatformLocales` (`tenancy.api`), declares every language with its tag, script, direction,
+face and **the tiers it is live in**; `GET /api/v1/operations/locales` serves it, and
+`core/i18n/platform-locales.ts` reads it once before the shell draws (`platformLocalesGuard`). This
+console keeps exactly one list of its own, `LOCALES` in `core/i18n/i18n.ts`, and it is a different
+thing: the languages this *build* has a catalogue for. A language is offered in the interface when
+the build holds its catalogue **and** the registry has its staff-UI tier live; the brand editor, the
+branch editor, a template's wordings, an audience's languages, the staff-profile form and the catalog's
+codes all read the registry's other tiers. A language the registry **declares but has not made live**
+(`kk`, `ka` today) is offered nowhere.
 
-- **Two enums** — `legal.domain.TermsLocale` and `notifications.domain.
-MessageLocale`, each `RU`/`UZ_LATN`/`EN`, each declared locally rather than
-  shared across module boundaries (`TermsLocale`'s own doc comment explains
-  why: neither lives in an `api` package another module may depend on).
-- **Three closed-set declarations** that either require every locale before
-  accepting a write or reject one outside the set — `notifications.
-application.NotificationTemplateService` (via `MessageLocale.required()`,
-  a template version needs all three before it can be saved or activated),
-  `ordering.application.OrderOutcomeReasonService.REQUIRED_LOCALES`, and
-  `marketing.domain.AudiencePredicate.SUPPORTED_LOCALES`.
-- **A hard-coded reference list on this side of the fence** — `core/i18n/
-i18n.ts`'s own `LOCALES` — mirrored again inside `features/marketing/
-audience-predicates.ts`.
-- **A SQL fallback CASE** — `JdbcCatalogStore`'s translation ordering
-  (`ORDER BY CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz-Latn' THEN 1 WHEN 'en'
-THEN 2 ELSE 3 END`, twice in that file), which decides which locale's
-  translation a caller sees when it asked for none in particular.
-- **Nine append-only `CHECK` constraints** across `platform/src/main/
-resources/db/migration` — `ck_template_version_locale` (V0026),
-  `ck_notification_locale` (V0026), `ck_customer_metrics_locale` (V0043),
-  `ck_outcome_reason_text_locale` (V0029), `ck_order_reject_reason_text_locale`
-  (V0119) and `ck_terms_content_locale` (V0160) all spell the set
-  `('ru', 'uz-Latn', 'en')`; `ck_owner_invitation_locale` (V0210),
-  `ck_owner_invitation_event_locale` (V0215) and `ck_password_reset_locale`
-  (V0213) spell it `('uz', 'ru', 'en')` instead — three of the nine, not the
-  one this row's own brief named, already disagree with the other six about
-  `uz` versus `uz-Latn`. Migrations are append-only, so fixing that drift is
-  its own forward migration, not a same-wave edit — recorded here, not fixed
-  here.
+`<html dir>` follows `<html lang>` (`core/i18n/document-direction.ts`): every entry says `LTR`, the
+document says so, and new or touched CSS uses logical properties (`margin-inline-start`,
+`inset-inline-end`, `text-align: start`). `no-physical-direction` (ESLint, `npm run lint`) fails a
+stylesheet that is not on `tools/eslint-plugin-horecaos/physical-direction-baseline.json` and says
+`margin-left`; the list can only shrink, and `npm run lint:rules` fails when a listed file no longer
+needs to be there.
 
-A fourth locale is every one of those, plus a font and a `dir` decision (kk
-and ka are both left-to-right Latin/Cyrillic-adjacent, so no bidi work, but
-neither face ships in the bundled `@ibm/plex-sans` Cyrillic/Latin-Extended
-subset above), plus the parity work every wave that ever wrote `.ru`/`.uz-
-Latn`/`.en` beside a message key would owe a fourth field. None of it is a
-frontend-only change, which is why it stays a roadmap line and not a task.
+### Activating a language
+
+No tenant makes a language exist: it is a release, per tier, and each tier has its own gate. Nothing
+is activated by the registry's existence; `kk` and `ka` are declared with no tier live.
+
+1. **Content** (a brand can author in it and a customer can read it) -- the storefront's and the mobile
+   app's catalogues contain the language, then its registry entry gains `CONTENT`. A brand then
+   *chooses* it by adding it to its supported set.
+2. **Messages** (the platform can write to a customer in it) -- every template key a brand uses has a
+   wording in it (a version needs one in every language **its brand serves**, not every language the
+   platform has), the Telegram bot's replies and the transactional emails are translated
+   (`TelegramBotMessages`, the invitation, reset and second-factor email tables), any SMS wording has
+   cleared ADR 0091's gate and the segment estimate has been checked for the script (`SmsSegments`
+   already falls to UCS-2 for Kazakh and Georgian), then the entry gains `MESSAGES`.
+3. **Staff UI** (this console and the control plane speak it) -- both consoles' catalogues exist for
+   it (`messages/<area>.<locale>.ts`, typed so a missing key fails the build; the control plane's
+   `messages.<locale>.ts`), the face is bundled and the glyph audit has passed, then the entry gains
+   `STAFF_UI`. Russian stays the staff default.
+4. **Script and layout** -- the bundled `@ibm/plex-sans` covers Latin, Latin Extended and Cyrillic,
+   and neither Kazakh's extra Cyrillic letters nor Georgian. Kazakh: audit the bundled face against
+   the Kazakh alphabet and add a second face only if it fails. Georgian: an openly licensed face chosen
+   at activation, declared as its own `@font-face` with a `unicode-range` and loaded only when the
+   locale is active, so a Russian-speaking cashier never downloads Mkhedruli. A right-to-left language
+   is not a checklist item: it reaches order lines, receipts, fiscal documents and SMS and needs its own
+   record.
+
+What activating adds *no* migration and *no* change to any module other than its catalogue: the
+locale columns are a BCP 47 shape check (V0499), the brand's supported set is the tenant's choice,
+and the registry is the only list. `LocaleListsLiveInTheRegistryTests` fails the backend build the day
+a module declares one of its own again.
 
 ---
 
