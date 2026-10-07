@@ -110,14 +110,7 @@ public class KnowledgeService {
         after.put("status", "PUBLISHED");
         after.put("questionForm", questionForm.strip());
         after.put("answerBody", answerBody.strip());
-        recordAudit(
-                "assistant.knowledge.created",
-                tenantId,
-                brandId,
-                entryId,
-                actorSubject,
-                reason,
-                ChangeDocuments.created(after));
+        recordCreated(tenantId, brandId, entryId, actorSubject, reason, after);
 
         return view(store.find(tenantId, entryId).orElseThrow());
     }
@@ -174,14 +167,15 @@ public class KnowledgeService {
         after.put("status", status);
         after.put("questionForm", questionForm.strip());
         after.put("answerBody", answerBody.strip());
-        recordAudit(
+        recordChanged(
                 retire ? "assistant.knowledge.retired" : "assistant.knowledge.published",
                 tenantId,
                 entry.brandId(),
                 entryId,
                 actorSubject,
                 reason,
-                ChangeDocuments.diff(before, after));
+                before,
+                after);
 
         return view(store.find(tenantId, entryId).orElseThrow());
     }
@@ -297,24 +291,44 @@ public class KnowledgeService {
         return entry;
     }
 
-    private void recordAudit(
+    private void recordCreated(
+            UUID tenantId,
+            @Nullable UUID brandId,
+            UUID entryId,
+            String actorSubject,
+            String reason,
+            Map<String, Object> after) {
+        audit.record(auditFact("assistant.knowledge.created", tenantId, brandId, entryId, actorSubject, reason)
+                .changed(ChangeDocuments.created(after))
+                .correlatedBy(entryId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    private void recordChanged(
             String action,
             UUID tenantId,
             @Nullable UUID brandId,
             UUID entryId,
             String actorSubject,
             String reason,
-            Map<String, Object> change) {
-        audit.record(AuditFact.of(action, AuditClass.BUSINESS)
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        audit.record(auditFact(action, tenantId, brandId, entryId, actorSubject, reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(entryId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    private static AuditFact.Builder auditFact(
+            String action, UUID tenantId, @Nullable UUID brandId, UUID entryId, String actorSubject, String reason) {
+        return AuditFact.of(action, AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(brandId == null ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
                 .target("assistant.knowledge_entry", entryId)
                 .because(reason)
-                .usingCapability(Capability.ASSISTANT_KNOWLEDGE_MANAGE.code())
-                .changed(change)
-                .correlatedBy(entryId.toString())
-                .occurredAt(clock.instant())
-                .build());
+                .usingCapability(Capability.ASSISTANT_KNOWLEDGE_MANAGE.code());
     }
 
     private static void requireLocale(String locale) {
