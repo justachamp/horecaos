@@ -425,6 +425,29 @@ export const routes: Routes = [
               ),
           },
           {
+            // ADR 0069: the chat assistant's switch, spend and first-answer wording, and (below it) the
+            // notes it answers from. Lazy, like every settings page: it is not in the initial bundle.
+            path: 'assistant',
+            children: [
+              {
+                path: '',
+                pathMatch: 'full',
+                loadComponent: () =>
+                  import('./features/settings/assistant/assistant-settings-page').then(
+                    (m) => m.AssistantSettingsPage,
+                  ),
+              },
+              {
+                // The notes the assistant answers from: written, versioned and retired here.
+                path: 'knowledge',
+                loadComponent: () =>
+                  import('./features/settings/assistant/assistant-knowledge-page').then(
+                    (m) => m.AssistantKnowledgePage,
+                  ),
+              },
+            ],
+          },
+          {
             path: 'integrations',
             loadComponent: () =>
               import('./features/settings/integrations/integrations-page').then(

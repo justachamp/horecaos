@@ -1323,4 +1323,95 @@ export const settingsEn = {
     'The limits above which a promotion or a large customer export waits for a second signature.',
   'settings.fiscalization.noAccess': 'No access',
   'settings.fiscalization.responsibility': 'Who issues the receipt',
+
+  // Chat assistant (ADR 0069).
+  'settings.nav.assistant': 'Chat assistant',
+  'settings.home.description.assistant':
+    'Whether the assistant answers customers in your bot, what it costs, and what it says first.',
+  'settings.assistant.title': 'Chat assistant',
+  'settings.assistant.lead':
+    'Answers customers who write to your Telegram bot (prices, availability, branches, hours, delivery) only from your own menu, branches and notes, and hands anything else to your team.',
+  'settings.assistant.brandLevelNote':
+    'The assistant is set for a brand. A branch uses its brand’s setting, so a change made here applies to the whole brand.',
+  'settings.assistant.revertReason': 'Reverted to the inherited value',
+  'settings.assistant.on': 'On',
+  'settings.assistant.off': 'Off',
+  'settings.assistant.switch.title': 'Answer customers',
+  'settings.assistant.switch.body':
+    'When on, the assistant answers questions from customers who write to your bot and that none of your flows handles. Anything it cannot answer reliably goes to your team’s inbox, with the whole conversation.',
+  'settings.assistant.switch.field': 'Assistant answers customers',
+  'settings.assistant.switch.privacy':
+    'To answer, the customer’s question is processed by an outside AI service. Names, phone numbers and addresses are removed first and never leave the platform.',
+  'settings.assistant.switch.noProvider':
+    'No AI service is connected on this platform yet, so the assistant cannot answer even when switched on. HorecaOS connects it.',
+  'settings.assistant.switch.notEntitled': 'Your plan does not include the assistant.',
+  'settings.assistant.usage.title': 'This month',
+  'settings.assistant.usage.month': 'Month: {month} (UTC)',
+  'settings.assistant.usage.turns': 'Questions taken',
+  'settings.assistant.usage.answered': 'Answered',
+  'settings.assistant.usage.handedOver': 'Handed to your team',
+  'settings.assistant.usage.cached': 'Answered from an earlier answer',
+  'settings.assistant.usage.spend': 'AI service cost',
+  'settings.assistant.usage.spendOf': '{spent} of {ceiling}',
+  'settings.assistant.usage.ceilingNote':
+    'The ceiling is set by HorecaOS for your account. When it is reached the assistant stops answering and hands customers to your team; ask support to change it.',
+  'settings.assistant.usage.ceilingReached':
+    'The monthly ceiling is reached: customers are handed to your team until next month.',
+  'settings.assistant.usage.denied': 'Your role cannot see the assistant’s usage.',
+  'settings.assistant.usage.notes': 'Published notes: {count}.',
+  'settings.assistant.usage.manageNotes': 'Manage notes',
+  'settings.assistant.disclosure.title': 'What customers are told first',
+  'settings.assistant.disclosure.body':
+    'Before its first answer in a conversation the assistant says this, in the customer’s language. Write it for your own customers. Left blank, HorecaOS’s wording is used; it cannot be switched off.',
+  'settings.assistant.disclosure.legal':
+    'HorecaOS’s default wording is not legal advice. What you must tell your customers about automated answers and outside processors is your own obligation.',
+  'settings.assistant.disclosure.field.ru': 'Said in Russian',
+  'settings.assistant.disclosure.field.uz': 'Said in Uzbek',
+  'settings.assistant.disclosure.field.en': 'Said in English',
+  'settings.assistant.disclosure.blank': 'HorecaOS’s default wording',
+  'settings.assistant.disclosure.default': 'Default wording: {text}',
+  'settings.assistant.disclosure.counter': '{count} of {max} characters',
+
+  // Chat assistant notes (ADR 0069).
+  'settings.assistant.notes.title': 'Assistant notes',
+  'settings.assistant.notes.lead':
+    'Short answers your team writes for the assistant to give: parking, allergens, how the family set is made. The assistant uses a note when a customer asks what it covers. Prices and opening hours come from the platform and are never taken from a note.',
+  'settings.assistant.notes.back': 'Back to the assistant settings',
+  'settings.assistant.notes.hint.tenant':
+    'Showing the notes for the whole company. Pick a brand in the bar above to write notes for one brand or one branch.',
+  'settings.assistant.notes.hint.brand':
+    'Showing this brand’s notes, branches’ included. Choose the whole company in the bar above for the company-wide ones.',
+  'settings.assistant.notes.new': 'New note',
+  'settings.assistant.notes.empty':
+    'No notes yet. Without a note the assistant can only answer from your menu, branches and hours.',
+  'settings.assistant.notes.field.locale': 'Language the customer writes in',
+  'settings.assistant.notes.field.applies': 'Applies to',
+  'settings.assistant.notes.field.question': 'How a customer would ask',
+  'settings.assistant.notes.field.question.hint':
+    'In the customer’s own words, for example “Is there parking?”. The assistant matches a question against this.',
+  'settings.assistant.notes.field.answer': 'What the assistant may say',
+  'settings.assistant.notes.field.answer.hint':
+    'Plain text, written for the customer. Leave prices and opening hours out: the assistant takes those from the platform.',
+  'settings.assistant.notes.counter': '{count} of {max} characters',
+  'settings.assistant.notes.publish': 'Publish note',
+  'settings.assistant.notes.publishVersion': 'Publish new version',
+  'settings.assistant.notes.revise': 'Publish a new version',
+  'settings.assistant.notes.retire': 'Retire',
+  'settings.assistant.notes.retire.body':
+    'The assistant stops using this note at once. What it said before stays readable in the history.',
+  'settings.assistant.notes.history': 'History',
+  'settings.assistant.notes.history.error': 'Could not load the history.',
+  'settings.assistant.notes.history.line': 'Version {version}, {status}, {author}, {when}',
+  'settings.assistant.notes.history.reason': 'Why: {reason}',
+  'settings.assistant.notes.version': 'version {version}',
+  'settings.assistant.notes.by': '{author}, {when}',
+  'settings.assistant.notes.locale.ru': 'Russian',
+  'settings.assistant.notes.locale.uz': 'Uzbek',
+  'settings.assistant.notes.locale.en': 'English',
+  'settings.assistant.notes.scope.TENANT': 'Whole company',
+  'settings.assistant.notes.scope.BRAND': 'Whole brand',
+  'settings.assistant.notes.scope.LOCATION': 'Branch “{name}”',
+  'settings.assistant.notes.scope.LOCATION.unnamed': 'One branch',
+  'settings.assistant.notes.status.PUBLISHED': 'In use',
+  'settings.assistant.notes.status.RETIRED': 'Retired',
 } as const;

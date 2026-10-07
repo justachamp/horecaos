@@ -16,6 +16,8 @@ import { CAPABILITY_AREAS, CAPABILITY_SENTENCES } from './capability-sentences';
 const TENANT_VISIBLE_CAPABILITY_CODES = [
   'approval.decide',
   'approval.policy.manage',
+  'assistant.knowledge.manage',
+  'assistant.read',
   'audience.export',
   'audience.read',
   'audit.read',
@@ -158,6 +160,14 @@ describe('CAPABILITY_SENTENCES', () => {
     }
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].en).toContain('recorded');
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].ru).toContain('записывается');
+  });
+
+  it('describes the two chat-assistant capabilities (ADR 0069) as what a person can do, under their own heading', () => {
+    expect(CAPABILITY_SENTENCES['assistant.read'].area).toBe('assistant');
+    expect(CAPABILITY_SENTENCES['assistant.knowledge.manage'].area).toBe('assistant');
+    expect(CAPABILITY_SENTENCES['assistant.read'].en).toContain('what an answer was based on');
+    expect(CAPABILITY_SENTENCES['assistant.knowledge.manage'].ru).toContain('заметки');
+    expect(CAPABILITY_AREAS['assistant'].uz).toBe('Chat yordamchisi');
   });
 
   it('has a build-time-equivalent entry for every capability a tenant-visible job can carry', () => {

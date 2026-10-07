@@ -136,6 +136,15 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         description: 'settings.home.description.notifications',
         builtRoute: true,
       },
+      {
+        // ADR 0069: the assistant that answers customers in the Telegram bot -- its switch, what it
+        // costs this month, what it says first, and the notes it answers from. Beside Notifications
+        // because it is the other thing a customer is told by the business.
+        path: 'assistant',
+        label: 'settings.nav.assistant',
+        description: 'settings.home.description.assistant',
+        builtRoute: true,
+      },
     ],
   },
   {

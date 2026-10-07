@@ -1319,4 +1319,95 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Пороги, выше которых акция или крупная выгрузка клиентов ждёт второй подписи.',
   'settings.fiscalization.noAccess': 'Нет доступа',
   'settings.fiscalization.responsibility': 'Кто выдаёт чек',
+
+  // Chat assistant (ADR 0069).
+  'settings.nav.assistant': 'Помощник в чате',
+  'settings.home.description.assistant':
+    'Отвечает ли помощник клиентам в вашем боте, сколько это стоит и что он говорит первым.',
+  'settings.assistant.title': 'Помощник в чате',
+  'settings.assistant.lead':
+    'Отвечает клиентам, которые пишут вашему боту в Telegram (цены, наличие, филиалы, часы работы, доставка), только по вашему меню, филиалам и заметкам, а всё остальное передаёт вашей команде.',
+  'settings.assistant.brandLevelNote':
+    'Помощник настраивается для бренда. Филиал использует настройку своего бренда, поэтому изменение здесь действует на весь бренд.',
+  'settings.assistant.revertReason': 'Возвращено унаследованное значение',
+  'settings.assistant.on': 'Включён',
+  'settings.assistant.off': 'Выключен',
+  'settings.assistant.switch.title': 'Отвечать клиентам',
+  'settings.assistant.switch.body':
+    'Когда включён, помощник отвечает на вопросы клиентов, которые пишут вашему боту и которые не обрабатывает ни один из ваших сценариев. Всё, на что он не может ответить надёжно, уходит в чаты вашей команды вместе со всей перепиской.',
+  'settings.assistant.switch.field': 'Помощник отвечает клиентам',
+  'settings.assistant.switch.privacy':
+    'Чтобы ответить, вопрос клиента обрабатывает внешний ИИ-сервис. Имена, телефоны и адреса предварительно удаляются и не покидают платформу.',
+  'settings.assistant.switch.noProvider':
+    'К платформе пока не подключён ИИ-сервис, поэтому помощник не ответит, даже будучи включённым. Его подключает HorecaOS.',
+  'settings.assistant.switch.notEntitled': 'Ваш тариф не включает помощника.',
+  'settings.assistant.usage.title': 'В этом месяце',
+  'settings.assistant.usage.month': 'Месяц: {month} (UTC)',
+  'settings.assistant.usage.turns': 'Вопросов принято',
+  'settings.assistant.usage.answered': 'Отвечено',
+  'settings.assistant.usage.handedOver': 'Передано вашей команде',
+  'settings.assistant.usage.cached': 'Отвечено прежним ответом',
+  'settings.assistant.usage.spend': 'Стоимость ИИ-сервиса',
+  'settings.assistant.usage.spendOf': '{spent} из {ceiling}',
+  'settings.assistant.usage.ceilingNote':
+    'Лимит задаёт HorecaOS для вашего аккаунта. Когда он достигнут, помощник перестаёт отвечать и передаёт клиентов вашей команде; чтобы изменить лимит, обратитесь в поддержку.',
+  'settings.assistant.usage.ceilingReached':
+    'Месячный лимит достигнут: клиентов передают вашей команде до следующего месяца.',
+  'settings.assistant.usage.denied': 'Ваша роль не позволяет видеть расход помощника.',
+  'settings.assistant.usage.notes': 'Опубликовано заметок: {count}.',
+  'settings.assistant.usage.manageNotes': 'Управлять заметками',
+  'settings.assistant.disclosure.title': 'Что клиенту говорят первым',
+  'settings.assistant.disclosure.body':
+    'Перед первым ответом в чате помощник говорит это на языке клиента. Напишите текст для своих клиентов. Если оставить пустым, используется формулировка HorecaOS; отключить это сообщение нельзя.',
+  'settings.assistant.disclosure.legal':
+    'Формулировка HorecaOS по умолчанию не является юридической консультацией. Что именно вы обязаны сообщать клиентам об автоматических ответах и сторонних обработчиках, определяете вы сами.',
+  'settings.assistant.disclosure.field.ru': 'Говорит по-русски',
+  'settings.assistant.disclosure.field.uz': 'Говорит по-узбекски',
+  'settings.assistant.disclosure.field.en': 'Говорит по-английски',
+  'settings.assistant.disclosure.blank': 'Формулировка HorecaOS по умолчанию',
+  'settings.assistant.disclosure.default': 'Формулировка по умолчанию: {text}',
+  'settings.assistant.disclosure.counter': '{count} из {max} знаков',
+
+  // Chat assistant notes (ADR 0069).
+  'settings.assistant.notes.title': 'Заметки помощника',
+  'settings.assistant.notes.lead':
+    'Короткие ответы, которые ваша команда пишет для помощника: парковка, аллергены, из чего состоит семейный сет. Помощник берёт заметку, когда клиент спрашивает о том, что она описывает. Цены и часы работы берутся с платформы и никогда не берутся из заметки.',
+  'settings.assistant.notes.back': 'Назад к настройкам помощника',
+  'settings.assistant.notes.hint.tenant':
+    'Показаны заметки для всей компании. Выберите бренд в панели выше, чтобы писать заметки для одного бренда или филиала.',
+  'settings.assistant.notes.hint.brand':
+    'Показаны заметки этого бренда, включая заметки его филиалов. Чтобы увидеть общие для компании, выберите всю компанию в панели выше.',
+  'settings.assistant.notes.new': 'Новая заметка',
+  'settings.assistant.notes.empty':
+    'Заметок пока нет. Без заметок помощник отвечает только по вашему меню, филиалам и часам работы.',
+  'settings.assistant.notes.field.locale': 'Язык, на котором пишет клиент',
+  'settings.assistant.notes.field.applies': 'Действует для',
+  'settings.assistant.notes.field.question': 'Как клиент об этом спросит',
+  'settings.assistant.notes.field.question.hint':
+    'Словами клиента, например «Есть ли парковка?». По этому тексту помощник сопоставляет вопрос.',
+  'settings.assistant.notes.field.answer': 'Что помощник может ответить',
+  'settings.assistant.notes.field.answer.hint':
+    'Простой текст, написанный для клиента. Цены и часы работы сюда не пишите: помощник берёт их с платформы.',
+  'settings.assistant.notes.counter': '{count} из {max} знаков',
+  'settings.assistant.notes.publish': 'Опубликовать заметку',
+  'settings.assistant.notes.publishVersion': 'Опубликовать новую версию',
+  'settings.assistant.notes.revise': 'Опубликовать новую версию',
+  'settings.assistant.notes.retire': 'Снять с публикации',
+  'settings.assistant.notes.retire.body':
+    'Помощник сразу перестанет использовать эту заметку. Что он говорил раньше, остаётся в истории.',
+  'settings.assistant.notes.history': 'История',
+  'settings.assistant.notes.history.error': 'Не удалось загрузить историю.',
+  'settings.assistant.notes.history.line': 'Версия {version}, {status}, {author}, {when}',
+  'settings.assistant.notes.history.reason': 'Причина: {reason}',
+  'settings.assistant.notes.version': 'версия {version}',
+  'settings.assistant.notes.by': '{author}, {when}',
+  'settings.assistant.notes.locale.ru': 'Русский',
+  'settings.assistant.notes.locale.uz': 'Узбекский',
+  'settings.assistant.notes.locale.en': 'Английский',
+  'settings.assistant.notes.scope.TENANT': 'Вся компания',
+  'settings.assistant.notes.scope.BRAND': 'Весь бренд',
+  'settings.assistant.notes.scope.LOCATION': 'Филиал «{name}»',
+  'settings.assistant.notes.scope.LOCATION.unnamed': 'Один филиал',
+  'settings.assistant.notes.status.PUBLISHED': 'Действует',
+  'settings.assistant.notes.status.RETIRED': 'Снята',
 };

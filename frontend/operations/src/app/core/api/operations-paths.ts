@@ -412,7 +412,7 @@ export const operationsPaths = {
     return `${this.conversation(scope, conversationId)}/replies`;
   },
 
-  /** Take a FLOW_ACTIVE conversation over from the flow engine. Mutation: key and `If-Match`. */
+  /** Take a conversation over from the flow engine or, since ADR 0069, the assistant. Mutation: key and `If-Match`. */
   conversationTakeover(scope: LocationScope, conversationId: string): string {
     return `${this.conversation(scope, conversationId)}/takeover`;
   },
@@ -425,6 +425,14 @@ export const operationsPaths = {
   /** Close a conversation. Mutation: key and `If-Match`. */
   conversationClose(scope: LocationScope, conversationId: string): string {
     return `${this.conversation(scope, conversationId)}/close`;
+  },
+
+  /**
+   * "Why did it say that" (ADR 0069): one assistant turn's outcome and the facts it stood on, read
+   * from the id an `ASSISTANT` message carries. Brand-scoped like {@link conversations}.
+   */
+  assistantTurn(scope: LocationScope, turnId: string): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/assistant/turns/${encodeURIComponent(turnId)}`;
   },
 
   /**
