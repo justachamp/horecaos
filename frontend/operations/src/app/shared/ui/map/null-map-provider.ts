@@ -9,6 +9,7 @@ import {
   MapProvider,
   PinHandle,
   PinOptions,
+  PinTone,
   PolygonHandle,
   PolygonLook,
   PolygonOptions,
@@ -154,6 +155,7 @@ export class NullPin implements PinHandle {
   position: LatLng;
   draggable: boolean;
   readonly label: string | undefined;
+  readonly tone: PinTone;
   removed = false;
 
   private readonly listeners = new Set<(position: LatLng) => void>();
@@ -162,6 +164,7 @@ export class NullPin implements PinHandle {
     this.position = options.position;
     this.draggable = options.draggable;
     this.label = options.label;
+    this.tone = options.tone ?? 'default';
   }
 
   setPosition(position: LatLng): void {

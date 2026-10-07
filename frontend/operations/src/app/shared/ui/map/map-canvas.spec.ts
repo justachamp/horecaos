@@ -164,6 +164,19 @@ describe('MapCanvas (ADR 0145, row X.4)', () => {
       expect(provider.map.pins).toHaveLength(2);
     });
 
+    it('gives each marker the tone it stands for, so couriers and orders can share a map', async () => {
+      const fixture = create({
+        markers: [
+          { id: 'courier-1', position: at(41.3, 69.2), tone: 'courier' },
+          { id: 'order-1', position: at(41.31, 69.21), tone: 'order' },
+          { id: 'plain', position: at(41.32, 69.22) },
+        ],
+      });
+      await settle(fixture);
+
+      expect(provider.map.livePins.map((pin) => pin.tone)).toEqual(['courier', 'order', 'default']);
+    });
+
     it('draws areas as outlines nobody can edit, and replaces them in place', async () => {
       const areas: MapArea[] = [
         { id: 'zone-1', ring: [at(41.3, 69.2), at(41.3, 69.3), at(41.4, 69.25)] },

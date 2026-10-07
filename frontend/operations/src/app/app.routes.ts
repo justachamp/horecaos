@@ -999,12 +999,15 @@ export const routes: Routes = [
           { path: '', pathMatch: 'full', redirectTo: 'dispatch' },
           {
             path: 'dispatch',
-            canActivate: [messagesGuard('couriers', 'orders')],
+            // `map` for the map pane (row 3.1, ADR 0145).
+            canActivate: [messagesGuard('couriers', 'orders', 'map')],
             loadComponent: () =>
               import('./features/delivery/dispatch-board-page').then((m) => m.DispatchBoardPage),
           },
           {
+            // ADR 0145, row 3.2: the couriers on a map.
             path: 'map',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/live-map-page').then((m) => m.LiveMapPage),
           },

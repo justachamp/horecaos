@@ -792,4 +792,28 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.zoneImport.review.action': 'Tekshirish va yoqish',
   'delivery.zoneImport.live': 'Yoqilgan',
   'delivery.zoneImport.activatedToast': '{code} zonasi, {version}-versiya yoqildi.',
+  'delivery.liveMap.mapLabel': 'Smenadagi kuryerlar xaritasi',
+  'delivery.liveMap.map.pinLabel': '{courier}: faol buyurtmalar — {orders}',
+  'delivery.liveMap.map.hint':
+    'Har bir nuqta — oxirgi joylashuvi chizish uchun yetarlicha yangi va aniq boʻlgan kuryer; konturlar — amaldagi yetkazib berish zonalari. Nuqtasiz kuryerlar sababi bilan quyida keltirilgan, ular taxminan xaritaga qoʻyilmaydi.',
+  'delivery.orderPoints.show': 'Bugungi yetkazib berish buyurtmalarini xaritada koʻrsatish',
+  'delivery.orderPoints.refresh': 'Qayta ochish',
+  'delivery.orderPoints.openOnly': 'Faqat jarayondagi buyurtmalar',
+  'delivery.orderPoints.audit':
+    'Bugungi yetkazib berish nuqtalarini ochish qayd etiladi: platforma kim, qachon va nima uchun ochganini saqlaydi. Xaritada buyurtma raqami va nuqta koʻrsatiladi, ism, telefon yoki manzil emas. Tugmani bosmaguningizcha hech narsa ochilmaydi va oʻz-oʻzidan yangilanmaydi.',
+  'delivery.orderPoints.loading': 'Kunlik yetkazib berish nuqtalari ochilmoqda…',
+  'delivery.orderPoints.denied':
+    'Sizda kunlik yetkazib berish nuqtalarini ochish huquqi yoʻq. U dispetcherlar va filial menejerlarida bor.',
+  'delivery.orderPoints.summary': 'Xaritada yetkazib berish buyurtmalari: {shown} / {total}',
+  'delivery.orderPoints.withoutPoint':
+    'Bugungi yetkazib berish buyurtmalaridan {count} tasida koʻrsatiladigan nuqta yoʻq (manzilni ochib boʻlmadi).',
+  'delivery.orderPoints.truncated':
+    'Kunda xarita bir vaqtda ochadigandan koʻproq yetkazib berish buyurtmasi bor; eng yangilari koʻrsatilgan.',
+  'delivery.orderPoints.mapLabel': 'Bugungi yetkazib berish buyurtmalari xaritasi',
+  'delivery.orderPoints.pinLabel': 'Buyurtma {number}: {status}',
+  'delivery.orderPoints.legend.courier': 'kuryer',
+  'delivery.orderPoints.legend.order': 'jarayondagi buyurtma',
+  'delivery.orderPoints.legend.closed': 'yakunlangan yoki bekor qilingan buyurtma',
+  'delivery.dispatch.map.show': 'Xarita',
+  'delivery.dispatch.map.hide': 'Xaritani yashirish',
 };

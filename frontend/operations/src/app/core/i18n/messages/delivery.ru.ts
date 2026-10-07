@@ -786,4 +786,28 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.zoneImport.review.action': 'Проверить и включить',
   'delivery.zoneImport.live': 'Включена',
   'delivery.zoneImport.activatedToast': 'Зона {code}, версия {version}, включена.',
+  'delivery.liveMap.mapLabel': 'Карта курьеров на смене',
+  'delivery.liveMap.map.pinLabel': '{courier}: активных заказов — {orders}',
+  'delivery.liveMap.map.hint':
+    'Каждая точка — курьер, чья последняя позиция достаточно свежая и точная, чтобы её рисовать; контуры — действующие зоны доставки. Курьеры на смене без точки перечислены ниже с причиной и не ставятся на карту наугад.',
+  'delivery.orderPoints.show': 'Показать сегодняшние заказы на доставку на карте',
+  'delivery.orderPoints.refresh': 'Открыть заново',
+  'delivery.orderPoints.openOnly': 'Только заказы в работе',
+  'delivery.orderPoints.audit':
+    'Открытие сегодняшних точек доставки записывается: платформа хранит, кто, когда и зачем их открыл. На карте — номер заказа и точка, но не имя, не телефон и не адрес. Пока вы не нажмёте кнопку, ничего не открывается, и само оно не обновляется.',
+  'delivery.orderPoints.loading': 'Открываем точки доставки за день…',
+  'delivery.orderPoints.denied':
+    'У вас нет права открывать точки доставки за день. Оно есть у диспетчеров и управляющих филиалом.',
+  'delivery.orderPoints.summary': 'На карте заказов на доставку: {shown} из {total}',
+  'delivery.orderPoints.withoutPoint':
+    'У заказов на доставку за сегодня без точки: {count} (адрес не удалось открыть).',
+  'delivery.orderPoints.truncated':
+    'За день заказов на доставку больше, чем карта открывает за раз; показаны самые новые.',
+  'delivery.orderPoints.mapLabel': 'Карта сегодняшних заказов на доставку',
+  'delivery.orderPoints.pinLabel': 'Заказ {number}: {status}',
+  'delivery.orderPoints.legend.courier': 'курьер',
+  'delivery.orderPoints.legend.order': 'заказ в работе',
+  'delivery.orderPoints.legend.closed': 'заказ завершён или отменён',
+  'delivery.dispatch.map.show': 'Карта',
+  'delivery.dispatch.map.hide': 'Скрыть карту',
 };

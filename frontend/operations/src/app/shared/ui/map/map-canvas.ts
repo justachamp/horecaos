@@ -24,6 +24,7 @@ import {
   MapUnavailableError,
   MapUnavailableReason,
   PinHandle,
+  PinTone,
   PolygonHandle,
 } from './map-provider';
 
@@ -34,6 +35,8 @@ export interface MapMarker {
   readonly position: LatLng;
   /** Already translated, or tenant data. */
   readonly label?: string;
+  /** What the pin stands for, when the map shows more than one kind of thing. */
+  readonly tone?: PinTone;
 }
 
 /** A read-only outline: a delivery zone on the live map, or a zone in the density view. */
@@ -210,7 +213,12 @@ export class MapCanvas {
       } else {
         this.pins.set(
           marker.id,
-          map.addPin({ position: marker.position, draggable: false, label: marker.label }),
+          map.addPin({
+            position: marker.position,
+            draggable: false,
+            label: marker.label,
+            tone: marker.tone,
+          }),
         );
       }
     }

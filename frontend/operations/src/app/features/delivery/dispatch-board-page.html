@@ -8,6 +8,15 @@
         }}</span>
         <q-stale-indicator [updatedAt]="lastUpdatedAt()" />
       }
+      <button
+        type="button"
+        class="dispatch__map-toggle"
+        [attr.aria-pressed]="mapOpen()"
+        (click)="toggleMap()"
+        data-testid="dispatch-map-toggle"
+      >
+        {{ (mapOpen() ? 'delivery.dispatch.map.hide' : 'delivery.dispatch.map.show') | t }}
+      </button>
       <button type="button" class="dispatch__refresh" (click)="manualRefresh()">
         {{ 'delivery.dispatch.refresh' | t }}
       </button>
@@ -15,6 +24,21 @@
   </div>
 
   <q-connection-state-banner [state]="realtime.state()" />
+
+  @if (mapOpen()) {
+    @if (mapScope(); as scope) {
+      <div class="dispatch__map" data-testid="dispatch-map">
+        <q-order-points-map
+          [scope]="scope"
+          [purpose]="ordersPurpose"
+          [center]="mapCentre()"
+          [extraMarkers]="courierMarkers()"
+          [alwaysShowMap]="true"
+          [height]="320"
+        />
+      </div>
+    }
+  }
 
   @if (notice(); as message) {
     <div class="dispatch__notice-band" role="alert">

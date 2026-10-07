@@ -6,6 +6,7 @@ import {
   MapProvider,
   PinHandle,
   PinOptions,
+  PinTone,
   PolygonHandle,
   PolygonLook,
   PolygonOptions,
@@ -154,6 +155,14 @@ export const loadYandexScript: YandexScriptLoader = (() => {
   };
 })();
 
+/** The vendor's own dot for each tone; `default` is the vendor's default pin, left alone. */
+const PIN_PRESETS: Readonly<Record<PinTone, string | null>> = {
+  default: null,
+  courier: 'islands#greenCircleDotIcon',
+  order: 'islands#redDotIcon',
+  closed: 'islands#grayDotIcon',
+};
+
 export function toYandex(point: LatLng): YCoord {
   return [point.latitude, point.longitude];
 }
@@ -217,7 +226,12 @@ class YandexMapHandle implements MapHandle {
     const placemark = new this.ymaps.Placemark(
       toYandex(options.position),
       { hintContent: options.label ?? '' },
-      { draggable: options.draggable },
+      {
+        draggable: options.draggable,
+        ...(PIN_PRESETS[options.tone ?? 'default']
+          ? { preset: PIN_PRESETS[options.tone ?? 'default'] }
+          : {}),
+      },
     );
     this.map.geoObjects.add(placemark);
     return new YandexPin(this.map, placemark);

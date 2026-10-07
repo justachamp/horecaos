@@ -6,6 +6,7 @@ import {
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 
 import { ApiError } from '../../core/api/problem-details';
@@ -14,6 +15,9 @@ import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetim
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
+import { boundsOf } from '../../shared/ui/map/geometry';
+import { MapArea, MapCanvas, MapMarker } from '../../shared/ui/map/map-canvas';
+import { LatLng, MapBounds } from '../../shared/ui/map/map-provider';
 import { Toasts } from '../../shared/ui/toast';
 import {
   CoarseCourier,
@@ -21,7 +25,10 @@ import {
   CourierPositionsApi,
   TrackRevealResponse,
 } from './courier-positions-api';
+import { DeliveryZonesApi, ZoneOutlineResponse } from './delivery-zones-api';
+import { FALLBACK_MAP_CENTRE, MapRegionService } from './map-region';
 import { TrackRevealDialog, TrackRevealSubmission } from './track-reveal-dialog';
+import { outerRings } from './zone-geometry';
 
 /** couriers.md §4: "10s refresh". */
 const POLL_INTERVAL_MS = 10_000;
@@ -48,25 +55,28 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * manager scoped above one branch sees one picker, wherever they open it
  * from, and it never drifts between this page and the shell.
  *
- * **Reduced relative to the spec, deliberately.** IA Part 4's own
- * component-gap list names `MapCanvas` as not built at all — no map
- * primitive exists in this design system. This renders the same fleet read
- * as a coordinate table instead of a canvas, the same honest reduction
- * `dispatch-board-page.ts` takes for its own "map of points and routes".
- * **Not built**: zone and work-state filters (couriers.md §4 also asks for
- * these; only the branch filter is this wave's row) and
- * in-house-vs-provider-courier distinction — every courier
- * `OperationsCourierPositionController` reads is in-house; ADR 0045 records
- * partner couriers with no position at all as a rejected alternative, not a
- * gap.
+ * **On a map (ADR 0145, row `3.2`).** Every drawable courier is a pin on the map above the table,
+ * keyed by courier so a courier who moved is one pin that moved, and the brand's live delivery
+ * zones are drawn under them (read-only: a zone is edited on the zones page). The table stays: it
+ * carries accuracy, heading, speed, battery and the audited reveal, none of which a pin shows, and
+ * it is what an environment with no map provider has. The couriers on duty whose fix is too old or
+ * too imprecise to draw are not on the map and are listed below it with the reason, never placed
+ * on a guess. A pin says the courier's reference and how many orders they carry, never a name
+ * (ADR 0029: the protected name is behind its own reveal).
  *
- * **The reveal renders what it decrypts, not a route.** With no map canvas,
- * a revealed window is a list of timestamped points rather than a drawn
- * path — the same honest-reduction stance the fleet table itself takes.
+ * **Not built**: work-state filters (couriers.md §4 also asks for these; only the branch filter is
+ * this wave's row) and in-house-vs-provider-courier distinction — every courier
+ * `OperationsCourierPositionController` reads is in-house; ADR 0045 records partner couriers with
+ * no position at all as a rejected alternative, not a gap.
+ *
+ * **The reveal renders what it decrypts, not a route.** A revealed window is a list of timestamped
+ * points rather than a drawn path: drawing one stored track on the live map would put a person's
+ * movement history next to everyone's present position, which is the combination ADR 0045 keeps
+ * apart.
  */
 @Component({
   selector: 'q-live-map-page',
-  imports: [TPipe, TrackRevealDialog],
+  imports: [TPipe, TrackRevealDialog, MapCanvas],
   templateUrl: './live-map-page.html',
   styleUrl: './live-map-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,6 +85,8 @@ export class LiveMapPage implements OnInit {
   private readonly positions = inject(CourierPositionsApi);
   private readonly location = inject(CurrentLocation);
   private readonly toasts = inject(Toasts);
+  private readonly zonesApi = inject(DeliveryZonesApi);
+  private readonly regions = inject(MapRegionService);
   protected readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -90,6 +102,41 @@ export class LiveMapPage implements OnInit {
     this.location.options(),
   );
   protected readonly selectedBranchId = computed(() => this.location.scope()?.locationId ?? null);
+
+  // ------------------------------------------------------------- the map
+  /** The brand's live zones, drawn under the couriers. Empty for a caller who may not read them. */
+  private readonly outlines = signal<readonly ZoneOutlineResponse[]>([]);
+
+  protected readonly markers = computed<readonly MapMarker[]>(() =>
+    this.pins().map((pin) => ({
+      id: pin.courierId,
+      position: { latitude: pin.latitude, longitude: pin.longitude },
+      label: this.i18n.t('delivery.liveMap.map.pinLabel', {
+        courier: pin.courierId,
+        orders: pin.activeAssignmentCount,
+      }),
+    })),
+  );
+
+  protected readonly areas = computed<readonly MapArea[]>(() =>
+    this.outlines().flatMap((outline) =>
+      outerRings(outline).map((ring, index) => ({
+        id: `${outline.zoneId}:${index}`,
+        ring,
+        label: outline.code,
+      })),
+    ),
+  );
+
+  /**
+   * Where the map first opens, fixed when it is built: the couriers' own spread when there are two
+   * or more, else the branch's region. Not recomputed on each ten-second refresh: a map that
+   * re-fits itself every poll fights a dispatcher who has panned to where they are looking.
+   */
+  protected readonly openingFit = signal<MapBounds | null>(null);
+  protected readonly openingCentre = signal<LatLng>(FALLBACK_MAP_CENTRE);
+  protected readonly mapReady = signal(false);
+  private readonly canvas = viewChild(MapCanvas);
 
   protected readonly revealCourierId = signal<string | null>(null);
   protected readonly revealBusy = signal(false);
@@ -114,7 +161,29 @@ export class LiveMapPage implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
-    await this.refresh();
+    await Promise.all([this.refresh(), this.loadZones(), this.regions.ensureLoaded()]);
+    this.openMap();
+  }
+
+  /** Best effort: a dispatcher who may not read zones still sees couriers, just not the zones under them. */
+  private async loadZones(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.outlines.set(await this.zonesApi.activeOutlines(scope));
+    } catch {
+      this.outlines.set([]);
+    }
+  }
+
+  private openMap(): void {
+    const pins = this.pins().map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude }));
+    const region = this.regions.primary();
+    this.openingFit.set(pins.length >= 2 ? boundsOf(pins) : null);
+    this.openingCentre.set(pins[0] ?? region?.centre ?? FALLBACK_MAP_CENTRE);
+    this.mapReady.set(true);
   }
 
   protected manualRefresh(): void {
@@ -127,7 +196,20 @@ export class LiveMapPage implements OnInit {
       return;
     }
     this.location.selectLocation(locationId);
-    void this.refresh();
+    void this.refresh().then(() => this.showBranchFleet());
+  }
+
+  /** A different branch is a different place: bring its couriers into view, once, when it is chosen. */
+  private showBranchFleet(): void {
+    const points = this.pins().map((pin) => ({
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+    }));
+    if (points.length >= 2) {
+      this.openingFit.set(boundsOf(points));
+    } else if (points.length === 1) {
+      this.canvas()?.recenter(points[0], 14);
+    }
   }
 
   private async refresh(): Promise<void> {

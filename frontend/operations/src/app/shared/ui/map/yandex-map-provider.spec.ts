@@ -225,6 +225,19 @@ describe('YandexMapProvider', () => {
       expect(maps[0].removed).toEqual([placemark]);
     });
 
+    it('gives each tone the vendor’s own dot, and leaves a plain pin as the vendor draws it', () => {
+      handle.addPin({ position: at(1, 2), draggable: false });
+      handle.addPin({ position: at(1, 2), draggable: false, tone: 'courier' });
+      handle.addPin({ position: at(1, 2), draggable: false, tone: 'order' });
+      handle.addPin({ position: at(1, 2), draggable: false, tone: 'closed' });
+      const [plain, courier, order, closed] = maps[0].added;
+
+      expect(plain.initialOptions).not.toHaveProperty('preset');
+      expect(courier.initialOptions?.['preset']).toBe('islands#greenCircleDotIcon');
+      expect(order.initialOptions?.['preset']).toBe('islands#redDotIcon');
+      expect(closed.initialOptions?.['preset']).toBe('islands#grayDotIcon');
+    });
+
     it('draws a polygon from an open ring and reports edits as an open ring again', () => {
       const ring = [at(41.3, 69.2), at(41.3, 69.3), at(41.4, 69.3)];
       const polygon = handle.addPolygon({ ring, editable: true });

@@ -35,11 +35,19 @@ export interface MapOptions {
 
 export type Unsubscribe = () => void;
 
+/**
+ * What a pin stands for, so a map with two kinds of thing on it (couriers and the day's orders)
+ * can tell them apart without any component naming a colour. The adapter turns each into the
+ * vendor's own look; a screen that draws one kind of pin leaves it out.
+ */
+export type PinTone = 'default' | 'courier' | 'order' | 'closed';
+
 export interface PinOptions {
   readonly position: LatLng;
   readonly draggable: boolean;
   /** Already translated, or tenant data; shown as the pin's hint. */
   readonly label?: string;
+  readonly tone?: PinTone;
 }
 
 export interface PinHandle {

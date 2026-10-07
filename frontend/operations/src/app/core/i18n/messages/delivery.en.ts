@@ -785,4 +785,28 @@ export const deliveryEn = {
   'delivery.zoneImport.review.action': 'Review and activate',
   'delivery.zoneImport.live': 'Live',
   'delivery.zoneImport.activatedToast': 'Zone {code}, version {version}, is live.',
+  'delivery.liveMap.mapLabel': 'Map of couriers on duty',
+  'delivery.liveMap.map.pinLabel': '{courier}: {orders} active orders',
+  'delivery.liveMap.map.hint':
+    'Each pin is a courier whose last position is recent and precise enough to draw; the outlines are the live delivery zones. Couriers on duty without a pin are listed below with the reason, never placed on a guess.',
+  'delivery.orderPoints.show': "Show today's delivery orders on the map",
+  'delivery.orderPoints.refresh': 'Open them again',
+  'delivery.orderPoints.openOnly': 'Only orders still in progress',
+  'delivery.orderPoints.audit':
+    "Opening the day's delivery points is recorded: the platform keeps who opened them, when, and why. The map shows an order number and a point, never a name, a phone or an address. Nothing is opened until you press the button, and it is not refreshed on its own.",
+  'delivery.orderPoints.loading': "Opening the day's delivery points…",
+  'delivery.orderPoints.denied':
+    "You may not open the day's delivery points. That is held by dispatchers and branch managers.",
+  'delivery.orderPoints.summary': '{shown} of {total} delivery orders are on the map',
+  'delivery.orderPoints.withoutPoint':
+    '{count} delivery orders today have no point to show (the address could not be opened).',
+  'delivery.orderPoints.truncated':
+    'The day has more delivery orders than the map opens at once; these are the newest.',
+  'delivery.orderPoints.mapLabel': "Map of today's delivery orders",
+  'delivery.orderPoints.pinLabel': 'Order {number}: {status}',
+  'delivery.orderPoints.legend.courier': 'courier',
+  'delivery.orderPoints.legend.order': 'order in progress',
+  'delivery.orderPoints.legend.closed': 'order finished or cancelled',
+  'delivery.dispatch.map.show': 'Map',
+  'delivery.dispatch.map.hide': 'Hide the map',
 } as const;
