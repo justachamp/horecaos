@@ -11,6 +11,7 @@ import { Capability, SessionCapabilities } from '../../core/auth/session-capabil
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { BrandProfileApi } from '../settings/brand-profile/brand-profile-api';
+import { CustomerCard, LeadsApi } from './leads-api';
 import { ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
@@ -70,6 +71,36 @@ const FAKE_REVIEWS_API = { list: vi.fn().mockResolvedValue({ items: [], nextCurs
 
 const FAKE_BRAND_PROFILE_API = { list: vi.fn().mockResolvedValue([]) };
 
+/** ADR 0111: opening the pane opens the card, which is an audited read — the fake counts the opens. */
+const CARD: CustomerCard = {
+  customerAccountId: 'customer-1',
+  status: 'ACTIVE',
+  displayName: 'Dilnoza Karimova',
+  preferredLocale: 'ru',
+  version: 3,
+  blacklisted: false,
+  leads: [],
+  history: [
+    {
+      kind: 'NOTIFICATION',
+      occurredAt: '2026-09-01T10:00:00Z',
+      channel: 'SMS',
+      statusCode: 'DELIVERED',
+      detailCode: 'order.confirmation',
+      referenceId: 'notification-1',
+      orderId: 'order-1',
+      rating: null,
+      label: null,
+    },
+  ],
+  nextBefore: null,
+};
+
+const FAKE_LEADS_API = {
+  openCard: vi.fn().mockResolvedValue(CARD),
+  recordCustomerAttempt: vi.fn(),
+};
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -80,6 +111,7 @@ describe('CustomerDetailPane', () => {
   let api: Record<string, ReturnType<typeof vi.fn>>;
 
   beforeEach(async () => {
+    FAKE_LEADS_API.openCard.mockClear();
     api = {
       profile: vi.fn().mockResolvedValue(PROFILE),
       updateProfile: vi.fn().mockResolvedValue(PROFILE.value),
@@ -111,6 +143,7 @@ describe('CustomerDetailPane', () => {
         { provide: Auth, useValue: FAKE_AUTH },
         { provide: SessionCapabilities, useValue: fakeCapabilities() },
         { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+        { provide: LeadsApi, useValue: FAKE_LEADS_API },
         { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
       ],
     }).compileComponents();
@@ -125,6 +158,25 @@ describe('CustomerDetailPane', () => {
   it('reads the profile through the operator’s own tenant/brand scope', () => {
     expect(api['profile']).toHaveBeenCalledWith(SCOPE, 'customer-1');
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Dilnoza Karimova');
+  });
+
+  it('opens the card once when the account is shown, and the Contacts tab renders it without opening it again', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(FAKE_LEADS_API.openCard).toHaveBeenCalledTimes(1);
+    expect(FAKE_LEADS_API.openCard).toHaveBeenCalledWith(
+      'tenant-1',
+      'customer-1',
+      'Operations console: open customer card',
+    );
+
+    (host.querySelector('[data-testid="tab-history"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelectorAll('[data-testid="card-entry"]')).toHaveLength(1);
+    expect(host.textContent).toContain('order.confirmation');
+    expect(FAKE_LEADS_API.openCard).toHaveBeenCalledTimes(1);
   });
 
   it('shows "not blacklisted" on the Blacklist tab, with no reveal call made', async () => {
@@ -222,6 +274,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -277,6 +330,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -368,6 +422,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -452,6 +507,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: brandProfiles },
         ],
       })
@@ -519,6 +575,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -586,6 +643,7 @@ describe('CustomerDetailPane', () => {
             { provide: Auth, useValue: FAKE_AUTH },
             { provide: SessionCapabilities, useValue: fakeCapabilities(held) },
             { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: LeadsApi, useValue: FAKE_LEADS_API },
             { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
           ],
         })

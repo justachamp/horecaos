@@ -1,0 +1,74 @@
+<form class="recorder" (submit)="$event.preventDefault(); submit()" data-testid="call-recorder">
+  <p class="q-body-sm note">{{ 'customers.leads.attempts.append' | t }}</p>
+
+  <label class="field">
+    <span class="q-caption">{{ 'customers.leads.attempts.direction' | t }}</span>
+    <select
+      [value]="direction()"
+      (change)="setDirection($any($event.target).value)"
+      data-testid="recorder-direction"
+    >
+      @for (option of directions; track option) {
+        <option [value]="option">{{ directionLabel(option) }}</option>
+      }
+    </select>
+  </label>
+
+  <label class="field">
+    <span class="q-caption">{{ 'customers.leads.attempts.outcome' | t }}</span>
+    <select
+      [value]="outcome()"
+      (change)="setOutcome($any($event.target).value)"
+      data-testid="recorder-outcome"
+    >
+      @for (option of outcomes; track option) {
+        <option [value]="option">{{ outcomeLabel(option) }}</option>
+      }
+    </select>
+  </label>
+
+  @if (blocked()) {
+    <label class="field">
+      <span class="q-caption">{{ 'customers.leads.attempts.blockingReason' | t }}</span>
+      <select
+        [value]="blockingReason()"
+        (change)="setBlockingReason($any($event.target).value)"
+        data-testid="recorder-blocking-reason"
+      >
+        @for (option of blockingReasons; track option) {
+          <option [value]="option">{{ blockingLabel(option) }}</option>
+        }
+      </select>
+    </label>
+  }
+
+  <label class="field">
+    <span class="q-caption">{{ 'customers.leads.attempts.nextAction' | t }}</span>
+    <select
+      [value]="nextAction()"
+      (change)="setNextAction($any($event.target).value)"
+      data-testid="recorder-next-action"
+    >
+      <option value="">{{ 'customers.leads.attempts.nextNone' | t }}</option>
+      @for (option of nextActions; track option) {
+        <option [value]="option">{{ nextActionLabel(option) }}</option>
+      }
+    </select>
+  </label>
+
+  @if (nextAction() !== '') {
+    <label class="field">
+      <span class="q-caption">{{ 'customers.leads.attempts.nextActionAt' | t }}</span>
+      <input
+        type="datetime-local"
+        [value]="nextActionAt()"
+        (input)="nextActionAt.set($any($event.target).value)"
+        data-testid="recorder-next-action-at"
+      />
+    </label>
+  }
+
+  <button type="submit" class="primary" [disabled]="busy()" data-testid="recorder-submit">
+    {{ 'customers.leads.attempts.submit' | t }}
+  </button>
+</form>
