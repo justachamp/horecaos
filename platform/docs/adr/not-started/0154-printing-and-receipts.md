@@ -50,13 +50,17 @@
   [ADR 0038](../partial/0038-legal-entities-fiscal-receipts-and-product-classification.md),
   [ADR 0041](../partial/0041-kitchen-execution-and-production-routing.md),
   [ADR 0056](../partial/0056-tenant-isolation-enforcement-and-rls.md),
+  [ADR 0058](../partial/0058-telegram-notification-channels.md),
   [ADR 0079](../partial/0079-kitchen-display-device-principal-and-enrolment.md),
   [ADR 0082](../built/0082-a-feature-flag-is-a-boolean-configuration-key.md),
   [ADR 0136](../partial/0136-composite-products-combo-groups-and-modifier-depth.md),
   [ADR 0151](../not-started/0151-a-wall-display-device-class.md)
-- Supersedes / Superseded by: — (amends no ADR. ADR 0011's closed port list stays
-  closed: Decision 11 explains why no print capability is added. ADR 0038 is extended,
-  not changed: it owns the fiscal document and says nothing of the paper. What this
+- Supersedes / Superseded by: Supersedes the exit-criterion sentence of ADR 0041, «a branch runs
+  a full service from screens with no paper tickets», only for a branch that has a printing
+  route; nothing else in ADR 0041 changes. The building wave sets `Superseded by ADR 0154` on ADR
+  0041 for that sentence and edits neither its argument nor its other exit criteria. (ADR 0011's
+  closed port list stays closed: Decision 11 explains why no print capability is added. ADR 0038
+  is extended, not changed: it owns the fiscal document and says nothing of the paper. What this
   record reopens is a declination in two documents that are not ADRs and that name it:
   `operations-spec/settings.md` §10.14 Card 3, which renders tape width and logo as a
   `LockedState` "rather than shipping fields nothing reads" until an ADR owns them, and
@@ -87,7 +91,8 @@
     time, the seller's name and TIN) verbatim, and the QR of the stored receipt URL;
     label an order summary «not a fiscal document»; mark every copy after the first as a
     copy. Wording lives in the locale catalogue, so a legal correction is a string
-    change. Blocks: nothing; a correction is a release of catalogue text.
+    change. Blocks: step 3 of Rollout for `FISCAL_RECEIPT` `auto_print`, not the build; a
+    correction after that is a release of catalogue text.
   - **The language a document prints in** (operations). Proposed default: one language
     per document, the location's own, resolved through the ADR 0030 key
     `printing.document_locale` and defaulting to `ru`; never the customer's.
@@ -239,8 +244,12 @@ capability to ADR 0011.**
    claims with a lease; a lapsed lease returns the job to `QUEUED` with the attempt
    counted; six attempts over about eight minutes end in `DEAD`; a `KITCHEN_TICKET`
    expires 30 minutes after it was queued rather than printing stale; a job printed on
-   a retry says so on the paper. A manual reprint is a new job, linked to the first,
-   with a reason and the requesting person, and writes a `BUSINESS` audit fact.
+   a retry says so on the paper, and a job whose paper comes out more than
+   `printing.late_marker_minutes` after it was queued says «delayed» with the time it was queued,
+   retried or not (an offline printer stops being claimed from, so a job that only waited prints
+   as attempt 1 and needs this line to say so). Both are lines drawn when the artifact is
+   rendered, above the fiscal block and never inside it. A manual reprint is a new job, linked to
+   the first, with a reason and the requesting person, and writes a `BUSINESS` audit fact.
 
 8. **Jobs are created after commit and reconciled, never inside the business
    transaction.** Listeners on `OrderConfirmed`, a new ticket-released signal (kitchen has
@@ -354,23 +363,30 @@ printing.printers
       (tenant_id, brand_id, location_id) -> tenant.locations (tenant_id, brand_id, id)
   display_name varchar(120)                       unique (tenant_id, location_id, display_name)
   tape_width_mm smallint                          58 | 80
-  agent_device_id uuid null                       -> iam.device_principals (tenant_id, id)
+  agent_device_id uuid null                       (tenant_id, location_id, agent_device_id) -> iam.device_principals
+                                                  (tenant_id, location_id, id) [uq_device_principal_location]:
+                                                  an agent serves printers at its own location only
   agent_printer_key varchar(64) null              the alias the agent advertises; null = BROWSER
   connection_kind varchar(16)                     AGENT | BROWSER       (a CHECK ties the pair: AGENT needs both ids)
   status varchar(16)                              ACTIVE | RETIRED
   last_status varchar(16) null                    ONLINE | OFFLINE | OUT_OF_PAPER | COVER_OPEN | ERROR | UNKNOWN
   last_status_at timestamptz null
-  version, created_at, updated_at                 unique (tenant_id, id)
+  version, created_at, updated_at                 unique (tenant_id, id); uq_printer_location (tenant_id, location_id, id)
 
 printing.print_routes
   id, tenant_id, brand_id, location_id
+      (tenant_id, brand_id, location_id) -> tenant.locations (tenant_id, brand_id, id)
   document_type varchar(20)                       KITCHEN_TICKET | ORDER_SLIP | FISCAL_RECEIPT
-  station_id uuid null                            -> kitchen.stations (id, tenant_id, location_id); KITCHEN_TICKET only
-  printer_id uuid                                 -> printing.printers (tenant_id, id)
+  station_id uuid null                            (station_id, tenant_id, location_id) -> kitchen.stations (id, tenant_id, location_id);
+                                                  KITCHEN_TICKET only
+  printer_id uuid                                 (tenant_id, location_id, printer_id) -> printing.printers
+                                                  (tenant_id, location_id, id) [uq_printer_location]:
+                                                  a route names a printer at its own location only
   copies smallint                                 1..3
   auto_print boolean                              default false
   status varchar(16)                              ACTIVE | INACTIVE
   version, created_at, updated_at
+  uq_print_route_location (tenant_id, location_id, id)
   unique (tenant_id, location_id, document_type, coalesce(station_id, nil uuid), printer_id)
 
 printing.receipt_profiles
@@ -381,30 +397,51 @@ printing.receipt_profiles
 
 printing.print_jobs
   id (Ids.newId, ADR 0076), tenant_id, brand_id, location_id, printer_id
-  route_id uuid null                              null for a manual job
+      (tenant_id, brand_id, location_id) -> tenant.locations (tenant_id, brand_id, id)
+      (tenant_id, location_id, printer_id) -> printing.printers (tenant_id, location_id, id) [uq_printer_location]
+  route_id uuid null                              null for a manual job; (tenant_id, location_id, route_id) ->
+                                                  printing.print_routes (tenant_id, location_id, id) [uq_print_route_location]
   document_type varchar(20)                       adds TEST_PAGE
   source_type varchar(20)                         KITCHEN_TICKET | ORDER | FISCAL_DOCUMENT | NONE
   source_id uuid null, source_revision integer    ticket release or amendment sequence; order version; 0 otherwise
+                                                  source_id names a row in another module's table and has no foreign key, by design;
+                                                  the unique key below and the sweeper guard it
   copy_no smallint                                1..copies
   origin varchar(8)                               AUTO | MANUAL
-  requested_by varchar(255) null, reason_code varchar(24) null, reprint_of uuid null
+  requested_by varchar(255) null, reason_code varchar(24) null
+  reprint_of uuid null                            (tenant_id, reprint_of) -> printing.print_jobs (tenant_id, id) [uq_print_job_tenant_id]
   status varchar(12)
   attempt integer, next_attempt_at timestamptz, expires_at timestamptz
-  lease_token uuid null, lease_expires_at timestamptz null, claimed_by_device_id uuid null
+  lease_token uuid null, lease_expires_at timestamptz null
+  claimed_by_device_id uuid null                  (tenant_id, location_id, claimed_by_device_id) -> iam.device_principals
+                                                  (tenant_id, location_id, id) [uq_device_principal_location]
   failure_code varchar(24) null                   PRINTER_OFFLINE | OUT_OF_PAPER | COVER_OPEN | TRANSPORT | RENDER | LEASE_LAPSED
   locale varchar(8), tape_width_mm smallint, profile_version integer null
   protected_document text null                    FieldProtection envelope (ADR 0029); null once purged
   document_digest varchar(64)                     SHA-256 of the canonical document, kept after the purge
   payload_purge_after timestamptz
   queued_at, printed_at, version, created_at, updated_at
+  uq_print_job_tenant_id (tenant_id, id)
   unique (tenant_id, location_id, printer_id, document_type, source_type, source_id,
           source_revision, copy_no)  WHERE origin = 'AUTO'
   index (printer_id, queued_at) WHERE status IN ('QUEUED', 'CLAIMED')
 ```
 
-Every table has `tenant_id` in its unique and foreign keys, a `GRANT SELECT, INSERT,
-UPDATE` to `horecaos_application` (`printing.print_routes` also `DELETE`; a job is never
-deleted, its payload is nulled), and row-level security from the first migration through
+Every table has `tenant_id` in its unique and foreign keys, and every foreign key that reaches
+a row bound to a location carries `location_id` too, so the database and not only the endpoint
+refuses a route naming a printer at another location, a printer bound to an agent enrolled at
+another location, a job whose printer, route or claiming agent is at another location, and a
+reprint of another tenant's job. The constraints are named `uq_printer_location`,
+`uq_print_route_location`, `uq_print_job_tenant_id`, `fk_printer_agent_device`,
+`fk_print_route_printer`, `fk_print_job_printer`, `fk_print_job_route`, `fk_print_job_reprint_of`
+and `fk_print_job_claimed_by` (with `fk_*_location` for each table's own location), and
+`TenantScopedReferenceCatalogTests` stays green with `known_tenant_blind_references.tsv` empty.
+`uq_device_principal_location (tenant_id, location_id, id)` on `iam.device_principals` is shared
+with ADR 0155 and ADR 0162: the first of the three migrations to merge adds it and the others rely
+on it (an earlier migration cannot rely on a constraint a later one adds, which is why this one
+is carried by the first and not by the last as the class CHECKs below are). Each table also has a
+`GRANT SELECT, INSERT, UPDATE` to `horecaos_application` (`printing.print_routes` also `DELETE`; a
+job is never deleted, its payload is nulled), and row-level security from the first migration through
 `platform.enable_tenant_row_level_security` (ADR 0056): a new schema has no cross-tenant
 reader to retrofit, and the reconciler and purge job bind platform scope explicitly. The
 migration also seeds nothing; `DatabasePrivilegeTests` and `RowLevelSecurityBackstopTests`
@@ -419,8 +456,9 @@ carries all of them, and the migration test asserts the whole list.
 
 `PrintDocument` is versioned JSON: `{type, locale, tapeWidthMm, copyMarker, blocks[]}` with
 money as `{amountMinor, currency}` and every instant as UTC formatted in the location's
-IANA timezone by the renderer. Text is placed on the cell grid (12 dots a cell, 24-dot
-glyphs), wrapped on cells, never on pixels, so a 58 mm and an 80 mm roll differ only in
+IANA timezone by the renderer. The retry and delayed lines are render inputs (the job's attempt,
+its `queued_at` and the clock when the artifact is requested), never part of the stored document or
+of its digest. Text is placed on the cell grid (12 dots a cell, 24-dot glyphs), wrapped on cells, never on pixels, so a 58 mm and an 80 mm roll differ only in
 column count. A combo is a header line with its components indented beneath it (ADR 0136);
 on a `KITCHEN_TICKET` only the components routed to that station appear under the header.
 Totals and VAT are printed from the fiscal or order facts and a render-time check that they
@@ -479,7 +517,8 @@ POST .../print/jobs/{jobId}/results                                           pr
 
 The lease is 60 seconds. `claims` upserts the advertised printers' statuses, so a printer
 that reports `OFFLINE` stops being claimed from and is raised as an operations alert
-(ADR 0020's `OperationsAlertPort`) when a `KITCHEN_TICKET` is waiting on it for two minutes.
+(`PRINTER_OFFLINE`, through ADR 0058's `OperationsAlertPort`) when a `KITCHEN_TICKET` is waiting on
+it for two minutes; a job that ends `DEAD` raises `PRINT_JOB_DEAD` the same way.
 The agent's configuration (which printers it may dial, by local alias) lives with the agent,
 never in a platform response: the platform cannot make a branch machine open a connection to
 an address a manager typed. The reference agent (`tools/print-agent`, TypeScript) speaks raw
@@ -518,6 +557,7 @@ scope, which a location manager does not hold), `print.reprint` (also `LOCATION_
 
 `feature.printing` (boolean, off). `printing.document_locale` (string, location scope,
 default `ru`). `printing.kitchen_ticket.expire_minutes` (integer, default 30, range 5–240).
+`printing.late_marker_minutes` (integer, location scope, default 5, range 1–1440).
 A job persists the resolved locale, the receipt profile's version, the roll width and the
 render protocol it used, so a reprint explains itself.
 
@@ -525,11 +565,25 @@ render protocol it used, so a reprint explains itself.
 
 No Kafka event is published. The signals above are in-process (ADR 0032's
 `FiscalDocumentIssued` precedent), and the two things an operator watches, a printer
-offline and a dead job, are operations alerts through `OperationsAlertPort`. If a consumer
-appears, the catalogue entry and schema precede the producer. Metrics carry only outcome
+offline and a dead job, are ADR 0058 operations alerts through `OperationsAlertPort`, under the
+classes `PRINTER_OFFLINE` and `PRINT_JOB_DEAD`. If a consumer appears, the catalogue entry and
+schema precede the producer. Metrics carry only outcome
 and document type (never a tenant's order, a name or a figure): `horecaos.printing.jobs`
 by terminal state, `horecaos.printing.claim.latency`, `horecaos.printing.render.seconds`,
 `horecaos.printing.enqueue.failures`.
+
+`fanOut` takes an `eventClass`, and it reaches only chats subscribed to a class in the closed
+`TelegramEventClass` set, backed by `integration.telegram_binding_events`'s
+`ck_telegram_binding_event_class` (last widened by V0488). Neither «printer offline» nor «dead
+job» is in it today, so an alert raised under either would reach no one («silent on no
+subscriber»). The build therefore adds `PRINTER_OFFLINE` and `PRINT_JOB_DEAD` to
+`TelegramEventClass` (with their labels) and restates the full `ck_telegram_binding_event_class`
+list in a migration, carrying every value in force forward as V0488 does; each class is its own
+semantic template key, whose wording a tenant authors as for `MARKETPLACE_CHANNEL_STALE`. ADR 0155
+widens the same list (`TERMINAL_CREDENTIAL_LOCKED`, `TERMINAL_DEVICE_UNSEEN`): the last of the two
+migrations to merge carries every value in force. The idempotency key base names the printer or
+job and the episode (the status change's `last_status_at`, the job id), so a replayed trigger
+reaches a chat once and a later outage alerts again.
 
 ### Personal data, audit and security
 
@@ -560,8 +614,21 @@ readable only with its live lease token and by the agent that holds it.
 - A lapsed lease returns the job to `QUEUED` and the next print is marked as a retry; a
   result with a stale token is refused and changes nothing; six failures end `DEAD`; a
   kitchen ticket past its expiry becomes `EXPIRED` and is never claimed.
+- A job that waited behind an offline printer for longer than `printing.late_marker_minutes` and
+  printed on its first attempt carries the «delayed» line with its queue time and no retry line
+  (the clock advanced, not an instant asserted); one printed inside the bound carries neither; a
+  retried and delayed job carries both; neither line is inside the fiscal block, and the stored
+  document's digest is the same with and without them.
 - An agent at location A is refused at location B and at another tenant, at the endpoint
-  and by the composite foreign keys.
+  (`ResourceScopeVerifier`).
+- The database, in a migration test, refuses: a route at location A naming a printer at B; a printer
+  at A bound to an agent enrolled at B; a job at A naming a printer, a route or a claiming agent at
+  B; a job whose `reprint_of` is another tenant's job. Each is seen failing first against keys that
+  carry `tenant_id` only. `TenantScopedReferenceCatalogTests` stays green with
+  `known_tenant_blind_references.tsv` empty.
+- A chat subscribed to `PRINTER_OFFLINE` and one subscribed to `PRINT_JOB_DEAD` each receive that
+  alert once; a chat subscribed to neither receives nothing; every class in `TelegramEventClass` is
+  admitted by the restated CHECK.
 - No stored document contains the order's customer name, phone or address (the order is
   seeded with all three).
 - End to end against `FakePrinter`: claim, artifact, bytes received, raster decoded equals
@@ -577,17 +644,21 @@ console path alone (test page and reprint of a slip through the browser at a wor
 agent), which proves the renderer on a real roll. Step 2 is one agent and one LAN printer
 at the pilot branch with a manually created `KITCHEN_TICKET` route and `auto_print` off,
 used by hand beside the screens. Step 3 turns `auto_print` on for one route at a time,
-kitchen first, receipt after the legal wording is confirmed. Rollback is, in order of
-bluntness: set a route inactive, turn the flag off for the tenant, revoke the agent. The
+kitchen first, and `FISCAL_RECEIPT` only after the legal wording (Open input 3) is confirmed.
+Rollback is, in order of bluntness: set a route inactive, turn the flag off for the tenant, revoke the agent. The
 tables are inert without routes, and no other module depends on this one.
 
 ## Implementation checklist
 
-- [ ] Owner accepts the record; the pilot's printer model and the legal wording are asked
-      for and tracked, not waited on.
-- [ ] Migrations: `printing` schema, four tables, grants, RLS, indexes and CHECKs; the two
-      device-class CHECKs restated with every class in force; the next free number checked
-      in every worktree.
+- [ ] Owner accepts the record; the pilot's printer model is asked for and tracked, not waited
+      on; the legal wording is asked for and gates only step 3 of Rollout for `FISCAL_RECEIPT`
+      `auto_print`, not the build.
+- [ ] Migrations: `printing` schema, four tables, grants, RLS, indexes and CHECKs, and the
+      location-carrying keys (`uq_printer_location`, `uq_print_route_location`,
+      `uq_print_job_tenant_id`, the foreign keys named in the Model); `uq_device_principal_location`
+      unless ADR 0155 or ADR 0162 already carries it; the two device-class CHECKs restated with
+      every class in force; `ck_telegram_binding_event_class` restated with `PRINTER_OFFLINE` and
+      `PRINT_JOB_DEAD`; the next free number checked in every worktree.
 - [ ] `DevicePrincipalClass.PRINT_AGENT`, `PlatformRole.PRINT_AGENT` (excluded in
       `TenantRoleCatalog` and `StaffMembers`), five capabilities in `Capability`, bundle
       changes and the invariant tests.
@@ -597,7 +668,8 @@ tables are inert without routes, and no other module depends on this one.
       `kitchen.api` package with the ticket-released signal and the ticket read; the seller's address and phone added to the
       seller read (not read from the table).
 - [ ] Listeners, sweeper, purge job, state machine, claim, artifact and result endpoints;
-      the idempotent unique key.
+      the idempotent unique key; the retry and delayed lines; the two `TelegramEventClass` values
+      and their alert callers.
 - [ ] Console endpoints, audit facts, flag and policy keys, the five OpenAPI baselines, the
       generated client.
 - [ ] Settings → Printing and receipts (three cards and the queue), the order «Печать»
@@ -607,31 +679,33 @@ tables are inert without routes, and no other module depends on this one.
 - [ ] `tools/print-agent`, `FakePrintAgent`, `FakePrinter` and the `make up` service; the
       production image carries `libfreetype` and `fontconfig`, proved by a render in CI.
 - [ ] A runbook: enrol an agent, replace a printer, read a dead job.
-- [ ] Update ADR 0041's exit criterion note (paper is now a route, not a POS side effect)
-      and ADR 0038's status line (the paper half exists).
+- [ ] In the building wave, set `Superseded by ADR 0154` on ADR 0041 for its «no paper tickets» exit
+      sentence and advance ADR 0038's Implementation status line (the paper half exists); do not edit
+      either record's argument. This record edits neither.
 - [ ] Tests listed above, each seen failing first.
 
 ## Exit criteria
 
 At a pilot branch with an agent and one printer, a manager creates a kitchen-ticket route
 for the grill and an `ORDER_SLIP`/`FISCAL_RECEIPT` route for the counter; a confirmed order
-prints its grill ticket once, in order, within seconds; the agent is unplugged for ten
-minutes and the next ticket is expired rather than printed late while a receipt printed on
-reconnection says it is a retry; a cash sale at the counter prints a receipt whose fiscal
-sign, receipt number and QR are those the fiscal operator returned and whose QR a phone
-opens to that receipt; a reprint says it is a copy and names, in the activity log, the
-person who asked and why; no printed page names a customer; and revoking the agent from
-the screen stops it within a request without signing anyone out.
+prints its grill ticket once, in order, within seconds; the agent is unplugged for forty
+minutes, the tickets queued in its first ten are expired rather than printed late, and a receipt
+queued in the outage prints on reconnection marked «delayed» with the time it was queued; a cash
+sale at the counter prints a receipt whose fiscal sign, receipt number and QR are those the
+fiscal operator returned and whose QR a phone opens to that receipt; a reprint says it is a
+copy and names, in the activity log, the person who asked and why; no printed page names a
+customer; and revoking the agent from the screen stops it within a request without signing
+anyone out.
 
 ## References
 
-- ADR 0007, ADR 0010 (media), ADR 0011 (POS capabilities, the Clopos rows), ADR 0020
-  (`OperationsAlertPort`), ADR 0025, ADR 0026, ADR 0027, ADR 0029, ADR 0030, ADR 0031,
-  ADR 0032 (in-process signals), ADR 0033 (registered accelerators), ADR 0034
-  (processors), ADR 0038 (fiscal documents, terminals, seller resolution), ADR 0041
-  (tickets, stations, release modes), ADR 0047, ADR 0048, ADR 0056, ADR 0061, ADR 0073,
-  ADR 0076, ADR 0079, ADR 0082, ADR 0087, ADR 0119 (the QR component and its cap),
-  ADR 0136 (combos on a ticket), ADR 0151 (the device self-read)
+- ADR 0007, ADR 0010 (media), ADR 0011 (POS capabilities, the Clopos rows), ADR 0025, ADR 0026,
+  ADR 0027, ADR 0029, ADR 0030, ADR 0031, ADR 0032 (in-process signals), ADR 0033 (registered
+  accelerators), ADR 0034 (processors), ADR 0038 (fiscal documents, terminals, seller
+  resolution), ADR 0041 (tickets, stations, release modes), ADR 0047, ADR 0048, ADR 0056, ADR 0058
+  (`OperationsAlertPort`, the Telegram event classes), ADR 0061, ADR 0073, ADR 0076, ADR 0079,
+  ADR 0082, ADR 0087, ADR 0119 (the QR component and its cap), ADR 0136 (combos on a ticket),
+  ADR 0151 (the device self-read)
 - `platform/docs/operations-gap-map.md` rows `10.14`, `3.2`, `1.2`, `X.36`;
   `platform/docs/operations-spec/settings.md` §10.14 and §4;
   `platform/docs/operations-spec/orders.md` §4.8; `platform/docs/delever-parity-matrix.md`
@@ -644,7 +718,8 @@ the screen stops it within a request without signing anyone out.
   `KitchenTicketService`, `KitchenReleaseWorker`, `KitchenAmendmentListener`, `V0030`,
   `V0477`; `DevicePrincipalClass`, `DeviceEnrolmentPort`, `KitchenDeviceService`,
   `TenantRoleCatalog`, `StaffMembers`, `V0192`; `tenant.brand_media` (`V0243`); `V0022`,
-  `V0326`; `ConfigurationKeys`; `EndpointCapabilityDeclarationTests`
+  `V0326`; `ConfigurationKeys`; `EndpointCapabilityDeclarationTests`; `OperationsAlertPort`,
+  `TelegramEventClass`, `V0488`; `TenantScopedReferenceCatalogTests`
 - `frontend/operations/src/app/shared/ui/table-print-card/`,
   `frontend/operations/src/app/shared/ui/qr-code.ts`, `qr-encode.ts`,
   `frontend/operations/src/app/features/settings/settings-nav.ts`

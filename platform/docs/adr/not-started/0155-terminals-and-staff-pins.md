@@ -36,6 +36,7 @@
   [ADR 0031](../built/0031-http-api-conventions.md),
   [ADR 0033](../built/0033-caching-rate-limiting-and-shared-runtime-state.md),
   [ADR 0041](../partial/0041-kitchen-execution-and-production-routing.md),
+  [ADR 0058](../partial/0058-telegram-notification-channels.md),
   [ADR 0062](../built/0062-staff-sign-in-happens-inside-the-platform.md),
   [ADR 0076](../partial/0076-time-ordered-identifiers-for-new-rows.md),
   [ADR 0079](../partial/0079-kitchen-display-device-principal-and-enrolment.md),
@@ -43,13 +44,20 @@
   [ADR 0139](../partial/0139-staff-identity-the-staff-person-record.md),
   [ADR 0148](../not-started/0148-staff-multi-factor-authentication.md),
   [ADR 0151](../not-started/0151-a-wall-display-device-class.md)
-- Supersedes / Superseded by: — (amends ADR 0079 and ADR 0139 without editing either.
-  It reopens exactly one rejected row of ADR 0079's Alternatives table, «Per-action human
-  attribution: a badge tap or a short PIN before every mutating action», whose stated
-  revisit trigger was a dispute or finding that «which device» is insufficient evidence
-  and a judgement that the cost is worth it; Open input 1 records that the owner's row
-  `X.3` is that judgement. It also closes the first open input of ADR 0139, whether
-  terminals and PINs stay a record of their own: they do, and this is it.)
+- Supersedes / Superseded by: Supersedes ADR 0079's Alternatives row on per-action attribution
+  («a badge tap or a short PIN before every mutating action», whose stated revisit trigger was a
+  dispute or finding that «which device» is insufficient evidence and a judgement that the cost is
+  worth it; Open input 1 records that the owner's row `X.3` is that judgement) and its Closed
+  input «A device is not a person» for a device of an unlockable class in a `PERSON_OPTIONAL` or
+  `PERSON_REQUIRED` mode; supersedes ADR 0079's «and nothing else» sentence about
+  `KITCHEN_DEVICE` by one machine capability, `terminal.unlock`; narrows ADR 0139's «Password,
+  MFA, sessions → Keycloak» row by a PIN that attributes and never authenticates; extends ADR
+  0025 check 3 («an active grant gives the principal the required capability») by a second
+  subject, the person, for those requests. Everything else in each of them is unchanged. The
+  building wave records the reciprocal «Superseded by ADR 0155 for …» lines on ADR 0079 and ADR
+  0139 and the extension on ADR 0025, and edits no argument, table or open input of any of the
+  three. It also closes the first open input of ADR 0139, whether terminals and PINs stay a
+  record of their own: they do, and this is it.
 - Open inputs: each is closed on its proposed default if the owner accepts the record
   as written; the ones that name a person other than the owner stay with that person and
   the work they block is marked.
@@ -64,15 +72,17 @@
     sessions → Keycloak"** (platform owner, security). Proposed default: it does not,
     on four conditions Decision 2 makes testable: the PIN is not a password (it cannot
     authenticate to anything, ever), the terminal session is not a token (it is accepted
-    only together with the device's own Keycloak bearer and confers nothing), no PIN is
-    ever valid outside the device it was typed on and the location it belongs to, and
+    only together with the device's own Keycloak bearer and confers nothing), a PIN is
+    accepted only by the `terminal-session` PIN endpoints (unlock, activation, change), from an
+    enrolled unlockable device, at a location where the person is eligible (it is one PIN per person per tenant,
+    Decision 3, so it is the session, not the PIN, that is bound to a device), and
     Keycloak remains the only verifier of every credential that can sign anyone in. If the
     owner reads the rule more strictly, the fallback is the Keycloak-native design in the
     Alternatives table, at a cost this record prices.
   - **The PIN's length** (security). Proposed default: six digits, with four allowed as a
-    tenant choice (`terminal.pin.length`) because the spec offers it; the settings screen
-    states the guess odds beside the choice (Decision 3). The length applies to the next PIN
-    set; an existing PIN keeps the length it was set with.
+    tenant choice (`terminal.pin.length`) because the spec offers it; the Policy card
+    (Decision 7) states the guess odds beside the choice, using the figures of the next input.
+    The length applies to the next PIN set; an existing PIN keeps the length it was set with.
   - **The lockout numbers** (security). Proposed default: five consecutive wrong PINs lock
     that person on that device for 15 minutes (the spec's rule), and twelve wrong PINs in a
     rolling 24 hours across every device lock the credential until it is reset. They are
@@ -80,9 +90,10 @@
     one. Twelve a day against a million six-digit PINs is about 1 in 83,000 a day; against
     ten thousand four-digit PINs it is about 1 in 830, which is the price of choosing four.
   - **Idle lock and session length** (operations). Proposed default: a terminal locks after
-    five minutes without a request carrying its session (`terminal.auto_lock_seconds`, per
-    device override, 30 to 3,600) and a session ends after twelve hours whatever happens
-    (`terminal.session.max_hours`).
+    five minutes without a user-initiated request carrying its session (a mutating call or the
+    keypad's `touch`; the board's timed poll does not count, Decision 5)
+    (`terminal.auto_lock_seconds`, per device override, 30 to 3,600) and a session ends after
+    twelve hours whatever happens (`terminal.session.max_hours`).
   - **What the roster shows** (product, legal; ADR 0139's open input on names on shared
     screens). Proposed default: first name and the initial of the last name
     (`terminal.roster.display` = `NAME_INITIAL`), never a phone, photo or employee number,
@@ -216,7 +227,8 @@ at it.**
    PINs lock that person on that device for 15 minutes; twelve wrong in a rolling 24 hours
    across devices lock the credential until it is reset; success clears the consecutive
    count and never the 24-hour one. A lock raises a `SECURITY` audit fact and an operations
-   alert that names the `display_reference`, never the person.
+   alert (event class `TERMINAL_CREDENTIAL_LOCKED`, Specification) that names the
+   `display_reference`, never the person.
 
 4. **Setting, changing and resetting.** A person with no PIN, or a locked one, opens
    «Задать PIN» on the roster of a terminal and types a single-use **activation code**, then
@@ -236,8 +248,15 @@ at it.**
    the maximum length, held by the device in memory only, so a reload locks the terminal. There is
    at most one live session per device and one per person across the tenant; opening a second
    ends the first with reason `SUPERSEDED`, so the live session is where the person is. The
-   device sends the token in `X-Terminal-Session`. On every request from a device principal
-   that carries it, the capability interceptor (a) runs ADR 0025's checks for the device,
+   device sends the token in `X-Terminal-Session`. Only user-initiated traffic keeps a session
+   alive: a mutating request (`POST`, `PUT`, `PATCH`, `DELETE`) extends `last_activity_at`, and so
+   does the keypad's `POST …/terminal-session/touch`, which the shell sends on a tap or key press
+   that is not itself a mutating call (opening a ticket, scrolling the board), at most once every
+   15 seconds. A `GET`, and so the board's timed refresh (`BOARD_POLL_MS` in `device-shell.ts`),
+   carries the header so its capability and attribution checks run and never extends the
+   session: a terminal nobody touches locks at `terminal.auto_lock_seconds`, however many polls
+   it sends, and ends at `terminal.session.max_hours` in any case. On every request from a device
+   principal that carries it, the capability interceptor (a) runs ADR 0025's checks for the device,
    unchanged, (b) validates the session in the database (live, not idle-expired, this device,
    this location, the member still `ACTIVE`), and (c) asks `AuthorizationService.has` of the
    **person's subject** for the same capability at the same scope, refusing with
@@ -267,7 +286,15 @@ at it.**
    set, set, locked) and «Сбросить PIN» and «Выдать код активации». «Мой профиль» gains
    «Мой PIN»: the state, a request for an activation code, and the person's own last twenty
    unlocks (which device, when, how it ended). The kitchen shell gains the roster, the
-   keypad and the lock; none of it shows unless the device's mode is not `DEVICE_ONLY`.
+   keypad and the lock; none of it shows unless the device's mode is not `DEVICE_ONLY`. The five
+   tenant policy keys of the Specification are written on **Staff → Терминалы → Policy**, a card
+   above the device list: each key with its resolved value and where it comes from, the PIN-length
+   choice with the guess odds stated beside it (Open inputs 3 and 4), and a Save that writes the five
+   in one transaction. They are tenant-scope values, with the per-device override of
+   `auto_lock_seconds` and the device's `attribution_mode` kept on the device record. Reading needs
+   `terminal.read` and writing `terminal.manage`, both held at `TENANT` scope (a location manager's
+   grant does not reach it), and the keys are not tenant-visible in the generic configuration
+   editor, so the card is their only write path and the capability is the control.
 
 8. **The person can see their name being used.** The activity list in «Мой профиль» is the
    control that makes a shared PIN visible: a person who sees an unlock at a tablet they were
@@ -331,8 +358,8 @@ at it.**
   the kitchen board is the first set (the controller sites listed in the checklist) and
   `kitchen.ticket_events` needs a `via_device_id` so the device is not lost.
 - Existing KDS bundles gain `terminal.unlock`, which changes ADR 0079's sentence that the
-  bundle holds those two capabilities "and nothing else". It is a machine-only capability
-  that opens no board data.
+  bundle holds those two capabilities "and nothing else" (the scoped supersession in the header).
+  It is a machine-only capability that opens no board data.
 - A shift change costs a tap and six digits per cook.
 - Two ways to revoke a kitchen tablet (kitchen's and the registry's), by two capabilities.
 
@@ -355,6 +382,9 @@ at it.**
 
 ```text
 iam.device_principals  (V0192; additive columns)
+  uq_device_principal_location (tenant_id, location_id, id)   shared with ADR 0154 and ADR 0162: the first of the
+                                                               three migrations to merge adds it, the others find it
+                                                               present and add nothing
   attribution_mode varchar(16) NOT NULL DEFAULT 'DEVICE_ONLY'   DEVICE_ONLY | PERSON_OPTIONAL | PERSON_REQUIRED
   auto_lock_seconds integer NULL                                 NULL = the tenant policy; 30..3600
   last_seen_at timestamptz NULL, last_seen_build varchar(64) NULL
@@ -379,11 +409,16 @@ iam.staff_pin_activations
   unique (tenant_id, staff_member_id) WHERE status = 'PENDING'
 
 iam.terminal_pin_locks
-  tenant_id, device_id, staff_member_id     PK (device_id, staff_member_id); FKs tenant-scoped
+  tenant_id, device_id, staff_member_id     PK (device_id, staff_member_id)
+                                            (tenant_id, device_id) -> iam.device_principals (tenant_id, id) [uq_device_principal_tenant_id]
+                                            (staff_member_id, tenant_id) -> iam.staff_members (id, tenant_id) [uq_staff_member_identity]
   consecutive_failures smallint, locked_until timestamptz NULL, last_failure_at timestamptz NULL
 
 iam.terminal_sessions
-  id (Ids.newId), tenant_id, device_id (-> iam.device_principals (tenant_id, id)), staff_member_id, location_id
+  id (Ids.newId), tenant_id, device_id, staff_member_id, location_id
+  (tenant_id, location_id, device_id) -> iam.device_principals (tenant_id, location_id, id) [uq_device_principal_location]:
+      the session's location is its device's location, enforced by the database and not by the service
+  (staff_member_id, tenant_id) -> iam.staff_members (id, tenant_id) [uq_staff_member_identity]
   token_digest varchar(64) UNIQUE, opened_at, last_activity_at, idle_seconds integer, hard_expires_at
   ended_at NULL, ended_reason varchar(16) NULL    LOCKED | SUPERSEDED | REVOKED | PIN_RESET | EMPLOYMENT_ENDED | IDLE | MAX_AGE
   unique (device_id) WHERE ended_at IS NULL;  unique (tenant_id, staff_member_id) WHERE ended_at IS NULL
@@ -434,6 +469,7 @@ GET  /api/v1/tenants/{t}/brands/{b}/locations/{l}/terminal-session/roster       
 POST …/terminal-session/unlocks            { memberId, pin }                          terminal.unlock   no Idempotency-Key (see below)
 POST …/terminal-session/pin-activations    { memberId, activationCode, newPin }       terminal.unlock   opens a session
 POST …/terminal-session/pin-changes        { currentPin, newPin }                     terminal.unlock   needs a live session
+POST …/terminal-session/touch                                                        terminal.unlock   extends this device's session; 204, no body
 POST …/terminal-session/locks                                                        terminal.unlock   ends this device's session
 
 GET  …/locations/{l}/terminals                                                       terminal.read     every device principal at the location
@@ -445,6 +481,10 @@ GET  /api/v1/operations/tenants/{t}/staff/me/pin                                
 POST /api/v1/operations/tenants/{t}/staff/me/pin-activations                         @StaffSelfAuthorized      returns the code once
 POST /api/v1/operations/tenants/{t}/staff/members/{memberId}/pin-activations         staff.profile.manage {reason}   TENANT, and the LOCATION twin ADR 0139 has
 POST /api/v1/operations/tenants/{t}/staff/members/{memberId}/pin-reset               staff.profile.manage {reason}
+
+GET  /api/v1/operations/tenants/{t}/terminal-policy                                  terminal.read    TENANT   the five keys, resolved, with where each comes from
+PUT  /api/v1/operations/tenants/{t}/terminal-policy   { pinLength, autoLockSeconds, sessionMaxHours, rosterDisplay, attributionDefault }
+                                                                                      terminal.manage  TENANT   Idempotency-Key
 ```
 
 The responses of `unlocks`, `pin-activations` and the two activation issues carry a secret, so
@@ -452,8 +492,10 @@ they are not `@Idempotent` (a stored response would put a bearer or a code into
 `platform.idempotency_records` for the retention day) and are listed by exact path in
 `EndpointCapabilityDeclarationTests` with that reason, as the sign-in endpoints are; the
 test's own rule that the next endpoint under `/terminal-session/` is not quietly exempted
-along with them is kept. Roster labels, a name and a reason are classified
-`@Classified(PERSONAL)` where they appear in a response an `@Idempotent` handler reaches;
+along with them is kept. `touch` carries no secret and returns nothing; it needs no
+`Idempotency-Key` because its only effect is a timestamp moved forward and a repeat is identical,
+and it is listed by exact path with that reason as well. Roster labels, a name and a reason are
+classified `@Classified(PERSONAL)` where they appear in a response an `@Idempotent` handler reaches;
 `IdempotentResponseClassificationTests` is the guard. `Cache-Control: no-store` on the roster.
 The device finds its tenant, brand and location from the self-read ADR 0151 specifies; if
 that read's path is given a prefix no OpenAPI group claims, the build places it under
@@ -473,9 +515,11 @@ before relying on it. PIN reset and activation reuse `staff.profile.manage` exac
 `CapabilityEnforcementInterceptor` stays the single place a capability is checked. After the
 principal's own check it does, only when the principal is a device of an unlockable class:
 read `X-Terminal-Session`; if absent, apply the device's mode; if present, resolve the digest,
-require the live-session conditions, extend `last_activity_at` when it is more than 15 seconds
-stale, and `AuthorizationService.has(personSubject, capability, scope)`; publish the result as
-the request's attribution. `PERSON_REQUIRED` refuses `POST`, `PUT`, `PATCH` and `DELETE` without a
+require the live-session conditions, extend `last_activity_at` only when the request is a mutating
+method or `terminal-session/touch` and then only when it is more than 15 seconds stale (a `GET` never
+extends it, so the board poll cannot keep a session alive), and
+`AuthorizationService.has(personSubject, capability, scope)`; publish the result as the request's
+attribution. `PERSON_REQUIRED` refuses `POST`, `PUT`, `PATCH` and `DELETE` without a
 session except the `terminal-session` endpoints. It adds one grant read per device request,
 served by the same ADR 0033 grant cache `has` already uses; session validity is read from the
 table, never from a cache.
@@ -484,14 +528,18 @@ table, never from a cache.
 
 `terminal.pin.length` (4 or 6, tenant, default 6), `terminal.auto_lock_seconds` (default 300),
 `terminal.session.max_hours` (default 12, 1 to 16), `terminal.roster.display`
-(`NAME_INITIAL` or `REFERENCE`), `terminal.attribution.default` (default `DEVICE_ONLY`).
+(`NAME_INITIAL` or `REFERENCE`), `terminal.attribution.default` (default `DEVICE_ONLY`). All five are
+registered not tenant-visible in the generic configuration surface
+(`OperationsConfigurationController` filters on `ConfigurationKey#tenantVisible`; the build confirms
+how before relying on it), and the `terminal-policy` endpoints above are their only tenant write path.
 `SECURITY`-class facts: `terminal.pin.activation_issued` (issuer, member, via),
 `terminal.pin.set`, `terminal.pin.changed`, `terminal.pin.reset` (with reason),
 `terminal.pin.locked` (device, which rule), `terminal.unlock.refused` (the fifth consecutive
 failure and the twelfth in a day only, not each one: each wrong attempt is on the table, and
 an attacker must not be able to fill the audit log), `terminal.session.opened`,
 `terminal.session.ended` (reason, except `IDLE` and `MAX_AGE`, which the row carries and a
-lazy check derives), `terminal.device.configured` (through `ChangeDocuments.diff`) and
+lazy check derives), `terminal.device.configured` (through `ChangeDocuments.diff`),
+`terminal.policy.changed` (through `ChangeDocuments.diff`, naming the person who saved the card) and
 `terminal.device.revoked`. A person's PIN, its digest, an activation code and a session token
 are redacted from every change document. An action attributed to a person carries the device
 in `evidenceReference` as `terminal:<sessionId>` and in its change document, and its actor is the person
@@ -502,10 +550,25 @@ away.
 
 Metrics, outcome only: `horecaos.terminal.unlocks` (`SUCCEEDED`, `WRONG_PIN`, `LOCKED`,
 `NOT_ELIGIBLE`), `horecaos.terminal.sessions.open` by class, `horecaos.terminal.pin.locks`.
-Operations alerts through `OperationsAlertPort`, naming `display_reference` and device only:
-a locked credential, and a `PERSON_REQUIRED` device unseen for the configured minutes during
-service (the spec's "an offline kitchen tablet during service is the only urgent row"). No Kafka
-event is published; a consumer would bring its schema and catalogue entry first (ADR 0032).
+Operations alerts through `OperationsAlertPort` (an ADR 0058 operations alert), naming
+`display_reference` and device only: a locked credential (`TERMINAL_CREDENTIAL_LOCKED`), and a
+`PERSON_REQUIRED` device unseen for the configured minutes during service
+(`TERMINAL_DEVICE_UNSEEN`; the spec's "an offline kitchen tablet during service is the only urgent
+row"). No Kafka event is published; a consumer would bring its schema and catalogue entry first
+(ADR 0032).
+
+`fanOut` takes an `eventClass`, and it reaches only chats subscribed to a class in the closed
+`TelegramEventClass` set, backed by `integration.telegram_binding_events`'s
+`ck_telegram_binding_event_class` (last widened by V0488). Neither class above is in it today, so
+an alert raised under either would reach no one («silent on no subscriber»). The build therefore adds
+`TERMINAL_CREDENTIAL_LOCKED` and `TERMINAL_DEVICE_UNSEEN` to `TelegramEventClass` (with their
+labels) and restates the full `ck_telegram_binding_event_class` list in a migration, carrying every
+value in force forward as V0488 does; each class is its own semantic template key, whose wording a
+tenant authors as for `MARKETPLACE_CHANNEL_STALE`. ADR 0154 widens the same list for
+`PRINTER_OFFLINE` and `PRINT_JOB_DEAD`: the last of the two migrations to merge carries every
+value in force. The idempotency key base names the subject and the episode (the lock's `locked_at`,
+the device's last-seen instant), so a replayed trigger reaches a chat once and a later lock alerts
+again.
 
 ### Testing (each seen failing first)
 
@@ -519,6 +582,20 @@ event is published; a consumer would bring its schema and catalogue entry first 
   count exactly forty and lock at five and at twelve; success does not clear the 24-hour
   count; the lock is per person per device and a second device is not locked by the first.
 - One session per device and per person: unlocking elsewhere ends the first with `SUPERSEDED`.
+- Idle lock against a polling board: a session whose only traffic is the timed `GET` refresh
+  carrying `X-Terminal-Session`, with the clock advanced past `terminal.auto_lock_seconds`, is locked,
+  and the next mutating request is refused `TERMINAL_UNLOCK_REQUIRED` in `PERSON_REQUIRED`; a
+  `touch` or a mutating call moves the deadline; `terminal.session.max_hours` ends the session
+  whatever its traffic. The shell's poll timer never calls `touch` (front-end test).
+- The database refuses a `terminal_sessions` row whose `location_id` is not its device's location, and
+  one whose device or member belongs to another tenant; `TenantScopedReferenceCatalogTests` stays
+  green with `known_tenant_blind_references.tsv` empty.
+- A chat subscribed to `TERMINAL_CREDENTIAL_LOCKED` and one subscribed to `TERMINAL_DEVICE_UNSEEN`
+  each receive that alert once; a chat subscribed to neither receives nothing; every class in
+  `TelegramEventClass` is admitted by the restated CHECK.
+- The terminal policy: `PUT terminal-policy` by a location manager is refused (the grant does not reach
+  `TENANT` scope) and by a tenant administrator succeeds, the five keys are neither listed nor writable
+  through the generic configuration endpoints, and the card shows the guess odds beside the length.
 - `PERSON_REQUIRED` refuses a start/ready without a session and accepts it with one; `DEVICE_ONLY`
   ignores the header and attributes to the device; every call site that records an actor in the
   kitchen board is covered by one test that fails if it still reads the device.
@@ -547,25 +624,29 @@ the tables stay as evidence, and no other module's data changes shape except the
 ## Implementation checklist
 
 - [ ] Owner accepts the record; Open input 2 is answered before the first migration.
-- [ ] Migrations: the `iam.device_principals` columns and restated class CHECK, the four new tables
-      with grants, `kitchen.ticket_events.via_device_id`; the next free number checked in every
-      worktree.
+- [ ] Migrations: the `iam.device_principals` columns and restated class CHECK,
+      `uq_device_principal_location` unless ADR 0154 or ADR 0162 already carries it, the four new
+      tables with grants, `kitchen.ticket_events.via_device_id`, and the restated
+      `ck_telegram_binding_event_class` with the two new classes; the next free number checked in
+      every worktree.
 - [ ] `DevicePrincipalClass.unlockable()`; `Capability` gains `terminal.read`, `terminal.manage`,
       `terminal.unlock`; `PlatformRole.KITCHEN_DEVICE` gains `terminal.unlock`; bundle tests and the
       machine-role exclusions in `TenantRoleCatalog` and `StaffMembers`.
 - [ ] The HMAC pepper as an ADR 0028 reference, and its startup refusal when absent (the
       `PartnerConfiguration` shape).
 - [ ] `PinService`, the verification transaction, activations, `TerminalSessionService`, the purge job,
-      the lock and employment-end hooks (`StaffMemberChanged`).
+      the lock and employment-end hooks (`StaffMemberChanged`); the two `TelegramEventClass` values and
+      their alert callers; the `terminal-policy` endpoints and the five keys' registration.
 - [ ] `CurrentActor` attributed identity; the interceptor changes; the kitchen board call sites
       (`start`, `ready`, `recall`, `release`, `hand-over`, the release-schedule write and the device stop
       path `StopSource.KITCHEN_DEVICE` reserves) read the attributed actor; the audit facts.
 - [ ] The registry endpoints, the self and manager PIN endpoints, the exact-path idempotency
       exemptions, the five OpenAPI baselines and the generated client.
-- [ ] Staff → Терминалы, the person card's security panel, «Мой PIN», the shell's roster, keypad and
-      lock, ru / uz-Latn / en strings, key parity.
-- [ ] An IA row for the screen; ADR 0079's status line (the rejected row is reopened and answered)
-      and ADR 0139's open input are updated by the wave that builds, not by this record.
+- [ ] Staff → Терминалы and its Policy card, the person card's security panel, «Мой PIN», the shell's
+      roster, keypad and lock (and its `touch` on user taps only), ru / uz-Latn / en strings, key parity.
+- [ ] An IA row for the screen. In the building wave, set `Superseded by ADR 0155` on ADR 0079 and ADR
+      0139 for the statements named in the header, and record the extension on ADR 0025; do not edit any
+      of their arguments, tables or open inputs. This record edits none of them.
 - [ ] Runbook: reset a PIN, find who was at a device, rotate the pepper.
 - [ ] Tests listed above, each seen failing first.
 

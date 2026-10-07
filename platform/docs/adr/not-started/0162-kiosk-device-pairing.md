@@ -41,17 +41,24 @@
   [ADR 0087](../built/0087-a-module-is-sold-on-its-own-unit-and-switches-features-on.md),
   [ADR 0119](../partial/0119-wave-p17-device-shell-auth-and-qr-pairing.md),
   [ADR 0151](../not-started/0151-a-wall-display-device-class.md),
-  [ADR 0155](../not-started/0155-terminals-and-staff-pins.md)
-- Supersedes / Superseded by: — (amends ADR 0119 without editing it. It reopens one
-  sentence of that record's Decision 5, «ADR 0079 keeps a pairing code typed, never
-  scanned, and this component does not reopen that decision», for the kiosk class only: the
-  kiosk's QR carries a link to the console's approval page, scanned by the manager's own
-  phone camera, and the typed code stays. It also answers, for the kiosk, ADR 0119's open
-  input «Device scope discovery», by the same self-read ADR 0151 Decision 5 gives the
-  kitchen. It does not reopen the parity matrix's decline of «Self-service kiosk hardware
-  integration»: provisioning, certification and field support of kiosk hardware, bank
-  terminals, receipt printers and marking scanners stay declined, and Decision 8 lists every
-  field of Delever's kiosk form with what becomes of it.)
+  [ADR 0155](../not-started/0155-terminals-and-staff-pins.md) (still Proposed: see the
+  open input on accepting this record before it)
+- Supersedes / Superseded by: Supersedes ADR 0079's note that `roleCode` is a parameter of
+  `ApproveEnrolment`, for every class; supersedes ADR 0151 Decision 3's placement of the
+  class-to-role map in `KitchenDeviceService` (the map moves to `DeviceEnrolmentService`, and
+  ADR 0151's narrowing rule is unchanged); reopens ADR 0119 Decision 5's sentence «ADR 0079
+  keeps a pairing code typed, never scanned, and this component does not reopen that
+  decision» and ADR 0079's typed-`userCode` step for the KIOSK class only, and nothing else
+  in any of them changes. For the kiosk class the QR carries a link to the console's approval
+  page, scanned by the manager's own phone camera, and the typed code stays. The building wave
+  records the reciprocal «Superseded by ADR 0162 for …» lines on ADR 0079 and ADR 0151 (and the
+  reopened sentence on ADR 0119) and edits neither the argument, the tables nor the open inputs
+  of any of the three. This record also answers, for the kiosk, ADR 0119's open input «Device
+  scope discovery», by the same self-read ADR 0151 Decision 5 gives the kitchen. It does not
+  reopen the parity matrix's decline of «Self-service kiosk hardware integration»:
+  provisioning, certification and field support of kiosk hardware, bank terminals, receipt
+  printers and marking scanners stay declined, and Decision 8 lists every field of Delever's
+  kiosk form with what becomes of it.
 - Open inputs: each is closed on its proposed default if the owner accepts the record
   as written; the ones that name a person other than the owner, or an external fact, stay
   with that person and the work they block is marked.
@@ -66,11 +73,22 @@
     call the operator's order endpoints. Blocks: the kiosk application, and nothing in this record.
   - **Whether the QR deep link is acceptable where ADR 0079 and ADR 0119 say a code is
     typed, never scanned** (platform owner, security). Proposed default: yes, for the kiosk
-    and offered to the kitchen display. The link only opens the console's approval page on the
-    manager's own signed-in session, prefilled with the code; it approves nothing, the manager
-    still confirms that the code on the screen in front of them matches, and the typed code is
-    unchanged. The link is built by the platform from `horecaos.frontends.operations-origin`,
-    never from anything the device sends.
+    only; the kitchen display stays typed until a record says otherwise (the approval page
+    refuses any class but `KIOSK`, Specification). The link only opens the console's approval
+    page on the manager's own signed-in session, prefilled with the code; it approves nothing,
+    the manager still confirms that the code on the screen in front of them matches, and the
+    typed code is unchanged. The link is built by the platform from
+    `horecaos.frontends.operations-origin`, never from anything the device sends.
+  - **Whether this record is accepted before ADR 0155** (platform owner). ADR 0155 is still
+    Proposed, and three things this record relies on are specified there and nowhere else: the
+    `last_seen_at` and `last_seen_build` columns stamped by any authenticated device request and
+    the class-neutral registry (Decisions 5 and 6, and the «last-seen under two minutes» exit
+    criterion), and `DevicePrincipalClass.unlockable()` (Decision 1). Proposed default: accept
+    ADR 0155 first or in the same reply («accept 0155 and 0162»). If only 0162 is accepted, its
+    building wave builds those pieces itself to ADR 0155's specification (the two columns and
+    their once-a-minute stamp, `unlockable()` false for `KIOSK`, and the kiosk's own list in
+    the KIOSK section, which Decision 6 already specifies), and ADR 0155's wave adopts them
+    unchanged instead of adding them a second time.
   - **Which capability approves a kiosk** (platform owner). Proposed default: a new
     location-scoped `kiosk.device.manage`, not `kitchen.station.manage` and not tenant-wide
     `channel.manage`. ADR 0079's own rule is that a new capability "earns its place only when a
@@ -102,8 +120,8 @@
     in a cabinet uses ADR 0154's agent at its location as for any printer, and certification and
     field support remain outside HorecaOS.
 
-**To accept as written:** say "accept 0162". Every open input above is then closed on its
-proposed default.
+**To accept as written:** say "accept 0162" (preferably in the same reply as "accept 0155").
+Every open input above is then closed on its proposed default.
 
 ## Context
 
@@ -184,12 +202,20 @@ out.**
 2. **A kiosk is bound to a channel, and the database says so.** A kiosk sells through one KIOSK
    channel, at one location where that channel is `ACTIVE`; it does not create a channel, and many
    kiosks share one. `tenant.kiosk_devices` records the binding (Specification) with foreign keys
-   that refuse a non-KIOSK channel and a location the channel has no binding row at (the service
-   also refuses an `INACTIVE` binding), the V0046 lesson applied: a foreign key
-   references a unique constraint on exactly its own columns, so the migration adds
-   `uq_sales_channel_type (tenant_id, id, system_type)` to the channel table for the purpose. A
-   tenant that needs separate menus or prices per kiosk makes a channel per kiosk with the mechanism
-   ADR 0036 already has.
+   that refuse a non-KIOSK channel, a location the channel has no binding row at, and a location
+   other than the one its principal is enrolled at (the service also refuses an `INACTIVE`
+   binding). The V0046 lesson applies twice: a foreign key references a unique constraint on
+   exactly its own columns, and every one of these carries `tenant_id` (a reference between two
+   tenant-scoped tables that leaves it out fails `TenantScopedReferenceCatalogTests`, whose
+   allowlist is empty and stays so). The target tables' own keys do not qualify: the channel
+   table's tenant-bearing unique is `(tenant_id, id)`, which cannot carry the type, and the
+   channel-location table's primary key is `(channel_id, location_id)`, which carries no tenant.
+   So the migration adds `uq_sales_channel_type (tenant_id, id, system_type)` to the channel table
+   and `uq_sales_channel_location_identity (tenant_id, channel_id, location_id)` to the
+   channel-location table, and the device's location rides on `uq_device_principal_location
+   (tenant_id, location_id, id)` on `iam.device_principals`, shared with ADR 0154 and ADR 0155
+   (Specification, Model). A tenant that needs separate menus or prices per kiosk makes a channel
+   per kiosk with the mechanism ADR 0036 already has.
 
 3. **Approval takes a class, not a role.** `ApproveEnrolment.roleCode` is replaced by the approved
    class; `DeviceEnrolmentService` owns a closed class-to-role map and a rule that the approved class
@@ -272,7 +298,7 @@ out.**
 | Identify the kiosk as a registered storefront app under ADR 0070 (an app id and an origin allowlist) | A browser app's identity cannot be revoked per physical unit, and ADR 0070 is about third-party storefronts. The device principal gives per-unit revocation; an app identity, once ADR 0070 is built, would sit beside it and say which application runs on the unit | ADR 0070 is built and the kiosk application is registered as one: the principal then adds per-device revocation to an app identity |
 | One sales channel per physical kiosk, as Delever does | Every report and rule keyed on the channel then multiplies per unit, which statistics.md §2.7 calls "a precedent that ends in eleven reports" | A tenant needs a price plane or a menu per kiosk, which the binding already allows by giving each kiosk its own channel |
 | Typed codes only (ADR 0079's and ADR 0119's position) | Fine beside a kitchen pass; for a kiosk in a lobby or a mall it is eight characters read off a screen by a phone user. The link adds a prefill and nothing else | A security review finds the confirmation step does not cover a hostile QR on a counterfeit screen: the page drops to typed-only |
-| Keep `roleCode` a parameter of approval and trust each module | It is what let one class's code take another class's role, and with three modules approving devices it is three chances to misspell it | Never |
+| Keep `roleCode` a parameter of approval and trust each module | It is what let one class's code take another class's role, and with three modules approving devices it is three chances to misspell it. ADR 0079's reason for the parameter (`iam` need not learn what a VDU is) is spent: `DevicePrincipalClass` and both class CHECKs are `iam`'s and already name every class. Hence the scoped supersession of that note | Never |
 | Grant the kiosk `order.place` now so it can order | A customer-facing device holding the operator's order capability at a location, in a record that has not decided how a kiosk orders or is paid | The ordering record decides it; the bundle grows then |
 | A kiosk hardware certification and provisioning programme | The parity matrix's reasons stand: certification, field support, a per-device fiscal identity, gated on physical terminals in restaurants | A pilot tenant names kiosk hardware and a vendor will certify it |
 | An application service PIN now | There is nothing to protect on a kiosk that has no application and no settings screen | A kiosk application has a maintenance mode and the OS cannot lock it |
@@ -303,8 +329,12 @@ out.**
   disabled; the control is the operating-system lockdown, which HorecaOS does not provide.
 - The QR shows the console's origin to the public. The origin is already the public sign-in page, so
   nothing is disclosed that a search would not, and the page still demands a signed-in manager.
-- The approve path's signature changes in `iam`, which ADR 0151 changes too; whichever merges
-  second reconciles the two.
+- The approve path's signature changes in `iam`, which ADR 0151 changes too, and the two records
+  place the class-to-role map differently (ADR 0151 Decision 3 in `KitchenDeviceService.approve`,
+  this record in `DeviceEnrolmentService`). Supersedes settles it: the map lives in
+  `DeviceEnrolmentService`, and ADR 0151's narrowing rule (a requested `KITCHEN_KDS` approved as
+  `KITCHEN_VDU`) is a row of that map. Whichever of the two builds first builds the map there; the
+  other adapts to it and adds only its own rows.
 - One more capability, `kiosk.device.manage`, and one more table beside the principal.
 - A kiosk bound to a channel that is later archived keeps working as a device and sells nothing:
   its configuration read reports the channel's status, and the registry flags it.
@@ -326,15 +356,24 @@ out.**
 ```text
 iam.device_principals / iam.device_enrolment_requests   ck_device_principal_class and ck_device_enrolment_class
                                                          restated with every class in force ('KITCHEN_KDS', ... 'KIOSK')
+iam.device_principals                                    + uq_device_principal_location (tenant_id, location_id, id)
+                                                         shared with ADR 0154 and ADR 0155: the first of the three
+                                                         migrations to merge adds it, the others find it present and
+                                                         add nothing (a migration that finds it present drops its own copy)
 tenant.sales_channels                                    + uq_sales_channel_type (tenant_id, id, system_type)
+tenant.sales_channel_locations                           + uq_sales_channel_location_identity (tenant_id, channel_id, location_id)
+                                                         its primary key (channel_id, location_id) carries no tenant_id
 
 tenant.kiosk_devices
-  tenant_id, device_id                    PK (device_id); (tenant_id, device_id) -> iam.device_principals (tenant_id, id)
-                                          [uq_device_principal_tenant_id, V0192]
+  tenant_id, device_id                    PK (device_id)
   brand_id, location_id                   (tenant_id, brand_id, location_id) -> tenant.locations (tenant_id, brand_id, id)
+                                          (tenant_id, location_id, device_id) -> iam.device_principals (tenant_id, location_id, id)
+                                          [uq_device_principal_location]: the kiosk's location is its principal's location
   channel_id, channel_type varchar(16)    CHECK (channel_type = 'KIOSK');
                                           (tenant_id, channel_id, channel_type) -> tenant.sales_channels (tenant_id, id, system_type)
-                                          (channel_id, location_id) -> tenant.sales_channel_locations (channel_id, location_id)
+                                          [uq_sales_channel_type]
+                                          (tenant_id, channel_id, location_id) -> tenant.sales_channel_locations (tenant_id, channel_id, location_id)
+                                          [uq_sales_channel_location_identity]
   version, created_at, updated_at
 
 PlatformRole.KIOSK_DEVICE   {KIOSK_DEVICE_READ}   LOCATION                 excluded from TenantRoleCatalog and StaffMembers
@@ -345,10 +384,15 @@ Capability.KIOSK_DEVICE_MANAGE ("kiosk.device.manage", "kiosk", "device.manage")
 `GRANT SELECT, INSERT, UPDATE ON tenant.kiosk_devices TO horecaos_application` (no delete: a revoked
 kiosk is history). The row is inserted in the approval transaction beside the principal; a `KIOSK`
 principal with no row (a defect, or an approval that half-committed) reports `kiosk: null`, the shell
-shows «not configured», and the registry flags it. The first FK references the channel's
-`(tenant_id, id, system_type)`, the second the channel-location pair, so a kiosk cannot be bound to a
-channel of another type, of another tenant, or to a location the channel has no binding row at; the
-service additionally refuses an `INACTIVE` binding, and rebinding re-checks all of it.
+shows «not configured», and the registry flags it. The first FK pins the kiosk to its
+principal's own location, through `uq_device_principal_location`; the second references the
+channel's `(tenant_id, id, system_type)`, through `uq_sales_channel_type`; the third the
+channel-location pair, through `uq_sales_channel_location_identity`. A kiosk therefore cannot be
+bound to a channel of another type, to a channel of another tenant, to a location the channel has
+no binding row at, or to a location other than the one its principal is enrolled at, and every
+reference names `tenant_id`, so `TenantScopedReferenceCatalogTests` passes with
+`known_tenant_blind_references.tsv` empty and no entry is added for this table. The service
+additionally refuses an `INACTIVE` binding, and rebinding re-checks all of it.
 
 ### Endpoints (ADR 0031; under the OPERATIONS group like the kitchen's; capabilities per ADR 0025)
 
@@ -401,8 +445,13 @@ No Kafka event: nothing consumes one (ADR 0032).
   `KITCHEN_KDS` through the kiosk endpoint is refused, and the role granted always follows the approved
   class (read back from `iam.grants`); ADR 0151's allowed narrowing still passes.
 - The database refuses a `tenant.kiosk_devices` row for a non-KIOSK channel, for a channel of another
-  tenant and for a location where the channel has no binding row, and refuses a rebind to one; the
-  service refuses an `INACTIVE` binding with a stable code.
+  tenant, for a location where the channel has no binding row and for a location other than its
+  principal's (a principal enrolled at A, a row naming B where the channel is bound), and refuses a
+  rebind to any of them; the service refuses an `INACTIVE` binding with a stable code. The test
+  seeds a second tenant with its own KIOSK channel and binding, so a tenant-blind key would
+  accept the cross-tenant row and the test would fail.
+- `TenantScopedReferenceCatalogTests` stays green with `platform/tools/checks/known_tenant_blind_references.tsv`
+  empty: no allowlist entry is added for `tenant.kiosk_devices`.
 - A kiosk token reads `kiosk/configuration` and is refused, with the capability named, the kitchen
   board, an order read, a customer read, a settings read and `order.place`; it holds no capability
   but `kiosk.device.read`.
@@ -436,8 +485,10 @@ inert without rows.
       `DeviceEnrolmentService`, `peek`; `KitchenDeviceService.approve` adapted; the grant reason no longer
       hard-codes "kitchen device"; the begin response gains `approvalUrl` from
       `horecaos.frontends.operations-origin`.
-- [ ] Flyway: both class CHECKs restated with every class in force; `uq_sales_channel_type`;
-      `tenant.kiosk_devices`, granted; the next free number checked in every worktree.
+- [ ] Flyway: both class CHECKs restated with every class in force; `uq_sales_channel_type` and
+      `uq_sales_channel_location_identity`; `uq_device_principal_location` unless a sibling
+      migration (ADR 0154 or ADR 0155) already carries it; `tenant.kiosk_devices` with its four
+      tenant-bearing foreign keys, granted; the next free number checked in every worktree.
 - [ ] `PlatformRole.KIOSK_DEVICE`, `Capability.KIOSK_DEVICE_READ` and `KIOSK_DEVICE_MANAGE`, bundle
       changes and the invariant tests; `TenantRoleCatalog` and `StaffMembers` exclusions.
 - [ ] `tenancy`: the kiosk service, controller and configuration read over the channel, location and
@@ -449,8 +500,11 @@ inert without rows.
       mode shows the pairing screen and a status screen naming the channel and branch, and the typed
       scope entry is removed for this class.
 - [ ] A runbook: install a kiosk under OS lockdown, revoke on theft, re-pair on a service visit.
-- [ ] ADR 0119's open input is updated by the wave that builds, not by this record; ADR 0079's status
-      line records a third class; settings.md §10.5 and the gap-map row `10.5` are updated by that wave.
+- [ ] The building wave sets the reciprocal «Superseded by ADR 0162 for …» fields on ADR 0079 (`roleCode`
+      as an approval parameter; the typed `userCode`, for the KIOSK class) and ADR 0151 (Decision 3's
+      placement of the class-to-role map) and records the reopened sentence on ADR 0119; it edits none
+      of their arguments, tables or open inputs. ADR 0079's Implementation status line records a third
+      class; settings.md §10.5 and the gap-map row `10.5` are updated by that wave.
 - [ ] Tests listed above, each seen failing first.
 
 ## Exit criteria
