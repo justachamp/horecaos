@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
@@ -14,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.assistant.api.AssistantModelPort;
 import uz.horecaos.platform.assistant.domain.CustomerWording;
+import uz.horecaos.platform.assistant.domain.ReplyLocale;
 import uz.horecaos.platform.assistant.infrastructure.persistence.JdbcKnowledgeStore;
 import uz.horecaos.platform.assistant.infrastructure.persistence.JdbcTurnStore;
 import uz.horecaos.platform.assistant.infrastructure.persistence.JdbcTurnStore.UsageRow;
@@ -86,7 +86,7 @@ public class AssistantUsageService {
      */
     private static Map<String, String> defaultDisclosure() {
         Map<String, String> wording = new LinkedHashMap<>();
-        for (String locale : List.of("en", "ru", "uz")) {
+        for (String locale : ReplyLocale.SUPPORTED) {
             wording.put(locale, CustomerWording.disclosure(locale));
         }
         return Map.copyOf(wording);

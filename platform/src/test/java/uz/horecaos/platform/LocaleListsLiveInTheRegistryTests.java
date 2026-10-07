@@ -40,7 +40,15 @@ class LocaleListsLiveInTheRegistryTests {
      */
     private static final List<String[]> EXEMPT = List.<String[]>of(
             // Payme's own published vocabulary for the language of its payment page, not ours.
-            new String[] {"uz/horecaos/platform/payments/domain/PresentationRequest.java", "Payme's vocabulary"});
+            new String[] {"uz/horecaos/platform/payments/domain/PresentationRequest.java", "Payme's vocabulary"},
+            // The assistant's language detector (ADR 0069) has word lists for these three languages
+            // and no others, and the disclosure wording is three declared configuration keys. A
+            // language beyond them is answered in the brand's default until someone writes its list;
+            // this is the one place the assistant names them, and it is a limit of the detector, not
+            // a statement about which languages the platform may offer.
+            new String[] {
+                "uz/horecaos/platform/assistant/domain/ReplyLocale.java", "the assistant's detector vocabulary"
+            });
 
     private static final Pattern THREE_TOGETHER = Pattern.compile(
             "\"ru\"\\s*,\\s*\"uz(?:-Latn)?\"\\s*,\\s*\"en\"|\"uz(?:-Latn)?\"\\s*,\\s*\"ru\"\\s*,\\s*\"en\""

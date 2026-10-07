@@ -58,7 +58,7 @@ CREATE TABLE assistant.knowledge_entries (
         OR (scope_type = 'BRAND' AND brand_id IS NOT NULL AND location_id IS NULL)
         OR (scope_type = 'LOCATION' AND brand_id IS NOT NULL AND location_id IS NOT NULL)
     ),
-    CONSTRAINT ck_knowledge_entry_locale CHECK (locale IN ('ru', 'uz', 'en'))
+    CONSTRAINT ck_knowledge_entry_locale CHECK (locale ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$')
 );
 
 CREATE INDEX ix_knowledge_entry_scope
