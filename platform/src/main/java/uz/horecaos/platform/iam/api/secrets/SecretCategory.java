@@ -24,6 +24,16 @@ public enum SecretCategory {
      */
     PROVIDER_MARKETPLACE,
 
+    /**
+     * ADR 0069: the platform's own account with the language-model provider
+     * behind the grounded assistant. Platform-owned like {@link #IDENTITY_ADMIN}
+     * and {@link #DATA_ENCRYPTION}: the provider is a processor the tenant did
+     * not choose, so no tenant action may write or replace its credential
+     * ({@link #tenantWritable()} is false). An operator stores it out of band
+     * and the application only reads it.
+     */
+    PROVIDER_ASSISTANT,
+
     /** Keycloak service-account credentials, per ADR 0009. */
     IDENTITY_ADMIN,
 

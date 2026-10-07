@@ -241,6 +241,7 @@ public class ConversationInboxController {
             String direction,
             @Nullable String blockId,
             @Nullable String actorPrincipalId,
+            @Nullable UUID assistantTurnId,
             String body,
             Instant occurredAt) {
 
@@ -250,6 +251,7 @@ public class ConversationInboxController {
                     view.direction(),
                     view.blockId(),
                     view.actorPrincipalId(),
+                    view.assistantTurnId(),
                     view.body(),
                     view.occurredAt());
         }

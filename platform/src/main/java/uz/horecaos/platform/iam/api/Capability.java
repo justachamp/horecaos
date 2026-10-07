@@ -1791,6 +1791,26 @@ public enum Capability {
     CONVERSATION_INBOX_MANAGE("conversation.inbox.manage", "conversation-inbox", "manage"),
 
     /**
+     * ADR 0069: reading the grounded assistant's knowledge entries and their
+     * version history, and its month-to-date usage and spend.
+     */
+    ASSISTANT_READ("assistant.read", "assistant", "read"),
+
+    /**
+     * ADR 0069: authoring the tenant's own answers the assistant may retrieve --
+     * creating an entry, publishing its next version, retiring it. Never an
+     * edit in place: a customer was answered with specific words at a specific
+     * time, and rewriting them destroys the only record of what was said.
+     *
+     * <p>Held by the roles that already own tenant content ({@link
+     * #CATALOG_AUTHOR}'s holders). Nothing the assistant itself does escapes a
+     * capability check by being automated; it holds no capability of its own
+     * and reads only what a customer's own question and the tenant's own
+     * published data entitle it to.
+     */
+    ASSISTANT_KNOWLEDGE_MANAGE("assistant.knowledge.manage", "assistant-knowledge", "manage"),
+
+    /**
      * ADR 0068: reading a brand's authored terms-of-service versions, their
      * history, and which one is currently in force.
      */

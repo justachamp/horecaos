@@ -94,7 +94,26 @@ public enum CacheRegistry {
             "staff.display_names",
             Duration.ofMinutes(10),
             20_000,
-            "StaffMemberChanged (evicted on every profile write)");
+            "StaffMemberChanged (evicted on every profile write)"),
+
+    /**
+     * ADR 0069: the model's reply to a question already answered from exactly the same
+     * facts -- "identical grounded questions are served from cache".
+     *
+     * <p>The key is the tenant, the brand, the reply language and a digest of the
+     * question's skeleton <em>and of every retrieved fact</em>, so a price that changed,
+     * a dish that sold out and a knowledge entry that was republished are each a
+     * different key: nothing needs evicting, and a cached reply is by construction one
+     * composed from the facts a fresh retrieval just returned. The facts are read live on
+     * every turn; this saves only the model call. Never holds a reply composed from a
+     * customer's own order, and the value is a reply and its citations -- no customer text.
+     * The five-minute TTL only bounds how long an unused entry occupies memory.
+     */
+    ASSISTANT_GROUNDED_REPLIES(
+            "assistant.grounded_replies",
+            Duration.ofMinutes(5),
+            5_000,
+            "None needed: the key carries a digest of the retrieved facts, so changed facts miss");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

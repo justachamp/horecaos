@@ -430,6 +430,10 @@ class JdbcAuthorizationServiceTests {
                 Capability.COURIER_SETTLEMENT_READ,
                 Capability.PARTNER_INVOICE_READ,
                 Capability.TERMS_READ,
+                // ADR 0069: the assistant's own knowledge entries, their history and its
+                // month-to-date usage. A suspended tenant reading what it told its customers
+                // and what that cost takes nothing out.
+                Capability.ASSISTANT_READ,
                 Capability.VOICE_PRESENCE_READ,
                 Capability.VOICE_SCREEN_POP_READ,
                 Capability.VOICE_CALL_LOG_READ,
