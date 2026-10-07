@@ -159,6 +159,10 @@ public class OperationsDeliveryTariffController {
                     new DeliveryTariffController.VersionView(drafted.tariffId(), drafted.version(), "DRAFT"));
         } catch (InvalidRoutingRequestException invalid) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, invalid.getMessage());
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            // A tariff of another brand or tenant. Drafting used to let this escape as a 500, the only
+            // one of these four endpoints that did: not-found, so the id cannot be probed.
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
     }
 
