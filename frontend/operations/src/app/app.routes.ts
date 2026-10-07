@@ -147,7 +147,7 @@ export const routes: Routes = [
             path: 'new',
             // The quote band reads `reports.provenance.*`, the dine-in picker and the party close read
             // `settings.locations.floorPlan.*`, and the aggregator branch reads `delivery.zones.*`.
-            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings')],
+            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings', 'map')],
             loadComponent: () =>
               import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
@@ -261,6 +261,8 @@ export const routes: Routes = [
               },
               {
                 path: ':accountId',
+                // `map` for the saved-address editor's map and search (row 5.2c, ADR 0145).
+                canActivate: [messagesGuard('map')],
                 loadComponent: () =>
                   import('./features/customers/customer-detail-pane').then(
                     (m) => m.CustomerDetailPane,

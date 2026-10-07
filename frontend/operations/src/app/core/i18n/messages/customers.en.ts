@@ -299,4 +299,10 @@ export const customersEn = {
   'customers.reviews.column.order': 'Order',
   'customers.reviews.column.customer': 'Customer',
   'customers.reviews.empty': 'No reviews yet.',
+  'customers.address.line2': 'Second address line',
+  'customers.address.postalCode': 'Postal code',
+  'customers.address.incomplete':
+    'The address needs a street line, a city and a district before it can be saved.',
+  'customers.address.pin.place': 'Place the pin',
+  'customers.address.pin.edit': 'Edit and move the pin',
 } as const;

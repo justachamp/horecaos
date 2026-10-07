@@ -11,6 +11,7 @@ import { Capability, SessionCapabilities } from '../../core/auth/session-capabil
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { BrandProfileApi } from '../settings/brand-profile/brand-profile-api';
+import { addressEditorFakes } from './address-editor-fakes.testing';
 import { ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
@@ -106,6 +107,7 @@ describe('CustomerDetailPane', () => {
       imports: [CustomerDetailPane],
       providers: [
         provideRouter([]),
+        ...addressEditorFakes().providers,
         { provide: CustomersApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
         { provide: Auth, useValue: FAKE_AUTH },
@@ -217,6 +219,7 @@ describe('CustomerDetailPane', () => {
         imports: [CustomerDetailPane],
         providers: [
           provideRouter([]),
+          ...addressEditorFakes().providers,
           { provide: CustomersApi, useValue: api },
           { provide: CurrentLocation, useValue: denied },
           { provide: Auth, useValue: FAKE_AUTH },
@@ -239,12 +242,14 @@ describe('CustomerDetailPane', () => {
   });
 
   /**
-   * Pins the `customer-detail-pane.ts:493-495` guard: `saveEditedAddress`
-   * carries `original.latitude`/`original.longitude`/`original.coordinateSource`
-   * through unchanged, because this form has no map or pin picker and the
-   * backend refuses a `coordinateSource` that claims a point with none
-   * attached. A regression here silently drops a storefront pin the moment
-   * an operator fixes a typo in the street name.
+   * Pins the 5.2c guard: an address edit that does not touch the pin carries
+   * `original.latitude`/`original.longitude`/`original.coordinateSource`
+   * through unchanged -- now that this form has a map and a pin picker, the
+   * easy mistake is the opposite one, re-labelling a storefront pin as the
+   * operator's own. The backend refuses a `coordinateSource` that claims a
+   * point with none attached, and a regression here silently drops or
+   * re-labels a customer's pin the moment an operator fixes a typo in the
+   * street name.
    */
   it('editing an address field carries the existing pin through, never dropping it', async () => {
     const address: RevealedCustomerAddress = {
@@ -272,6 +277,7 @@ describe('CustomerDetailPane', () => {
         imports: [CustomerDetailPane],
         providers: [
           provideRouter([]),
+          ...addressEditorFakes().providers,
           { provide: CustomersApi, useValue: updateApi },
           { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
           { provide: Auth, useValue: FAKE_AUTH },
@@ -302,9 +308,10 @@ describe('CustomerDetailPane', () => {
     addressFixture.detectChanges();
 
     // Only the street line is touched — a typo fix, nothing about the point.
-    const line1Input = host.querySelectorAll('.address-form input')[1] as HTMLInputElement;
+    const line1Input = host.querySelector('[data-testid="q-address-street"]') as HTMLInputElement;
     line1Input.value = 'Amir Temur ko’chasi 14';
     line1Input.dispatchEvent(new Event('input'));
+    addressFixture.detectChanges();
 
     const saveButton = Array.from(
       host.querySelectorAll('.address-form .form__actions button'),
@@ -614,5 +621,177 @@ describe('CustomerDetailPane', () => {
       'CUSTOMER_ERASURE_EXECUTE',
     ]);
     expect(withExecute.host.querySelector('[data-testid="erasure-execute"]')).not.toBeNull();
+  });
+
+  // ------------------------------------- rows 5.2c / 1.3b (ADR 0145): a pin on a saved address
+
+  describe('saved addresses with a pin', () => {
+    const EXISTING: RevealedCustomerAddress = {
+      id: 'address-1',
+      label: 'Home',
+      fields: { line1: 'Bunyodkor 12', city: 'Toshkent', district: 'Chilonzor' },
+      deliveryInstructions: null,
+      latitude: 41.31,
+      longitude: 69.28,
+      coordinateSource: 'CUSTOMER_PIN',
+      version: 4,
+    };
+
+    async function mountAddresses(addresses: readonly RevealedCustomerAddress[]): Promise<{
+      host: HTMLElement;
+      view: ComponentFixture<CustomerDetailPane>;
+      fakes: ReturnType<typeof addressEditorFakes>;
+      customers: Record<string, ReturnType<typeof vi.fn>>;
+    }> {
+      const fakes = addressEditorFakes();
+      const customers = {
+        ...api,
+        revealAddresses: vi.fn().mockResolvedValue(addresses),
+        addAddress: vi.fn().mockResolvedValue({ id: 'address-new' }),
+        updateAddress: vi.fn().mockResolvedValue(undefined),
+      };
+      await TestBed.resetTestingModule()
+        .configureTestingModule({
+          imports: [CustomerDetailPane],
+          providers: [
+            provideRouter([]),
+            ...fakes.providers,
+            { provide: CustomersApi, useValue: customers },
+            { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+            { provide: Auth, useValue: FAKE_AUTH },
+            { provide: SessionCapabilities, useValue: fakeCapabilities() },
+            { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+          ],
+        })
+        .compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      const view = TestBed.createComponent(CustomerDetailPane);
+      view.componentRef.setInput('accountId', 'customer-1');
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      const host: HTMLElement = view.nativeElement;
+      (host.querySelectorAll('.tab')[1] as HTMLButtonElement).click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      return { host, view, fakes, customers };
+    }
+
+    const button = (host: HTMLElement, text: string): HTMLButtonElement =>
+      Array.from(host.querySelectorAll('button')).find((b) =>
+        b.textContent?.trim().includes(text),
+      ) as HTMLButtonElement;
+
+    function typeInto(host: HTMLElement, testId: string, value: string): void {
+      const field = host.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+    }
+
+    it('creates an address with a pin the operator placed: coordinates and OPERATOR_PIN together', async () => {
+      const { host, view, customers } = await mountAddresses([]);
+
+      button(host, 'Add address').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      typeInto(host, 'q-address-street', 'Bunyodkor 12');
+      typeInto(host, 'address-editor-city', 'Toshkent');
+      typeInto(host, 'address-editor-district', 'Chilonzor');
+      typeInto(host, 'q-map-pin-latitude', '41.3');
+      typeInto(host, 'q-map-pin-longitude', '69.2');
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      button(host, 'Save').click();
+      await flushMicrotasks();
+
+      expect(customers['addAddress']).toHaveBeenCalledTimes(1);
+      const request = customers['addAddress'].mock.calls[0][2];
+      expect(request.latitude).toBe(41.3);
+      expect(request.longitude).toBe(69.2);
+      expect(request.coordinateSource).toBe('OPERATOR_PIN');
+      expect(request.fields.line1).toBe('Bunyodkor 12');
+      expect(request.fields.city).toBe('Toshkent');
+    });
+
+    it('still creates an address with no pin at all, honestly NOT_GEOCODED, when there is no map or no time', async () => {
+      const { host, view, customers } = await mountAddresses([]);
+
+      button(host, 'Add address').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      typeInto(host, 'q-address-street', 'Bunyodkor 12');
+      typeInto(host, 'address-editor-city', 'Toshkent');
+      typeInto(host, 'address-editor-district', 'Chilonzor');
+      view.detectChanges();
+      button(host, 'Save').click();
+      await flushMicrotasks();
+
+      const request = customers['addAddress'].mock.calls[0][2];
+      expect(request.latitude).toBeNull();
+      expect(request.longitude).toBeNull();
+      expect(request.coordinateSource).toBe('NOT_GEOCODED');
+    });
+
+    it('will not save an address missing a street line, a city or a district', async () => {
+      const { host, view, customers } = await mountAddresses([]);
+
+      button(host, 'Add address').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      typeInto(host, 'q-address-street', 'Bunyodkor 12');
+      view.detectChanges();
+
+      const save = button(host, 'Save');
+      expect(save.disabled).toBe(true);
+      save.click();
+      await flushMicrotasks();
+
+      expect(customers['addAddress']).not.toHaveBeenCalled();
+      expect(host.querySelector('[data-testid="address-editor-incomplete"]')).not.toBeNull();
+    });
+
+    it('moves a saved pin: the new point is the operator’s, with its coordinates, at the address’s own version', async () => {
+      const { host, view, fakes, customers } = await mountAddresses([EXISTING]);
+
+      button(host, 'Edit').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      fakes.map.map.livePins[0].simulateDrag({ latitude: 41.35, longitude: 69.3 });
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      button(host, 'Save').click();
+      await flushMicrotasks();
+
+      const [, , , request, version] = customers['updateAddress'].mock.calls[0];
+      expect(request.latitude).toBe(41.35);
+      expect(request.longitude).toBe(69.3);
+      expect(request.coordinateSource).toBe('OPERATOR_PIN');
+      expect(version).toBe(4);
+    });
+
+    it('shows the point a saved address carries, so a missing one is visible at a glance', async () => {
+      const { host } = await mountAddresses([
+        EXISTING,
+        {
+          ...EXISTING,
+          id: 'address-2',
+          latitude: null,
+          longitude: null,
+          coordinateSource: 'LANDMARK_ONLY',
+        },
+      ]);
+
+      const points = host.querySelectorAll('[data-testid="address-card-point"]');
+      expect(points).toHaveLength(1);
+      expect(points[0].textContent).toContain('41.31');
+    });
   });
 });

@@ -302,4 +302,9 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.reviews.column.order': 'Заказ',
   'customers.reviews.column.customer': 'Клиент',
   'customers.reviews.empty': 'Отзывов пока нет.',
+  'customers.address.line2': 'Вторая строка адреса',
+  'customers.address.postalCode': 'Почтовый индекс',
+  'customers.address.incomplete': 'Чтобы сохранить адрес, нужны строка улицы, город и район.',
+  'customers.address.pin.place': 'Поставить точку',
+  'customers.address.pin.edit': 'Править и сдвинуть точку',
 };
