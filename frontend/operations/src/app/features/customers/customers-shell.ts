@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { TPipe } from '../../core/i18n/t.pipe';
 
 /**
@@ -15,6 +16,11 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * does, because a segment builder needs its own width, not the ~480px the
  * docked layout leaves it.
  *
+ * **Обратные звонки** (ADR 0111, the call centre's lead queue) is a tab only for an operator who holds
+ * `customer.lead.read` somewhere: the rail's own capability is `CUSTOMER_READ`, and a line cook with neither
+ * should not be offered a queue of people to ring. The route itself still answers for itself — a direct
+ * URL to it is refused by the server, not by this tab's absence.
+ *
  * 5.5 routes to the same shared `NotBuiltPage` 5.4 does, and for the same
  * reason: a review tag library and prompt-timing settings configure a review/
  * feedback entity that does not exist, so there is nothing here for a
@@ -27,4 +33,6 @@ import { TPipe } from '../../core/i18n/t.pipe';
   styleUrl: './customers-shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CustomersShell {}
+export class CustomersShell {
+  protected readonly capabilities = inject(SessionCapabilities);
+}

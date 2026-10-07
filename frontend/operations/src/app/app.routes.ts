@@ -224,6 +224,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/customers/customers-shell').then((m) => m.CustomersShell),
         children: [
+          // ADR 0111: the call centre's callback queue. A literal segment, so it is declared before
+          // the empty-path `CustomersPage` child whose `:accountId` would otherwise swallow "leads".
+          {
+            path: 'leads',
+            loadComponent: () => import('./features/customers/leads-page').then((m) => m.LeadsPage),
+          },
           {
             path: 'segments',
             loadComponent: () =>

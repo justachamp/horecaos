@@ -4,6 +4,11 @@
       <div>
         <h1 class="q-title">{{ 'staff.people.title' | t }}</h1>
         <p class="q-body-sm lead">{{ 'staff.people.lead' | t }}</p>
+        @if (scoped()) {
+          <p class="q-body-sm lead" data-testid="staff-scoped-note">
+            {{ 'staff.people.scopedLead' | t }}
+          </p>
+        }
       </div>
       <button
         type="button"

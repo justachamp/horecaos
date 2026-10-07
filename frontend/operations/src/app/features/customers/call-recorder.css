@@ -1,0 +1,42 @@
+.recorder {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+  margin-top: 8px;
+}
+
+.note {
+  color: var(--q-ink-muted);
+  margin: 0;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+select,
+input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.primary {
+  height: 36px;
+  justify-self: start;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--q-radius);
+  background: var(--q-accent);
+  color: var(--q-accent-ink, #fff);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

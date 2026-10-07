@@ -885,6 +885,31 @@ public enum Capability {
     CUSTOMER_PII_REVEAL("customer.pii.reveal", "customer", "pii-reveal"),
 
     /**
+     * ADR 0111: the call centre's callback queue and one lead's detail. A lead is a guest
+     * who has phoned in, asked for a callback or enquired about catering and is not yet an
+     * account with an order behind them.
+     *
+     * <p>Held at {@code TENANT}, {@code BRAND} or {@code LOCATION}: a {@code LOCATION} holder
+     * reads only the leads assigned to her branch (the route names the branch, and the query
+     * is written against it). Reading never decrypts: the queue shows a masked number, and
+     * the number itself is {@link #CUSTOMER_PII_REVEAL}, purpose-stamped and audited.
+     * Separate from {@link #CUSTOMER_READ} because that is about accounts and this is about
+     * people who are not one yet.
+     */
+    CUSTOMER_LEAD_READ("customer.lead.read", "customer", "lead.read"),
+    /**
+     * ADR 0111: creating a lead, moving it through its status machine, handing it to a
+     * branch, and recording a voice contact attempt against a lead or a customer.
+     *
+     * <p>Not a four-eyes act: a lead transition is neither irreversible nor cost-bearing the
+     * way a campaign send is, so it carries an audit fact and no approval. Granted to the
+     * roles that already do the call centre's work; a role that should never see a guest's
+     * phone number does not hold it, and holding it still reveals nothing without {@link
+     * #CUSTOMER_PII_REVEAL}.
+     */
+    CUSTOMER_LEAD_MANAGE("customer.lead.manage", "customer", "lead.manage"),
+
+    /**
      * ADR 0029, ADR 0044: performs the transition a raised erasure request only
      * records the intent for — anonymising the account, overwriting its
      * protected fields, and calling every registered erasure participant.

@@ -785,6 +785,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Клиент чёрный список раскрыто',
       'uz-Latn': 'Mijoz qora roʻyxat ochib berildi',
     },
+    'customer.card.viewed': {
+      en: 'Customer card viewed',
+      ru: 'Карточка клиента открыта',
+      'uz-Latn': 'Mijoz kartochkasi ochildi',
+    },
+    'customer.contact_attempt.recorded': {
+      en: 'Contact attempt recorded',
+      ru: 'Попытка связи записана',
+      'uz-Latn': 'Aloqa urinishi qayd etildi',
+    },
     'customer.csv_import_queued': {
       en: 'Customer CSV import queued',
       ru: 'Клиент CSV импорт в очереди',
@@ -794,6 +804,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Customer identity merged',
       ru: 'Клиент личность объединено',
       'uz-Latn': 'Mijoz shaxs birlashtirildi',
+    },
+    'customer.lead.assigned': {
+      en: 'Lead handed to a branch',
+      ru: 'Лид передан в филиал',
+      'uz-Latn': 'Lid filialga topshirildi',
+    },
+    'customer.lead.registered': {
+      en: 'Lead registered',
+      ru: 'Лид зарегистрирован',
+      'uz-Latn': 'Lid roʻyxatga olindi',
+    },
+    'customer.lead.revealed': {
+      en: 'Lead phone number revealed',
+      ru: 'Номер телефона лида раскрыт',
+      'uz-Latn': 'Lid telefon raqami ochib berildi',
+    },
+    'customer.lead.status_changed': {
+      en: 'Lead status changed',
+      ru: 'Статус лида изменён',
+      'uz-Latn': 'Lid holati oʻzgartirildi',
     },
     'customer.list.exported': {
       en: 'Customer list exported',

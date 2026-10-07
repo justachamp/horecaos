@@ -96,6 +96,15 @@
       >
         {{ 'customers.tab.erasure' | t }}
       </button>
+      <button
+        type="button"
+        class="tab"
+        [class.tab--on]="activeTab() === 'history'"
+        (click)="selectTab('history')"
+        data-testid="tab-history"
+      >
+        {{ 'customers.tab.history' | t }}
+      </button>
     </div>
 
     <!-- ---------------------------------------------------------------- profile -->
@@ -1041,6 +1050,20 @@
           }}
         </p>
       }
+    }
+
+    <!-- ----------------------------------------------------------------- contacts (ADR 0111) -->
+    @if (activeTab() === 'history') {
+      <q-customer-card-history
+        [card]="card()"
+        [loading]="cardLoading()"
+        [loadingMore]="cardLoadingMore()"
+        [error]="cardError()"
+        [canRecord]="canRecordCalls()"
+        [recordBusy]="recordBusy()"
+        (olderRequested)="loadOlderHistory()"
+        (callRecorded)="recordCall($event)"
+      />
     }
 
     <!-- ----------------------------------------------------------------- reviews -->

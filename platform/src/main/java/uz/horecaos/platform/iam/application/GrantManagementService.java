@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.GrantChanged;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.TenantRoleCatalog;
 import uz.horecaos.platform.iam.api.grants.GrantAuthority;
 import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -415,6 +417,192 @@ public class GrantManagementService implements GrantAuthority {
         return updated == 1;
     }
 
+    /**
+     * The grants given at one branch, or inside one brand, for a granter whose
+     * {@code iam.grant.manage} reaches no further (ADR 0103) — "the Chilonzor
+     * manager sees Chilonzor's team".
+     *
+     * <p>Exactly the grants whose own scope lies at or beneath {@code boundary}:
+     * for a location, that location's; for a brand, the brand's own and every one
+     * of its locations'. Never a company-level or platform grant, and never a
+     * grant of another brand, which is the point — the query is written against
+     * the boundary rather than filtering {@link #listForTenant}'s answer after the
+     * fact, so a bug in a filter cannot leak a sibling's team.
+     *
+     * @param boundary a {@code BRAND} or {@code LOCATION} scope; anything wider is
+     *                 {@link #listForTenant}'s business
+     */
+    public List<GrantView> listWithin(ResourceScope boundary, boolean includeInactive) {
+        requireBranchBoundary(boundary);
+        String within = boundary.type() == ResourceScope.ScopeType.LOCATION
+                ? "(g.scope_type = 'LOCATION' AND g.scope_id = :locationId)"
+                : """
+                          ((g.scope_type = 'BRAND' AND g.scope_id = :brandId)
+                            OR (g.scope_type = 'LOCATION' AND g.scope_id IN (
+                                  SELECT l.id FROM tenant.locations l
+                                   WHERE l.tenant_id = :tenantId AND l.brand_id = :brandId)))
+                          """;
+        return jdbc.sql("""
+                SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
+                       g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
+                       g.revoked_at, g.revoked_by, g.revoked_reason
+                  FROM iam.grants g
+                  JOIN iam.roles r ON r.id = g.role_id
+                 WHERE g.tenant_id = :tenantId AND (:includeInactive OR g.status = 'ACTIVE')
+                   AND %s
+                 ORDER BY g.created_at DESC
+                """.formatted(within))
+                .param("tenantId", boundary.tenantId())
+                .param("brandId", boundary.brandId())
+                .param("locationId", boundary.locationId())
+                .param("includeInactive", includeInactive)
+                .query(GrantManagementService::toGrantView)
+                .list();
+    }
+
+    /**
+     * Revokes a grant lying at or beneath {@code boundary}, for a branch-scoped
+     * granter (ADR 0103). Answers {@code false} — the same answer a grant that
+     * does not exist gets — for one lying anywhere else, so a manager cannot use
+     * a grant id seen in a ticket to take away a company-level job or a sibling
+     * branch's.
+     *
+     * <p>A second rule beside the boundary, and the mirror of {@link
+     * #requireGrantable}: she may only take away a job she could herself have
+     * given at that scope. Otherwise a manager could suspend a finance clerk the
+     * owner placed at her branch — a job whose capabilities she does not hold, and
+     * so one she has no standing to judge.
+     */
+    @Transactional
+    public boolean revokeWithin(ResourceScope boundary, UUID grantId, String revokerSubject, String reason) {
+        requireBranchBoundary(boundary);
+        UUID tenantId = Objects.requireNonNull(boundary.tenantId());
+        var row = jdbc.sql("""
+                SELECT g.role_id, g.scope_type, g.scope_id
+                  FROM iam.grants g
+                 WHERE g.id = :id AND g.tenant_id = :tenantId AND g.status = 'ACTIVE'
+                """)
+                .param("id", grantId)
+                .param("tenantId", tenantId)
+                .query((rs, n) -> new GrantLocator(
+                        rs.getObject("role_id", UUID.class),
+                        rs.getString("scope_type"),
+                        rs.getObject("scope_id", UUID.class)))
+                .optional();
+        if (row.isEmpty()) {
+            return false;
+        }
+        ResourceScope grantScope = scopeOfGrant(tenantId, row.get());
+        if (grantScope == null || !boundary.covers(grantScope)) {
+            return false;
+        }
+        for (String code : jdbc.sql("SELECT capability_code FROM iam.role_capabilities WHERE role_id = :roleId")
+                .param("roleId", row.get().roleId())
+                .query(String.class)
+                .list()) {
+            Capability capability = Capability.require(code);
+            if (!authorization.has(revokerSubject, capability, grantScope)) {
+                throw new AuthorizationService.AccessDeniedException(capability, grantScope);
+            }
+        }
+        return revoke(tenantId, grantId, revokerSubject, reason);
+    }
+
+    /**
+     * The tenant-visible jobs, each with whether {@code granterSubject} may confer
+     * it at {@code scope} right now (ADR 0103).
+     *
+     * <p>Answered by running {@link #requireGrantable} itself and reading its
+     * refusal, not by a second copy of its rules: the picker a branch manager is
+     * shown and the check that runs when she presses the button then cannot
+     * disagree, which is the whole of staff-and-access.md §0's "never taunt her
+     * with a job she cannot give".
+     */
+    public List<GrantableRole> grantableRoles(ResourceScope scope, String granterSubject) {
+        return TenantRoleCatalog.tenantVisible().stream()
+                .map(descriptor -> {
+                    PlatformRole role = PlatformRole.find(descriptor.code()).orElseThrow();
+                    ResolvedRole resolved = new ResolvedRole(
+                            RoleRegistrySynchronizer.platformRoleId(role), role.code(), role.capabilities(), true);
+                    boolean grantable = true;
+                    try {
+                        requireGrantable(resolved, scope, granterSubject);
+                    } catch (AuthorizationService.AccessDeniedException refused) {
+                        grantable = false;
+                    } catch (ApiException refused) {
+                        if (refused.errorCode() != ErrorCode.INSUFFICIENT_CAPABILITY) {
+                            throw refused;
+                        }
+                        grantable = false;
+                    }
+                    return new GrantableRole(
+                            descriptor.code(), descriptor.scopeType(), descriptor.capabilities(), grantable);
+                })
+                .toList();
+    }
+
+    /**
+     * The brand and branches a {@link #listWithin} answer is grouped under, named.
+     *
+     * <p>The tenant's own brand and location lists need {@code brand.read} and
+     * {@code location.read} one level up from where a branch manager holds them, so
+     * the team view carries its own small directory rather than asking for a wider
+     * grant for the sake of two display names. Only places at or beneath the
+     * boundary, and the boundary's own brand.
+     */
+    public PlaceDirectory placesWithin(ResourceScope boundary) {
+        requireBranchBoundary(boundary);
+        List<PlaceDirectory.BrandPlace> brands = jdbc.sql("""
+                SELECT id, display_name FROM tenant.brands WHERE tenant_id = :tenantId AND id = :brandId
+                """)
+                .param("tenantId", boundary.tenantId())
+                .param("brandId", boundary.brandId())
+                .query((rs, n) ->
+                        new PlaceDirectory.BrandPlace(rs.getObject("id", UUID.class), rs.getString("display_name")))
+                .list();
+        List<PlaceDirectory.LocationPlace> locations = jdbc.sql("""
+                SELECT id, brand_id, display_name FROM tenant.locations
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND (CAST(:locationId AS uuid) IS NULL OR id = CAST(:locationId AS uuid))
+                 ORDER BY display_name
+                """)
+                .param("tenantId", boundary.tenantId())
+                .param("brandId", boundary.brandId())
+                .param("locationId", boundary.locationId())
+                .query((rs, n) -> new PlaceDirectory.LocationPlace(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getString("display_name")))
+                .list();
+        return new PlaceDirectory(brands, locations);
+    }
+
+    private static void requireBranchBoundary(ResourceScope boundary) {
+        if (boundary.type() != ResourceScope.ScopeType.BRAND && boundary.type() != ResourceScope.ScopeType.LOCATION) {
+            throw new IllegalArgumentException(
+                    "A branch boundary is a BRAND or LOCATION scope, not " + boundary.type());
+        }
+    }
+
+    /** The scope a grant row sits at, rehydrated with the ancestry its type needs; null for a platform grant. */
+    private @Nullable ResourceScope scopeOfGrant(UUID tenantId, GrantLocator grant) {
+        return switch (grant.scopeType()) {
+            case "TENANT" -> ResourceScope.tenant(tenantId);
+            case "BRAND" -> ResourceScope.brand(tenantId, Objects.requireNonNull(grant.scopeId()));
+            case "LOCATION" -> {
+                UUID locationId = Objects.requireNonNull(grant.scopeId());
+                yield jdbc.sql("SELECT brand_id FROM tenant.locations WHERE tenant_id = :tenantId AND id = :id")
+                        .param("tenantId", tenantId)
+                        .param("id", locationId)
+                        .query(UUID.class)
+                        .optional()
+                        .map(brandId -> ResourceScope.location(tenantId, brandId, locationId))
+                        .orElse(null);
+            }
+            default -> null;
+        };
+    }
+
     /** Active grants only, the historical default — see {@link #listForTenant(UUID, boolean)}. */
     public List<GrantView> listForTenant(UUID tenantId) {
         return listForTenant(tenantId, false);
@@ -543,6 +731,74 @@ public class GrantManagementService implements GrantAuthority {
             if (!authorization.has(granterSubject, capability, scope)) {
                 throw new AuthorizationService.AccessDeniedException(capability, scope);
             }
+        }
+
+        requireWithinABranchGranter(role, scope, granterSubject);
+    }
+
+    /**
+     * ADR 0103: what a granter whose {@code iam.grant.manage} stops short of the
+     * whole company may confer, beyond the subset rule above.
+     *
+     * <p>Two refusals, both only for such a granter. The scope must name a
+     * hierarchy that exists, because {@link ResourceScope#covers} is a statement
+     * about levels: a brand manager naming {@code location(her brand, somebody
+     * else's location)} would pass every capability check above and confer a job
+     * at a branch of another brand. And the job must be code-owned and no broader
+     * than the scope it is given at: a company-level job such as
+     * {@code tenant-finance} has no meaning "at one branch", and the subset rule
+     * alone would let a manager whose bundle happens to hold all of a narrower
+     * job's capabilities hand out a company-level one with a branch's reach
+     * looking like a company's.
+     *
+     * <p>A tenant-wide granter is exempt on purpose: this changes nothing for the
+     * owner and the administrator, who may already give any job at any level.
+     */
+    private void requireWithinABranchGranter(ResolvedRole role, ResourceScope scope, String granterSubject) {
+        if (scope.type() == ResourceScope.ScopeType.PLATFORM || holdsGrantManagementTenantWide(granterSubject, scope)) {
+            return;
+        }
+        requireRealHierarchy(scope);
+        PlatformRole platformRole =
+                role.platformDefined() ? PlatformRole.find(role.code()).orElse(null) : null;
+        if (platformRole == null
+                || platformRole.scopeType().ordinal() < scope.type().ordinal()) {
+            throw ApiException.insufficientCapability(Capability.IAM_GRANT_MANAGE.code(), "TENANT");
+        }
+    }
+
+    private boolean holdsGrantManagementTenantWide(String granterSubject, ResourceScope scope) {
+        UUID tenantId = scope.tenantId();
+        return tenantId != null
+                && authorization.has(granterSubject, Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(tenantId));
+    }
+
+    private void requireRealHierarchy(ResourceScope scope) {
+        boolean real =
+                switch (scope.type()) {
+                    case PLATFORM -> true;
+                    case TENANT -> true;
+                    case BRAND ->
+                        jdbc.sql("SELECT count(*) FROM tenant.brands WHERE tenant_id = :tenantId AND id = :brandId")
+                                        .param("tenantId", scope.tenantId())
+                                        .param("brandId", scope.brandId())
+                                        .query(Long.class)
+                                        .single()
+                                > 0;
+                    case LOCATION ->
+                        jdbc.sql("""
+                                        SELECT count(*) FROM tenant.locations
+                                         WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :locationId
+                                        """)
+                                        .param("tenantId", scope.tenantId())
+                                        .param("brandId", scope.brandId())
+                                        .param("locationId", scope.locationId())
+                                        .query(Long.class)
+                                        .single()
+                                > 0;
+                };
+        if (!real) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such place in this company");
         }
     }
 
@@ -721,5 +977,24 @@ public class GrantManagementService implements GrantAuthority {
             @Nullable String revokedBy,
             @Nullable String revokedReason) {}
 
+    /**
+     * One tenant-visible job as a particular granter sees it at a particular scope.
+     *
+     * @param grantable whether the granter may confer it there; false is "do not offer", never an error
+     */
+    public record GrantableRole(
+            String code, ResourceScope.ScopeType scopeType, Set<String> capabilities, boolean grantable) {}
+
+    /** The names a branch manager's team view groups its people under. */
+    public record PlaceDirectory(List<BrandPlace> brands, List<LocationPlace> locations) {
+
+        public record BrandPlace(UUID id, String displayName) {}
+
+        public record LocationPlace(UUID id, UUID brandId, String displayName) {}
+    }
+
     private record RevokedGrant(String principalSubject, UUID tenantId, String scopeType, UUID scopeId) {}
+
+    private record GrantLocator(
+            UUID roleId, String scopeType, @Nullable UUID scopeId) {}
 }

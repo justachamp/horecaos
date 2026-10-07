@@ -21,6 +21,7 @@ import {
   TelegramStaffLinkView,
 } from './staff-api';
 import { StaffInviteDialog } from './staff-invite-dialog';
+import { StaffReach } from './staff-reach';
 import { StaffJobDialog } from './staff-job-dialog';
 import { StaffMfaPolicyCard } from './staff-mfa-policy-card';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
@@ -87,6 +88,7 @@ interface GroupRow {
 export class StaffPage {
   private readonly api = inject(StaffApi);
   private readonly membersApi = inject(StaffMembersApi);
+  private readonly reach = inject(StaffReach);
   private readonly tenant = inject(CurrentTenant);
   private readonly auth = inject(Auth);
   private readonly capabilities = inject(SessionCapabilities);
@@ -94,6 +96,8 @@ export class StaffPage {
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
 
+  /** ADR 0103: her `iam.grant.manage` stops at a branch or brand, so this is that place's team and not the company's. */
+  protected readonly scoped = this.reach.scoped;
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
   protected readonly loadError = signal<string | null>(null);

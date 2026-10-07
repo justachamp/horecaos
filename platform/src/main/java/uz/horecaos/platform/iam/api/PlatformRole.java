@@ -315,6 +315,9 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: the call centre's callback queue, and the voice journal beside the card.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // Row 1.3a: CUSTOMER_MANAGE already covers everything
                     // CUSTOMER_CREATE grants on its own; held explicitly here
                     // too only so CustomerController#createManually's
@@ -538,6 +541,9 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: the call centre's callback queue, and the voice journal beside the card.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // Row 1.3a: CUSTOMER_MANAGE already covers everything
                     // CUSTOMER_CREATE grants on its own; held explicitly here
                     // too only so CustomerController#createManually's
@@ -676,6 +682,13 @@ public enum PlatformRole {
             "brand-manager",
             ScopeType.BRAND,
             EnumSet.of(
+                    // ADR 0103: the brand's own team. The same capability the owner holds, at the
+                    // brand: GrantManagementService.requireGrantable refuses a job this bundle does
+                    // not hold in full, and refuses any job broader than the brand, so a brand
+                    // manager reaches her brand's people and no other. Held on top of the routes
+                    // that name a brand in the path -- the tenant-wide grants routes still need the
+                    // capability at TENANT scope.
+                    IAM_GRANT_MANAGE,
                     // ADR 0139: a brand manager sees the people of their brand and edits none of
                     // them -- changing a person is the branch manager's and above.
                     STAFF_PROFILE_READ,
@@ -698,6 +711,9 @@ public enum PlatformRole {
                     MARKETING_LINK_MANAGE,
                     // ADR 0042: delivery cost is a brand's own operating number.
                     DELIVERY_COST_READ,
+                    // ADR 0111: a brand's call-centre queue -- who works it, which branch gets which lead.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     BRAND_READ,
                     LOCATION_READ,
                     CATALOG_READ,
@@ -750,6 +766,11 @@ public enum PlatformRole {
             "location-manager",
             ScopeType.LOCATION,
             EnumSet.of(
+                    // ADR 0103: "the Chilonzor manager sees Chilonzor's team" and hands one of them
+                    // a job. Held at the branch only: the grants routes that name a location in the
+                    // path authorise against it, the tenant-wide ones still need TENANT scope, and
+                    // requireGrantable bounds what she can confer to what this bundle holds in full.
+                    IAM_GRANT_MANAGE,
                     // ADR 0139: the branch's own people. The routes at LOCATION scope refuse a
                     // change to anyone with a job outside this branch, and answer "no such
                     // member" for a person of a sibling branch.
@@ -837,6 +858,10 @@ public enum PlatformRole {
                     // a caller nobody has seen before.
                     CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL,
+                    // ADR 0111: the callbacks assigned to her branch -- and the number to ring them on,
+                    // which is why this bundle and not the floor's holds the pair.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // ADR 0059 stage 2: the operator inbox — see
                     // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
                     // this and why, including the scope caveat that applies to this role
@@ -1104,6 +1129,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: support reads the queue to answer "did anyone call her back"; it never works it.
+                    CUSTOMER_LEAD_READ,
                     // Row 1.3a: see TENANT_OWNER's identical grant above for why.
                     CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL));

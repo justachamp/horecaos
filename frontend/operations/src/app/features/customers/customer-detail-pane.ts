@@ -27,6 +27,8 @@ import { orderStatusLabel } from '../orders/order-status';
 import { BrandProfileApi, BrandView } from '../settings/brand-profile/brand-profile-api';
 import { CustomerAddressDraft, CustomerAddressEditor } from './customer-address-editor';
 import { customerStatusLabel } from './customer-status';
+import { CustomerCardHistory } from './customer-card-history';
+import { CustomerCard, HistoryEntry, LeadsApi, RecordContactAttemptRequest } from './leads-api';
 import { ReviewRow, ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
@@ -53,6 +55,7 @@ type Tab =
   | 'profile'
   | 'addresses'
   | 'orders'
+  | 'history'
   | 'consent'
   | 'cashback'
   | 'blacklist'
@@ -121,6 +124,7 @@ const REVEAL_PURPOSE = {
   dateOfBirth: 'Operations console: view customer date of birth',
   addresses: 'Operations console: view customer addresses',
   blacklistHistory: 'Operations console: view blacklist history',
+  openCard: 'Operations console: open customer card',
 } as const;
 
 /**
@@ -144,7 +148,7 @@ const REVEAL_PURPOSE = {
  */
 @Component({
   selector: 'q-customer-detail-pane',
-  imports: [TPipe, ActorChip, MoneyInput, CustomerAddressEditor],
+  imports: [TPipe, ActorChip, MoneyInput, CustomerAddressEditor, CustomerCardHistory],
   templateUrl: './customer-detail-pane.html',
   styleUrl: './customer-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -152,6 +156,7 @@ const REVEAL_PURPOSE = {
 export class CustomerDetailPane {
   private readonly api = inject(CustomersApi);
   private readonly reviewsApi = inject(ReviewsApi);
+  private readonly leadsApi = inject(LeadsApi);
   private readonly brandProfiles = inject(BrandProfileApi);
   private readonly baseLocation = inject(CurrentLocation);
   private readonly router = inject(Router);
@@ -168,6 +173,18 @@ export class CustomerDetailPane {
   protected readonly loadError = signal<string | null>(null);
   protected readonly profile = signal<Versioned<CustomerProfile> | null>(null);
   protected readonly notice = signal<string | null>(null);
+
+  /**
+   * ADR 0111: the customer card. Opening the pane opens the card, and **opening the card is the
+   * audited act** — one `customer.card.viewed` fact per open — so this is read once when the account
+   * is shown, whichever tab is on top, and again only when the operator pages further back. It is
+   * never re-read to refresh: a refresh would be a second open she did not ask for.
+   */
+  protected readonly card = signal<CustomerCard | null>(null);
+  protected readonly cardLoading = signal(false);
+  protected readonly cardLoadingMore = signal(false);
+  protected readonly cardError = signal<string | null>(null);
+  protected readonly recordBusy = signal(false);
 
   constructor() {
     // The route reuses this component across an `:accountId` change (default
@@ -226,6 +243,7 @@ export class CustomerDetailPane {
     this.denied.set(false);
     try {
       this.profile.set(await this.api.profile(scope, accountId));
+      void this.openCard(scope.tenantId, accountId);
       this.loadTabData(this.activeTab());
     } catch (error) {
       if (error instanceof ApiError) {
@@ -266,12 +284,101 @@ export class CustomerDetailPane {
       case 'erasure':
         void this.loadErasureRequests();
         return;
+      case 'history':
       case 'profile':
         return;
     }
   }
 
+  // ------------------------------------------------------------------ the card (ADR 0111)
+
+  private async openCard(tenantId: string, accountId: string): Promise<void> {
+    this.cardLoading.set(true);
+    this.cardError.set(null);
+    try {
+      const opened = await this.leadsApi.openCard(tenantId, accountId, REVEAL_PURPOSE.openCard);
+      // The pane may have moved to another account while the card was loading.
+      if (this.accountId() === accountId) {
+        this.card.set(opened);
+      }
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.cardError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    } finally {
+      this.cardLoading.set(false);
+    }
+  }
+
+  protected async loadOlderHistory(): Promise<void> {
+    const scope = this.scope();
+    const current = this.card();
+    if (!scope || !current || current.nextBefore === null || this.cardLoadingMore()) {
+      return;
+    }
+    this.cardLoadingMore.set(true);
+    try {
+      const older = await this.leadsApi.openCard(
+        scope.tenantId,
+        this.accountId(),
+        REVEAL_PURPOSE.openCard,
+        current.nextBefore,
+      );
+      this.card.set({
+        ...current,
+        history: [...current.history, ...older.history],
+        nextBefore: older.nextBefore,
+      });
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.cardLoadingMore.set(false);
+    }
+  }
+
+  protected canRecordCalls(): boolean {
+    return this.capabilities.has('CUSTOMER_LEAD_MANAGE');
+  }
+
+  /** Records a call with this guest and shows it at the top, without re-opening the card. */
+  protected async recordCall(request: RecordContactAttemptRequest): Promise<void> {
+    const scope = this.scope();
+    const current = this.card();
+    if (!scope || !current || this.recordBusy()) {
+      return;
+    }
+    this.recordBusy.set(true);
+    try {
+      const recorded = await this.leadsApi.recordCustomerAttempt(
+        scope.tenantId,
+        this.accountId(),
+        scope.brandId,
+        request,
+      );
+      const entry: HistoryEntry = {
+        kind: 'VOICE_CONTACT',
+        occurredAt: recorded.occurredAt,
+        channel: 'PHONE',
+        statusCode: recorded.outcome,
+        detailCode: recorded.blockingReason,
+        referenceId: recorded.id,
+        orderId: null,
+        rating: null,
+        label: recorded.direction,
+      };
+      this.card.set({ ...current, history: [entry, ...current.history] });
+    } catch (error) {
+      this.noticeFrom(error);
+    } finally {
+      this.recordBusy.set(false);
+    }
+  }
+
   private resetTabState(): void {
+    this.card.set(null);
+    this.cardError.set(null);
     this.revealedContacts.set(null);
     this.dateOfBirth.set(undefined);
     this.editingProfile.set(false);

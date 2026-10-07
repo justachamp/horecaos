@@ -12,6 +12,8 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.people.title': 'Xodimlar',
   'staff.people.lead':
     'Kim ishlaydi, har biri nima qila oladi va kimda boʻlmasligi kerak boʻlgan huquq bor.',
+  'staff.people.scopedLead':
+    'Bu yerda sizning filial yoki brendingiz xodimlari: ularga oʻz doirangiz ichida lavozim bera olasiz.',
   'staff.people.loading': 'Roʻyxat yuklanmoqda',
   'staff.people.denied': 'Bu boʻlimga kirish huquqi yoʻq',
   'staff.people.emptyRule':

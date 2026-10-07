@@ -129,10 +129,11 @@ export const NAVIGATION: readonly NavGroup[] = [
         label: 'shell.nav.staff',
         badge: null,
         spec: 'operations-spec/staff-and-access.md',
-        // `GrantController`'s roles and grants reads both demand this —
-        // held only by tenant-owner and tenant-admin (`PlatformRole`). A
-        // branch manager cannot open Staff today (row 9.1's own finding,
-        // ADR 0025's TENANT-scope limit) — see ADR 0103.
+        // `GrantController`'s company-wide roles and grants reads demand this
+        // at TENANT scope (tenant-owner, tenant-admin); since ADR 0103 a
+        // brand-manager and a location-manager hold it at their own scope too
+        // and reach their own team through `ScopedGrantController`'s routes —
+        // the rail asks "held anywhere", which is why she is admitted now.
         capability: 'IAM_GRANT_MANAGE',
       },
     ],

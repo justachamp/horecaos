@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import uz.horecaos.platform.customers.api.CustomersEvent;
 import uz.horecaos.platform.media.api.MediaEvent;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
@@ -76,6 +77,24 @@ class EventCatalogCompletenessTests {
                 .isNotEmpty();
         assertThat(registered)
                 .as("every permitted MediaEvent needs an ADR 0032 catalogue entry")
+                .containsAll(publishable);
+    }
+
+    @Test
+    void everyPublishableCustomersEventIsRegistered() {
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
+
+        List<String> publishable = Arrays.stream(CustomersEvent.class.getPermittedSubclasses())
+                .map(Class::getSimpleName)
+                .toList();
+
+        assertThat(publishable)
+                .as("the scan must actually find the ADR 0111 lead events it claims to check")
+                .containsExactlyInAnyOrder(
+                        "LeadRegistered", "LeadStatusChanged", "LeadAssignedToLocation", "LeadConverted");
+        assertThat(registered)
+                .as("every permitted CustomersEvent needs an ADR 0032 catalogue entry")
                 .containsAll(publishable);
     }
 

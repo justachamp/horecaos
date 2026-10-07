@@ -10,6 +10,8 @@ export const staffEn = {
   'staff.people.title': 'People',
   'staff.people.lead':
     'Who works here, what each of them may do, and who has access they should not.',
+  'staff.people.scopedLead':
+    'You see the people of your own branch or brand, and can hand them a job within it.',
   'staff.people.loading': 'Loading the list',
   'staff.people.denied': 'No access to this section',
   'staff.people.emptyRule':

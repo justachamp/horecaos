@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/customers.events/LeadStatusChanged.v1.schema.json",
+  "title": "LeadStatusChanged v1 payload",
+  "description": "A lead moved from one status to another (ADR 0111). A reschedule of a pending callback keeps its status and is not published. Two status codes and the lead id; nothing about the guest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "leadId",
+    "fromStatus",
+    "toStatus"
+  ],
+  "properties": {
+    "leadId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "fromStatus": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "CONTACTED",
+        "CALLBACK_SCHEDULED",
+        "CONVERTED",
+        "DECLINED",
+        "LOST"
+      ]
+    },
+    "toStatus": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "CONTACTED",
+        "CALLBACK_SCHEDULED",
+        "CONVERTED",
+        "DECLINED",
+        "LOST"
+      ]
+    }
+  }
+}

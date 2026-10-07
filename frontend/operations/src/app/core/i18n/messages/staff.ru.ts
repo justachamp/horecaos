@@ -12,6 +12,8 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.people.title': 'Люди',
   'staff.people.lead':
     'Кто работает, что каждый может делать, и у кого есть доступ, которого быть не должно.',
+  'staff.people.scopedLead':
+    'Здесь люди вашего филиала или бренда: вы можете дать им должность в его пределах.',
   'staff.people.loading': 'Загрузка списка',
   'staff.people.denied': 'Нет доступа к этому разделу',
   'staff.people.emptyRule':
