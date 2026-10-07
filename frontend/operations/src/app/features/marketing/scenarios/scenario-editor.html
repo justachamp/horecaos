@@ -14,7 +14,7 @@
     <div class="editor__skeleton" [attr.aria-label]="'marketing.campaigns.loading' | t"></div>
   } @else {
     @if (loadError(); as error) {
-      <div class="editor__band editor__band--error" role="alert">
+      <div class="editor__band editor__band--error" role="alert" data-testid="scenario-load-error">
         <span class="q-body-sm">{{ error }}</span>
       </div>
     }

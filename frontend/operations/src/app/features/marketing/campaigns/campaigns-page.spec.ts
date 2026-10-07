@@ -496,6 +496,17 @@ describe('CampaignsPage', () => {
       expect(host.querySelector('[data-testid="tab-contact-policy"]')).not.toBeNull();
     });
 
+    it('switches tab without leaving the address it is on: a docked campaign stays open', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="tab-offers"]')!
+        .click();
+
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
     it('shows the offers screen on its tab', async () => {
       await render([], CHANNELS, SIDE_APIS);
       const host = fixture.nativeElement as HTMLElement;

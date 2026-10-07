@@ -128,13 +128,6 @@ export interface ScenarioResultsView {
 export class ScenariosApi {
   private readonly api = inject(ApiClient);
 
-  async list(scope: BrandScope): Promise<readonly ScenarioSummaryView[]> {
-    const result = await firstValueFrom(
-      this.api.get<readonly ScenarioSummaryView[]>(marketingPaths.scenarios(scope)),
-    );
-    return result.value ?? [];
-  }
-
   async get(scope: BrandScope, campaignId: string): Promise<ScenarioView> {
     const result = await firstValueFrom(
       this.api.get<ScenarioView>(marketingPaths.scenario(scope, campaignId)),

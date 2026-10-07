@@ -11,6 +11,17 @@ that write say so in their first line.
 that needs its own approval; the version it replaces keeps running until the new one is
 launched, and nothing is edited in place.
 
+**In the console.** Everything below is also a screen, for someone without a token. Marketing,
+Campaigns, then the scenario: its pane has **What it decided, and why** (every block with its
+reason in words, whether it ends the guest's run or only holds the step, and the sentence the
+engine recorded), a field that narrows the log to one guest by account id (step 1), the counts
+of where the guests are (step 2), and **Did it work?** with the attribution model and window
+(step 6). The **Contact policy** tab is step 4 and lists every reason in step 1 with what it
+means; the **Offers** tab is where a step's offer is drafted, published and retired; and
+Automations, *Recent firings*, is the apology's run list. A channel that cannot deliver for the
+brand says so on the draft, with the reason in words: SMS names the gate in step 3, and email and
+push say they have no delivery path.
+
 ```bash
 export HORECAOS_HOST=...            # the console host
 export TENANT=...                   # tenant id (uuid)

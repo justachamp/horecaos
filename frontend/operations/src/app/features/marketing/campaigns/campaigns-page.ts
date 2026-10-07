@@ -17,7 +17,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { WiringSentence, isSelectable, wiringSentence } from '../channel-wiring';
+import { WiringSentence, wiringSentence } from '../channel-wiring';
 import { ContactPolicyPanel } from '../contact-policy/contact-policy-panel';
 import { OffersPanel } from '../offers/offers-panel';
 import { ScenarioEditor } from '../scenarios/scenario-editor';
@@ -330,11 +330,6 @@ export class CampaignsPage implements OnInit {
 
   protected switchView(next: CampaignsPageView): void {
     this.view.set(next);
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { view: next === 'campaigns' ? null : next, scenario: null },
-      queryParamsHandling: 'merge',
-    });
     if (next === 'suppressions' && !this.suppressionsLoaded()) {
       void this.loadSuppressions();
     }
@@ -504,10 +499,7 @@ export class CampaignsPage implements OnInit {
     this.newCampaignAudienceId.set(this.audiences()[0]?.audienceId ?? '');
     // The first channel that can deliver, not SMS by habit: SMS may be the one this brand's
     // account is not cleared to carry marketing on.
-    this.newCampaignChannel.set(
-      this.channels().find((view) => isSelectable(this.channels(), view.channel) && view.isWired)
-        ?.channel ?? 'SMS',
-    );
+    this.newCampaignChannel.set(this.channels().find((view) => view.isWired)?.channel ?? 'SMS');
     this.newCampaignTemplateKey.set('');
     this.newCampaignRecipientCap.set(1000);
     this.newCampaignCostCeilingMinor.set(null);

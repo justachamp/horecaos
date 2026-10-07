@@ -234,10 +234,14 @@ export class ScenarioEditor implements OnInit {
     return null;
   });
 
+  /** The draft being edited could not be read: saving steps over what nobody saw would be a guess. */
+  private readonly draftUnreadable = signal(false);
+
   protected readonly canSave = computed(
     () =>
       !this.submitting() &&
       !this.notDraft() &&
+      !this.draftUnreadable() &&
       this.problems().length === 0 &&
       this.formProblem() === null,
   );
@@ -292,7 +296,10 @@ export class ScenarioEditor implements OnInit {
             this.steps.set(view.steps.map((step, index) => stepFromView(step, index + 1)));
             this.nextUid = view.steps.length + 2;
           })
-          .catch((error) => this.loadError.set(this.describe(error))),
+          .catch((error) => {
+            this.draftUnreadable.set(true);
+            this.loadError.set(this.describe(error));
+          }),
       );
     } else if (this.audiences().length > 0) {
       this.audienceId.set(this.audiences()[0].audienceId);

@@ -547,6 +547,58 @@ describe('ScenarioEditor', () => {
     });
   });
 
+  it('will not save steps over a draft it could not read', async () => {
+    // An editor opened on a scenario the server does not know.
+    scenarios = {
+      create: vi.fn(),
+      replaceSteps: vi.fn(),
+      get: vi
+        .fn()
+        .mockRejectedValue(new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, null)),
+    };
+    await TestBed.configureTestingModule({
+      imports: [ScenarioEditor],
+      providers: [
+        { provide: ScenariosApi, useValue: scenarios },
+        { provide: OffersApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: ContactPolicyApi,
+          useValue: { defaults: vi.fn().mockRejectedValue(new Error('x')) },
+        },
+        {
+          provide: MarketingApi,
+          useValue: {
+            listChannels: vi.fn().mockResolvedValue([]),
+            listTemplates: vi.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: CurrentBrand,
+          useValue: {
+            scope: signal<BrandScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(ScenarioEditor);
+    fixture.componentRef.setInput('campaignId', 'missing');
+    host = fixture.nativeElement as HTMLElement;
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    // Make the one step on screen a perfectly good step: what is left to refuse the save is the
+    // fact that nobody saw what it would replace.
+    type('scenario-step-template-key', 'WIN_BACK_TG');
+    expect(host.querySelector('[data-testid="scenario-step-problem"]')).toBeNull();
+
+    expect(saveButton().disabled).toBe(true);
+    expect(host.querySelector('[data-testid="scenario-load-error"]')).not.toBeNull();
+  });
+
   it('shows the server’s refusal and keeps what was typed', async () => {
     await render();
     fillSmallest();

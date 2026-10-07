@@ -71,13 +71,6 @@ export class OffersApi {
     return result.value ?? [];
   }
 
-  async versions(scope: BrandScope, offerId: string): Promise<readonly OfferView[]> {
-    const result = await firstValueFrom(
-      this.api.get<readonly OfferView[]>(marketingPaths.offerVersions(scope, offerId)),
-    );
-    return result.value ?? [];
-  }
-
   /** Version 1 of a new lineage, as a draft. */
   async create(scope: BrandScope, request: OfferRequest): Promise<OfferView> {
     return firstValueFrom(

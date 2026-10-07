@@ -21,7 +21,7 @@ import {
 import { RuleSimulator, SimulatedRule } from '../../../shared/ui/rule-simulator';
 import { MarketingChannel } from '../../customers/segments/segments-api';
 import { describeApiError } from '../../orders/order-errors';
-import { WiringSentence, viewOf, wiringSentence } from '../channel-wiring';
+import { WiringSentence, isSelectable, viewOf, wiringSentence } from '../channel-wiring';
 import { ChannelView, MarketingApi } from '../marketing-api';
 import { refusalLabelKey } from '../refusal-explainer';
 import { AUTOMATION_CONDITION_CATALOGUE, simulatedAutomationRule } from './automation-conditions';
@@ -135,12 +135,13 @@ export class AutomationsPage implements OnInit {
   /** Each channel the form lists, whether it can be picked, and why not. */
   protected readonly channelOptions = computed(() =>
     this.channels.map((channel) => {
-      const view = viewOf(this.channelViews(), channel);
-      const wired = view?.isWired ?? true;
+      const wired = isSelectable(this.channelViews(), channel);
       return {
         channel,
         wired,
-        sentence: wired ? null : wiringSentence(channel, view?.notWiredReason ?? null),
+        sentence: wired
+          ? null
+          : wiringSentence(channel, viewOf(this.channelViews(), channel)?.notWiredReason ?? null),
       };
     }),
   );
