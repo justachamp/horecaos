@@ -396,7 +396,7 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.tariffs.detail.accrual': 'Hisoblash',
   'delivery.tariffs.detail.rounding': 'Yaxlitlash',
   'delivery.tariffs.detail.radiusFallback':
-    'Yoʻl rejimi: marshrut xizmati javob bermasa, toʻlov toʻgʻri chiziq boʻyicha {factor} koeffitsiyenti bilan hisoblanadi va hisobga RADIUS_FALLBACK belgisi qoʻyiladi.',
+    'Yoʻl rejimi hozir toʻgʻri chiziq boʻyicha ishlayapti: toʻlov toʻgʻri chiziq boʻyicha {factor} koeffitsiyenti bilan hisoblanadi va marshrut xizmati qayta javob bergunicha har bir hisobda RADIUS_FALLBACK belgisi qoʻyiladi.',
   'delivery.tariffs.detail.timeRulesHead': 'Choʻqqi soatlar',
   'delivery.tariffs.detail.discountsHead': 'Chegirmalar',
   'delivery.tariffs.band.set': 'Polosalar toʻplami',
@@ -413,8 +413,28 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.tariffs.draft.roadFactor': 'Aylanma koeffitsiyenti (bazis punkt, 10000 = 1,0)',
   'delivery.tariffs.draft.roadNeedsRouting':
     'Yoʻl rejimiga ulangan marshrut xizmati kerak. U boʻlmaguncha bu versiyani faollashtirish rad etiladi.',
-  'delivery.tariffs.draft.roadFallbackNote':
-    'Marshrut xizmati javob bermasa, toʻlov toʻgʻri chiziq boʻyicha aylanma koeffitsiyenti bilan hisoblanadi va hisobda RADIUS_FALLBACK belgisi boʻladi.',
+  'delivery.tariffs.detail.basis': 'Masofa qanday oʻlchanadi',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE': 'Filialdan toʻgʻri chiziq boʻyicha',
+  'delivery.tariffs.detail.basis.ROAD': 'Yoʻl boʻyicha, platformaning marshrut xizmati orqali',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE_FALLBACK':
+    'Toʻgʻri chiziq boʻyicha aylanma koeffitsiyenti bilan (marshrut xizmati javob bermayapti)',
+  'delivery.tariffs.detail.dataset': 'Marshrut maʼlumotlar toʻplami',
+  'delivery.tariffs.detail.basisEvidence.FEES':
+    'Bu versiya oxirgi {hours} soatda hisoblagan toʻlovlar boʻyicha: {road} ta yoʻl boʻyicha, {fallback} ta toʻgʻri chiziq boʻyicha.',
+  'delivery.tariffs.detail.basisEvidence.CONFIGURATION':
+    'Sozlamalar boʻyicha kutilmoqda: oxirgi {hours} soatda bu versiya birorta toʻlov hisoblamagan.',
+  'delivery.tariffs.draft.usePlatformRouting':
+    'Platforma marshrutidan foydalanish (tavsiya etiladi): yoʻlni platformaning oʻz xizmati oʻlchaydi, kirish maʼlumotlarini sozlash shart emas',
+  'delivery.tariffs.draft.basis.STRAIGHT_LINE':
+    'Masofa filialdan toʻgʻri chiziq boʻyicha hisoblanadi.',
+  'delivery.tariffs.draft.basis.ROAD_ON':
+    'Masofa yoʻl boʻyicha platformaning marshrut xizmati bilan oʻlchanadi, maʼlumotlar toʻplami {dataset}.',
+  'delivery.tariffs.draft.basis.ROAD_OFF':
+    'Platformaning marshrut xizmati hali yoqilmagan. U yoqilmaguncha toʻlov toʻgʻri chiziq boʻyicha {factor} koeffitsiyenti bilan hisoblanadi va har bir hisobda RADIUS_FALLBACK belgisi boʻladi.',
+  'delivery.tariffs.draft.basis.ROAD_UNKNOWN':
+    'Masofa yoʻl boʻyicha platformaning marshrut xizmati bilan oʻlchanadi. U javob bermasa, toʻlov toʻgʻri chiziq boʻyicha aylanma koeffitsiyenti bilan hisoblanadi va hisobda RADIUS_FALLBACK belgisi boʻladi.',
+  'delivery.tariffs.draft.basis.ROAD_NAMED_INSTALLATION':
+    'Masofa siz koʻrsatgan marshrut ulanmasi bilan oʻlchanadi. U javob bermasa, toʻlov toʻgʻri chiziq boʻyicha aylanma koeffitsiyenti bilan hisoblanadi va hisobda RADIUS_FALLBACK belgisi boʻladi.',
   'delivery.tariffs.draft.maxFee': 'Maksimal toʻlov (minimal birlik, ixtiyoriy)',
   'delivery.tariffs.draft.roundingStep': 'Yaxlitlash qadami (minimal birlik, ixtiyoriy)',
   'delivery.tariffs.draft.accrual': 'Km boʻyicha hisoblash',

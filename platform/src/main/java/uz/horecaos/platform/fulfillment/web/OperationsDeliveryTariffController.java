@@ -88,6 +88,20 @@ public class OperationsDeliveryTariffController {
                 .toList());
     }
 
+    @GetMapping("/routing-engine")
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Whether the platform routing engine is switched on, and the dataset it holds",
+            description = "What the tariff editor shows next to \"use platform routing\" before any "
+                    + "version has priced a fee (ADR 0147). Reads configuration and never calls the "
+                    + "engine, so opening the editor is not a routing request.")
+    public ResponseEntity<DeliveryTariffController.RoutingEngineResponse> routingEngine(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        var engine = routing.platformEngine();
+        return ResponseEntity.ok(
+                new DeliveryTariffController.RoutingEngineResponse(engine.engineEnabled(), engine.datasetVersion()));
+    }
+
     @GetMapping("/{tariffId}")
     @RequiresCapability(value = Capability.DELIVERY_TARIFF_READ, scope = ScopeType.BRAND)
     @Operation(

@@ -87,6 +87,18 @@ public class DeliveryTariffRoutingService {
     }
 
     /**
+     * Whether the platform's routing engine is switched on and which dataset it holds, for a
+     * tariff editor that has no live version yet to read it from.
+     *
+     * <p>Configuration, not a probe: the same statement {@link #routingOf} makes for a tariff
+     * with no fees, and for the same reason it never calls the engine.
+     */
+    @Transactional(readOnly = true)
+    public RoutingEngineStatus platformEngine() {
+        return routing.engineStatus(null);
+    }
+
+    /**
      * The routing facts for a tariff's live version, or null when it has none.
      *
      * <p>Reads nothing from the engine: whether it answers is what the fees say, and a

@@ -300,6 +300,39 @@ class RoadDistanceEndToEndTests {
     }
 
     @Test
+    @DisplayName("the editor can ask whether the engine is on before any version has priced a fee")
+    void theEditorReadsTheEngineBeforeAnyFee() throws Exception {
+        int hitsBefore = engine.hits();
+        JsonNode engineStatus = operationsGet(tariffsPath() + "/routing-engine");
+
+        assertThat(engineStatus.path("engineEnabled").asBoolean()).isTrue();
+        assertThat(engineStatus.path("datasetVersion").asString()).isEqualTo("2026-10-01");
+        assertThat(engine.hits())
+                .as("reading the editor is not a routing request")
+                .isZero();
+
+        // The read is capability-gated like every other read of a rate table.
+        MvcResult refused = mvc.perform(get(tariffsPath() + "/routing-engine")
+                        .with(tokenFor(UUID.randomUUID().toString())))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("the tariff read names the engine behind a platform-routing version, so the console can tell")
+    void theDetailNamesThePlatformEngine() throws Exception {
+        UUID tariffId = registerTariff();
+        draftRoadTariff(tariffId, true);
+        activateTariff(tariffId, 1);
+
+        JsonNode routing = tariffDetail(tariffId).path("routing");
+
+        assertThat(routing.path("provider").asString()).isEqualTo("osrm");
+        assertThat(routing.path("basisEvidence").asString()).isEqualTo("CONFIGURATION");
+        assertThat(routing.path("basis").asString()).isEqualTo("ROAD");
+    }
+
+    @Test
     @DisplayName("asking twice for platform routing leaves one installation, shared by both versions")
     void aSecondDraftSharesTheInstallation() throws Exception {
         UUID tariffId = registerTariff();

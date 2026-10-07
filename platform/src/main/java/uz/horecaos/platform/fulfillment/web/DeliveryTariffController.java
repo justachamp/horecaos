@@ -453,6 +453,9 @@ public class DeliveryTariffController {
      * @param engineEnabled          whether the platform has switched the engine on
      * @param installationStatus     the routing installation's own status, or null when
      *                               the version names none
+     * @param provider               the engine behind that installation ({@code osrm} for the
+     *                               platform's own), or null when the version names none; what
+     *                               tells the console a draft is on platform routing
      * @param engineDatasetVersion   the dataset the engine would answer from now, or null
      * @param lastDatasetVersion     the dataset on the most recent fee the engine measured
      *                               in the window, or null
@@ -463,6 +466,7 @@ public class DeliveryTariffController {
             int roadFactorBasisPoints,
             boolean engineEnabled,
             @Nullable String installationStatus,
+            @Nullable String provider,
             @Nullable String engineDatasetVersion,
             @Nullable String lastDatasetVersion,
             long roadFees,
@@ -478,6 +482,7 @@ public class DeliveryTariffController {
                     routing.roadFactorBasisPoints(),
                     routing.engine().engineEnabled(),
                     routing.engine().installationStatus(),
+                    routing.engine().provider(),
                     routing.engine().datasetVersion(),
                     routing.lastDatasetVersion(),
                     routing.roadFees(),
@@ -487,6 +492,14 @@ public class DeliveryTariffController {
                     routing.lastResolvedAt());
         }
     }
+
+    /**
+     * Whether the platform's routing engine is switched on, and which dataset it holds (ADR
+     * 0147). What the tariff editor shows beside "use platform routing" before any version
+     * has priced a fee. Configuration, never a probe of the engine.
+     */
+    public record RoutingEngineResponse(
+            boolean engineEnabled, @Nullable String datasetVersion) {}
 
     public record ActiveVersionResponse(
             int version,
