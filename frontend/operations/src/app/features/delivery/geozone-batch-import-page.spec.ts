@@ -8,6 +8,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
 import { MapBounds } from '../../shared/ui/map/map-provider';
 import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
+import { DeliveryTariffsApi, TariffSummaryResponse } from './delivery-tariffs-api';
 import { BatchImportResponse, DeliveryZonesApi, ZoneOutlineResponse } from './delivery-zones-api';
 import { GeozoneBatchImportPage } from './geozone-batch-import-page';
 import { MapRegion, MapRegionService } from './map-region';
@@ -24,6 +25,14 @@ const VALID_ROW = {
   priority: 0,
   geoJson:
     '{"type":"Polygon","coordinates":[[[69.2,41.3],[69.25,41.3],[69.225,41.35],[69.2,41.3]]]}',
+};
+
+const CITY_TARIFF: TariffSummaryResponse = {
+  tariffId: 'tariff-city',
+  code: 'CITY',
+  name: 'City tariff',
+  status: 'ACTIVE',
+  brandDefault: false,
 };
 
 const TASHKENT: MapBounds = {
@@ -119,7 +128,10 @@ describe('GeozoneBatchImportPage', () => {
   let provider: NullMapProvider;
   let regions: FakeRegions;
 
-  async function render(api: Partial<DeliveryZonesApi>): Promise<void> {
+  async function render(
+    api: Partial<DeliveryZonesApi>,
+    tariffs: Partial<DeliveryTariffsApi> = { list: vi.fn().mockResolvedValue([]) },
+  ): Promise<void> {
     provider = new NullMapProvider();
     regions = new FakeRegions();
     await TestBed.configureTestingModule({
@@ -136,6 +148,7 @@ describe('GeozoneBatchImportPage', () => {
           },
         },
         { provide: DeliveryZonesApi, useValue: api },
+        { provide: DeliveryTariffsApi, useValue: tariffs },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -158,6 +171,7 @@ describe('GeozoneBatchImportPage', () => {
           },
         },
         { provide: DeliveryZonesApi, useValue: {} },
+        { provide: DeliveryTariffsApi, useValue: { list: vi.fn() } },
         { provide: MapRegionService, useValue: new FakeRegions() },
       ],
     }).compileComponents();
@@ -431,5 +445,51 @@ describe('GeozoneBatchImportPage', () => {
     expect(host.querySelector('[data-testid="zone-import-review-dialog"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="zone-import-review-error"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="zone-import-live"]')).toBeNull();
+  });
+
+  describe('the tariff the activation review reports (ADR 0037: look before geometry governs a fee)', () => {
+    async function openReviewFor(
+      row: unknown,
+      tariffs: Partial<DeliveryTariffsApi>,
+    ): Promise<string> {
+      const importBatch = vi.fn().mockResolvedValue(committed());
+      await render({ importBatch, outline: vi.fn().mockResolvedValue(STORED) }, tariffs);
+      const host = await upload([row]);
+      click(host, 'zone-import-commit');
+      await flushMicrotasks();
+      fixture.detectChanges();
+      click(host, 'zone-import-review');
+      await flushMicrotasks();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      return host.querySelector('[data-testid="zone-review-tariff"]')?.textContent?.trim() ?? '';
+    }
+
+    it('names the tariff the imported version is bound to, not "no tariff"', async () => {
+      const shown = await openReviewFor(
+        { ...VALID_ROW, deliveryTariffId: CITY_TARIFF.tariffId },
+        { list: vi.fn().mockResolvedValue([CITY_TARIFF]) },
+      );
+
+      expect(shown).toBe('Tariff: CITY — City tariff');
+    });
+
+    it('still discloses that a tariff is bound when the brand’s tariff list cannot be read', async () => {
+      const shown = await openReviewFor(
+        { ...VALID_ROW, deliveryTariffId: CITY_TARIFF.tariffId },
+        { list: vi.fn().mockRejectedValue(new ApiError('FORBIDDEN', 403, null, null)) },
+      );
+
+      expect(shown).toBe('Tariff: tariff-city');
+    });
+
+    it('says no tariff is bound when the row carries none', async () => {
+      const shown = await openReviewFor(VALID_ROW, {
+        list: vi.fn().mockResolvedValue([CITY_TARIFF]),
+      });
+
+      expect(shown).toContain('No tariff is bound');
+    });
   });
 });
