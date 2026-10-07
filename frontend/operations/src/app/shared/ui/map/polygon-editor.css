@@ -1,0 +1,79 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.q-polygon-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.q-polygon-editor__hint {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.q-polygon-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.q-polygon-editor__button {
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  padding: 6px 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.q-polygon-editor__button[aria-pressed='true'] {
+  background: var(--q-info-tint);
+  border-color: var(--q-primary);
+}
+
+.q-polygon-editor__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.q-polygon-editor__corners {
+  border-collapse: collapse;
+}
+
+.q-polygon-editor__corners th {
+  padding-right: 12px;
+  text-align: start;
+  font-weight: normal;
+  color: var(--q-ink-subtle);
+}
+
+.q-polygon-editor__corners td {
+  padding: 2px 8px 2px 0;
+}
+
+.q-polygon-editor__corners input {
+  width: 14ch;
+  padding: 4px 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-family: var(--q-font-mono);
+}
+
+.q-polygon-editor__corners input[aria-invalid='true'] {
+  border-color: var(--q-error);
+}
+
+.q-polygon-editor__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.q-polygon-editor__problems {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border-radius: var(--q-radius);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}

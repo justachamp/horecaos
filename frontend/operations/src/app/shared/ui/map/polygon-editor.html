@@ -1,0 +1,107 @@
+<div class="q-polygon-editor" data-testid="q-polygon-editor">
+  <q-map-canvas [center]="center()" [fitTo]="fit()" [zoom]="12" (ready)="onReady($event)" />
+
+  @if (editable()) {
+    <p class="q-polygon-editor__hint q-caption">{{ 'ui.map.polygon.hint' | t }}</p>
+    <div class="q-polygon-editor__toolbar">
+      <button
+        type="button"
+        class="q-polygon-editor__button q-caption"
+        [attr.aria-pressed]="drawing()"
+        (click)="toggleDrawing()"
+        data-testid="q-polygon-draw"
+      >
+        {{ (drawing() ? 'ui.map.polygon.stopDrawing' : 'ui.map.polygon.draw') | t }}
+      </button>
+      <button
+        type="button"
+        class="q-polygon-editor__button q-caption"
+        (click)="addCorner()"
+        data-testid="q-polygon-add-corner"
+      >
+        {{ 'ui.map.polygon.addCorner' | t }}
+      </button>
+      <button
+        type="button"
+        class="q-polygon-editor__button q-caption"
+        [disabled]="ring().length === 0"
+        (click)="clear()"
+        data-testid="q-polygon-clear"
+      >
+        {{ 'ui.map.polygon.clear' | t }}
+      </button>
+    </div>
+  }
+
+  @if (ring().length > 0) {
+    <table class="q-polygon-editor__corners" data-testid="q-polygon-corners">
+      <caption class="q-visually-hidden">
+        {{
+          'ui.map.polygon.corners' | t
+        }}
+      </caption>
+      <tbody>
+        @for (corner of ring(); track $index; let i = $index) {
+          <tr data-testid="q-polygon-corner">
+            <th scope="row" class="q-caption">
+              {{ 'ui.map.polygon.corner' | t: { n: i + 1 } }}
+            </th>
+            <td>
+              <input
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                [value]="corner.latitude"
+                [disabled]="!editable()"
+                [attr.aria-label]="'ui.map.latitude' | t"
+                [attr.aria-invalid]="rowErrors().has(i) ? 'true' : null"
+                (change)="editCorner(i, 'latitude', $any($event.target).value)"
+                data-testid="q-polygon-corner-latitude"
+              />
+            </td>
+            <td>
+              <input
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                [value]="corner.longitude"
+                [disabled]="!editable()"
+                [attr.aria-label]="'ui.map.longitude' | t"
+                [attr.aria-invalid]="rowErrors().has(i) ? 'true' : null"
+                (change)="editCorner(i, 'longitude', $any($event.target).value)"
+                data-testid="q-polygon-corner-longitude"
+              />
+            </td>
+            <td>
+              @if (editable()) {
+                <button
+                  type="button"
+                  class="q-polygon-editor__button q-caption"
+                  [attr.aria-label]="'ui.map.polygon.removeCorner' | t: { n: i + 1 }"
+                  (click)="removeCorner(i)"
+                  data-testid="q-polygon-remove-corner"
+                >
+                  ✕
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (rowErrors().size > 0) {
+    <p class="q-polygon-editor__error q-caption" role="alert" data-testid="q-polygon-row-error">
+      {{ 'ui.map.coordinate.invalid' | t }}
+    </p>
+  }
+
+  @if (shown().length > 0) {
+    <ul class="q-polygon-editor__problems" role="alert" data-testid="q-polygon-problems">
+      @for (item of shown(); track item.problem) {
+        <li class="q-caption" [attr.data-problem]="item.problem">{{ item.key | t }}</li>
+      }
+    </ul>
+  }
+</div>
