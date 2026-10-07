@@ -14,9 +14,13 @@
   saved views (`SavedViewsStore`, `q-data-table.views.<viewId>`), the data table's hidden
   columns (`TableFilterStore`, `<key>.hiddenColumns`) and split-pane widths. The order
   board does not use the data table and has no column picker; it draws none of
-  created-by, accepted-by, courier type, source icon or courier ETA, although
-  `OrderSummaryResponse` carries `createdBy*`, `acceptedBy*` and `discountMinor`. «Моя
-  работа» renders a `q-locked-state` band that says interface personalization is not
+  created-by, accepted-by, courier type, source icon or courier ETA. What
+  `OrderSummaryResponse` carries for them is uneven: `createdBy*` and `acceptedBy*` are an
+  actor type and a subject, not a name (the order detail resolves names server-side,
+  row `9.2d`), `discountMinor` and `courierId` are carried (the board already resolves
+  the courier against a roster that names its type), and there is no courier ETA and no
+  source (`origin` is a column of `ordering.orders` that the response does not select).
+  «Моя работа» renders a `q-locked-state` band that says interface personalization is not
   built (`my-work-page`). ADR 0030 has no user level: `ResourceScope.ScopeType` is
   `PLATFORM`, `TENANT`, `BRAND`, `LOCATION`, `tenant.configuration_values` and
   `tenant.policies` carry the same four in `ck_*_scope_type` (V0005), and a
@@ -48,6 +52,15 @@
     default column set is a different thing from a person's choice and would be an
     ordinary ADR 0030 `TENANT` key, not a preference. Proposed default: not built; the
     code-owned default set applies until a person changes it.
+  - **Whether the column picker waits for the board to carry courier ETA and source**
+    (product, engineering). Row `1.1` lists five columns the board does not draw, and
+    the board read can supply three of them today (`createdBy`, `acceptedBy` with one
+    names batch, and `courierType` from the roster it already fetches) and neither of the
+    other two. Proposed default: the picker ships with the columns the board read can
+    fill; `courierEta` and `source` are added one at a time, each under a
+    `document_schema` bump, when the board read carries their field (Specification,
+    «Board columns»), and row `1.1` keeps those two as its residue. Blocks: nothing in
+    the build; blocks closing row `1.1`.
   - **Whether the data already in a person's browser moves to their account**
     (product, engineering). Proposed default: never automatically. A device that holds
     saved views or a column choice offers once, per device, «Сохранить мои настройки в
@@ -175,8 +188,12 @@ on the device.**
    The order board's column vocabulary: always shown and not hideable `number`, `time`,
    `total`, `status`, `actions`; shown by default and hideable `branch` (and hidden
    anyway for a single-branch tenant, as `orders.md` §2.5 says), `channel`, `customer`,
-   `items`, `payment`, `courier`; off by default and addable `createdBy`, `acceptedBy`,
-   `courierType`, `courierEta`, `source`, `discount`. A saved view's filter fields are a
+   `items`, `payment`, `courier`; off by default and addable in v1 `createdBy`,
+   `acceptedBy`, `courierType`, `discount`. A column is offered only if the board read
+   gives its cell something to draw (Specification, «Board columns»). The IA row also
+   names courier ETA and a source icon, and the board read carries neither, so
+   `courierEta` and `source` are not in v1 and are added, one `document_schema` bump
+   each, when the board read carries their field. A saved view's filter fields are a
    closed list: `allBranches`, `channelCode`, `origin` (`HORECAOS`, `MARKETPLACE`),
    `fulfillmentMode`, `paymentMethodCode`, `paymentStatus`, `fiscalStatus`, `lateOnly`,
    `problemOnly`, `callbackRequested`, `mineOnly`, and a relative `dateRange` token
@@ -246,7 +263,8 @@ on the device.**
 ### Positive
 
 - A person's column layout, saved filters, default branch and language follow them to any
-  machine, which closes row `0.2d` and unblocks the board's column picker in row `1.1`.
+  machine, which closes row `0.2d` and unblocks the board's column picker in row `1.1`
+  (which keeps courier ETA and source as its residue until the board read carries them).
 - ADR 0030, ADR 0025 and `ResourceScope` are untouched, so nothing that resolves a
   setting or checks a capability can be affected by a feature about a column.
 - The store holds no personal data beyond the subject id in its key, and the document that
@@ -317,7 +335,8 @@ ORDER_BOARD  { columns: { show: [ColumnKey], hide: [ColumnKey] },
                                           lateOnly?, problemOnly?, callbackRequested?, mineOnly?,
                                           dateRange?: TODAY | YESTERDAY | LAST_7_DAYS | THIS_MONTH } } ] (max 20) }
 ColumnKey    branch | channel | customer | items | payment | courier |
-             createdBy | acceptedBy | courierType | courierEta | source | discount
+             createdBy | acceptedBy | courierType | discount
+             (courierEta and source join by a later document_schema bump: Board columns)
 ```
 
 Validation refuses an unknown key, an unknown enumeration value, a duplicate key in
@@ -327,6 +346,27 @@ a run of digits long enough to be a phone number. `channelCode` and
 `paymentMethodCode` are checked against the shape of the tenant's own codes, not
 against a list, since tenants define them. The schema version is bumped when a surface's
 shape changes, and the reader upgrades an older document on read.
+
+### Board columns: what each addable column draws from
+
+The picker offers a column only when the board read gives its cell something to draw, so
+it cannot offer one that renders empty. `OrderSummaryResponse` (`OperationsOrderController`)
+carries `discountMinor`, `createdByActorType` and `createdByActorId`, `acceptedByActorType`
+and `acceptedByActorId`, and `courierId`. It carries no courier type, no courier ETA and no
+source, and its actor fields are a subject and not a name.
+
+| Column | In v1 | Draws from | Board-read change |
+|---|---|---|---|
+| `discount` | yes | `discountMinor`, with the order's currency | none |
+| `courierType` | yes | `courierId` resolved against the roster the board already fetches for its Курьер column (`courierTypeName`); «—» for an unassigned or partner-carried order, as the Курьер cell | none |
+| `createdBy`, `acceptedBy` | yes | the actor fields, resolved to a name | `OrderQueryService` resolves the page's subjects with one `StaffDirectory#namesOf(tenantId, subjects)` batch, as the order detail (row `9.2d`) and `OperatorTodayLeaderboardController` do, and `OrderSummaryResponse` gains `createdByDisplayName` and `acceptedByDisplayName`, null for a non-staff actor; names go only to callers `order.read` already admits |
+| `courierEta` | no | the ETA captured for the order's live delivery plan, `fulfillment.api.CourierEtaPort#etaByOrders`, which exists for the kitchen board (row `2.1a`); it answers only for a partner-carried plan and is a snapshot of the winning quote, not a live feed | one batched `CourierEtaPort` call per page, in the manner of `OrderTablesPort` and `ActiveCourierAssignmentsPort`, and `courierEtaAt` on the response |
+| `source` | no | `ordering.orders.origin` (`HORECAOS` or `MARKETPLACE`, V0038) with `channelCode`, drawn as an icon from a closed set the console owns | `origin` on the response; no port, the column is `ordering`'s own |
+
+The two deferred columns need a board-read change of their own and a product answer (what
+an ETA means for an order a house courier carries, which icons exist), which is why they
+wait. Adding either later is a `document_schema` bump, and because a document stores a
+change from the default, an older document is unaffected.
 
 ### APIs (ADR 0031) and limits (ADR 0033)
 
@@ -389,8 +429,15 @@ for a profile edit covers `ui_locale`. A preference is never read by any other m
 - **Drift**: the Java column enumeration and the generated TypeScript union agree, and the
   board's column registry is a `satisfies` over it.
 - **Board**: a hidden column is not drawn, an added optional column (`createdBy`) is drawn
-  from the field the response already carries, and a column added by a later release is
-  shown to a person whose stored document predates it.
+  from the name the board read resolved for the page, and a column added by a later
+  release is shown to a person whose stored document predates it.
+- **Every offered column renders**: the console's column registry maps each `ColumnKey` to
+  a cell reading a field of the generated `OrderSummaryResponse` type (a `satisfies` over
+  the response type), so a key whose field the response lacks fails the build; for each
+  key, a board fixture with the field present draws a non-empty cell, and one with it
+  absent (an unassigned order, a non-staff actor) draws «—» and never a raw subject or
+  id. The names batch is one `namesOf` call per page, and a name appears only for a
+  caller `order.read` admits.
 
 ## Rollout and rollback
 
@@ -413,13 +460,22 @@ ADR 0030 changed.
       anonymise); the report-only mode is unchanged.
 - [ ] `OwnPreferences`, the mirror and its sign-out clear; the precedence rule in
       `I18n` and `CurrentLocation`.
-- [ ] Column picker in the shared library; the board's columns, including the five
-      columns the row `1.1` note lists, drawn from the response.
+- [ ] Column picker in the shared library; the board's columns. Of the five the row `1.1`
+      note lists, `createdBy` and `acceptedBy` need the names batch (next item),
+      `courierType` draws from the roster the board already fetches, and `courierEta`
+      and `source` need a board-read extension and are not in v1; `discount` is carried
+      and ships.
+- [ ] Board read: one `StaffDirectory#namesOf` batch per page, `createdByDisplayName` and
+      `acceptedByDisplayName` on `OrderSummaryResponse`, the OpenAPI baselines and the
+      renderer registry typed against the regenerated client.
+- [ ] A later release, one `document_schema` bump each, not blocking this record:
+      `courierEta` (a batched `CourierEtaPort` read and `courierEtaAt`) and `source`
+      (`origin` on the response), then add them to `ColumnKey`.
 - [ ] Saved views from the server; the one-time per-device offer.
 - [ ] «Интерфейс» section in «Мой профиль»; the `q-locked-state` band on «Моя работа»
       replaced by a link; strings in three languages.
 - [ ] `0.2d` and `1.1` rows of the gap map and the parity matrix's open question updated
-      when this lands.
+      when this lands (`1.1` stays PARTIAL for courier ETA and source).
 
 ## Exit criteria
 
@@ -445,7 +501,9 @@ the capability model are byte-for-byte what they were.
 - `platform/docs/delever-parity-matrix.md` «Личный кабинет (Account) и BETA версия - V2»,
   including its open questions
 - `ResourceScope`, `ScopeResolution`, `ConfigurationKey`, `V0005`, `V0453`,
-  `StaffSelfController`, `StaffSelfAuthorized`
+  `StaffSelfController`, `StaffSelfAuthorized`, `OrderSummaryResponse`
+  (`OperationsOrderController`), `OrderQueryService`, `StaffDirectory`, `CourierEtaPort`,
+  `ActiveCourierAssignmentsPort`, `OrderTablesPort`; `V0038` (`ordering.orders.origin`)
 - `frontend/operations/src/app/core/auth/own-profile.ts`, `core/i18n/i18n.ts`
   (`hasStoredLocale`), `core/auth/current-location.ts`, `core/auth/brand-choice.ts`,
   `features/orders/order-queue-filter-state.ts`, `shared/ui/table/saved-views-store.ts`,
