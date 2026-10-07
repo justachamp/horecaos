@@ -652,6 +652,13 @@ public enum PlatformRole {
             "brand-manager",
             ScopeType.BRAND,
             EnumSet.of(
+                    // ADR 0103: the brand's own team. The same capability the owner holds, at the
+                    // brand: GrantManagementService.requireGrantable refuses a job this bundle does
+                    // not hold in full, and refuses any job broader than the brand, so a brand
+                    // manager reaches her brand's people and no other. Held on top of the routes
+                    // that name a brand in the path -- the tenant-wide grants routes still need the
+                    // capability at TENANT scope.
+                    IAM_GRANT_MANAGE,
                     // ADR 0139: a brand manager sees the people of their brand and edits none of
                     // them -- changing a person is the branch manager's and above.
                     STAFF_PROFILE_READ,
@@ -722,6 +729,11 @@ public enum PlatformRole {
             "location-manager",
             ScopeType.LOCATION,
             EnumSet.of(
+                    // ADR 0103: "the Chilonzor manager sees Chilonzor's team" and hands one of them
+                    // a job. Held at the branch only: the grants routes that name a location in the
+                    // path authorise against it, the tenant-wide ones still need TENANT scope, and
+                    // requireGrantable bounds what she can confer to what this bundle holds in full.
+                    IAM_GRANT_MANAGE,
                     // ADR 0139: the branch's own people. The routes at LOCATION scope refuse a
                     // change to anyone with a job outside this branch, and answer "no such
                     // member" for a person of a sibling branch.

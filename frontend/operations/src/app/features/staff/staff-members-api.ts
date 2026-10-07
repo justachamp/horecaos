@@ -8,6 +8,7 @@ import { Page } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { EmploymentStatus, StaffMember } from '../../core/api/staff-member';
 import { staffPaths } from '../../core/api/staff-paths';
+import { ManagedPlace, StaffReach } from './staff-reach';
 
 export type { EmploymentStatus, StaffMember };
 
@@ -100,6 +101,7 @@ export interface EmergencyContactInput {
 @Injectable({ providedIn: 'root' })
 export class StaffMembersApi {
   private readonly api = inject(ApiClient);
+  private readonly reach = inject(StaffReach);
 
   /**
    * Everyone the tenant keeps a record for, ended people included. The list
@@ -108,10 +110,44 @@ export class StaffMembersApi {
    * because a name is ciphertext in the database.
    */
   async list(tenantId: string): Promise<readonly StaffMember[]> {
+    if (this.reach.scoped()) {
+      return this.listWithin();
+    }
     const result = await firstValueFrom(
       this.api.get<Page<StaffMember>>(staffPaths.members(tenantId)),
     );
     return result.value.items;
+  }
+
+  /**
+   * A branch or brand manager's own people (ADR 0103): one read per place of hers,
+   * each through the route her grant covers, merged on the member id.
+   */
+  private async listWithin(): Promise<readonly StaffMember[]> {
+    const lists = await Promise.all(
+      this.reach
+        .places()
+        .map((place) =>
+          firstValueFrom(this.api.get<Page<StaffMember>>(this.placeMembersPath(place))).then(
+            (result) => result.value.items,
+          ),
+        ),
+    );
+    const byId = new Map<string, StaffMember>();
+    for (const member of lists.flat()) {
+      byId.set(member.memberId, member);
+    }
+    return Array.from(byId.values());
+  }
+
+  private placeMembersPath(place: ManagedPlace): string {
+    return place.locationId === null
+      ? staffPaths.brandMembers(place.tenantId, place.brandId)
+      : staffPaths.locationMembers({
+          tenantId: place.tenantId,
+          brandId: place.brandId,
+          locationId: place.locationId,
+        });
   }
 
   /**
@@ -127,10 +163,38 @@ export class StaffMembersApi {
 
   /** One person in full: phone, employee number and a short-lived photo link. */
   async detail(tenantId: string, memberId: string): Promise<StaffMember> {
+    if (this.reach.scoped()) {
+      return this.detailWithin(memberId);
+    }
     const result = await firstValueFrom(
       this.api.get<StaffMember>(staffPaths.member(tenantId, memberId)),
     );
     return result.value;
+  }
+
+  /**
+   * The first of her places that knows the person. Every other place answers "no such
+   * member" for someone outside its reach, which is the server's deliberate
+   * non-answer, so it is skipped rather than shown.
+   */
+  private async detailWithin(memberId: string): Promise<StaffMember> {
+    let last: unknown = new Error('No place of hers reaches this person');
+    for (const place of this.reach.places()) {
+      const path =
+        place.locationId === null
+          ? staffPaths.brandMember(place.tenantId, place.brandId, memberId)
+          : staffPaths.locationMember(
+              { tenantId: place.tenantId, brandId: place.brandId, locationId: place.locationId },
+              memberId,
+            );
+      try {
+        const result = await firstValueFrom(this.api.get<StaffMember>(path));
+        return result.value;
+      } catch (error) {
+        last = error;
+      }
+    }
+    throw last;
   }
 
   /** `staff.profile.manage`. Replaces the personal and employment fields; `version` is the record's, from the read. */

@@ -26,6 +26,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService;
@@ -36,6 +37,7 @@ import uz.horecaos.platform.tenancy.application.invitations.StaffInvitationServi
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
+import uz.horecaos.platform.web.authorization.ScopeNotFoundException;
 import uz.horecaos.platform.web.cache.RateLimiter;
 
 /**
@@ -67,16 +69,19 @@ public class StaffInvitationController {
     private final StaffInvitationService staffInvitations;
     private final CurrentActor currentActor;
     private final RateLimiter rateLimiter;
+    private final ResourceScopeVerifier scopes;
 
     public StaffInvitationController(
             OwnerInvitationService ownerInvitations,
             StaffInvitationService staffInvitations,
             CurrentActor currentActor,
-            RateLimiter rateLimiter) {
+            RateLimiter rateLimiter,
+            ResourceScopeVerifier scopes) {
         this.ownerInvitations = ownerInvitations;
         this.staffInvitations = staffInvitations;
         this.currentActor = currentActor;
         this.rateLimiter = rateLimiter;
+        this.scopes = scopes;
     }
 
     // ------------------------------------------------------- the invited person's side (public)
@@ -186,6 +191,68 @@ public class StaffInvitationController {
                         body.locale() == null ? "ru" : body.locale()),
                 ActorRef.user(currentActor.get().subject(), null),
                 correlationId);
+        return ResponseEntity.ok(new StaffInvitationCreatedResponse(
+                created.invitationId(), created.principalSubject(), created.grantId(), created.inviteLink()));
+    }
+
+    /**
+     * ADR 0103: inviting a colleague into the branch the path names, for the
+     * manager of that branch. The tenant route above needs {@code
+     * iam.grant.manage} at TENANT scope; this one needs it at the location, and
+     * the job is given at that location and no other -- the scope is the path's,
+     * never the body's.
+     */
+    @PostMapping("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/invitations")
+    @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, scope = ResourceScope.ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Invite a colleague into this branch",
+            description = "As the company-wide invitation, but the job is given at this branch and the "
+                    + "caller needs iam.grant.manage here, not company-wide. A job broader than a "
+                    + "branch is refused, as is one she does not hold in full.")
+    public ResponseEntity<StaffInvitationCreatedResponse> inviteAtLocation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody ScopedStaffInvitationRequest body) {
+        return invitedAt(tenantId, ResourceScope.location(tenantId, brandId, locationId), body);
+    }
+
+    /** The brand route: at the brand, or at one of its branches when {@code locationId} is given. */
+    @PostMapping("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/staff/invitations")
+    @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, scope = ResourceScope.ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Invite a colleague into this brand",
+            description = "As the branch invitation, at brand level; name a branch of this brand with "
+                    + "locationId to give the job there. A branch of another brand answers not-found.")
+    public ResponseEntity<StaffInvitationCreatedResponse> inviteInBrand(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody BrandStaffInvitationRequest body) {
+        ResourceScope target = body.locationId() == null
+                ? ResourceScope.brand(tenantId, brandId)
+                : ResourceScope.location(tenantId, brandId, body.locationId());
+        if (!scopes.exists(target)) {
+            throw new ScopeNotFoundException(target);
+        }
+        return invitedAt(tenantId, target, body.asScoped());
+    }
+
+    private ResponseEntity<StaffInvitationCreatedResponse> invitedAt(
+            UUID tenantId, ResourceScope scope, ScopedStaffInvitationRequest body) {
+        StaffInvitationService.Created created = staffInvitations.invite(
+                tenantId,
+                new InviteCommand(
+                        body.firstName().strip(),
+                        body.lastName().strip(),
+                        body.phone().strip(),
+                        blankToNull(body.email()),
+                        body.roleCode(),
+                        scope,
+                        body.reason(),
+                        body.validUntil(),
+                        body.locale() == null ? "ru" : body.locale()),
+                ActorRef.user(currentActor.get().subject(), null),
+                UUID.randomUUID().toString());
         return ResponseEntity.ok(new StaffInvitationCreatedResponse(
                 created.invitationId(), created.principalSubject(), created.grantId(), created.inviteLink()));
     }
@@ -318,6 +385,52 @@ public class StaffInvitationController {
         public String toString() {
             return "StaffInvitationRequest[roleCode=" + roleCode + ", brandId=" + brandId + ", locationId=" + locationId
                     + ", validUntil=" + validUntil + "]";
+        }
+    }
+
+    /**
+     * {@link StaffInvitationRequest} without the place: the path names it (ADR 0103).
+     *
+     * @param phone the identifier this market actually uses; required
+     */
+    public record ScopedStaffInvitationRequest(
+            @NotBlank @Size(max = 100) String firstName,
+            @NotBlank @Size(max = 100) String lastName,
+            @NotBlank @Size(min = 9, max = 20) String phone,
+            @Email @Size(max = 255) @Nullable String email,
+            @NotBlank @Size(max = 64) String roleCode,
+            @NotBlank @Size(max = 1000) String reason,
+            @Nullable Instant validUntil,
+            @Nullable String locale) {
+
+        /** A record's generated {@code toString} would print the name, phone and email. */
+        @Override
+        public String toString() {
+            return "ScopedStaffInvitationRequest[roleCode=" + roleCode + ", validUntil=" + validUntil + "]";
+        }
+    }
+
+    /** The brand route's body: {@link ScopedStaffInvitationRequest} plus an optional branch of that brand. */
+    public record BrandStaffInvitationRequest(
+            @NotBlank @Size(max = 100) String firstName,
+            @NotBlank @Size(max = 100) String lastName,
+            @NotBlank @Size(min = 9, max = 20) String phone,
+            @Email @Size(max = 255) @Nullable String email,
+            @NotBlank @Size(max = 64) String roleCode,
+            @Nullable UUID locationId,
+            @NotBlank @Size(max = 1000) String reason,
+            @Nullable Instant validUntil,
+            @Nullable String locale) {
+
+        ScopedStaffInvitationRequest asScoped() {
+            return new ScopedStaffInvitationRequest(
+                    firstName, lastName, phone, email, roleCode, reason, validUntil, locale);
+        }
+
+        /** A record's generated {@code toString} would print the name, phone and email. */
+        @Override
+        public String toString() {
+            return "BrandStaffInvitationRequest[roleCode=" + roleCode + ", locationId=" + locationId + "]";
         }
     }
 

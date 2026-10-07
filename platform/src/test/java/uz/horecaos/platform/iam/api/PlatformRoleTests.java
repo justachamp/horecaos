@@ -300,6 +300,43 @@ class PlatformRoleTests {
                 .isTrue();
     }
 
+    /**
+     * ADR 0103's default: the same capability, held at their own scope, and by no
+     * bundle that is not a manager of something. A cook, a finance clerk, a
+     * dispatcher and a support agent administer nobody's access, and a support
+     * session never does (the test above pins that one).
+     */
+    @Test
+    void grantManagementIsHeldByTheOwnerTheAdministratorAndTheTwoManagersOnly() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.IAM_GRANT_MANAGE))
+                        .toList())
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER);
+        assertThat(PlatformRole.LOCATION_MANAGER.scopeType())
+                .as("held at the branch: the bundle is granted at LOCATION, so the capability never reaches the tenant")
+                .isEqualTo(ScopeType.LOCATION);
+    }
+
+    /**
+     * What the branch manager can give is her own bundle's subset, so the two jobs
+     * below her are exactly what the picker offers (ADR 0103 Question 2's default).
+     * Written as a fact about the bundles so a later capability added to
+     * {@code location-staff} that the manager lacks fails here, loudly, rather than
+     * silently shrinking what she can hand out.
+     */
+    @Test
+    void aLocationManagerHoldsEverythingTheJobsBelowHerCarry() {
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities())
+                .containsAll(PlatformRole.LOCATION_STAFF.capabilities());
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities())
+                .containsAll(PlatformRole.KITCHEN_DEVICE.capabilities());
+    }
+
     @Test
     void integrationInstallationIsLimitedToTenantOwnerAndAdmin() {
         assertThat(Arrays.stream(PlatformRole.values())
