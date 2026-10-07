@@ -460,6 +460,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Платёжный аккаунт для карт приостановлен',
       'uz-Latn': 'Karta uchun toʻlov hisobi toʻxtatildi',
     },
+    'commercial.einvoicing.classification.updated': {
+      en: 'Electronic invoice line classification changed',
+      ru: 'Изменена классификация позиций электронного счёта-фактуры',
+      'uz-Latn': 'Elektron hisob-faktura qatorlari tasnifi oʻzgartirildi',
+    },
     'commercial.entitlement_override.granted': {
       en: 'Commercial entitlement override granted',
       ru: 'Коммерция право доступа переопределение предоставлено',
