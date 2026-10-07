@@ -58,6 +58,7 @@ class CourierBroadcastAndAttributionLinkTests {
     private CourierBroadcastService broadcasts;
     private AttributionLinkService links;
     private FakeCampaignMessagePort port;
+    private boolean couriersAddressable;
     private RecordingAuditRecorder audit;
 
     private UUID courierType;
@@ -93,7 +94,9 @@ class CourierBroadcastAndAttributionLinkTests {
 
         port = new FakeCampaignMessagePort();
         audit = new RecordingAuditRecorder();
-        broadcasts = new CourierBroadcastService(new JdbcCourierBroadcastStore(jdbc), port, audit, CLOCK);
+        couriersAddressable = true;
+        broadcasts = new CourierBroadcastService(
+                new JdbcCourierBroadcastStore(jdbc), port, () -> couriersAddressable, audit, CLOCK);
         links = new AttributionLinkService(
                 new JdbcAttributionLinkStore(jdbc), new JdbcCampaignStore(jdbc), audit, CLOCK);
     }
@@ -159,6 +162,41 @@ class CourierBroadcastAndAttributionLinkTests {
         CourierBroadcastRow row = broadcasts.require(TENANT, broadcastId);
         assertThat(row.status()).isEqualTo("FAILED");
         assertThat(row.refusalReason()).contains("SMS");
+    }
+
+    @Test
+    @DisplayName(
+            "an account not cleared for courier traffic refuses the send with the stable code, and the courier purpose is what was asked")
+    void sendRefusesWhenTheAccountIsNotClearedForCouriers() {
+        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Road closure", AUTHOR);
+        port.refusingPurpose("COURIER");
+
+        ApiException failure =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        assertThat(broadcasts.require(TENANT, broadcastId).refusalReason()).contains("SMS_PURPOSE_NOT_PERMITTED");
+        assertThat(port.wiringAsked())
+                .as("a courier broadcast reads the courier purpose, not the marketing one")
+                .contains("SMS/COURIER")
+                .doesNotContain("SMS/MARKETING");
+    }
+
+    @Test
+    @DisplayName(
+            "a cleared account still cannot message couriers that nothing can address, and the broadcast is not recorded as sent")
+    void sendRefusesWhenNoCourierCanBeAddressed() {
+        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Road closure", AUTHOR);
+        couriersAddressable = false;
+
+        ApiException failure =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        CourierBroadcastRow row = broadcasts.require(TENANT, broadcastId);
+        assertThat(row.status()).isEqualTo("FAILED");
+        assertThat(row.refusalReason()).contains(CourierBroadcastService.COURIERS_NOT_ADDRESSABLE);
+        assertThat(row.recipientCount()).isZero();
     }
 
     @Test

@@ -1,0 +1,131 @@
+:host {
+  display: block;
+}
+
+.scenario__section {
+  margin-bottom: 20px;
+}
+
+.scenario__list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scenario__list li {
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.scenario__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+}
+
+.scenario__facts dt {
+  color: var(--q-ink-subtle);
+  font-size: var(--q-type-caption);
+}
+
+.scenario__facts dd {
+  margin: 0;
+  font-size: var(--q-type-body-sm);
+}
+
+.scenario__counts {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.scenario__counts li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 10px;
+  font-size: var(--q-type-body-sm);
+}
+
+.scenario__lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.scenario__lookup button,
+.scenario__actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.scenario__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.scenario__hint {
+  margin: 4px 0 8px;
+  color: var(--q-ink-muted);
+}
+
+.scenario__warn {
+  margin: 4px 0;
+  color: var(--q-warning-text);
+}
+
+.scenario__band {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.scenario__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scenario__table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.scenario__table td {
+  padding: 4px 8px;
+  font-size: var(--q-type-body-sm);
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.scenario__why summary {
+  cursor: pointer;
+}
+
+.scenario__why p {
+  margin: 4px 0 0;
+}
+
+.q-field input,
+.q-field select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+  font-family: inherit;
+}

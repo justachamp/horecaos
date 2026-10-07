@@ -156,4 +156,77 @@ export const marketingPaths = {
   automationPreview(scope: BrandScope, ruleId: string): string {
     return `${this.automation(scope, ruleId)}/preview`;
   },
+
+  /**
+   * `ScenarioController` — per-guest scenario campaigns beside the one-off broadcast
+   * (ADR 0112). A scenario is a campaign, so its estimate, submission, approval, launch
+   * and halt are the ordinary `campaign*` paths above; these are only what a scenario
+   * alone has.
+   */
+  scenarios(scope: BrandScope): string {
+    return `${base(scope)}/scenarios`;
+  },
+
+  scenario(scope: BrandScope, campaignId: string): string {
+    return `${this.scenarios(scope)}/${enc(campaignId)}`;
+  },
+
+  scenarioSteps(scope: BrandScope, campaignId: string): string {
+    return `${this.scenario(scope, campaignId)}/steps`;
+  },
+
+  scenarioRevisions(scope: BrandScope, campaignId: string): string {
+    return `${this.scenario(scope, campaignId)}/revisions`;
+  },
+
+  scenarioDecisions(scope: BrandScope, campaignId: string): string {
+    return `${this.scenario(scope, campaignId)}/decisions`;
+  },
+
+  scenarioResults(scope: BrandScope, campaignId: string): string {
+    return `${this.scenario(scope, campaignId)}/results`;
+  },
+
+  /** `OfferController` — versioned references to a pricing promotion or a loyalty accrual rule (ADR 0112). */
+  offers(scope: BrandScope): string {
+    return `${base(scope)}/offers`;
+  },
+
+  offer(scope: BrandScope, offerId: string): string {
+    return `${this.offers(scope)}/${enc(offerId)}`;
+  },
+
+  offerVersions(scope: BrandScope, offerId: string): string {
+    return `${this.offer(scope, offerId)}/versions`;
+  },
+
+  offerPublications(scope: BrandScope, offerId: string): string {
+    return `${this.offer(scope, offerId)}/publications`;
+  },
+
+  offerRetirements(scope: BrandScope, offerId: string): string {
+    return `${this.offer(scope, offerId)}/retirements`;
+  },
+
+  /** `ContactPolicyController` — the platform's bounds and a brand's tighter overrides (ADR 0112). */
+  contactPolicy(scope: BrandScope): string {
+    return `${base(scope)}/contact-policy`;
+  },
+
+  contactPolicyDefaults(scope: BrandScope): string {
+    return `${this.contactPolicy(scope)}/defaults`;
+  },
+
+  contactPolicyOverrides(scope: BrandScope): string {
+    return `${this.contactPolicy(scope)}/overrides`;
+  },
+
+  contactPolicyOverride(
+    scope: BrandScope,
+    channel: string,
+    campaignPurpose: string,
+    period: string,
+  ): string {
+    return `${this.contactPolicyOverrides(scope)}/${enc(channel)}/${enc(campaignPurpose)}/${enc(period)}`;
+  },
 } as const;

@@ -56,17 +56,22 @@ public class JdbcCampaignStore {
         parameters.put("createdBy", campaign.createdBy());
         parameters.put("scheduledAt", utc(campaign.scheduledAt()));
         parameters.put("now", utc(campaign.createdAt()));
+        parameters.put("kind", campaign.kind());
+        parameters.put("controlGroupPercent", campaign.controlGroupPercent());
+        parameters.put("supersedes", campaign.supersedesCampaignId());
 
         jdbc.sql("""
                 INSERT INTO marketing.campaigns (
                     id, tenant_id, brand_id, name, channel, consent_purpose, status,
                     audience_id, template_key, recipient_cap, cost_ceiling_minor, currency,
                     timezone, benefit_offer_id, loyalty_accrual_rule_id, created_by,
-                    scheduled_at, created_at, updated_at)
+                    scheduled_at, created_at, updated_at,
+                    kind, control_group_percent, supersedes_campaign_id)
                 VALUES (:id, :tenantId, :brandId, :name, :channel, :consentPurpose, 'DRAFT',
                     :audienceId, :templateKey, :recipientCap, :ceiling, :currency,
                     :timezone, :benefitOfferId, :accrualRuleId, :createdBy,
-                    :scheduledAt, :now, :now)
+                    :scheduledAt, :now, :now,
+                    :kind, :controlGroupPercent, :supersedes)
                 """).params(parameters).update();
     }
 
@@ -78,7 +83,8 @@ public class JdbcCampaignStore {
             estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
             reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
             benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
-            blocked_count, paused_at, scheduled_at, halted_reason, created_at, updated_at, version
+            blocked_count, paused_at, scheduled_at, halted_reason, created_at, updated_at, version,
+            kind, control_group_percent, supersedes_campaign_id
             """;
 
     public Optional<CampaignRow> find(UUID tenantId, UUID campaignId) {
@@ -102,6 +108,20 @@ public class JdbcCampaignStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .query(JdbcCampaignStore::campaignRow)
+                .list();
+    }
+
+    /** The scenarios currently {@code SENDING}, across every tenant — the runner's own sweep (ADR 0112). */
+    public List<CampaignRef> sendingScenarios(int limit) {
+        return jdbc.sql("""
+                SELECT id, tenant_id FROM marketing.campaigns
+                 WHERE status = 'SENDING' AND kind = 'SCENARIO'
+                 ORDER BY started_at NULLS LAST
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((ResultSet row, int number) ->
+                        new CampaignRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
                 .list();
     }
 
@@ -501,6 +521,37 @@ public class JdbcCampaignStore {
         REFUSED
     }
 
+    /**
+     * Reserves and spends one scenario step's cost under the campaign's ceiling (ADR 0112).
+     *
+     * <p>A broadcast reserves a batch before it expands; a scenario has no batch, because a
+     * step is decided guest by guest over days, so each step reserves its own cost. One
+     * conditional UPDATE that checks the ceiling and moves the money together, for the
+     * reason {@code CampaignSendService} gives: two workers summing the same rows both
+     * conclude there is budget left and both spend it.
+     *
+     * @return false when the ceiling would be passed, or the campaign is no longer sending
+     */
+    public boolean reserveStepCost(UUID tenantId, UUID campaignId, long costMinor, Instant now) {
+        if (costMinor <= 0) {
+            return true;
+        }
+        return jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET reserved_cost_minor = reserved_cost_minor + :cost,
+                       spent_cost_minor = spent_cost_minor + :cost,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'SENDING'
+                   AND (cost_ceiling_minor IS NULL OR reserved_cost_minor + :cost <= cost_ceiling_minor)
+                """)
+                        .param("cost", costMinor)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .update()
+                == 1;
+    }
+
     /** Turns a reservation into spend once the messages for a batch exist. */
     public void recordSpend(UUID tenantId, UUID campaignId, long costMinor, Instant now) {
         jdbc.sql("""
@@ -687,7 +738,10 @@ public class JdbcCampaignStore {
                 // through the null-forwarding instant() helper.
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
                 row.getObject("updated_at", OffsetDateTime.class).toInstant(),
-                row.getInt("version"));
+                row.getInt("version"),
+                row.getString("kind"),
+                row.getObject("control_group_percent", Integer.class),
+                row.getObject("supersedes_campaign_id", UUID.class));
     }
 
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
@@ -715,7 +769,53 @@ public class JdbcCampaignStore {
             @Nullable UUID loyaltyAccrualRuleId,
             UUID createdBy,
             @Nullable Instant scheduledAt,
-            Instant createdAt) {}
+            Instant createdAt,
+            String kind,
+            @Nullable Integer controlGroupPercent,
+            @Nullable UUID supersedesCampaignId) {
+
+        /** The shape every caller used before ADR 0112: a one-off broadcast. */
+        public NewCampaign(
+                UUID id,
+                UUID tenantId,
+                UUID brandId,
+                String name,
+                String channel,
+                String consentPurpose,
+                UUID audienceId,
+                String templateKey,
+                int recipientCap,
+                @Nullable Long costCeilingMinor,
+                String currency,
+                String timezone,
+                @Nullable UUID benefitOfferId,
+                @Nullable UUID loyaltyAccrualRuleId,
+                UUID createdBy,
+                @Nullable Instant scheduledAt,
+                Instant createdAt) {
+            this(
+                    id,
+                    tenantId,
+                    brandId,
+                    name,
+                    channel,
+                    consentPurpose,
+                    audienceId,
+                    templateKey,
+                    recipientCap,
+                    costCeilingMinor,
+                    currency,
+                    timezone,
+                    benefitOfferId,
+                    loyaltyAccrualRuleId,
+                    createdBy,
+                    scheduledAt,
+                    createdAt,
+                    "BROADCAST",
+                    null,
+                    null);
+        }
+    }
 
     public record CampaignRow(
             UUID id,
@@ -750,7 +850,16 @@ public class JdbcCampaignStore {
             @Nullable String haltedReason,
             Instant createdAt,
             Instant updatedAt,
-            int version) {}
+            int version,
+            String kind,
+            @Nullable Integer controlGroupPercent,
+            @Nullable UUID supersedesCampaignId) {
+
+        /** Whether this is a per-guest scenario rather than a one-off broadcast (ADR 0112). */
+        public boolean isScenario() {
+            return "SCENARIO".equals(kind);
+        }
+    }
 
     /** A campaign identity without its whole row — what a cross-tenant sweep reads. */
     public record CampaignRef(UUID tenantId, UUID campaignId) {}

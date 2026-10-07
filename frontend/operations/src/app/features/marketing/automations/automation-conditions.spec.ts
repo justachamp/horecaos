@@ -85,9 +85,15 @@ describe('automation conditions', () => {
     expect(evaluateConditionGroups(groups, AUTOMATION_CONDITION_CATALOGUE, {})).toBe(false);
   });
 
+  it('LATE_ORDER_APOLOGY fires for an order that closed at least the configured minutes after it was promised', () => {
+    expect(fires('LATE_ORDER_APOLOGY', 30, 29)).toBe(false);
+    expect(fires('LATE_ORDER_APOLOGY', 30, 30)).toBe(true);
+    expect(fires('LATE_ORDER_APOLOGY', 30, 95)).toBe(true);
+  });
+
   it('cannot express a rule of a trigger kind this build does not know', () => {
-    expect(automationConditionGroups(rule({ triggerType: 'LATE_ORDER_APOLOGY' }))).toBeNull();
-    expect(simulatedAutomationRule(rule({ triggerType: 'LATE_ORDER_APOLOGY' }), 'x')).toBeNull();
+    expect(automationConditionGroups(rule({ triggerType: 'POST_ORDER_REVIEW' }))).toBeNull();
+    expect(simulatedAutomationRule(rule({ triggerType: 'POST_ORDER_REVIEW' }), 'x')).toBeNull();
   });
 
   it('cannot express a rule whose config lacks the number its trigger reads', () => {

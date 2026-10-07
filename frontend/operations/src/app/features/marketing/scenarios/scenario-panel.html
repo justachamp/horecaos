@@ -1,0 +1,299 @@
+<div class="scenario" data-testid="scenario-panel">
+  @if (loading() && !view()) {
+    <p class="q-body-sm">{{ 'marketing.campaigns.loading' | t }}</p>
+  } @else if (loadError(); as error) {
+    <div class="scenario__band" role="alert" data-testid="scenario-load-error">
+      <span class="q-body-sm">{{ error }}</span>
+    </div>
+  } @else if (view(); as scenario) {
+    <section class="scenario__section" data-testid="scenario-steps">
+      <h3 class="q-caption">{{ 'marketing.scenario.steps.title' | t }}</h3>
+      <ol class="scenario__list">
+        @for (step of scenario.steps; track step.sequence) {
+          <li data-testid="scenario-step-row">
+            <div class="q-emphasis">
+              {{ step.sequence }}. {{ channelLabelKey(step.channel) | t }}
+            </div>
+            @if (unwiredBySequence().get(step.sequence); as unwired) {
+              <p class="q-caption scenario__warn" data-testid="scenario-step-unwired-note">
+                {{ 'marketing.wiring.notConnected' | t }} {{ unwired.key | t: unwired.values }}
+              </p>
+            }
+            <dl class="scenario__facts">
+              <dt>{{ 'marketing.scenario.steps.wait' | t }}</dt>
+              <dd>{{ waitText(step.waitAfterPreviousSeconds) }}</dd>
+              @if (offerName(step); as offer) {
+                <dt>{{ 'marketing.offerPicker.label' | t }}</dt>
+                <dd>{{ offer }}</dd>
+              }
+              <dt>{{ 'marketing.campaigns.create.template' | t }}</dt>
+              <dd>{{ step.templateKey }}</dd>
+              <dt>{{ 'marketing.scenario.editor.continuation' | t }}</dt>
+              <dd>{{ conditionKey(step.continuationCondition) | t }}</dd>
+              <dt>{{ 'marketing.scenario.editor.stop' | t }}</dt>
+              <dd>{{ conditionKey(step.stopCondition) | t }}</dd>
+            </dl>
+          </li>
+        }
+      </ol>
+      @if (scenario.campaign.supersedesCampaignId; as previous) {
+        <p class="q-caption" data-testid="scenario-supersedes">
+          {{ 'marketing.scenario.supersedes' | t: { id: previous } }}
+        </p>
+      }
+    </section>
+
+    <section class="scenario__section" data-testid="scenario-guests">
+      <h3 class="q-caption">{{ 'marketing.scenario.guests.title' | t }}</h3>
+      @if (scenario.campaign.controlGroupPercent !== null) {
+        <p class="q-body-sm" data-testid="scenario-control">
+          {{
+            'marketing.scenario.control.some'
+              | t: { percent: scenario.campaign.controlGroupPercent }
+          }}
+        </p>
+      } @else {
+        <p class="q-body-sm" data-testid="scenario-control">
+          {{ 'marketing.scenario.control.none' | t }}
+        </p>
+      }
+      @if (!hasGuests()) {
+        <p class="q-body-sm">{{ 'marketing.scenario.guests.none' | t }}</p>
+      } @else {
+        <dl class="scenario__facts" data-testid="scenario-participants">
+          @for (entry of participantEntries(); track entry[0]) {
+            <dt>{{ participantLabel(entry[0]) }}</dt>
+            <dd class="q-tnum">{{ entry[1] }}</dd>
+          }
+        </dl>
+      }
+    </section>
+
+    <section class="scenario__section" data-testid="scenario-decisions">
+      <h3 class="q-caption">{{ 'marketing.scenario.decisions.title' | t }}</h3>
+      @if (decisionEntries().length > 0) {
+        <ul class="scenario__counts" data-testid="scenario-decision-counts">
+          @for (entry of decisionEntries(); track entry[0]) {
+            <li>
+              <span>{{ decisionCountLabel(entry[0]) }}</span>
+              <span class="q-tnum">{{ entry[1] }}</span>
+            </li>
+          }
+        </ul>
+      }
+
+      <div class="scenario__lookup">
+        <label class="q-field">
+          <span class="q-caption">{{ 'marketing.scenario.decisions.guest.label' | t }}</span>
+          <input
+            type="text"
+            data-testid="scenario-guest-input"
+            [value]="guestFilter()"
+            (input)="guestFilter.set($any($event.target).value)"
+            (keydown.enter)="lookUpGuest()"
+          />
+        </label>
+        <button type="button" data-testid="scenario-guest-lookup" (click)="lookUpGuest()">
+          {{ 'marketing.scenario.decisions.guest.lookup' | t }}
+        </button>
+        @if (filteredGuest()) {
+          <button type="button" data-testid="scenario-guest-clear" (click)="clearGuest()">
+            {{ 'marketing.scenario.decisions.guest.clear' | t }}
+          </button>
+        }
+      </div>
+      <p class="q-caption scenario__hint">{{ 'marketing.scenario.decisions.guest.hint' | t }}</p>
+
+      @if (decisionsError(); as error) {
+        <p class="q-caption scenario__warn" role="alert" data-testid="scenario-decisions-error">
+          {{ error }}
+        </p>
+      }
+
+      @if (rows().length === 0) {
+        <p class="q-body-sm" data-testid="scenario-decisions-empty">
+          {{
+            (filteredGuest()
+              ? 'marketing.scenario.decisions.guest.empty'
+              : 'marketing.scenario.decisions.empty'
+            ) | t
+          }}
+        </p>
+      } @else {
+        <table class="scenario__table">
+          <thead>
+            <tr>
+              <th>{{ 'marketing.scenario.decisions.column.when' | t }}</th>
+              <th>{{ 'marketing.scenario.decisions.column.step' | t }}</th>
+              <th>{{ 'marketing.scenario.decisions.column.outcome' | t }}</th>
+              <th>{{ 'marketing.scenario.decisions.column.guest' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.decision.decisionId) {
+              <tr data-testid="decision-row">
+                <td class="q-tnum">{{ moment(row.decision.decidedAt) }}</td>
+                <td class="q-tnum">{{ row.decision.stepSequence }}</td>
+                <td>
+                  @if (row.decision.decision === 'SENT') {
+                    <span>{{ 'marketing.scenario.decision.SENT' | t }}</span>
+                    <span class="q-caption"> · {{ channelOf(row.decision.resolvedChannel) }}</span>
+                    @if (row.decision.reasonText; as note) {
+                      <div class="q-caption scenario__hint" data-testid="decision-note">
+                        {{ note }}
+                      </div>
+                    }
+                  } @else {
+                    <details class="scenario__why" data-testid="decision-why">
+                      <summary>
+                        {{ 'marketing.scenario.decision.BLOCKED' | t }}:
+                        @if (row.explanation; as explanation) {
+                          {{ explanation.labelKey | t }}
+                        } @else {
+                          {{ row.decision.refusalReason }}
+                        }
+                      </summary>
+                      @if (row.explanation; as explanation) {
+                        <p class="q-body-sm">{{ explanation.meaningKey | t }}</p>
+                        <p class="q-caption" data-testid="decision-effect">
+                          {{ effectKeys[explanation.effect] | t }}
+                        </p>
+                      }
+                      @if (row.decision.reasonText; as sentence) {
+                        <p class="q-caption" data-testid="decision-recorded">
+                          {{ 'marketing.scenario.decisions.recorded' | t }} {{ sentence }}
+                        </p>
+                      }
+                      @if (row.explanation; as explanation) {
+                        <p class="q-caption">{{ explanation.remedyKey | t }}</p>
+                      }
+                    </details>
+                  }
+                </td>
+                <td class="q-caption" [attr.title]="row.decision.customerAccountId">
+                  {{ shortAccount(row.decision.customerAccountId) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    <section class="scenario__section" data-testid="scenario-results">
+      <h3 class="q-caption">{{ 'marketing.scenario.results.title' | t }}</h3>
+      <p class="q-caption scenario__hint">{{ 'marketing.scenario.results.hint' | t }}</p>
+      <div class="scenario__lookup">
+        <label class="q-field">
+          <span class="q-caption">{{ 'marketing.scenario.results.model' | t }}</span>
+          <select
+            data-testid="scenario-model"
+            [value]="model()"
+            (change)="model.set($any($event.target).value); loadResults()"
+          >
+            <option value="FIRST_TOUCH">
+              {{ 'marketing.scenario.results.model.FIRST_TOUCH' | t }}
+            </option>
+            <option value="LAST_TOUCH">
+              {{ 'marketing.scenario.results.model.LAST_TOUCH' | t }}
+            </option>
+          </select>
+        </label>
+        <label class="q-field">
+          <span class="q-caption">{{ 'marketing.scenario.results.window' | t }}</span>
+          <input
+            type="number"
+            min="1"
+            max="90"
+            data-testid="scenario-window"
+            [value]="windowDays()"
+            (input)="windowDays.set($any($event.target).valueAsNumber)"
+            (change)="loadResults()"
+          />
+        </label>
+      </div>
+      @if (resultsError(); as error) {
+        <p class="q-caption scenario__warn" role="alert" data-testid="scenario-results-error">
+          {{ error }}
+        </p>
+      }
+      @if (!hasGuests()) {
+        <p class="q-body-sm">{{ 'marketing.scenario.results.none' | t }}</p>
+      } @else if (results(); as measured) {
+        <table class="scenario__table" data-testid="scenario-results-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>{{ 'marketing.scenario.results.column.guests' | t }}</th>
+              <th>{{ 'marketing.scenario.results.column.ordered' | t }}</th>
+              <th>{{ 'marketing.scenario.results.column.rate' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{ 'marketing.scenario.results.treated' | t }}</td>
+              <td class="q-tnum">{{ measured.treatedParticipants }}</td>
+              <td class="q-tnum">{{ measured.treatedConverted }}</td>
+              <td class="q-tnum" data-testid="scenario-treated-rate">
+                {{ percent(measured.treatedRate) }}
+              </td>
+            </tr>
+            <tr>
+              <td>{{ 'marketing.scenario.results.control' | t }}</td>
+              <td class="q-tnum">{{ measured.controlParticipants }}</td>
+              <td class="q-tnum">{{ measured.controlConverted }}</td>
+              <td class="q-tnum" data-testid="scenario-control-rate">
+                {{ percent(measured.controlRate) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        @if (measured.hasControlGroup && measured.lift !== null) {
+          <p class="q-body-sm" data-testid="scenario-lift">
+            {{ 'marketing.scenario.results.lift' | t: { points: points(measured.lift) } }}
+          </p>
+        } @else {
+          <p class="q-body-sm" data-testid="scenario-no-lift">
+            {{
+              (measured.hasControlGroup
+                ? 'marketing.scenario.results.noLift.empty'
+                : 'marketing.scenario.results.noLift.noControl'
+              ) | t
+            }}
+          </p>
+        }
+        @if (measured.participantsWithOpenWindow > 0) {
+          <p class="q-caption scenario__hint" data-testid="scenario-open-windows">
+            {{
+              'marketing.scenario.results.open' | t: { count: measured.participantsWithOpenWindow }
+            }}
+          </p>
+        }
+      }
+    </section>
+
+    @if (actionError(); as error) {
+      <div class="scenario__band" role="alert" data-testid="scenario-action-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <section class="scenario__actions">
+      @if (isDraft()) {
+        <button type="button" data-testid="scenario-edit" (click)="editRequested.emit()">
+          {{ 'marketing.scenario.action.edit' | t }}
+        </button>
+      } @else {
+        <button
+          type="button"
+          data-testid="scenario-revise"
+          [disabled]="acting()"
+          (click)="revise()"
+        >
+          {{ 'marketing.scenario.action.revise' | t }}
+        </button>
+        <p class="q-caption scenario__hint">{{ 'marketing.scenario.action.revise.hint' | t }}</p>
+      }
+    </section>
+  }
+</div>

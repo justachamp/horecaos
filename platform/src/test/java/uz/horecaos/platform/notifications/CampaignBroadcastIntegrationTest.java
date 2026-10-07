@@ -239,8 +239,17 @@ class CampaignBroadcastIntegrationTest {
         // stage is about. A real pacer against a real cursor table, not a fake —
         // the pacing behaviour under test lives here.
         CampaignPacer pacer = new CampaignPacer(new JdbcCampaignPaceCursorStore(jdbc), clock, RATE_PER_SECOND);
-        CampaignTelegramDeliveryService messagePort = new CampaignTelegramDeliveryService(
+        CampaignTelegramDeliveryService telegramDelivery = new CampaignTelegramDeliveryService(
                 notifications, templates, pacer, objectMapper, clock, Duration.ofDays(1));
+        // The router, as production wires it (ADR 0146 Decision 8): Telegram is one
+        // channel of it, and everything marketing calls goes through the same port.
+        uz.horecaos.platform.marketing.api.CampaignMessagePort messagePort =
+                new uz.horecaos.platform.notifications.application.CampaignMessageRouter(
+                        java.util.List.of(telegramDelivery),
+                        transport,
+                        notifications,
+                        new uz.horecaos.platform.notifications.infrastructure.persistence.JdbcDeliveryReceiptStore(
+                                jdbc));
 
         // The real block-rate guard, threshold lowered so two blocks — not
         // hundreds — cross it deterministically in a test.

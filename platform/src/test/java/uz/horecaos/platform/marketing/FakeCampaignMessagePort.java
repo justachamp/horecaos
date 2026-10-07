@@ -28,6 +28,9 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     private final List<MarketingMessage> sent = new ArrayList<>();
     private final Map<String, String> bodies = new LinkedHashMap<>();
     private boolean wired = true;
+    private String notWiredReason = "NO_PROVIDER_BINDING";
+    private final java.util.Set<String> refusedPurposes = new java.util.HashSet<>();
+    private final List<String> wiringAsked = new ArrayList<>();
     private OptionalDouble ratePerSecond = OptionalDouble.empty();
     private int suppressedForNotSending;
 
@@ -59,8 +62,14 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     }
 
     @Override
-    public boolean isWired(String channel) {
-        return wired;
+    public Wiring wiring(UUID tenantId, UUID brandId, String channel, String purpose) {
+        wiringAsked.add(channel + "/" + purpose);
+        if (!wired) {
+            return Wiring.no(notWiredReason);
+        }
+        // A purpose the fake has been told this brand's account is not cleared for
+        // is refused with the same stable code production answers with.
+        return refusedPurposes.contains(purpose) ? Wiring.no("SMS_PURPOSE_NOT_PERMITTED") : Wiring.yes();
     }
 
     @Override
@@ -75,6 +84,17 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
 
     void unwire() {
         wired = false;
+    }
+
+    /** The brand's account is bound but not cleared for this purpose. */
+    FakeCampaignMessagePort refusingPurpose(String purpose) {
+        refusedPurposes.add(purpose);
+        return this;
+    }
+
+    /** Every {@code channel/purpose} wiring was asked about, so a test can prove which question a caller put. */
+    List<String> wiringAsked() {
+        return List.copyOf(wiringAsked);
     }
 
     List<MarketingMessage> sent() {

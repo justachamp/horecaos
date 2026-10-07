@@ -1125,6 +1125,31 @@ public enum Capability {
     CAMPAIGN_AUTHOR("campaign.author", "campaign", "author"),
 
     /**
+     * ADR 0112: creating, versioning, publishing and retiring a brand's
+     * {@code marketing.offers}.
+     *
+     * <p>A reference and never a discount. Holding this lets a marketer choose which
+     * existing promotion or accrual rule an offer points at, for how long and in which
+     * channels; it grants no authority to create the promotion (that is pricing's) or to
+     * mint points (that is loyalty's), and no editor behind it has a field in which to
+     * invent either. Separate from {@link #CAMPAIGN_AUTHOR} because an offer outlives
+     * any one campaign, and from {@link #CAMPAIGN_APPROVE} because choosing what a
+     * guest may be offered is not the second signature on sending it.
+     */
+    MARKETING_OFFER_MANAGE("marketing.offer.manage", "marketing-offer", "manage"),
+
+    /**
+     * ADR 0112: writing {@code marketing.contact_policy_overrides}: a tighter cap or a
+     * wider quiet-hour exclusion for one channel, campaign purpose and period.
+     *
+     * <p>Tighten-only, enforced by the service and by the table's CHECKs, so holding it
+     * can only ever make a brand quieter. It is still its own capability because the
+     * numbers protect a sending reputation shared across tenants, and because a rule
+     * that silences a campaign is a decision somebody should be able to attribute.
+     */
+    MARKETING_CONTACT_POLICY_MANAGE("marketing.contact_policy.manage", "marketing-contact-policy", "manage"),
+
+    /**
      * ADR 0044: the second signature, and the power to stop a running send.
      *
      * <p>Separate from {@link #CAMPAIGN_AUTHOR} and useless in the same hands: the

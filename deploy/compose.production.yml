@@ -130,6 +130,11 @@ services:
       # fail-closed value: every Payme callback is rejected until the owner
       # sets this to Payme's real, currently-published addresses.
       HORECAOS_PAYME_ALLOWED_IPS: ${HORECAOS_PAYME_ALLOWED_IPS:-0.0.0.0/32}
+      # ADR 0146: the SMS gateway's published source addresses for
+      # /providers/sms/*/receipts, which for a gateway whose callback carries
+      # nothing verifiable (VAS) are the whole of its authentication. Defaulted to
+      # the same non-routable address as Payme's so an unset list fails closed.
+      HORECAOS_SMS_RECEIPT_ALLOWED_IPS: ${HORECAOS_SMS_RECEIPT_ALLOWED_IPS:-0.0.0.0/32}
       # Empty in production. `deploy/local-smoke.sh` sets this to `internal`
       # so Caddy issues from its own internal CA instead of asking Let's
       # Encrypt for a certificate for a hostname the public internet cannot

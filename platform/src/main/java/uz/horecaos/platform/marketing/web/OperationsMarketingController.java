@@ -109,9 +109,19 @@ public class OperationsMarketingController {
                     + "create form disables an unwired channel instead.")
     public ResponseEntity<List<ChannelResponse>> listChannels(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return ResponseEntity.ok(Arrays.stream(MarketingChannel.values())
-                .map(channel -> new ChannelResponse(
-                        channel.name(), channel.carriesMarginalCost(), messages.isWired(channel.name())))
+                .map(channel -> {
+                    CampaignMessagePort.Wiring wiring =
+                            messages.wiring(tenantId, brandId, channel.name(), CampaignMessagePort.PURPOSE_MARKETING);
+                    return new ChannelResponse(
+                            channel.name(), channel.carriesMarginalCost(), wiring.isWired(), wiring.reason());
+                })
                 .toList());
+    }
+
+    /** Whether this campaign's channel can deliver for its own brand, and why not (ADR 0146 Decision 8). */
+    private CampaignMessagePort.Wiring wiringOf(CampaignRow campaign) {
+        return messages.wiring(
+                campaign.tenantId(), campaign.brandId(), campaign.channel(), CampaignMessagePort.PURPOSE_MARKETING);
     }
 
     @PostMapping("/audiences")
@@ -204,8 +214,7 @@ public class OperationsMarketingController {
                 body.scheduledAt(),
                 actorId());
         CampaignRow created = campaigns.require(tenantId, campaignId);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(CampaignResponse.of(created, messages.isWired(created.channel())));
+        return ResponseEntity.status(HttpStatus.CREATED).body(CampaignResponse.of(created, wiringOf(created)));
     }
 
     @GetMapping("/campaigns")
@@ -215,7 +224,7 @@ public class OperationsMarketingController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId) {
 
         return ResponseEntity.ok(campaigns.list(tenantId, brandId).stream()
-                .map(row -> CampaignResponse.of(row, messages.isWired(row.channel())))
+                .map(row -> CampaignResponse.of(row, wiringOf(row)))
                 .toList());
     }
 
@@ -234,7 +243,7 @@ public class OperationsMarketingController {
             throw new ApiException(
                     ErrorCode.RESOURCE_NOT_FOUND, "No campaign " + campaignId + " belongs to this brand");
         }
-        return ResponseEntity.ok(CampaignResponse.of(campaign, messages.isWired(campaign.channel())));
+        return ResponseEntity.ok(CampaignResponse.of(campaign, wiringOf(campaign)));
     }
 
     @PostMapping("/audiences/{audienceId}/snapshots")
@@ -466,18 +475,35 @@ public class OperationsMarketingController {
                     ErrorCode.RESOURCE_NOT_FOUND, "No campaign " + campaignId + " belongs to this brand");
         }
 
-        return ResponseEntity.ok(
-                campaignStore.recipients(tenantId, campaignId, Math.min(limit, RECIPIENT_PAGE)).stream()
-                        .map(row -> new RecipientResponse(
-                                row.customerAccountId(),
-                                row.status(),
-                                row.notificationId(),
-                                row.refusalReason(),
-                                row.deferredUntil() == null
-                                        ? null
-                                        : row.deferredUntil().toString(),
-                                row.terminalStatus()))
+        var rows = campaignStore.recipients(tenantId, campaignId, Math.min(limit, RECIPIENT_PAGE));
+        // What the delivery path knows about each message, asked once for the page
+        // (ADR 0146): the state a gateway's receipts have taken it to, and what it
+        // billed. Never copied onto the recipient row, where it would drift from
+        // the attempt it describes.
+        Map<UUID, CampaignMessagePort.DeliveryEvidence> evidence = messages.deliveryEvidence(
+                tenantId,
+                rows.stream()
+                        .map(JdbcCampaignStore.RecipientRow::notificationId)
+                        .filter(java.util.Objects::nonNull)
                         .toList());
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> {
+                    CampaignMessagePort.DeliveryEvidence delivery =
+                            row.notificationId() == null ? null : evidence.get(row.notificationId());
+                    return new RecipientResponse(
+                            row.customerAccountId(),
+                            row.status(),
+                            row.notificationId(),
+                            row.refusalReason(),
+                            row.deferredUntil() == null
+                                    ? null
+                                    : row.deferredUntil().toString(),
+                            row.terminalStatus(),
+                            delivery == null ? null : delivery.state(),
+                            delivery == null ? null : delivery.receiptState(),
+                            delivery == null ? null : delivery.segmentsBilled());
+                })
+                .toList());
     }
 
     @GetMapping("/campaigns/{campaignId}/recipients/counts")
@@ -689,7 +715,11 @@ public class OperationsMarketingController {
      * form offered every channel with no way to tell that only Telegram
      * ({@code MESSAGING_APP}) has an ADR 0020 delivery path in this build.
      */
-    public record ChannelResponse(String channel, boolean carriesMarginalCost, boolean isWired) {}
+    public record ChannelResponse(
+            String channel,
+            boolean carriesMarginalCost,
+            boolean isWired,
+            @Nullable String notWiredReason) {}
 
     public record ExportRequest(@NotBlank @Size(max = 512) String purpose, Integer limit) {}
 
@@ -716,7 +746,10 @@ public class OperationsMarketingController {
             UUID notificationId,
             String refusalReason,
             @Nullable String deferredUntil,
-            String terminalStatus) {}
+            String terminalStatus,
+            @Nullable String deliveryState,
+            @Nullable String receiptState,
+            @Nullable Integer segmentsBilled) {}
 
     /**
      * Row 7.9b. {@code campaignRecipients.status} (V0043) has exactly these four
@@ -892,9 +925,16 @@ public class OperationsMarketingController {
      *                     null && status == SCHEDULED && haltedReason != null}
      *                     is exactly the shape {@code POST .../reschedules} re-arms.
      * @param isWired whether {@code channel} has a real ADR 0020 delivery
-     *                path today — the read model row 6.4 asked for, so the
-     *                detail pane can explain a launch refusal before it
-     *                happens rather than after
+     *                path for this brand today — the read model row 6.4 asked
+     *                for, so the detail pane can explain a launch refusal before
+     *                it happens rather than after
+     * @param notWiredReason why not, as a stable code ({@code
+     *                       SMS_PURPOSE_NOT_PERMITTED}, {@code
+     *                       NO_PROVIDER_BINDING}, …), or null when wired
+     * @param kind {@code BROADCAST} (the one-off send) or {@code SCENARIO} (ADR 0112,
+     *             per-guest steps; see the scenarios endpoints for its steps)
+     * @param controlGroupPercent a scenario's withheld share, or null for none
+     * @param supersedesCampaignId the scenario version this one replaces, or null
      */
     public record CampaignResponse(
             UUID campaignId,
@@ -925,11 +965,15 @@ public class OperationsMarketingController {
             @Nullable Instant scheduledAt,
             @Nullable String haltedReason,
             boolean isWired,
+            @Nullable String notWiredReason,
             Instant createdAt,
             Instant updatedAt,
-            int version) {
+            int version,
+            String kind,
+            @Nullable Integer controlGroupPercent,
+            @Nullable UUID supersedesCampaignId) {
 
-        static CampaignResponse of(CampaignRow row, boolean isWired) {
+        static CampaignResponse of(CampaignRow row, CampaignMessagePort.Wiring wiring) {
             return new CampaignResponse(
                     row.id(),
                     row.name(),
@@ -958,10 +1002,14 @@ public class OperationsMarketingController {
                     row.pausedAt(),
                     row.scheduledAt(),
                     row.haltedReason(),
-                    isWired,
+                    wiring.isWired(),
+                    wiring.reason(),
                     row.createdAt(),
                     row.updatedAt(),
-                    row.version());
+                    row.version(),
+                    row.kind(),
+                    row.controlGroupPercent(),
+                    row.supersedesCampaignId());
         }
     }
 

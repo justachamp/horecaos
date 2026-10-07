@@ -226,6 +226,29 @@
         },
         "type" : "object"
       },
+      "Banner" : {
+        "properties" : {
+          "imageReference" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "offerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "presentedOfferId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CartLineResponse" : {
         "properties" : {
           "comboPicks" : {
@@ -4963,6 +4986,91 @@
         "tags" : [ "Reviews" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers" : {
+      "get" : {
+        "description" : "Counts each returned banner against today's cap. A banner the customer closed, one past the daily cap, and one whose offer has left its validity window are not returned.",
+        "operationId" : "poll_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "surface",
+          "required" : false,
+          "schema" : {
+            "default" : "STOREFRONT",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/Banner"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The banners to show this customer now",
+        "tags" : [ "Presented offers" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals" : {
+      "post" : {
+        "operationId" : "dismiss",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "presentedOfferId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "The customer closed a banner; it is not shown again",
+        "tags" : [ "Presented offers" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
       "get" : {
         "description" : "Mints the code on first read rather than requiring a separate create call — a customer's own code is a durable identity, not a resource with a creation step worth exposing.",
@@ -5778,6 +5886,9 @@
   }, {
     "description" : "Row 10.5: a channel's public SEO facts and static pages",
     "name" : "Storefront channel presentation"
+  }, {
+    "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
+    "name" : "Presented offers"
   }, {
     "description" : "A customer's own referral code, and redeeming a friend's",
     "name" : "Referrals"

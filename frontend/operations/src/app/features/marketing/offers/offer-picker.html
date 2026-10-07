@@ -1,0 +1,50 @@
+<label class="offer-picker">
+  <span class="q-caption">{{ 'marketing.offerPicker.label' | t }}</span>
+  <select
+    data-testid="offer-picker-select"
+    [value]="value() ?? ''"
+    (change)="pick($any($event.target).value)"
+  >
+    <option value="" [selected]="value() === null">
+      {{ (required() ? 'marketing.offerPicker.choose' : 'marketing.offerPicker.none') | t }}
+    </option>
+    @for (option of options(); track option.offerId) {
+      <option [value]="option.offerId" [selected]="option.offerId === value()">
+        {{ option.label }}
+        @if (!option.inForce) {
+          {{ 'marketing.offerPicker.notInForceSuffix' | t }}
+        }
+      </option>
+    }
+  </select>
+</label>
+
+@if (options().length === 0) {
+  <p class="q-caption offer-picker__note" data-testid="offer-picker-empty">
+    {{ 'marketing.offerPicker.empty' | t }}
+  </p>
+}
+
+@if (selectedIsStale()) {
+  <p class="q-caption offer-picker__note offer-picker__note--warn" data-testid="offer-picker-stale">
+    {{ 'marketing.offerPicker.stale' | t }}
+  </p>
+}
+
+@if (selected(); as offer) {
+  <dl class="offer-picker__facts" data-testid="offer-picker-facts">
+    <dt class="q-caption">{{ 'marketing.offerPicker.fact.reference' | t }}</dt>
+    <dd class="q-body-sm">
+      {{
+        (offer.pricingPromotionId !== null
+          ? 'marketing.offer.reference.promotion'
+          : 'marketing.offer.reference.accrualRule'
+        ) | t
+      }}
+    </dd>
+    <dt class="q-caption">{{ 'marketing.offerPicker.fact.window' | t }}</dt>
+    <dd class="q-body-sm">{{ window(offer) }}</dd>
+    <dt class="q-caption">{{ 'marketing.offerPicker.fact.template' | t }}</dt>
+    <dd class="q-body-sm">{{ offer.templateKey }}</dd>
+  </dl>
+}

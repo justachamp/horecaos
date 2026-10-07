@@ -1,0 +1,37 @@
+:host {
+  display: block;
+}
+
+.offer-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.offer-picker select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+  font-family: inherit;
+}
+
+.offer-picker__note {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.offer-picker__note--warn {
+  color: var(--q-warning-text);
+}
+
+.offer-picker__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 6px 0 0;
+}
+
+.offer-picker__facts dd {
+  margin: 0;
+}

@@ -79,6 +79,7 @@
 .section-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -261,5 +262,9 @@
   cursor: default;
   background: var(--q-surface-1);
   border-color: var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.row-kind {
   color: var(--q-ink-muted);
 }

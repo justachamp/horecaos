@@ -1,14 +1,30 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
+import uz.horecaos.platform.integration.camel.notification.AccountContext;
+import uz.horecaos.platform.integration.camel.notification.AccountReadiness;
+import uz.horecaos.platform.integration.camel.notification.NotificationChannelAdapter;
+import uz.horecaos.platform.integration.camel.notification.ReceiptEvent;
+import uz.horecaos.platform.integration.camel.notification.ResolveRequest;
+import uz.horecaos.platform.integration.camel.notification.SmsPurposes;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
+import uz.horecaos.platform.notifications.api.NotificationDispatch;
 
 /**
  * smsgw.vas.uz, behind ADR 0007's rules, from
@@ -41,9 +57,30 @@ import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
  *
  * <p>The request body is never logged, at any level, on any path. See
  * {@link SmsGateBody}.
+ *
+ * <p><strong>One adapter, every SMS purpose</strong> (ADR 0146 Decision 3). This
+ * class is also the {@link NotificationChannelAdapter} for {@code SMSGW_VAS}, so a
+ * single binding serves a customer's sign-in code (through {@code SmsGateway}, the
+ * verification entry point) and an order confirmation (through
+ * {@code NotificationGateway}) over the same HTTP client, the same code table and
+ * the same credential handling. Both entry points call the same private methods.
+ * What the account may carry is not decided here: {@link #defaultPurposes} is the
+ * owner's default (codes and transactional messages), and an installation widens it
+ * only by naming more in {@code permittedPurposes}, which is the written answer
+ * ADR 0146's first open input waits for.
+ *
+ * <p><strong>This provider cannot be asked by our key.</strong>
+ * {@link #queryStatus} says so (uncertain) rather than pretending, and
+ * {@link #resolve(ResolveRequest, ProviderCall, AccountContext)} is the honest
+ * replacement: a {@code /search} by destination and day, matched on the provider's
+ * own message id when the send's answer gave one and otherwise on the SHA-256 of the
+ * text, which is all the platform keeps of it (ADR 0029). Not finding the message
+ * is <em>unknown</em>, never <em>not sent</em>, because the day's timezone is not
+ * stated and the second answer licenses the resend this whole class exists to
+ * prevent.
  */
 @Component
-public class VasSmsGatewayAdapter {
+public class VasSmsGatewayAdapter implements NotificationChannelAdapter {
 
     /** The ADR 0026 {@code provider_type} an installation must declare to be called here. */
     public static final String PROVIDER_TYPE = "SMSGW_VAS";
@@ -54,8 +91,10 @@ public class VasSmsGatewayAdapter {
     /** Keys the route and the transport read off a normalised outcome. Bounded and safe. */
     static final String MESSAGE_ID_KEY = "providerMessageId";
 
-    static final String SEGMENTS_KEY = "providerSegments";
     static final String DELIVERY_STATE_KEY = "providerDeliveryState";
+
+    /** {@code delivery_status_events.provider_status} is 64 characters wide. */
+    private static final int PROVIDER_STATUS_MAX = 64;
 
     /**
      * No headers, and that is a statement rather than an omission.
@@ -73,6 +112,170 @@ public class VasSmsGatewayAdapter {
         this.http = http;
     }
 
+    // ------------------------------------------------- NotificationChannelAdapter
+
+    @Override
+    public String providerType() {
+        return PROVIDER_TYPE;
+    }
+
+    @Override
+    public String channel() {
+        return "SMS";
+    }
+
+    /**
+     * Codes and transactional messages: the owner's default for this gateway
+     * (ADR 0146, open input 1). Marketing and courier SMS stay refused until an
+     * installation says in {@code permittedPurposes} that the account may carry
+     * them, which is the answer in writing the record waits for.
+     */
+    @Override
+    public Set<String> defaultPurposes() {
+        return Set.of(SmsPurposes.VERIFICATION, SmsPurposes.TRANSACTIONAL);
+    }
+
+    @Override
+    public boolean permits(String purpose, AccountContext account) {
+        return SmsPurposes.permitted(account, defaultPurposes()).contains(purpose);
+    }
+
+    /**
+     * Login and sender are present, found without calling out. The credential
+     * reference is the gateway's to check: it is on the installation, not in
+     * non-secret configuration.
+     */
+    @Override
+    public AccountReadiness describeAccount(AccountContext account) {
+        List<String> missing = new ArrayList<>();
+        if (account.value(JdbcAccountKeys.LOGIN) == null) {
+            missing.add(JdbcAccountKeys.LOGIN);
+        }
+        if (account.value(JdbcAccountKeys.SENDER) == null) {
+            missing.add(JdbcAccountKeys.SENDER);
+        }
+        return AccountReadiness.missing(missing);
+    }
+
+    /**
+     * Refused: this provider's request carries a login and a sender, and neither is
+     * on a call that arrived without an {@link AccountContext}. Reaching here means
+     * a caller bypassed the gateway, and the refusal says so rather than sending a
+     * body with blanks in it.
+     */
+    @Override
+    public ProviderOutcome send(NotificationDispatch dispatch, ProviderCall call) {
+        return ProviderOutcome.rejected(
+                "SMS_ACCOUNT_MISCONFIGURED", "The VAS gateway needs an account context to send");
+    }
+
+    @Override
+    public ProviderOutcome send(NotificationDispatch dispatch, ProviderCall call, AccountContext account) {
+        SmsAccount smsAccount = accountOf(account);
+        if (!smsAccount.isComplete()) {
+            return ProviderOutcome.rejected(
+                    "SMS_ACCOUNT_MISCONFIGURED", "The VAS account has no login and sender configured");
+        }
+        return sendMessage(dispatch.recipientValue(), dispatch.body(), smsAccount, call);
+    }
+
+    /**
+     * This provider holds no key of ours, so it cannot answer "what became of
+     * request K". Uncertain, which is the true answer; {@link #resolve} is how it is
+     * asked what it does hold.
+     */
+    @Override
+    public ProviderOutcome queryStatus(String providerIdempotencyKey, ProviderCall call) {
+        return ProviderOutcome.uncertain("SMS_NO_KEY_LOOKUP", "The VAS gateway cannot be asked by an idempotency key");
+    }
+
+    /**
+     * ADR 0146 {@code resolve}: sent, not sent, or unknown, and never by sending.
+     *
+     * <p>Found is a success carrying the message's own state, which may be a failure
+     * (the message exists and will not arrive); it is a fact about that message and
+     * licenses nothing. Not found is uncertain, always.
+     */
+    @Override
+    public ProviderOutcome resolve(ResolveRequest request, ProviderCall call, AccountContext account) {
+        String destination = request.destination();
+        if (destination == null || destination.isBlank()) {
+            // A search by number needs the number. The dispatcher only resolves one
+            // when it has no message id to go on; with neither this is unknown.
+            return ProviderOutcome.uncertain(
+                    "SMS_RESOLVE_NEEDS_DESTINATION", "A search by destination was asked without one");
+        }
+        SmsAccount smsAccount = accountOf(account);
+        if (!smsAccount.isComplete()) {
+            return ProviderOutcome.uncertain("SMS_ACCOUNT_MISCONFIGURED", "The VAS account has no login configured");
+        }
+
+        String knownId = request.providerMessageId();
+        String wantedHash = request.renderedContentHash();
+        Predicate<Map<String, Object>> ours = entry -> {
+            String id = text(entry.get("id"));
+            if (knownId != null && !knownId.isBlank()) {
+                return knownId.equals(id);
+            }
+            String sentText = text(entry.get("msg"));
+            return wantedHash != null && sentText != null && wantedHash.equals(sha256Hex(sentText));
+        };
+
+        return search(
+                destination, request.requestedAt(), smsAccount, call, ours, VasSmsGatewayAdapter::foundForNotification);
+    }
+
+    /**
+     * ADR 0146 {@code receipt}: the callback's {@code {login, key, id, code,
+     * description}} in the platform's vocabulary.
+     *
+     * <p>Written against the document's own example and <em>unverified against a
+     * real callback</em> (the record's second open input): the receipt endpoint
+     * stays off for this provider type until one has been captured. A code the
+     * document does not list reads as nothing at all, not as {@code UNKNOWN}.
+     */
+    @Override
+    public Optional<ReceiptEvent> normalise(Map<String, Object> rawReceipt) {
+        String id = text(rawReceipt.get("id"));
+        if (id == null || id.isBlank() || "0".equals(id)) {
+            return Optional.empty();
+        }
+        SmsGateDeliveryState state = SmsGateDeliveryState.of(integer(rawReceipt.get("code")));
+        String normalized = state.normalizedStatus();
+        if (normalized == null) {
+            return Optional.empty();
+        }
+        String description = text(rawReceipt.get("description"));
+        String word = description == null || description.isBlank() ? state.name() : description.strip();
+        if (word.length() > PROVIDER_STATUS_MAX) {
+            word = word.substring(0, PROVIDER_STATUS_MAX);
+        }
+        return Optional.of(new ReceiptEvent(id, normalized, word, null, state.isBlacklisted()));
+    }
+
+    /**
+     * The provider documents a {@code login}/{@code key} pair in the callback and
+     * its own example shows {@code key} empty, so nothing in the request can be
+     * trusted to authenticate it. What stands in its place is the edge: the
+     * provider's published source addresses are the only thing allowed to reach the
+     * endpoint, and the attempt-match rule (an id this installation made, advancing
+     * only) limits what a forgery that got through could do.
+     */
+    @Override
+    public ReceiptAuthentication receiptAuthentication() {
+        return ReceiptAuthentication.SOURCE_ADDRESS_ALLOWLIST;
+    }
+
+    // ------------------------------------------------------ the verification entry
+
+    /**
+     * {@code POST /send} for a verification code: a thin wrapper over the same
+     * send a notification takes.
+     */
+    public ProviderOutcome send(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
+        return sendMessage(operation.destination(), operation.text(), account, call);
+    }
+
     /**
      * {@code POST /send}. One message, one destination, no key to repeat it under.
      *
@@ -82,14 +285,14 @@ public class VasSmsGatewayAdapter {
      * treated as uncertain rather than believed — {@code id} is the only evidence
      * the gateway actually took the message.
      */
-    public ProviderOutcome send(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
+    private ProviderOutcome sendMessage(String destination, String text, SmsAccount account, ProviderCall call) {
 
         SmsGateBody.Send body = new SmsGateBody.Send(
                 requireConfigured(account.login(), "login"),
                 call.credential(),
                 requireConfigured(account.sender(), "sender"),
-                operation.destination(),
-                operation.text());
+                destination,
+                text);
 
         return http.post(call, SEND_PATH, NO_HEADERS, body, response -> {
             SmsGateCode code = SmsGateCode.of(
@@ -109,18 +312,27 @@ public class VasSmsGatewayAdapter {
                         "SMS_ACCEPTED_WITHOUT_ID", "The gateway reported success without a message id");
             }
 
+            int parts = integerOr(response.get("parts"), 1);
             return ProviderOutcome.success(
                     Map.of(
                             MESSAGE_ID_KEY,
                             messageId,
                             SEGMENTS_KEY,
-                            String.valueOf(integerOr(response.get("parts"), 1))),
+                            String.valueOf(parts),
+                            // The send's own answer is "Created", whatever the
+                            // handset later does: the provider says nothing about
+                            // delivery here and neither does this map.
+                            PROVIDER_STATUS_KEY,
+                            SmsGateDeliveryState.CREATED.name(),
+                            NORMALIZED_STATUS_KEY,
+                            "ACCEPTED"),
                     messageId);
         });
     }
 
     /**
-     * {@code POST /search}: the uncertainty resolver. Sends nothing.
+     * {@code POST /search}: the uncertainty resolver for a verification code. Sends
+     * nothing.
      *
      * <p>The provider answers with every message it holds for that destination on
      * that day, <em>including the text</em>. Ours is the entry whose text carries
@@ -137,12 +349,29 @@ public class VasSmsGatewayAdapter {
      * exists to prevent.
      */
     public ProviderOutcome resolve(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
+        Predicate<Map<String, Object>> carriesTheCode = entry -> {
+            String sentText = text(entry.get("msg"));
+            return sentText != null && sentText.contains(operation.code());
+        };
+        return search(
+                operation.destination(),
+                operation.issuedAt(),
+                account,
+                call,
+                carriesTheCode,
+                VasSmsGatewayAdapter::foundForVerification);
+    }
+
+    private ProviderOutcome search(
+            String destination,
+            Instant day,
+            SmsAccount account,
+            ProviderCall call,
+            Predicate<Map<String, Object>> ours,
+            java.util.function.Function<Map<String, Object>, ProviderOutcome> onFound) {
 
         SmsGateBody.Search body = new SmsGateBody.Search(
-                requireConfigured(account.login(), "login"),
-                call.credential(),
-                operation.destination(),
-                operation.issuedAt().getEpochSecond());
+                requireConfigured(account.login(), "login"), call.credential(), destination, day.getEpochSecond());
 
         return http.post(call, SEARCH_PATH, NO_HEADERS, body, response -> {
             SmsGateCode code = SmsGateCode.of(
@@ -156,21 +385,19 @@ public class VasSmsGatewayAdapter {
             }
 
             for (Map<String, Object> entry : entries(response)) {
-                String sentText = text(entry.get("msg"));
-                if (sentText == null || !sentText.contains(operation.code())) {
-                    continue;
+                if (ours.test(entry)) {
+                    return onFound.apply(entry);
                 }
-                return found(entry);
             }
 
             return ProviderOutcome.uncertain(
-                    "SMS_SEND_UNCONFIRMED",
-                    "The gateway holds no message carrying this challenge for that destination");
+                    "SMS_SEND_UNCONFIRMED", "The gateway holds no message matching this attempt for that destination");
         });
     }
 
     /**
-     * The message was found. What state it is in decides the answer.
+     * The message was found, for a verification code. What state it is in decides
+     * the answer.
      *
      * <p>Only the three states the provider states as failures are failures.
      * {@code Sent} means handed to the operator and never confirmed, and
@@ -179,7 +406,7 @@ public class VasSmsGatewayAdapter {
      * at all. Reading either as "not delivered" would tear down a challenge whose
      * code is on a customer's phone.
      */
-    private static ProviderOutcome found(Map<String, Object> entry) {
+    private static ProviderOutcome foundForVerification(Map<String, Object> entry) {
         SmsGateDeliveryState state = SmsGateDeliveryState.of(integer(entry.get("status")));
         String messageId = text(entry.get("id"));
 
@@ -197,6 +424,27 @@ public class VasSmsGatewayAdapter {
     }
 
     /**
+     * The message was found, for a notification. The answer is a fact about that
+     * message — including a failed or blacklisted one — never a licence to send
+     * again: a retry is a second message and a second charge.
+     */
+    private static ProviderOutcome foundForNotification(Map<String, Object> entry) {
+        SmsGateDeliveryState state = SmsGateDeliveryState.of(integer(entry.get("status")));
+        String messageId = text(entry.get("id"));
+        String normalized = state.normalizedStatus();
+
+        Map<String, Object> normalizedOutcome = new java.util.LinkedHashMap<>();
+        normalizedOutcome.put(MESSAGE_ID_KEY, messageId == null ? "" : messageId);
+        normalizedOutcome.put(DELIVERY_STATE_KEY, state.name());
+        normalizedOutcome.put(PROVIDER_STATUS_KEY, state.name());
+        // An undocumented state is "handed over, nothing more known" rather than a
+        // guess in either direction.
+        normalizedOutcome.put(NORMALIZED_STATUS_KEY, normalized == null ? "ACCEPTED" : normalized);
+        normalizedOutcome.put(HARD_BOUNCE_KEY, String.valueOf(state.isBlacklisted()));
+        return ProviderOutcome.success(Map.copyOf(normalizedOutcome), messageId);
+    }
+
+    /**
      * {@code SmsGateway.invoke} refuses to reach this adapter at all unless
      * {@code account.isComplete()}, so login and sender are always present by
      * the time either method above runs; this only makes that invariant visible
@@ -204,6 +452,10 @@ public class VasSmsGatewayAdapter {
      */
     private static String requireConfigured(@Nullable String value, String field) {
         return Objects.requireNonNull(value, () -> "SmsGateway called this adapter with no " + field + " configured");
+    }
+
+    private static SmsAccount accountOf(AccountContext account) {
+        return new SmsAccount(account.value(JdbcAccountKeys.LOGIN), account.value(JdbcAccountKeys.SENDER));
     }
 
     private static ProviderOutcome classify(SmsGateCode code) {
@@ -273,5 +525,27 @@ public class VasSmsGatewayAdapter {
 
     private static @Nullable String text(@Nullable Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * The same SHA-256 hex over UTF-8 that {@code notifications.domain.ContentHashes}
+     * freezes onto a notification, restated here because integration may not import
+     * another module's domain package. A test holds the two equal.
+     */
+    static String sha256Hex(String value) {
+        try {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException unreachable) {
+            throw new IllegalStateException("SHA-256 is required by every JVM", unreachable);
+        }
+    }
+
+    /** The configuration keys this provider's account is read from (see {@code JdbcSmsAccountLookup}). */
+    private static final class JdbcAccountKeys {
+        static final String LOGIN = "login";
+        static final String SENDER = "sender";
+
+        private JdbcAccountKeys() {}
     }
 }

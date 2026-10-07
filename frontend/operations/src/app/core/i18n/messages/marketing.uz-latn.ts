@@ -49,9 +49,6 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.campaigns.create.recipientCap': 'Qabul qiluvchilar chegarasi',
   'marketing.campaigns.create.costCeiling': 'Xarajat chegarasi (kichik birliklarda)',
   'marketing.campaigns.create.currency': 'Valyuta',
-  'marketing.campaigns.create.channel.unwiredSuffix': ' (hali ulanmagan)',
-  'marketing.campaigns.create.channel.unwiredHint':
-    'Bu kanal uchun hali yetkazib berish yoʻli yoʻq — kampaniyani unda ishga tushirib boʻlmaydi.',
   'marketing.campaigns.create.scheduledAt': 'Rejalashtirilgan yuborish (ixtiyoriy)',
   'marketing.campaigns.create.scheduledAt.hint':
     'Darhol, operator buyrugʻi bilan ishga tushirish uchun boʻsh qoldiring.',
@@ -95,7 +92,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.field.reserved': 'Zaxiraga olindi (summa · qabul qiluvchilar)',
   'marketing.campaign.field.scheduledAt': 'Quyidagi vaqtga rejalashtirilgan',
   'marketing.campaign.unwired.warning':
-    '{channel} kanali uchun hali yetkazib berish yoʻli yoʻq. Bu paydo boʻlmaguncha kampaniyani ishga tushirish rad etiladi.',
+    'Bu kampaniyani hozircha bu brend uchun {channel} kanalida ishga tushirib boʻlmaydi.',
   'marketing.campaign.paused.blockedCount':
     'Bloklash himoyasi tomonidan toʻxtatildi: hozircha {count} qabul qiluvchi ushbu yuborishni bloklagan.',
   'marketing.campaign.resume.suppressedCost':
@@ -533,7 +530,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.automations.runs.column.firedAt': 'Qachon',
   'marketing.automations.runStatus.FIRED': 'Ishga tushdi',
   'marketing.automations.runStatus.REFUSED': 'Rad etildi',
-  'marketing.automations.runStatus.CANCELLED': 'Bekor qilindi (mijoz avval buyurtma berdi)',
+  'marketing.automations.runStatus.CANCELLED': 'Bekor qilindi',
   'marketing.automations.preview.open': 'Mosliklarni koʻrish — {name}',
   'marketing.automations.preview.title': 'Bu qoida bugun kimga mos kelardi — {name}',
   'marketing.automations.preview.intro':
@@ -552,4 +549,387 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.automations.condition.CART_ABANDONMENT': 'Savat tashlab ketilganidan beri necha soat',
   'marketing.automations.condition.CASHBACK_CHANGE':
     'Keshbek oʻzgarishi miqdori, minimal birliklar',
+
+  // channel wiring, refusal explanations and the fifth automation trigger (ADR 0112, ADR 0146)
+  'marketing.wiring.notConnectedSuffix': ' (ulanmagan)',
+  'marketing.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'Bu brendning SMS hisobiga marketing xabarlarini yuborish ruxsat etilmagan. Kirish kodlari va buyurtma xabarlari bunga taʻsir qilmaydi. Platforma egasi qaysi hisob marketingni yuborishi mumkinligini yozma tasdiqlamaguncha va u ulanishda koʻrsatilmaguncha, marketing SMS kampaniyasini ishga tushirib boʻlmaydi.',
+  'marketing.wiring.NO_PROVIDER_BINDING':
+    'Bu brend uchun ushbu kanalga hech qanday provayder ulanmagan. Uni brendning integratsiya sozlamalarida ulang.',
+  'marketing.wiring.INSTALLATION_INACTIVE': 'Ushbu kanal uchun provayder ulanishi oʻchirilgan.',
+  'marketing.wiring.INSTALLATION_MISSING': 'Ushbu kanal uchun provayder ulanishi endi mavjud emas.',
+  'marketing.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'Bu brendning SMS hisobi sozlamalarida baʻzi maʻlumotlar yetishmaydi.',
+  'marketing.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'Ulangan provayderda ushbu versiyada bu kanal uchun adapter yoʻq.',
+  'marketing.wiring.NO_ADAPTER': 'Ushbu versiyada bu kanal uchun adapter yoʻq.',
+  'marketing.wiring.NO_DELIVERY_ADAPTER':
+    'Ushbu versiyada bu kanalning yetkazib berish yoʻli yoʻq.',
+  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
+    'Mehmonlarga email ulanmagan. Platformaning pochta xizmati faqat xodimlarga taklif va parolni tiklash xatlarini yuboradi; muassasaning oʻz mehmonlariga email yuborish alohida qaror boʻlib, u hali qabul qilinmagan.',
+  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
+    'Push ulanmagan: push provayderi hali yoʻq, shuning uchun mehmonga push-xabar yuborib boʻlmaydi.',
+  'marketing.wiring.UNKNOWN': 'Ushbu kanal hozir bu brend uchun xabar yetkaza olmaydi ({reason}).',
+  'marketing.refusal.SCENARIO_CONFLICT': 'Boshqa faol ssenariy bu mehmonga hozirgina taklif bergan',
+  'marketing.refusal.SCENARIO_PRIORITY_LOST':
+    'Xuddi shu mehmon uchun ommaviy yuborish bu qadamdan ustun',
+  'marketing.refusal.SCENARIO_STOPPED': 'Ssenariy bu mehmonga endi taalluqli emas',
+  'marketing.refusal.CHANNEL_NOT_WIRED':
+    'Qoida ishlaganda kanalning yetkazib berish yoʻli yoʻq edi',
+  'marketing.refusal.effect.ENDS': 'Bu mehmonning yoʻlini tugatadi',
+  'marketing.refusal.effect.HOLDS': 'Qadamni kechiktiradi va keyinroq yana soʻraydi; yoʻqolmaydi',
+  'marketing.refusal.effect.VARIES':
+    'Odatda yoʻlni tugatadi; yozilgan jumlada u qachon oʻrniga qayta urinishi aytilgan',
+  'marketing.refusal.effect.BROADCAST': 'Faqat bir martalik ommaviy yuborishda uchraydi',
+  'marketing.refusal.meaning.CONSENT_WITHHELD':
+    'Mehmonning ushbu kanalda bunday xabarlarga roziligi yoʻq. Javob yoʻqligi rozilik emas.',
+  'marketing.refusal.remedy.CONSENT_WITHHELD':
+    'Bu yerda qiladigan ish yoʻq: rozilik mehmonning oʻz tanlovidan olinadi, marketing uni qayta hal qilmaydi.',
+  'marketing.refusal.meaning.SUPPRESSED':
+    'Bu mehmonga ushbu kanalda faol toʻxtatish amal qiladi: obunani bekor qilish, yetkazilmaslik, shikoyat yoki operator bloki. U rozilikdan ustun.',
+  'marketing.refusal.remedy.SUPPRESSED':
+    'Xato boʻlsa, «Toʻxtatishlar» boʻlimida sababini koʻrsatib olib tashlang.',
+  'marketing.refusal.meaning.ACCOUNT_NOT_ACTIVE':
+    'Mehmonning hisobi endi faol emas: yopilgan, boshqasiga birlashtirilgan yoki anonimlashtirilgan.',
+  'marketing.refusal.remedy.ACCOUNT_NOT_ACTIVE':
+    'Qiladigan ish yoʻq: xabar yuboradigan odam qolmagan.',
+  'marketing.refusal.meaning.FREQUENCY_CAP_REACHED':
+    'Mehmon davr ichida qoidalar ruxsat etgan miqdordagi xabarni allaqachon olgan. Uni yo platformaning barcha kanallar boʻyicha chegarasi, yo brendning ushbu kanal va maqsad uchun oʻz aloqa siyosati toʻxtatdi; yozilgan jumlada qaysi biri va raqamlar koʻrsatilgan.',
+  'marketing.refusal.remedy.FREQUENCY_CAP_REACHED':
+    'Kuting: qadam keyingi oraliqda qayta soʻraladi. Platforma chegarasini oshirib boʻlmaydi; brend qoidasini «Aloqa siyosati» boʻlimida olib tashlash mumkin.',
+  'marketing.refusal.meaning.NO_VERIFIED_ENDPOINT':
+    'Mehmonda kanal uchun kerakli tasdiqlangan aloqa yoʻq: SMS uchun tasdiqlangan telefon, Telegram uchun bogʻlangan chat.',
+  'marketing.refusal.remedy.NO_VERIFIED_ENDPOINT':
+    'Bu yerda qiladigan ish yoʻq; mehmon bu orada aloqani tasdiqlagan boʻlishi mumkin, qadam ertaga qayta soʻraladi.',
+  'marketing.refusal.meaning.SCENARIO_CONFLICT':
+    'Boshqa faol ssenariy oxirgi bir kecha-kunduz ichida bu mehmonga taklif bergan va uning ustiga ikkinchisi birinchisiga zid boʻlardi.',
+  'marketing.refusal.remedy.SCENARIO_CONFLICT':
+    'Qiladigan ish yoʻq: qadam olti soatdan keyin qayta soʻraladi.',
+  'marketing.refusal.meaning.SCENARIO_PRIORITY_LOST':
+    'Bu mehmon uchun xuddi shu kanalda ommaviy yuborish ham navbat kutmoqda va muassasaning kanal ustuvorligi tartibi uning maqsadini bu ssenariyniki bilan teng yoki undan yuqori qoʻygan.',
+  'marketing.refusal.remedy.SCENARIO_PRIORITY_LOST':
+    'Qiladigan ish yoʻq: ommaviy yuborish ketgach, qadam oʻn besh daqiqadan keyin qayta soʻraladi.',
+  'marketing.refusal.meaning.SCENARIO_STOPPED':
+    'Ssenariy bu mehmonga endi taalluqli emas yoki davom eta olmaydi: taklif muddati tugagan yoki bekor qilingan, kanal endi yetkaza olmaydi, mehmon toʻxtatish yoki davom ettirish shartini bajargan yoxud xarajat chegarasi oshib ketardi.',
+  'marketing.refusal.remedy.SCENARIO_STOPPED':
+    'Yozilgan jumlani oʻqing: unda aniq sabab koʻrsatilgan. Gap taklifda boʻlsa, yangi versiyani eʻlon qiling va ssenariyni qayta koʻrib chiqing.',
+  'marketing.refusal.meaning.CAMPAIGN_HALTED':
+    'Kampaniya bu qabul qiluvchiga yetib borguncha toʻxtatilgan.',
+  'marketing.refusal.remedy.CAMPAIGN_HALTED':
+    'Kampaniya pauzada boʻlsa, uni davom ettiring; toʻxtatilganini qayta ishga tushirib boʻlmaydi.',
+  'marketing.automations.trigger.LATE_ORDER_APOLOGY': 'Kechikkan buyurtma uchun uzr',
+  'marketing.automations.configLabel.LATE_ORDER_APOLOGY':
+    'Kechikish daqiqalari: buyurtma vaʻda qilingan vaqtdan kamida shuncha keyin yopilgan',
+  'marketing.automations.condition.LATE_ORDER_APOLOGY':
+    'Buyurtma vaʻda qilingan vaqtdan necha daqiqa keyin yopilgan',
+  'marketing.automations.form.apologyNote':
+    'Uzr — bu soʻzlar, imtiyoz emas: qoida faqat shablonni koʻrsatadi, shuning uchun u kompensatsiya bera olmaydi. Birinchi soʻz yordam xizmatiniki: buyurtma yopilgandan yarim soat keyingina hisobga olinadi, unga yozilgan kompensatsiya (qaytarish yoki kredit) boʻlsa, qoida bekor qilinadi, qayta uzr soʻralmaydi. Har buyurtmaga bir marta, boshqa triggerlardagi kabi rozilik, chegara va tinch soatlar bilan.',
+  'marketing.automations.rule.description.LATE_ORDER_APOLOGY':
+    '{trigger} · {channel} · {configValue} daqiqa va undan koʻp kechikish · har buyurtmaga bir marta',
+  'marketing.automations.preview.outcome.LATE_ORDER_APOLOGY':
+    '«{template}» ni {channel} orqali yuboradi, har buyurtmaga bir marta va kompensatsiya allaqachon yozilgan boʻlsa yubormaydi',
+
+  // offers, offer picker, contact policy (ADR 0112)
+  'marketing.channel.IN_APP': 'Ilovadagi banner',
+  'marketing.channel.CALL_CENTRE': 'Call-markaz',
+  'marketing.offerPicker.label': 'Taklif',
+  'marketing.offerPicker.none': 'Taklifsiz',
+  'marketing.offerPicker.choose': 'Taklifni tanlang',
+  'marketing.offerPicker.notInForceSuffix': ' — endi amal qilmaydi',
+  'marketing.offerPicker.empty':
+    'Bu kanal uchun eʻlon qilingan taklif yoʻq. Takliflar «Takliflar» boʻlimida yoziladi va eʻlon qilinadi.',
+  'marketing.offerPicker.stale':
+    'Bu qadamdagi taklif endi amal qilmaydi. Boshqasini tanlang, aks holda ssenariyni saqlab boʻlmaydi.',
+  'marketing.offerPicker.fact.reference': 'Quyidagiga ishora qiladi',
+  'marketing.offerPicker.fact.window': 'Amal qiladi',
+  'marketing.offerPicker.fact.template': 'Shablon',
+  'marketing.offerPicker.window.open': '{from} dan',
+  'marketing.offerPicker.window.closed': '{from} dan {until} gacha',
+  'marketing.offer.reference.promotion': 'Narxlash aksiyasi',
+  'marketing.offer.reference.accrualRule': 'Sodiqlik jamgʻarish qoidasi',
+  'marketing.offer.status.DRAFT': 'Qoralama',
+  'marketing.offer.status.PUBLISHED': 'Eʻlon qilingan',
+  'marketing.offer.status.SUPERSEDED': 'Yangi versiya bilan almashtirilgan',
+  'marketing.offer.status.RETIRED': 'Bekor qilingan',
+  'marketing.campaigns.tab.offers': 'Takliflar',
+  'marketing.campaigns.tab.contactPolicy': 'Aloqa siyosati',
+  'marketing.offers.intro':
+    'Mavjud aksiya yoki sodiqlik jamgʻarish qoidasiga versiyalangan havolalar. Ssenariylar shulardan tanlaydi. Taklif oʻz qiymatini aytmaydi: buni narxlash va sodiqlik hal qiladi.',
+  'marketing.offers.create': 'Yangi taklif',
+  'marketing.offers.denied': 'Bu brendning takliflariga kirish huquqi yoʻq',
+  'marketing.offers.empty':
+    'Hali taklif yaratilmagan. Taklif mavjud aksiya yoki jamgʻarish qoidasiga ishora qiladi — avval shularni yarating.',
+  'marketing.offers.column.version': 'Versiya',
+  'marketing.offers.column.status': 'Holati',
+  'marketing.offers.column.reference': 'Ishora qiladi',
+  'marketing.offers.column.window': 'Amal qilish muddati',
+  'marketing.offers.column.channels': 'Kanallar',
+  'marketing.offers.action.edit': 'Qoralamani tahrirlash',
+  'marketing.offers.action.publish': 'Eʻlon qilish',
+  'marketing.offers.action.retire': 'Bekor qilish',
+  'marketing.offers.action.newVersion': 'Yangi versiya',
+  'marketing.offers.accrualRuleLabel': '{rate}% jamgʻarish ({status})',
+  'marketing.offers.form.title.create': 'Yangi taklif',
+  'marketing.offers.form.title.edit': 'Taklif qoralamasini tahrirlash',
+  'marketing.offers.form.title.version': 'Ushbu taklifning yangi versiyasi',
+  'marketing.offers.form.noBenefit':
+    'Taklif nimaga ishora qilishi, qachon amal qilishi, qayerda va qaysi soʻzlar bilan koʻrsatilishini bildiradi. Chegirma yoki ball miqdori uchun maydon yoʻq: imtiyoz qiymatini narxlash va sodiqlik hal qiladi.',
+  'marketing.offers.form.name': 'Mehmon koʻradigan nom',
+  'marketing.offers.form.reference': 'Ishora qiladi',
+  'marketing.offers.form.noPromotions':
+    'Bu brendda ishora qilinadigan aksiya yoʻq. Avval «Aksiyalar» boʻlimida yarating.',
+  'marketing.offers.form.noAccrualRules':
+    'Bu brendda ishora qilinadigan jamgʻarish qoidasi yoʻq. Avval «Sodiqlik» boʻlimida yarating.',
+  'marketing.offers.form.referenceManual':
+    'Aksiyalar va jamgʻarish qoidalari roʻyxatini olib boʻlmadi. Ushbu taklif ishora qiladiganining identifikatorini kiriting.',
+  'marketing.offers.form.validFrom': 'Boshlanishi ({zone} vaqti)',
+  'marketing.offers.form.validUntil': 'Tugashi ({zone} vaqti, ixtiyoriy)',
+  'marketing.offers.form.channels': 'Qayerda koʻrsatilishi mumkin',
+  'marketing.offers.form.template': 'Shablon (matn)',
+  'marketing.offers.form.audience': 'Auditoriya',
+  'marketing.offers.form.audience.any': 'Ssenariy yoki kampaniya yetib boradigan hamma',
+  'marketing.offers.form.banner': 'Banner rasmi havolasi (ixtiyoriy)',
+  'marketing.offers.form.submit': 'Qoralamani saqlash',
+  'marketing.offers.problem.name': 'Taklifga mehmonga koʻrsatish mumkin boʻlgan nom bering.',
+  'marketing.offers.problem.reference':
+    'Taklif ishora qiladigan aksiya yoki jamgʻarish qoidasini tanlang.',
+  'marketing.offers.problem.validFrom': 'Taklif qachon boshlanishini koʻrsating.',
+  'marketing.offers.problem.window': 'Taklif tugash vaqti boshlanishidan keyin boʻlishi kerak.',
+  'marketing.offers.problem.channels': 'Kamida bitta kanalga ruxsat bering.',
+  'marketing.offers.problem.template': 'Matnni olib yuradigan shablonni tanlang.',
+  'marketing.offers.publish.title': '«{name}» eʻlon qilinsinmi?',
+  'marketing.offers.publish.body':
+    'U kuchga kiradi va amaldagi versiyani almashtiradi. Eski versiyaga ishora qiluvchi ssenariylar unga ishora qilishda davom etadi.',
+  'marketing.offers.retire.title': '«{name}» ni bekor qilish',
+  'marketing.offers.retire.body':
+    'Uni tanlab boʻlmaydi va unga ishora qiluvchi har bir ssenariy mehmonning keyingi qadamida uni taklif qilishni toʻxtatadi — sababi yozib qoʻyiladi.',
+  'marketing.offers.retire.reason': 'Nima uchun bekor qilinmoqda?',
+  'marketing.contactPolicy.intro':
+    'Platforma mehmon bilan qanchalik tez-tez va qachon bogʻlanish mumkinligini belgilaydi. Brend qattiqroq boʻlishi mumkin, yumshoqroq emas. Siyosat xabarni toʻxtatganda, qarorlar jurnalida qaysi qoida va nima uchun ekani aytiladi.',
+  'marketing.contactPolicy.create': 'Yangi qoida',
+  'marketing.contactPolicy.denied': 'Bu brendning aloqa siyosatiga kirish huquqi yoʻq',
+  'marketing.contactPolicy.bounds.title': 'Platforma chegaralari',
+  'marketing.contactPolicy.bounds.hint':
+    'Brend qoidasi shunga solishtiriladi. Yuqori chegaradan oshgan limit yoki kechroq boshlanadigan yoki erta tugaydigan tinch soatlar platforma qoidasini yumshatadi va rad etiladi.',
+  'marketing.contactPolicy.bounds.quiet': 'Tinch soatlar',
+  'marketing.contactPolicy.bounds.quietValue':
+    '{start} dan {end} gacha xabar yoʻq (kamida); brend ertaroq boshlashi va kechroq tugatishi mumkin',
+  'marketing.contactPolicy.period.DAILY': 'Kuniga xabarlar, koʻpi bilan',
+  'marketing.contactPolicy.period.WEEKLY': 'Taqvim haftasiga xabarlar, koʻpi bilan',
+  'marketing.contactPolicy.period.ROLLING_7D': 'Istalgan 7 kunda xabarlar, koʻpi bilan',
+  'marketing.contactPolicy.period.ROLLING_30D': 'Istalgan 30 kunda xabarlar, koʻpi bilan',
+  'marketing.contactPolicy.overrides.title': 'Brendning oʻz qoidalari',
+  'marketing.contactPolicy.overrides.empty':
+    'Brend platforma chegaralaridan qattiqroq hech narsa belgilamagan.',
+  'marketing.contactPolicy.column.channel': 'Kanal',
+  'marketing.contactPolicy.column.purpose': 'Kampaniya maqsadi',
+  'marketing.contactPolicy.column.period': 'Davr',
+  'marketing.contactPolicy.column.cap': 'Limit',
+  'marketing.contactPolicy.column.quiet': 'Tinch soatlar',
+  'marketing.contactPolicy.column.reason': 'Sababi',
+  'marketing.contactPolicy.action.replace': 'Oʻzgartirish',
+  'marketing.contactPolicy.action.remove': 'Olib tashlash',
+  'marketing.contactPolicy.defaults.title': 'Ssenariylar oʻqiydigan sozlamalar',
+  'marketing.contactPolicy.defaults.hint':
+    'Konfiguratsiya API orqali oʻrnatiladi, bu yerda emas. Ular tenglik va standart qiymatlarni hal qiladi.',
+  'marketing.contactPolicy.defaults.priority':
+    'Qadam va ommaviy yuborish bir vaqtda kelganda qaysi maqsad birinchi',
+  'marketing.contactPolicy.defaults.priorityNone': 'Belgilanmagan: qadam ommaviy yuborishni kutadi',
+  'marketing.contactPolicy.defaults.inAppCap':
+    'Bitta ilovadagi banner mehmonga kuniga necha marta koʻrsatiladi',
+  'marketing.contactPolicy.defaults.controlGroup': 'Standart nazorat guruhi',
+  'marketing.contactPolicy.explainer.title': 'Nega mehmon xabar olmaydi',
+  'marketing.contactPolicy.explainer.hint':
+    'Ssenariyning har bir tanlovi yozib boriladi va har bir rad etishda shu sabablardan biri boʻladi. Har biri uchun u mehmon yoʻlini tugatishi yoki faqat qadamni kechiktirishi koʻrsatilgan.',
+  'marketing.contactPolicy.explainer.governed':
+    'buning ortida brendning aloqa siyosati boʻlishi mumkin',
+  'marketing.contactPolicy.explainer.quiet':
+    'Tinch soatlar xabarni hech qachon rad etmaydi: yopiq oraliqda kelgani keyingi ochiq vaqtgacha ushlab turiladi va oʻshanda yuboriladi.',
+  'marketing.contactPolicy.form.title.create': 'Yangi aloqa qoidasi',
+  'marketing.contactPolicy.form.title.replace': 'Ushbu qoidani oʻzgartirish',
+  'marketing.contactPolicy.form.tightenOnly':
+    'Qoida brendni tinchroq qilishi mumkin, balandroq emas. Platforma raqami har bir maydon yonida koʻrsatilgan.',
+  'marketing.contactPolicy.form.cap': 'Davr uchun limit (platforma chegarasi {ceiling})',
+  'marketing.contactPolicy.form.quietStart':
+    'Tinch soatlar boshlanishi (platformanikidan kech emas)',
+  'marketing.contactPolicy.form.quietEnd': 'Tinch soatlar tugashi (platformanikidan erta emas)',
+  'marketing.contactPolicy.form.reason': 'Bu qoida nima uchun kerak',
+  'marketing.contactPolicy.form.submit': 'Qoidani saqlash',
+  'marketing.contactPolicy.problem.purpose':
+    'Qoida qaysi kampaniya maqsadi uchunligini koʻrsating.',
+  'marketing.contactPolicy.problem.empty':
+    'Qoida nimadir deydi: limit, tinch oraliq yoki ikkalasi.',
+  'marketing.contactPolicy.problem.quietPair':
+    'Tinch oraliqning boshlanishi ham, tugashi ham boʻladi.',
+  'marketing.contactPolicy.problem.capNegative': 'Limit — butun son, nol yoki undan katta.',
+  'marketing.contactPolicy.problem.capLoosened':
+    'Limitni qattiqlashtirish mumkin, yumshatib boʻlmaydi: {cap} platformaning {ceiling} idan oshadi.',
+  'marketing.contactPolicy.problem.quietStartLoosened':
+    'Tinch soatlarni qattiqlashtirish mumkin, yumshatib boʻlmaydi: {start} dagi boshlanish platformaning {bound} idan kech.',
+  'marketing.contactPolicy.problem.quietEndLoosened':
+    'Tinch soatlarni qattiqlashtirish mumkin, yumshatib boʻlmaydi: {end} dagi tugash platformaning {bound} idan erta.',
+  'marketing.contactPolicy.problem.reason':
+    'Qoida nima uchun kerakligini yozing: uni kimgadir bogʻlash mumkin boʻlishi kerak.',
+  'marketing.contactPolicy.remove.title': 'Ushbu qoidani olib tashlash',
+  'marketing.contactPolicy.remove.body':
+    'Brend {channel} kanali uchun platforma chegarasiga qaytadi: {period}.',
+  'marketing.contactPolicy.remove.reason': 'Nima uchun olib tashlanmoqda?',
+
+  // scenario campaigns (ADR 0112) and delivery evidence (ADR 0146)
+  'marketing.campaigns.create.scenario': 'Yangi ssenariy',
+  'marketing.campaigns.kind.BROADCAST': 'Ommaviy yuborish',
+  'marketing.campaigns.kind.SCENARIO': 'Ssenariy',
+  'marketing.wiring.notConnected': 'Ulanmagan:',
+  'marketing.scenario.editor.title.create': 'Yangi ssenariy',
+  'marketing.scenario.editor.title.edit': '«{name}» qadamlarini tahrirlash',
+  'marketing.scenario.editor.intro':
+    'Ssenariy — har bir mehmon uchun reja: qadamlar, har birining oldidan kutish, kanal, taklif va shablon bor. Saqlash qoralama yaratadi va hech narsa yubormaydi. U har qanday kampaniya kabi baholanadi, kelishuvga yuboriladi va muallifi boʻlmagan kishi tomonidan tasdiqlanadi; uni faqat ishga tushirish boshlaydi. Qoralamadan chiqqach qadamlari qotadi: oʻzgartirish — oʻz tasdigʻini talab qiladigan yangi versiya.',
+  'marketing.scenario.editor.notDraft':
+    'Ssenariy qoralamadan chiqqan, shuning uchun qadamlari qotgan. Oʻzgartirish — oʻz tasdigʻini talab qiladigan yangi versiya: ssenariyni oching va uni yarating.',
+  'marketing.scenario.editor.name': 'Nomi',
+  'marketing.scenario.editor.steps': 'Qadamlar',
+  'marketing.scenario.editor.steps.hint':
+    'Koʻpi bilan {max} ta qadam. Kutish koʻpi bilan {days} kun, mehmon kirganidan (birinchi qadam) yoki oldingi qadam yuborilganidan boshlab hisoblanadi.',
+  'marketing.scenario.editor.step': '{number}-qadam',
+  'marketing.scenario.editor.addStep': 'Qadam qoʻshish',
+  'marketing.scenario.editor.moveUp': 'Qadamni yuqoriga koʻtarish',
+  'marketing.scenario.editor.moveDown': 'Qadamni pastga tushirish',
+  'marketing.scenario.editor.remove': 'Qadamni olib tashlash',
+  'marketing.scenario.editor.callCentreSuffix': ' (call-markaz navbati kerak, u hali yoʻq)',
+  'marketing.scenario.editor.wait': 'Qadamdan oldin kutish',
+  'marketing.scenario.editor.waitUnit': 'Birlik',
+  'marketing.scenario.editor.wait.hintFirst':
+    'Mehmon ssenariyga kirgan paytdan boshlab hisoblanadi.',
+  'marketing.scenario.editor.wait.hint': 'Oldingi qadam yuborilgan paytdan boshlab hisoblanadi.',
+  'marketing.scenario.editor.continuation': 'Bu qadamga oʻtish',
+  'marketing.scenario.editor.stop': 'Mehmon uchun ssenariyni tugatish',
+  'marketing.scenario.editor.offerTemplate': 'Taklif shabloni ({template})',
+  'marketing.scenario.editor.noTemplate': 'Shablonni tanlang',
+  'marketing.scenario.editor.inAppTemplate':
+    'Ilovadagi banner oʻz taklifini koʻrsatadi va taklif shablonidan foydalanadi.',
+  'marketing.scenario.editor.controlGroup':
+    'Natijalar oshishni koʻrsata olishi uchun nazorat guruhini ajratib qoʻyish',
+  'marketing.scenario.editor.controlGroup.percent': 'Nazorat guruhidagi auditoriya ulushi, %',
+  'marketing.scenario.editor.controlGroup.hint':
+    '{cap} mehmondan {count} tasi hech bir qadamni olmaydi; guruh boshida bir marta aniqlanadi va qayta tanlanmaydi. Nazorat guruhi qamrovga tushadi: kichik auditoriyada oʻlchash uchun juda kam mehmon qolishi mumkin.',
+  'marketing.scenario.editor.controlGroup.off':
+    'Nazorat guruhisiz: ssenariy butun auditoriya boʻyicha ishlaydi va natijalari oshishni koʻrsata olmaydi — solishtirish bazasi yoʻq.',
+  'marketing.scenario.editor.unwired':
+    'Bu muammolar hal qilinmaguncha ssenariyni ishga tushirib boʻlmaydi. Uni qoralama sifatida saqlash mumkin.',
+  'marketing.scenario.editor.unwired.step': '{number}-qadam,',
+  'marketing.scenario.editor.save': 'Qoralamani saqlash',
+  'marketing.scenario.editor.saveSteps': 'Qadamlarni saqlash',
+  'marketing.scenario.editor.problem.name': 'Ssenariyga nom bering.',
+  'marketing.scenario.editor.problem.audience': 'Auditoriyani tanlang.',
+  'marketing.scenario.editor.problem.cap':
+    'Qabul qiluvchilar chegarasi — 1 yoki undan katta butun son.',
+  'marketing.scenario.editor.problem.ceiling':
+    'Har bir xabar uchun toʻlanadigan kanalda yuboradigan ssenariyga xarajat chegarasi kerak.',
+  'marketing.scenario.editor.problem.currency': 'Valyuta — uch harfli kod.',
+  'marketing.scenario.editor.problem.controlGroup': 'Nazorat guruhi — 0 dan 100 gacha butun foiz.',
+  'marketing.scenario.editor.problem.scheduledAt': 'Boshlanish vaqti kelajakda boʻlishi kerak.',
+  'marketing.scenario.problem.NO_STEPS': 'Ssenariyda kamida bitta qadam boʻladi.',
+  'marketing.scenario.problem.TOO_MANY_STEPS': 'Ssenariyda koʻpi bilan {max} ta qadam boʻladi.',
+  'marketing.scenario.problem.NO_MESSAGING_STEP':
+    'Kamida bitta xabar yuboradigan qadam kerak: xarajat chegarasi, rozilik va baho xabar kanalidan olinadi, faqat ilovadagi bannerda ular yoʻq.',
+  'marketing.scenario.problem.CALL_CENTRE_NOT_WIRED':
+    '{step}-qadam mehmonni call-markazga uzatadi, uning murojaatlar navbati esa hali yoʻq.',
+  'marketing.scenario.problem.IN_APP_NEEDS_OFFER':
+    '{step}-qadam ilovadagi bannerni koʻrsatadi, lekin koʻrsatiladigan taklifni koʻrsatmagan.',
+  'marketing.scenario.problem.NEEDS_TEMPLATE':
+    '{step}-qadamga shablon yoki shablonni koʻrsatgan taklif kerak.',
+  'marketing.scenario.problem.WAIT_INVALID':
+    '{step}-qadamning kutish vaqti nol yoki undan katta boʻlishi kerak.',
+  'marketing.scenario.problem.WAIT_TOO_LONG': '{step}-qadam {days} kundan uzoq kutadi.',
+  'marketing.scenario.problem.OFFER_NOT_IN_FORCE':
+    '{step}-qadam amal qilmaydigan taklifga ishora qiladi: u eʻlon qilinmagan, tugagan, bekor qilingan yoki almashtirilgan.',
+  'marketing.scenario.problem.OFFER_CHANNEL':
+    '{step}-qadam taklifga ruxsat berilmagan kanalda yuboradi.',
+  'marketing.scenario.condition.ALWAYS': 'Har doim',
+  'marketing.scenario.condition.NO_ORDER_SINCE_ENTRY':
+    'Faqat mehmon kirganidan beri buyurtma bermagan boʻlsa',
+  'marketing.scenario.condition.NONE': 'Hech qachon erta emas',
+  'marketing.scenario.condition.ORDER_PLACED_SINCE_ENTRY': 'Mehmon buyurtma berishi bilanoq',
+  'marketing.scenario.unit.MINUTES': 'daqiqa',
+  'marketing.scenario.unit.HOURS': 'soat',
+  'marketing.scenario.unit.DAYS': 'kun',
+  'marketing.scenario.steps.title': 'Qadamlar',
+  'marketing.scenario.steps.wait': 'Undan oldingi kutish',
+  'marketing.scenario.wait.none': 'Darhol',
+  'marketing.scenario.wait.days': '{count} kun',
+  'marketing.scenario.wait.hours': '{count} soat',
+  'marketing.scenario.wait.minutes': '{count} daqiqa',
+  'marketing.scenario.supersedes':
+    '{id} versiyasini almashtiradi; bu versiyani ishga tushirish oldingisini toʻxtatadi.',
+  'marketing.scenario.guests.title': 'Mehmonlar qayerda',
+  'marketing.scenario.guests.none':
+    'Hali birorta mehmon kirmagan: mehmonlar ssenariy ishga tushganda qoʻshiladi.',
+  'marketing.scenario.control.some':
+    'Auditoriyaning {percent}% nazorat guruhida ajratilgan: boshida aniqlangan, qayta tanlanmaydi.',
+  'marketing.scenario.control.none':
+    'Nazorat guruhisiz: ssenariy butun auditoriya boʻyicha ishlaydi, shuning uchun natijalari oshishni koʻrsata olmaydi.',
+  'marketing.scenario.participant.IN_PROGRESS': 'Jarayonda',
+  'marketing.scenario.participant.CONTROL': 'Nazorat guruhida',
+  'marketing.scenario.participant.COMPLETED': 'Tugatgan',
+  'marketing.scenario.participant.STOPPED_BY_CONDITION': 'Shart bilan toʻxtatilgan',
+  'marketing.scenario.participant.STOPPED_BY_CONSENT_WITHDRAWN':
+    'Toʻxtatilgan: rozilik qaytarib olingan',
+  'marketing.scenario.participant.STOPPED_BY_SUPPRESSION': 'Toʻxtatilgan: toʻxtatish roʻyxatida',
+  'marketing.scenario.decisions.title': 'Nima hal qilingan va nega',
+  'marketing.scenario.decision.SENT': 'Yuborilgan',
+  'marketing.scenario.decision.BLOCKED': 'Toʻsilgan',
+  'marketing.scenario.decisions.empty': 'Hali hech narsa hal qilinmagan.',
+  'marketing.scenario.decisions.column.when': 'Qachon',
+  'marketing.scenario.decisions.column.step': 'Qadam',
+  'marketing.scenario.decisions.column.outcome': 'Natija',
+  'marketing.scenario.decisions.column.guest': 'Mehmon',
+  'marketing.scenario.decisions.guest.label':
+    'Nega bu mehmon qadamni olmadi? Mehmon hisobi identifikatori',
+  'marketing.scenario.decisions.guest.lookup': 'Shu mehmon boʻyicha qarorlarni koʻrsatish',
+  'marketing.scenario.decisions.guest.clear': 'Hammasini koʻrsatish',
+  'marketing.scenario.decisions.guest.hint':
+    'Hisob identifikatori mijoz kartochkasida bor. Bu yerda ism, telefon yoki email koʻrsatilmaydi.',
+  'marketing.scenario.decisions.guest.invalid':
+    'Bu hisob identifikatori emas: u 36 belgidan iborat — harflar va raqamlar 8-4-4-4-12 guruhlarda.',
+  'marketing.scenario.decisions.guest.empty':
+    'Bu mehmon boʻyicha ssenariy hali hech narsa hal qilmagan.',
+  'marketing.scenario.decisions.recorded': 'Yozilgan:',
+  'marketing.scenario.results.title': 'Ish berdimi?',
+  'marketing.scenario.results.hint':
+    'Maqsad — mehmonning oyna ichidagi keyingi buyurtmasi. Xabar yuborilgan mehmonning buyurtmasi faqat atribusiya modeli hisoblasa shu ssenariyga yoziladi; nazorat mehmonlari oʻz holicha sanaladi, chunki ularga hech qachon yozilmagan.',
+  'marketing.scenario.results.model': 'Atribusiya',
+  'marketing.scenario.results.model.FIRST_TOUCH':
+    'Birinchi aloqa: mehmonga birinchi yozgan kampaniya',
+  'marketing.scenario.results.model.LAST_TOUCH':
+    'Oxirgi aloqa: buyurtmadan oldingi eng soʻnggi kampaniya',
+  'marketing.scenario.results.window': 'Oyna, kun',
+  'marketing.scenario.results.window.invalid': 'Oyna — 1 dan 90 gacha butun kun soni.',
+  'marketing.scenario.results.none':
+    'Hali birorta mehmon kirmagan, oʻlchash uchun hech narsa yoʻq.',
+  'marketing.scenario.results.column.guests': 'Mehmonlar',
+  'marketing.scenario.results.column.ordered': 'Buyurtma berganlar',
+  'marketing.scenario.results.column.rate': 'Ulush',
+  'marketing.scenario.results.treated': 'Xabar olganlar',
+  'marketing.scenario.results.control': 'Nazorat guruhi',
+  'marketing.scenario.results.lift': 'Oshish: nazorat guruhiga nisbatan {points} foiz punkti.',
+  'marketing.scenario.results.noLift.noControl':
+    'Oshishni aytib boʻlmaydi: ssenariy nazorat guruhisiz ishlagan, solishtirish uchun baza yoʻq.',
+  'marketing.scenario.results.noLift.empty':
+    'Oshishni hozircha aytib boʻlmaydi: ikki guruhdan birida mehmon yoʻq.',
+  'marketing.scenario.results.open':
+    'Oynasi hali yopilmagan mehmonlar: {count} ta, shuning uchun bu raqamlar oʻzgaradi.',
+  'marketing.scenario.action.edit': 'Qadamlarni tahrirlash',
+  'marketing.scenario.action.revise': 'Yangi versiya yaratish',
+  'marketing.scenario.action.revise.hint':
+    'Ssenariy qoralamadan chiqqach, qadamlar qotadi. Yangi versiya — xuddi shu qadamlar bilan qoralama; unga oʻz tasdigʻi kerak va uni ishga tushirish shu versiyani toʻxtatadi.',
+  'marketing.campaign.recipients.column.delivery': 'Yetkazish',
+  'marketing.delivery.DELIVERED': 'Yetkazilgan',
+  'marketing.delivery.FAILED': 'Yetkazilmagan',
+  'marketing.delivery.REJECTED': 'Shlyuz rad etgan',
+  'marketing.delivery.NO_RECEIPT': 'Yetkazish hisoboti kelmadi',
+  'marketing.delivery.HANDED_TO_OPERATOR': 'Operatorga topshirilgan',
+  'marketing.delivery.PENDING': 'Hali yuborilmagan',
+  'marketing.campaign.recipients.deliveryHint':
+    'Yetkazish — shlyuzdan kelgan maʻlumot, vaʻda emas: «operatorga topshirilgan» xabar qabul qilingani va boshqa hech narsa maʻlum qilinmaganini bildiradi.',
+  'marketing.campaign.recipients.segments': 'Hisoblangan segmentlar: {count}',
 };

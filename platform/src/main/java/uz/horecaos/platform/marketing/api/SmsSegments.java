@@ -1,4 +1,4 @@
-package uz.horecaos.platform.marketing.domain;
+package uz.horecaos.platform.marketing.api;
 
 /**
  * How many segments one body actually costs (ADR 0044).
@@ -17,6 +17,12 @@ package uz.horecaos.platform.marketing.domain;
  * body pays the Cyrillic price for the whole message — which is exactly what the
  * gateway will charge, because a single non-GSM character forces the entire body
  * to UCS-2.
+ *
+ * <p>Lives in {@code marketing.api} (ADR 0146 Decision 7) because two modules need
+ * the same arithmetic: marketing estimates a campaign with it before anything
+ * sends, and notifications compares it with the segments a gateway reports having
+ * billed, and a pure function that two modules each reimplemented would drift in
+ * exactly the places the cost ceiling is enforced.
  */
 public final class SmsSegments {
 

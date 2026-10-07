@@ -105,6 +105,14 @@ public final class EventCatalog {
     public static final String PRICING_EVENTS_TOPIC = KafkaTopicCatalog.PRICING_EVENTS;
 
     /**
+     * ADR 0112 marketing facts. Its own topic rather than a share of {@code
+     * pricing.events} or {@code tenancy.events}: a scenario produces a record per
+     * guest per step, which has nothing in common with a handful of control-plane
+     * activations. Nothing on it carries a contact value or a rendered message.
+     */
+    public static final String MARKETING_EVENTS_TOPIC = KafkaTopicCatalog.MARKETING_EVENTS;
+
+    /**
      * ADR 0012's durable scheduler. A command, not a fact: {@code PosSyncRequested}
      * says "start a catalog import now", and the durable timer that decided it was
      * due lives in {@code integration.pos_sync_schedules}, never in Kafka.
@@ -597,6 +605,42 @@ public final class EventCatalog {
                     "A promotion was taken out of front of customers (ADR 0140). New orders stop "
                             + "receiving it; an order that already holds it keeps it under its "
                             + "recorded definition version."),
+            new EventContract(
+                    "ScenarioStepDecided",
+                    1,
+                    "marketing",
+                    MARKETING_EVENTS_TOPIC,
+                    "campaignId",
+                    "events/marketing.events/ScenarioStepDecided.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A scenario's action selection made a choice for one guest at one step "
+                            + "(ADR 0112): the step was sent, or it was blocked for a stated reason. "
+                            + "Ids, the step number, the decision and a reason code from a closed set -- "
+                            + "never a contact value, a rendered message or the reason's sentence."),
+            new EventContract(
+                    "ScenarioParticipantStopped",
+                    1,
+                    "marketing",
+                    MARKETING_EVENTS_TOPIC,
+                    "campaignId",
+                    "events/marketing.events/ScenarioParticipantStopped.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A guest's run through a scenario ended (ADR 0112): completed, or stopped by a "
+                            + "condition, by consent withdrawn or by a suppression. Ids and the outcome code."),
+            new EventContract(
+                    "OfferPublished",
+                    1,
+                    "marketing",
+                    MARKETING_EVENTS_TOPIC,
+                    "offerId",
+                    "events/marketing.events/OfferPublished.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An offer version was put in front of campaigns (ADR 0112). The offer, its brand "
+                            + "and its version number; never the promotion or rule it references, which a "
+                            + "consumer reads through the authorized offers API."),
             // ADR 0012's durable scheduler command. The claim that decided this
             // command should exist happened in PostgreSQL, under FOR UPDATE SKIP
             // LOCKED, in the same transaction that advanced the schedule's
