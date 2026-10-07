@@ -1,5 +1,6 @@
 rule_files:
   - adr-0023-alerts.yml
+  - adr-0147-alerts.yml
 
 evaluation_interval: 1m
 
@@ -132,3 +133,74 @@ tests:
             exp_annotations:
               summary: "an onboarding run has not moved for 3770s"
               runbook: docs/runbooks/onboarding-run-stalled.md
+
+  # ADR 0147's fallback rate. One fallback in ten ROAD measurements is 10%, over the 5%
+  # line, with enough traffic (150 in the window) to count.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_delivery_distance_fallbacks_total{mode="ROAD"}'
+        values: '0+1x25'
+      - series: 'horecaos_delivery_distance_road_measurements_total{mode="ROAD"}'
+        values: '0+10x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HorecaosRoadRoutingFallingBack
+        exp_alerts:
+          - exp_labels:
+              tier: morning
+            exp_annotations:
+              summary: "ROAD delivery fees are falling back to the straight line for more than 5% of quotes over the last 15 minutes"
+              runbook: docs/runbooks/load-uzbekistan-routing-dataset.md
+
+  # The same fallbacks against forty times the traffic are 2.5%, which is not an alert.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_delivery_distance_fallbacks_total{mode="ROAD"}'
+        values: '0+1x25'
+      - series: 'horecaos_delivery_distance_road_measurements_total{mode="ROAD"}'
+        values: '0+40x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HorecaosRoadRoutingFallingBack
+        exp_alerts: []
+
+  # Every one of a handful of quotes falling back is 100%, and is under the twenty-quote
+  # floor: at pilot volume that is a branch having a slow afternoon, not a routing fault.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_delivery_distance_fallbacks_total{mode="ROAD"}'
+        values: '0+1x25'
+      - series: 'horecaos_delivery_distance_road_measurements_total{mode="ROAD"}'
+        values: '0+1x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HorecaosRoadRoutingFallingBack
+        exp_alerts: []
+
+  # A dataset two months old by a day is stale once it has been so for five minutes; one
+  # day under is not.
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_routing_dataset_age_days'
+        values: '61x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HorecaosRoutingDatasetStale
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HorecaosRoutingDatasetStale
+        exp_alerts:
+          - exp_labels:
+              tier: morning
+            exp_annotations:
+              summary: "the routing dataset is 61 days old"
+              runbook: docs/runbooks/load-uzbekistan-routing-dataset.md
+
+  - interval: 1m
+    input_series:
+      - series: 'horecaos_routing_dataset_age_days'
+        values: '59x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: HorecaosRoutingDatasetStale
+        exp_alerts: []

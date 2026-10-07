@@ -32,6 +32,13 @@ import org.jspecify.annotations.Nullable;
  *                              none. Compared in the pipeline, against the same
  *                              post-discount goods subtotal the threshold uses
  * @param freeDeliveryFromMinor the zone's waiver threshold, or null
+ * @param routingDatasetVersion the routing dataset that measured a {@code ROAD} distance,
+ *                              or null for every other source (ADR 0147). Deliberately not
+ *                              in {@link #canonicalForm()}: a quote already carries the
+ *                              metres and the fee they priced, so a monthly dataset refresh
+ *                              changes what the next quote measures and never what an
+ *                              issued quote says. This is the label that explains why two
+ *                              quotes for one address disagree
  * @param losingZoneIds         the candidates that contained the point and lost
  *                              the ranking, so "the other zone's price applies"
  *                              is answerable
@@ -52,10 +59,53 @@ public record ResolvedDeliveryCharge(
         @Nullable Integer distanceMeters,
         @Nullable String distanceMode,
         @Nullable String distanceSource,
+        @Nullable String routingDatasetVersion,
         List<UUID> losingZoneIds) {
 
     public ResolvedDeliveryCharge {
         losingZoneIds = losingZoneIds == null ? List.of() : List.copyOf(losingZoneIds);
+    }
+
+    /**
+     * A charge priced without a routed distance, which is every charge that does not name a
+     * routing dataset: the sixteen-argument form that predates ADR 0147 and still describes
+     * a {@code RADIUS} fee, a fallback, a refusal and every fixture.
+     */
+    public ResolvedDeliveryCharge(
+            DeliveryFeeOutcome outcome,
+            String currency,
+            long feeMinor,
+            long tariffDiscountMinor,
+            @Nullable Long minBasketMinor,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable UUID zoneId,
+            @Nullable Integer zoneVersion,
+            @Nullable UUID tariffId,
+            @Nullable Integer tariffVersion,
+            @Nullable Integer bandSequence,
+            @Nullable Integer timeRuleSequence,
+            @Nullable Integer distanceMeters,
+            @Nullable String distanceMode,
+            @Nullable String distanceSource,
+            List<UUID> losingZoneIds) {
+        this(
+                outcome,
+                currency,
+                feeMinor,
+                tariffDiscountMinor,
+                minBasketMinor,
+                freeDeliveryFromMinor,
+                zoneId,
+                zoneVersion,
+                tariffId,
+                tariffVersion,
+                bandSequence,
+                timeRuleSequence,
+                distanceMeters,
+                distanceMode,
+                distanceSource,
+                null,
+                losingZoneIds);
     }
 
     /**

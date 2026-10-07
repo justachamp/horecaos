@@ -141,6 +141,14 @@ export const deliveryTariffPaths = {
     return this.base(scope);
   },
 
+  /**
+   * Whether the platform's routing engine is switched on and the dataset it holds (ADR 0147).
+   * What the editor shows beside "use platform routing" before any version has priced a fee.
+   */
+  routingEngine(scope: BrandScope): string {
+    return `${this.base(scope)}/routing-engine`;
+  },
+
   /** One tariff's live bands, time rules and discounts in full. */
   tariff(scope: BrandScope, tariffId: string): string {
     return `${this.base(scope)}/${encodeURIComponent(tariffId)}`;

@@ -391,7 +391,7 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.tariffs.detail.accrual': 'Начисление',
   'delivery.tariffs.detail.rounding': 'Округление',
   'delivery.tariffs.detail.radiusFallback':
-    'Режим по дорогам: если служба маршрутизации не отвечает, стоимость считается по прямой с коэффициентом {factor}, и в расчёте ставится отметка RADIUS_FALLBACK.',
+    'Режим по дорогам сейчас работает по прямой: стоимость считается по прямой с коэффициентом {factor}, и в каждом расчёте стоит отметка RADIUS_FALLBACK, пока маршрутизация не заработает снова.',
   'delivery.tariffs.detail.timeRulesHead': 'Часы пик',
   'delivery.tariffs.detail.discountsHead': 'Скидки',
   'delivery.tariffs.band.set': 'Набор полос',
@@ -408,8 +408,27 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.tariffs.draft.roadFactor': 'Коэффициент объезда (базисные пункты, 10000 = 1,0)',
   'delivery.tariffs.draft.roadNeedsRouting':
     'Режиму по дорогам нужна подключённая служба маршрутизации. Пока её нет, активация этой версии будет отклонена.',
-  'delivery.tariffs.draft.roadFallbackNote':
-    'Если служба маршрутизации не ответит, стоимость посчитается по прямой с коэффициентом объезда, а в расчёте будет отметка RADIUS_FALLBACK.',
+  'delivery.tariffs.detail.basis': 'Как измеряется расстояние',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE': 'По прямой от филиала',
+  'delivery.tariffs.detail.basis.ROAD': 'По дорогам, службой маршрутизации платформы',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE_FALLBACK':
+    'По прямой с коэффициентом объезда (маршрутизация не отвечает)',
+  'delivery.tariffs.detail.dataset': 'Набор данных маршрутизации',
+  'delivery.tariffs.detail.basisEvidence.FEES':
+    'По стоимостям, рассчитанным этой версией за последние {hours} ч: {road} по дорогам, {fallback} по прямой.',
+  'delivery.tariffs.detail.basisEvidence.CONFIGURATION':
+    'Ожидается по настройкам: за последние {hours} ч эта версия не рассчитала ни одной стоимости.',
+  'delivery.tariffs.draft.usePlatformRouting':
+    'Использовать маршрутизацию платформы (рекомендуется): дорогу измеряет собственная служба платформы, настраивать доступы не нужно',
+  'delivery.tariffs.draft.basis.STRAIGHT_LINE': 'Расстояние считается по прямой от филиала.',
+  'delivery.tariffs.draft.basis.ROAD_ON':
+    'Расстояние будет измеряться по дорогам службой маршрутизации платформы, набор данных {dataset}.',
+  'delivery.tariffs.draft.basis.ROAD_OFF':
+    'Служба маршрутизации платформы пока не включена. Пока она выключена, стоимость считается по прямой с коэффициентом {factor}, и в каждом расчёте стоит отметка RADIUS_FALLBACK.',
+  'delivery.tariffs.draft.basis.ROAD_UNKNOWN':
+    'Расстояние будет измеряться по дорогам службой маршрутизации платформы. Если она не ответит, стоимость посчитается по прямой с коэффициентом объезда, а в расчёте будет отметка RADIUS_FALLBACK.',
+  'delivery.tariffs.draft.basis.ROAD_NAMED_INSTALLATION':
+    'Расстояние будет измеряться указанным вами подключением маршрутизации. Если оно не ответит, стоимость посчитается по прямой с коэффициентом объезда, а в расчёте будет отметка RADIUS_FALLBACK.',
   'delivery.tariffs.draft.maxFee': 'Максимальная стоимость (в минимальных единицах, необязательно)',
   'delivery.tariffs.draft.roundingStep': 'Шаг округления (в минимальных единицах, необязательно)',
   'delivery.tariffs.draft.accrual': 'Начисление за км',

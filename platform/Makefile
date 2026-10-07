@@ -41,7 +41,7 @@ build: ## Compile and package without running tests
 format: ## Reformat Java sources (ADR 0054)
 	$(MVN) spotless:apply
 
-lint: fmt-check doc-links hooks-test bands-test shards-test makefile-test ## Static checks an agent must pass before review
+lint: fmt-check doc-links hooks-test bands-test shards-test makefile-test routing-gate-test ## Static checks an agent must pass before review
 
 fmt-check: ## Repository hygiene checks that need no JVM
 	@python3 tools/checks/repo_hygiene.py
@@ -55,6 +55,9 @@ bands-test: ## Prove control-band detection escalates at the right thresholds
 shards-test: ## Prove CI's Java test shards cover every test class exactly once, and ci.yml agrees
 	@python3 tools/ci/test_shard_tests.py
 	@python3 tools/ci/shard_tests.py check
+
+routing-gate-test: ## Prove the routing accuracy gate can say no (ADR 0147)
+	@cd tools/routing && python3 -m unittest test_accuracy_gate
 
 makefile-test: ## Prove Maven targets run under the build lock and `make run` does not hold it while serving
 	@python3 tools/checks/test_makefile.py

@@ -388,7 +388,7 @@ export const deliveryEn = {
   'delivery.tariffs.detail.accrual': 'Accrual',
   'delivery.tariffs.detail.rounding': 'Rounding',
   'delivery.tariffs.detail.radiusFallback':
-    'Road mode: when the routing provider does not answer, the fee is priced from the straight line multiplied by {factor} and the resolution is stamped RADIUS_FALLBACK.',
+    'Road mode is falling back to the straight line: fees are priced from it multiplied by {factor}, and each resolution is stamped RADIUS_FALLBACK until routing answers again.',
   'delivery.tariffs.detail.timeRulesHead': 'Peak windows',
   'delivery.tariffs.detail.discountsHead': 'Discounts',
   'delivery.tariffs.band.set': 'Band set',
@@ -405,8 +405,27 @@ export const deliveryEn = {
   'delivery.tariffs.draft.roadFactor': 'Detour factor (basis points, 10000 = 1.0)',
   'delivery.tariffs.draft.roadNeedsRouting':
     'Road mode needs a routing installation. Activation will refuse this version until one is set.',
-  'delivery.tariffs.draft.roadFallbackNote':
-    'If the routing provider does not answer, the fee is priced from the straight line multiplied by the detour factor and the resolution says RADIUS_FALLBACK.',
+  'delivery.tariffs.detail.basis': 'Distance measured by',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE': 'The straight line from the branch',
+  'delivery.tariffs.detail.basis.ROAD': 'Road distance, from the platform routing engine',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE_FALLBACK':
+    'The straight line times the detour factor (routing is not answering)',
+  'delivery.tariffs.detail.dataset': 'Routing dataset',
+  'delivery.tariffs.detail.basisEvidence.FEES':
+    'Read from the fees this version priced in the last {hours} h: {road} by road, {fallback} by straight line.',
+  'delivery.tariffs.detail.basisEvidence.CONFIGURATION':
+    'Expected from configuration: this version has priced no fee in the last {hours} h.',
+  'delivery.tariffs.draft.usePlatformRouting':
+    "Use platform routing (recommended): the platform's own routing engine measures the road, with no credentials to set up",
+  'delivery.tariffs.draft.basis.STRAIGHT_LINE': 'Distance is the straight line from the branch.',
+  'delivery.tariffs.draft.basis.ROAD_ON':
+    'Distance will be measured by road with the platform routing engine, dataset {dataset}.',
+  'delivery.tariffs.draft.basis.ROAD_OFF':
+    'The platform routing engine is not switched on yet. Until it is, fees are priced from the straight line multiplied by {factor}, and each resolution says RADIUS_FALLBACK.',
+  'delivery.tariffs.draft.basis.ROAD_UNKNOWN':
+    'Distance will be measured by road with the platform routing engine. If it does not answer, the fee is priced from the straight line multiplied by the detour factor and says RADIUS_FALLBACK.',
+  'delivery.tariffs.draft.basis.ROAD_NAMED_INSTALLATION':
+    'Distance will be measured by the routing installation you named. If it does not answer, the fee is priced from the straight line multiplied by the detour factor and says RADIUS_FALLBACK.',
   'delivery.tariffs.draft.maxFee': 'Maximum fee (minor units, optional)',
   'delivery.tariffs.draft.roundingStep': 'Rounding step (minor units, optional)',
   'delivery.tariffs.draft.accrual': 'Per-km accrual',

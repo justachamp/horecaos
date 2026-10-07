@@ -21,6 +21,8 @@ import {
   BandRequest,
   DeliveryTariffsApi,
   DiscountRequest,
+  RoutingEngineResponse,
+  RoutingView,
   TariffDetailResponse,
   TariffSummaryResponse,
   TimeRuleRequest,
@@ -76,6 +78,12 @@ const DAY_KEYS: readonly MessageKey[] = [
   'delivery.tariffs.days.sun',
 ];
 
+const BASIS_KEYS: Readonly<Record<RoutingView['basis'], MessageKey>> = {
+  STRAIGHT_LINE: 'delivery.tariffs.detail.basis.STRAIGHT_LINE',
+  ROAD: 'delivery.tariffs.detail.basis.ROAD',
+  STRAIGHT_LINE_FALLBACK: 'delivery.tariffs.detail.basis.STRAIGHT_LINE_FALLBACK',
+};
+
 const FEE_SOURCE_KEYS: Readonly<Record<string, MessageKey>> = {
   TARIFF: 'delivery.tariffs.feeSource.TARIFF',
   PROVIDER_QUOTE: 'delivery.tariffs.feeSource.PROVIDER_QUOTE',
@@ -118,12 +126,16 @@ const DISCOUNT_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
  *    controllers and had no caller anywhere in this console, so every location
  *    rode the brand default and ADR 0037's middle precedence rung was
  *    unreachable from the product.
- * 4. **`RADIUS_FALLBACK` is rendered, not hidden.** A `ROAD` tariff with no
- *    routing installation is refused at activation; one whose provider does
- *    not answer prices from the straight line inflated by the detour factor
- *    and stamps `RADIUS_FALLBACK` on the resolution. Three Javadoc comments in
- *    the platform say this exists "so nobody is misled", and nothing rendered
- *    it. Both facts are on the screen now.
+ * 4. **`RADIUS_FALLBACK` is rendered, not hidden — and only when it is true.** A `ROAD`
+ *    tariff with no routing installation is refused at activation; one whose provider
+ *    does not answer prices from the straight line inflated by the detour factor and
+ *    stamps `RADIUS_FALLBACK` on the resolution. Both facts are on the screen. Since
+ *    ADR 0147 the notice follows the platform's routing read — what recent fees
+ *    recorded, else what configuration says, and which of the two it is — instead of
+ *    the distance mode alone, because the platform now has an engine that can answer.
+ * 5. **"Use platform routing."** A `ROAD` draft binds to the platform's own routing
+ *    engine in the same action, with no credential screen; naming an installation by
+ *    id is the alternative, as before.
  *
  * Drafting and activating are two clicks, for the reason
  * `DELIVERY_TARIFF_ACTIVATE` is a separate capability from `MANAGE`: an
@@ -171,6 +183,14 @@ export class DeliveryTariffsPage implements OnInit {
   protected readonly draftFeeSource = signal<'TARIFF' | 'PROVIDER_QUOTE'>('TARIFF');
   protected readonly draftDistanceMode = signal<'RADIUS' | 'ROAD'>('RADIUS');
   protected readonly draftRoutingInstallationId = signal('');
+  /**
+   * "Use platform routing" (ADR 0147): the platform's own engine measures the road and the
+   * tenant's installation of it is created in the same action, with no credential screen.
+   * On by default for a `ROAD` draft because it is the only way to a working `ROAD` tariff
+   * that needs nothing from the operator; off, the operator names an installation by id as
+   * before.
+   */
+  protected readonly draftUsePlatformRouting = signal(true);
   protected readonly draftRoadFactorBasisPoints = signal(13_000);
   protected readonly draftMaxDistanceMeters = signal(15_000);
   protected readonly draftMinFeeMinor = signal(0);
@@ -208,6 +228,14 @@ export class DeliveryTariffsPage implements OnInit {
   protected readonly bindingTariffId = signal<string | null>(null);
   protected readonly bindLocationId = signal('');
 
+  /**
+   * Whether the platform's routing engine is switched on and which dataset it holds, read once
+   * with the list. Null while unknown (the read failed, or has not come back), and every
+   * sentence that depends on it says nothing rather than guessing: ADR 0147 rules out the
+   * screen claiming a fallback, or a road, that the platform has not shown it.
+   */
+  protected readonly engine = signal<RoutingEngineResponse | null>(null);
+
   protected readonly branchOptions = computed(() => this.location.options());
 
   /**
@@ -217,8 +245,34 @@ export class DeliveryTariffsPage implements OnInit {
    * discovers otherwise on the activation click.
    */
   protected readonly roadNeedsRouting = computed(
-    () => this.draftDistanceMode() === 'ROAD' && this.draftRoutingInstallationId().trim() === '',
+    () =>
+      this.draftDistanceMode() === 'ROAD' &&
+      !this.draftUsePlatformRouting() &&
+      this.draftRoutingInstallationId().trim() === '',
   );
+
+  /**
+   * Which basis the version being drafted will be priced by, said from what is known before it
+   * exists (ADR 0147): the straight line by choice, the road once the engine is on, or the
+   * straight line times the detour factor until it is. `ROAD_NAMED_INSTALLATION` is an
+   * installation the operator named, whose engine this screen cannot speak for; `ROAD_UNKNOWN`
+   * is "the engine's state could not be read".
+   */
+  protected readonly draftBasis = computed<
+    'STRAIGHT_LINE' | 'ROAD_ON' | 'ROAD_OFF' | 'ROAD_UNKNOWN' | 'ROAD_NAMED_INSTALLATION'
+  >(() => {
+    if (this.draftDistanceMode() === 'RADIUS') {
+      return 'STRAIGHT_LINE';
+    }
+    if (!this.draftUsePlatformRouting()) {
+      return 'ROAD_NAMED_INSTALLATION';
+    }
+    const engine = this.engine();
+    if (engine === null) {
+      return 'ROAD_UNKNOWN';
+    }
+    return engine.engineEnabled ? 'ROAD_ON' : 'ROAD_OFF';
+  });
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -235,6 +289,7 @@ export class DeliveryTariffsPage implements OnInit {
     }
     try {
       this.tariffs.set(await this.api.list(scope));
+      await this.loadEngine(scope);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -243,6 +298,19 @@ export class DeliveryTariffsPage implements OnInit {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * The engine's standing, for the draft form's sentence about what a road tariff will do.
+   * Never fatal: the list is what the page is for, and a failed read leaves the sentence
+   * saying only what is certain.
+   */
+  private async loadEngine(scope: { tenantId: string; brandId: string }): Promise<void> {
+    try {
+      this.engine.set(await this.api.routingEngine(scope));
+    } catch {
+      this.engine.set(null);
     }
   }
 
@@ -275,16 +343,31 @@ export class DeliveryTariffsPage implements OnInit {
   }
 
   /**
-   * Whether this live version will price from an inflated straight line rather
-   * than from a road distance.
+   * What this live version's distance is measured by, from the server's routing read (ADR 0147).
    *
-   * `RoadDistancePort` answers empty today — ADR 0037 records it — so every
-   * `ROAD` tariff currently resolves `RADIUS_FALLBACK`. Rendering it is the
-   * difference between an operator who knows the fee is approximate and one
-   * who thinks the routing provider is working.
+   * This used to answer "is the distance mode ROAD", because `RoadDistancePort` answered empty
+   * on every call and so every `ROAD` tariff was in fact pricing from an inflated straight
+   * line. That sentence is true only while it is true, and the day an adapter answers it
+   * would be a screen telling an operator their routing is broken when it is working. The
+   * notice now follows what the fees recorded, and a server that sends no routing read gets
+   * no notice at all rather than the old unconditional one.
    */
-  protected fallsBackToRadius(active: ActiveVersionResponse): boolean {
-    return active.distanceMode === 'ROAD';
+  protected routingOf(detail: TariffDetailResponse): RoutingView | null {
+    return detail.routing ?? null;
+  }
+
+  /** Whether this version is, on the evidence, pricing a ROAD tariff from the straight line. */
+  protected isFallingBack(routing: RoutingView | null): boolean {
+    return routing !== null && routing.basis === 'STRAIGHT_LINE_FALLBACK';
+  }
+
+  protected basisKey(basis: RoutingView['basis']): MessageKey {
+    return BASIS_KEYS[basis];
+  }
+
+  /** The dataset to show: the one on the last fee the engine measured, else the one it holds now. */
+  protected datasetOf(routing: RoutingView): string | null {
+    return routing.lastDatasetVersion ?? routing.engineDatasetVersion ?? null;
   }
 
   /**
@@ -385,7 +468,18 @@ export class DeliveryTariffsPage implements OnInit {
     this.draftCurrency.set(active?.currency ?? tariff.currency ?? 'UZS');
     this.draftFeeSource.set((active?.feeSource as 'TARIFF' | 'PROVIDER_QUOTE') ?? 'TARIFF');
     this.draftDistanceMode.set((active?.distanceMode as 'RADIUS' | 'ROAD') ?? 'RADIUS');
-    this.draftRoutingInstallationId.set(active?.routingProviderInstallationId ?? '');
+    // A version already on platform routing stays on it. One bound to an installation the
+    // operator named keeps that installation, so re-drafting it does not silently swap its
+    // engine; everything else starts on platform routing, the choice that needs nothing.
+    const routing = this.detailByTariffId().get(tariff.tariffId)?.routing ?? null;
+    const namedInstallation =
+      active?.distanceMode === 'ROAD' &&
+      !!active.routingProviderInstallationId &&
+      routing?.provider !== 'osrm';
+    this.draftUsePlatformRouting.set(!namedInstallation);
+    this.draftRoutingInstallationId.set(
+      namedInstallation ? (active?.routingProviderInstallationId ?? '') : '',
+    );
     this.draftRoadFactorBasisPoints.set(active?.roadFactorBasisPoints ?? 13_000);
     this.draftMaxDistanceMeters.set(active?.maxDistanceMeters ?? 15_000);
     this.draftMinFeeMinor.set(active?.minFeeMinor ?? 0);
@@ -596,7 +690,14 @@ export class DeliveryTariffsPage implements OnInit {
         feeSource: this.draftFeeSource(),
         distanceMode: this.draftDistanceMode(),
         roadFactorBasisPoints: this.draftRoadFactorBasisPoints(),
-        routingProviderInstallationId: this.draftRoutingInstallationId().trim() || null,
+        // Exactly one of the two for a road tariff, and neither for a straight-line one: the
+        // server refuses a RADIUS draft that asks for platform routing, and refuses naming an
+        // installation while asking for it.
+        routingProviderInstallationId:
+          this.draftDistanceMode() === 'ROAD' && !this.draftUsePlatformRouting()
+            ? this.draftRoutingInstallationId().trim() || null
+            : null,
+        usePlatformRouting: this.draftDistanceMode() === 'ROAD' && this.draftUsePlatformRouting(),
         maxDistanceMeters: this.draftMaxDistanceMeters(),
         minFeeMinor: this.draftMinFeeMinor(),
         maxFeeMinor: this.draftMaxFeeMinor(),

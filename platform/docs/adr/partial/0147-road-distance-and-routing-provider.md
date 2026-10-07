@@ -1,29 +1,32 @@
 # ADR 0147: Road distance and routing provider
 
 - Decision status: Accepted
-- Implementation status: Not started — no routing provider exists and a `ROAD`
-  tariff prices as if it were a `RADIUS` one. `DeliveryRoutingConfiguration`
-  registers a `RoadDistancePort` that answers empty on every call, on purpose
-  ("not a stub that invents a plausible number"), so `DeliveryFeeResolver.measure`
-  falls through to `straight line × road_factor_basis_points`, records
-  `distance_source = RADIUS_FALLBACK` and increments
-  `horecaos.delivery.distance.fallbacks`; the fee is never failed for a routing
-  problem. What exists around that: `DistanceMode.ROAD` on
-  `fulfillment.delivery_tariff_versions` with `road_factor_basis_points`
-  (default 13000, CHECK ≥ 10000, V0025) and `routing_provider_installation_id`;
-  `DeliveryTariff.activationProblems` refusing a `ROAD` tariff with no
-  installation ("ROAD distance needs a routing binding (ADR 0026)"); the
-  `routing_provider` column on `delivery_fee_resolutions`; `LegacyTariffImport`
-  refusing to import a legacy branch as anything but `ROAD` with a routing
-  installation, because the legacy measured through its map SDK; the courier
-  module mapping `ROAD` to `DistanceSource.ROUTING` as evidence. What does not
-  exist: a routing adapter, a `ROUTING` value in `ProviderCategory` (the enum has
-  `POS`, `PAYMENT`, `DELIVERY`, `MARKETPLACE`, `NOTIFICATION`, `GEOCODING`,
-  `VOICE`, `ANALYTICS`, `OTHER`), an approved routing endpoint in
-  `integration.provider_environments`, a cache or timeout on the call, a duration
-  in the port's answer (it returns metres and a provider name only), and any
-  value in `ordering.orders.promise_travel_minutes` for a delivery order —
-  `CheckoutOrderWriter` passes `null`, "travel is null rather than zero".
+- Implementation status: Partial — built in operations batch 19 (2026-10-07), behind a
+  switch that is off everywhere: `RoadDistancePort` moved to `fulfillment.api` and
+  answers `RoadRoute(meters, seconds, provider, datasetVersion)`; `DeliveryFeeResolver`
+  stores the dataset version and the free-flow seconds on `delivery_fee_resolutions`
+  (V0493, with a CHECK that they exist exactly for a `ROAD` distance), the quote's
+  evidence carries the dataset (and the context hash does not), and the evidence
+  endpoint exposes both; the `ROUTING` provider category on both CHECKs and the approved
+  environment `osrm_internal` (V0493); `OsrmRoadDistanceAdapter` behind the
+  `routing.road-distance.v1` Camel route (descriptor `docs/routes/osrm-road-distance.md`)
+  with the 500 ms bound, a per-engine circuit breaker, the registered
+  `routing.road_routes` cache and the `horecaos.routing.*` metrics; "use platform
+  routing" (`usePlatformRouting` on the draft and `RoutingInstallationPort`, which
+  creates the keyless installation in the draft's own transaction and idempotently);
+  the tariff editor's basis, dataset and conditional fallback notice (read from recent
+  fees, else configuration, and which); the `routing` compose profile (`osrm`,
+  `osrm-dataset`), the dataset build script and image, the accuracy-gate tool, the two
+  morning-digest alerts and the runbook. **Not built, and each waits on something this
+  record cannot supply:** the VM memory measurement (so the 2 GB planning ceiling is
+  still an assumption), the 100-trip reference sample (so the gate has never been run
+  and the region's detour factor is still the unmeasured 1.30), a first run of the
+  monthly dataset workflow and of the engine itself in any environment (the `osrm`
+  health check is written from the image's description and unverified against it), the
+  pilot tenant's week of fees compared with its fallback shadow, and a test against the
+  real engine and a fixture extract; the hosted-API second adapter, which its own
+  triggers have not fired; and `promise_travel_minutes`, which is ADR 0037's remaining
+  item.
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)

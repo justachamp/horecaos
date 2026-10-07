@@ -18,7 +18,8 @@ import uz.horecaos.platform.fulfillment.api.DeliveryFeePort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
-import uz.horecaos.platform.fulfillment.application.port.RoadDistancePort;
+import uz.horecaos.platform.fulfillment.api.RoadDistancePort;
+import uz.horecaos.platform.fulfillment.api.RoadRoute;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.DeliveryFeeResolution;
 import uz.horecaos.platform.fulfillment.domain.Haversine;
@@ -207,6 +208,14 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         if (distance.source() == DistanceSource.RADIUS_FALLBACK) {
             evidence.put("roadFactorBasisPoints", tariff.roadFactorBasisPoints());
         }
+        if (distance.source() == DistanceSource.ROAD) {
+            // The map this figure came from, in the evidence the simulator returns as
+            // well as on the stored row's own columns: a road distance is reproducible
+            // only against its dataset, and a refresh moves fees without anyone
+            // editing a tariff (ADR 0147).
+            evidence.put("routingDatasetVersion", distance.datasetVersion());
+            evidence.put("routingSecondsFreeFlow", distance.seconds());
+        }
         if (distance.meters() >= tariff.maxDistanceMeters()) {
             // Inside the polygon and past the tariff's reach. A generously drawn
             // district polygon always contains a house no courier will serve at
@@ -236,6 +245,8 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
                     tariff.distanceMode(),
                     distance.source(),
                     distance.provider(),
+                    distance.seconds(),
+                    distance.datasetVersion(),
                     null,
                     null,
                     null,
@@ -294,6 +305,8 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
                 tariff.distanceMode(),
                 distance.source(),
                 distance.provider(),
+                distance.seconds(),
+                distance.datasetVersion(),
                 providerQuote,
                 computedFee,
                 finalFee,
@@ -362,20 +375,27 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         int straightLine = Haversine.metersBetween(origin.point(), query.destination());
 
         if (tariff.distanceMode() == DistanceMode.RADIUS) {
-            return new Distance(straightLine, DistanceSource.RADIUS, null);
+            return new Distance(straightLine, DistanceSource.RADIUS, null, null, null);
         }
 
-        Optional<RoadDistancePort.RoadDistance> routed =
-                routing.distance(origin.point(), query.destination(), tariff.routingProviderInstallationId());
+        Optional<RoadRoute> routed =
+                routing.route(origin.point(), query.destination(), tariff.routingProviderInstallationId());
+        // The denominator of ADR 0147's fallback alert ("fallbacks above 5% of ROAD
+        // quotes over fifteen minutes"): every ROAD-mode measurement, counted whichever
+        // way it came out, because a fallback rate with no total is a number nobody can
+        // read.
+        meters.counter("horecaos.delivery.distance.road_measurements", "mode", DistanceMode.ROAD.name())
+                .increment();
         if (routed.isPresent()) {
+            RoadRoute route = routed.get();
             return new Distance(
-                    routed.get().meters(), DistanceSource.ROAD, routed.get().provider());
+                    route.meters(), DistanceSource.ROAD, route.provider(), route.seconds(), route.datasetVersion());
         }
 
         meters.counter("horecaos.delivery.distance.fallbacks", "mode", DistanceMode.ROAD.name())
                 .increment();
         long inflated = Math.multiplyExact((long) straightLine, tariff.roadFactorBasisPoints()) / 10_000L;
-        return new Distance(Math.toIntExact(inflated), DistanceSource.RADIUS_FALLBACK, null);
+        return new Distance(Math.toIntExact(inflated), DistanceSource.RADIUS_FALLBACK, null, null, null);
     }
 
     private DeliveryFeeResolution refusal(
@@ -413,6 +433,8 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
                 null,
                 null,
                 null,
+                null,
+                null,
                 winner == null ? null : winner.minBasketMinor(),
                 winner == null ? null : winner.freeDeliveryFromMinor(),
                 losers,
@@ -422,6 +444,14 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
     /** @param rung which precedence step answered, so the evidence explains itself */
     private record TariffChoice(String rung, DeliveryTariff tariff) {}
 
+    /**
+     * @param seconds        the engine's free-flow travel time, present exactly when {@code source} is {@code ROAD}
+     * @param datasetVersion the dataset that measured it, present exactly when {@code source} is {@code ROAD}
+     */
     private record Distance(
-            int meters, DistanceSource source, @Nullable String provider) {}
+            int meters,
+            DistanceSource source,
+            @Nullable String provider,
+            @Nullable Integer seconds,
+            @Nullable String datasetVersion) {}
 }
