@@ -115,7 +115,7 @@
         </button>
       </form>
       <p class="q-caption muted approvalsNote">
-        {{ i18n.t('wallet.approvals.note') }}
+        {{ i18n.t('billing.bank.approvalsNote') }}
         <a class="approvalsLink" [routerLink]="['/compliance/approvals']">{{
           i18n.t('wallet.approvals.link')
         }}</a>
@@ -185,7 +185,7 @@
                       installationStatusLabel(installation.status)
                     }}</span>
                   </td>
-                  <td class="q-body-sm actions">
+                  <td class="q-body-sm rowActions">
                     @if (session.has('INTEGRATION_INSTALLATION_MANAGE')) {
                       @if (moveFor(installation); as move) {
                         <button

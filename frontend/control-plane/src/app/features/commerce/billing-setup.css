@@ -56,3 +56,8 @@
 .num {
   text-align: right;
 }
+
+.rowActions {
+  text-align: right;
+  white-space: nowrap;
+}

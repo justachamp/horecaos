@@ -344,7 +344,7 @@
                   <td class="q-body-sm q-tnum num">{{ i18n.moneyOrRaw(invoice.paid) }}</td>
                   <td class="q-body-sm q-tnum num">{{ i18n.moneyOrRaw(invoice.due) }}</td>
                   <td class="q-body-sm q-tnum">{{ i18n.day(asDate(invoice.validUntil)) }}</td>
-                  <td class="q-body-sm actions">
+                  <td class="q-body-sm rowActions">
                     @if (invoice.status === 'OPEN' && session.has('COMMERCIAL_WALLET_MANAGE')) {
                       <button type="button" class="cancelInvoiceToggle" (click)="openCancelInvoice(invoice)">{{ i18n.t('wallet.invoice.cancel.open') }}</button>
                     }

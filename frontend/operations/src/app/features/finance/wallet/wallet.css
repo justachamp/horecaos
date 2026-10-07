@@ -235,3 +235,8 @@
 .ledger-title {
   margin-top: 32px;
 }
+
+/* A number is read whole: it is what the payer copies into a transfer's purpose. */
+.q-mono {
+  white-space: nowrap;
+}

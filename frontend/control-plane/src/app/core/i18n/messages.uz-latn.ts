@@ -1925,6 +1925,7 @@ export const uzLatn: Messages = {
     'Hisob-faktura chiqarilgan kundagi rekvizitlarni saqlaydi. Bularni o‘zgartirish chiqarilganlarni qayta yozmaydi.',
   'billing.bank.note':
     'Tasdiqlovchi hisob raqamini imzolaydi: u bu yerdagi barcha maydonlarni ko‘radi, faqat sizning sababingiz yashirin. Boshqa odam tasdiqlamaguncha hech narsa o‘zgarmaydi; keyin xuddi shu taklifni yana yuboring.',
+  'billing.bank.approvalsNote': 'Taklif ikkinchi odamning tasdig‘ini kutadi.',
   'billing.bank.submit': 'Taklif qilish',
   'billing.bank.awaiting':
     'Taklif qilindi. Hech narsa o‘zgarmadi: boshqa odam tasdiqlashi kerak. U tasdiqlagach, qo‘llash uchun xuddi shu taklifni yana yuboring.',

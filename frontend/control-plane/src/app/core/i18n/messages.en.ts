@@ -1909,6 +1909,7 @@ export const en = {
     'An invoice keeps the details of the day it was issued. Changing these never rewrites one.',
   'billing.bank.note':
     'The account number is what an approver signs: they see every field here and only your reason is withheld. Nothing changes until a different person approves it; then submit the identical proposal again.',
+  'billing.bank.approvalsNote': 'A proposal waits for a second person to approve it.',
   'billing.bank.submit': 'Propose',
   'billing.bank.awaiting':
     'Proposed. Nothing has changed: a different person must approve it. Once they have, submit the same proposal again to apply it.',
@@ -1949,7 +1950,7 @@ export const en = {
   'billing.installation.externalAccount': 'Account at the provider',
   'billing.installation.submit': 'Declare',
   'dunning.column.owed': 'Owed',
-  'dunning.owed': '{amount}, {count} statement(s)',
+  'dunning.owed': '{amount} (statements owing: {count})',
   'dunning.paidInFull': 'Paid in full: ready to restore',
   'dunning.paidInFull.hint':
     'Nothing moves a tenant by itself: paying clears what it owes and leaves its stage as it was, for a person to decide.',
