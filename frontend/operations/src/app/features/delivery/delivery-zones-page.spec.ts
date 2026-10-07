@@ -4,12 +4,14 @@ import { provideRouter } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../core/api/catalog-paths';
+import { ApiError } from '../../core/api/problem-details';
 import { Auth } from '../../core/auth/auth';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import {
   ActiveVersionResponse,
   DeliveryTariffsApi,
@@ -19,11 +21,12 @@ import {
 import {
   DeliveryZonesApi,
   ZoneDetailResponse,
+  ZoneOutlineResponse,
   ZoneSummaryResponse,
   ZoneVersionResponse,
 } from './delivery-zones-api';
 import { DeliveryZonesPage } from './delivery-zones-page';
-import { RegionsApi } from './regions-api';
+import { RegionResponse, RegionsApi } from './regions-api';
 
 const BRAND_SCOPE: BrandScope = { tenantId: 't1', brandId: 'b1' };
 
@@ -110,12 +113,16 @@ describe('DeliveryZonesPage', () => {
 
   afterEach(() => resetRegionalFormats());
 
+  let mapProvider: NullMapProvider;
+
   async function render(
     api: Partial<DeliveryZonesApi>,
     tariffs: Partial<DeliveryTariffsApi> = { list: vi.fn().mockResolvedValue([]) },
     locale: Locale = 'en',
     localeSet: FakeLocaleSet = new FakeLocaleSet(),
+    regions: readonly RegionResponse[] = [],
   ): Promise<void> {
+    mapProvider = new NullMapProvider();
     await TestBed.configureTestingModule({
       imports: [DeliveryZonesPage],
       providers: [
@@ -139,8 +146,9 @@ describe('DeliveryZonesPage', () => {
         { provide: Auth, useValue: { subject: signal('actor-1') } },
         { provide: DeliveryZonesApi, useValue: api },
         { provide: DeliveryTariffsApi, useValue: tariffs },
-        { provide: RegionsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: RegionsApi, useValue: { list: vi.fn().mockResolvedValue(regions) } },
         { provide: LocaleSet, useValue: localeSet },
+        provideNullMapProvider(mapProvider),
         provideRouter([]),
       ],
     }).compileComponents();
@@ -562,6 +570,283 @@ describe('DeliveryZonesPage', () => {
     await flushMicrotasks();
 
     expect(deactivate).toHaveBeenCalledWith(BRAND_SCOPE, ZONE.zoneId, 1);
+  });
+
+  // ------------------------------------------------------ ADR 0145: zones on a map
+
+  const SAMARKAND: RegionResponse = {
+    regionId: 'region-sam',
+    platform: false,
+    code: 'SAMARKAND',
+    displayNameRu: 'Самарканд',
+    displayNameUz: 'Samarqand',
+    displayNameEn: 'Samarkand',
+    centreLat: 39.65,
+    centreLon: 66.96,
+    bboxSwLat: 39.4,
+    bboxSwLon: 66.7,
+    bboxNeLat: 39.9,
+    bboxNeLon: 67.2,
+    status: 'ACTIVE',
+    version: 1,
+  };
+
+  function versionRow(overrides: Partial<ZoneVersionResponse>): ZoneVersionResponse {
+    return {
+      version: 2,
+      status: 'DRAFT',
+      priority: 3,
+      currency: 'UZS',
+      deliveryTariffId: null,
+      freeDeliveryFromMinor: null,
+      minBasketMinor: null,
+      areaSquareMeters: 12_000_000,
+      regionId: SAMARKAND.regionId,
+      originLocationId: null,
+      shapeKind: 'POLYGON',
+      createdAt: null,
+      activatedAt: null,
+      retiredAt: null,
+      ...overrides,
+    };
+  }
+
+  function outlineOf(overrides: Partial<ZoneOutlineResponse> = {}): ZoneOutlineResponse {
+    return {
+      zoneId: ZONE.zoneId,
+      code: ZONE.code,
+      role: 'DELIVERY',
+      version: 2,
+      status: 'DRAFT',
+      shapeKind: 'POLYGON',
+      polygons: [
+        {
+          ring: [
+            { latitude: 39.6, longitude: 66.9 },
+            { latitude: 39.6, longitude: 67.0 },
+            { latitude: 39.7, longitude: 66.95 },
+          ],
+          holes: [],
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  async function expandWithVersions(
+    versions: ZoneVersionResponse[],
+    api: Partial<DeliveryZonesApi> = {},
+    regions: readonly RegionResponse[] = [SAMARKAND],
+  ): Promise<void> {
+    await render(
+      {
+        list: vi.fn().mockResolvedValue([ZONE]),
+        detail: vi
+          .fn()
+          .mockResolvedValue({ zone: ZONE, boundLocationIds: [] } as ZoneDetailResponse),
+        versions: vi.fn().mockResolvedValue(versions),
+        outline: vi.fn().mockResolvedValue(outlineOf()),
+        ...api,
+      },
+      { list: vi.fn().mockResolvedValue([PAID_TARIFF]) },
+      'en',
+      new FakeLocaleSet(),
+      regions,
+    );
+    host().querySelector<HTMLElement>('[data-testid="zone-row"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  function press(testId: string): void {
+    host().querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click();
+  }
+
+  async function settle(): Promise<void> {
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('drafts a polygon drawn on the map, sent as closed GeoJSON in [longitude, latitude] with the chosen tariff', async () => {
+    const draftPolygonVersion = vi
+      .fn()
+      .mockResolvedValue({ zoneId: ZONE.zoneId, version: 2, status: 'DRAFT' });
+    await expandWithVersions([], { draftPolygonVersion });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-row"] button')!.click();
+    fixture.detectChanges();
+    const shape = host().querySelector<HTMLSelectElement>('[data-testid="zone-shape-select"]')!;
+    shape.value = 'POLYGON';
+    shape.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await settle();
+
+    expect(host().querySelector('[data-testid="zone-origin-select"]')).toBeNull();
+    expect(host().querySelector('[data-testid="q-polygon-editor"]')).not.toBeNull();
+    expect(
+      host().querySelector<HTMLButtonElement>('[data-testid="zone-draft-submit"]')!.disabled,
+    ).toBe(true);
+
+    for (let i = 0; i < 3; i++) {
+      press('q-polygon-add-corner');
+      fixture.detectChanges();
+    }
+    const tariff = host().querySelector<HTMLSelectElement>('[data-testid="zone-tariff-select"]')!;
+    tariff.value = PAID_TARIFF.tariffId;
+    tariff.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(
+      host().querySelector<HTMLButtonElement>('[data-testid="zone-draft-submit"]')!.disabled,
+    ).toBe(false);
+    press('zone-draft-submit');
+    await settle();
+
+    expect(draftPolygonVersion).toHaveBeenCalledTimes(1);
+    const [scope, zoneId, request] = draftPolygonVersion.mock.calls[0];
+    expect(scope).toEqual(BRAND_SCOPE);
+    expect(zoneId).toBe(ZONE.zoneId);
+    expect(request.deliveryTariffId).toBe(PAID_TARIFF.tariffId);
+    const geoJson = JSON.parse(request.geoJson) as { type: string; coordinates: number[][][] };
+    expect(geoJson.type).toBe('Polygon');
+    const ring = geoJson.coordinates[0];
+    expect(ring).toHaveLength(4);
+    expect(ring[0]).toEqual(ring[3]);
+    // Samarkand's own centre is where a new outline starts, and GeoJSON puts longitude first.
+    expect(ring[0]).toEqual([SAMARKAND.centreLon, SAMARKAND.centreLat]);
+  });
+
+  it('will not save an outline that has a problem the editor can name, such as a corner outside the region', async () => {
+    const draftPolygonVersion = vi.fn();
+    await expandWithVersions([], { draftPolygonVersion });
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-row"] button')!.click();
+    fixture.detectChanges();
+    const shape = host().querySelector<HTMLSelectElement>('[data-testid="zone-shape-select"]')!;
+    shape.value = 'POLYGON';
+    shape.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await settle();
+    for (let i = 0; i < 3; i++) {
+      press('q-polygon-add-corner');
+      fixture.detectChanges();
+    }
+    const latitude = host().querySelector<HTMLInputElement>(
+      '[data-testid="q-polygon-corner-latitude"]',
+    )!;
+    latitude.value = '41.2';
+    latitude.dispatchEvent(new Event('change'));
+    await settle();
+
+    expect(host().querySelector('[data-problem="OUTSIDE_REGION"]')).not.toBeNull();
+    const submit = host().querySelector<HTMLButtonElement>('[data-testid="zone-draft-submit"]')!;
+    expect(submit.disabled).toBe(true);
+    submit.click();
+    await settle();
+    expect(draftPolygonVersion).not.toHaveBeenCalled();
+  });
+
+  it('opens a stored polygon version in the editor to draft its successor, keeping its terms', async () => {
+    const draftPolygonVersion = vi
+      .fn()
+      .mockResolvedValue({ zoneId: ZONE.zoneId, version: 3, status: 'DRAFT' });
+    const outline = vi.fn().mockResolvedValue(outlineOf({ version: 2 }));
+    await expandWithVersions(
+      [versionRow({ version: 2, priority: 7, deliveryTariffId: PAID_TARIFF.tariffId })],
+      { draftPolygonVersion, outline },
+    );
+
+    press('zone-edit-outline');
+    await settle();
+
+    expect(outline).toHaveBeenCalledWith(BRAND_SCOPE, ZONE.zoneId, 2);
+    expect(host().querySelector('[data-testid="zone-polygon-from"]')?.textContent).toContain('2');
+    expect(host().querySelectorAll('[data-testid="q-polygon-corner"]')).toHaveLength(3);
+    press('zone-draft-submit');
+    await settle();
+
+    const request = draftPolygonVersion.mock.calls[0][2];
+    expect(request.priority).toBe(7);
+    expect(request.deliveryTariffId).toBe(PAID_TARIFF.tariffId);
+    expect(request.regionId).toBe(SAMARKAND.regionId);
+    expect(JSON.parse(request.geoJson).coordinates[0][0]).toEqual([66.9, 39.6]);
+  });
+
+  it('refuses to open in the editor a version it would flatten (holes, several parts)', async () => {
+    const ring = outlineOf().polygons[0].ring;
+    const withHole = outlineOf({ polygons: [{ ring, holes: [ring] }] });
+    await expandWithVersions([versionRow({ version: 2 })], {
+      outline: vi.fn().mockResolvedValue(withHole),
+    });
+
+    press('zone-edit-outline');
+    await settle();
+
+    expect(host().querySelector('[data-testid="zone-row-error"]')?.textContent).toContain(
+      'holes or several parts',
+    );
+    expect(host().querySelector('[data-testid="q-polygon-editor"]')).toBeNull();
+  });
+
+  it('puts the review in front of activation: nothing is activated until the outline has been looked at and confirmed', async () => {
+    const activate = vi
+      .fn()
+      .mockResolvedValue({ zoneId: ZONE.zoneId, version: 2, status: 'ACTIVE' });
+    await expandWithVersions([versionRow({ version: 2 })], { activate });
+
+    press('zone-activate');
+    await settle();
+
+    expect(host().querySelector('[data-testid="zone-review"]')).not.toBeNull();
+    expect(mapProvider.map.livePolygons).toHaveLength(1);
+    expect(activate).not.toHaveBeenCalled();
+    expect(
+      host().querySelector<HTMLButtonElement>('[data-testid="zone-review-activate"]')!.disabled,
+    ).toBe(true);
+
+    const confirm = host().querySelector<HTMLInputElement>('[data-testid="zone-review-confirm"]')!;
+    confirm.checked = true;
+    confirm.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    press('zone-review-activate');
+    await settle();
+
+    expect(activate).toHaveBeenCalledWith(BRAND_SCOPE, ZONE.zoneId, 2);
+    expect(host().querySelector('[data-testid="zone-review"]')).toBeNull();
+  });
+
+  it('keeps the review open and shows why when activation is refused', async () => {
+    const activate = vi.fn().mockRejectedValue(new ApiError('VALIDATION_FAILED', 422, null, null));
+    await expandWithVersions([versionRow({ version: 2 })], { activate });
+    press('zone-activate');
+    await settle();
+    const confirm = host().querySelector<HTMLInputElement>('[data-testid="zone-review-confirm"]')!;
+    confirm.checked = true;
+    confirm.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    press('zone-review-activate');
+    await settle();
+
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(host().querySelector('[data-testid="zone-review"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="zone-review-error"]')).not.toBeNull();
+  });
+
+  it('shows a version on the map without offering to activate it', async () => {
+    const activate = vi.fn();
+    await expandWithVersions([versionRow({ version: 1, status: 'ACTIVE' })], { activate });
+
+    press('zone-show-on-map');
+    await settle();
+
+    expect(host().querySelector('[data-testid="zone-review"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="zone-review-activate"]')).toBeNull();
+    expect(host().querySelector('[data-testid="zone-review-confirm"]')).toBeNull();
+    press('zone-review-close');
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="zone-review"]')).toBeNull();
+    expect(activate).not.toHaveBeenCalled();
   });
 
   it('shows the denied state when the brand grant is missing', async () => {

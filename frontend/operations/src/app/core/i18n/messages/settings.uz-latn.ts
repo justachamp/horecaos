@@ -1336,4 +1336,11 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Aksiya yoki yirik mijozlar eksporti ikkinchi imzoni kutadigan chegaralar.',
   'settings.fiscalization.noAccess': 'Ruxsat yoʻq',
   'settings.fiscalization.responsibility': 'Chekni kim beradi',
+  'settings.locations.pin.title': 'Xaritadagi nuqta',
+  'settings.locations.pin.none':
+    'Filialning xaritada nuqtasi yoʻq. U boʻlmaguncha filialdan masofa oʻlchab boʻlmaydi va uning atrofida yetkazib berish zonasi chizib boʻlmaydi. Nuqtani qoʻyish uchun tahrirlashni oching.',
+  'settings.locations.pin.hint':
+    'Nuqtani filial eshigiga olib keling: xaritani bosing, nuqtani sudrang yoki koordinatalarni kiriting. Nuqta faqat siz surgan boʻlsangiz saqlanadi; filial nuqtasini koʻchirish mumkin, oʻchirib boʻlmaydi.',
+  'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
+    'Kunlik yetkazib berish nuqtalari xaritada ochildi',
 };

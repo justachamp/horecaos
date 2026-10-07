@@ -733,4 +733,80 @@ export const deliveryEn = {
     'On: a courier cannot mark a cash order delivered until they have entered the cash they collected and it matches what is due. Orders already paid online are not affected.',
   'delivery.policy.consequence.gpsVerificationEnabled':
     'On: taking an offer is refused when the courier is farther from the branch than the accept radius; arriving, collecting and handing over are refused when they are farther from the branch or the customer’s door than the step radius. Off: positions are not checked, and not even read.',
+  'delivery.zones.draft.shape': 'Shape',
+  'delivery.zones.draft.shape.CIRCLE': 'A circle around a branch',
+  'delivery.zones.draft.shape.POLYGON': 'Draw on the map',
+  'delivery.zones.draft.polygonHint':
+    "Draw the zone's outline corner by corner. Saving only drafts a new version: nothing governs a delivery fee until the version has been looked at on the map and activated.",
+  'delivery.zones.draft.polygonEmpty': 'Draw at least three corners to save the outline.',
+  'delivery.zones.draft.fromVersion':
+    'Starting from the outline of version {version}. Saving drafts a new version; version {version} stays as it is.',
+  'delivery.zones.draft.polygonRegionBox':
+    "The box drawn on the map is the region's: a corner outside it cannot be activated.",
+  'delivery.zones.version.showOnMap': 'Show on map',
+  'delivery.zones.version.editOutline': 'Edit outline',
+  'delivery.zones.map.notEditable':
+    'This version has holes or several parts, which the outline editor would flatten. Draw a new outline instead.',
+  'delivery.zones.map.outlineFailed': 'The outline of this version could not be read.',
+  'delivery.zones.review.title': 'Check zone {code}, version {version}, on the map',
+  'delivery.zones.review.mapLabel': 'Outline of zone {code}',
+  'delivery.zones.review.loading': 'Reading the outline…',
+  'delivery.zones.review.loadFailed':
+    'The outline could not be read, so this version cannot be reviewed now. Close and try again.',
+  'delivery.zones.review.verdict.INSIDE': 'The outline sits inside its region.',
+  'delivery.zones.review.verdict.OUTSIDE':
+    'The outline is not inside its region. Activation will be refused; check where it is on the map.',
+  'delivery.zones.review.verdict.LIKELY_SWAPPED':
+    'The outline is outside its region, but would be inside it with latitude and longitude swapped. It was probably written the wrong way round; do not activate it.',
+  'delivery.zones.review.verdict.NO_REGION':
+    'No region is set for this zone, so there is nothing to check the outline against except your own eyes.',
+  'delivery.zones.review.tariff': 'Tariff: {tariff}',
+  'delivery.zones.review.noTariff':
+    "No tariff is bound to this zone: it falls through to the branch's tariff.",
+  'delivery.zones.review.simplified':
+    'This shape has holes or several parts. The map draws only the outer outline of each part.',
+  'delivery.zones.review.corners': '{count} corners',
+  'delivery.zones.review.moreCorners': '…and {count} more corners.',
+  'delivery.zones.review.confirm.map':
+    'I looked at the outline on the map and it is where this zone should be.',
+  'delivery.zones.review.confirm.noMap':
+    'There is no map here. I checked the corner coordinates against the source and they are where this zone should be.',
+  'delivery.zones.review.activate': 'Activate version {version}',
+  'delivery.zones.review.close': 'Close',
+  'delivery.zoneImport.column.map': 'On the map',
+  'delivery.zoneImport.preview.show': 'Show',
+  'delivery.zoneImport.preview.unreadable': 'Not polygon GeoJSON: cannot be drawn',
+  'delivery.zoneImport.preview.title': 'Row {ref}, on the map beside its source',
+  'delivery.zoneImport.preview.mapLabel': 'Row {ref} outline',
+  'delivery.zoneImport.preview.sourceHeading': 'The corners, as written in the file and as read',
+  'delivery.zoneImport.preview.inFile': 'In the file [longitude, latitude]',
+  'delivery.zoneImport.preview.readAs': 'Read as latitude, longitude',
+  'delivery.zoneImport.preview.close': 'Close the preview',
+  'delivery.zoneImport.review.action': 'Review and activate',
+  'delivery.zoneImport.live': 'Live',
+  'delivery.zoneImport.activatedToast': 'Zone {code}, version {version}, is live.',
+  'delivery.liveMap.mapLabel': 'Map of couriers on duty',
+  'delivery.liveMap.map.pinLabel': '{courier}: {orders} active orders',
+  'delivery.liveMap.map.hint':
+    'Each pin is a courier whose last position is recent and precise enough to draw; the outlines are the live delivery zones. Couriers on duty without a pin are listed below with the reason, never placed on a guess.',
+  'delivery.orderPoints.show': "Show today's delivery orders on the map",
+  'delivery.orderPoints.refresh': 'Open them again',
+  'delivery.orderPoints.openOnly': 'Only orders still in progress',
+  'delivery.orderPoints.audit':
+    "Opening the day's delivery points is recorded: the platform keeps who opened them, when, and why. The map shows an order number and a point, never a name, a phone or an address. Nothing is opened until you press the button, and it is not refreshed on its own.",
+  'delivery.orderPoints.loading': "Opening the day's delivery points…",
+  'delivery.orderPoints.denied':
+    "You may not open the day's delivery points. That is held by dispatchers and branch managers.",
+  'delivery.orderPoints.summary': '{shown} of {total} delivery orders are on the map',
+  'delivery.orderPoints.withoutPoint':
+    '{count} delivery orders today have no point to show (the address could not be opened).',
+  'delivery.orderPoints.truncated':
+    'The day has more delivery orders than the map opens at once; these are the newest.',
+  'delivery.orderPoints.mapLabel': "Map of today's delivery orders",
+  'delivery.orderPoints.pinLabel': 'Order {number}: {status}',
+  'delivery.orderPoints.legend.courier': 'courier',
+  'delivery.orderPoints.legend.order': 'order in progress',
+  'delivery.orderPoints.legend.closed': 'order finished or cancelled',
+  'delivery.dispatch.map.show': 'Map',
+  'delivery.dispatch.map.hide': 'Hide the map',
 } as const;

@@ -1,0 +1,116 @@
+<section class="review" data-testid="zone-review">
+  <h3 class="q-subhead">
+    {{ 'delivery.zones.review.title' | t: { code: zoneCode(), version: version() } }}
+  </h3>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-caption" role="status" data-testid="zone-review-loading">
+        {{ 'delivery.zones.review.loading' | t }}
+      </p>
+    }
+    @case ('failed') {
+      <p class="q-body-sm review__error" role="alert" data-testid="zone-review-failed">
+        {{ 'delivery.zones.review.loadFailed' | t }}
+      </p>
+    }
+    @case ('ready') {
+      <q-map-canvas
+        [center]="centre()"
+        [fitTo]="fit()"
+        [areas]="areas()"
+        [height]="320"
+        [label]="'delivery.zones.review.mapLabel' | t: { code: zoneCode() }"
+        (ready)="onMapReady($event)"
+        (unavailable)="onMapUnavailable()"
+      />
+
+      <p
+        class="q-body-sm review__verdict"
+        [attr.data-verdict]="verdict()"
+        data-testid="zone-review-verdict"
+      >
+        {{ verdictKey() | t }}
+      </p>
+
+      @if (tariff(); as tariffText) {
+        <p class="q-caption" data-testid="zone-review-tariff">
+          {{ 'delivery.zones.review.tariff' | t: { tariff: tariffText } }}
+        </p>
+      } @else {
+        <p class="q-caption" data-testid="zone-review-tariff">
+          {{ 'delivery.zones.review.noTariff' | t }}
+        </p>
+      }
+
+      @if (simplified()) {
+        <p class="q-caption" data-testid="zone-review-simplified">
+          {{ 'delivery.zones.review.simplified' | t }}
+        </p>
+      }
+
+      <table class="review__corners" data-testid="zone-review-corners">
+        <caption class="q-caption">
+          {{
+            'delivery.zones.review.corners' | t: { count: allCorners().length }
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{{ 'ui.map.latitude' | t }}</th>
+            <th>{{ 'ui.map.longitude' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (corner of shownCorners(); track $index) {
+            <tr data-testid="zone-review-corner">
+              <td class="q-tnum">{{ $index + 1 }}</td>
+              <td class="q-mono">{{ corner.latitude }}</td>
+              <td class="q-mono">{{ corner.longitude }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (hiddenCornerCount() > 0) {
+        <p class="q-caption">
+          {{ 'delivery.zones.review.moreCorners' | t: { count: hiddenCornerCount() } }}
+        </p>
+      }
+
+      @if (mode() === 'activate') {
+        <label class="review__confirm q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="reviewed()"
+            (change)="toggleReviewed($any($event.target).checked)"
+            data-testid="zone-review-confirm"
+          />
+          {{
+            (mapAvailable()
+              ? 'delivery.zones.review.confirm.map'
+              : 'delivery.zones.review.confirm.noMap'
+            ) | t
+          }}
+        </label>
+      }
+    }
+  }
+
+  <div class="review__actions">
+    <button type="button" (click)="closed.emit()" data-testid="zone-review-close">
+      {{ 'delivery.zones.review.close' | t }}
+    </button>
+    @if (mode() === 'activate') {
+      <button
+        type="button"
+        class="review__activate"
+        [disabled]="!canActivate()"
+        (click)="confirm()"
+        data-testid="zone-review-activate"
+      >
+        {{ 'delivery.zones.review.activate' | t: { version: version() } }}
+      </button>
+    }
+  </div>
+</section>

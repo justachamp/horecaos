@@ -566,10 +566,9 @@ export const reportsEn = {
 
   // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
   'reports.geography.title': 'Geography',
-  'reports.geography.intro': 'Delivery-time and distance histograms, and a day/hour heat grid.',
+  'reports.geography.intro':
+    'Delivery-time and distance histograms, a day/hour heat grid, and where deliveries land against the delivery zones.',
   'reports.geography.loading': 'Loading…',
-  'reports.geography.mapDeferred':
-    "Density heatmap and today's orders as pins are deferred pending a map provider (see X.4).",
   'reports.geography.branch.label': 'Branch',
   'reports.geography.section.histograms': 'Delivery-time and distance histograms',
   'reports.geography.histogram.duration.title': 'Handover time',
@@ -593,4 +592,28 @@ export const reportsEn = {
   'reports.products.combos.column.sold': 'Sold',
   'reports.products.combos.note':
     'Completed orders only. A dish sold on its own is not a combo — see Sales.',
+  'reports.geography.section.density': 'Where deliveries land, by zone',
+  'reports.geography.density.intro':
+    'Each delivery zone is shaded by how many deliveries its tariff priced over the last 30 days, busiest zone darkest. The deliveries no drawn zone covered are their own row: that number is the sign of a badly cut zone or a missing catchment.',
+  'reports.geography.density.mapLabel': 'Delivery zones shaded by deliveries',
+  'reports.geography.density.areaLabel': '{zone}: {count} deliveries',
+  'reports.geography.density.scale':
+    'A darker zone took more deliveries; a faint one took few or none.',
+  'reports.geography.density.zonesNotReadable':
+    'Your role may read reports but not delivery zones, so the counts below have no zone names and there is no map.',
+  'reports.geography.density.column.zone': 'Zone',
+  'reports.geography.density.column.deliveries': 'Deliveries',
+  'reports.geography.density.column.share': 'Share',
+  'reports.geography.density.column.fees': 'Delivery fees',
+  'reports.geography.density.outside': 'Outside every drawn zone',
+  'reports.geography.density.zoneUnknown': 'A zone',
+  'reports.geography.density.outsideNote':
+    "{count} deliveries were priced by the branch's own tariff because no drawn zone covered their address. If that is more than you expect, a zone is cut badly or a catchment is missing.",
+  'reports.geography.density.empty':
+    'No deliveries were priced in this range, and the brand has no live delivery zones.',
+  'reports.geography.density.basis':
+    "Deliveries whose fee a tariff resolved, over closed business days from {from} to {to}, at this branch. Today is not in it, and a delivery priced outside the tariff model (a manual fee, an aggregator's own price) is not either.",
+  'reports.geography.section.pins': "Today's orders as pins",
+  'reports.geography.pins.intro':
+    "Where this branch's delivery orders of the day are going, one pin per order, to see clusters and outliers. This opens doorsteps, so it is recorded and held by dispatchers and branch managers; it is not part of the report above.",
 } as const;

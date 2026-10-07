@@ -1,0 +1,91 @@
+<section class="order-points" data-testid="order-points">
+  <div class="order-points__bar">
+    <button
+      type="button"
+      class="order-points__reveal"
+      [disabled]="state() === 'loading'"
+      (click)="reveal()"
+      data-testid="order-points-reveal"
+    >
+      {{ (state() === 'ready' ? 'delivery.orderPoints.refresh' : 'delivery.orderPoints.show') | t }}
+    </button>
+    @if (state() === 'ready') {
+      <label class="order-points__toggle q-caption">
+        <input
+          type="checkbox"
+          [checked]="openOnly()"
+          (change)="setOpenOnly($any($event.target).checked)"
+          data-testid="order-points-open-only"
+        />
+        {{ 'delivery.orderPoints.openOnly' | t }}
+      </label>
+    }
+  </div>
+
+  <p class="order-points__audit q-caption" data-testid="order-points-audit">
+    {{ 'delivery.orderPoints.audit' | t }}
+  </p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-caption" role="status" data-testid="order-points-loading">
+        {{ 'delivery.orderPoints.loading' | t }}
+      </p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm" role="alert" data-testid="order-points-denied">
+        {{ 'delivery.orderPoints.denied' | t }}
+      </p>
+    }
+    @case ('failed') {
+      <p class="q-body-sm order-points__error" role="alert" data-testid="order-points-failed">
+        {{ errorText() }}
+      </p>
+    }
+    @case ('ready') {
+      @if (result(); as revealed) {
+        <p class="q-caption" data-testid="order-points-summary">
+          {{
+            'delivery.orderPoints.summary'
+              | t: { shown: shown().length, total: revealed.points.length }
+          }}
+        </p>
+        @if (revealed.withoutPoint > 0) {
+          <p class="q-caption" data-testid="order-points-without">
+            {{ 'delivery.orderPoints.withoutPoint' | t: { count: revealed.withoutPoint } }}
+          </p>
+        }
+        @if (revealed.truncated) {
+          <p class="q-caption" data-testid="order-points-truncated">
+            {{ 'delivery.orderPoints.truncated' | t }}
+          </p>
+        }
+      }
+    }
+  }
+
+  @if (showMap()) {
+    <q-map-canvas
+      [center]="mapCentre()"
+      [fitTo]="fit()"
+      [zoom]="12"
+      [height]="height()"
+      [markers]="markers()"
+      [areas]="areas()"
+      [label]="'delivery.orderPoints.mapLabel' | t"
+      data-testid="order-points-canvas"
+    />
+    <p class="order-points__legend q-caption" data-testid="order-points-legend">
+      @if (hasCouriers()) {
+        <span class="order-points__swatch order-points__swatch--courier" aria-hidden="true">●</span>
+        {{ 'delivery.orderPoints.legend.courier' | t }}
+      }
+      <span class="order-points__swatch order-points__swatch--order" aria-hidden="true">●</span>
+      {{ 'delivery.orderPoints.legend.order' | t }}
+      @if (!openOnly()) {
+        <span class="order-points__swatch order-points__swatch--closed" aria-hidden="true">●</span>
+        {{ 'delivery.orderPoints.legend.closed' | t }}
+      }
+    </p>
+  }
+</section>

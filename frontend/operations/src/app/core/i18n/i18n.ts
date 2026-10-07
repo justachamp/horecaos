@@ -57,6 +57,7 @@ const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
     couriers: () => import('./messages/couriers.ru').then((m) => m.couriersRu),
     device: () => import('./messages/device.ru').then((m) => m.deviceRu),
     wallboard: () => import('./messages/wallboard.ru').then((m) => m.wallboardRu),
+    map: () => import('./messages/map.ru').then((m) => m.mapRu),
   },
   'uz-Latn': {
     core: () => import('./messages/core.uz-latn').then((m) => m.coreUzLatn),
@@ -76,6 +77,7 @@ const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
     couriers: () => import('./messages/couriers.uz-latn').then((m) => m.couriersUzLatn),
     device: () => import('./messages/device.uz-latn').then((m) => m.deviceUzLatn),
     wallboard: () => import('./messages/wallboard.uz-latn').then((m) => m.wallboardUzLatn),
+    map: () => import('./messages/map.uz-latn').then((m) => m.mapUzLatn),
   },
   en: {
     core: () => import('./messages/core.en').then((m) => m.coreEn),
@@ -95,6 +97,7 @@ const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
     couriers: () => import('./messages/couriers.en').then((m) => m.couriersEn),
     device: () => import('./messages/device.en').then((m) => m.deviceEn),
     wallboard: () => import('./messages/wallboard.en').then((m) => m.wallboardEn),
+    map: () => import('./messages/map.en').then((m) => m.mapEn),
   },
 };
 

@@ -188,6 +188,20 @@ export interface DistanceBucketSetResponse {
   readonly buckets: readonly DistanceBucketDefinitionResponse[];
 }
 
+/** Row 7.10 (ADR 0145): one delivery zone's deliveries — mirrors `ReportingController.ZoneDensityRowResponse`. `zoneId` null is the deliveries no drawn zone covered. */
+export interface ZoneDensityRowResponse {
+  readonly zoneId: string | null;
+  readonly deliveryCount: number;
+  /** Integer minor units of {@link currency}; never summed across currencies. */
+  readonly totalFeeMinor: number;
+  readonly currency: string;
+}
+
+export interface ZoneDensityResponse {
+  readonly zones: readonly ZoneDensityRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
 /** Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1 — see {@link ReportingApi.deliveryDistance}. */
 export interface DistanceResponse {
   readonly averageMeters: number | null;
@@ -833,6 +847,16 @@ export class ReportingApi {
   async distanceBuckets(tenantId: string, params: RangeParams): Promise<DistanceBucketsResponse> {
     const result = await firstValueFrom(
       this.api.get<DistanceBucketsResponse>(reportsPaths.distanceBuckets(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Row 7.10 (ADR 0145): deliveries per delivery zone — the zone dimension of the fee-resolution fact, never a doorstep. */
+  async zoneDensity(tenantId: string, params: RangeParams): Promise<ZoneDensityResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ZoneDensityResponse>(reportsPaths.zoneDensity(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
       }),
     );

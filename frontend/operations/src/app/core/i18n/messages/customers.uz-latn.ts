@@ -97,7 +97,6 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.profile.merge.action': 'Boshqa hisobga birlashtirish',
 
   'customers.address.label': 'Belgi',
-  'customers.address.line1': 'Manzil',
   'customers.address.city': 'Shahar',
   'customers.address.district': 'Tuman',
   'customers.address.entrance': 'Kirish',
@@ -302,4 +301,9 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.reviews.column.order': 'Buyurtma',
   'customers.reviews.column.customer': 'Mijoz',
   'customers.reviews.empty': 'Hozircha sharhlar yoʻq.',
+  'customers.address.line2': 'Manzilning ikkinchi qatori',
+  'customers.address.postalCode': 'Pochta indeksi',
+  'customers.address.incomplete': 'Manzilni saqlash uchun koʻcha qatori, shahar va tuman kerak.',
+  'customers.address.pin.place': 'Nuqtani qoʻyish',
+  'customers.address.pin.edit': 'Tahrirlash va nuqtani surish',
 };

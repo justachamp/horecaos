@@ -226,3 +226,10 @@
   padding-left: 18px;
   color: var(--q-error-text);
 }
+
+/* A modal that holds a map needs more room than a form: the map and the corner table beside it. */
+.zones__map-modal {
+  width: min(880px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+}

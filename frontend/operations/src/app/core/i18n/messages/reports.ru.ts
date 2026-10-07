@@ -572,10 +572,8 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
   'reports.geography.title': 'География',
   'reports.geography.intro':
-    'Гистограммы времени и расстояния доставки, и тепловая карта по дням и часам.',
+    'Гистограммы времени и расстояния доставки, сетка «день недели × час» и распределение доставок по зонам доставки.',
   'reports.geography.loading': 'Загрузка…',
-  'reports.geography.mapDeferred':
-    'Карта плотности и точки заказов отложены до выбора картопровайдера (см. X.4).',
   'reports.geography.branch.label': 'Филиал',
   'reports.geography.section.histograms': 'Гистограммы времени и расстояния доставки',
   'reports.geography.histogram.duration.title': 'Время обработки',
@@ -599,4 +597,28 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.products.combos.column.sold': 'Продано',
   'reports.products.combos.note':
     'Только завершённые заказы. Блюдо, проданное отдельно, — не комбо.',
+  'reports.geography.section.density': 'Куда идут доставки, по зонам',
+  'reports.geography.density.intro':
+    'Каждая зона доставки закрашена по числу доставок, которые её тариф оценил за последние 30 дней: самая загруженная — темнее всех. Доставки, которые не покрыла ни одна нарисованная зона, вынесены в отдельную строку: это число выдаёт плохо проведённую границу или отсутствующую зону охвата.',
+  'reports.geography.density.mapLabel': 'Зоны доставки, закрашенные по числу доставок',
+  'reports.geography.density.areaLabel': '{zone}: доставок — {count}',
+  'reports.geography.density.scale':
+    'Чем темнее зона, тем больше доставок; бледная — мало или ни одной.',
+  'reports.geography.density.zonesNotReadable':
+    'Ваша роль может читать отчёты, но не зоны доставки, поэтому у счётчиков ниже нет названий зон и карты нет.',
+  'reports.geography.density.column.zone': 'Зона',
+  'reports.geography.density.column.deliveries': 'Доставок',
+  'reports.geography.density.column.share': 'Доля',
+  'reports.geography.density.column.fees': 'Плата за доставку',
+  'reports.geography.density.outside': 'Вне всех нарисованных зон',
+  'reports.geography.density.zoneUnknown': 'Зона',
+  'reports.geography.density.outsideNote':
+    'Доставок, оценённых тарифом самого филиала, потому что их адрес не покрыла ни одна нарисованная зона: {count}. Если их больше ожидаемого, значит, зона проведена плохо или нет зоны охвата.',
+  'reports.geography.density.empty':
+    'За этот период доставок не оценивалось, а у бренда нет действующих зон доставки.',
+  'reports.geography.density.basis':
+    'Доставки, плату за которые определил тариф, за закрытые рабочие дни с {from} по {to} в этом филиале. Сегодняшний день не входит, как и доставки, оценённые вне тарифной модели (ручная плата, собственная цена агрегатора).',
+  'reports.geography.section.pins': 'Сегодняшние заказы точками',
+  'reports.geography.pins.intro':
+    'Куда идут сегодняшние заказы на доставку этого филиала, по точке на заказ, чтобы видеть скопления и выбросы. Это открывает адреса доставки, поэтому записывается и доступно диспетчерам и управляющим филиала; к отчёту выше оно не относится.',
 };

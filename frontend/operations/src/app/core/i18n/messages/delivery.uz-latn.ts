@@ -741,4 +741,79 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Yoqilgan: kuryer naqd pulli buyurtmani, olingan pulni kiritmaguncha va u toʻlanishi kerak boʻlgan summaga mos kelmaguncha, yetkazilgan deb belgilay olmaydi. Onlayn toʻlangan buyurtmalarga bu taʻsir qilmaydi.',
   'delivery.policy.consequence.gpsVerificationEnabled':
     'Yoqilgan: kuryer filialdan qabul radiusidan uzoqroq boʻlsa, taklifni qabul qilish rad etiladi; yetib borish, olish va topshirish kuryer filialdan yoki mijoz eshigidan holat radiusidan uzoqroq boʻlsa rad etiladi. Oʻchirilgan: joylashuv tekshirilmaydi va oʻqilmaydi ham.',
+  'delivery.zones.draft.shape': 'Shakl',
+  'delivery.zones.draft.shape.CIRCLE': 'Filial atrofidagi doira',
+  'delivery.zones.draft.shape.POLYGON': 'Xaritada chizish',
+  'delivery.zones.draft.polygonHint':
+    'Zona konturini burchak-burchak chizing. Saqlash faqat yangi versiya qoralamasini yaratadi: versiya xaritada koʻrib chiqilib, yoqilmaguncha yetkazib berish narxiga taʻsir qilmaydi.',
+  'delivery.zones.draft.polygonEmpty': 'Konturni saqlash uchun kamida uchta burchak chizing.',
+  'delivery.zones.draft.fromVersion':
+    'Asos sifatida {version}-versiya konturi olindi. Saqlash yangi versiya yaratadi; {version}-versiya oʻzgarishsiz qoladi.',
+  'delivery.zones.draft.polygonRegionBox':
+    'Xaritada hudud toʻrtburchagi koʻrsatilgan: undan tashqaridagi burchakni faollashtirib boʻlmaydi.',
+  'delivery.zones.version.showOnMap': 'Xaritada koʻrsatish',
+  'delivery.zones.version.editOutline': 'Konturni tahrirlash',
+  'delivery.zones.map.notEditable':
+    'Bu versiyada teshiklar yoki bir necha qism bor, kontur tahrirlagichi ularni soddalashtirib yuborardi. Yangi kontur chizing.',
+  'delivery.zones.map.outlineFailed': 'Bu versiya konturini oʻqib boʻlmadi.',
+  'delivery.zones.review.title': '{code} zonasi, {version}-versiyani xaritada tekshiring',
+  'delivery.zones.review.mapLabel': '{code} zonasi konturi',
+  'delivery.zones.review.loading': 'Kontur oʻqilmoqda…',
+  'delivery.zones.review.loadFailed':
+    'Konturni oʻqib boʻlmadi, shuning uchun versiyani hozir tekshirib boʻlmaydi. Oynani yopib, qayta urinib koʻring.',
+  'delivery.zones.review.verdict.INSIDE': 'Kontur oʻz hududi ichida joylashgan.',
+  'delivery.zones.review.verdict.OUTSIDE':
+    'Kontur oʻz hududi ichida emas. Faollashtirish rad etiladi; uning xaritadagi joyini tekshiring.',
+  'delivery.zones.review.verdict.LIKELY_SWAPPED':
+    'Kontur oʻz hududidan tashqarida, ammo kenglik va uzunlik oʻrni almashtirilsa ichida boʻlardi. Koordinatalar teskari yozilgan boʻlishi mumkin; uni yoqmang.',
+  'delivery.zones.review.verdict.NO_REGION':
+    'Zona uchun hudud belgilanmagan, shuning uchun konturni oʻz koʻzingizdan boshqa narsa bilan tekshirib boʻlmaydi.',
+  'delivery.zones.review.tariff': 'Tarif: {tariff}',
+  'delivery.zones.review.noTariff': 'Zonaga tarif biriktirilmagan: filial tarifi amal qiladi.',
+  'delivery.zones.review.simplified':
+    'Bu shaklda teshiklar yoki bir necha qism bor. Xaritada har bir qismning faqat tashqi konturi chizilgan.',
+  'delivery.zones.review.corners': 'Burchaklar: {count}',
+  'delivery.zones.review.moreCorners': '…va yana {count} ta burchak.',
+  'delivery.zones.review.confirm.map':
+    'Men konturni xaritada koʻrdim: u zona boʻlishi kerak joyda.',
+  'delivery.zones.review.confirm.noMap':
+    'Bu yerda xarita yoʻq. Men burchak koordinatalarini manba bilan solishtirdim: ular zona boʻlishi kerak joyda.',
+  'delivery.zones.review.activate': '{version}-versiyani yoqish',
+  'delivery.zones.review.close': 'Yopish',
+  'delivery.zoneImport.column.map': 'Xaritada',
+  'delivery.zoneImport.preview.show': 'Koʻrsatish',
+  'delivery.zoneImport.preview.unreadable': 'Poligon GeoJSON emas: chizib boʻlmaydi',
+  'delivery.zoneImport.preview.title': '{ref}-qator xaritada, manba yonida',
+  'delivery.zoneImport.preview.mapLabel': '{ref}-qator konturi',
+  'delivery.zoneImport.preview.sourceHeading': 'Burchaklar: faylda yozilganidek va oʻqilganidek',
+  'delivery.zoneImport.preview.inFile': 'Faylda [uzunlik, kenglik]',
+  'delivery.zoneImport.preview.readAs': 'Kenglik, uzunlik sifatida oʻqildi',
+  'delivery.zoneImport.preview.close': 'Koʻrib chiqishni yopish',
+  'delivery.zoneImport.review.action': 'Tekshirish va yoqish',
+  'delivery.zoneImport.live': 'Yoqilgan',
+  'delivery.zoneImport.activatedToast': '{code} zonasi, {version}-versiya yoqildi.',
+  'delivery.liveMap.mapLabel': 'Smenadagi kuryerlar xaritasi',
+  'delivery.liveMap.map.pinLabel': '{courier}: faol buyurtmalar — {orders}',
+  'delivery.liveMap.map.hint':
+    'Har bir nuqta — oxirgi joylashuvi chizish uchun yetarlicha yangi va aniq boʻlgan kuryer; konturlar — amaldagi yetkazib berish zonalari. Nuqtasiz kuryerlar sababi bilan quyida keltirilgan, ular taxminan xaritaga qoʻyilmaydi.',
+  'delivery.orderPoints.show': 'Bugungi yetkazib berish buyurtmalarini xaritada koʻrsatish',
+  'delivery.orderPoints.refresh': 'Qayta ochish',
+  'delivery.orderPoints.openOnly': 'Faqat jarayondagi buyurtmalar',
+  'delivery.orderPoints.audit':
+    'Bugungi yetkazib berish nuqtalarini ochish qayd etiladi: platforma kim, qachon va nima uchun ochganini saqlaydi. Xaritada buyurtma raqami va nuqta koʻrsatiladi, ism, telefon yoki manzil emas. Tugmani bosmaguningizcha hech narsa ochilmaydi va oʻz-oʻzidan yangilanmaydi.',
+  'delivery.orderPoints.loading': 'Kunlik yetkazib berish nuqtalari ochilmoqda…',
+  'delivery.orderPoints.denied':
+    'Sizda kunlik yetkazib berish nuqtalarini ochish huquqi yoʻq. U dispetcherlar va filial menejerlarida bor.',
+  'delivery.orderPoints.summary': 'Xaritada yetkazib berish buyurtmalari: {shown} / {total}',
+  'delivery.orderPoints.withoutPoint':
+    'Bugungi yetkazib berish buyurtmalaridan {count} tasida koʻrsatiladigan nuqta yoʻq (manzilni ochib boʻlmadi).',
+  'delivery.orderPoints.truncated':
+    'Kunda xarita bir vaqtda ochadigandan koʻproq yetkazib berish buyurtmasi bor; eng yangilari koʻrsatilgan.',
+  'delivery.orderPoints.mapLabel': 'Bugungi yetkazib berish buyurtmalari xaritasi',
+  'delivery.orderPoints.pinLabel': 'Buyurtma {number}: {status}',
+  'delivery.orderPoints.legend.courier': 'kuryer',
+  'delivery.orderPoints.legend.order': 'jarayondagi buyurtma',
+  'delivery.orderPoints.legend.closed': 'yakunlangan yoki bekor qilingan buyurtma',
+  'delivery.dispatch.map.show': 'Xarita',
+  'delivery.dispatch.map.hide': 'Xaritani yashirish',
 };

@@ -47,6 +47,21 @@
       <p class="q-body-sm">{{ 'delivery.liveMap.denied' | t }}</p>
     </div>
   } @else {
+    @if (mapReady()) {
+      <q-map-canvas
+        [center]="openingCentre()"
+        [fitTo]="openingFit()"
+        [zoom]="13"
+        [height]="420"
+        [markers]="markers()"
+        [areas]="areas()"
+        [label]="'delivery.liveMap.mapLabel' | t"
+        data-testid="live-map-canvas"
+      />
+      <p class="live-map__hint q-caption" data-testid="live-map-hint">
+        {{ 'delivery.liveMap.map.hint' | t }}
+      </p>
+    }
     <table class="live-map__table">
       <thead>
         <tr>

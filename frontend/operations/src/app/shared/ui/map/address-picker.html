@@ -1,0 +1,116 @@
+<div class="q-address-picker" data-testid="q-address-picker">
+  <div class="q-address-picker__search">
+    <label class="q-caption" for="q-address-picker-query">{{ 'ui.map.address.search' | t }}</label>
+    <q-combobox
+      [query]="query()"
+      [options]="options()"
+      [loading]="loading()"
+      [allowCreate]="true"
+      [createLabel]="'ui.map.address.useAsTyped' | t: { query: query().trim() }"
+      [placeholder]="'ui.map.address.placeholder' | t"
+      [ariaLabel]="'ui.map.address.search' | t"
+      (queryChange)="onQuery($event)"
+      (search)="onSearch($event)"
+      (optionSelected)="onSuggestionChosen($event)"
+      (create)="useAsTyped()"
+    />
+    @if (attribution(); as text) {
+      <p class="q-address-picker__attribution q-caption" data-testid="q-address-attribution">
+        {{ text }}
+      </p>
+    }
+  </div>
+
+  @if (unavailableKey(); as key) {
+    <q-inline-alert severity="info" [messageKey]="key" />
+  }
+
+  @if (nothingResolved()) {
+    <q-inline-alert severity="warning" messageKey="ui.map.address.nothingResolved" />
+  }
+
+  @if (lowConfidence()) {
+    <q-inline-alert severity="warning" messageKey="ui.map.address.lowConfidence" />
+  }
+
+  <q-map-pin
+    [position]="pinPosition()"
+    [center]="center()"
+    [region]="region()"
+    (positionChange)="onPin($event)"
+  />
+
+  @if (pinPosition() && !confirmed()) {
+    <button
+      type="button"
+      class="q-address-picker__confirm q-caption"
+      (click)="confirm()"
+      data-testid="q-address-confirm"
+    >
+      {{ 'ui.map.address.confirm' | t }}
+    </button>
+  }
+
+  <div class="q-address-picker__parts">
+    <label>
+      <span class="q-caption">{{ 'ui.map.address.street' | t }}</span>
+      <input
+        type="text"
+        autocomplete="off"
+        [value]="parts().street"
+        (input)="setPart('street', $any($event.target).value)"
+        data-testid="q-address-street"
+      />
+    </label>
+    <label>
+      <span class="q-caption">{{ 'ui.map.address.house' | t }}</span>
+      <input
+        type="text"
+        autocomplete="off"
+        [value]="parts().house"
+        (input)="setPart('house', $any($event.target).value)"
+        data-testid="q-address-house"
+      />
+    </label>
+    <label>
+      <span class="q-caption">{{ 'ui.map.address.entrance' | t }}</span>
+      <input
+        type="text"
+        autocomplete="off"
+        [value]="parts().entrance"
+        (input)="setPart('entrance', $any($event.target).value)"
+        data-testid="q-address-entrance"
+      />
+    </label>
+    <label>
+      <span class="q-caption">{{ 'ui.map.address.floor' | t }}</span>
+      <input
+        type="text"
+        autocomplete="off"
+        [value]="parts().floor"
+        (input)="setPart('floor', $any($event.target).value)"
+        data-testid="q-address-floor"
+      />
+    </label>
+    <label>
+      <span class="q-caption">{{ 'ui.map.address.flat' | t }}</span>
+      <input
+        type="text"
+        autocomplete="off"
+        [value]="parts().flat"
+        (input)="setPart('flat', $any($event.target).value)"
+        data-testid="q-address-flat"
+      />
+    </label>
+    <label class="q-address-picker__landmark">
+      <span class="q-caption">{{ 'ui.map.address.landmark' | t }}</span>
+      <input
+        type="text"
+        autocomplete="off"
+        [value]="parts().landmark"
+        (input)="setPart('landmark', $any($event.target).value)"
+        data-testid="q-address-landmark"
+      />
+    </label>
+  </div>
+</div>

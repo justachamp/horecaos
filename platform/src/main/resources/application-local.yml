@@ -96,6 +96,12 @@ horecaos:
       preset:
         phone: ${HORECAOS_VERIFICATION_PRESET_PHONE:+998000000000}
         code: ${HORECAOS_VERIFICATION_PRESET_CODE:000000}
+  geo:
+    # ADR 0145: answers from the controlled fake (FakeGeocoderAdapter, registered only under
+    # this profile) so the console's address components can be built and tried before a
+    # provider key exists. It has no tiles; a screen must say so. Set HORECAOS_GEO_PROVIDER=none
+    # to see the unconfigured state, or `yandex` with a key to try the real adapter.
+    provider: ${HORECAOS_GEO_PROVIDER:fake}
   fake-providers:
     click:
       # FakeClickProviderConfiguration — a local stand-in for Click's MERCHANT

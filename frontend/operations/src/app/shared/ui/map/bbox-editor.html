@@ -1,0 +1,87 @@
+<div class="q-bbox-editor" data-testid="q-bbox-editor">
+  <q-map-canvas
+    [center]="center()"
+    [fitTo]="fit()"
+    [zoom]="10"
+    (ready)="onReady($event)"
+    (mapClick)="onMapClick($event)"
+  />
+
+  @if (editable()) {
+    <p class="q-bbox-editor__hint q-caption" data-testid="q-bbox-hint">
+      {{ (bounds() ? 'ui.map.bbox.hint' : 'ui.map.bbox.hintEmpty') | t }}
+    </p>
+  }
+
+  <div class="q-bbox-editor__grid">
+    <fieldset class="q-bbox-editor__corner">
+      <legend class="q-caption">{{ 'ui.map.bbox.southWest' | t }}</legend>
+      <label>
+        <span class="q-caption">{{ 'ui.map.latitude' | t }}</span>
+        <input
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          [value]="texts().swLat"
+          [disabled]="!editable()"
+          (input)="edit('swLat', $any($event.target).value)"
+          data-testid="q-bbox-sw-lat"
+        />
+      </label>
+      <label>
+        <span class="q-caption">{{ 'ui.map.longitude' | t }}</span>
+        <input
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          [value]="texts().swLon"
+          [disabled]="!editable()"
+          (input)="edit('swLon', $any($event.target).value)"
+          data-testid="q-bbox-sw-lon"
+        />
+      </label>
+    </fieldset>
+
+    <fieldset class="q-bbox-editor__corner">
+      <legend class="q-caption">{{ 'ui.map.bbox.northEast' | t }}</legend>
+      <label>
+        <span class="q-caption">{{ 'ui.map.latitude' | t }}</span>
+        <input
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          [value]="texts().neLat"
+          [disabled]="!editable()"
+          (input)="edit('neLat', $any($event.target).value)"
+          data-testid="q-bbox-ne-lat"
+        />
+      </label>
+      <label>
+        <span class="q-caption">{{ 'ui.map.longitude' | t }}</span>
+        <input
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          [value]="texts().neLon"
+          [disabled]="!editable()"
+          (input)="edit('neLon', $any($event.target).value)"
+          data-testid="q-bbox-ne-lon"
+        />
+      </label>
+    </fieldset>
+  </div>
+
+  @if (notNumbers()) {
+    <p class="q-bbox-editor__error q-caption" role="alert" data-testid="q-bbox-invalid">
+      {{ 'ui.map.coordinate.invalid' | t }}
+    </p>
+  }
+
+  @if (problemKeys().length > 0) {
+    <ul class="q-bbox-editor__problems" role="alert" data-testid="q-bbox-problems">
+      @for (item of problemKeys(); track item.problem) {
+        <li class="q-caption" [attr.data-problem]="item.problem">{{ item.key | t }}</li>
+      }
+    </ul>
+  }
+</div>

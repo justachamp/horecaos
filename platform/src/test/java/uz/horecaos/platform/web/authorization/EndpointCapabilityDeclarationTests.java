@@ -268,7 +268,8 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
-                    || isPromotionSimulationEndpoint(handler)) {
+                    || isPromotionSimulationEndpoint(handler)
+                    || isGeocodeLookupEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -686,6 +687,74 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isDeliveryFeePreviewEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee");
+    }
+
+    /**
+     * Whether this endpoint is one of the six address lookups (ADR 0145): suggest, geocode and
+     * reverse geocode, each at brand scope and again at location scope.
+     *
+     * <p>A POST only because the body carries a customer's address, which must never be in a
+     * query string (ADR 0029, ADR 0031). Nothing is created or changed: the answer is a
+     * suggestion a person confirms on a map, nothing is stored, and the one write that happens, a
+     * usage-ledger row, takes a fresh id per call, so a repeat is a second billable lookup and
+     * never a duplicate of the first. There is therefore no effect for an {@code Idempotency-Key}
+     * to guard, and a person typing in a field cannot be asked to send one.
+     *
+     * <p>Exempt from replay protection <em>only</em>. {@link
+     * #theGeocodeLookupsStillDeclareTheirCapability} holds the other half: each of the six
+     * declares {@code geo.lookup}, non-mutating, at the narrowest scope its path supports, so
+     * this exemption is not a way to leave one unauthorized. Matched on exact paths, the
+     * discipline every exemption here keeps.
+     */
+    private static boolean isGeocodeLookupEndpoint(Method handler) {
+        return GEOCODE_LOOKUP_PATHS.contains(pathOf(handler));
+    }
+
+    private static final Set<String> GEOCODE_LOOKUP_PATHS = geocodeLookupPaths();
+
+    private static Set<String> geocodeLookupPaths() {
+        String brand = "/api/v1/operations/tenants/{tenantId}/brands/{brandId}";
+        Set<String> paths = new java.util.LinkedHashSet<>();
+        for (String prefix : new String[] {brand, brand + "/locations/{locationId}"}) {
+            for (String operation : new String[] {"suggestions", "resolutions", "reverse-resolutions"}) {
+                paths.add(prefix + "/geocode/" + operation);
+            }
+        }
+        return Set.copyOf(paths);
+    }
+
+    @Test
+    void theGeocodeLookupsStillDeclareTheirCapability() {
+        List<String> found = new ArrayList<>();
+        List<String> wrong = new ArrayList<>();
+
+        for (Method handler : allControllerMethods()) {
+            if (!isGeocodeLookupEndpoint(handler)) {
+                continue;
+            }
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            found.add(where);
+            RequiresCapability declaration = handler.getAnnotation(RequiresCapability.class);
+            if (declaration == null) {
+                wrong.add(where + " declares no capability");
+                continue;
+            }
+            if (declaration.value() != uz.horecaos.platform.iam.api.Capability.GEO_LOOKUP) {
+                wrong.add(where + " requires " + declaration.value() + ", not geo.lookup");
+            }
+            if (declaration.mutating()) {
+                wrong.add(where + " is marked mutating, which would demand an Idempotency-Key it does not need");
+            }
+            ScopeType expected = pathOf(handler).contains("{locationId}") ? ScopeType.LOCATION : ScopeType.BRAND;
+            if (declaration.scope() != expected) {
+                wrong.add(where + " requires " + declaration.scope() + " but its path supports " + expected);
+            }
+        }
+
+        assertThat(found)
+                .as("the six lookups the exemption names must all exist, or the exemption outlived them")
+                .hasSize(GEOCODE_LOOKUP_PATHS.size());
+        assertThat(wrong).isEmpty();
     }
 
     /**

@@ -374,6 +374,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     uz: 'Yetkazib berish zonalarini koʻrish',
     en: 'View delivery zones',
   },
+  'geo.lookup': {
+    area: 'delivery',
+    ru: 'Искать адреса на карте',
+    uz: 'Xaritada manzillarni qidirish',
+    en: 'Look up addresses on the map',
+  },
   'delivery.zone.manage': {
     area: 'delivery',
     ru: 'Редактировать зоны доставки',
@@ -435,6 +441,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Видеть местоположение курьеров',
     uz: 'Kuryerlar joylashuvini koʻrish',
     en: 'View courier positions',
+  },
+  'order.points.reveal': {
+    area: 'order',
+    ru: 'Открывать на карте точки доставки сегодняшних заказов',
+    uz: 'Bugungi buyurtmalar yetkazish nuqtalarini xaritada ochish',
+    en: "Open the day's delivery points on the map",
   },
   'courier.duty.manage': {
     area: 'courier',

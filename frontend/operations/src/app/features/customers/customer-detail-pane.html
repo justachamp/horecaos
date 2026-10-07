@@ -386,62 +386,14 @@
         @for (address of list; track address.id) {
           @if (editingAddressId() === address.id) {
             <div class="form address-form">
-              <label class="q-caption">{{ 'customers.address.label' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressLabel()"
-                (input)="addressLabel.set($any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.line1' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().line1"
-                (input)="setAddressField('line1', $any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.city' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().city"
-                (input)="setAddressField('city', $any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.district' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().district"
-                (input)="setAddressField('district', $any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.entrance' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().entrance"
-                (input)="setAddressField('entrance', $any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.floor' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().floor"
-                (input)="setAddressField('floor', $any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.apartment' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().apartment"
-                (input)="setAddressField('apartment', $any($event.target).value)"
-              />
-              <label class="q-caption">{{ 'customers.address.landmark' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="addressFields().landmark"
-                (input)="setAddressField('landmark', $any($event.target).value)"
-              />
+              @if (locationScope(); as editorScope) {
+                <q-customer-address-editor
+                  [scope]="editorScope"
+                  [initial]="address"
+                  [extended]="true"
+                  (draftChange)="onAddressDraft($event)"
+                />
+              }
               <label class="q-caption">{{ 'customers.address.instructions' | t }}</label>
               <textarea
                 class="q-body field"
@@ -462,7 +414,7 @@
                   type="button"
                   class="q-btn-primary"
                   (click)="saveEditedAddress(address)"
-                  [disabled]="addressSaving()"
+                  [disabled]="!canSaveAddress()"
                 >
                   {{ addressSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
                 </button>
@@ -494,6 +446,11 @@
               >
                 {{ 'customers.address.coordinateSource' | t }}:
                 {{ coordinateSourceLabel(address.coordinateSource) }}
+                @if (address.latitude !== null && address.longitude !== null) {
+                  <span class="q-mono" data-testid="address-card-point">
+                    ({{ address.latitude }}, {{ address.longitude }})
+                  </span>
+                }
               </p>
               <div class="address-card__actions">
                 <button type="button" class="link" (click)="startEditingAddress(address)">
@@ -519,62 +476,13 @@
           </button>
         } @else {
           <div class="form address-form">
-            <label class="q-caption">{{ 'customers.address.label' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressLabel()"
-              (input)="addressLabel.set($any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.line1' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().line1"
-              (input)="setAddressField('line1', $any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.city' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().city"
-              (input)="setAddressField('city', $any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.district' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().district"
-              (input)="setAddressField('district', $any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.entrance' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().entrance"
-              (input)="setAddressField('entrance', $any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.floor' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().floor"
-              (input)="setAddressField('floor', $any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.apartment' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().apartment"
-              (input)="setAddressField('apartment', $any($event.target).value)"
-            />
-            <label class="q-caption">{{ 'customers.address.landmark' | t }}</label>
-            <input
-              class="q-body field"
-              type="text"
-              [value]="addressFields().landmark"
-              (input)="setAddressField('landmark', $any($event.target).value)"
-            />
+            @if (locationScope(); as editorScope) {
+              <q-customer-address-editor
+                [scope]="editorScope"
+                [extended]="true"
+                (draftChange)="onAddressDraft($event)"
+              />
+            }
             <label class="q-caption">{{ 'customers.address.instructions' | t }}</label>
             <textarea
               class="q-body field"
@@ -595,7 +503,7 @@
                 type="button"
                 class="q-btn-primary"
                 (click)="saveNewAddress()"
-                [disabled]="addressSaving()"
+                [disabled]="!canSaveAddress()"
               >
                 {{ addressSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
               </button>

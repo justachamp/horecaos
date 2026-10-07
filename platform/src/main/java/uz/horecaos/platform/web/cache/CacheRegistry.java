@@ -94,7 +94,28 @@ public enum CacheRegistry {
             "staff.display_names",
             Duration.ofMinutes(10),
             20_000,
-            "StaffMemberChanged (evicted on every profile write)");
+            "StaffMemberChanged (evicted on every profile write)"),
+
+    /**
+     * Geocoder answers (ADR 0145, ADR 0033), keyed by tenant, region and version, locale,
+     * operation and a keyed hash of the normalized query.
+     *
+     * <p>Thirty days, which is the narrowest licence limit in force: Yandex's standard terms
+     * let results be cached for up to thirty days, and a longer life would be a storage
+     * decision the record deliberately did not make (ADR 0145 decision 5). There is no
+     * invalidation event, and none is needed: a stale answer is a suggestion a person looks
+     * at on a map before it becomes a pin, and editing a region changes its version, which is
+     * part of the key. Only non-empty answers are held.
+     *
+     * <p>An entry is personal data (ADR 0029): it holds an address. It lives in process
+     * memory only, under a key that carries a hash and never the query text, and is held to
+     * the rules of the address it came from.
+     */
+    GEO_RESPONSES(
+            "geo.responses",
+            Duration.ofDays(30),
+            20_000,
+            "none: the TTL is the provider licence limit, and a region edit changes the key");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

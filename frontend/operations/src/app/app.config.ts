@@ -14,6 +14,7 @@ import { sessionRefreshInterceptor } from './core/api/session-refresh.intercepto
 import { captureSupportTenant, supportTenantInterceptor } from './core/auth/support-tenant';
 import { Auth } from './core/auth/auth';
 import { I18n } from './core/i18n/i18n';
+import { provideMapProvider } from './shared/ui/map/lazy-map-provider';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -80,5 +81,9 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => {
       inject(I18n);
     }),
+
+    // ADR 0145: which map vendor draws is the platform's configuration, and its adapter and
+    // script are both fetched on first use. Nothing vendor-shaped is in this bundle.
+    provideMapProvider(),
   ],
 };

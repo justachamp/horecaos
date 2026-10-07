@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 
 import { Versioned } from '../../core/api/aggregate-version';
@@ -17,13 +25,13 @@ import { MoneyInput } from '../../shared/ui/money-input';
 import { describeApiError } from '../orders/order-errors';
 import { orderStatusLabel } from '../orders/order-status';
 import { BrandProfileApi, BrandView } from '../settings/brand-profile/brand-profile-api';
+import { CustomerAddressDraft, CustomerAddressEditor } from './customer-address-editor';
 import { customerStatusLabel } from './customer-status';
 import { ReviewRow, ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
   ConsentDecision,
   ContactType,
-  CustomerAddressFields,
   CustomerCoordinateSource,
   CustomerDiscountHistory,
   CustomerEligibility,
@@ -116,66 +124,6 @@ const REVEAL_PURPOSE = {
 } as const;
 
 /**
- * The address form's own draft shape: every field a plain, possibly-empty
- * string, unlike {@link CustomerAddressFields} where `line1`/`city`/`district`
- * are required and the rest are `string | null`. Keeping the draft
- * all-string avoids coercing an empty required field to `null` mid-edit,
- * which `CustomerAddressFields`'s own type would otherwise forbid; {@link
- * toAddressFields} is the one place the draft becomes the real request.
- */
-interface AddressFormState {
-  readonly line1: string;
-  readonly line2: string;
-  readonly city: string;
-  readonly district: string;
-  readonly postalCode: string;
-  readonly entrance: string;
-  readonly floor: string;
-  readonly apartment: string;
-  readonly landmark: string;
-}
-
-const EMPTY_ADDRESS_FORM: AddressFormState = {
-  line1: '',
-  line2: '',
-  city: '',
-  district: '',
-  postalCode: '',
-  entrance: '',
-  floor: '',
-  apartment: '',
-  landmark: '',
-};
-
-function formFromAddressFields(fields: CustomerAddressFields): AddressFormState {
-  return {
-    line1: fields.line1,
-    line2: fields.line2 ?? '',
-    city: fields.city,
-    district: fields.district,
-    postalCode: fields.postalCode ?? '',
-    entrance: fields.entrance ?? '',
-    floor: fields.floor ?? '',
-    apartment: fields.apartment ?? '',
-    landmark: fields.landmark ?? '',
-  };
-}
-
-function toAddressFields(form: AddressFormState): CustomerAddressFields {
-  return {
-    line1: form.line1.trim(),
-    line2: form.line2.trim() || null,
-    city: form.city.trim(),
-    district: form.district.trim(),
-    postalCode: form.postalCode.trim() || null,
-    entrance: form.entrance.trim() || null,
-    floor: form.floor.trim() || null,
-    apartment: form.apartment.trim() || null,
-    landmark: form.landmark.trim() || null,
-  };
-}
-
-/**
  * 5.2 Customer detail — the screen Delever does not have.
  *
  * **What this wave builds, and what it does not.** Profile + DOB, addresses
@@ -196,7 +144,7 @@ function toAddressFields(form: AddressFormState): CustomerAddressFields {
  */
 @Component({
   selector: 'q-customer-detail-pane',
-  imports: [TPipe, ActorChip, MoneyInput],
+  imports: [TPipe, ActorChip, MoneyInput, CustomerAddressEditor],
   templateUrl: './customer-detail-pane.html',
   styleUrl: './customer-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -256,6 +204,9 @@ export class CustomerDetailPane {
       throw error;
     }
   }
+
+  /** The same scope as a signal, for the address editor, whose lookups it selects the path for. */
+  protected readonly locationScope = computed(() => this.baseLocation.scope());
 
   private scope() {
     return this.baseLocation.scope();
@@ -593,8 +544,8 @@ export class CustomerDetailPane {
   protected readonly editingAddressId = signal<string | null>(null);
   protected readonly addingAddress = signal(false);
   protected readonly addressSaving = signal(false);
-  protected readonly addressLabel = signal('');
-  protected readonly addressFields = signal<AddressFormState>(EMPTY_ADDRESS_FORM);
+  /** What the address editor (map, suggest, structured fields) currently holds; `null` until it has said anything. */
+  protected readonly addressDraft = signal<CustomerAddressDraft | null>(null);
   protected readonly addressInstructions = signal('');
 
   private async loadAddresses(): Promise<void> {
@@ -615,23 +566,25 @@ export class CustomerDetailPane {
   }
 
   protected startAddingAddress(): void {
-    this.addressLabel.set('');
-    this.addressFields.set(EMPTY_ADDRESS_FORM);
+    this.addressDraft.set(null);
     this.addressInstructions.set('');
     this.editingAddressId.set(null);
     this.addingAddress.set(true);
   }
 
   protected startEditingAddress(address: RevealedCustomerAddress): void {
-    this.addressLabel.set(address.label);
-    this.addressFields.set(formFromAddressFields(address.fields));
+    this.addressDraft.set(null);
     this.addressInstructions.set(address.deliveryInstructions ?? '');
     this.editingAddressId.set(address.id);
     this.addingAddress.set(false);
   }
 
-  protected setAddressField(field: keyof AddressFormState, value: string): void {
-    this.addressFields.update((current) => ({ ...current, [field]: value }));
+  protected onAddressDraft(draft: CustomerAddressDraft): void {
+    this.addressDraft.set(draft);
+  }
+
+  protected canSaveAddress(): boolean {
+    return !this.addressSaving() && (this.addressDraft()?.valid ?? false);
   }
 
   protected cancelAddressForm(): void {
@@ -639,18 +592,26 @@ export class CustomerDetailPane {
     this.editingAddressId.set(null);
   }
 
+  /**
+   * A new address, with whatever point the operator confirmed on the map (row `5.2c`): `OPERATOR_PIN`
+   * with its coordinates, or `NOT_GEOCODED`/`LANDMARK_ONLY` with none. The editor keeps the three
+   * consistent, which the server insists on (`requireCoordinatesMatchSource`).
+   */
   protected async saveNewAddress(): Promise<void> {
     const scope = this.scope();
-    if (!scope || this.addressSaving()) {
+    const draft = this.addressDraft();
+    if (!scope || !draft || !this.canSaveAddress()) {
       return;
     }
     this.addressSaving.set(true);
     try {
       await this.api.addAddress(scope, this.accountId(), {
-        label: this.addressLabel().trim(),
-        fields: toAddressFields(this.addressFields()),
+        label: draft.label,
+        fields: draft.fields,
         deliveryInstructions: this.addressInstructions().trim() || null,
-        coordinateSource: 'NOT_GEOCODED',
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        coordinateSource: draft.coordinateSource,
       });
       this.addingAddress.set(false);
       await this.loadAddresses();
@@ -662,16 +623,15 @@ export class CustomerDetailPane {
   }
 
   /**
-   * `original` supplies the coordinate and its source unchanged: this form has
-   * no map or pin picker, and the backend refuses a `coordinateSource` that
-   * claims a point (`GEOCODER`, `*_PIN`, `LEGACY_UNSOURCED`) with none
-   * attached (`CustomerProfileService#requireCoordinatesMatchSource`) — so
-   * editing the text fields must carry the existing point through rather
-   * than silently dropping it.
+   * The editor starts from `original` and, until the operator touches the pin, hands back its point
+   * and its source unchanged: editing the street's spelling must never re-label a customer's own pin
+   * as the operator's, nor drop it (`requireCoordinatesMatchSource` refuses a source that claims a
+   * point with none attached). A pin the operator moved is theirs, with the new coordinates.
    */
   protected async saveEditedAddress(original: RevealedCustomerAddress): Promise<void> {
     const scope = this.scope();
-    if (!scope || this.addressSaving()) {
+    const draft = this.addressDraft();
+    if (!scope || !draft || !this.canSaveAddress()) {
       return;
     }
     this.addressSaving.set(true);
@@ -681,12 +641,12 @@ export class CustomerDetailPane {
         this.accountId(),
         original.id,
         {
-          label: this.addressLabel().trim(),
-          fields: toAddressFields(this.addressFields()),
+          label: draft.label,
+          fields: draft.fields,
           deliveryInstructions: this.addressInstructions().trim() || null,
-          latitude: original.latitude,
-          longitude: original.longitude,
-          coordinateSource: original.coordinateSource,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          coordinateSource: draft.coordinateSource,
         },
         original.version,
       );

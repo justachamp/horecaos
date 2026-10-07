@@ -452,6 +452,141 @@ class OperationsServiceZoneControllerEndpointTests {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
+    // ----------------------------------------- ADR 0145: the outline a map draws from
+
+    private static final String CHILONZOR_BOX =
+            "{\"type\":\"Polygon\",\"coordinates\":[[[69.20,41.28],[69.28,41.28],[69.28,41.34],[69.20,41.34],[69.20,41.28]]]}";
+
+    private void draftPolygon(UUID zoneId, String idempotencyKey) throws Exception {
+        MvcResult drafted = mvc.perform(post(zonesPath(TENANT) + "/" + zoneId + "/versions")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSON.writeValueAsString(
+                                Map.of("geoJson", CHILONZOR_BOX, "priority", 10, "currency", "UZS"))))
+                .andReturn();
+        assertThat(drafted.getResponse().getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void aDraftedPolygonIsReadBackWithNamedCoordinatesInTheOrderItWasDrawn() throws Exception {
+        UUID zoneId = registerZone(OWNER);
+        draftPolygon(zoneId, "outline-polygon");
+
+        MvcResult read = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId + "/versions/1/outline")
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        var body = JSON.readTree(read.getResponse().getContentAsString());
+        assertThat(body.path("status").asString()).isEqualTo("DRAFT");
+        assertThat(body.path("shapeKind").asString()).isEqualTo("POLYGON");
+        var ring = body.path("polygons").get(0).path("ring");
+        assertThat(ring.size())
+                .as("the ring is open: PostGIS closes it, the console's editors keep it open")
+                .isEqualTo(4);
+        // The trap this endpoint exists to get right: GeoJSON is [longitude, latitude], and a
+        // client that read it the other way draws Tashkent in the Indian Ocean without an error.
+        assertThat(ring.get(0).path("latitude").asDouble()).isEqualTo(41.28);
+        assertThat(ring.get(0).path("longitude").asDouble()).isEqualTo(69.20);
+        assertThat(ring.get(2).path("latitude").asDouble()).isEqualTo(41.34);
+        assertThat(ring.get(2).path("longitude").asDouble()).isEqualTo(69.28);
+        assertThat(body.path("polygons").get(0).path("holes").size()).isZero();
+    }
+
+    @Test
+    void aCircleDraftReadsBackAsARingOfCornersAroundItsBranch() throws Exception {
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "outline-circle");
+
+        MvcResult read = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId + "/versions/1/outline")
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        var body = JSON.readTree(read.getResponse().getContentAsString());
+        assertThat(body.path("shapeKind").asString()).isEqualTo("CIRCLE");
+        var ring = body.path("polygons").get(0).path("ring");
+        assertThat(ring.size()).as("a buffered circle is many corners").isGreaterThan(16);
+        for (var corner : ring) {
+            // 3 km is about 0.027 degrees of latitude: every corner is near the branch's own pin.
+            assertThat(Math.abs(corner.path("latitude").asDouble() - 41.311081)).isLessThan(0.04);
+            assertThat(Math.abs(corner.path("longitude").asDouble() - 69.240562))
+                    .isLessThan(0.04);
+        }
+    }
+
+    @Test
+    void theOutlinesListHoldsEachZonesLiveVersionAndNothingElse() throws Exception {
+        UUID live = registerZone(OWNER);
+        draftCircle(live, "outlines-live-v1");
+        mvc.perform(post(zonesPath(TENANT) + "/" + live + "/versions/1/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "outlines-live-activate"));
+        // A second version, never activated: it governs nothing and must not be drawn as if it did.
+        draftPolygon(live, "outlines-live-v2");
+        UUID neverActivated = registerZone(OWNER);
+        draftCircle(neverActivated, "outlines-draft-only");
+
+        MvcResult list = mvc.perform(get(zonesPath(TENANT) + "/outlines").with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(list.getResponse().getStatus()).isEqualTo(200);
+        var body = JSON.readTree(list.getResponse().getContentAsString());
+        assertThat(body.size())
+                .as("one live zone; the draft-only zone covers nothing")
+                .isEqualTo(1);
+        assertThat(body.get(0).path("zoneId").asString()).isEqualTo(live.toString());
+        assertThat(body.get(0).path("version").asInt()).isEqualTo(1);
+        assertThat(body.get(0).path("status").asString()).isEqualTo("ACTIVE");
+        assertThat(body.get(0).path("shapeKind").asString()).isEqualTo("CIRCLE");
+    }
+
+    @Test
+    void anOutlineOfAnotherTenantsZoneOrAVersionThatNeverExistedIsNotFound() throws Exception {
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "outline-foreign-draft");
+
+        MvcResult foreign = mvc.perform(
+                        get(zonesPath(OTHER_TENANT, OTHER_TENANT_BRAND) + "/" + zoneId + "/versions/1/outline")
+                                .with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(foreign.getResponse().getStatus())
+                .as("the foreign owner's path is wholly their own; only the zone's ownership stands in the way")
+                .isEqualTo(404);
+
+        MvcResult missingVersion = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId + "/versions/9/outline")
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(missingVersion.getResponse().getStatus()).isEqualTo(404);
+
+        MvcResult foreignList = mvc.perform(get(zonesPath(OTHER_TENANT, OTHER_TENANT_BRAND) + "/outlines")
+                        .with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(foreignList.getResponse().getStatus()).isEqualTo(200);
+        assertThat(JSON.readTree(foreignList.getResponse().getContentAsString()).size())
+                .as("another tenant's zones never appear in this tenant's outlines")
+                .isZero();
+    }
+
+    @Test
+    void aCallerWithNoDeliveryZoneGrantCannotReadAnOutline() throws Exception {
+        UUID zoneId = registerZone(OWNER);
+        draftCircle(zoneId, "outline-refusal-draft");
+
+        MvcResult refused = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId + "/versions/1/outline")
+                        .with(tokenFor(NO_DELIVERY_GRANT)))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.DELIVERY_ZONE_READ.code());
+
+        MvcResult listRefused = mvc.perform(get(zonesPath(TENANT) + "/outlines").with(tokenFor(NO_DELIVERY_GRANT)))
+                .andReturn();
+        assertThat(listRefused.getResponse().getStatus()).isEqualTo(403);
+    }
+
     /**
      * Registers a zone named in {@code displayNamesJson}. The contract keeps the platform triple
      * required, so a language the JSON does not name is filled with the {@code ru} name -- what the

@@ -16,6 +16,7 @@ import { deliveryRu } from './messages/delivery.ru';
 import { couriersRu } from './messages/couriers.ru';
 import { deviceRu } from './messages/device.ru';
 import { wallboardRu } from './messages/wallboard.ru';
+import { mapRu } from './messages/map.ru';
 
 /**
  * Russian, every area together. Typed as the complete catalogue, so a key added to the English
@@ -46,4 +47,5 @@ export const messagesRu: MessageCatalogue = {
   ...couriersRu,
   ...deviceRu,
   ...wallboardRu,
+  ...mapRu,
 };

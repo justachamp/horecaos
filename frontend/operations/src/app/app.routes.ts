@@ -147,7 +147,7 @@ export const routes: Routes = [
             path: 'new',
             // The quote band reads `reports.provenance.*`, the dine-in picker and the party close read
             // `settings.locations.floorPlan.*`, and the aggregator branch reads `delivery.zones.*`.
-            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings')],
+            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings', 'map')],
             loadComponent: () =>
               import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
@@ -261,6 +261,8 @@ export const routes: Routes = [
               },
               {
                 path: ':accountId',
+                // `map` for the saved-address editor's map and search (row 5.2c, ADR 0145).
+                canActivate: [messagesGuard('map')],
                 loadComponent: () =>
                   import('./features/customers/customer-detail-pane').then(
                     (m) => m.CustomerDetailPane,
@@ -321,8 +323,9 @@ export const routes: Routes = [
             children: [
               {
                 path: ':locationId',
-                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen).
-                canActivate: [messagesGuard('staff', 'orders')],
+                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen);
+                // `map` for the branch's pin (row 10.2b, ADR 0145).
+                canActivate: [messagesGuard('staff', 'orders', 'map')],
                 loadComponent: () =>
                   import('./features/settings/locations/location-detail-pane').then(
                     (m) => m.LocationDetailPane,
@@ -908,7 +911,10 @@ export const routes: Routes = [
           // heatmap and today's orders as pins) stay deferred with X.4 and
           // are named as such on the page itself, not silently absent.
           {
+            // ADR 0145: the order-density view and today's orders as pins. `delivery` holds the pins' own
+            // words and the zone names' vocabulary; `map` holds the map's.
             path: 'geography',
+            canActivate: [messagesGuard('delivery', 'map')],
             loadComponent: () =>
               import('./features/reports/geography-page').then((m) => m.GeographyPage),
           },
@@ -998,17 +1004,22 @@ export const routes: Routes = [
           { path: '', pathMatch: 'full', redirectTo: 'dispatch' },
           {
             path: 'dispatch',
-            canActivate: [messagesGuard('couriers', 'orders')],
+            // `map` for the map pane (row 3.1, ADR 0145).
+            canActivate: [messagesGuard('couriers', 'orders', 'map')],
             loadComponent: () =>
               import('./features/delivery/dispatch-board-page').then((m) => m.DispatchBoardPage),
           },
           {
+            // ADR 0145, row 3.2: the couriers on a map.
             path: 'map',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/live-map-page').then((m) => m.LiveMapPage),
           },
           {
+            // ADR 0145: zones are drawn on a map and activated after a look at it.
             path: 'zones',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
           },
@@ -1017,6 +1028,7 @@ export const routes: Routes = [
             // its own top-level tab (delivery-shell.ts's own doc names this
             // as sharing the 3.6 shell).
             path: 'zones/import',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/geozone-batch-import-page').then(
                 (m) => m.GeozoneBatchImportPage,

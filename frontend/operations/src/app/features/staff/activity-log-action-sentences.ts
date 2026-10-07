@@ -1120,6 +1120,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Уведомления шаблон провайдер проверка зафиксировано',
       'uz-Latn': 'Bildirishnomalar shablon provayder koʻrib chiqish qayd etildi',
     },
+    'order.map_points.revealed': {
+      en: 'The day’s delivery points opened on a map',
+      ru: 'Открыты на карте точки доставки за день',
+      'uz-Latn': 'Kunlik yetkazib berish nuqtalari xaritada ochildi',
+    },
     'ordering.acceptance-policy.authored': {
       en: 'Order acceptance policy published',
       ru: 'Опубликована политика приёма заказов',

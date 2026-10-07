@@ -1323,4 +1323,11 @@ export const settingsEn = {
     'The limits above which a promotion or a large customer export waits for a second signature.',
   'settings.fiscalization.noAccess': 'No access',
   'settings.fiscalization.responsibility': 'Who issues the receipt',
+  'settings.locations.pin.title': 'Map pin',
+  'settings.locations.pin.none':
+    'This branch has no point on the map. It cannot be measured from, and a delivery zone cannot be drawn around it, until it has one. Edit the branch to place it.',
+  'settings.locations.pin.hint':
+    "Move the pin to the branch's door: click the map, drag the pin or type the coordinates. The point is saved only if you moved it, and a branch's pin can be moved but not removed.",
+  'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
+    "Opened the day's delivery points on a map",
 } as const;
