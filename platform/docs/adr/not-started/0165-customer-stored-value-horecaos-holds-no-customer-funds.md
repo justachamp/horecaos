@@ -474,8 +474,8 @@ typed by a person today and may contain anything including a name (ADR 0029 keep
 personal data out of metrics), and not by tenant, customer or amount. This record
 specifies no log line, and none may carry the code either. *Which* codes operators
 used is read from the existing `loyalty.balance.adjust` audit facts, which already
-hold it under the ADR 0027 redaction rules. The counter is what the report-only release is for: how often an
-operator typed something off the list.
+hold it under the ADR 0027 redaction rules. The counter is what the report-only
+release is for: how often an operator typed something off the list.
 
 ### Decision 4's shape, for the day it is built (specification, not a plan)
 

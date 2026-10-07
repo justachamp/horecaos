@@ -21,8 +21,13 @@
   `StorefrontOrderingController.GiftOfferResponse`) for the customer to add with
   one tap; pricing adds no line. ADR 0016 named
   `catalog.variant_packaging_requirements` (sold variant, packaging variant,
-  numerator and denominator) and its own status line says it was never built; no
-  migration creates it. Every cart a customer or operator fills goes through
+  numerator and denominator) and its body says it was never built (the "Not yet
+  built" paragraph, 0016:299; its status line does not mention it); no migration
+  creates it. The legacy side is on record and decided nowhere:
+  `variants.package_id`, `package_volume` and `is_package` put synthetic package
+  lines on a legacy order, kept out of the subtotal and rolled into
+  `packaging_price` (`platform/docs/domains/legacy-profile-findings.md`,
+  `legacy-schema-profile.md`). Every cart a customer or operator fills goes through
   `CartService` (`StorefrontOrderingController`, `CustomerBotOrderingAdapter`,
   `OperatorOrderingService`; a reorder is a plan the client turns into the same
   calls), so one place can see every basket; `AggregatorOrderIntakeService`
@@ -37,58 +42,116 @@
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0016, ADR 0017, ADR 0018, ADR 0019, ADR 0025, ADR 0027,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0036, ADR 0038, ADR 0039, ADR 0040,
-  ADR 0041, ADR 0043, ADR 0056, ADR 0136, ADR 0137, ADR 0140
-- Supersedes / Superseded by: — (amends ADR 0016 by closing the never-built
-  `catalog.variant_packaging_requirements` and its open input on legacy packaging
-  disposition: the packaging relationship is carried by the product-triggered rule
-  kind below instead of a fourth model; amends ADR 0137 by adding the
-  `portions_per_unit` fact that its sentence "portion-band becomes buildable the day
-  `portion_size` exists" assumed `portion_size` already was; leaves ADR 0140's
-  decision "the storefront offers a gift, pricing never invents a line" exactly as
-  decided; reopens no rejected row of any of them)
+  ADR 0041, ADR 0043, ADR 0047, ADR 0056, ADR 0057, ADR 0136, ADR 0137, ADR 0140,
+  ADR 0169 (a mutual dependency: ADR 0169 depends back on this record for the
+  `AUTO_ADD_LINE_MANDATORY` code; see the open input on amendments)
+- Supersedes / Superseded by: — (amends ADR 0016 by replacing the never-built
+  `catalog.variant_packaging_requirements` with the product-triggered rule kind
+  below instead of a fourth model, and by proposing a default, in the last open
+  input, for the legacy packaging disposition that ADR 0016's body leaves to the
+  migration coverage register (its header lists no such input); amends ADR 0137 by
+  adding the `portions_per_unit` fact that its sentence "portion-band becomes
+  buildable the day `portion_size` exists" assumed `portion_size` already was;
+  closes ADR 0140's open input on who adds a gift line, on the answer already
+  shipped: ADR 0140 decided only that pricing never invents a line, and this record
+  keeps that exactly, so a promotion's gift stays an offer (`giftOffers`) and an
+  auto-add rule may inject any other line but is blocked from injecting a
+  promotion's gift; reopens no rejected row of any of them)
 - Open inputs: each is closed on its proposed default if the owner accepts the
-  record as written; the ones that name a person other than the owner stay with that
-  person and the work they block is marked.
+  record as written. The function in brackets is who supplies the fact; the owner
+  accepts on its behalf, and no input names a person other than the owner. Each
+  input says what it blocks.
   - **Whether a mandatory injected line is lawful and how it must be worded**
     (legal, product). A line the customer cannot remove is a charge the customer
     did not choose; ADR 0136 already carries the same question for a hidden
     modifier and left its copy as a neutral placeholder. Proposed default: the
-    `mandatory` flag exists in the schema and is refused at authoring until the ADR
-    0030 key `catalog.auto_add_mandatory_allowed` (BOOLEAN, scope TENANT, code
-    default `false`) is turned on by the owner; a mandatory rule, once allowed,
-    needs customer text in the brand's default locale or publication is blocked.
-    Blocks: only mandatory rules; every other rule is removable and unaffected.
+    `mandatory` flag exists in the schema, and a mandatory rule is blocked at
+    publication (`AUTO_ADD_MANDATORY_NOT_ALLOWED`) until the ADR 0030 key
+    `catalog.auto_add_mandatory_allowed` (BOOLEAN, scope TENANT, code default
+    `false`) is turned on. The key is declared without `tenantVisible()`, so the
+    tenant configuration surface neither lists nor writes it (as built, a tenant
+    administrator holds `tenant.configuration.write` and may write any key that is
+    `tenantVisible()`), and it is written only through the platform control-plane
+    configuration controller under `PLATFORM_ADMIN`, by a platform administrator on
+    the owner's instruction. A mandatory rule, once allowed, needs customer text in
+    the brand's default locale or publication is blocked. Blocks: only mandatory
+    rules; every other rule is removable and unaffected.
   - **Whether an injected line counts toward a promotion's minimum, a gift
     trigger and the free-delivery threshold** (product, finance). Proposed default:
-    it is an ordinary line and counts everywhere, because making it special means a
-    second kind of line in the pricing engine; the delivery-fee threshold basis is
-    ADR 0140's own open input and this record follows whichever answer it gets.
+    it is an ordinary line for every money condition (a minimum order amount, the
+    free-delivery threshold, a delivery-fee band), because making it special there
+    means a second kind of line in the pricing engine; the delivery-fee threshold
+    basis is ADR 0140's own open input and this record follows whichever answer it
+    gets. For the quantity a promotion counts, `M` in ADR 0140's gift rule (the
+    summed quantity of the lines the promotion's item conditions match, which drives
+    `floor(M / triggerQuantity)`), an injected line counts only when the promotion
+    has no item predicate; a promotion that names products, variants or categories
+    never counts one, so a bag cannot tip a "three for two". The cart hands pricing
+    each line's origin for this one purpose; pricing is still never told a rule.
     Blocks: nothing.
   - **Whether rules apply on an aggregator or POS channel** (product,
-    operations). Proposed default: no. An aggregator order arrives with its lines
-    and its total (ADR 0040, `AggregatorOrderIntakeService`), and a line added on top
-    would change a figure the marketplace already stated. The schema's channel
-    set is the cart-built channel types only, so the answer cannot be changed by
-    configuration, only by a record that amends this one.
+    operations). Proposed default: no, for one reason on both: this cart did not
+    build the order's lines or fix its total. An aggregator order arrives with its
+    lines and its total (ADR 0040, `AggregatorOrderIntakeService`), and a POS order
+    is a ticket the POS keeps authoritative and keeps editing (ADR 0047, the row on
+    mirroring the POS open ticket), so a line added by a rule would change a figure
+    someone else already stated or is still changing. ADR 0140 lists POS among its
+    promotion channel types because a discount can be computed over any priced
+    basket; adding a line needs a basket this cart owns. The schema's channel set is
+    the cart-built channel types only, so the answer cannot be changed by
+    configuration, only by a record that amends this one. Blocks: nothing; no
+    aggregator or POS order carries an injected line until such a record exists.
   - **Whether a confirmed order is re-evaluated when an operator amends it**
     (product, operations). Proposed default: no. An amendment is explicit, repriced
     and agreed (ADR 0039); a rule that fires after confirmation is a change nobody
     on the call agreed to. The amendment composer shows lines flagged "added
-    automatically" and applies the ordinary removal rules to them (ADR 0169).
+    automatically". How an operator removes or reduces one is decided by ADR 0169,
+    not here, and no such removal exists until ADR 0169 is built
+    (`AmendmentCommandType.REMOVE_LINES` is refused today), so until then an
+    injected line on a confirmed order is as fixed as any other line. The two
+    records depend on each other (ADR 0169 depends back on this one) and share the
+    Problem Details code `AUTO_ADD_LINE_MANDATORY`: this record declares the code
+    and the mandatory flag; ADR 0169 applies the refusal to a mandatory line on an
+    amendment. Blocks: nothing here; removing an injected line from a confirmed order
+    waits for ADR 0169.
   - **What one unit of a dish is worth in portions, and who authors it**
     (product, catalog authors). Proposed default: `portions_per_unit` is blank on
     every variant, a blank counts as zero, and a portion-band rule on a brand where
     no variant carries a value publishes with a warning and never fires. No value is
     guessed from weight, price or category. A portion means one serving of the item
-    as the menu sells it.
+    as the menu sells it. Blocks: only `PORTION_BAND` rules; `PLAIN` and
+    `PRODUCT_TRIGGERED` rules are unaffected.
   - **Whether the offer mode ships with the first build** (product). Proposed
     default: the schema carries both modes; the first build ships `INJECT` only
     and `OFFER` follows as its own change, because it reuses the ADR 0140
-    gift-offer response shape and needs both storefronts to draw it.
+    gift-offer response shape and needs both storefronts to draw it. Blocks: nothing
+    in the first build; `OFFER` rules wait for their own change.
   - **Whether a line the customer removed is offered again if the basket changes
     later** (product). Proposed default: never, for the life of that cart. A rule
     that re-adds what the customer just took off is the failure the whole
-    record is built to prevent.
+    record is built to prevent. Blocks: nothing.
+  - **How legacy packaging (`variants.package_id`, `package_volume`, `is_package`)
+    is carried over** (product, migration). ADR 0016's body leaves the disposition
+    to the migration coverage register and asks that retained packaging use "an
+    explicit same-brand variant relationship with exact quantity semantics"; its
+    header lists no such input, and nothing else decides it. Proposed default:
+    retain it, as rules. Each legacy variant that has a `package_id` becomes one
+    `PRODUCT_TRIGGERED` rule in `INJECT` mode, removable: the sold variant is its
+    single trigger node, `trigger_threshold` is its `package_volume`, `quantity` is
+    1 (the package variant is `add_variant_id`) and `repeat_per_multiple` is true.
+    Historical `is_package` order lines import as ordinary order lines with
+    `origin = 'AUTO_ADD'` and a null rule id, which `ordering.order_lines` allows
+    because only `ordering.cart_lines` carries the origin-and-rule `CHECK`.
+    Injected packaging counts toward the subtotal here; the legacy platform kept
+    package lines out of the subtotal and rolled them into `packaging_price`, so
+    a migrated total and a new one differ by that definition, and no migrated order
+    is restated. The gap, named: a rule's step count is `floor(T / threshold)`, while
+    the legacy count is `get_packages_count(quantity, package_volume)`, whose body
+    the repository's schema profile does not record. If it rounds a partial group up,
+    the rule adds one package fewer for a remainder; the import reads the legacy
+    function before cutover and either accepts that difference or the owner amends
+    this record with a rounding mode. Blocks: only the legacy import and the
+    retained-packaging rules at catalog cutover; nothing in the build.
 
 **To accept as written:** say "accept 0158". Every open input above is then closed
 on its proposed default.
@@ -119,7 +182,7 @@ against bands that each name a product and a quantity.
 **Three decisions are tangled in that one row, and they have different owners.**
 
 1. *Where the rule runs.* The row's complaint is that three entry paths disagree. The
-   cart is the one place all three share: `CartService` creates, edits and prices every
+   cart (ADR 0019) is the one place all three share: `CartService` creates, edits and prices every
    cart the storefronts, the Telegram bot and the operator's New order screen build,
    and a reorder is a plan those same callers replay through it. `QuoteService` and the ADR 0140 evaluator are the wrong place:
    ADR 0018 makes a quote a price for a basket, ADR 0140 says "pricing must never
@@ -189,27 +252,44 @@ it unless the rule is mandatory, and mandatory is off until the owner says other
    is written by the cart through the same `upsertLine` a customer's edit uses, under
    the cart's version compare-and-set, with `origin = 'AUTO_ADD'`, the rule id and the
    rule version. It is priced, reserved, routed, fiscalized and reported as any line
-   is. Pricing is not told about rules and adds no line.
+   is. Routing sends it to the `PACKING` station or the location's fallback
+   (ADR 0041). Pricing is told each line's origin (Open input 2), never a rule, and
+   adds no line.
 5. **The customer can always see and remove an injected line, unless the rule is
    mandatory.** Every cart read says, per injected line, which rule put it there, the
    customer text of that rule, whether it can be removed, and the bounds on its
    quantity. A removal is honoured and remembered for the life of the cart: the rule
    is never evaluated into that cart again. A customer may raise the quantity up to the
-   rule's maximum and lower it to zero when the rule is removable; a rule's later
-   re-evaluation never overwrites a quantity the customer set. A mandatory line is
-   shown with its text and cannot be removed or reduced below the computed quantity.
-   There is no hidden injected line.
-6. **A rule that cannot be honoured is skipped, never made into a refusal.** If the
-   injected variant is off the menu at that location, stopped, outside its sale window
-   or unpriced, the rule does not fire for that cart, the skip is counted, and the
-   basket proceeds. Packaging running out never blocks a sale.
+   rule's maximum and lower it to zero when the rule is removable; a later
+   re-evaluation never overwrites a quantity the customer set, except to enforce the
+   rule's maximum or, for a mandatory rule, to raise the line back to the computed
+   quantity when the basket has grown. A mandatory line is shown with its text and
+   cannot be removed or reduced below the computed quantity. There is no hidden
+   injected line.
+6. **A rule that cannot be honoured is skipped, never made into a refusal.** The
+   reconciler runs the cart's own checks on the injected variant: on the menu at that
+   location, `requireOnSaleNow`, `requireAvailable` (the stop-list and stock check of
+   ADR 0017, the same two `putLine` and `price()` run on a customer's line) and
+   priced. If one fails, the rule does not fire for that cart, the skip is counted,
+   and the basket proceeds. A race does not turn a skip into a refusal: `price()`
+   reconciles before it checks the customer's lines, so an injected line whose stock
+   ran out since the last edit is dropped and the cart re-priced (the refusal that
+   names a line applies only to lines the customer chose), and a reservation that
+   fails for an injected line at checkout (ADR 0019) drops the line and re-prices
+   with `changedByPricing`. The customer sees a changed basket through the existing
+   `PRICE_CHANGED` re-quote, not a refusal that names a line they never chose. A
+   stock-tracked packaging variant can therefore run out under a basket, and the
+   order still goes through.
 7. **Hidden modifiers and gifts keep their roles and are kept from colliding.** A
    per-product packaging charge stays a hidden modifier. A per-order or per-portion
    packaging line is an auto-add rule. The catalog validator blocks publication when a
    rule would add a variant that a hidden modifier on a product in the same modes already
-   charges, and warns when a rule's variant is the gift of an active `FREE_ITEM`
-   promotion. An auto-add line may be the very line a `FREE_ITEM` promotion prices
-   free; the gift offer treats an injected line as already held.
+   charges, and blocks an `INJECT` rule whose variant is the gift of an active
+   `FREE_ITEM` promotion: a rule cannot read the money the promotion's condition
+   reads, so an injected gift would be charged in full whenever the promotion does
+   not fire. An `OFFER` rule for such a variant only warns, because the customer
+   taps. The gift offer treats any line the cart already holds, injected or not, as
+   held.
 8. **`OFFER` mode suggests instead of injecting.** An offer rule writes nothing to the
    cart; it is returned on the priced cart in the shape ADR 0140 uses for a gift offer,
    the customer taps, and the line is written through the ordinary cart call with
@@ -224,7 +304,9 @@ it unless the rule is mandatory, and mandatory is off until the owner says other
     off the cart neither adds nor removes anything. A shadow mode counts what would
     have fired so the owner can see it before turning it on.
 11. **An amendment never re-evaluates.** Lines already on an order stay as they are;
-    an operator adds or removes them explicitly, and a removal follows ADR 0169.
+    an operator adds or removes them explicitly, and a removal follows ADR 0169 once
+    that record is built (it depends back on this one and shares the
+    `AUTO_ADD_LINE_MANDATORY` code); until then no removal exists.
 12. **Aggregator and POS orders are out of scope by schema.** The rule's channel set
     cannot name them.
 
@@ -232,16 +314,16 @@ it unless the rule is mandatory, and mandatory is off until the owner says other
 
 | Option | Why not chosen | Revisit when |
 |---|---|---|
-| Inject inside the quote (`QuoteService`) | ADR 0018 makes a quote a price for the basket the customer sees; ADR 0140 says pricing never invents a line. A quote that adds a line makes a total the customer cannot reconcile to their screen | Never |
-| Each client evaluates the rules | Three entry paths, three carts: the row's own complaint. Every client would have to be changed for every new rule kind | Never |
+| Inject inside the quote (`QuoteService`) | ADR 0018 makes a quote a price for the basket the customer sees; ADR 0140 says pricing never invents a line. A quote that adds a line makes a total the customer cannot reconcile to their screen | ADR 0018 is amended so a quote may carry lines that the cart then displays and the customer can remove |
+| Each client evaluates the rules | Three entry paths, three carts: the row's own complaint. Every client would have to be changed for every new rule kind | A client must fill a basket offline, and ships rule logic with a server-checked parity test (the same fixtures through its evaluator and `AutoAddEvaluator` on every build) |
 | Hidden modifiers only (ADR 0136) | Already built and right for "this dish comes in a box". It scales with the dish, cannot express one-per-order or per-portion, and is deliberately not a line the customer can see or remove | Per-order and per-portion packaging prove unneeded; then drop `PLAIN` and `PORTION_BAND` |
 | Build `catalog.variant_packaging_requirements` as ADR 0016 sketched | A fourth model for what `PRODUCT_TRIGGERED` with a repeating step states, with its own authoring screen and its own cart code. Its numerator and denominator are the rule's step and quantity | A catalog author asks to state packaging on the product page, in which case that page writes a product-triggered rule |
-| Express injection as ADR 0140 promotions (`FREE_ITEM` made automatic) | A promotion's conditions are money, customer and time; a gift is free by definition. Packaging is neither, and ADR 0140 already decided the storefront offers a gift rather than the engine adding one | ADR 0140's open input on who adds a gift line is reopened by the owner |
+| Express injection as ADR 0140 promotions (`FREE_ITEM` made automatic) | A promotion's conditions are money, customer and time; a gift is free by definition. Packaging is neither. ADR 0140 decided only that pricing never invents a line and left open who adds a gift line; this record answers that for the cart on the shipped behaviour (the storefront offers a promotion's gift, and a rule may inject any other line, never a promotion's gift) | The owner decides a promotion's gift should be added without a tap; ADR 0140's open input is then reopened and a successor amends the gift blocker here |
 | Count portions from `portion_size` | It is the order step of a splittable dish; most dishes carry none. A band on it counts plov and nothing else | Never as the sole source; a derived default may be added if a tenant wants it |
 | Read rules live, not from the publication | A customer could be shown a basket the rules then change under them, and "what the cart enforces equals what was published" is the rule `CartMenuRules` already keeps | An urgent rule withdrawal proves too slow through a republish; add a live kill switch for rule status only |
 | Let an operator waive a mandatory line | A per-order exception is an unaudited discount and a hole in the rule | Operations shows a real waiver pattern; then an ADR 0027 approval with a reason, as ADR 0039 does for decreases |
 | Re-evaluate on amendment | The customer agreed to a price; a rule firing after confirmation changes it without a call | Operators report forgotten packaging on amended orders at a rate staff training does not fix |
-| Scripted or free-form rules | `docs/operations-spec/couriers.md` rejects scripting for every rule engine here: it cannot be simulated, validated or explained | Never |
+| Scripted or free-form rules | `docs/operations-spec/couriers.md` rejects scripting for every rule engine here: it cannot be simulated, validated or explained | The platform adopts a script language for any rule engine, with a simulator, a validator and an explanation view for it; `couriers.md` is amended first |
 
 ## Consequences
 
@@ -262,8 +344,9 @@ it unless the rule is mandatory, and mandatory is off until the owner says other
 - The cart now writes lines the customer did not type. Every cart edit gains a
   reconciliation step, and a bug in it is a bug in every basket.
 - A new column on cart and order lines, a new publication item type and a new
-  `portions_per_unit` fact are added to tables other modules read; the reporting fact
-  and the console's order and basket views must each learn the origin.
+  `portions_per_unit` fact are added to tables other modules read; the reporting fact,
+  the console's order and basket views and the cart's pricing port must each learn the
+  origin.
 - A rule change reaches customers only on republish. Pausing a rule fast means
   stopping the injected variant (the stop-list) or switching `ordering.auto_add_enabled`.
 - A portion-band rule is only as good as its authors' portion figures, and none exist
@@ -273,10 +356,16 @@ it unless the rule is mandatory, and mandatory is off until the owner says other
 
 ### Accepted trade-offs
 
-- An injected line counts toward promotion thresholds and the free-delivery threshold, so
-  a bag can tip an order over a free-delivery line. That is simple and unsurprising to
-  the engine and mildly surprising to a customer; ADR 0140's open input on the threshold
-  basis governs it.
+- An injected line counts toward the money thresholds (a minimum order amount, the
+  free-delivery threshold), so a bag can tip an order over a free-delivery line. That is
+  simple and unsurprising to the engine and mildly surprising to a customer; ADR 0140's
+  open input on the threshold basis governs it. It does not count toward an item-targeted
+  promotion's matched quantity (Open input 2).
+- A `FREE_ITEM` promotion activated after an `INJECT` rule that adds its gift variant is
+  not caught until the next catalog publication; until then the injected line is charged
+  in full whenever the promotion does not fire.
+- A stock-tracked packaging line can drop out between pricing and checkout; the customer
+  sees a re-quote, not a refusal.
 - An order that grows through amendment does not gain more packaging. An operator adds it.
 - A removed line is never re-offered in that cart, so a customer who removes the bag, then
   doubles the order, gets no bag. Predictability is chosen over completeness.
@@ -359,12 +448,18 @@ An injected line's `line_key` is `aa:` plus the rule id (39 characters, inside t
 64 that `cart_lines.line_key` allows); `CartService.requireLineKeyShape` refuses a
 customer-supplied key that begins `aa:`. Every new table ends its migration with an
 explicit `GRANT ... TO horecaos_application` (the hygiene check requires it);
-`cart_auto_add_declines` gets `SELECT, INSERT, DELETE`; the rule tables get
+`cart_auto_add_declines` gets `SELECT, INSERT, DELETE`; `catalog.auto_add_rules` gets
 `SELECT, INSERT, UPDATE` and no `DELETE`, because a rule is archived, not deleted, so
-a published snapshot can always be traced to a row. Row-level security follows ADR 0056
-as the `catalog` and `ordering` schemas reach the backstop; every new table carries
-`tenant_id` and a tenant-bearing foreign key now so that arrival is a policy and not
-a migration. The next free migration number is taken at implementation time from every
+a published snapshot can always be traced to a row. Its child tables
+`catalog.auto_add_rule_triggers`, `catalog.auto_add_rule_bands` and
+`catalog.auto_add_rule_locations` get `SELECT, INSERT, UPDATE, DELETE`: they carry no
+status, archive or validity column and a published snapshot already holds its own
+immutable copy of them (Decision 3), so a child row needs no tombstone, and without
+`DELETE` a `PUT` could never remove a trigger node, a band or a location. The `PUT` on a
+rule replaces the three child sets inside the same transaction as the rule's version
+bump and the `.updated` audit fact (ADR 0027). Row-level security follows ADR 0056 as the
+`catalog` and `ordering` schemas reach the backstop; every new table carries `tenant_id`
+and a tenant-bearing foreign key now so that arrival is a policy and not a migration. The next free migration number is taken at implementation time from every
 active worktree, as AGENTS.md says.
 
 ### Evaluation
@@ -388,18 +483,26 @@ For each published rule whose modes, channel types and locations contain the con
 
 A raw quantity of zero means the rule does not fire. Otherwise the quantity is
 `clamp(raw, minimum_quantity, maximum_quantity)`. A rule the customer declined in this
-cart, or whose variant fails the availability, sale-window or priced checks, yields
-`Skipped(reason)`.
+cart, or whose variant fails the checks the cart runs on a customer's line (on the menu
+at the location, `requireOnSaleNow`, `requireAvailable` per ADR 0017, priced), yields
+`Skipped(reason)`. Those checks are the cart's own, not a second copy: on an injected
+line a failure is a `Skipped` and never a `CartRefusedException`. The evaluator stays
+pure; the reconciler runs the checks and hands it the result.
 
 `AutoAddReconciler` (`ordering.application`) applies the result to the cart: it
 inserts a missing injected line; changes the quantity or variant of one the customer has
 not adjusted; removes one whose rule no longer fires; leaves a customer-adjusted line
-alone unless it now exceeds the maximum; and does nothing at all when
-`ordering.auto_add_enabled` is false. It is called from `putLine`, `removeLine`,
+alone unless it now exceeds the maximum or, for a mandatory rule, has fallen below the
+computed quantity, in which case it is lowered to the maximum or raised to the computed
+quantity; and does nothing at all when `ordering.auto_add_enabled` is false. It is called from `putLine`, `removeLine`,
 `setDestination`, `rebuildAtLocation` and, as a verification, from `price()`. In
-`price()` a difference advances the cart version and the priced response carries the new
-version and a `changedByPricing` flag, so the client redraws instead of paying a total
-for a basket it has not seen. A removal of an injected line by the customer writes the
+`price()` the reconciler runs before the checks over the customer's lines, so an
+injected line whose stock ran out is dropped rather than refused; a difference advances
+the cart version and the priced response carries the new version and a
+`changedByPricing` flag, so the client redraws instead of paying a total for a basket it
+has not seen. A reservation that fails for an injected line at checkout (ADR 0019) is
+handled the same way: the line is dropped, the cart re-priced, and the customer meets
+the existing `PRICE_CHANGED` re-quote, never a refusal that names the packaging. A removal of an injected line by the customer writes the
 decline row and then reconciles.
 
 Rules are read through a port `CartAutoAddRules` in `ordering.application`, implemented
@@ -436,18 +539,19 @@ mandatory one answers a Problem Details `409` with the stable code
 ### Validator findings (`CatalogValidator`)
 
 Errors block publication: `AUTO_ADD_TRIGGER_MISSING` (a product-triggered rule with no
-live trigger node), `AUTO_ADD_VARIANT_NOT_SELLABLE` (the injected variant is not active or
+live trigger node, that is, none whose product, variant or category is not `ARCHIVED`), `AUTO_ADD_VARIANT_NOT_SELLABLE` (the injected variant is not active or
 has no price in scope), `AUTO_ADD_RULES_OVERLAP` (two active rules add the same variant
 in overlapping modes, channel types and locations), `AUTO_ADD_DUPLICATES_HIDDEN_PACKAGING`
 (the injected variant is the linked variant of a hidden modifier option attached to a
 product or variant in overlapping fulfilment modes), `AUTO_ADD_MANDATORY_NOT_ALLOWED`
 (mandatory while `catalog.auto_add_mandatory_allowed` is off) and
 `AUTO_ADD_MANDATORY_UNDISCLOSED` (mandatory with no customer text in the brand default
-locale). Warnings do not block: `AUTO_ADD_PORTION_BAND_COUNTS_NOTHING` (no variant of the
-brand carries `portions_per_unit > 0`), `AUTO_ADD_BAND_GAP`, and
-`AUTO_ADD_VARIANT_IS_PROMOTION_GIFT` (the variant is in an active `FREE_ITEM`
-promotion). Fiscal classification of an injected variant is already reported by
-`FISCAL_CLASSIFICATION_MISSING` for every variant offered, so it needs no new finding.
+locale) and `AUTO_ADD_VARIANT_IS_PROMOTION_GIFT` (an `INJECT` rule whose variant is in
+an active `FREE_ITEM` promotion; the same finding is a warning for an `OFFER` rule).
+Warnings do not block: `AUTO_ADD_PORTION_BAND_COUNTS_NOTHING` (no variant of the brand
+carries `portions_per_unit > 0`) and `AUTO_ADD_BAND_GAP`. Fiscal classification of an
+injected variant is already reported by `FISCAL_CLASSIFICATION_MISSING` for every variant
+offered (ADR 0038), so it needs no new finding.
 
 ### Events, audit, PII, policy
 
@@ -463,8 +567,9 @@ promotion). Fiscal classification of an injected variant is already reported by
 - **PII (ADR 0029).** A rule holds no personal data. A decline row holds a cart id, which
   carries none. The cart retention sweeper deletes it with the cart.
 - **Policy (ADR 0030).** `ordering.auto_add_enabled` (BOOLEAN, BRAND, default `false`) and
-  `catalog.auto_add_mandatory_allowed` (BOOLEAN, TENANT, default `false`), each declared
-  once in the module's configuration keys and mirrored in the tenancy registry the way
+  `catalog.auto_add_mandatory_allowed` (BOOLEAN, TENANT, default `false`, declared without
+  `tenantVisible()` and written only under `PLATFORM_ADMIN`; see the first open input), each
+  declared once in the module's configuration keys and mirrored in the tenancy registry the way
   `OrderingConfigurationKeys` documents. A decision that used a rule persists the rule id
   and version on the line, which is the ADR 0030 requirement for a durable decision.
 - **Observability.** `horecaos.autoadd.rules{kind,outcome}` with outcome `fired`, `skipped`,
@@ -492,10 +597,20 @@ Strings in ru, uz-Latn and en.
 - One cart fixture driven through the storefront controller, the bot adapter and
   `OperatorOrderingService`, asserting the same injected lines (the row's own claim).
 - Removal sticks: remove, edit the basket three ways, the line does not return.
-  Mandatory: the removal is a `409`; a customer-adjusted quantity survives a re-evaluation.
+  Mandatory: the removal is a `409`; a customer-adjusted quantity above the computed one
+  survives a re-evaluation, and one that the basket's growth left below it is raised.
 - Skips: stopped variant, outside sale window, unpriced variant, none of which refuses the cart.
+- Races: an injected variant runs out between the last edit and `price()`, and its
+  reservation fails at checkout; each drops the line, re-prices with `changedByPricing`
+  and refuses nothing for the packaging.
+- A `PUT` that removes a trigger node, a band and a location leaves exactly the new sets,
+  with the version bump and the `.updated` audit fact in one transaction.
+- The legacy import: a variant with `package_id` and `package_volume` becomes one
+  product-triggered rule, and an `is_package` line imports with `origin = 'AUTO_ADD'` and
+  a null rule id.
 - `price()` after a republish changes the injected set and advances the version.
-- Validator tests for every finding, including the hidden-modifier collision.
+- Validator tests for every finding, including the hidden-modifier collision and the
+  promotion-gift blocker for `INJECT` (and its warning for `OFFER`).
 - An aggregator-intake order carries no injected line, and the schema rejects `AGGREGATOR`.
 - Migration tests: the exclusion constraint, the channel `CHECK`, the line-origin `CHECK`.
 
@@ -505,10 +620,12 @@ Build the schema, the evaluator, the publication item and the authoring API behi
 `ordering.auto_add_enabled = false`, so nothing changes for any cart. Turn on shadow
 counting for one pilot brand and read the numbers against what staff add by hand. Enable
 `INJECT` for that brand, then the others. `OFFER` ships later and `mandatory` stays off until
-the owner turns the tenant key. Rollback is the key: set it false and the cart stops
-adding and removing; lines already injected are on carts and orders as ordinary lines and
-the customer or operator removes them by the usual means. The authoring tables and the
-published items stay; nothing is deleted.
+a platform administrator turns the tenant key on the owner's instruction. Rollback is the
+key: set it false and the cart stops adding and removing; lines already injected are on
+carts and orders as ordinary lines and the customer or operator removes them by the usual
+means (on a confirmed order, as ADR 0169 provides). The authoring tables and the published
+items stay; no rule row is deleted, and a `PUT` replaces only a rule's trigger, band and
+location rows, which every published item already copies.
 
 ## Implementation checklist
 
@@ -524,6 +641,8 @@ published items stay; nothing is deleted.
 - [ ] Storefront and operator cart responses; `409` codes; order line copy at checkout;
       reporting fact columns.
 - [ ] Console screen with simulator; storefront and composer line rendering; i18n.
+- [ ] Legacy packaging import: one rule per legacy variant with a `package_id`, `is_package`
+      lines as `AUTO_ADD` order lines, and the rounding check against the legacy function.
 - [ ] Metrics and the shadow counter.
 - [ ] Tests listed above; `ModularArchitectureTests` green.
 - [ ] ADR 0016 and ADR 0137 status lines updated to point here; gap-map row `4.9` re-audited.
@@ -543,8 +662,12 @@ rule added. Switching `ordering.auto_add_enabled` off stops all of it without a 
   injected variant), ADR 0018 (quotes), ADR 0019 (cart and checkout), ADR 0025, ADR 0027,
   ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0036 (sales-channel system types), ADR 0038
   (classification of an injected variant), ADR 0039 (amendment), ADR 0040 (aggregator
-  intake), ADR 0041 (station routing), ADR 0043, ADR 0056, ADR 0136 (hidden modifiers,
-  combos), ADR 0137 (`portion_size`), ADR 0140 (`FREE_ITEM`, gift offers), ADR 0169
+  intake), ADR 0041 (station routing), ADR 0043, ADR 0047 (the POS ticket stays
+  authoritative), ADR 0056, ADR 0057 (control-plane OpenAPI group), ADR 0136 (hidden
+  modifiers, combos), ADR 0137 (`portion_size`), ADR 0140 (`FREE_ITEM`, gift offers),
+  ADR 0169 (removal after confirmation; depends back on this record)
+- `platform/docs/domains/legacy-profile-findings.md` and `legacy-schema-profile.md` (legacy
+  `package_id`, `package_volume`, `is_package`, `packaging_price`)
 - `platform/docs/operations-gap-map.md` row `4.9` and the open-decision table that lists it
 - `platform/docs/frontend-information-architecture.md` §4.9; `platform/docs/operations-spec/catalog.md`
   (Delever match table, "Data the backend does not have yet"); `platform/docs/operations-spec/orders.md` §5.5;
