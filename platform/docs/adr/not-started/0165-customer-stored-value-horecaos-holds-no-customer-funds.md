@@ -16,8 +16,12 @@
   `PaymentMethod` is exactly `CASH`, `CLICK`, `PAYME`, `TELEGRAM` and
   `MARKETPLACE`, plus the `LOYALTY_POINTS` leg that
   `CheckoutSettlementPlanner.POINTS_METHOD_CODE` registers. `NoDepositTenderTests`
-  and `LoyaltyLedgerAndSplitTenderTests.theDatabaseRejectsTopUpAndWithdrawal`
-  hold both. The operations console says so in three places and three languages:
+  holds the method set and
+  `LoyaltyLedgerAndSplitTenderTests.theDatabaseRejectsTopUpAndWithdrawal` the entry
+  types; of the three settlement constraints only `ck_tender_balance_has_no_intent`
+  has a test today, and a weak one, so the Specification adds a guard for each of
+  the other two and tightens that one. The operations console says so in three places
+  and three languages:
   the «Deposit accounts» card on the loyalty page (`marketing.loyalty.deposit.*`,
   `data-testid="loyalty-deposit-not-built"`), the customer pane's
   `customers.cashback.depositNotBuilt`, and an order payment read
@@ -34,16 +38,30 @@
 - Date proposed: 2026-10-07
 - Date decided: —
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
-- Depends on: ADR 0007, ADR 0013, ADR 0025, ADR 0026, ADR 0027, ADR 0030,
-  ADR 0031, ADR 0038, ADR 0046, ADR 0048, ADR 0055, ADR 0095
-- Supersedes / Superseded by: — (amends ADR 0046 without editing it. It reopens
-  two rows of that record's Alternatives table and nothing else: «Issue
-  customer-funded stored value now, as Delever does», whose revisit condition — a
-  licence, or an acquirer-held float — Decision 6 turns into a procedure; and
-  «Delegate the balance to the acquirer's wallet (Payme, Click)», which ADR 0046
-  rejected as a *default* and which this record keeps rejected as a default while
-  naming it the only route a tenant who needs stored value may take, Decision 4.
-  ADR 0046's closed input of 2026-08-23, "Loyalty is points only", is not touched)
+- Depends on: ADR 0007, ADR 0013, ADR 0025, ADR 0026, ADR 0027, ADR 0028,
+  ADR 0029, ADR 0030, ADR 0031, ADR 0032, ADR 0038, ADR 0042, ADR 0046, ADR 0048,
+  ADR 0055, ADR 0095, and ADR 0166, which is **Proposed** in the same batch:
+  accepting this record does not accept 0166, and nothing here assumes its outcome
+  (the two places this record touches it, Decision 4's fiscal line and item 6 of
+  the superseding ADR's list, say "whatever ADR 0166 decides")
+- Supersedes / Superseded by: — (amends ADR 0046 without editing it; that record
+  stays Accepted as written. It reopens three items of it and nothing else. Two
+  are rows of its Alternatives table: «Issue customer-funded stored value now, as
+  Delever does», whose revisit condition — a licence, or an acquirer-held float —
+  Decision 6 turns into a procedure; and «Delegate the balance to the acquirer's
+  wallet (Payme, Click)», which ADR 0046 rejected as a *default* and which this
+  record keeps rejected as a default while naming it the only route a tenant who
+  needs stored value may take, Decision 4. The third is the first bullet of ADR
+  0046's «What would bring stored value back», "A licence exists": there a licence
+  held by a tenant, or by Qoida (that record's wording), lets a `DEPOSIT` account
+  type join the loyalty ledger, with `TOPUP` and `WITHDRAWAL` entry types. This
+  record narrows it: **a tenant's licence yields a Decision 4 external tender
+  only, never an in-ledger deposit.** A ledger that HorecaOS operates for customer
+  funds needs an authorisation of HorecaOS's own, or counsel's written
+  confirmation that a tenant's authorisation obliges HorecaOS to operate that
+  tenant's ledger (Decision 6, route a), and then a new ADR. The second bullet,
+  "An acquirer holds the float", is restated as Decision 4 and not changed. ADR
+  0046's closed input of 2026-08-23, "Loyalty is points only", is not touched)
 - Open inputs: each is closed on its proposed default if the owner accepts the
   record as written; the ones that name a person other than the owner stay with
   that person and the work they block is marked.
@@ -69,8 +87,14 @@
   - **The operator reason-code list for manual points adjustments** (finance, with
     Ayubkhon Abbosov). Proposed default: `GOODWILL`, `SERVICE_RECOVERY`,
     `CORRECTION`, `ACCOUNT_MERGE`, `LEGACY_OPENING_BALANCE`, in report-only mode
-    for one release and then refusing anything else (Decision 3). Blocks: only
-    the enforcing switch.
+    for one release and then refusing anything else (Decision 3). Two things ride
+    on the same default. Finance reads, monthly and from the audit facts, the
+    five operators with the largest `GOODWILL` plus `CORRECTION` total in each
+    tenant, because a sale labelled with a listed code is the one case the list
+    cannot stop (Consequences, Negative). And closing the list is treated as
+    compatible under ADR 0031, not as a reason for a `v2` (Specification, API);
+    Ayubkhon Abbosov overrules that by saying so before the enforcing release.
+    Blocks: only the enforcing switch.
   - **What a tenant migrating from Delever does with the deposit balances its
     customers hold there** (Ayubkhon Abbosov, for the future migration programme
     of ADR 0055, with each tenant). Proposed default: never imported as
@@ -189,7 +213,7 @@ named.**
    Review applies the test to anything that looks near it: points bundles bought
    with money, gift cards and certificates sold for money, prepaid meal plans,
    "credit instead of refund", an account top-up by any name.
-3. **One new guard closes the only back door the structure does not already
+3. **One new guard narrows the only back door the structure does not already
    close: operator reason codes become a closed list.** The manual adjustment
    endpoint accepts a `reasonCode` only from a platform-scope policy list
    (default `GOODWILL`, `SERVICE_RECOVERY`, `CORRECTION`, `ACCOUNT_MERGE`,
@@ -197,10 +221,16 @@ named.**
    tenant cannot widen it to include a code that means "paid in cash". The
    free-text `reason` narrative stays. Codes written by the system itself (the
    accrual clawback, the referral grant) never pass through the operator path and
-   are unaffected. It starts in report-only mode — a counter, labelled by mode only, incremented for
-   every code outside the list — for one release, then refuses with 422
-   `VALIDATION_FAILED` naming the field, so a tenant's existing habits show up in
-   a metric before they show up as a refusal.
+   are unaffected. It starts in report-only mode — a counter, labelled by mode
+   only, incremented for every code outside the list — for one release, then
+   refuses with 400 `VALIDATION_FAILED` and an `errors[]` entry naming
+   `reasonCode`, so a tenant's existing habits show up in a metric before they
+   show up as a refusal. The console learns the list from a read, not from a copy
+   in its own source (Specification, API). **What this does not do:** it removes
+   the custom label, not the sale. An operator who takes cash can still pick
+   `GOODWILL` or `CORRECTION`; that case is caught only afterwards, by the audit
+   facts, the ADR 0027 approval threshold and finance's monthly read (Consequences,
+   Negative).
 4. **Stored value, if a tenant needs it, is an external tender and never a
    HorecaOS balance.** It is a `PAYMENT` provider installation (ADR 0026) whose
    instrument is the provider's own wallet or prepaid card: the customer funds it
@@ -225,9 +255,13 @@ named.**
    refund rule for the one case it left open.
 6. **What reopens this, and what changes.** Either (a) HorecaOS, or a company the
    owner controls, obtains a Central Bank authorisation that covers customer
-   prepayments, or (b) a pilot tenant that holds its own authorisation, or whose
-   bank runs the programme, names its provider and volume. Under (b) Decision 4 is
-   built for that provider and nothing else changes. Under (a) a new ADR
+   prepayments, or counsel confirms in writing that a tenant's own authorisation
+   obliges HorecaOS to operate that tenant's ledger; or (b) a pilot tenant that
+   holds its own authorisation, or whose bank runs the programme, names its
+   provider and volume, and HorecaOS only transmits payment requests. Under (b)
+   Decision 4 is built for that provider and nothing else changes: this is the
+   narrowing of ADR 0046's "A licence exists" named in Supersedes, a tenant's
+   licence alone does not put a deposit in a HorecaOS ledger. Under (a) a new ADR
    supersedes this one, and the Specification section "If an authorisation is
    obtained" lists what it must decide before any table is written. Neither
    trigger is met by a tenant asking for the feature, or by a legal opinion that
@@ -250,13 +284,13 @@ named.**
 |---|---|---|
 | Build the Delever-style deposit now, behind a kill switch, and answer the legal question before enabling it | ADR 0046 already rejected the dormant feature: tables, a registry row, endpoints and tests maintained against no user, with the first defect found by whoever enables it two years on. It would also put a money-holding schema in every tenant's database from day one | Never as a shape; the reversal conditions produce a new ADR with a live feature, not a dormant one |
 | Build it and apply for the authorisation in parallel | Operates a payment service across every tenant for as long as the application takes, which is the failure ADR 0046 named: not a bug but an unlicensed service, everywhere at once | An authorisation is in hand (Decision 6, route a) |
-| Hold the funds "under a tenant's own licence" (the wording of row `6.3a`'s blocker) | A tenant's licence covers that tenant's customers; the platform would still be the party whose accounts and code hold the float for every other tenant, and whose failure loses it. If the tenant is the issuer and HorecaOS only transmits instructions, that is Decision 4 and not custody | Counsel confirms in writing a structure in which a tenant is the issuer and HorecaOS holds nothing; it is then Decision 4 for that tenant |
+| Hold the funds "under a tenant's own licence" (the wording of row `6.3a`'s blocker; the tenant form of ADR 0046's "A licence exists") | A tenant's licence covers that tenant's customers; the platform would still be the party whose accounts and code hold the float for every other tenant, and whose failure loses it. If the tenant is the issuer and HorecaOS only transmits instructions, that is Decision 4 and not custody | Counsel confirms in writing a licence that obliges HorecaOS to operate the tenant's ledger: this option itself then wins, through a new ADR under Decision 6, route (a). A structure in which the tenant is the issuer and HorecaOS holds nothing is the other option, Decision 4 |
 | A segregated or escrow bank account that HorecaOS operates | Still custody: HorecaOS signs for the money and owes it back. Segregation limits the loss, it does not remove the authorisation question | HorecaOS holds an authorisation that contemplates such an account |
 | Delegate the balance to the acquirer's wallet (Payme, Click) as the *default* | ADR 0046's reason stands: a wallet at Payme is not spendable at a Click-only branch, and one customer's money splits across acquirers with no combined view. Kept as the *route*, not the default | A named tenant and a named provider exist (Decision 4) |
 | Sell points: bundles bought with money, "pay 100 000 get 120 000" | A balance bought with money that is spent like money is stored value under another name; the three not-money properties of ADR 0046 hold only because points are never sold | HorecaOS holds an authorisation (route a) |
 | Gift cards and certificates as promo codes with a face value sold for money | Same: a face value paid for in advance is a prepaid balance with a code on it. Free promo codes are different and stay (ADR 0018, ADR 0140) | Counsel rules that a single-tenant, single-brand certificate is not stored value, or route (a) |
 | Credit the account when a refund cannot reach the original method | Creates a balance owed back in money from a support desk, with no ledger, no liability report and no terms | Never without route (a) |
-| Leave rows `5.2f` and `6.3a` `BLOCKED` until legal answers | Costs nothing today and tells every reader the feature is coming. It also leaves the reason-code back door open and the sales answer undefined | Never; the cheapest part of this record is the part that stops the accident |
+| Leave rows `5.2f` and `6.3a` `BLOCKED` until legal answers | Costs nothing today and tells every reader the feature is coming. It also leaves the custom reason-code label open and the sales answer undefined | Never; the cheapest part of this record is the part that narrows the accident |
 
 ## Consequences
 
@@ -267,7 +301,9 @@ named.**
 - HorecaOS carries no safeguarding, AML or unclaimed-balance obligation, and no
   customer-money liability line, in v1.
 - The one back door in the points ledger that the structure did not close — a
-  sale disguised as an adjustment — closes, and does so visibly first.
+  sale disguised as an adjustment — narrows: the label that says "paid in cash"
+  goes, visibly first (a counter before a refusal). A sale labelled with a listed
+  code stays possible, which is the first residual risk below.
 - A prospect gets one clear answer, and a tenant with a licensed programme gets a
   route that does not need a HorecaOS ledger.
 
@@ -282,6 +318,15 @@ named.**
   reference, which is slower and more manual than a credit.
 - Closing the reason-code list changes a console field from free text to a list, and
   an operator whose habit is a custom code will hit a refusal after one release.
+- **Residual risk: a sale can still be labelled `GOODWILL` or `CORRECTION`.** The
+  closed list removes the label that says "paid in cash"; it cannot tell a favour
+  from a sale, and the counter sees only unlisted codes, never a listed one used
+  wrongly. What catches it is after the fact: the ADR 0027 approval threshold
+  puts a second person on every adjustment above it, and finance reads the
+  `loyalty.balance.adjust` audit facts monthly (a saved query grouped by actor and
+  reason code, no new report) for the five operators with the largest `GOODWILL`
+  plus `CORRECTION` total in each tenant, and asks about any whose figure stands
+  out. That is detection, not prevention, and this record does not claim more.
 
 ### Accepted trade-offs
 
@@ -304,19 +349,26 @@ named.**
 |---|---|---|
 | No movement funds or drains a points account | `ck_loyalty_entry_type` (closed set, V0042); `EntryType` | `LoyaltyLedgerAndSplitTenderTests.theDatabaseRejectsTopUpAndWithdrawal` (`TOPUP`, `WITHDRAWAL`, `PAYOUT`) |
 | The ledger cannot be rewritten | Application role has `SELECT, INSERT` on `loyalty.entries`; append-only trigger | the same suite's append-only cases |
-| A balance tender is never a provider call | `ck_tender_balance_has_no_intent`; `ck_payment_method_balance_is_not_a_fiscal_path` | `LoyaltyLedgerAndSplitTenderTests` |
-| One balance leg per settlement | `ux_tender_one_balance_per_settlement` | `LoyaltyLedgerAndSplitTenderTests` |
+| A balance tender is never a provider call | `ck_tender_balance_has_no_intent` | `LoyaltyLedgerAndSplitTenderTests.pointsCannotReachAProvider`, which asserts only that the insert fails: its `payment_intent_id` is a random UUID that `fk_tender_intent` would also refuse, so it passes with the check dropped. Tightened in the checklist |
+| A balance method is never a partner, terminal or marketplace path | `ck_payment_method_balance_is_not_a_fiscal_path` | None today: the three `registerMethod(..., true, ...)` calls in the test tree (`LoyaltyLedgerAndSplitTenderTests`, `RefundAndRemedyTests`, `OrderCompletionAccrualTriggerTests`) all register `LOYALTY_POINTS` as `OPERATOR`, and nothing inserts a balance method under another responsibility. New guard 4 |
+| One balance leg per settlement | `ux_tender_one_balance_per_settlement` | None today: nothing inserts two balance tenders into one settlement. New guard 5 |
 | No deposit payment method exists | `PaymentMethod` is five values; `POINTS_METHOD_CODE` is the only `settles_from_balance` code | `NoDepositTenderTests` |
 | Only points credit paths exist | `ReferralGrantPort` is credit-only and idempotent; `loyalty.api`'s package documentation says no port credits an account from a payment and none pays one out | No test, only documentation and `ModularArchitectureTests`' module boundary — which is why new guards 1 and 3 below exist |
 
 ### New guards (tests, no new table)
 
 1. **Capability stems.** A structural test over `Capability` asserts that no code
-   contains `deposit`, `topup`, `top-up`, `withdraw`, `payout` (points), `stored-value`
-   or `gift-card`, with one named exception: the `commercial.wallet.*` pair
+   contains `deposit`, `topup`, `withdraw`, `payout`, `wallet`, `storedvalue` or
+   `giftcard` (compared after removing `-` and `_`, so `top-up` and `gift-card` are
+   caught), with three named exceptions: the `commercial.wallet.*` pair
    (`COMMERCIAL_WALLET_READ`, `COMMERCIAL_WALLET_MANAGE`), which belong to ADR 0095's
-   tenant wallet. Adding a stem requires an ADR and a change to the exception list
-   in the same diff.
+   tenant wallet, and `courier.payout.authorise` (`COURIER_PAYOUT_AUTHORISE`), which
+   authorises the payout of a closed courier-settlement period under ADR 0042: pay
+   owed to a courier, no customer funds. A test over code strings cannot tell that
+   payout from a points payout, so the exception is by name. The exception list is
+   asserted exactly (equal to those three, not a superset), so a new exception is a
+   visible diff in the test; a new capability whose code contains a stem needs an
+   ADR and an entry in the list in the same diff.
 2. **Provider types.** A test over `PaymentProviderType` and the
    `ProviderCategory.PAYMENT` catalogue asserts that no value names a wallet or a
    deposit; Decision 4's first adapter, when it exists, adds its own value and its own
@@ -325,8 +377,20 @@ named.**
    `LoyaltyAdjustmentServiceTests` exists) gains a case per listed code accepted, a
    case for `CASH_RECEIVED` refused in enforcing mode, and a case that report-only
    mode accepts it and increments the counter; `LoyaltyOperationsControllerTests`
-   gains the 422 mapping. What would still pass if the guard were broken is the
-   refusal alone, so the report-only case reads the counter.
+   gains the refusal mapping (400 `VALIDATION_FAILED`, an `errors[]` entry for
+   `reasonCode`, a `detail` that does not echo the code) and the read of the
+   effective list in both modes. What would still pass if the guard were broken is
+   the refusal alone, so the report-only case reads the counter.
+4. **A balance method is never a fiscal path.** `LoyaltyLedgerAndSplitTenderTests`,
+   beside `pointsCannotReachAProvider`, inserts a `payments.payment_methods` row with
+   `settles_from_balance` true under each of `PARTNER`, `TERMINAL` and `MARKETPLACE`
+   and asserts each is refused with `ck_payment_method_balance_is_not_a_fiscal_path`
+   named in the exception; a control insert under `OPERATOR` succeeds, so the refusal
+   cannot be some other error.
+5. **One balance leg per settlement.** The same suite inserts two tenders with
+   `settles_from_balance` true into one settlement (sequences 1 and 2, both against
+   the points method), asserts the first succeeds, and asserts the second is refused
+   with `ux_tender_one_balance_per_settlement` named in the exception.
 
 ### The reason-code policy (ADR 0030)
 
@@ -338,24 +402,68 @@ loyalty.adjustment_reason_codes      PolicyKey<AdjustmentReasonPolicy>
 ```
 
 A policy rather than a configuration value because the decision it records ("this
-adjustment was permitted under list version N") belongs on the entry; the
-`loyalty.balance.adjust` audit fact already carries the reason code and gains the
-policy version.
+adjustment was permitted under list version N") is a business decision, and ADR 0030
+asks a durable decision to persist `policy_id` and `policy_version` with its
+business fact. The durable record of this decision is the `loyalty.balance.adjust`
+audit fact (class `BUSINESS`), which already carries the reason code in its change
+document and gains `policyId` and `policyVersion` there. The `loyalty.entries` row
+is not touched: V0042 fixes its columns and the application role may only insert it.
 
 ### API (ADR 0031) and capabilities (ADR 0025)
 
-No new endpoint. One behavioural change, in enforcing mode only:
+One new read, one behavioural change, no new capability.
+
+**The read.** `GET /api/v1/operations/tenants/{tenantId}/loyalty/adjustment-reason-codes`
+on `LoyaltyOperationsController` returns the effective policy,
+`{ "mode": "REPORT_ONLY" | "ENFORCE", "codes": ["GOODWILL", ...], "policyVersion": 3 }`.
+It needs `loyalty.adjust` at `TENANT` scope, not mutating: only someone who can
+adjust needs the list. ADR 0030's resolution read (`ConfigurationController`,
+`/api/v1/control-plane/configuration/keys/{code}/resolution`) serves configuration
+keys, not policy keys, and needs `PLATFORM_ADMIN`, which no tenant operator holds;
+`PolicyKey`, unlike `ConfigurationKey`, has no tenant-visible flag. The policy has
+no other way to reach the console. A `PLATFORM`-scope policy has no tenant or
+brand dimension, so the answer is the same for every tenant. The adjustment dialog
+calls it when it opens. In `REPORT_ONLY`
+mode the field stays free text with the list offered as suggestions, so the counter
+measures what operators really type; in `ENFORCE` mode it becomes a closed choice.
+A new endpoint is additive under ADR 0031, and the published OpenAPI documents and
+the generated client types gain it.
+
+**The refusal.** In enforcing mode only,
 `POST /api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments`
-answers 422 `VALIDATION_FAILED` with `reasonCode` as the field when the code is
-outside the list. The capability is unchanged, `loyalty.adjust` at `TENANT` scope,
-mutating, with the ADR 0027 approval above the existing threshold. No capability is
-added, and the guard test above keeps it that way.
+answers 400 `VALIDATION_FAILED` with one `errors[]` entry,
+`{ "field": "reasonCode", "code": "REASON_CODE_NOT_PERMITTED" }`. 400, not 422:
+`ErrorCode` documents `VALIDATION_FAILED` as "the client sent something wrong and
+should send something else", which is this case, and reserves the 422 codes
+(`UNPROCESSABLE_STATE`, `SECOND_APPROVER_REQUIRED`) for a valid request that the
+current state refuses; it is also the answer this endpoint already gives for a zero
+amount or a balance below zero. The `detail` does not echo the code, which a person
+typed and may contain a name (ADR 0031: no PII in `detail`).
+
+**Compatibility with ADR 0031.** `reasonCode` stays `string` in the OpenAPI
+contract, with no `enum`, because a list that changes by policy must not change the
+schema; `OpenApiContractTests`, which refuses a changed property type or a dropped
+required field, sees nothing. No status code changes. What changes is which values
+the server accepts, by policy, as it already does for amounts and balances. ADR
+0031's breaking list is about the contract's shape and does not classify that, so
+this record rules it compatible within `v1` for three reasons: the report-only
+release is the notice; the read lets any client learn the list before it posts; and
+the only client in this repository is the operations console, changed in the same
+release. If the owner rules it breaking instead, the alternative is a `v2`
+adjustment endpoint for one field, which this record does not propose: two parallel
+endpoints to move one string. That is the second rider on the reason-code open
+input.
+
+The capability is unchanged: `loyalty.adjust` at `TENANT` scope, mutating, with the
+ADR 0027 approval above the existing threshold; the read reuses it without the
+mutating flag. No capability is added, and the guard test above keeps it that way.
 
 ### Data, PII, audit, events
 
 No table, no column, no migration. Nothing here carries personal data. The existing
-`loyalty.balance.adjust` audit fact (ADR 0027) is unchanged except for the policy
-version it gains. No event: `LoyaltyBalanceChanged` is untouched and still not a
+`loyalty.balance.adjust` audit fact (ADR 0027) is unchanged except for the
+`policyId` and `policyVersion` its change document gains (a map, so no schema
+change). No event: `LoyaltyBalanceChanged` is untouched and still not a
 governed ADR 0032 event.
 
 ### Observability
@@ -363,10 +471,10 @@ governed ADR 0032 event.
 One counter, `loyalty.adjustment.reason_code_unlisted`, labelled by mode
 (`REPORT_ONLY` or `ENFORCE`) and nothing else: not by reason code, because a code is
 typed by a person today and may contain anything including a name (ADR 0029 keeps
-personal data out of metrics), and not by tenant, customer or amount. No log line
-carries the code either. *Which* codes operators used is read from the existing
-`loyalty.balance.adjust` audit facts, which already hold it under the ADR 0027
-redaction rules. The counter is what the report-only release is for: how often an
+personal data out of metrics), and not by tenant, customer or amount. This record
+specifies no log line, and none may carry the code either. *Which* codes operators
+used is read from the existing `loyalty.balance.adjust` audit facts, which already
+hold it under the ADR 0027 redaction rules. The counter is what the report-only release is for: how often an
 operator typed something off the list.
 
 ### Decision 4's shape, for the day it is built (specification, not a plan)
@@ -380,8 +488,9 @@ tenders         payment_intent_id NOT NULL  (ck_tender_balance_has_no_intent una
 balance         never stored; read live through PAYMENT_QUERY, or not shown
 top-up          not a HorecaOS feature: the customer funds it in the provider's app
 refund          ADR 0048 bookkeeping against the provider's cabinet
-fiscal          the sale is fiscalized by the tenant's own account at the time it is
-                spent (ADR 0166); what a prepayment is for fiscal purposes is counsel's
+fiscal          the sale is fiscalized by the tenant's own account when it is spent,
+                as whatever ADR 0166 (Proposed) decides for the tenant-issued
+                receipt; what a prepayment is for fiscal purposes is counsel's
 ```
 
 Provider credentials are ADR 0028 secret references per legal entity, as ADR 0038
@@ -391,11 +500,15 @@ requires of every `PARTNER` method.
 
 This list is the reason Decision 6 can say "a new ADR" and mean it. Before any table:
 
-1. **Where the ledger lives.** A separate module with its own schema, not a second
-   account type in `loyalty`: points are non-withdrawable, non-transferable and
-   valueless outside the platform, and a deposit is the opposite on all three. The
-   closed `entry_type` set, the `SELECT, INSERT` grant and the three not-money
-   constraints exist to keep the two from being mixed.
+1. **Where the ledger lives.** A recommendation to the superseding ADR, which
+   decides: a separate module with its own schema rather than a second account type
+   in `loyalty`. ADR 0046 allows the second ("a `DEPOSIT` account type can join the
+   ledger") and this record does not forbid it; it recommends against, because
+   points are non-withdrawable, non-transferable and valueless outside the
+   platform, and a deposit is the opposite on all three. The closed `entry_type`
+   set, the `SELECT, INSERT` grant and the three not-money constraints exist to
+   keep the two from being mixed; an in-ledger `DEPOSIT` would have to replace each
+   of them with something that still does.
 2. **The registry row and its constraints.** A `CUSTOMER_DEPOSIT` method with
    `settles_from_balance` true would need `ck_payment_method_balance_is_not_a_fiscal_path`
    and `ux_tender_one_balance_per_settlement` reconsidered, because a deposit plus
@@ -407,19 +520,20 @@ This list is the reason Decision 6 can say "a new ADR" and mean it. Before any t
 5. **Terms, expiry, closure, unclaimed balances.** None of ADR 0046's forfeiture
    rules may be copied: closing a funded account pays out.
 6. **Fiscal treatment of a prepayment.** What the tax rules call money taken before
-   the sale, and what the receipt at spend must say; ADR 0166's agent rule applies
-   unchanged, the tenant's own entity issues.
+   the sale, and what the receipt at spend must say, read against whatever ADR 0166
+   has decided for the tenant-issued receipt by then (it is Proposed today).
 7. **Offboarding.** What becomes of customers' balances when a tenant leaves, which
    ADR 0046 left to legal for points and which is a hard obligation for money.
 
 ## Rollout and rollback
 
-One release: the guard tests, the report-only reason-code policy and its counter, and
-the copy change on the two console notices. The next release, after the counter has
-been read against real tenants, flips the policy to enforcing. There is no migration
-and no data to move. Rollback is setting the policy back to `REPORT_ONLY` (a platform
-write, audited), and reverting the copy; nothing else was changed, so nothing else
-needs undoing.
+One release: the guard tests, the report-only reason-code policy and its counter, the
+read of the effective list and the dialog that uses it, and the copy change on the two
+console notices. The next release, after the counter has been read against real
+tenants, flips the policy to enforcing. There is no migration and no data to move.
+Rollback is setting the policy back to `REPORT_ONLY` (a platform write, audited),
+which also returns the dialog to free text with suggestions, and reverting the copy;
+nothing else was changed, so nothing else needs undoing.
 
 ## Implementation checklist
 
@@ -433,11 +547,20 @@ needs undoing.
       re-statuses them in the next audit. This record does not edit the gap map.
 - [ ] Add the declined capability to `docs/delever-parity-matrix.md`'s "Deliberately
       not building" table with the Decision 8 sentence.
-- [ ] Capability-stem test and provider-type test (new guards 1 and 2).
-- [ ] `loyalty.adjustment_reason_codes` policy key, report-only default, the counter
-      and the log line; the adjustment dialog offers the list instead of free text.
+- [ ] Capability-stem test (with its three named exceptions, asserted exactly) and
+      provider-type test (new guards 1 and 2).
+- [ ] `loyalty.adjustment_reason_codes` policy key, report-only default, the counter,
+      and `policyId` and `policyVersion` in the `loyalty.balance.adjust` change
+      document.
+- [ ] The read `GET .../loyalty/adjustment-reason-codes`, the regenerated OpenAPI
+      documents and client types (`reasonCode` stays `string`), and the adjustment
+      dialog: free text with the list as suggestions in `REPORT_ONLY`, a closed
+      choice in `ENFORCE`.
 - [ ] Reason-code tests (new guard 3) in `LoyaltyLedgerAndSplitTenderTests` and
-      `LoyaltyOperationsControllerTests`.
+      `LoyaltyOperationsControllerTests`, the read included.
+- [ ] Guards 4 and 5 in `LoyaltyLedgerAndSplitTenderTests`, beside
+      `pointsCannotReachAProvider`; and tighten that test to insert a real payment
+      intent and assert `ck_tender_balance_has_no_intent` is the constraint named.
 - [ ] Reword `marketing.loyalty.deposit.*` and `customers.cashback.depositNotBuilt` in
       ru, uz-Latn and en to "not offered", with the Decision 8 sentence.
 - [ ] Add the refund-without-a-source rule (Decision 5) to ADR 0048's operator
@@ -450,22 +573,27 @@ needs undoing.
 
 An operator opening the loyalty page or a customer's pane reads that a deposit is not
 offered and why, in their language, with the same sentence a prospect is given. An
-adjustment submitted with reason code `CASH_RECEIVED` is refused with 422 once the
-policy enforces, and in the release before it is accepted and counted; the counter
-shows how often operators typed something else, and the audit trail shows what. The capability-stem and provider-type tests pass,
-and fail when a `DEPOSIT` value or a `wallet` capability outside `commercial.wallet.*`
-is added (shown once by adding one and watching the build go red). The next gap-map
-audit carries no `BLOCKED` row whose blocker is "may HorecaOS hold customer funds".
+adjustment dialog takes its list from `GET .../loyalty/adjustment-reason-codes`. An
+adjustment submitted with reason code `CASH_RECEIVED` is refused with 400
+`VALIDATION_FAILED` naming `reasonCode` once the policy enforces, and in the release
+before it is accepted and counted; the counter shows how often operators typed
+something else, and the audit trail shows what. The capability-stem and provider-type
+tests pass, and fail when a `DEPOSIT` value, or a capability whose code contains a
+stem and is not one of the three named exceptions, is added (shown once by adding one
+and watching the build go red). Guards 4 and 5 pass, and each goes red when its
+constraint is dropped on a scratch database (shown once). The next gap-map audit
+carries no `BLOCKED` row whose blocker is "may HorecaOS hold customer funds".
 
 ## References
 
 - ADR 0007 (provider route machinery and contract tests), ADR 0013 (payment, refund),
   ADR 0018 (promo codes), ADR 0024 and ADR 0055 (legacy migration, greenfield launch),
-  ADR 0025, ADR 0026, ADR 0027, ADR 0028, ADR 0030, ADR 0031, ADR 0038 (merchant
-  accounts are the tenant's own), ADR 0046 (loyalty is points only; "What would bring
+  ADR 0025, ADR 0026, ADR 0027, ADR 0028, ADR 0029, ADR 0030, ADR 0031, ADR 0032,
+  ADR 0038 (merchant accounts are the tenant's own), ADR 0042 (courier settlement
+  payout; a named exception to guard 1), ADR 0046 (loyalty is points only; "What would bring
   stored value back"; its Alternatives table), ADR 0048 (refunds as bookkeeping; a
   future discount is not money), ADR 0067 (referral credit), ADR 0095 (the tenant's
-  wallet), ADR 0140 (promotions), ADR 0166 (fiscal agent)
+  wallet), ADR 0140 (promotions), ADR 0166 (fiscal agent; Proposed)
 - `platform/docs/operations-gap-map.md` rows `5.2f`, `6.3a`, `X.1` of §8
 - `platform/docs/frontend-information-architecture.md` rows 5.2, 6.3, 8.1
 - `platform/docs/frontend-and-parity-plan.md` (the blocked table: ADR 0046, "Legal")
@@ -474,7 +602,8 @@ audit carries no `BLOCKED` row whose blocker is "may HorecaOS hold customer fund
   "Deliberately not building")
 - `V0042`, `V0079`, `V0211`; `EntryType`, `PaymentMethod`, `CheckoutSettlementPlanner`,
   `OperationsPaymentController`, `LoyaltyOperationsController`,
-  `LoyaltyAdjustmentService`, `ReferralGrantPort`, `loyalty/package-info.java`;
+  `LoyaltyAdjustmentService`, `ReferralGrantPort`, `loyalty/package-info.java`,
+  `ErrorCode`, `Capability`, `OpenApiContractTests`;
   `NoDepositTenderTests`, `LoyaltyLedgerAndSplitTenderTests`
 - `frontend/operations/src/app/features/marketing/loyalty/loyalty-page.html`,
   `frontend/operations/src/app/features/customers/customer-detail-pane.ts`
