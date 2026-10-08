@@ -544,4 +544,97 @@ public final class ReportingFacts {
             }
         }
     }
+
+    /**
+     * ADR 0159 / ADR 0043: one review, on the business day it was submitted.
+     *
+     * <p>Built at day close from the {@code ReviewFactSource} port, never by a report reading
+     * {@code reviews} tables (ADR 0023). {@code customerSubjectHash} is the ADR 0029 keyed
+     * pseudonym and never an account id. No comment, no tag label and no courier reaches a fact:
+     * {@code hasComment} says whether words exist and nothing about what they say.
+     *
+     * <p>Every review is one row, whatever became of its comment. The average rating that leaves out
+     * the unwelcome ones is not an average (ADR 0159, Decision 5).
+     */
+    public record ReviewFact(
+            UUID tenantId,
+            UUID reviewId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            @Nullable String customerSubjectHash,
+            int rating,
+            boolean hasComment,
+            int tagCount) {
+
+        public ReviewFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(reviewId, "A review fact names its review");
+            if (rating < 1 || rating > 5) {
+                throw new IllegalArgumentException("A rating is one to five stars, not " + rating);
+            }
+        }
+    }
+
+    /** One tag a review carries, by the two code-owned dimensions a report groups by. */
+    public record ReviewTagFact(
+            UUID tenantId,
+            UUID reviewId,
+            UUID tagId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            String category,
+            String sentiment) {
+
+        public ReviewTagFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(reviewId, "A tag fact names its review");
+            Objects.requireNonNull(tagId, "A tag fact names its tag");
+        }
+    }
+
+    /**
+     * ADR 0159 / ADR 0043: one service-recovery case. Counted as opened on its opening date and
+     * closed on its closing date, as a refund lands on its own date, so one row carries both and is
+     * rewritten when a later close sees the case finish.
+     *
+     * <p>Remedy money is the amount and currency copied onto the compensation link when it was
+     * attached; a benefit grant is a count and never money.
+     */
+    public record RecoveryCaseFact(
+            UUID tenantId,
+            UUID caseId,
+            LocalDate openedBusinessDate,
+            @Nullable LocalDate closedBusinessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            UUID reviewId,
+            int rating,
+            String state,
+            @Nullable String outcomeCode,
+            @Nullable Long secondsToFirstResponse,
+            @Nullable Long secondsToClose,
+            boolean firstResponseBreached,
+            boolean resolutionBreached,
+            int compensationCount,
+            long remedyMoneyMinor,
+            @Nullable String currency) {
+
+        public RecoveryCaseFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(caseId, "A case fact names its case");
+            if (remedyMoneyMinor < 0 || (remedyMoneyMinor > 0 && currency == null)) {
+                throw new IllegalArgumentException("Remedy money is non-negative and names its currency");
+            }
+        }
+    }
 }

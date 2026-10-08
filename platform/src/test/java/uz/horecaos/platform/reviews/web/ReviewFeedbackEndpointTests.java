@@ -734,6 +734,502 @@ class ReviewFeedbackEndpointTests {
                 .isGreaterThanOrEqualTo(5);
     }
 
+    // ===================================================================== the settings
+
+    @Test
+    @DisplayName("the tag library: a tag is created once with its default-language wording, an icon must be a real"
+            + " image, an edit keeps the locales it did not show, and a used tag is frozen")
+    void theTagLibraryRules() throws Exception {
+        JsonNode empty = json(get(settings() + "/feedback/tags").with(token(OWNER)));
+        assertThat(empty.path("tags")).isEmpty();
+        assertThat(empty.path("maximumActiveTags").asInt()).isEqualTo(40);
+        assertThat(empty.path("iconAspectRatio").asText()).isEqualTo("3:2");
+        assertThat(empty.path("iconMaximumBytes").asLong()).isEqualTo(1_048_576L);
+        String defaultLocale = empty.path("defaultLocale").asText();
+        assertThat(defaultLocale).isNotBlank();
+        assertThat(empty.path("locales")).extracting(JsonNode::asText).contains(defaultLocale);
+
+        String template =
+                "{\"code\":\"%s\",\"category\":\"FOOD\",\"sentiment\":\"NEGATIVE\",\"labels\":{\"%s\":\"%s\"}}";
+        MvcResult created = postAs(
+                OWNER, settings() + "/feedback/tags", template.formatted("food_greasy", defaultLocale, "Too greasy"));
+        assertThat(created.getResponse().getStatus()).isEqualTo(201);
+        assertThat(created.getResponse().getHeader("ETag")).isNotBlank();
+        JsonNode tag = JSON.readTree(created.getResponse().getContentAsString());
+        assertThat(tag.path("status").asText()).isEqualTo("ACTIVE");
+        assertThat(tag.path("used").asBoolean()).isFalse();
+        assertThat(tag.path("sortOrder").asInt())
+                .as("absent means the end of the list")
+                .isEqualTo(100);
+        assertThat(tag.path("labels").path(defaultLocale).asText()).isEqualTo("Too greasy");
+
+        assertThat(postAs(
+                                OWNER,
+                                settings() + "/feedback/tags",
+                                template.formatted("food_greasy", defaultLocale, "Again"))
+                        .getResponse()
+                        .getStatus())
+                .as("a duplicate code")
+                .isEqualTo(409);
+        for (String badCode : List.of("Food Greasy", "1_greasy", "x", "food-greasy", "A".repeat(49))) {
+            assertThat(postAs(OWNER, settings() + "/feedback/tags", template.formatted(badCode, defaultLocale, "x"))
+                            .getResponse()
+                            .getStatus())
+                    .as("code %s", badCode)
+                    .isEqualTo(400);
+        }
+        String otherLocale = "ru".equals(defaultLocale) ? "en" : "ru";
+        assertThat(postAs(
+                                OWNER,
+                                settings() + "/feedback/tags",
+                                template.formatted("food_salty", otherLocale, "Too salty"))
+                        .getResponse()
+                        .getStatus())
+                .as("a tag needs its wording in the tenant's default language")
+                .isEqualTo(400);
+        assertThat(postAs(OWNER, settings() + "/feedback/tags", template.formatted("food_salty", defaultLocale, " "))
+                        .getResponse()
+                        .getStatus())
+                .as("a blank wording is no wording")
+                .isEqualTo(400);
+        MvcResult iconless = postAs(
+                OWNER,
+                settings() + "/feedback/tags",
+                "{\"code\":\"food_bland\",\"category\":\"FOOD\",\"sentiment\":\"NEGATIVE\",\"iconAssetId\":\"%s\",\"labels\":{\"%s\":\"Bland\"}}"
+                        .formatted(UUID.randomUUID(), defaultLocale));
+        assertThat(iconless.getResponse().getStatus())
+                .as("an icon that is no image of this tenant's")
+                .isEqualTo(400);
+        assertThat(iconless.getResponse().getContentAsString()).contains("no such image");
+        assertThat(postAs(OWNER, settings() + "/feedback/tags", "{\"code\":\"x_y\",\"labels\":{}}")
+                        .getResponse()
+                        .getStatus())
+                .as("category and sentiment are required")
+                .isEqualTo(400);
+
+        Map<String, String> pack = starterPack();
+        JsonNode cold = tagByCode(
+                json(get(settings() + "/feedback/tags").with(token(OWNER))).path("tags"), "food_cold");
+        String body =
+                "{\"category\":\"FOOD\",\"sentiment\":\"NEGATIVE\",\"sortOrder\":%d,\"status\":\"ACTIVE\",\"labels\":{\"en\":\"Served cold\"}}"
+                        .formatted(cold.path("sortOrder").asInt());
+        MvcResult edited = putAs(
+                OWNER,
+                settings() + "/feedback/tags/" + pack.get("food_cold"),
+                body,
+                cold.path("version").asInt());
+        assertThat(edited.getResponse().getStatus()).isEqualTo(200);
+        JsonNode after = JSON.readTree(edited.getResponse().getContentAsString());
+        assertThat(after.path("labels").path("en").asText()).isEqualTo("Served cold");
+        assertThat(after.path("labels").path("ru").asText())
+                .as("a locale the editor did not show keeps its wording")
+                .isEqualTo(cold.path("labels").path("ru").asText())
+                .isNotBlank();
+        assertThat(after.path("version").asInt()).isEqualTo(cold.path("version").asInt() + 1);
+
+        assertThat(putAs(
+                                OWNER,
+                                settings() + "/feedback/tags/" + pack.get("food_cold"),
+                                body,
+                                cold.path("version").asInt())
+                        .getResponse()
+                        .getStatus())
+                .as("the version the list returned is spent")
+                .isEqualTo(409);
+        assertThat(putAs(OWNER, settings() + "/feedback/tags/" + pack.get("food_cold"), body, null)
+                        .getResponse()
+                        .getStatus())
+                .as("no version, no edit")
+                .isIn(400, 428);
+        assertThat(putAs(OWNER, settings() + "/feedback/tags/" + UUID.randomUUID(), body, 1)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(404);
+
+        // A review carries the tag: its category and sentiment are now what reports group by.
+        switchOn("feature.feedback_settings");
+        assertThat(submit(order(), 1, null, List.of(pack.get("food_cold")), false)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        JsonNode used = tagByCode(
+                json(get(settings() + "/feedback/tags").with(token(OWNER))).path("tags"), "food_cold");
+        assertThat(used.path("used").asBoolean()).isTrue();
+        String recategorised =
+                "{\"category\":\"SERVICE\",\"sentiment\":\"NEGATIVE\",\"sortOrder\":%d,\"status\":\"ACTIVE\"}"
+                        .formatted(used.path("sortOrder").asInt());
+        assertThat(putAs(
+                                OWNER,
+                                settings() + "/feedback/tags/" + pack.get("food_cold"),
+                                recategorised,
+                                used.path("version").asInt())
+                        .getResponse()
+                        .getStatus())
+                .as("a tag a review carries cannot change what a report groups by")
+                .isEqualTo(422);
+        String reworded =
+                "{\"category\":\"FOOD\",\"sentiment\":\"NEGATIVE\",\"sortOrder\":%d,\"status\":\"ACTIVE\",\"labels\":{\"ru\":\"Остыло\"}}"
+                        .formatted(used.path("sortOrder").asInt());
+        assertThat(putAs(
+                                OWNER,
+                                settings() + "/feedback/tags/" + pack.get("food_cold"),
+                                reworded,
+                                used.path("version").asInt())
+                        .getResponse()
+                        .getStatus())
+                .as("its wording is the tenant's to change at any time")
+                .isEqualTo(200);
+
+        assertThat(auditActions()).contains("reviews.tag.create", "reviews.tag.update");
+        assertNothingRedacted("reviews.tag.create", "reviews.tag.update");
+    }
+
+    @Test
+    @DisplayName("the library holds forty active tags: the forty-first is refused, retiring one makes room, and"
+            + " bringing a retired one back past forty is refused too")
+    void theLibraryHoldsFortyActiveTags() throws Exception {
+        String defaultLocale = json(get(settings() + "/feedback/tags").with(token(OWNER)))
+                .path("defaultLocale")
+                .asText();
+        starterPack();
+        String template =
+                "{\"code\":\"%s\",\"category\":\"OTHER\",\"sentiment\":\"POSITIVE\",\"labels\":{\"%s\":\"Tag %s\"}}";
+        for (int i = 0; i < 28; i++) {
+            String code = "extra_tag_" + i;
+            assertThat(postAs(OWNER, settings() + "/feedback/tags", template.formatted(code, defaultLocale, i))
+                            .getResponse()
+                            .getStatus())
+                    .as(code)
+                    .isEqualTo(201);
+        }
+        MvcResult forty1 =
+                postAs(OWNER, settings() + "/feedback/tags", template.formatted("one_too_many", defaultLocale, "41"));
+        assertThat(forty1.getResponse().getStatus()).isEqualTo(422);
+        assertThat(forty1.getResponse().getContentAsString()).contains("40");
+
+        JsonNode library = json(get(settings() + "/feedback/tags").with(token(OWNER)));
+        assertThat(library.path("tags")).hasSize(40);
+        JsonNode first = tagByCode(library.path("tags"), "extra_tag_0");
+        String retire = "{\"category\":\"OTHER\",\"sentiment\":\"POSITIVE\",\"sortOrder\":%d,\"status\":\"%s\"}";
+        MvcResult retired = putAs(
+                OWNER,
+                settings() + "/feedback/tags/" + first.path("id").asText(),
+                retire.formatted(first.path("sortOrder").asInt(), "RETIRED"),
+                first.path("version").asInt());
+        assertThat(retired.getResponse().getStatus()).isEqualTo(200);
+
+        assertThat(postAs(OWNER, settings() + "/feedback/tags", template.formatted("one_too_many", defaultLocale, "41"))
+                        .getResponse()
+                        .getStatus())
+                .as("a retired tag frees its place")
+                .isEqualTo(201);
+        JsonNode back = JSON.readTree(retired.getResponse().getContentAsString());
+        assertThat(putAs(
+                                OWNER,
+                                settings() + "/feedback/tags/"
+                                        + first.path("id").asText(),
+                                retire.formatted(first.path("sortOrder").asInt(), "ACTIVE"),
+                                back.path("version").asInt())
+                        .getResponse()
+                        .getStatus())
+                .as("and bringing it back over the limit is refused")
+                .isEqualTo(422);
+        assertThat(postAs(OWNER, settings() + "/feedback/tags/starter-pack", null)
+                        .getResponse()
+                        .getStatus())
+                .as("the starter pack is imported once")
+                .isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName(
+            "the prompt policy: the default is stated, a save is checked against the version read, a brand may override"
+                    + " the tenant, and every bound is enforced where it is written")
+    void thePromptPolicyRoundTrip() throws Exception {
+        JsonNode defaults = json(get(settings() + "/feedback/prompt-policy").with(token(OWNER)));
+        assertThat(defaults.path("isDefault").asBoolean()).isTrue();
+        assertThat(defaults.path("winningScope").isNull()).isTrue();
+        assertThat(defaults.path("versionAtScope").asInt()).isZero();
+        assertThat(defaults.path("inlineWindowDays").asInt()).isEqualTo(7);
+        assertThat(defaults.path("sendWindow").path("start").asText()).isEqualTo("09:00");
+        assertThat(defaults.path("sendWindow").path("end").asText()).isEqualTo("21:00");
+        assertThat(defaults.path("rows")).hasSize(4);
+        assertThat(defaults.path("rows"))
+                .filteredOn(row -> "TELEGRAM".equals(row.path("channel").asText()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.path("enabled").asBoolean()).isTrue();
+                    assertThat(row.path("delayMinutes").asInt()).isEqualTo(30);
+                    assertThat(row.path("giveUpAfterHours").asInt()).isEqualTo(6);
+                });
+        assertThat(defaults.path("rows"))
+                .filteredOn(row -> !"TELEGRAM".equals(row.path("channel").asText()))
+                .allSatisfy(row -> assertThat(row.path("enabled").asBoolean())
+                        .as("SMS, email and push are off until a tenant enables them")
+                        .isFalse());
+
+        String valid = promptPolicy(
+                "{\"start\":\"08:00\",\"end\":\"22:00\"}",
+                14,
+                "{\"fulfillmentMode\":\"DELIVERY\",\"channel\":\"SMS\",\"enabled\":true,\"delayMinutes\":120,\"giveUpAfterHours\":12},"
+                        + "{\"fulfillmentMode\":\"*\",\"channel\":\"TELEGRAM\",\"enabled\":true,\"delayMinutes\":0,\"giveUpAfterHours\":1}",
+                "start with delivery SMS");
+        assertThat(putAs(OWNER, settings() + "/feedback/prompt-policy", valid, null)
+                        .getResponse()
+                        .getStatus())
+                .as("no If-Match, no save")
+                .isIn(400, 428);
+        MvcResult saved = putAs(OWNER, settings() + "/feedback/prompt-policy", valid, 0);
+        assertThat(saved.getResponse().getStatus()).isEqualTo(200);
+        JsonNode policy = JSON.readTree(saved.getResponse().getContentAsString());
+        assertThat(policy.path("isDefault").asBoolean()).isFalse();
+        assertThat(policy.path("winningScope").asText()).isEqualTo("TENANT");
+        assertThat(policy.path("versionAtScope").asInt()).isEqualTo(1);
+        assertThat(policy.path("inlineWindowDays").asInt()).isEqualTo(14);
+        assertThat(putAs(OWNER, settings() + "/feedback/prompt-policy", valid, 0)
+                        .getResponse()
+                        .getStatus())
+                .as("the version read is spent")
+                .isEqualTo(409);
+
+        JsonNode brandBefore = json(
+                get(settings() + "/brands/" + BRAND + "/feedback/prompt-policy").with(token(OWNER)));
+        assertThat(brandBefore.path("winningScope").asText())
+                .as("the brand follows the tenant")
+                .isEqualTo("TENANT");
+        assertThat(brandBefore.path("versionAtScope").asInt()).isZero();
+        assertThat(brandBefore.path("inlineWindowDays").asInt()).isEqualTo(14);
+        MvcResult brandSaved = putAs(
+                OWNER,
+                settings() + "/brands/" + BRAND + "/feedback/prompt-policy",
+                promptPolicy("null", 3, "", "ask within three days"),
+                0);
+        assertThat(brandSaved.getResponse().getStatus()).isEqualTo(200);
+        JsonNode brandPolicy = JSON.readTree(brandSaved.getResponse().getContentAsString());
+        assertThat(brandPolicy.path("winningScope").asText()).isEqualTo("BRAND");
+        assertThat(brandPolicy.path("sendWindow").isNull())
+                .as("null means any hour")
+                .isTrue();
+        assertThat(json(get(settings() + "/feedback/prompt-policy").with(token(OWNER)))
+                        .path("inlineWindowDays")
+                        .asInt())
+                .as("the tenant's own document is untouched by the brand's")
+                .isEqualTo(14);
+
+        String row =
+                "{\"fulfillmentMode\":\"*\",\"channel\":\"TELEGRAM\",\"enabled\":true,\"delayMinutes\":%d,\"giveUpAfterHours\":%d}";
+        List<String> refused = List.of(
+                promptPolicy("null", 7, row.formatted(1441, 6), "delay over a day"),
+                promptPolicy("null", 7, row.formatted(-1, 6), "negative delay"),
+                promptPolicy("null", 7, row.formatted(30, 0), "give up at once"),
+                promptPolicy("null", 7, row.formatted(30, 73), "give up after three days"),
+                promptPolicy("null", 7, row.formatted(30, 6).replace("TELEGRAM", "FAX"), "an unknown channel"),
+                promptPolicy(
+                        "null",
+                        7,
+                        row.formatted(30, 6).replace("\"*\",\"channel\"", "\"TAKEAWAY\",\"channel\""),
+                        "an unknown order type"),
+                promptPolicy(
+                        "{\"start\":\"21:00\",\"end\":\"09:00\"}",
+                        7,
+                        row.formatted(30, 6),
+                        "a window that ends before it starts"),
+                promptPolicy(
+                        "{\"start\":\"9am\",\"end\":\"9pm\"}", 7, row.formatted(30, 6), "a window nobody can parse"),
+                promptPolicy("null", 0, row.formatted(30, 6), "no inline days"),
+                promptPolicy("null", 91, row.formatted(30, 6), "a quarter and a day"),
+                promptPolicy(
+                        "null",
+                        7,
+                        row.formatted(30, 6) + "," + row.formatted(30, 6).replace("TELEGRAM", "SMS"),
+                        "two different rows are fine"));
+        // The last document is valid (two different rows); the others are not.
+        for (int i = 0; i < refused.size() - 1; i++) {
+            assertThat(putAs(OWNER, settings() + "/feedback/prompt-policy", refused.get(i), 1)
+                            .getResponse()
+                            .getStatus())
+                    .as("document %d", i)
+                    .isEqualTo(400);
+        }
+        assertThat(putAs(OWNER, settings() + "/feedback/prompt-policy", refused.getLast(), 1)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        assertThat(putAs(
+                                OWNER,
+                                settings() + "/feedback/prompt-policy",
+                                promptPolicy("null", 7, row.formatted(30, 6), " "),
+                                2)
+                        .getResponse()
+                        .getStatus())
+                .as("a policy change needs a reason")
+                .isEqualTo(400);
+
+        assertThat(auditActions()).contains("reviews.prompt-policy.authored");
+        assertNothingRedacted("reviews.prompt-policy.authored");
+    }
+
+    @Test
+    @DisplayName("the recovery policy: the default is 2 stars, 240 minutes and 72 hours; an edit moves new cases and"
+            + " never an old case's clocks")
+    void theRecoveryPolicyRoundTrip() throws Exception {
+        switchOn("feature.feedback_settings");
+        switchOn("feature.service_recovery");
+        JsonNode defaults = json(get(settings() + "/feedback/recovery-policy").with(token(OWNER)));
+        assertThat(defaults.path("isDefault").asBoolean()).isTrue();
+        assertThat(defaults.path("autoOpenMaxRating").asInt()).isEqualTo(2);
+        assertThat(defaults.path("firstResponseMinutes").asInt()).isEqualTo(240);
+        assertThat(defaults.path("resolutionMinutes").asInt()).isEqualTo(4320);
+        assertThat(defaults.path("alertOnOpen").asBoolean()).isFalse();
+        assertThat(defaults.path("alertOnBreach").asBoolean()).isFalse();
+
+        UUID old = review(1, "cold", List.of(), false);
+        assertThat(caseWindowMinutes(old)).containsExactly(240L, 4320L);
+
+        String valid = recoveryPolicy(3, 60, 1440, true, false, "tighten for the pilot");
+        assertThat(putAs(OWNER, settings() + "/feedback/recovery-policy", valid, null)
+                        .getResponse()
+                        .getStatus())
+                .isIn(400, 428);
+        MvcResult saved = putAs(OWNER, settings() + "/feedback/recovery-policy", valid, 0);
+        assertThat(saved.getResponse().getStatus()).isEqualTo(200);
+        JsonNode policy = JSON.readTree(saved.getResponse().getContentAsString());
+        assertThat(policy.path("winningScope").asText()).isEqualTo("TENANT");
+        assertThat(policy.path("versionAtScope").asInt()).isEqualTo(1);
+        assertThat(policy.path("alertOnOpen").asBoolean()).isTrue();
+        assertThat(putAs(OWNER, settings() + "/feedback/recovery-policy", valid, 0)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(409);
+
+        assertThat(caseWindowMinutes(old))
+                .as("a case stores the version it opened under: an edit never makes an old case late")
+                .containsExactly(240L, 4320L);
+        UUID three = review(3, "so-so", List.of(), false);
+        assertThat(caseWindowMinutes(three))
+                .as("three stars now opens a case, on the new clocks")
+                .containsExactly(60L, 1440L);
+        assertThat(jdbc.sql("SELECT policy_version FROM reviews.recovery_cases WHERE review_id = :id")
+                        .param("id", three)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+        UUID four = review(4, "fine", List.of(), false);
+        assertThat(jdbc.sql("SELECT count(*) FROM reviews.recovery_cases WHERE review_id = :id")
+                        .param("id", four)
+                        .query(Long.class)
+                        .single())
+                .as("four stars is above the new threshold")
+                .isZero();
+
+        List<String> refused = List.of(
+                recoveryPolicy(6, 60, 1440, false, false, "x"),
+                recoveryPolicy(-1, 60, 1440, false, false, "x"),
+                recoveryPolicy(2, 14, 1440, false, false, "first response under a quarter hour"),
+                recoveryPolicy(2, 10_081, 43_200, false, false, "first response over a week"),
+                recoveryPolicy(2, 60, 59, false, false, "resolution under an hour"),
+                recoveryPolicy(2, 60, 43_201, false, false, "resolution over thirty days"),
+                recoveryPolicy(2, 600, 500, false, false, "resolution shorter than the first response"));
+        for (int i = 0; i < refused.size(); i++) {
+            assertThat(putAs(OWNER, settings() + "/feedback/recovery-policy", refused.get(i), 1)
+                            .getResponse()
+                            .getStatus())
+                    .as("document %d", i)
+                    .isEqualTo(400);
+        }
+        assertThat(putAs(
+                                OWNER,
+                                settings() + "/feedback/recovery-policy",
+                                "{\"autoOpenMaxRating\":2,\"firstResponseMinutes\":60,\"resolutionMinutes\":1440}",
+                                1)
+                        .getResponse()
+                        .getStatus())
+                .as("a reason is required")
+                .isEqualTo(400);
+
+        MvcResult never = putAs(
+                OWNER,
+                settings() + "/brands/" + BRAND + "/feedback/recovery-policy",
+                recoveryPolicy(0, 60, 1440, false, false, "this brand does not run a worklist"),
+                0);
+        assertThat(never.getResponse().getStatus()).isEqualTo(200);
+        UUID one = review(1, "terrible", List.of(), false);
+        assertThat(jdbc.sql("SELECT count(*) FROM reviews.recovery_cases WHERE review_id = :id")
+                        .param("id", one)
+                        .query(Long.class)
+                        .single())
+                .as("0 means never: the brand's own policy overrides the tenant's")
+                .isZero();
+
+        assertThat(auditActions()).contains("reviews.recovery-policy.authored");
+        assertNothingRedacted("reviews.recovery-policy.authored");
+        assertThat(jdbc.sql("SELECT change_document::text FROM audit.audit_events WHERE action_code = "
+                                + "'reviews.recovery-policy.authored' ORDER BY recorded_at LIMIT 1")
+                        .query(String.class)
+                        .single())
+                .as("the audit key names stars, because a key containing the letters of 'rating' is redacted")
+                .contains("autoOpenMaxStars");
+    }
+
+    @Test
+    @DisplayName("the settings are the owner's and the administrator's: a brand manager, a branch manager, a customer,"
+            + " another tenant's owner and a caller with no token all get nothing")
+    void theSettingsReach() throws Exception {
+        List<String> reads = List.of(
+                settings() + "/feedback/tags",
+                settings() + "/feedback/prompt-policy",
+                settings() + "/feedback/recovery-policy",
+                settings() + "/brands/" + BRAND + "/feedback/prompt-policy",
+                settings() + "/brands/" + BRAND + "/feedback/recovery-policy");
+        for (String path : reads) {
+            assertThat(getAs(OWNER, path).getResponse().getStatus())
+                    .as("owner %s", path)
+                    .isEqualTo(200);
+            assertThat(getAs(BRAND_MANAGER, path).getResponse().getStatus())
+                    .as("brand manager %s", path)
+                    .isEqualTo(403);
+            assertThat(getAs(CHI_MANAGER, path).getResponse().getStatus())
+                    .as("branch manager %s", path)
+                    .isEqualTo(403);
+            assertThat(getAs(OTHER_OWNER, path).getResponse().getStatus())
+                    .as("another tenant's owner %s", path)
+                    .isIn(403, 404);
+            assertThat(mvc.perform(get(path).with(guest()))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus())
+                    .as("a customer %s", path)
+                    .isIn(401, 403);
+            assertThat(mvc.perform(get(path)).andReturn().getResponse().getStatus())
+                    .as("no token %s", path)
+                    .isEqualTo(401);
+        }
+        String policy = recoveryPolicy(2, 240, 4320, false, false, "no");
+        assertThat(putAs(BRAND_MANAGER, settings() + "/feedback/recovery-policy", policy, 0)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(403);
+        assertThat(putAs(BRAND_MANAGER, settings() + "/brands/" + BRAND + "/feedback/recovery-policy", policy, 0)
+                        .getResponse()
+                        .getStatus())
+                .as("not even for the brand they manage: configuration is the owner's")
+                .isEqualTo(403);
+        assertThat(postAs(BRAND_MANAGER, settings() + "/feedback/tags/starter-pack", null)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(403);
+        assertThat(putAs(OTHER_OWNER, settings() + "/feedback/recovery-policy", policy, 0)
+                        .getResponse()
+                        .getStatus())
+                .isIn(403, 404);
+        assertThat(jdbc.sql("SELECT count(*) FROM reviews.feedback_tags")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was written by anyone refused")
+                .isZero();
+        assertThat(auditActions()).isEmpty();
+    }
+
     // ===================================================================== fixtures
 
     /** A completed order of the guest's, a review of it, and the id of the review. */
@@ -912,6 +1408,72 @@ class ReviewFeedbackEndpointTests {
             request = request.contentType(MediaType.APPLICATION_JSON).content(body);
         }
         return mvc.perform(request).andReturn();
+    }
+
+    private MvcResult putAs(String subject, String path, String body, @Nullable Object version) throws Exception {
+        MockHttpServletRequestBuilder request = put(path)
+                .with(token(subject))
+                .header("Idempotency-Key", key())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body);
+        if (version != null) {
+            request = request.header("If-Match", "W/\"" + version + "\"");
+        }
+        return mvc.perform(request).andReturn();
+    }
+
+    private static String promptPolicy(String sendWindow, int inlineDays, String rows, String reason) {
+        return "{\"sendWindow\":%s,\"inlineWindowDays\":%d,\"rows\":[%s],\"reason\":\"%s\"}"
+                .formatted(sendWindow, inlineDays, rows, reason);
+    }
+
+    private static String recoveryPolicy(
+            int rating,
+            int firstMinutes,
+            int resolutionMinutes,
+            boolean alertOnOpen,
+            boolean alertOnBreach,
+            String reason) {
+        return ("{\"autoOpenMaxRating\":%d,\"firstResponseMinutes\":%d,\"resolutionMinutes\":%d,"
+                        + "\"alertOnOpen\":%s,\"alertOnBreach\":%s,\"reason\":\"%s\"}")
+                .formatted(rating, firstMinutes, resolutionMinutes, alertOnOpen, alertOnBreach, reason);
+    }
+
+    /** The minutes from opening to each clock's due time, as a case stored them. */
+    private List<Long> caseWindowMinutes(UUID reviewId) {
+        Map<String, Object> row = jdbc.sql("""
+                SELECT EXTRACT(EPOCH FROM first_response_due_at - created_at)::bigint / 60 AS first_minutes,
+                       EXTRACT(EPOCH FROM resolution_due_at - created_at)::bigint / 60 AS resolution_minutes
+                  FROM reviews.recovery_cases WHERE review_id = :id
+                """).param("id", reviewId).query().singleRow();
+        return List.of(
+                ((Number) Objects.requireNonNull(row.get("first_minutes"))).longValue(),
+                ((Number) Objects.requireNonNull(row.get("resolution_minutes"))).longValue());
+    }
+
+    private List<String> auditActions() {
+        return jdbc.sql("SELECT DISTINCT action_code FROM audit.audit_events WHERE action_code LIKE 'reviews.%' "
+                        + "ORDER BY 1")
+                .query(String.class)
+                .list();
+    }
+
+    /**
+     * The audit sanitiser redacts any change-document key that contains the letters of a protected term, and
+     * "rating" and "setting" both contain "tin": a key named after either would be stored as a redaction.
+     */
+    private void assertNothingRedacted(String... actions) {
+        for (String action : actions) {
+            assertThat(jdbc.sql("SELECT change_document::text FROM audit.audit_events WHERE action_code = :a")
+                            .param("a", action)
+                            .query(String.class)
+                            .list())
+                    .as("%s: at least one audited change", action)
+                    .isNotEmpty()
+                    .allSatisfy(document -> assertThat(document)
+                            .as("%s: a redacted value is a key the sanitiser mistook for personal data", action)
+                            .doesNotContain("[redacted]"));
+        }
     }
 
     private static List<String> fieldNames(JsonNode node) {

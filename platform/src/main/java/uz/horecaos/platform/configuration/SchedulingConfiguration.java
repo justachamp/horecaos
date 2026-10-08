@@ -255,10 +255,11 @@ public class SchedulingConfiguration {
      * rather than discovered on the receipt (ADR 0140). Batch 19 added four more on
      * branches that could not see each other: the scenario runner's scheduler (ADR
      * 0112), the SMS delivery-receipt sweeper (ADR 0146), the card top-up settlement
-     * sweeper (ADR 0095) and the e-invoice state sweeper (ADR 0096). The pool-size
-     * test counts them.
+     * sweeper (ADR 0095) and the e-invoice state sweeper (ADR 0096). Batch 20 added
+     * the service-recovery SLA sweeper ({@code RecoverySlaSweeper}, ADR 0159). The
+     * pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 80;
+    static final int DEFAULT_POOL_SIZE = 81;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

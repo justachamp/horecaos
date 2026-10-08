@@ -611,9 +611,12 @@ class DayCloseAndMetricLayerTests {
         // per-refund" category this assertion already tolerates for every
         // other source read derive() runs, not the N+1 this test exists to
         // catch.
+        //
+        // w7-service-recovery (ADR 0159): 57 to 59, for the same reason again -- clearDay gained the two
+        // review-fact deletes (fact_review_tag, fact_review), fixed per close and nothing per refund.
         assertThat(used)
                 .as("a busy Saturday's close should not spend a round-trip per refund")
-                .isLessThanOrEqualTo(57);
+                .isLessThanOrEqualTo(59);
     }
 
     // ----------------------------------------------------- the settle recut
