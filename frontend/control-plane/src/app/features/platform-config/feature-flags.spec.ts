@@ -82,6 +82,14 @@ describe('FeatureFlags', () => {
     expect(text).toContain('Oshxona');
   });
 
+  it('names the marked-goods flag in the operator’s words, so the platform can find the switch ADR 0161 puts in its hands', async () => {
+    await create([flag({ code: 'feature.marked_goods' })]);
+
+    const text = el('.flag').textContent ?? '';
+    expect(text).toContain(ru['featureFlags.flag.markedGoods']);
+    expect(text).toContain(ru['featureFlags.flag.markedGoods.description']);
+  });
+
   it('turns a flag on for everyone through the ordinary setting write, with the version it read', async () => {
     await create([flag({ platformValue: false, platformVersion: 3 })]);
 

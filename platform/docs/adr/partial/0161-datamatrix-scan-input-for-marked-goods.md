@@ -31,7 +31,10 @@
   Click's `Labels` cardinality are open inputs (the GS1 shape is an assumption with a
   switch, and a unit-per-item split would live in the projection alone); nothing has run
   on a scanner or a camera; the state system's check is a seam (`MarkingVerificationPort`,
-  `NOT_WIRED`); the Payme payment-options exclusion
+  `NOT_WIRED`); the flag is tenant-visible because the registry test of ADR 0082 requires every
+  flag to be, so a tenant administrator who holds `TENANT_CONFIGURATION_WRITE` can turn it on for
+  their own account and "the platform turns it on" is a rollout rule and not yet a mechanism; the
+  Payme payment-options exclusion
   (`payments.payment_methods.supports_marking`) is not built, so a marked Payme document
   is refused at the projection and not hidden at checkout; the receipt's VAT percent is
   derived from the quote's tax share until ADR 0166's line builder replaces it; inventory

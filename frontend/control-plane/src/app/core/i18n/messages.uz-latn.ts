@@ -434,6 +434,9 @@ export const uzLatn: Messages = {
   'featureFlags.flag.supportVisits': 'Yordam tashriflari sahifasi',
   'featureFlags.flag.supportVisits.description':
     'Mijoz administratorlariga operatsion ilovada HorecaOS yordamining barcha tashriflarini ko‘rsatadi va tashrifni tugatishga imkon beradi.',
+  'featureFlags.flag.markedGoods': 'Markirlangan tovarlar (DataMatrix)',
+  'featureFlags.flag.markedGoods.description':
+    'Berish joyida markirovka kodlarini skanerlashni va har bir markirlangan birlik skanerlanmaguncha buyurtmani chiqarmaydigan tekshiruvni yoqadi. Markirlangan tovarlar uchun chek yo‘li sinovdan o‘tgandan keyingina mijoz uchun yoqing.',
 
   'tenantDetail.facts.title': 'Mijoz ma’lumotlari',
   'tenantDetail.facts.status': 'Holati',

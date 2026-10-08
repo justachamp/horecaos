@@ -428,6 +428,9 @@ export const ru: Messages = {
   'featureFlags.flag.supportVisits': 'Страница визитов поддержки',
   'featureFlags.flag.supportVisits.description':
     'Показывает администраторам клиента в операционном приложении все визиты поддержки HorecaOS и позволяет завершить визит.',
+  'featureFlags.flag.markedGoods': 'Маркированные товары (DataMatrix)',
+  'featureFlags.flag.markedGoods.description':
+    'Включает сканирование кодов маркировки на выдаче и проверку, которая не выпускает заказ, пока не отсканирована каждая маркированная единица. Включайте для клиента только после проверки пути чека для маркированных товаров.',
 
   'tenantDetail.facts.title': 'Сведения о клиенте',
   'tenantDetail.facts.status': 'Статус',

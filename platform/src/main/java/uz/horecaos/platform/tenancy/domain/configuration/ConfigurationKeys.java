@@ -128,14 +128,20 @@ public final class ConfigurationKeys {
 
     /**
      * ADR 0161 (ADR 0082 flag): whether marked-goods capture is on for a tenant. Off until a tenant names a
-     * marked SKU and the three preconditions of ADR 0161 hold; the platform turns it on, so it is settable
-     * at the platform and per tenant but is not offered to a tenant's own administrators. Read by catalog
-     * (publication) and ordering (capture and the handover guard) through {@code tenancy.api.FeatureFlagKeys}.
+     * marked SKU and the three preconditions of ADR 0161 hold, and ADR 0161 has the platform turn it on.
+     * Read by catalog (publication) and ordering (capture and the handover guard) through {@code
+     * tenancy.api.FeatureFlagKeys}.
+     *
+     * <p>Tenant-visible like every ADR 0082 flag ({@code ConfigurationKeysTests} requires it), which also
+     * means the tenant settings surface can set it for the tenant's own account. "The platform turns it on"
+     * is therefore the rollout rule and not a mechanism; making it one needs either an exemption from that
+     * invariant or a write guard that knows the actor, which is the owner's call and is recorded as open.
      */
     public static final ConfigurationKey<Boolean> FEATURE_MARKED_GOODS = ConfigurationKey.of(
                     "feature.marked_goods", Boolean.class)
             .defaultValue(false)
             .ownedBy("ordering")
+            .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
             .describedAs("Turns on marked-goods (DataMatrix) capture at the pass and the handover guard "
                     + "that holds an order until every marked unit is scanned.")
