@@ -23,7 +23,9 @@ import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.OrderMarksPort;
 import uz.horecaos.platform.payments.application.FiscalReceiptPort;
+import uz.horecaos.platform.payments.application.MarkedOrderReceiptProjection;
 import uz.horecaos.platform.payments.application.PartnerFiscalizationBridge;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.application.PaymentFiscalService;
@@ -350,6 +352,208 @@ class PartnerFiscalizationBridgeTests {
                 .as("still owed, not failed — the sweeper's reporting deadline is what eventually "
                         + "turns real silence into BLOCKED, never this call")
                 .isEqualTo(FiscalStatus.SUBMITTED);
+    }
+
+    // -----------------------------------------------------------------------
+    // ADR 0161: a marked order is never given the synthetic aggregate line
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a marked order is submitted with its scanned codes on its own line, and never as the synthetic aggregate")
+    void aMarkedOrderCarriesItsCodesToTheProvider() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        CapturingClickPort click = new CapturingClickPort();
+        PartnerFiscalizationBridge bridge = markedBridge(click, completeVodka(2));
+
+        Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-1");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        FiscalDocument sent = click.sent.get(0);
+        assertThat(sent.lines()).hasSize(1);
+        assertThat(sent.lines().get(0).fiscalName()).isEqualTo("Vodka");
+        assertThat(sent.lines().get(0).quantity()).isEqualTo(2);
+        assertThat(sent.lines().get(0).markingCodes()).containsExactly(MARK_CODE_1, MARK_CODE_2);
+        assertThat(sent.lines().get(0).mxikCode())
+                .as("a real classification, not the synthetic placeholder")
+                .isEqualTo("22030000000000000");
+    }
+
+    @Test
+    @DisplayName("a marked order short of a scanned unit sends nothing and reports BLOCKED_MARKS")
+    void aMarkedOrderShortOfCodesIsBlockedNotSent() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        CapturingClickPort click = new CapturingClickPort();
+        PartnerFiscalizationBridge bridge = markedBridge(click, shortVodka());
+
+        Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-2");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_MARKS);
+        assertThat(click.sent).as("the provider was never asked").isEmpty();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .as("still owed, and not failed")
+                .isEqualTo(FiscalStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("a marked order on a provider with no field for a code is rejected, not sent as a fake aggregate")
+    void aMarkedOrderOnAProviderThatCannotCarryCodesIsRejected() {
+        seedPaymeBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY));
+        PartnerFiscalizationBridge bridge = markedBridge(new CapturingClickPort(), completeVodka(1));
+
+        Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-3");
+
+        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().lines())
+                .as("no synthetic line was written for the marked good either")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("an order with no marked line still takes the synthetic aggregate line when marked goods are wired")
+    void anOrdinaryOrderIsUnchangedByTheProjection() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        CapturingClickPort click = new CapturingClickPort();
+        PartnerFiscalizationBridge bridge = markedBridge(click, ordinaryOnly());
+
+        Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-4");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        assertThat(click.sent.get(0).lines()).hasSize(1);
+        assertThat(click.sent.get(0).lines().get(0).markingCodes()).isEmpty();
+        assertThat(click.sent.get(0).lines().get(0).mxikCode()).isEqualTo("00000000000000000");
+    }
+
+    private static final UUID VODKA_VARIANT = UUID.randomUUID();
+    private static final String MARK_CODE_1 = "010460000000001521BridgeSerial0001";
+    private static final String MARK_CODE_2 = "010460000000001521BridgeSerial0002";
+
+    private OrderMarksPort.ReceiptSource completeVodka(int units) {
+        List<OrderMarksPort.MarkRef> refs = new java.util.ArrayList<>();
+        String[] codes = {MARK_CODE_1, MARK_CODE_2};
+        for (int i = 0; i < units; i++) {
+            refs.add(markRef(i + 1, codes[i]));
+        }
+        return new OrderMarksPort.ReceiptSource(
+                BRAND,
+                "UZS",
+                List.of(new OrderMarksPort.ReceiptLine(
+                        UUID.randomUUID(),
+                        VODKA_VARIANT,
+                        "Vodka",
+                        java.math.BigDecimal.valueOf(units),
+                        7_500L * units,
+                        0L,
+                        true,
+                        units,
+                        refs)));
+    }
+
+    private OrderMarksPort.ReceiptSource shortVodka() {
+        return new OrderMarksPort.ReceiptSource(
+                BRAND,
+                "UZS",
+                List.of(new OrderMarksPort.ReceiptLine(
+                        UUID.randomUUID(),
+                        VODKA_VARIANT,
+                        "Vodka",
+                        java.math.BigDecimal.valueOf(2),
+                        15_000L,
+                        0L,
+                        true,
+                        2,
+                        List.of(markRef(1, MARK_CODE_1)))));
+    }
+
+    private static OrderMarksPort.ReceiptSource ordinaryOnly() {
+        return new OrderMarksPort.ReceiptSource(
+                BRAND,
+                "UZS",
+                List.of(new OrderMarksPort.ReceiptLine(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "Plov",
+                        java.math.BigDecimal.ONE,
+                        15_000L,
+                        0L,
+                        false,
+                        0,
+                        List.of())));
+    }
+
+    private final uz.horecaos.platform.iam.api.protection.FieldProtection protection =
+            uz.horecaos.platform.support.TestProtection.envelope();
+
+    private OrderMarksPort.MarkRef markRef(int sequence, String code) {
+        UUID id = UUID.randomUUID();
+        String envelope = protection
+                .protect(
+                        TENANT,
+                        uz.horecaos.platform.iam.api.protection.DataClass.FINANCIAL,
+                        new uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef(
+                                OrderMarksPort.CODE_TABLE, OrderMarksPort.CODE_COLUMN, id),
+                        code)
+                .serialize();
+        return new OrderMarksPort.MarkRef(id, sequence, "04600000000015", envelope);
+    }
+
+    /** A bridge whose marked-goods projection reads {@code source} and whose Click port records what it is sent. */
+    private PartnerFiscalizationBridge markedBridge(CapturingClickPort click, OrderMarksPort.ReceiptSource source) {
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents,
+                List.of(click, new PaymeFiscalAdapter(intents, CLOCK)),
+                event -> {},
+                new RecordingProviderActivityRecorder());
+        fiscalService = service;
+        OrderMarksPort marks = new OrderMarksPort() {
+            @Override
+            public List<LineMarkCount> markCounts(UUID tenantId, UUID orderId) {
+                return List.of();
+            }
+
+            @Override
+            public ReceiptSource receiptSource(UUID tenantId, UUID orderId) {
+                return source;
+            }
+        };
+        uz.horecaos.platform.catalog.api.FiscalClassificationLookup classifications =
+                (tenantId, brandId, ids) -> Map.of(
+                        VODKA_VARIANT,
+                        new uz.horecaos.platform.catalog.api.FiscalClassificationLookup.FiscalClassificationFacts(
+                                "22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
+        MarkedOrderReceiptProjection projection =
+                new MarkedOrderReceiptProjection(marks, classifications, service, protection, fact -> {}, CLOCK);
+        return new PartnerFiscalizationBridge(service, bindings, intents, orders, legalEntities, CLOCK, projection);
+    }
+
+    /** A Click port that says it can carry codes and remembers every document it is asked to send. */
+    private static final class CapturingClickPort implements FiscalReceiptPort {
+
+        final List<FiscalDocument> sent = new java.util.ArrayList<>();
+
+        @Override
+        public FiscalSubmission submit(
+                FiscalDocument document, uz.horecaos.platform.payments.domain.ProviderBinding binding) {
+            sent.add(document);
+            return FiscalSubmission.issued(
+                    new FiscalDocument.FiscalEvidence(
+                            "R-M", "SIGN-M", "TERM-M", "R-M", CLOCK.instant(), "https://ofd.soliq.uz/r/m", null, null),
+                    CLOCK.instant());
+        }
+
+        @Override
+        public PaymentProviderType providerType() {
+            return PaymentProviderType.CLICK;
+        }
+
+        @Override
+        public boolean carriesMarkingCodes() {
+            return true;
+        }
     }
 
     // ------------------------------------------------------------------- helpers

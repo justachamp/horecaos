@@ -73,6 +73,12 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         return PaymentProviderType.CLICK;
     }
 
+    /** Click's {@code Items[].Labels} carries a marking code per unit (ADR 0161). */
+    @Override
+    public boolean carriesMarkingCodes() {
+        return true;
+    }
+
     @Override
     public FiscalSubmission submit(FiscalDocument document, ProviderBinding binding) {
         Instant now = clock.instant();

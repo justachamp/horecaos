@@ -5,8 +5,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
@@ -78,7 +80,9 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final OrderDirectory orders;
     private final LegalEntityDirectory legalEntities;
     private final Clock clock;
+    private final @Nullable MarkedOrderReceiptProjection markedOrders;
 
+    /** A bridge wired without marked-goods projection: every order takes the aggregate line, as before ADR 0161. */
     public PartnerFiscalizationBridge(
             PaymentFiscalService fiscalDocuments,
             PaymentBindingResolver bindings,
@@ -86,12 +90,29 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             OrderDirectory orders,
             LegalEntityDirectory legalEntities,
             Clock clock) {
+        this(fiscalDocuments, bindings, intents, orders, legalEntities, clock, null);
+    }
+
+    /**
+     * @param markedOrders ADR 0161: builds the receipt of an order that holds a marked line, codes included,
+     *     so such an order never takes the synthetic aggregate line
+     */
+    @Autowired
+    public PartnerFiscalizationBridge(
+            PaymentFiscalService fiscalDocuments,
+            PaymentBindingResolver bindings,
+            JdbcPaymentIntentStore intents,
+            OrderDirectory orders,
+            LegalEntityDirectory legalEntities,
+            Clock clock,
+            @Nullable MarkedOrderReceiptProjection markedOrders) {
         this.fiscalDocuments = fiscalDocuments;
         this.bindings = bindings;
         this.intents = intents;
         this.orders = orders;
         this.legalEntities = legalEntities;
         this.clock = clock;
+        this.markedOrders = markedOrders;
     }
 
     @Override
@@ -129,7 +150,32 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             return Outcome.NO_PROVIDER_PATH;
         }
 
-        FiscalDocument submittable = document.lines().isEmpty() ? withSyntheticLines(document) : document;
+        FiscalDocument submittable = document;
+        if (document.lines().isEmpty()) {
+            // ADR 0161: an order holding a marked line is never given the synthetic aggregate line. Its
+            // receipt is projected from the order's lines and the codes scanned at the pass, or nothing is
+            // sent at all.
+            MarkedOrderReceiptProjection.Result marked = markedOrders == null
+                    ? new MarkedOrderReceiptProjection.Result.NotMarked()
+                    : markedOrders.project(document, commissionTin(document));
+            switch (marked) {
+                case MarkedOrderReceiptProjection.Result.MarksIncomplete incomplete -> {
+                    return Outcome.BLOCKED_MARKS;
+                }
+                case MarkedOrderReceiptProjection.Result.Unprojectable unprojectable -> {
+                    log.warn(
+                            "Fiscal document {} for order {} was not sent: {}",
+                            documentId,
+                            document.orderId(),
+                            unprojectable.reason());
+                    return Outcome.REJECTED;
+                }
+                case MarkedOrderReceiptProjection.Result.Lines projected ->
+                    submittable = copyWithLines(document, projected.lines());
+                case MarkedOrderReceiptProjection.Result.NotMarked notMarked ->
+                    submittable = withSyntheticLines(document);
+            }
+        }
 
         FiscalStatus result = fiscalDocuments.submit(submittable, binding.get(), clock.instant());
         return switch (result) {

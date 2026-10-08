@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import uz.horecaos.platform.fiscal.api.MarkingVerificationPort;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 
 /**
@@ -41,6 +42,16 @@ public class FiscalPortConfiguration {
                         + "read carries {}.",
                 PartnerFiscalizationPort.NOT_WIRED_WARNING);
         return new UnwiredPartnerFiscalization();
+    }
+
+    /**
+     * ADR 0161: the state system's check of a marking code is a seam, not a call. Nothing implements it,
+     * so this answers {@link MarkingVerificationPort.Verdict#NOT_WIRED} for every code and asks nobody.
+     */
+    @Bean
+    @ConditionalOnMissingBean(MarkingVerificationPort.class)
+    MarkingVerificationPort unwiredMarkingVerification() {
+        return (tenantId, canonicalCode) -> MarkingVerificationPort.Verdict.NOT_WIRED;
     }
 
     /**

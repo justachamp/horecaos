@@ -69,6 +69,7 @@ public class CatalogValidator {
         validateOfferings(snapshot, findings);
         validateFiscalClassification(snapshot, findings);
         validatePhysicalAttributes(snapshot, findings);
+        validateMarkedGoods(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
     }
@@ -234,6 +235,70 @@ public class CatalogValidator {
                                         .formatted(physical.catchweight() ? "catchweight" : "splittable")
                                 + "one per physical unit, so the unit cannot be weighed at handover or split "
                                 + "into portions"));
+            }
+        }
+    }
+
+    /**
+     * The two blockers ADR 0161 puts on marked goods at publication.
+     *
+     * <p>{@code MARKED_GOODS_NOT_ENABLED}: while {@code feature.marked_goods} is off for the tenant, a variant
+     * (or any node) whose classification says {@code marking_required} cannot be published. This closes the
+     * hazard the record names: a tenant administrator could already set {@code marking_required} through the
+     * classification endpoint and sell it, with no capture, to a customer paying through Payme. The flag is
+     * turned on by the platform only once the payment exclusion, the real receipt line and the Click sandbox
+     * check exist, so the first marked SKU is published only after it.
+     *
+     * <p>{@code MARKED_MODIFIER_UNSUPPORTED}: a modifier option and the delivery fee are refused whatever
+     * the flag says, because a modifier row has a quantity and no line of its own to hold a mark. Marking is
+     * a property of a variant, which has its own order line.
+     */
+    private void validateMarkedGoods(Snapshot snapshot, List<ValidationFinding> findings) {
+        boolean enabled = snapshot.fiscal().markedGoodsEnabled();
+        for (Variant variant : snapshot.variants()) {
+            if (variant.status() == Status.ACTIVE
+                    && !enabled
+                    && snapshot.effectiveClassification(variant).markingRequired()) {
+                findings.add(ValidationFinding.blocker(
+                        "MARKED_GOODS_NOT_ENABLED",
+                        EntityType.VARIANT,
+                        variant.id(),
+                        variant.sku(),
+                        "This variant is classified as a marked good (marking_required) but marked-goods capture "
+                                + "is not enabled for this tenant, so a unit would be sold with no code scanned "
+                                + "(feature.marked_goods is off)"));
+            }
+        }
+        for (ModifierGroup group : snapshot.modifierGroups()) {
+            if (group.status() != Status.ACTIVE) {
+                continue;
+            }
+            for (ModifierOption option : snapshot.optionsByGroup().getOrDefault(group.id(), List.of())) {
+                if (option.status() == Status.ACTIVE
+                        && snapshot.effectiveClassification(option).markingRequired()
+                        && option.linkedVariantId() == null) {
+                    findings.add(ValidationFinding.blocker(
+                            "MARKED_MODIFIER_UNSUPPORTED",
+                            EntityType.MODIFIER_OPTION,
+                            option.id(),
+                            option.code(),
+                            "A modifier option cannot be a marked good: it has a quantity and no order line of its "
+                                    + "own to hold a scanned code. Mark the variant it adds instead"));
+                }
+            }
+        }
+        for (Fee fee : snapshot.fiscal().fees()) {
+            if (fee.status() != Status.ARCHIVED
+                    && snapshot.fiscal()
+                            .byNode()
+                            .getOrDefault(fee.id(), FiscalClassification.unclassified())
+                            .markingRequired()) {
+                findings.add(ValidationFinding.blocker(
+                        "MARKED_MODIFIER_UNSUPPORTED",
+                        EntityType.FEE,
+                        fee.id(),
+                        fee.code(),
+                        "A fee cannot be a marked good: it is a charge and has no unit to scan"));
             }
         }
     }
@@ -1071,13 +1136,30 @@ public class CatalogValidator {
      *                            different owners
      * @param referenceCodes      the subset of this catalog's codes the reference
      *                            recognises
+     * @param markedGoodsEnabled  ADR 0161: whether {@code feature.marked_goods} is on for the
+     *                            tenant; while it is off a node classified as marked cannot be
+     *                            published
      */
     public record FiscalContext(
             Map<UUID, FiscalClassification> byNode,
             List<Fee> fees,
             boolean brandOffersDelivery,
             boolean referenceLoaded,
-            Set<String> referenceCodes) {
+            Set<String> referenceCodes,
+            boolean markedGoodsEnabled) {
+
+        /**
+         * A context that does not restrict marked goods: every snapshot that predates ADR 0161's flag, and
+         * every test with nothing to say about it.
+         */
+        public FiscalContext(
+                Map<UUID, FiscalClassification> byNode,
+                List<Fee> fees,
+                boolean brandOffersDelivery,
+                boolean referenceLoaded,
+                Set<String> referenceCodes) {
+            this(byNode, fees, brandOffersDelivery, referenceLoaded, referenceCodes, true);
+        }
 
         /** For a test or a caller with nothing fiscal to say. */
         public static FiscalContext empty() {
