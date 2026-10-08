@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -15,6 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -44,7 +52,11 @@ import uz.horecaos.platform.commercial.domain.EInvoicingInstallation;
 import uz.horecaos.platform.commercial.domain.EInvoicingLineClassification;
 import uz.horecaos.platform.commercial.domain.StatementEInvoice;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcEInvoiceStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcStatementStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.api.LegalParty;
@@ -770,6 +782,50 @@ class EInvoicingServiceTests {
     }
 
     @Test
+    @DisplayName(
+            "a lost send is asked about with the documents of the statement's earlier attempts, and never adopts one")
+    void aLostSendNeverAdoptsAnEarlierAttemptsDocument() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-A", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice first = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-A", EInvoiceOperatorState.REFUSED, "3"));
+        service.refresh(TENANT, first.id(), STAFF, "c");
+
+        // The statement is sent again as B under the same number, and B's answer is lost.
+        didox.sends.add(() -> new EInvoiceSendOutcome.Uncertain("READ_TIMEOUT", "lost"));
+        StatementEInvoice second = send(statement);
+        assertThat(second.delivery()).isEqualTo(EInvoiceDelivery.UNCERTAIN);
+
+        // An adapter that picked the first row of a number-keyed list would answer with A's document.
+        didox.asked.clear();
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-A", EInvoiceOperatorState.REFUSED, "3"));
+        EInvoicingService.Refreshed refreshed = service.refresh(TENANT, second.id(), STAFF, "c");
+
+        assertThat(didox.asked.getFirst().otherAttemptDocumentIds())
+                .as("the lookup is told which documents already belong to other attempts")
+                .containsExactly("DOC-A");
+        assertThat(refreshed.unavailableCode()).isEqualTo("DOCUMENT_OF_ANOTHER_ATTEMPT");
+        StatementEInvoice held = store.find(TENANT, second.id()).orElseThrow();
+        assertThat(held.delivery()).isEqualTo(EInvoiceDelivery.UNCERTAIN);
+        assertThat(held.operatorDocumentId()).isNull();
+        assertThat(held.live())
+                .as("still holds the statement; a third send would duplicate B")
+                .isTrue();
+        assertThatThrownBy(() -> send(statement))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "EINVOICE_LIVE"));
+
+        // The right document, once the operator names it, is adopted.
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-B", EInvoiceOperatorState.DRAFT, "0"));
+        StatementEInvoice found =
+                service.refresh(TENANT, second.id(), STAFF, "c").einvoice();
+        assertThat(found.delivery()).isEqualTo(EInvoiceDelivery.SUBMITTED);
+        assertThat(found.operatorDocumentId()).isEqualTo("DOC-B");
+    }
+
+    @Test
     @DisplayName("an adapter that throws has not said whether the operator acted: uncertain, with the class name only")
     void anAdapterThatThrowsIsUncertain() {
         connect(true);
@@ -862,6 +918,184 @@ class EInvoicingServiceTests {
         assertThat(gone.live())
                 .as("still holds the statement until somebody can say it is gone")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName("a settled document is not asked about again, and nothing the operator says moves it")
+    void aSettledDocumentIsNotRefreshed() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice sent = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.SIGNED, "2"));
+        StatementEInvoice signed =
+                service.refresh(TENANT, sent.id(), STAFF, "c").einvoice();
+        assertThat(signed.operatorState()).isEqualTo(EInvoiceOperatorState.SIGNED);
+        didox.asked.clear();
+
+        // A status code the adapter does not map reads as UNKNOWN; before the guard one click rewrote the invoice.
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.UNKNOWN, "5"));
+        assertThatThrownBy(() -> service.refresh(TENANT, sent.id(), STAFF, "c"))
+                .isInstanceOfSatisfying(ApiException.class, refusal -> {
+                    assertThat(refusal.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+                    assertThat(refusal.properties()).containsEntry("reason", "SETTLED_AT_OPERATOR");
+                });
+
+        assertThat(didox.asked).as("a settled document is not even asked about").isEmpty();
+        StatementEInvoice unchanged = store.find(TENANT, sent.id()).orElseThrow();
+        assertThat(unchanged.operatorState()).isEqualTo(EInvoiceOperatorState.SIGNED);
+        assertThat(unchanged.operatorStatus()).isEqualTo("2");
+        assertThat(unchanged.version()).isEqualTo(signed.version());
+    }
+
+    @Test
+    @DisplayName("a refused attempt is not revived into the live index while its statement stands on another")
+    void aRefusedAttemptStaysDead() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-A", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice first = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-A", EInvoiceOperatorState.REFUSED, "3"));
+        StatementEInvoice refused =
+                service.refresh(TENANT, first.id(), STAFF, "c").einvoice();
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-B", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice second = send(statement);
+
+        // The operator no longer lists a refused document: before the guard A became UNKNOWN, hence live,
+        // beside B, and the update ran into the live index.
+        didox.states.add(EInvoiceStateOutcome.NotFound::new);
+        assertThatThrownBy(() -> service.refresh(TENANT, first.id(), STAFF, "c"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "SETTLED_AT_OPERATOR"));
+
+        StatementEInvoice after = store.find(TENANT, first.id()).orElseThrow();
+        assertThat(after.operatorState()).isEqualTo(EInvoiceOperatorState.REFUSED);
+        assertThat(after.live()).isFalse();
+        assertThat(after.version()).isEqualTo(refused.version());
+        assertThat(store.find(TENANT, second.id()).orElseThrow().live()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the database write itself refuses to move a settled document, whoever asks")
+    void theStoreDoesNotMoveASettledDocument() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice sent = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.CANCELLED, "4"));
+        StatementEInvoice cancelled =
+                service.refresh(TENANT, sent.id(), STAFF, "c").einvoice();
+
+        assertThat(store.recordState(
+                        cancelled.id(), cancelled.version(), "DOC-1", EInvoiceOperatorState.UNKNOWN, "5", NOW))
+                .isFalse();
+        assertThat(store.touchChecked(cancelled.id(), cancelled.version(), NOW)).isFalse();
+        assertThat(store.find(TENANT, sent.id()).orElseThrow().operatorState())
+                .isEqualTo(EInvoiceOperatorState.CANCELLED);
+    }
+
+    @Test
+    @DisplayName(
+            "a draft deleted at the operator holds its statement until staff release it, and then it can be sent again")
+    void aDraftDeletedAtTheOperatorIsReleasedByStaff() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        JdbcStatementStore statements = new JdbcStatementStore(jdbc);
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice sent = send(statement);
+
+        // Staff delete the draft in the operator's product to fix its classification; it is asked about next.
+        didox.states.add(EInvoiceStateOutcome.NotFound::new);
+        StatementEInvoice gone = service.refresh(TENANT, sent.id(), STAFF, "c").einvoice();
+        assertThat(gone.operatorState()).isEqualTo(EInvoiceOperatorState.UNKNOWN);
+        assertThat(gone.operatorStatus()).isEqualTo("NOT_FOUND_AT_OPERATOR");
+        assertThat(gone.live()).as("nothing but staff can free it").isTrue();
+        assertThat(statements.hasLiveEInvoice(TENANT, statement)).isTrue();
+        assertThatThrownBy(() -> send(statement))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "EINVOICE_LIVE"));
+        facts.clear();
+
+        StatementEInvoice released = service.release(
+                TENANT, gone.id(), gone.version(), STAFF, "draft deleted to correct its classification", "corr-r");
+
+        assertThat(released.operatorState()).isEqualTo(EInvoiceOperatorState.CANCELLED);
+        assertThat(released.operatorStatus()).as("a release says it is one").isEqualTo("RELEASED_BY_STAFF");
+        assertThat(released.operatorDocumentId())
+                .as("the record of what was sent is kept")
+                .isEqualTo("DOC-1");
+        assertThat(released.live()).isFalse();
+        assertThat(released.version()).isEqualTo(gone.version() + 1);
+        assertThat(statements.hasLiveEInvoice(TENANT, statement)).isFalse();
+        assertThat(facts.stream().map(AuditFact::actionCode)).containsExactly("commercial.einvoice.released");
+        AuditFact fact = facts.getFirst();
+        assertThat(fact.capabilityUsed()).isEqualTo("commercial.einvoice.send");
+        assertThat(fact.reason()).isEqualTo("draft deleted to correct its classification");
+        assertThat(fact.changeDocument().toString()).contains("UNKNOWN", "CANCELLED", "RELEASED_BY_STAFF");
+
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-2", EInvoiceOperatorState.DRAFT, "created"));
+        assertThat(send(statement).delivery()).as("free to be sent again").isEqualTo(EInvoiceDelivery.SUBMITTED);
+        assertThatThrownBy(() -> service.refresh(TENANT, released.id(), STAFF, "c"))
+                .as("a released document is settled and no answer moves it")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "SETTLED_AT_OPERATOR"));
+    }
+
+    @Test
+    @DisplayName("only a document the operator says it does not hold is released, at the version staff read")
+    void onlyAMissingDocumentIsReleased() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice held = send(statement);
+        facts.clear();
+
+        assertThatThrownBy(() -> service.release(TENANT, held.id(), held.version(), STAFF, "r", "c"))
+                .as("the operator holds it as a draft: nothing to release")
+                .isInstanceOfSatisfying(ApiException.class, refusal -> {
+                    assertThat(refusal.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+                    assertThat(refusal.properties()).containsEntry("reason", "NOT_RELEASABLE");
+                });
+
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.UNKNOWN, "5"));
+        StatementEInvoice unreadable =
+                service.refresh(TENANT, held.id(), STAFF, "c").einvoice();
+        assertThat(unreadable.operatorState()).isEqualTo(EInvoiceOperatorState.UNKNOWN);
+        facts.clear();
+        assertThatThrownBy(() -> service.release(TENANT, unreadable.id(), unreadable.version(), STAFF, "r", "c"))
+                .as("a status the adapter cannot read is a document the operator holds")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "NOT_RELEASABLE"));
+
+        didox.states.add(EInvoiceStateOutcome.NotFound::new);
+        StatementEInvoice gone = service.refresh(TENANT, held.id(), STAFF, "c").einvoice();
+        assertThat(gone.operatorStatus()).isEqualTo("NOT_FOUND_AT_OPERATOR");
+        facts.clear();
+        assertThatThrownBy(() -> service.release(TENANT, gone.id(), gone.version() - 1, STAFF, "r", "c"))
+                .as("the document moved since staff read it")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        stale -> assertThat(stale.errorCode()).isEqualTo(ErrorCode.STALE_VERSION));
+        assertThatThrownBy(() -> service.release(TENANT, UUID.randomUUID(), 0, STAFF, "r", "c"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        missing -> assertThat(missing.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+        assertThat(facts).as("a refusal leaves no fact").isEmpty();
+        assertThat(store.find(TENANT, gone.id()).orElseThrow().version()).isEqualTo(gone.version());
+
+        UUID second = statement("S-2026-10-000002", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Uncertain("READ_TIMEOUT", "lost"));
+        StatementEInvoice lost = send(second);
+        assertThat(lost.delivery()).isEqualTo(EInvoiceDelivery.UNCERTAIN);
+        assertThatThrownBy(() -> service.release(TENANT, lost.id(), lost.version(), STAFF, "r", "c"))
+                .as("a send whose answer was lost is resolved by asking, never by a release")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "NOT_RELEASABLE"));
     }
 
     @Test
@@ -1057,6 +1291,159 @@ class EInvoicingServiceTests {
         assertThat(statements.hasLiveEInvoice(TENANT, statement)).isFalse();
         assertThat(statements.voidStatement(TENANT, statement, "finance.staff", "wrong month", NOW))
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a send that overlaps a void in flight waits for it and finds a void statement: no invoice is sent for it")
+    void aSendWaitsForAVoidInFlight() throws Exception {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        CountDownLatch changed = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // The void: its check found nothing live, its UPDATE has run, and it has not committed yet.
+            Future<?> voiding = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                jdbc.sql("""
+                                UPDATE commercial.statements
+                                   SET status = 'VOID', voided_by = 'finance.staff', voided_at = now(), void_reason = 'wrong'
+                                 WHERE id = :id
+                                """).param("id", statement).update();
+                changed.countDown();
+                holdUntilSomeoneWaits(() -> count("commercial.statement_einvoices") > 0);
+            }));
+            assertThat(changed.await(15, TimeUnit.SECONDS)).isTrue();
+            Future<StatementEInvoice> sending = pool.submit(() -> send(statement));
+            voiding.get(40, TimeUnit.SECONDS);
+
+            assertThatThrownBy(() -> sending.get(40, TimeUnit.SECONDS))
+                    .as("the send read the statement as the void left it")
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            refusal ->
+                                    assertThat(refusal.properties()).containsEntry("reason", "STATEMENT_NOT_ISSUED"));
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(didox.sent)
+                .as("nothing was sent to an operator for a void statement")
+                .isEmpty();
+        assertThat(count("commercial.statement_einvoices")).isZero();
+        assertThat(jdbc.sql("SELECT status FROM commercial.statements WHERE id = :id")
+                        .param("id", statement)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("VOID");
+    }
+
+    @Test
+    @DisplayName(
+            "a void that overlaps a send in flight waits for it and is refused for the live invoice, not by the database")
+    void aVoidWaitsForASendInFlight() throws Exception {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        JdbcStatementStore statements = new JdbcStatementStore(jdbc);
+        StatementService voidService = new StatementService(
+                mock(JdbcSubscriptionStore.class),
+                mock(JdbcPlanStore.class),
+                mock(JdbcModuleStore.class),
+                statements,
+                mock(JdbcUsageStore.class),
+                mock(WalletService.class),
+                facts::add,
+                clock);
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        CountDownLatch attempted = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // The send: it holds the statement and has written its attempt, and has not committed yet.
+            Future<?> sending = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                assertThat(statements.lockShared(TENANT, statement)).isTrue();
+                jdbc.sql("""
+                                INSERT INTO commercial.statement_einvoices (
+                                    id, tenant_id, statement_id, installation_id, provider_type, legal_entity_id,
+                                    buyer_tin, buyer_name, seller_tin, document_number, document_date, currency,
+                                    net_minor, vat_minor, total_minor, classification_provisional, sent_document,
+                                    delivery, send_reason, sent_by, created_at, updated_at, version)
+                                VALUES (:id, :tenant, :statement, :didox, 'DIDOX', :company, '301234567', 'x',
+                                    '305000001', 'S-2026-09-000001', '2026-10-07', 'UZS', 100, 12, 112, true,
+                                    '{}'::jsonb, 'PENDING', 'r', 'someone', now(), now(), 0)
+                                """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenant", TENANT)
+                        .param("statement", statement)
+                        .param("didox", DIDOX_ID)
+                        .param("company", COMPANY)
+                        .update();
+                attempted.countDown();
+                holdUntilSomeoneWaits(() -> false);
+            }));
+            assertThat(attempted.await(15, TimeUnit.SECONDS)).isTrue();
+            Future<?> voiding = pool.submit(() -> transaction.executeWithoutResult(
+                    status -> voidService.voidStatement(TENANT, statement, STAFF, "wrong month", "c")));
+            sending.get(40, TimeUnit.SECONDS);
+
+            assertThatThrownBy(() -> voiding.get(40, TimeUnit.SECONDS))
+                    .as("the void saw the attempt once it committed")
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            refusal -> assertThat(refusal.properties()).containsEntry("reason", "EINVOICE_LIVE"));
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.sql("SELECT status FROM commercial.statements WHERE id = :id")
+                        .param("id", statement)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("ISSUED");
+        assertThat(count("commercial.statement_einvoices")).isEqualTo(1);
+    }
+
+    /**
+     * Holds the open transaction until the other one has run into it: a backend is waiting on a lock
+     * (it had to wait), or {@code itDidNotNeedTo} says it got through without. Giving up after a while
+     * only lets the assertions say what happened. {@code itDidNotNeedTo} runs inside the open
+     * transaction, so it must not be a question the transaction's own writes would answer.
+     */
+    private void holdUntilSomeoneWaits(BooleanSupplier itDidNotNeedTo) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        try {
+            while (System.nanoTime() < deadline) {
+                if (backendsWaitingOnALock() > 0 || itDidNotNeedTo.getAsBoolean()) {
+                    return;
+                }
+                Thread.sleep(20);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Asked on a connection of its own, outside any transaction: inside one, PostgreSQL serves
+     * {@code pg_stat_activity} from the snapshot it took at the first look, and a backend that began
+     * waiting afterwards is never seen.
+     */
+    private long backendsWaitingOnALock() {
+        try (java.sql.Connection connection = db.dataSource().getConnection();
+                java.sql.Statement statement = connection.createStatement();
+                java.sql.ResultSet rows = statement.executeQuery("""
+                        SELECT count(*) FROM pg_stat_activity
+                         WHERE datname = current_database() AND wait_event_type = 'Lock'
+                        """)) {
+            rows.next();
+            return rows.getLong(1);
+        } catch (java.sql.SQLException failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 
     // ----------------------------------------------------------------- fixtures

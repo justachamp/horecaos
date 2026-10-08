@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -33,6 +34,14 @@ import uz.horecaos.platform.commercial.domain.StatementEInvoice;
  */
 @Repository
 public class JdbcEInvoiceStore {
+
+    /**
+     * A document the operator has not settled. Signed, refused and cancelled are final: the sweep
+     * never asks about them, and no write moves one, so a refused attempt cannot come back into the
+     * live index beside the attempt that replaced it, and a signed invoice cannot be rewritten.
+     */
+    private static final String NOT_SETTLED =
+            "(operator_state IS NULL OR operator_state NOT IN ('SIGNED', 'REFUSED', 'CANCELLED'))";
 
     private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {};
 
@@ -333,6 +342,24 @@ public class JdbcEInvoiceStore {
                 .list();
     }
 
+    /**
+     * The identifiers the operators have given for the statement's <em>other</em> attempts. Every
+     * attempt for a statement carries the statement's number, so a lookup by number can meet the
+     * documents of earlier attempts; these are what it must set aside.
+     */
+    public Set<String> documentIdsOfOtherAttempts(UUID tenantId, UUID statementId, UUID exceptEinvoiceId) {
+        return Set.copyOf(jdbc.sql("""
+                        SELECT operator_document_id FROM commercial.statement_einvoices
+                         WHERE tenant_id = :tenantId AND statement_id = :statementId AND id <> :exceptId
+                           AND operator_document_id IS NOT NULL
+                        """)
+                .param("tenantId", tenantId)
+                .param("statementId", statementId)
+                .param("exceptId", exceptEinvoiceId)
+                .query(String.class)
+                .list());
+    }
+
     public List<StatementEInvoice> forTenant(UUID tenantId) {
         return jdbc.sql(EINVOICE + " WHERE tenant_id = :tenantId ORDER BY created_at DESC, id DESC")
                 .param("tenantId", tenantId)
@@ -344,11 +371,11 @@ public class JdbcEInvoiceStore {
     public List<StatementEInvoice> openDocuments(Instant checkedBefore, int limit) {
         return jdbc.sql(EINVOICE + """
                          WHERE delivery IN ('SUBMITTED', 'UNCERTAIN')
-                           AND (operator_state IS NULL OR operator_state NOT IN ('SIGNED', 'REFUSED', 'CANCELLED'))
+                           AND %s
                            AND (state_checked_at IS NULL OR state_checked_at < :checkedBefore)
                          ORDER BY state_checked_at NULLS FIRST, created_at
                          LIMIT :limit
-                        """)
+                        """.formatted(NOT_SETTLED))
                 .param("checkedBefore", utc(checkedBefore))
                 .param("limit", limit)
                 .query(this::einvoiceOf)
@@ -428,7 +455,9 @@ public class JdbcEInvoiceStore {
 
     /**
      * What the operator reported when asked. {@code state_changed_at} moves only when the
-     * state itself did; {@code state_checked_at} moves on every answer.
+     * state itself did; {@code state_checked_at} moves on every answer. A document the operator
+     * has settled (signed, refused, cancelled) is not moved by any answer: false, as for a lost
+     * version race.
      */
     public boolean recordState(
             UUID id,
@@ -446,8 +475,8 @@ public class JdbcEInvoiceStore {
                                                        THEN :now ELSE state_changed_at END,
                                operator_state = :state, operator_status = :rawStatus,
                                state_checked_at = :now, updated_at = :now, version = version + 1
-                         WHERE id = :id AND version = :expectedVersion
-                        """)
+                         WHERE id = :id AND version = :expectedVersion AND %s
+                        """.formatted(NOT_SETTLED))
                         .param("id", id)
                         .param("expectedVersion", expectedVersion)
                         .param("documentId", operatorDocumentId)
@@ -458,13 +487,16 @@ public class JdbcEInvoiceStore {
                 == 1;
     }
 
-    /** The operator was asked and had nothing to add (or could not answer): only the asking is recorded. */
+    /**
+     * The operator was asked and had nothing to add (or could not answer): only the asking is
+     * recorded. A settled document is not moved, and answers false like any write that lost.
+     */
     public boolean touchChecked(UUID id, long expectedVersion, Instant now) {
         return jdbc.sql("""
                         UPDATE commercial.statement_einvoices
                            SET state_checked_at = :now, updated_at = :now, version = version + 1
-                         WHERE id = :id AND version = :expectedVersion
-                        """)
+                         WHERE id = :id AND version = :expectedVersion AND %s
+                        """.formatted(NOT_SETTLED))
                         .param("id", id)
                         .param("expectedVersion", expectedVersion)
                         .param("now", utc(now))

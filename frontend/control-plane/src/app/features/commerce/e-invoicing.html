@@ -439,7 +439,8 @@
               <div class="actions left">
                 @if (
                   canSend() &&
-                  (attempt.delivery === 'SUBMITTED' || attempt.delivery === 'UNCERTAIN')
+                  (attempt.delivery === 'SUBMITTED' || attempt.delivery === 'UNCERTAIN') &&
+                  !settled(attempt)
                 ) {
                   <button
                     type="button"
@@ -450,10 +451,45 @@
                     {{ i18n.t('einvoicing.refresh') }}
                   </button>
                 }
+                @if (canSend() && missingAtOperator(attempt)) {
+                  <button
+                    type="button"
+                    class="release"
+                    [disabled]="busy()"
+                    (click)="startRelease(attempt)"
+                  >
+                    {{ i18n.t('einvoicing.release') }}
+                  </button>
+                }
                 <button type="button" class="link showDetail" (click)="showDetail(attempt)">
                   {{ attempt.documentNumber }}
                 </button>
               </div>
+              @if (missingAtOperator(attempt)) {
+                <p class="q-caption muted missingAtOperator">
+                  {{ i18n.t('einvoicing.attempt.notFound') }}
+                </p>
+              }
+              @if (releasing() === attempt.einvoiceId) {
+                <p class="q-caption muted">{{ i18n.t('einvoicing.release.hint') }}</p>
+                <span class="confirm">
+                  <input
+                    class="q-body-sm"
+                    name="releaseReason"
+                    [placeholder]="i18n.t('common.reason')"
+                    [value]="releaseReason()"
+                    (input)="releaseReason.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="confirmRelease"
+                    [disabled]="busy() || releaseReason().trim().length === 0"
+                    (click)="confirmRelease(attempt)"
+                  >
+                    {{ i18n.t('einvoicing.release.confirm') }}
+                  </button>
+                </span>
+              }
               @if (detail(); as sent) {
                 @if (sent.einvoiceId === attempt.einvoiceId) {
                   <table class="innerTable">

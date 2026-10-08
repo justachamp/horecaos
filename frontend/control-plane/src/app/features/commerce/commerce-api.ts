@@ -1245,6 +1245,25 @@ export class CommerceApi {
     );
   }
 
+  /**
+   * Releases a statement from a document the operator no longer holds, at the version staff read.
+   * Refused for any other attempt.
+   */
+  async releaseEInvoice(
+    tenantId: string,
+    einvoiceId: string,
+    version: number,
+    reason: string,
+  ): Promise<EInvoiceView> {
+    return firstValueFrom(
+      this.api.post<EInvoiceView>(
+        `/api/v1/platform-admin/commercial/tenants/${tenantId}/einvoices/${einvoiceId}/release`,
+        { reason },
+        { expectedVersion: version },
+      ),
+    );
+  }
+
   // ------------------------------------------------------------- arrears
 
   async arrears(): Promise<ArrearsBoardView> {

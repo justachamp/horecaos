@@ -293,6 +293,35 @@ class CommercialEInvoicingControllerTests {
         verify(service).suspendInstallation(eq(INSTALLATION), eq(6L), any(), eq("outage"), anyString());
     }
 
+    @Test
+    @DisplayName(
+            "a release reads the version from If-Match, hands the service the reason and the caller, and answers the attempt")
+    void releasingPassesWhatWasAsked() {
+        StatementEInvoice released = einvoice(EInvoiceDelivery.SUBMITTED, EInvoiceOperatorState.CANCELLED);
+        when(service.release(eq(TENANT), eq(released.id()), eq(7L), any(), eq("draft deleted"), anyString()))
+                .thenReturn(released);
+
+        ResponseEntity<CommercialEInvoicingController.EInvoiceView> response = controller.release(
+                TENANT,
+                released.id(),
+                new CommercialEInvoicingController.EInvoicingReasonRequest("draft deleted"),
+                ifMatch(7));
+
+        ArgumentCaptor<ActorRef> actor = ArgumentCaptor.forClass(ActorRef.class);
+        verify(service)
+                .release(eq(TENANT), eq(released.id()), eq(7L), actor.capture(), eq("draft deleted"), anyString());
+        assertThat(actor.getValue().subject()).isEqualTo("finance.staff");
+        assertThat(Objects.requireNonNull(response.getBody()).operatorState()).isEqualTo("CANCELLED");
+        assertThat(response.getHeaders().getETag()).isNotNull();
+        assertThatThrownBy(() -> controller.release(
+                        TENANT,
+                        released.id(),
+                        new CommercialEInvoicingController.EInvoicingReasonRequest("r"),
+                        new MockHttpServletRequest()))
+                .as("no blind release")
+                .isInstanceOf(ApiException.class);
+    }
+
     private static MockHttpServletRequest ifMatch(long version) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("If-Match", "W/\"" + version + "\"");

@@ -484,6 +484,14 @@ public class EInvoicingService {
     }
 
     private Prepared prepare(SendRequest request, ActorRef actor, String correlationId) {
+        // The statement row is locked before it is read, and the lock is held to the end of this
+        // transaction. A void that has changed the row but not committed makes this wait and then read
+        // the statement as it became; a void that comes later waits for this attempt to commit and then
+        // sees it. Without the lock both commit: the attempt's foreign key takes only a key-share lock,
+        // which the void's UPDATE does not conflict with, and V0516's trigger sees committed rows only.
+        if (!statements.lockShared(request.tenantId(), request.statementId())) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such statement");
+        }
         Statement statement = statements
                 .find(request.tenantId(), request.statementId())
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such statement"));
@@ -798,6 +806,16 @@ public class EInvoicingService {
 
     // ------------------------------------------------------------ the state
 
+    /** The code of a lookup that found only a document recorded against another attempt for the same statement. */
+    static final String ANOTHER_ATTEMPTS_DOCUMENT = "DOCUMENT_OF_ANOTHER_ATTEMPT";
+
+    /** The code of a refresh refused, or answered unread, because the operator has settled the document. */
+    static final String SETTLED_AT_OPERATOR = "SETTLED_AT_OPERATOR";
+
+    private static boolean settledAtOperator(StatementEInvoice row) {
+        return row.operatorState() != null && row.operatorState().settled();
+    }
+
     /** What asking the operator did: the document as it stands, and why nothing could be learned if so. */
     public record Refreshed(
             StatementEInvoice einvoice, @Nullable String unavailableCode) {}
@@ -813,6 +831,15 @@ public class EInvoicingService {
                     ErrorCode.UNPROCESSABLE_STATE,
                     "Nothing stands at an operator for an attempt that is " + row.delivery(),
                     Map.of("reason", "NOTHING_AT_OPERATOR"));
+        }
+        if (settledAtOperator(row)) {
+            // Signed, refused and cancelled are final. The sweep never asks about them, so neither does
+            // a click: an answer such as "not found" for a refused document would otherwise read as
+            // UNKNOWN, which stands as live again beside the attempt that replaced it.
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "The operator has settled this document as " + row.operatorState() + "; there is nothing to ask",
+                    Map.of("reason", SETTLED_AT_OPERATOR));
         }
         EInvoicingOperator operator = operators.get(row.providerType());
         EInvoicingInstallation installation = store.installation(row.installationId())
@@ -832,7 +859,8 @@ public class EInvoicingService {
                             row.operatorDocumentId(),
                             StatementEInvoice.clientReferenceOf(row.id()),
                             row.documentNumber(),
-                            row.documentDate()));
+                            row.documentDate(),
+                            store.documentIdsOfOtherAttempts(row.tenantId(), row.statementId(), row.id())));
         } catch (RuntimeException failure) {
             outcome = new EInvoiceStateOutcome.Unavailable(
                     "ADAPTER_FAILURE", failure.getClass().getSimpleName());
@@ -840,6 +868,66 @@ public class EInvoicingService {
         EInvoiceStateOutcome answer = outcome;
         return Objects.requireNonNull(
                 unitOfWork.execute(status -> applyState(row.tenantId(), row.id(), answer, actor, correlationId)));
+    }
+
+    /** The status recorded when the operator says it holds nothing under a document identifier we hold. */
+    static final String NOT_FOUND_AT_OPERATOR = "NOT_FOUND_AT_OPERATOR";
+
+    /** The status recorded when staff release a statement from a document the operator no longer holds. */
+    static final String RELEASED_BY_STAFF = "RELEASED_BY_STAFF";
+
+    /**
+     * Frees a statement from a document the operator no longer holds. Documents go out as drafts and
+     * are signed, or cancelled, in the operator's own product, so staff who delete a draft there to
+     * correct it leave an attempt the operator answers "not found" for: {@code UNKNOWN}, which is
+     * not settled and stands as the statement's live invoice, so it can be neither sent again nor
+     * voided. This is the act that ends it -- the attempt reads {@code CANCELLED} with the status
+     * {@link #RELEASED_BY_STAFF}, so it can never be mistaken for the operator's own cancellation.
+     *
+     * <p>Only an attempt the operator has itself said it does not hold is released, and at the
+     * version staff read: a document the operator holds, or reports in a status this adapter cannot
+     * read, is a document that may be signed, and releasing its statement would invite a second
+     * invoice. If the operator finds the document after all, the sweep moves the attempt out of
+     * {@code UNKNOWN} and the version the release was asked at is stale.
+     *
+     * @throws ApiException {@code NOT_RELEASABLE} for any other attempt; a stale version
+     */
+    public StatementEInvoice release(
+            UUID tenantId, UUID einvoiceId, long expectedVersion, ActorRef actor, String reason, String correlationId) {
+        return Objects.requireNonNull(unitOfWork.execute(status -> {
+            StatementEInvoice row = find(tenantId, einvoiceId);
+            checkVersion(row.version(), expectedVersion);
+            if (row.delivery() != EInvoiceDelivery.SUBMITTED
+                    || row.operatorState() != EInvoiceOperatorState.UNKNOWN
+                    || !NOT_FOUND_AT_OPERATOR.equals(row.operatorStatus())) {
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
+                        "Only a document the operator no longer holds is released; this one is " + row.delivery()
+                                + (row.operatorState() == null ? "" : "/" + row.operatorState()),
+                        Map.of("reason", "NOT_RELEASABLE"));
+            }
+            Instant now = clock.instant();
+            if (!store.recordState(
+                    row.id(),
+                    row.version(),
+                    Objects.requireNonNull(row.operatorDocumentId()),
+                    EInvoiceOperatorState.CANCELLED,
+                    RELEASED_BY_STAFF,
+                    now)) {
+                throw ApiException.staleVersion(row.version(), row.version() + 1);
+            }
+            Map<String, Object> before = new LinkedHashMap<>();
+            Map<String, Object> after = new LinkedHashMap<>();
+            diff(
+                    before,
+                    after,
+                    "operatorState",
+                    EInvoiceOperatorState.UNKNOWN.name(),
+                    EInvoiceOperatorState.CANCELLED.name());
+            diff(before, after, "operatorStatus", NOT_FOUND_AT_OPERATOR, RELEASED_BY_STAFF);
+            recordSend("commercial.einvoice.released", actor, row, reason, before, after, correlationId, now);
+            return find(tenantId, einvoiceId);
+        }));
     }
 
     /**
@@ -898,8 +986,20 @@ public class EInvoicingService {
             UUID tenantId, UUID einvoiceId, EInvoiceStateOutcome outcome, ActorRef actor, String correlationId) {
         StatementEInvoice row = find(tenantId, einvoiceId);
         Instant now = clock.instant();
+        if (settledAtOperator(row)) {
+            // Settled between asking and recording (another click, the sweep): the answer is not applied.
+            return new Refreshed(row, SETTLED_AT_OPERATOR);
+        }
         switch (outcome) {
             case EInvoiceStateOutcome.Known known -> {
+                if (row.operatorDocumentId() == null
+                        && store.documentIdsOfOtherAttempts(row.tenantId(), row.statementId(), row.id())
+                                .contains(known.operatorDocumentId())) {
+                    // Found by the statement's number, which every attempt for it shares, and the document
+                    // belongs to an attempt with a record of its own. Adopting it would give this attempt
+                    // that attempt's state (a refused one releases the statement for a duplicate send).
+                    return new Refreshed(row, ANOTHER_ATTEMPTS_DOCUMENT);
+                }
                 boolean differs = row.delivery() != EInvoiceDelivery.SUBMITTED
                         || row.operatorState() != known.state()
                         || !Objects.equals(row.operatorStatus(), known.rawStatus())
@@ -973,7 +1073,7 @@ public class EInvoicingService {
                             row.version(),
                             Objects.requireNonNull(row.operatorDocumentId()),
                             EInvoiceOperatorState.UNKNOWN,
-                            "NOT_FOUND_AT_OPERATOR",
+                            NOT_FOUND_AT_OPERATOR,
                             now)) {
                         throw ApiException.staleVersion(row.version(), row.version() + 1);
                     }

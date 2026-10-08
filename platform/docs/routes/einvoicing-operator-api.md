@@ -57,6 +57,19 @@ holds nothing under the statement's number five minutes after the send, the atte
 never signs. Somebody at HorecaOS signs and sends it from the operator's own product; the next
 refresh shows `SENT`, then `SIGNED` once the buyer signs, or `REFUSED`.
 
+**A draft was deleted at the operator to be corrected.** Every classification is provisional until
+finance confirms it, so a first draft may carry wrong codes or VAT, and staff delete it in the
+operator's product. The next refresh (or the sweep) finds nothing under the document's identifier
+and the attempt reads `UNKNOWN` with the status `NOT_FOUND_AT_OPERATOR`: still the statement's live
+invoice, so it can be neither sent again nor voided. In Control plane > E-invoicing the attempt
+says the operator no longer holds it and offers "Release statement". Releasing takes a reason, is
+audited as `commercial.einvoice.released` under `commercial.einvoice.send`, and records the attempt
+as `CANCELLED` with the status `RELEASED_BY_STAFF` (never the operator's own word for it); then the
+statement can be sent again or voided. Only an attempt the operator itself says it does not hold is
+released: a document the operator holds, or reports in a status the adapter cannot read, is not
+(422 `NOT_RELEASABLE`), because it may be signed. A signed, refused or cancelled document is final:
+refreshing it is refused (422 `SETTLED_AT_OPERATOR`) and no answer moves it.
+
 **An attempt is `FAILED` with `OPERATOR_REJECTED_DOCUMENT` or `PROVIDER_REJECTED`.** The operator
 refused the document; the failure text is its reason with long digit runs masked. Fix the cause
 (commonly the buyer's taxpayer number is not registered with the operator, or a classification
@@ -73,6 +86,11 @@ failed for one account. The breaker half-opens after 30s on its own. Suspending 
 **A statement cannot be voided ("has an e-invoice at an operator").** An invoice made from it stands
 at the operator, or may. Cancel the invoice in the operator's product, refresh its state until it
 reads `CANCELLED` or `REFUSED`, and void the statement then.
+A send and a void of the same statement are serialised on the statement's row (the send takes a
+share lock before it reads the statement, the void a change lock before it looks for a live
+invoice), so a void pressed while a send is in flight waits and is then refused for the invoice,
+and a send pressed while a void is in flight waits and is then refused because the statement is
+void; the database trigger stays as the backstop.
 
 ## Rollout
 

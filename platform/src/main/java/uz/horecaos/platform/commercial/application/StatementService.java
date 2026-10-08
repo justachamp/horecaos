@@ -257,6 +257,9 @@ public class StatementService {
 
     @Transactional
     public void voidStatement(UUID tenantId, UUID statementId, ActorRef actor, String reason, String correlationId) {
+        // Before the check below: a send in flight holds the row until it commits, and a send that
+        // starts after this holds off until the void does, so the check sees every attempt there is.
+        statements.lockForChange(tenantId, statementId);
         Statement statement = find(tenantId, statementId);
         if (statements.hasLiveEInvoice(tenantId, statementId)) {
             // ADR 0096: an invoice made from this statement stands at an e-invoicing

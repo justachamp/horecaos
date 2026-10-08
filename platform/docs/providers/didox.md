@@ -50,6 +50,15 @@ refresh shows `SENT`, then `SIGNED` or `REFUSED`.
   status under `status`, `doc_status`, `docStatus`, `statusId`; a create answered with no readable
   id is `Uncertain` (resolved by the number lookup), and a state with no readable status is
   `Unavailable`, never a default.
+* **What a lookup by number may conclude.** A create whose answer was lost is resolved by
+  `GET /v2/documents?name={number}`, and the platform frees the statement for a second send when
+  that lookup says "not found". So only a list that is positively there (`data`, a JSON array) and
+  empty reads as not found. A missing or differently nested list, a row whose number or identifier
+  this adapter cannot read, and a list of other numbers only (Didox may have ignored the filter) are
+  `Unavailable` (`STATE_UNREADABLE`), and the attempt stays held until a later lookup reads or a
+  person releases it. Every attempt for a statement shares its number, so the lookup is given the
+  document ids already recorded against the statement's other attempts and sets those aside; two
+  documents under the number that no earlier attempt accounts for are `STATE_AMBIGUOUS`, never a pick.
 * **A callback.** If Didox pushes state changes, nothing here listens: the state is polled (every 15
   minutes for documents not yet signed, refused or cancelled).
 * **Cancelling.** No cancel call is made; cancelling needs the operator's signers. A cancelled
