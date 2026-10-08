@@ -71,9 +71,13 @@ public class ArrearsController {
             summary = "Tenants in arrears, longest first",
             description = "Past-due and suspended subscriptions with how long each has been there and "
                     + "the last statement issued, beside what each stage restricts. owed is what the tenant "
-                    + "still owes on issued statements; paidInFull is true when it owes nothing, which is the "
-                    + "cue to restore it — nothing moves a subscription by itself (ADR 0089), so moving a tenant "
-                    + "between stages stays the subscription transition, with its reason.")
+                    + "still owes on issued statements, and depositDue the activation deposit it owes beside "
+                    + "them, which is on no statement; paidInFull is true when it owes neither. For a PAST_DUE "
+                    + "tenant, whose stage is about money by definition, that is the cue to restore it. For a "
+                    + "SUSPENDED one it is a fact and not a cue: the suspension's reason is free text, so the "
+                    + "platform cannot tell whether paying addressed it — nothing moves a subscription by "
+                    + "itself (ADR 0089), so moving a tenant between stages stays the subscription transition, "
+                    + "with its reason.")
     public ResponseEntity<ArrearsBoardView> board() {
         Instant now = clock.instant();
         ArrearsService.Board board = arrears.board();
@@ -186,9 +190,12 @@ public class ArrearsController {
             @Nullable String suspensionReason,
             @Nullable LatestStatementView latestStatement,
             @Nullable OwedView owed,
+            @Nullable ApiMoney depositDue,
             boolean paidInFull) {
 
         static ArrearView of(ArrearRow row, @Nullable Statement latest, @Nullable OpenDue owed, Instant now) {
+            ApiMoney depositDue =
+                    row.depositDueMinor() > 0 ? ApiMoney.of(row.depositDueMinor(), row.planCurrency()) : null;
             return new ArrearView(
                     row.tenantId(),
                     row.tenantName(),
@@ -203,7 +210,8 @@ public class ArrearsController {
                     row.suspensionReason(),
                     latest == null ? null : LatestStatementView.of(latest),
                     OwedView.of(owed),
-                    owed == null);
+                    depositDue,
+                    owed == null && depositDue == null);
         }
     }
 

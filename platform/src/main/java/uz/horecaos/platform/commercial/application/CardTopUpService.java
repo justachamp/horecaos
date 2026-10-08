@@ -200,6 +200,20 @@ public class CardTopUpService {
             count("unanswered");
             return topUps.find(tenantId, id).orElseThrow();
         }
+        if (retried && CardCharger.saysNothingAboutAnAttemptAlreadyAsked(outcome)) {
+            // Asked before, under an account that is not answering now (suspended or replaced): the first ask
+            // may have moved the money and lost the answer, and the account in front of us never saw the key.
+            // That is not a decline and not "not configured"; settling it either way would be final. It stays
+            // PENDING, and resolves when the account that holds the key is active again. Never the token, never
+            // the amount beside a tenant (ADR 0028, ADR 0029).
+            log.warn(
+                    "A card top-up {} of tenant {} was asked under a merchant account that is not the active one; "
+                            + "it stays pending until that account is active again",
+                    id,
+                    tenantId);
+            count("stranded");
+            return topUps.find(tenantId, id).orElseThrow();
+        }
         return Objects.requireNonNull(unitOfWork.execute(status -> record(tenantId, opened, outcome, actor)));
     }
 

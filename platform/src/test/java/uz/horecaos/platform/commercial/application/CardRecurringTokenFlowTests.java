@@ -302,7 +302,7 @@ class CardRecurringTokenFlowTests extends WalletBillingFixture {
 
         inTx(() -> installations.suspend(id, 1, MAKER, "x", "c"));
         PlatformCardInstallationService strictInstallations =
-                new PlatformCardInstallationService(installationStore, strict, audit, clock);
+                new PlatformCardInstallationService(installationStore, strict, topUpStore, attemptStore, audit, clock);
         UUID second = inTx(() -> strictInstallations.create(
                 FakeCardProvider.PROVIDER_TYPE, null, "Another", null, null, Map.of(), MAKER, "x", "c"));
         assertThatThrownBy(() -> inTx(() -> strictInstallations.activate(second, 0, MAKER, "x", "c")))
@@ -378,8 +378,8 @@ class CardRecurringTokenFlowTests extends WalletBillingFixture {
                 """).update();
         PlatformCardGateway withRealType =
                 new PlatformCardGateway(installationStore, List.of(fake, new StandInAdapter()), true);
-        PlatformCardInstallationService service =
-                new PlatformCardInstallationService(installationStore, withRealType, audit, clock);
+        PlatformCardInstallationService service = new PlatformCardInstallationService(
+                installationStore, withRealType, topUpStore, attemptStore, audit, clock);
         String secret = "horecaos:production:provider_payment:platform:w6-test";
 
         assertThatThrownBy(() ->

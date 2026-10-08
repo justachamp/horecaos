@@ -169,5 +169,17 @@ describe('CommerceApi billing setup, invoices and top-ups', () => {
     expect(suspension.request.body).toEqual({ expectedVersion: 5, reason: 'provider outage' });
     suspension.flush({ status: 'SUSPENDED' });
     await suspended;
+
+    const acknowledged = api.suspendCardInstallation('ci-1', 5, 'provider outage', true);
+    const acknowledgedSuspension = http.expectOne(
+      url('/api/v1/platform-admin/commercial/billing/card-installations/ci-1/suspension'),
+    );
+    expect(acknowledgedSuspension.request.body).toEqual({
+      expectedVersion: 5,
+      reason: 'provider outage',
+      acknowledgeUnresolvedCharges: true,
+    });
+    acknowledgedSuspension.flush({ status: 'SUSPENDED' });
+    await acknowledged;
   });
 });

@@ -246,6 +246,40 @@ class CommercialWalletSelfServiceEndpointTests {
     }
 
     @Test
+    void theStaffOverviewOfAWalletSaysWhichCardAndNeverWhichReference() throws Exception {
+        String installationId = staffActivatesTheFake();
+        ownerBindsCard(FakeCardProvider.APPROVING_CARD);
+        String storedReference = jdbc.sql(
+                        "SELECT card_token_reference FROM commercial.tenant_billing" + " WHERE tenant_id = :tenant")
+                .param("tenant", TENANT)
+                .query(String.class)
+                .single();
+        assertThat(storedReference)
+                .as("the premise: the column holds the installation and the provider's vault token")
+                .startsWith(installationId + ":")
+                .contains("fake_card_");
+
+        MvcResult read = mvc.perform(get("/api/v1/control-plane/tenants/" + TENANT + "/wallet")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        String body = read.getResponse().getContentAsString();
+        assertThat(body)
+                .as("a support agent with commercial.wallet.read sees which card, never which reference")
+                .doesNotContain(storedReference)
+                .doesNotContain("fake_card_")
+                .doesNotContain(installationId);
+        JsonNode view = JSON.readTree(body);
+        assertThat(view.get("cardTokenReference").isNull())
+                .as("the field stays, so no client breaks (ADR 0031), and is always null")
+                .isTrue();
+        assertThat(view.get("card").get("last4").asString()).isEqualTo("4242");
+        assertThat(view.get("card").get("lapsed").asBoolean()).isFalse();
+        assertThat(view.get("hasCard").asBoolean()).isTrue();
+    }
+
+    @Test
     void withNoMerchantAccountTheTenantIsToldCardsAreNotAvailableYet() throws Exception {
         MvcResult refused = mvc.perform(post(WALLET + "/card/enrolments")
                         .with(tokenFor(OWNER))
@@ -430,6 +464,40 @@ class CommercialWalletSelfServiceEndpointTests {
                 .isEqualTo("INVOICE");
     }
 
+    @Test
+    void staffAreToldWhichChargesAreStillWaitingBeforeTheyReplaceTheAccountAndMayAcknowledgeIt() throws Exception {
+        String installationId = staffActivatesTheFake();
+        ownerBindsCard(FakeCardProvider.UNANSWERING_CARD);
+        String pending = postAs(OWNER, WALLET + "/top-ups", "idem-pending", "{\"amountMinor\":400000}", 200);
+        assertThat(JSON.readTree(pending).get("outcome").asString()).isEqualTo("PENDING");
+        String suspension = STAFF_BASE + "/billing/card-installations/" + installationId + "/suspension";
+
+        // The console's body: the version and the reason, and nothing about acknowledging.
+        String refused = staffPost(suspension, "idem-s1", "{\"expectedVersion\":1,\"reason\":\"replacing it\"}", 409);
+
+        assertThat(refused)
+                .contains("UNRESOLVED_CARD_CHARGES")
+                .as("how many, so the person knows what they would be leaving")
+                .contains("unresolvedTopUps");
+        assertThat(JSON.readTree(mvc.perform(get("/api/v1/control-plane/billing/card-installations")
+                                        .with(tokenFor(STAFF)))
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString())
+                        .get(0)
+                        .get("status")
+                        .asString())
+                .as("nothing moved")
+                .isEqualTo("ACTIVE");
+
+        String suspended = staffPost(
+                suspension,
+                "idem-s2",
+                "{\"expectedVersion\":1,\"reason\":\"the account is unreachable\",\"acknowledgeUnresolvedCharges\":true}",
+                200);
+        assertThat(JSON.readTree(suspended).get("status").asString()).isEqualTo("SUSPENDED");
+    }
+
     // --------------------------------------------------------------------- invoices
 
     @Test
@@ -596,6 +664,37 @@ class CommercialWalletSelfServiceEndpointTests {
                 .isEqualTo(403);
     }
 
+    @Test
+    void theBoardDoesNotSayPaidInFullWhileTheActivationDepositIsStillDue() throws Exception {
+        staffActivatesTheFake();
+        ownerBindsCard(FakeCardProvider.APPROVING_CARD);
+        UUID versionId = activePlan(300_000L);
+        clock.set(OCTOBER);
+        subscriptions.start(TENANT, versionId, null, ActorRef.user(STAFF, null), "pilot", "c");
+        clock.set(Instant.parse("2026-11-05T09:00:00Z"));
+        statements.issue(TENANT, "2026-10", ActorRef.user(STAFF, null), "October close", "c");
+        moveToPastDue();
+
+        postAs(OWNER, WALLET + "/top-ups", "idem-stmt", "{\"amountMinor\":" + MONTHLY + "}", 200);
+
+        JsonNode row = boardRow(STAFF);
+        assertThat(row.get("owed").isNull())
+                .as("every issued statement is paid")
+                .isTrue();
+        assertThat(row.get("paidInFull").asBoolean())
+                .as("the activation deposit is owed beside the statements, so this tenant has not paid in full")
+                .isFalse();
+        assertThat(row.get("depositDue").get("amountMinor").asLong())
+                .as("and the board says what is still due")
+                .isEqualTo(300_000L);
+        assertThat(row.get("depositDue").get("currency").asString()).isEqualTo("UZS");
+        assertThat(jdbc.sql(
+                                "SELECT count(*) FROM audit.audit_events WHERE action_code = 'commercial.arrears.paid_in_full'")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // --------------------------------------------------------------------- fixtures
 
     private JsonNode boardRow(String subject) throws Exception {
@@ -626,6 +725,10 @@ class CommercialWalletSelfServiceEndpointTests {
     }
 
     private UUID activePlan() {
+        return activePlan(0);
+    }
+
+    private UUID activePlan(long activationDepositMinor) {
         UUID planId = plans.createPlan("WALLET_EP", "Wallet endpoint plan", ActorRef.user(STAFF, null), "prices", "c");
         UUID versionId = plans.draftVersion(
                 planId,
@@ -634,7 +737,7 @@ class CommercialWalletSelfServiceEndpointTests {
                 "MONTHLY",
                 null,
                 Map.of(),
-                new PlanTerms(null, 0, Map.of()),
+                new PlanTerms(null, activationDepositMinor, Map.of()),
                 ActorRef.user(STAFF, null),
                 "prices",
                 "c");

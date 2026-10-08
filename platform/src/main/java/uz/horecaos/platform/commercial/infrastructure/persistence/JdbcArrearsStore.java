@@ -31,7 +31,8 @@ public class JdbcArrearsStore {
     public List<ArrearRow> board() {
         return jdbc.sql("""
                         SELECT s.id, s.tenant_id, t.display_name, s.status, s.status_changed_at,
-                               s.suspension_reason, s.version, p.code AS plan_code, v.version_number
+                               s.suspension_reason, s.version, s.deposit_due_minor, p.code AS plan_code,
+                               v.version_number, v.currency AS plan_currency
                           FROM commercial.subscriptions s
                           JOIN tenant.tenants t ON t.id = s.tenant_id
                           JOIN commercial.plan_versions v ON v.id = s.plan_version_id
@@ -53,7 +54,8 @@ public class JdbcArrearsStore {
     public Optional<ArrearRow> forTenant(UUID tenantId) {
         return jdbc.sql("""
                         SELECT s.id, s.tenant_id, t.display_name, s.status, s.status_changed_at,
-                               s.suspension_reason, s.version, p.code AS plan_code, v.version_number
+                               s.suspension_reason, s.version, s.deposit_due_minor, p.code AS plan_code,
+                               v.version_number, v.currency AS plan_currency
                           FROM commercial.subscriptions s
                           JOIN tenant.tenants t ON t.id = s.tenant_id
                           JOIN commercial.plan_versions v ON v.id = s.plan_version_id
@@ -82,7 +84,10 @@ public class JdbcArrearsStore {
                 .list();
     }
 
-    /** One subscription on the arrears board. */
+    /**
+     * One subscription on the arrears board. {@code depositDueMinor} is the activation deposit still owed beside
+     * the statements, in {@code planCurrency}.
+     */
     public record ArrearRow(
             UUID subscriptionId,
             UUID tenantId,
@@ -91,8 +96,10 @@ public class JdbcArrearsStore {
             Instant since,
             @Nullable String suspensionReason,
             long version,
+            long depositDueMinor,
             String planCode,
-            int versionNumber) {}
+            int versionNumber,
+            String planCurrency) {}
 
     private static ArrearRow row(ResultSet row, int number) throws SQLException {
         return new ArrearRow(
@@ -103,7 +110,9 @@ public class JdbcArrearsStore {
                 row.getObject("status_changed_at", OffsetDateTime.class).toInstant(),
                 row.getString("suspension_reason"),
                 row.getLong("version"),
+                row.getLong("deposit_due_minor"),
                 row.getString("plan_code"),
-                row.getInt("version_number"));
+                row.getInt("version_number"),
+                row.getString("plan_currency"));
     }
 }

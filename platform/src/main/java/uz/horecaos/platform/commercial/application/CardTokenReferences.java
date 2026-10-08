@@ -21,6 +21,14 @@ public final class CardTokenReferences {
 
     private static final int UUID_LENGTH = 36;
 
+    /**
+     * What a charge is declined with when its reference was minted under a merchant account that is not
+     * the active one. Nothing was sent to a provider, so for a fresh charge it is a plain refusal; for an
+     * attempt already asked under the old account it is the opposite of an answer (see {@link
+     * CardCharger#charge}'s callers), which is why it is named once and compared by value.
+     */
+    public static final String BOUND_UNDER_ANOTHER_ACCOUNT = "CARD_BOUND_UNDER_ANOTHER_MERCHANT_ACCOUNT";
+
     private CardTokenReferences() {}
 
     public static String compose(UUID installationId, String providerToken) {

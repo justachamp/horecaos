@@ -368,7 +368,27 @@ export interface WalletOverviewView {
   /** What the live grants have left between them: the bonus money a statement can actually spend. */
   readonly bonusSpendableBalance: Money;
   readonly paymentMethod: 'INVOICE' | 'WALLET' | 'CARD' | (string & {});
+  /**
+   * Always null. The field stays so no client breaks, but the reference is the card adapter's alone:
+   * for a card the tenant bound itself it carries the merchant installation and the provider's vault
+   * token, and no screen or log line may reach it.
+   */
   readonly cardTokenReference: string | null;
+  /** Whether a card is on file, which is all a card typed in by staff can say about itself. */
+  readonly hasCard: boolean;
+  /** Which card, as the provider's own form reported it; null when none is on file. */
+  readonly card: WalletCardView | null;
+}
+
+/** What is safe to say about a card on file: never which reference it is. */
+export interface WalletCardView {
+  readonly last4: string | null;
+  readonly brand: string | null;
+  readonly expiryMonth: number | null;
+  readonly expiryYear: number | null;
+  readonly lapsed: boolean;
+  readonly lapsesSoon: boolean;
+  readonly boundAt: string | null;
 }
 
 /** One entry of the append-only ledger. Nothing ever edits or deletes one. */
@@ -559,9 +579,17 @@ export interface ArrearView {
    */
   readonly owed: { readonly due: Money; readonly openStatements: number } | null;
   /**
-   * True when the tenant owes nothing: the cue that whoever restores it can
-   * now do so. Nothing moves a subscription by itself (ADR 0089), so this is
-   * only a signal.
+   * The activation deposit the tenant still owes beside its statements, which is
+   * on none of them, or null when none is due.
+   */
+  readonly depositDue: Money | null;
+  /**
+   * True when the tenant owes neither a statement nor its deposit. For a
+   * PAST_DUE tenant, whose stage is about money by definition, that is the cue
+   * that whoever restores it can now do so. For a SUSPENDED one it is a fact and
+   * not a cue: the suspension's reason is free text, so nothing can say whether
+   * paying addressed it. Nothing moves a subscription by itself (ADR 0089), so
+   * this is only a signal.
    */
   readonly paidInFull: boolean;
 }
@@ -1076,16 +1104,29 @@ export class CommerceApi {
     );
   }
 
-  /** Every card tenant is then collected like an invoice tenant until an account is active. */
+  /**
+   * Every card tenant is then collected like an invoice tenant until an account is active.
+   *
+   * Refused with `UNRESOLVED_CARD_CHARGES` while top-ups or statement charges asked through the account
+   * have no answer yet: the account that replaces it cannot say whether they took the money.
+   * `acknowledgeUnresolvedCharges` suspends anyway, for an account that cannot answer; the charges then
+   * stay pending, never declined, and resolve when the account is active again.
+   */
   async suspendCardInstallation(
     installationId: string,
     expectedVersion: number,
     reason: string,
+    acknowledgeUnresolvedCharges = false,
   ): Promise<CardInstallationView> {
     return firstValueFrom(
       this.api.post<CardInstallationView>(
         `/api/v1/platform-admin/commercial/billing/card-installations/${installationId}/suspension`,
-        { expectedVersion, reason },
+        // Absent, not false: the console's ordinary body stays the version and the reason.
+        {
+          expectedVersion,
+          reason,
+          ...(acknowledgeUnresolvedCharges ? { acknowledgeUnresolvedCharges: true } : {}),
+        },
       ),
     );
   }

@@ -94,9 +94,21 @@
                   <!--
                     The cue, not the act: ADR 0089 says nothing moves a subscription by itself, so a tenant that
                     has paid what it owed keeps its stage until a person decides, and this is how that person is told.
+                    Only a PAST_DUE stage is about money by definition. A suspension's reason is free text, so for
+                    one the board says the fact (nothing is owed) and sends the reader to the reason, not to "restore".
                   -->
-                  <span class="chip live paidInFull">{{ i18n.t('dunning.paidInFull') }}</span>
-                  <div class="q-caption muted">{{ i18n.t('dunning.paidInFull.hint') }}</div>
+                  @if (arrear.status === 'PAST_DUE') {
+                    <span class="chip live paidInFull">{{ i18n.t('dunning.paidInFull') }}</span>
+                    <div class="q-caption muted">{{ i18n.t('dunning.paidInFull.hint') }}</div>
+                  } @else {
+                    <span class="chip nothingOwed">{{ i18n.t('dunning.nothingOwed') }}</span>
+                    <div class="q-caption muted">{{ i18n.t('dunning.nothingOwed.hint') }}</div>
+                  }
+                }
+                @if (arrear.depositDue; as deposit) {
+                  <div class="depositDue">
+                    {{ i18n.t('dunning.depositDue', { amount: i18n.moneyOrRaw(deposit) }) }}
+                  </div>
                 }
               </td>
               <td class="q-body-sm actions">

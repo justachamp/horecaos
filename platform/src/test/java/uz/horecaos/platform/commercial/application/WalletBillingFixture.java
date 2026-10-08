@@ -197,7 +197,8 @@ abstract class WalletBillingFixture {
         subscriptions = new SubscriptionService(subscriptionStore, planStore, entitlements, audit, clock);
         statements = new StatementService(
                 subscriptionStore, planStore, moduleStore, statementStore, usageStore, wallet, audit, clock);
-        installations = new PlatformCardInstallationService(installationStore, gateway, audit, clock);
+        installations =
+                new PlatformCardInstallationService(installationStore, gateway, topUpStore, attemptStore, audit, clock);
         cardOnFile = new CardOnFileService(walletStore, topUpStore, attemptStore, gateway, audit, transactions, clock);
         topUps = new CardTopUpService(topUpStore, walletStore, wallet, gateway, audit, meters, transactions, clock);
         billingSettings = new PlatformBillingSettingsService(settingsStore, approvals, audit, clock);
@@ -248,13 +249,24 @@ abstract class WalletBillingFixture {
     }
 
     void startOnPlan(UUID tenantId, Instant startAt, long monthlyMinor) {
+        startOnPlan(tenantId, startAt, monthlyMinor, 0);
+    }
+
+    /** A plan that asks an activation deposit, which is owed beside the statements and not on one. */
+    void startOnPlan(UUID tenantId, Instant startAt, long monthlyMinor, long activationDepositMinor) {
         clock.set(startAt);
         UUID versionId = activePlan(
-                "PLAN_" + tenantId.toString().substring(30).toUpperCase().replace("-", "_"), monthlyMinor);
+                "PLAN_" + tenantId.toString().substring(30).toUpperCase().replace("-", "_"),
+                monthlyMinor,
+                activationDepositMinor);
         inTx(() -> subscriptions.start(tenantId, versionId, null, MAKER, "the pilot", "corr"));
     }
 
     UUID activePlan(String planCode, long monthlyMinor) {
+        return activePlan(planCode, monthlyMinor, 0);
+    }
+
+    UUID activePlan(String planCode, long monthlyMinor, long activationDepositMinor) {
         UUID planId = inTx(() -> plans.createPlan(planCode, planCode, MAKER, "the price list", "corr"));
         UUID versionId = inTx(() -> plans.draftVersion(
                 planId,
@@ -263,7 +275,7 @@ abstract class WalletBillingFixture {
                 "MONTHLY",
                 null,
                 Map.of(),
-                new PlanTerms(null, 0, Map.of()),
+                new PlanTerms(null, activationDepositMinor, Map.of()),
                 MAKER,
                 "the 2026 prices",
                 "corr"));

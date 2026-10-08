@@ -9,10 +9,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,12 +29,14 @@ import uz.horecaos.platform.commercial.application.PrepaymentInvoiceService;
 import uz.horecaos.platform.commercial.application.WalletService;
 import uz.horecaos.platform.commercial.application.WalletService.WalletChangeOutcome;
 import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
+import uz.horecaos.platform.commercial.domain.CardOnFile;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.PrepaymentInvoice;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
 import uz.horecaos.platform.commercial.domain.WalletBalances;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
+import uz.horecaos.platform.commercial.web.CommercialOperationsWalletController.CardOnFileView;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -71,18 +76,21 @@ public class CommercialWalletController {
     private final CardTopUpService topUps;
     private final CurrentActor currentActor;
     private final Clock clock;
+    private final Duration expiryWarning;
 
     public CommercialWalletController(
             WalletService wallet,
             PrepaymentInvoiceService invoices,
             CardTopUpService topUps,
             CurrentActor currentActor,
-            Clock clock) {
+            Clock clock,
+            @Value("${horecaos.commercial.wallet.expiry-warning-days:14}") int expiryWarningDays) {
         this.wallet = wallet;
         this.invoices = invoices;
         this.topUps = topUps;
         this.currentActor = currentActor;
         this.clock = clock;
+        this.expiryWarning = Duration.ofDays(expiryWarningDays);
     }
 
     // ------------------------------------------------------------------- reads
@@ -95,16 +103,23 @@ public class CommercialWalletController {
                     + "bonusSpendableBalance is the part of the bonus balance a statement could draw on now — "
                     + "the sum of the live grants' remainders. It is lower than bonusBalance between a grant's "
                     + "expiry and the hourly sweep that lapses it, and after a voided statement hands a draw "
-                    + "back to a grant that has already expired.")
+                    + "back to a grant that has already expired. The card on file is described by its last "
+                    + "four digits, brand and expiry only: its token reference, which for a card the tenant "
+                    + "bound itself carries the merchant installation and the provider's vault token, is "
+                    + "never returned, so cardTokenReference is always null (ADR 0028).")
     public ResponseEntity<WalletOverviewView> overview(@PathVariable UUID tenantId) {
+        Instant now = clock.instant();
         WalletBalances balances = wallet.balances(tenantId);
         TenantBilling billing = wallet.billing(tenantId);
+        Optional<CardOnFile> card = wallet.cardOnFile(tenantId);
         return ResponseEntity.ok(new WalletOverviewView(
                 ApiMoney.of(balances.paidMinor(), balances.currency()),
                 ApiMoney.of(balances.bonusMinor(), balances.currency()),
                 ApiMoney.of(wallet.spendableBonusMinor(tenantId), balances.currency()),
                 billing.paymentMethod().name(),
-                billing.cardTokenReference()));
+                null,
+                card.isPresent(),
+                card.map(found -> CardOnFileView.of(found, now, expiryWarning)).orElse(null)));
     }
 
     @GetMapping("/api/v1/control-plane/tenants/{tenantId}/wallet/ledger")
@@ -359,13 +374,20 @@ public class CommercialWalletController {
     /**
      * @param bonusBalance          the ledger's own SUM of BONUS entries, which has no clock in it
      * @param bonusSpendableBalance what a statement could draw on right now: the live grants' remainders
+     * @param cardTokenReference    always null. The field stays so no client breaks (ADR 0031), but the
+     *                              reference is the adapter's alone (ADR 0028): a tenant-bound card's is the
+     *                              merchant installation id and the provider's vault token
+     * @param hasCard               whether a card is on file, which is all a card typed in by staff can say
+     * @param card                  which card, as the provider's form reported it, never which reference
      */
     public record WalletOverviewView(
             ApiMoney paidBalance,
             ApiMoney bonusBalance,
             ApiMoney bonusSpendableBalance,
             String paymentMethod,
-            @Nullable String cardTokenReference) {}
+            @Nullable String cardTokenReference,
+            boolean hasCard,
+            @Nullable CardOnFileView card) {}
 
     public record WalletEntryView(
             UUID entryId,

@@ -15,6 +15,17 @@ import org.jspecify.annotations.Nullable;
  * <p>The idempotency contract on {@link #charge} is the one {@link CardCharger}
  * documents, and it is the adapter's to keep: a repeated key is the same attempt,
  * never a new charge.
+ *
+ * <p>So is its other half: <strong>a charge outlives its card.</strong> A tenant may
+ * replace its card while a charge asked on the old one has no answer yet, and the
+ * old reference is revoked at once (ADR 0095: the attempt keeps its own key and
+ * card, and is not refused the replacement). {@link #status} and a replay of
+ * {@link #charge} under the same key must go on answering for that attempt after
+ * {@link #revoke}, because what a card paid is a record of the merchant account and
+ * not of the card. An adapter that forgets a charge with its card turns money taken
+ * into money never recorded, which nothing in HorecaOS can see from the outside;
+ * {@code FakeCardProviderTests} states the clause and a real adapter is run against
+ * it in the provider's sandbox before it is activated.
  */
 public interface CardProviderAdapter {
 

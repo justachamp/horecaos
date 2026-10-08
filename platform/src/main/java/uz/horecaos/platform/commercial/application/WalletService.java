@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -393,7 +394,8 @@ public class WalletService {
                 .occurredAt(now)
                 .build());
 
-        applyAvailableFunds(tenantId);
+        // The deposit fell due with the subscription, before any stage it can be in now.
+        applyFunds(tenantId, List.of(Instant.EPOCH));
         return id;
     }
 
@@ -919,11 +921,24 @@ public class WalletService {
      */
     @Transactional
     public long applyAvailableFunds(UUID tenantId) {
+        return applyFunds(tenantId, List.of());
+    }
+
+    /**
+     * @param alsoCleared when each obligation this call's caller has just paid outside the statements (an
+     *     activation deposit) first fell due, so that clearing it can be told with the statements this pass
+     *     pays and not twice
+     */
+    private long applyFunds(UUID tenantId, List<Instant> alsoCleared) {
         Instant now = clock.instant();
         wallet.lockBilling(tenantId, now);
         String currency = wallet.currencyOf(tenantId);
         List<StatementPayment> open = wallet.openStatementsOldestFirst(tenantId, currency);
+        List<Instant> cleared = new ArrayList<>(alsoCleared);
         if (open.isEmpty()) {
+            if (!cleared.isEmpty()) {
+                noteArrearsClearedByPayment(tenantId, currency, now, cleared);
+            }
             return 0;
         }
 
@@ -940,6 +955,7 @@ public class WalletService {
             if (remainingDue <= 0) {
                 continue;
             }
+            long dueBefore = remainingDue;
             for (BonusGrantBalance grant : grants) {
                 if (remainingDue <= 0) {
                     break;
@@ -993,9 +1009,12 @@ public class WalletService {
                 remainingDue -= draw;
                 totalPaid += draw;
             }
+            if (remainingDue < dueBefore) {
+                cleared.add(statement.issuedAt());
+            }
         }
-        if (totalPaid > 0) {
-            noteArrearsClearedByPayment(tenantId, currency, now);
+        if (!cleared.isEmpty()) {
+            noteArrearsClearedByPayment(tenantId, currency, now, cleared);
         }
         return totalPaid;
     }
@@ -1006,33 +1025,52 @@ public class WalletService {
      * <p>It only says it. ADR 0089 decided that nothing moves a subscription by itself and that lateness
      * is a conversation, so restoring the subscription stays the staff transition it always was; what
      * this adds is that the person holding that conversation is told the tenant has paid, on the
-     * activity log and on the dunning board, instead of finding out by asking. Written when a payment
-     * is what cleared it, never when a pass finds nothing to pay, so one clearing is one fact.
+     * activity log and on the dunning board, instead of finding out by asking.
+     *
+     * <p><strong>Owing nothing is more than having no open statement.</strong> An activation deposit is
+     * owed beside the statements and is on none of them ({@code subscriptions.deposit_due_minor}), so a
+     * tenant with every statement paid and its deposit outstanding has not paid in full.
+     *
+     * <p><strong>One clearing is one fact.</strong> It is written when a payment settles something the
+     * tenant already owed when it went late: a statement issued at or before the moment its stage began,
+     * or the deposit. A statement issued after that moment and paid at issue from the money left over is
+     * not what made the tenant late, and saying "paid in full" again for each such month would make the
+     * fact mean "a statement was paid", which the ledger already says.
+     *
+     * @param clearedIssuedAt when each obligation this payment settled first fell due
      */
-    private void noteArrearsClearedByPayment(UUID tenantId, String currency, Instant now) {
-        Optional<Subscription> live = subscriptions.findLive(tenantId);
+    private void noteArrearsClearedByPayment(
+            UUID tenantId, String currency, Instant now, List<Instant> clearedIssuedAt) {
+        Optional<JdbcSubscriptionStore.LiveStage> live = subscriptions.findLiveStage(tenantId);
         if (live.isEmpty()) {
             return;
         }
-        SubscriptionStatus status = live.get().status();
+        JdbcSubscriptionStore.LiveStage stage = live.get();
+        SubscriptionStatus status = stage.status();
         if (status != SubscriptionStatus.PAST_DUE && status != SubscriptionStatus.SUSPENDED) {
             return;
         }
-        boolean stillOwes = wallet.openStatementsOldestFirst(tenantId, currency).stream()
-                .anyMatch(statement -> statement.dueMinor() > 0);
+        boolean settledWhatMadeItLate =
+                clearedIssuedAt.stream().anyMatch(issuedAt -> !issuedAt.isAfter(stage.statusChangedAt()));
+        if (!settledWhatMadeItLate) {
+            return;
+        }
+        boolean stillOwes = stage.depositDueMinor() > 0
+                || wallet.openStatementsOldestFirst(tenantId, currency).stream()
+                        .anyMatch(statement -> statement.dueMinor() > 0);
         if (stillOwes) {
             return;
         }
         audit.record(AuditFact.of("commercial.arrears.paid_in_full", AuditClass.BUSINESS)
                 .by(ActorRef.systemJob("wallet-settlement"))
                 .at(ResourceScope.tenant(tenantId))
-                .target("commercial.subscription", live.get().id())
-                .because("every issued statement of this tenant is now paid; the subscription stays "
+                .target("commercial.subscription", stage.subscriptionId())
+                .because("everything this tenant owed when it went late is now paid; the subscription stays "
                         + status.name().toLowerCase(Locale.ROOT)
                         + " until a person moves it, because nothing moves a subscription by itself (ADR 0089)")
                 .changed(ChangeDocuments.created(Map.of("subscriptionStatus", status.name())))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
-                .correlatedBy(live.get().id().toString())
+                .correlatedBy(stage.subscriptionId().toString())
                 .occurredAt(now)
                 .build());
     }
@@ -1212,6 +1250,20 @@ public class WalletService {
             log.warn("A card charge for statement {} of tenant {} was never answered", statementId, tenantId);
             log.debug("The card charger threw", unanswered);
             countCardCharge("unanswered");
+            return 0;
+        }
+        if (attempt.reused() && CardCharger.saysNothingAboutAnAttemptAlreadyAsked(outcome)) {
+            // Asked before, under a merchant account that is not answering now (suspended or replaced). The
+            // first ask may have moved the money and lost the answer, and the account in front of us never saw
+            // the key: that is neither a decline nor "not configured", and settling it as either is final. It
+            // stays PENDING until the account that holds the key is active again. A card swapped in the
+            // meantime still supersedes it (beginCardAttempt), with its late success audited for finance.
+            log.warn(
+                    "A card charge for statement {} of tenant {} was asked under a merchant account that is not "
+                            + "the active one; it stays pending until that account is active again",
+                    statementId,
+                    tenantId);
+            countCardCharge("stranded");
             return 0;
         }
         return Objects.requireNonNull(unitOfWork.execute(status -> recordCardOutcome(tenantId, attempt, outcome)));
@@ -1727,7 +1779,8 @@ public class WalletService {
                 null,
                 null,
                 now));
-        noteArrearsClearedByPayment(tenantId, attempt.currency(), now);
+        noteArrearsClearedByPayment(
+                tenantId, attempt.currency(), now, List.of(wallet.statementIssuedAt(tenantId, attempt.statementId())));
         return applied;
     }
 

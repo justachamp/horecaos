@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,6 +16,8 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.domain.PlatformCardInstallation;
 import uz.horecaos.platform.commercial.infrastructure.PlatformCardGateway;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardTopUpStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlatformCardInstallationStore;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.Capability;
@@ -39,6 +42,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>Replacing the active account strands the cards bound under the old one: a token is only meaningful
  * to the merchant account that minted it. The gateway refuses such a card by name, so the tenant is asked
  * to add its card again instead of being told its bank declined it.
+ *
+ * <p>It strands the charges still waiting for an answer too, and those are worse: an idempotency key is
+ * meaningful only to the account it was sent to. A top-up or a statement charge that was asked and never
+ * answered may have moved the money, and the account that replaces this one cannot say. So an account is
+ * not suspended while charges asked through it are unresolved, unless the person suspending it says, in so
+ * many words, that they know. Even then the charges are not settled as declined: they stay {@code PENDING}
+ * and resolve when this account is active again.
  */
 @Service
 public class PlatformCardInstallationService {
@@ -47,16 +57,22 @@ public class PlatformCardInstallationService {
 
     private final JdbcPlatformCardInstallationStore installations;
     private final PlatformCardGateway gateway;
+    private final JdbcCardTopUpStore topUps;
+    private final JdbcCardChargeAttemptStore attempts;
     private final AuditRecorder audit;
     private final Clock clock;
 
     public PlatformCardInstallationService(
             JdbcPlatformCardInstallationStore installations,
             PlatformCardGateway gateway,
+            JdbcCardTopUpStore topUps,
+            JdbcCardChargeAttemptStore attempts,
             AuditRecorder audit,
             Clock clock) {
         this.installations = installations;
         this.gateway = gateway;
+        this.topUps = topUps;
+        this.attempts = attempts;
         this.audit = audit;
         this.clock = clock;
     }
@@ -173,14 +189,32 @@ public class PlatformCardInstallationService {
                 expectedVersion,
                 PlatformCardInstallation.ACTIVE,
                 subject(actor),
+                Map.of(),
                 actor,
                 reason,
                 correlationId);
     }
 
+    /** Stops charging through this account; refused while charges asked through it are unresolved. */
     @Transactional
     public PlatformCardInstallation suspend(
             UUID id, long expectedVersion, ActorRef actor, String reason, String correlationId) {
+        return suspend(id, expectedVersion, false, actor, reason, correlationId);
+    }
+
+    /**
+     * @param acknowledgeUnresolvedCharges the caller knows top-ups or statement charges asked through this
+     *     account have no answer yet, and suspends it anyway. They stay {@code PENDING}, the audit fact says
+     *     how many, and they resolve when this account is active again.
+     */
+    @Transactional
+    public PlatformCardInstallation suspend(
+            UUID id,
+            long expectedVersion,
+            boolean acknowledgeUnresolvedCharges,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
         PlatformCardInstallation installation = find(id);
         if (!PlatformCardInstallation.ACTIVE.equals(installation.status())) {
             throw new ApiException(
@@ -188,8 +222,37 @@ public class PlatformCardInstallationService {
                     "Only an active installation can be suspended",
                     Map.of("reason", "NOT_ACTIVE"));
         }
+        long unresolvedTopUps = topUps.countPendingUnder(id);
+        long unresolvedCharges = attempts.countPendingUnder(id);
+        Map<String, Object> unresolved = new LinkedHashMap<>();
+        if (unresolvedTopUps + unresolvedCharges > 0) {
+            if (!acknowledgeUnresolvedCharges) {
+                throw new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT,
+                        "Card charges asked through this account are still waiting for its answer, and the account "
+                                + "that replaces it cannot tell whether they took the money. Wait for the settlement "
+                                + "sweep to resolve them, or suspend with acknowledgeUnresolvedCharges to leave them "
+                                + "pending until this account is active again.",
+                        Map.of(
+                                "reason",
+                                "UNRESOLVED_CARD_CHARGES",
+                                "unresolvedTopUps",
+                                unresolvedTopUps,
+                                "unresolvedStatementCharges",
+                                unresolvedCharges));
+            }
+            unresolved.put("unresolvedTopUps", unresolvedTopUps);
+            unresolved.put("unresolvedStatementCharges", unresolvedCharges);
+        }
         return move(
-                installation, expectedVersion, PlatformCardInstallation.SUSPENDED, null, actor, reason, correlationId);
+                installation,
+                expectedVersion,
+                PlatformCardInstallation.SUSPENDED,
+                null,
+                unresolved,
+                actor,
+                reason,
+                correlationId);
     }
 
     private PlatformCardInstallation move(
@@ -197,6 +260,7 @@ public class PlatformCardInstallationService {
             long expectedVersion,
             String status,
             @Nullable String activatedBy,
+            Map<String, Object> alsoRecorded,
             ActorRef actor,
             String reason,
             String correlationId) {
@@ -205,6 +269,8 @@ public class PlatformCardInstallationService {
             throw new ApiException(
                     ErrorCode.STALE_VERSION, "The installation changed since it was read; read it again");
         }
+        Map<String, Object> after = withStatus(status, alsoRecorded);
+        Map<String, Object> change = ChangeDocuments.diff(Map.of("status", installation.status()), after);
         audit.record(AuditFact.of(
                         "commercial.card_installation." + status.toLowerCase(java.util.Locale.ROOT),
                         AuditClass.BUSINESS)
@@ -212,12 +278,19 @@ public class PlatformCardInstallationService {
                 .at(ResourceScope.platform())
                 .target("commercial.platform_card_installation", installation.id())
                 .because(reason)
-                .changed(ChangeDocuments.change("status", installation.status(), status))
+                .changed(change)
                 .usingCapability(Capability.INTEGRATION_INSTALLATION_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
         return find(installation.id());
+    }
+
+    private static Map<String, Object> withStatus(String status, Map<String, Object> alsoRecorded) {
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", status);
+        after.putAll(alsoRecorded);
+        return after;
     }
 
     private static void requirePaymentSecretReference(@Nullable String reference) {

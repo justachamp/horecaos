@@ -56,7 +56,8 @@ assertions against the real adapter's sandbox before activating it.
 5. **Walk one real card through.** With a test tenant: add a card, top up a small amount,
    check the ledger holds one `TOP_UP` whose reference is the provider's own, and that the
    provider's dashboard shows exactly one charge. Then choose CARD and issue its statement.
-6. **To stop charging**, suspend the installation (`.../{id}/suspension`). Cards stay on file.
+6. **To stop charging**, suspend the installation (`.../{id}/suspension`). Cards stay on file. It is
+   refused while a top-up or statement charge asked through it is still `PENDING`; see *Replacing an account*.
 
 Steps 2, 4 and 6 are also on the control plane's Billing setup screen (Commerce → Billing
 setup): "Declare an account", then Activate or Suspend with a reason. The screen sends the
@@ -70,6 +71,26 @@ is bound to the installation it was added under. Suspend the old account, activa
 one, and every tenant's card is refused by name (`CARD_BOUND_UNDER_ANOTHER_MERCHANT_ACCOUNT`,
 visible as the decline reason) until the tenant adds it again. That is deliberate: sending a
 token to an account that never minted it would read as the cardholder's bank declining.
+
+An idempotency key is just as local to the account it was sent to, and that is the part to
+check **before** suspending. A top-up or a statement charge that was asked and never
+answered (`PENDING`) may have moved the money, and the account that replaces this one has
+never seen its key, so it cannot say. Suspending is therefore refused with
+`UNRESOLVED_CARD_CHARGES` (the count of top-ups and of statement charges is in the answer)
+while any charge asked through the account is still `PENDING`. In the normal case there is
+nothing to do: the settlement sweep resolves them within minutes, and the suspension then
+goes through.
+
+If the account cannot answer (credentials revoked, provider down for a day) suspend with
+`"acknowledgeUnresolvedCharges": true`. Nothing is lost by it: the charges stay `PENDING` —
+never `FAILED`, never `NOT_CONFIGURED` — the audit fact for the suspension carries the counts,
+and `commercial.wallet.card_top_up{outcome="stranded"}` and
+`commercial.wallet.card_charge{outcome="stranded"}` count every sweep that found one. A
+stranded top-up blocks that tenant's next top-up (`TOP_UP_IN_FLIGHT`) until it is resolved.
+To resolve one, make the old account active again (suspend the new one, activate the old):
+the next sweep asks the account that holds the key and records the money once if it was
+taken. Finance can also compare the old account's dashboard with `commercial.card_top_ups` /
+`commercial.card_charge_attempts` by row id, which is the key.
 
 ## When it goes wrong
 

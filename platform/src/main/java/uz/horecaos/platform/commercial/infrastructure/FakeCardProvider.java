@@ -35,6 +35,11 @@ import uz.horecaos.platform.commercial.application.CardProviderAdapter;
  *       answer, including a decline, which is exactly why a charge for a different
  *       amount must carry a new key. The same key with different parameters is refused,
  *       so a bug that reuses a key fails here loudly instead of at a provider.
+ *   <li><strong>An account knows only its own.</strong> Cards and idempotency keys are scoped to the
+ *       installation that made them, as they are at two real merchant accounts: a key charged through
+ *       one account is unknown to the other, so replacing the account and asking the new one what
+ *       happened to an old attempt answers "not that I know of", which is the whole reason that
+ *       question cannot settle an attempt as declined.
  *   <li><strong>An answer can be lost after the money moved.</strong> {@link
  *       #UNANSWERING_CARD}'s first charge succeeds provider-side and then throws, which is
  *       the double-charge trap {@code status} exists to defuse.
@@ -129,7 +134,7 @@ public class FakeCardProvider implements CardProviderAdapter {
         }
         sessions.remove(sessionReference);
         String token = "fake_card_" + UUID.randomUUID();
-        cards.put(token, new Card(tenantId, behaviour));
+        cards.put(scoped(account, token), new Card(tenantId, behaviour));
         YearMonth expiry =
                 YearMonth.from(clock.instant().atZone(ZoneOffset.UTC)).plusYears(3);
         return new CardEnrolment.ConfirmOutcome.Enrolled(
@@ -138,7 +143,7 @@ public class FakeCardProvider implements CardProviderAdapter {
 
     @Override
     public CardEnrolment.RevokeOutcome revoke(CardAccount account, String providerToken) {
-        return cards.remove(providerToken) == null
+        return cards.remove(scoped(account, providerToken)) == null
                 ? new CardEnrolment.RevokeOutcome.Failed("UNKNOWN_TOKEN")
                 : new CardEnrolment.RevokeOutcome.Revoked();
     }
@@ -154,7 +159,7 @@ public class FakeCardProvider implements CardProviderAdapter {
         if (providerToken == null) {
             return new CardCharger.Outcome.Failed("NO_CARD_ON_FILE");
         }
-        Charge seen = charges.get(idempotencyKey);
+        Charge seen = charges.get(scoped(account, idempotencyKey));
         if (seen != null) {
             boolean sameAttempt = seen.tenantId().equals(tenantId)
                     && seen.token().equals(providerToken)
@@ -165,7 +170,7 @@ public class FakeCardProvider implements CardProviderAdapter {
             }
             return seen.answer();
         }
-        Card card = cards.get(providerToken);
+        Card card = cards.get(scoped(account, providerToken));
         if (card == null || !card.tenantId().equals(tenantId)) {
             return new CardCharger.Outcome.Failed("UNKNOWN_TOKEN");
         }
@@ -174,8 +179,9 @@ public class FakeCardProvider implements CardProviderAdapter {
         CardCharger.Outcome answer = approved
                 ? new CardCharger.Outcome.Succeeded(reference)
                 : new CardCharger.Outcome.Failed("INSUFFICIENT_FUNDS");
-        Charge charge = new Charge(tenantId, providerToken, amountMinor, currency, idempotencyKey, answer);
-        charges.put(idempotencyKey, charge);
+        Charge charge = new Charge(
+                account.installationId(), tenantId, providerToken, amountMinor, currency, idempotencyKey, answer);
+        charges.put(scoped(account, idempotencyKey), charge);
         if (approved) {
             successes.add(charge);
         }
@@ -187,7 +193,7 @@ public class FakeCardProvider implements CardProviderAdapter {
 
     @Override
     public synchronized CardCharger.StatusOutcome status(CardAccount account, String idempotencyKey) {
-        Charge charge = charges.get(idempotencyKey);
+        Charge charge = charges.get(scoped(account, idempotencyKey));
         if (charge != null && charge.answer() instanceof CardCharger.Outcome.Succeeded succeeded) {
             return new CardCharger.StatusOutcome.Succeeded(succeeded.providerReference());
         }
@@ -211,6 +217,7 @@ public class FakeCardProvider implements CardProviderAdapter {
 
     /** What the provider recorded for one charge attempt. */
     public record Charge(
+            UUID installationId,
             UUID tenantId,
             String token,
             long amountMinor,
@@ -223,6 +230,11 @@ public class FakeCardProvider implements CardProviderAdapter {
         public String toString() {
             return "Charge[key=%s amount=%d %s]".formatted(idempotencyKey, amountMinor, currency);
         }
+    }
+
+    /** A card token or an idempotency key means something only to the account that made it. */
+    private static String scoped(CardAccount account, String value) {
+        return account.installationId() + "/" + value;
     }
 
     private record Session(UUID tenantId, Instant expiresAt) {}

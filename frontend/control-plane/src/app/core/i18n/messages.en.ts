@@ -1978,6 +1978,10 @@ export const en = {
     'Cards bound under another account will have to be added again by their tenants. A test double is refused outside a local or test run.',
   'billing.installation.suspend.note':
     'Every card tenant is collected like an invoice tenant until an account is active again.',
+  'billing.installation.suspend.unresolved':
+    'Card charges asked through this account are still waiting for its answer: {topUps} top-ups and {charges} statement charges. The account that replaces it cannot tell whether they took the money; the settlement sweep resolves them within minutes.',
+  'billing.installation.suspend.acknowledge':
+    'Suspend anyway. Those charges stay pending, never declined, and resolve when this account is active again.',
   'billing.installation.activated': '{name} is now the account cards are charged through.',
   'billing.installation.suspended': '{name} is suspended. No card is charged.',
   'billing.installation.created': 'The account was declared, in draft.',
@@ -1993,6 +1997,10 @@ export const en = {
   'dunning.paidInFull': 'Paid in full: ready to restore',
   'dunning.paidInFull.hint':
     'Nothing moves a tenant by itself: paying clears what it owes and leaves its stage as it was, for a person to decide.',
+  'dunning.nothingOwed': 'Nothing owed',
+  'dunning.nothingOwed.hint':
+    'A suspension can be about something other than money. Read its reason before restoring this tenant.',
+  'dunning.depositDue': 'Activation deposit due: {amount}',
   'platformApprovals.action.commercial_billing_bank-details': 'Bank details on invoices',
   'platformApprovals.subject.field.beneficiary': 'Beneficiary',
   'platformApprovals.subject.field.bankName': 'Bank',

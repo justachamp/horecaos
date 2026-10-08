@@ -420,9 +420,19 @@ public class JdbcWalletStore {
         return statementPayments(tenantId, currency);
     }
 
+    /** When this statement was issued, which is when the tenant came to owe it. */
+    public Instant statementIssuedAt(UUID tenantId, UUID statementId) {
+        return jdbc.sql("SELECT issued_at FROM commercial.statements WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", statementId)
+                .query(OffsetDateTime.class)
+                .single()
+                .toInstant();
+    }
+
     private List<StatementPayment> statementPayments(UUID tenantId, @Nullable String openInCurrency) {
         String sql = """
-                SELECT s.id, s.number, s.period_key, s.currency, s.total_minor,
+                SELECT s.id, s.number, s.period_key, s.currency, s.total_minor, s.issued_at,
                        COALESCE(-SUM(w.amount_minor), 0) AS paid_minor
                   FROM commercial.statements s
                   LEFT JOIN commercial.wallet_entries w
@@ -432,7 +442,7 @@ public class JdbcWalletStore {
                 """
                 + (openInCurrency == null ? "" : " AND s.currency = :currency")
                 + """
-                 GROUP BY s.id, s.number, s.period_key, s.currency, s.total_minor
+                 GROUP BY s.id, s.number, s.period_key, s.currency, s.total_minor, s.issued_at
                 """
                 + (openInCurrency == null
                         ? " ORDER BY s.period_key DESC"
@@ -451,7 +461,8 @@ public class JdbcWalletStore {
                             row.getString("currency"),
                             total,
                             paid,
-                            total - paid);
+                            total - paid,
+                            row.getObject("issued_at", OffsetDateTime.class).toInstant());
                 })
                 .list();
     }

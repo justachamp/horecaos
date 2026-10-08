@@ -258,6 +258,49 @@ describe('BillingSetup', () => {
     expect(api.activateCardInstallation).not.toHaveBeenCalled();
   });
 
+  it('tells staff which charges are still waiting and suspends anyway only when they say they know', async () => {
+    await create();
+    api.cardInstallations.mockResolvedValue([{ ...DRAFT_ACCOUNT, status: 'ACTIVE', version: 3 }]);
+    await fixture.componentInstance['load']();
+    await settle();
+    api.suspendCardInstallation.mockRejectedValueOnce(
+      new ApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        reason: 'UNRESOLVED_CARD_CHARGES',
+        unresolvedTopUps: 2,
+        unresolvedStatementCharges: 1,
+      }),
+    );
+    el<HTMLButtonElement>('[data-installation="ci-1"] .moveToggle').click();
+    await settle();
+    expect(el('[name="acknowledgeUnresolved"]')).toBeNull();
+    await type('[name="moveReason"]', 'the provider is down');
+    el<HTMLButtonElement>('.confirmMove').click();
+    await settle();
+
+    const alert = fixture.nativeElement.querySelector('[role="alert"]') as HTMLElement;
+    expect(alert.textContent).toContain('2');
+    expect(alert.textContent).toContain('1');
+    expect(alert.textContent).not.toContain(ru['error.UNKNOWN']);
+    expect(api.suspendCardInstallation).toHaveBeenLastCalledWith('ci-1', 3, 'the provider is down');
+    const acknowledge = el<HTMLInputElement>('[name="acknowledgeUnresolved"]');
+    expect(acknowledge).not.toBeNull();
+
+    acknowledge.click();
+    await settle();
+    el<HTMLButtonElement>('.confirmMove').click();
+    await settle();
+
+    expect(api.suspendCardInstallation).toHaveBeenLastCalledWith(
+      'ci-1',
+      3,
+      'the provider is down',
+      true,
+    );
+    expect(el('[name="acknowledgeUnresolved"]')).toBeNull();
+  });
+
   it('declares an account, leaving out the fields that were not filled in', async () => {
     await create();
     el<HTMLButtonElement>('.openInstallation').click();
