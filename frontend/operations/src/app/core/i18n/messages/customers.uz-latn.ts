@@ -157,7 +157,7 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.cashback.noEntries': 'Hali yozuvlar yoʻq.',
   'customers.cashback.empty': 'Bu mijozda hali ball balansi yoʻq.',
   'customers.cashback.depositNotBuilt':
-    'Depozit balansi — qurilmagan. Sodiqlik moduli ataylab mijoz mablagʻini saqlamaydi: depozit hisobi, toʻldirish yoki yechib olish yoʻq.',
+    'Depozit balansi — taklif qilinmaydi. HorecaOS mijozlarning pulini saqlamaydi, shuning uchun oldindan toʻlanadigan depozit yoʻq. Mijozlar sodiqlik ballarini yigʻadi va sarflaydi — bular pul emas; oʻzining litsenziyalangan oldindan toʻlov dasturiga ega restoran oʻz provayderini toʻlov usuli sifatida ulashi mumkin.',
   'customers.cashback.adjust.action': 'Balansni toʻgʻrilash',
   'customers.cashback.adjust.direction': 'Yoʻnalish',
   'customers.cashback.adjust.direction.CREDIT': 'Ball qoʻshish',
@@ -165,6 +165,9 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.cashback.adjust.amount': 'Miqdor',
   'customers.cashback.adjust.reasonCode': 'Sabab kodi',
   'customers.cashback.adjust.reasonCode.placeholder': 'masalan, GOODWILL',
+  'customers.cashback.adjust.reasonCode.choose': 'Sabab kodini tanlang',
+  'customers.cashback.adjust.reasonCode.refused':
+    'Bu sabab kodi roʻyxatda yoʻq. Roʻyxatdagi kodlardan birini tanlang.',
   'customers.cashback.adjust.reason': 'Sabab',
   'customers.cashback.adjust.submit': 'Toʻgʻrilashni qoʻllash',
   'customers.cashback.adjust.result.applied': 'Toʻgʻrilash qoʻllandi.',

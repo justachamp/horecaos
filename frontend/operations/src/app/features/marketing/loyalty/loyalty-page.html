@@ -195,9 +195,14 @@
       </table>
     </section>
 
-    <section class="loyalty__section loyalty__not-built" data-testid="loyalty-deposit-not-built">
+    <section class="loyalty__section loyalty__not-built" data-testid="loyalty-deposit-not-offered">
       <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.deposit.title' | t }}</h2>
-      <p class="q-body-sm">{{ 'marketing.loyalty.deposit.body' | t }}</p>
+      <p class="q-body-sm" data-testid="loyalty-deposit-sentence">
+        {{ 'marketing.loyalty.deposit.body' | t }}
+      </p>
+      <p class="q-caption" data-testid="loyalty-deposit-revisit">
+        {{ 'marketing.loyalty.deposit.revisit' | t }}
+      </p>
     </section>
 
     <section class="loyalty__section loyalty__not-built" data-testid="loyalty-pos-sync-not-built">

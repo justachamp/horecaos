@@ -809,6 +809,21 @@ and writer-ownership review.
 - Run one side-effect owner, shadow only records/decisions, and disable the
   corresponding Redis subscriber after count/status/idempotency reconciliation.
 
+### 8.1a Legacy deposit balances are not imported as platform-held value
+
+[ADR 0165](adr/not-started/0165-customer-stored-value-horecaos-holds-no-customer-funds.md)
+(Decision 7): HorecaOS holds no customer funds, and a Delever tenant's customers may
+hold deposit balances there. Those balances are never imported as value the platform
+holds.
+
+- The migration plan for each tenant **lists the tenant's outstanding deposit
+  liability** per customer, for the tenant to honour or settle outside the platform.
+  That liability stays the tenant's.
+- Converting any part of it to loyalty points is a **per-tenant decision, in writing,
+  audited**: recorded as `LEGACY_OPENING_BALANCE` adjustments with the tenant's written
+  consent, because it takes a cash right away from a customer. It is never a bulk import.
+- ADR 0024 stays dormant until this programme runs.
+
 ### 8.2 Media and object delivery
 
 - Move upload, validation, derivative, access, and retention contracts to media.

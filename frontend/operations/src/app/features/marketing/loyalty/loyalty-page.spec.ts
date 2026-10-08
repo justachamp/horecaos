@@ -101,14 +101,29 @@ describe('LoyaltyPage', () => {
     expect(host.textContent).toContain('50.00%');
   });
 
-  it('always renders the honest not-built panels for deposit accounts and POS balance sync', async () => {
+  it('says a deposit is not offered, in the one sentence ADR 0165 gives, with when it would be reopened', async () => {
     await render(fakeApi());
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(host.querySelector('[data-testid="loyalty-deposit-not-built"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="loyalty-deposit-not-built"]')).toBeNull();
+    expect(host.querySelector('[data-testid="loyalty-deposit-not-offered"]')).not.toBeNull();
+    // Decision 8: the same sentence the customer pane, the gap map and a prospect are given.
+    expect(host.querySelector('[data-testid="loyalty-deposit-sentence"]')?.textContent).toContain(
+      'HorecaOS does not hold customer money, so there is no prepaid deposit.',
+    );
+    // Decision 6: what would reopen it, and the ADR 0046 licence condition that narrows.
+    const revisit =
+      host.querySelector('[data-testid="loyalty-deposit-revisit"]')?.textContent ?? '';
+    expect(revisit).toContain('ADR 0165');
+    expect(revisit).toContain('Central Bank authorisation');
+    expect(revisit).toContain('ADR 0046');
+  });
+
+  it('still renders the honest not-built panel for POS balance sync', async () => {
+    await render(fakeApi());
+    const host = fixture.nativeElement as HTMLElement;
+
     expect(host.querySelector('[data-testid="loyalty-pos-sync-not-built"]')).not.toBeNull();
-    // ADR 0046's own decision is named, not just "not built".
-    expect(host.textContent).toContain('ADR 0046');
   });
 
   it('shows the denied state when the brand grant is missing', async () => {

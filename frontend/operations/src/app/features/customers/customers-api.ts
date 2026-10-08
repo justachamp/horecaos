@@ -310,6 +310,19 @@ export interface LoyaltyAdjustmentRequest {
   readonly correlationId?: string | null;
 }
 
+/**
+ * `LoyaltyOperationsController.ReasonCodesResponse` (ADR 0165): the platform's closed list of reason
+ * codes for a manual adjustment. In `REPORT_ONLY` any code is accepted and the unlisted ones are
+ * counted, so the dialog offers the list as suggestions; in `ENFORCE` a code off the list is refused
+ * (400 `VALIDATION_FAILED`, an `errors[]` entry for `reasonCode`), so the dialog offers a closed choice.
+ */
+export interface LoyaltyReasonCodes {
+  readonly mode: 'REPORT_ONLY' | 'ENFORCE';
+  readonly codes: readonly string[];
+  /** 0 while the built-in default applies and nothing has been stored. */
+  readonly policyVersion: number;
+}
+
 /** `ApprovalOutcome`'s four wire values (ADR 0027), as `AdjustmentResponse.status` renders them. */
 export type LoyaltyAdjustmentStatus = 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'DECLINED';
 
@@ -902,6 +915,15 @@ export class CustomersApi {
   }
 
   // -------------------------------------------------- row 5.2e: manual adjustment
+
+  /** The list a manual adjustment's reason code is checked against (ADR 0165). */
+  async adjustmentReasonCodes(scope: LocationScope): Promise<LoyaltyReasonCodes> {
+    return (
+      await firstValueFrom(
+        this.api.get<LoyaltyReasonCodes>(operationsPaths.loyaltyAdjustmentReasonCodes(scope)),
+      )
+    ).value;
+  }
 
   /**
    * Credits or debits one balance by hand. `idempotencyKey` travels twice —

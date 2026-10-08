@@ -55,8 +55,9 @@ prose:**
   own Javadoc: split tender "sits between the order and this... empty until
   split tender ships". `payments.payment_intents` has one live intent per
   order (`ux_payment_intent_live_per_order`, `findLiveForOrder`), never a
-  simultaneous cash-plus-cashback-plus-deposit settlement. The IA line is
-  aspirational for a feature ADR 0046 has not decided. `OperationsPaymentController.forOrder`
+  simultaneous cash-plus-cashback-plus-deposit settlement. The deposit leg of
+  the IA line is struck (2026-10-08, ADR 0165: HorecaOS holds no customer funds,
+  so no deposit tender exists or will); cash plus cashback is the split tender. `OperationsPaymentController.forOrder`
   (new this wave) returns that one intent, its attempts, and what a
   `payments.payment_transactions` capture/return total says — the
   `payment[]` array's first and, for now, only element. The screen says so

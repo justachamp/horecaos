@@ -748,13 +748,41 @@
                 (valueMinorChange)="adjustAmountMinor.set($event)"
               />
               <label class="q-caption">{{ 'customers.cashback.adjust.reasonCode' | t }}</label>
-              <input
-                class="q-body field"
-                type="text"
-                [value]="adjustReasonCode()"
-                (input)="adjustReasonCode.set($any($event.target).value)"
-                [placeholder]="'customers.cashback.adjust.reasonCode.placeholder' | t"
-              />
+              @if (reasonCodeIsClosed()) {
+                <!-- ADR 0165, ENFORCE: a closed choice, taken from the platform's list. -->
+                <select
+                  class="q-body field"
+                  data-testid="cashback-adjust-reason-code-select"
+                  [value]="adjustReasonCode()"
+                  (change)="adjustReasonCode.set($any($event.target).value)"
+                >
+                  <option value="">{{ 'customers.cashback.adjust.reasonCode.choose' | t }}</option>
+                  @for (code of reasonCodePolicy()?.codes; track code) {
+                    <option [value]="code">{{ code }}</option>
+                  }
+                </select>
+              } @else {
+                <!-- REPORT_ONLY (or the list could not be read): free text, with the list offered. -->
+                <input
+                  class="q-body field"
+                  type="text"
+                  list="cashback-adjust-reason-codes"
+                  data-testid="cashback-adjust-reason-code-input"
+                  [value]="adjustReasonCode()"
+                  (input)="adjustReasonCode.set($any($event.target).value)"
+                  [placeholder]="'customers.cashback.adjust.reasonCode.placeholder' | t"
+                />
+                <datalist id="cashback-adjust-reason-codes">
+                  @for (code of reasonCodePolicy()?.codes; track code) {
+                    <option [value]="code"></option>
+                  }
+                </datalist>
+              }
+              @if (reasonCodeRefused()) {
+                <p class="q-caption" role="alert" data-testid="cashback-adjust-reason-code-refused">
+                  {{ 'customers.cashback.adjust.reasonCode.refused' | t }}
+                </p>
+              }
               <label class="q-caption">{{ 'customers.cashback.adjust.reason' | t }}</label>
               <textarea
                 class="q-body field"
