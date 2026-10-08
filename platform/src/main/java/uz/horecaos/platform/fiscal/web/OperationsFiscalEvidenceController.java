@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -126,9 +127,13 @@ public class OperationsFiscalEvidenceController {
                                     + "CUSTOMER_COMPLAINT, AUDIT or CORRECTION"));
         }
 
-        return ResponseEntity.ok(FiscalEvidenceResponse.of(
-                order.publicOrderNumber(),
-                evidence.forOrder(tenantId, orderId, reveal, actor(), request.getHeader("X-Correlation-Id"))));
+        // Never cached: an identifier opened in full for a stated purpose must not outlive that look
+        // in a browser or a proxy.
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(FiscalEvidenceResponse.of(
+                        order.publicOrderNumber(),
+                        evidence.forOrder(tenantId, orderId, reveal, actor(), request.getHeader("X-Correlation-Id"))));
     }
 
     private void requireReveal(UUID tenantId) {

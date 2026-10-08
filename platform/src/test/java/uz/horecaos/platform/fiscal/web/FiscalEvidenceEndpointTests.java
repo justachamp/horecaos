@@ -265,6 +265,7 @@ class FiscalEvidenceEndpointTests {
         assertThat(masked.getResponse().getStatus())
                 .as("fiscal.document.read is all the masked read needs")
                 .isEqualTo(200);
+        assertThat(masked.getResponse().getHeader("Cache-Control")).contains("no-store");
         String text = masked.getResponse().getContentAsString();
         JsonNode identifiers = json.readTree(text).path("documents").path(0).path("identifiers");
         assertThat(identifiers.path("revealed").asBoolean()).isFalse();
