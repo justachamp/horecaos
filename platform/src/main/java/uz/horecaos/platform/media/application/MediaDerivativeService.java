@@ -82,7 +82,10 @@ public class MediaDerivativeService {
 
         List<DerivativeVariant> existing = new ArrayList<>();
         List<DerivativeVariant> missing = new ArrayList<>();
-        for (DerivativeVariant variant : DerivativeVariant.values()) {
+        // The standard set for every asset, plus HERO for a creative (ADR 0157). Looping over
+        // DerivativeVariant.values() would render a fourth JPEG for every catalogue photograph and
+        // staff upload on the one 8 vCPU machine (ADR 0073).
+        for (DerivativeVariant variant : DerivativeVariant.owedTo(asset.creative())) {
             if (derivatives.find(tenantId, assetId, variant).isPresent()) {
                 existing.add(variant);
             } else {

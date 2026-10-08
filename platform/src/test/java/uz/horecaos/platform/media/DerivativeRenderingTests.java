@@ -50,8 +50,16 @@ class DerivativeRenderingTests {
         assertThat(rendered).isInstanceOf(Rendered.class);
         var renditions = ((Rendered) rendered).renditions();
         assertThat(renditions)
-                .containsOnlyKeys(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
-        // containsOnlyKeys above already proved these two are present.
+                .containsOnlyKeys(
+                        DerivativeVariant.THUMBNAIL,
+                        DerivativeVariant.CARD,
+                        DerivativeVariant.DETAIL,
+                        DerivativeVariant.HERO);
+        // containsOnlyKeys above already proved these three are present. HERO (ADR 0157) comes out of the
+        // same decode; which assets are owed one is the service's decision, not the renderer's.
+        assertThat(Objects.requireNonNull(renditions.get(DerivativeVariant.HERO))
+                        .widthPx())
+                .isEqualTo(1600);
         assertThat(Objects.requireNonNull(renditions.get(DerivativeVariant.THUMBNAIL))
                         .widthPx())
                 .isEqualTo(200);

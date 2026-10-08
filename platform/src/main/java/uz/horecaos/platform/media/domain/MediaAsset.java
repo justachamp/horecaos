@@ -58,4 +58,60 @@ public record MediaAsset(
         @Nullable Integer heightPx,
         @Nullable UUID createdBy,
         @Nullable Instant uploadedAt,
-        Instant createdAt) {}
+        Instant createdAt,
+        @Nullable String renditionProfile,
+        @Nullable Integer durationMs) {
+
+    /** The profile that also renders {@link DerivativeVariant#HERO}. */
+    public static final String CREATIVE_PROFILE = "CREATIVE";
+
+    /** An asset that has the standard rendition set and is not a video: every asset before ADR 0157. */
+    public MediaAsset(
+            MediaAssetId assetId,
+            UUID tenantId,
+            MediaOwner owner,
+            String objectKey,
+            String bucket,
+            MediaAssetStatus status,
+            MediaVisibility visibility,
+            String declaredContentType,
+            long declaredSizeBytes,
+            @Nullable String declaredChecksumSha256,
+            @Nullable String verifiedContentType,
+            @Nullable Long verifiedSizeBytes,
+            @Nullable String verifiedChecksumSha256,
+            @Nullable String originalFilename,
+            @Nullable Integer widthPx,
+            @Nullable Integer heightPx,
+            @Nullable UUID createdBy,
+            @Nullable Instant uploadedAt,
+            Instant createdAt) {
+        this(
+                assetId,
+                tenantId,
+                owner,
+                objectKey,
+                bucket,
+                status,
+                visibility,
+                declaredContentType,
+                declaredSizeBytes,
+                declaredChecksumSha256,
+                verifiedContentType,
+                verifiedSizeBytes,
+                verifiedChecksumSha256,
+                originalFilename,
+                widthPx,
+                heightPx,
+                createdBy,
+                uploadedAt,
+                createdAt,
+                null,
+                null);
+    }
+
+    /** Whether this asset is owed the {@link DerivativeVariant#HERO} rendition. */
+    public boolean creative() {
+        return CREATIVE_PROFILE.equals(renditionProfile);
+    }
+}

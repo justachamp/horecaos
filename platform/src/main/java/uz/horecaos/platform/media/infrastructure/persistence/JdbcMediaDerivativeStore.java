@@ -91,6 +91,22 @@ public class JdbcMediaDerivativeStore implements MediaDerivativeStore {
     }
 
     @Override
+    public List<MediaDerivative> findAllFor(UUID tenantId, java.util.Collection<UUID> assetIds) {
+        if (assetIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT * FROM media.derivatives
+                WHERE tenant_id = :tenantId AND asset_id = ANY(:assetIds)
+                ORDER BY asset_id, width_px
+                """)
+                .param("tenantId", tenantId)
+                .param("assetIds", assetIds.toArray(UUID[]::new))
+                .query(JdbcMediaDerivativeStore::mapDerivative)
+                .list();
+    }
+
+    @Override
     public int deleteAll(UUID tenantId, MediaAssetId assetId) {
         return jdbc.sql("DELETE FROM media.derivatives WHERE tenant_id = :tenantId AND asset_id = :assetId")
                 .param("tenantId", tenantId)

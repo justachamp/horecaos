@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.net.URI;
 import java.time.Instant;
@@ -72,7 +73,8 @@ public class MediaController {
                     request.contentType(),
                     request.sizeBytes(),
                     request.filename(),
-                    actorId());
+                    actorId(),
+                    request.renditionProfile());
         } catch (IllegalArgumentException rejected) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, rejected.getMessage());
         }
@@ -150,6 +152,9 @@ public class MediaController {
      *
      * @param sizeBytes the exact byte count. The presigned URL is signed for it,
      *                  so an upload of a different size will not be accepted
+     * @param renditionProfile omitted for the standard renditions; {@code CREATIVE} for an
+     *                  image the console uploads for the storefront's home content, which
+     *                  is also rendered at {@code HERO} (ADR 0157)
      */
     public record UploadRequest(
             @NotNull MediaOwner.Scope ownerScope,
@@ -157,7 +162,8 @@ public class MediaController {
             @NotNull MediaVisibility visibility,
             @NotBlank String contentType,
             @Positive @Max(10 * 1024 * 1024) long sizeBytes,
-            String filename) {}
+            String filename,
+            @Nullable @Pattern(regexp = "CREATIVE") String renditionProfile) {}
 
     public record UploadTicketResponse(
             String assetId, URI uploadUrl, Map<String, String> requiredHeaders, Instant expiresAt) {}

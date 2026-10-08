@@ -130,7 +130,31 @@ public class MediaAssetService implements MediaAvailability {
             long sizeBytes,
             @Nullable String originalFilename,
             @Nullable UUID actorId) {
+        return requestUpload(tenantId, owner, visibility, contentType, sizeBytes, originalFilename, actorId, null);
+    }
 
+    /**
+     * {@link #requestUpload(UUID, MediaOwner, MediaVisibility, String, long, String, UUID)} for an
+     * asset with a rendition profile (ADR 0157).
+     *
+     * @param renditionProfile null for the standard set; {@code CREATIVE} for what the console's
+     *                         content upload allocates, which is also rendered at {@code HERO}
+     * @throws IllegalArgumentException if the profile is not one the platform knows
+     */
+    @Transactional
+    public UploadTicket requestUpload(
+            UUID tenantId,
+            MediaOwner owner,
+            MediaVisibility visibility,
+            String contentType,
+            long sizeBytes,
+            @Nullable String originalFilename,
+            @Nullable UUID actorId,
+            @Nullable String renditionProfile) {
+
+        if (renditionProfile != null && !MediaAsset.CREATIVE_PROFILE.equals(renditionProfile)) {
+            throw new IllegalArgumentException("Unknown rendition profile: " + renditionProfile);
+        }
         String normalizedType =
                 contentType == null ? "" : contentType.toLowerCase(Locale.ROOT).strip();
         if (!ALLOWED_IMAGE_TYPES.contains(normalizedType)) {
@@ -167,7 +191,9 @@ public class MediaAssetService implements MediaAvailability {
                 null,
                 actorId,
                 null,
-                now));
+                now,
+                renditionProfile,
+                null));
 
         ObjectStorage.PresignedUpload presigned =
                 storage.presignUpload(bucket, key, normalizedType, sizeBytes, UPLOAD_WINDOW);

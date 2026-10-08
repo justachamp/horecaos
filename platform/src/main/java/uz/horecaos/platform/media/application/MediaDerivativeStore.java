@@ -37,6 +37,12 @@ public interface MediaDerivativeStore {
     List<MediaDerivative> findAll(UUID tenantId, MediaAssetId assetId);
 
     /**
+     * Every rendition of several assets of one tenant in one read, for a caller that describes a
+     * whole page of creatives (ADR 0157). An asset of another tenant has no rows in the answer.
+     */
+    List<MediaDerivative> findAllFor(UUID tenantId, java.util.Collection<UUID> assetIds);
+
+    /**
      * Forgets an asset's renditions once their objects have been removed from
      * the store, so no row keeps naming a key that no longer exists.
      *

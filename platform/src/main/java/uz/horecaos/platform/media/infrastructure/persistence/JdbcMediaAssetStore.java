@@ -31,11 +31,12 @@ public class JdbcMediaAssetStore {
                 INSERT INTO media.assets (
                     asset_id, tenant_id, owner_scope, owner_id, object_key, bucket,
                     status, visibility, declared_content_type, declared_size_bytes,
-                    declared_checksum_sha256, original_filename, created_by, created_at)
+                    declared_checksum_sha256, original_filename, created_by, created_at,
+                    rendition_profile)
                 VALUES (
                     :assetId, :tenantId, :ownerScope, :ownerId, :objectKey, :bucket,
                     :status, :visibility, :contentType, :sizeBytes,
-                    :checksum, :filename, :createdBy, :createdAt)
+                    :checksum, :filename, :createdBy, :createdAt, :renditionProfile)
                 """)
                 .param("assetId", asset.assetId().value())
                 .param("tenantId", asset.tenantId())
@@ -51,7 +52,28 @@ public class JdbcMediaAssetStore {
                 .param("filename", asset.originalFilename())
                 .param("createdBy", asset.createdBy())
                 .param("createdAt", OffsetDateTime.ofInstant(asset.createdAt(), ZoneOffset.UTC))
+                .param("renditionProfile", asset.renditionProfile())
                 .update();
+    }
+
+    /**
+     * Several assets of one tenant at once, for a caller that has a document to check (ADR 0157).
+     *
+     * <p>The tenant is in the query, so an id that is another tenant's is simply absent from the
+     * answer, exactly like one that does not exist. Deleted assets are absent too.
+     */
+    public List<MediaAsset> findAllOwned(UUID tenantId, java.util.Collection<UUID> assetIds) {
+        if (assetIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT * FROM media.assets
+                WHERE tenant_id = :tenantId AND asset_id = ANY(:assetIds) AND status <> 'DELETED'
+                """)
+                .param("tenantId", tenantId)
+                .param("assetIds", assetIds.toArray(UUID[]::new))
+                .query(JdbcMediaAssetStore::mapAsset)
+                .list();
     }
 
     /**
@@ -238,6 +260,8 @@ public class JdbcMediaAssetStore {
                 java.util.Optional.ofNullable(row.getObject("uploaded_at", OffsetDateTime.class))
                         .map(OffsetDateTime::toInstant)
                         .orElse(null),
-                row.getObject("created_at", OffsetDateTime.class).toInstant());
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getString("rendition_profile"),
+                (Integer) row.getObject("duration_ms"));
     }
 }
