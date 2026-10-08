@@ -2213,6 +2213,22 @@ public class JdbcOrderStore {
                 .list();
     }
 
+    /**
+     * The lines of this order that hold at least one live mark (ADR 0161). Read by the amendment guard that
+     * refuses to close or reduce a line a unit has been scanned against, without making the amendment
+     * service depend on the marking service.
+     */
+    public java.util.Set<UUID> linesHoldingLiveMarks(UUID tenantId, UUID orderId) {
+        return java.util.Set.copyOf(jdbc.sql("""
+                SELECT DISTINCT order_line_id FROM ordering.order_line_marks
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND released_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .list());
+    }
+
     /** The lines as they stand now: those no revision has closed. */
     public List<OrderLineRow> lines(UUID tenantId, UUID orderId) {
         return lines(tenantId, orderId, null);

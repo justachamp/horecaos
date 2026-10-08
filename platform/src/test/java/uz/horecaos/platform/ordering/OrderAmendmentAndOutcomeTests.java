@@ -1631,6 +1631,64 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("ADR 0161: CHANGE_LINE_QUANTITY on a line that holds a scanned unit is refused before it writes "
+            + "anything, and goes through once the unit is released")
+    void changeLineQuantityIsRefusedWhileTheLineHoldsAScan() {
+        UUID orderId = orderIdOf(placeOrder("idem-qty-marked"));
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        UUID markId = UUID.randomUUID();
+        insertLiveMark(markId, orderId, lineId);
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-qty-marked-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, 3)))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .as("the replacement line would orphan the scanned unit")
+                        .isEqualTo("MARKS_ALREADY_CAPTURED"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("nothing was written")
+                .hasSize(1);
+        assertThat(orderStore.lines(TENANT, orderId).getFirst().lineId())
+                .as("the scanned line is still the live one")
+                .isEqualTo(lineId);
+
+        jdbc.sql("UPDATE ordering.order_line_marks SET released_at = now(), released_reason = 'LINE_REPLACED' "
+                        + "WHERE id = :id")
+                .param("id", markId)
+                .update();
+        var proposed = proposeOnly(
+                orderId, "k-qty-marked-2", OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, 3));
+
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("a released unit no longer blocks the amendment: the guard keys on live marks")
+                .isPositive();
+    }
+
+    private void insertLiveMark(UUID markId, UUID orderId, UUID lineId) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_line_marks (id, tenant_id, order_id, order_line_id, sequence, gtin,
+                    code_encrypted, code_lookup_hash, capture_stage, entry_method, gtin_checked,
+                    captured_by_actor_type, captured_by_actor_id, captured_at)
+                VALUES (:id, :t, :o, :l, 1, '04600000000015', 'envelope-not-a-code', :hash, 'PICK', 'SCANNER',
+                    true, 'USER', 'op-1', now())
+                """)
+                .param("id", markId)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("l", lineId)
+                .param(
+                        "hash",
+                        markId.toString().replace("-", "") + markId.toString().replace("-", ""))
+                .update();
+    }
+
+    @Test
     @DisplayName("a financial amendment is refused past the ADR 0039 cut point; a non-financial one is not")
     void aFinancialAmendmentIsRefusedPastTheCutPoint() {
         UUID orderId = orderIdOf(placeOrder("idem-cutpoint"));

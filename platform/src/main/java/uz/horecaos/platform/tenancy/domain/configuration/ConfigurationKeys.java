@@ -127,6 +127,46 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0161 (ADR 0082 flag): whether marked-goods capture is on for a tenant. Off until a tenant names a
+     * marked SKU and the three preconditions of ADR 0161 hold; the platform turns it on, so it is settable
+     * at the platform and per tenant but is not offered to a tenant's own administrators. Read by catalog
+     * (publication) and ordering (capture and the handover guard) through {@code tenancy.api.FeatureFlagKeys}.
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_MARKED_GOODS = ConfigurationKey.of(
+                    "feature.marked_goods", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Turns on marked-goods (DataMatrix) capture at the pass and the handover guard "
+                    + "that holds an order until every marked unit is scanned.")
+            .build();
+
+    /**
+     * ADR 0161: how much of a marking code's shape the server checks. Declared here so a stored row for it
+     * passes the startup validator, and declared identically in {@code
+     * ordering.api.MarkingConfigurationKeys} where it is consumed, for the reason recorded on {@link
+     * #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<String> FISCAL_MARKING_STRUCTURE_CHECK = ConfigurationKey.of(
+                    "fiscal.marking.structure_check", String.class)
+            .defaultValue("GS1")
+            .ownedBy("fiscal")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("How much of a marking code's shape the server checks: GS1 (the assumed GS1 "
+                    + "element-string shape) or NONE (only the character set and length).")
+            .build();
+
+    /** ADR 0161: whether a hand-typed or pasted marking code is accepted; see {@link #FISCAL_MARKING_STRUCTURE_CHECK}. */
+    public static final ConfigurationKey<Boolean> FISCAL_MARKING_ALLOW_KEYED_ENTRY = ConfigurationKey.of(
+                    "fiscal.marking.allow_keyed_entry", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("fiscal")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether a marking code typed or pasted by hand is accepted at the pass. Off by "
+                    + "default: a keyed code is not the code on the package.")
+            .build();
+
+    /**
      * ADR 0175: the longest offered-to-answered interval the day close still believes as one
      * call's ring time. Declared here so a stored row for it passes the startup validator, and
      * declared identically in {@code voice.api.VoiceConfigurationKeys} where it is consumed, for the
@@ -866,6 +906,9 @@ public final class ConfigurationKeys {
             ORDERING_CART_RETENTION_DAYS,
             COURIER_APPLICANT_RETENTION_MONTHS,
             VOICE_RING_TIME_CEILING_SECONDS,
+            FEATURE_MARKED_GOODS,
+            FISCAL_MARKING_STRUCTURE_CHECK,
+            FISCAL_MARKING_ALLOW_KEYED_ENTRY,
             QUOTE_TTL_SECONDS,
             PROMOTION_APPROVAL_PERCENTAGE_OVER_BP,
             PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,
