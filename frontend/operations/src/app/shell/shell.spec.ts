@@ -186,6 +186,25 @@ describe('Shell', () => {
     expect(groups).not.toContain('People');
   });
 
+  it('shows a brand manager the Customers section by the call centre capability she holds', () => {
+    // PlatformRole.BRAND_MANAGER at her brand: customer.lead.read and no customer.read, so the
+    // section's own capability alone would have hidden the screen her role exists to use.
+    currentTenant.scopes.set([
+      {
+        scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+        roleCode: 'brand-manager',
+        capabilities: ['ORDER_READ', 'CUSTOMER_LEAD_READ', 'CUSTOMER_LEAD_MANAGE'],
+      },
+    ]);
+    fixture.detectChanges();
+
+    const items = [...fixture.nativeElement.querySelectorAll('.rail__item')].map((node: Element) =>
+      node.textContent?.trim(),
+    );
+    expect(items).toContain('Customers');
+    expect(items).not.toContain('Staff and access');
+  });
+
   it('hides the late indicator when nothing is late', () => {
     // Not greyed out. Absent. A permanently visible "0 late" is a signal that
     // never changes, and an operator stops reading it within a shift.

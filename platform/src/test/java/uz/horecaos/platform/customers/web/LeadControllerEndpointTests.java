@@ -268,6 +268,37 @@ class LeadControllerEndpointTests {
                 .isZero();
     }
 
+    @Test
+    @DisplayName("a brand manager reaches the queue by customer.lead.read while holding no customer.read, "
+            + "and the session context says exactly that")
+    void aBrandManagerReachesTheQueueWithoutTheCustomerList() throws Exception {
+        UUID accountId = account("Regular Guest");
+
+        JsonNode context = JSON.readTree(mvc.perform(get("/api/v1/session/context")
+                        .param("tenantId", TENANT.toString())
+                        .with(token(CALL_CENTRE)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+        List<String> held = new java.util.ArrayList<>();
+        context.path("scopes")
+                .forEach(scope -> scope.path("capabilities").forEach(capability -> held.add(capability.asText())));
+        assertThat(held)
+                .as("the console admits the Customers section to her by the capability her role holds; "
+                        + "navigation.ts names these by their enum names")
+                .contains(Capability.CUSTOMER_LEAD_READ.name(), Capability.CUSTOMER_LEAD_MANAGE.name())
+                .as("and she holds no customer.read, which is why the section's own capability alone turned her away")
+                .doesNotContain(Capability.CUSTOMER_READ.name());
+        assertThat(mvc.perform(get(leads()).with(token(CALL_CENTRE)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("the queue itself answers her")
+                .isEqualTo(200);
+        assertRefused(mvc.perform(get(card(accountId)).with(token(CALL_CENTRE))).andReturn(), Capability.CUSTOMER_READ);
+    }
+
     // ================================================================ the status machine
 
     @Test

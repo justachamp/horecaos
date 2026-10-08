@@ -1,13 +1,15 @@
 <div class="shell">
   <nav class="shell__tabs" [attr.aria-label]="'customers.nav.label' | t">
-    <a
-      class="shell__tab"
-      routerLink="/customers"
-      routerLinkActive="shell__tab--on"
-      [routerLinkActiveOptions]="{ exact: true }"
-    >
-      {{ 'customers.nav.list' | t }}
-    </a>
+    @if (capabilities.has('CUSTOMER_READ')) {
+      <a
+        class="shell__tab"
+        routerLink="/customers"
+        routerLinkActive="shell__tab--on"
+        [routerLinkActiveOptions]="{ exact: true }"
+      >
+        {{ 'customers.nav.list' | t }}
+      </a>
+    }
     @if (capabilities.has('CUSTOMER_LEAD_READ')) {
       <a
         class="shell__tab"

@@ -28,7 +28,7 @@ import { ToastHost } from '../shared/ui/toast-host';
 import { CallBar } from './call-bar';
 import { ShellMessageKey, shellMessages } from './shell-messages';
 import { ShortcutSheet } from './shortcut-sheet';
-import { NAVIGATION, NavGroup } from './navigation';
+import { NAVIGATION, NavGroup, admitsSection } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 import { VoicePresence } from './voice-presence';
@@ -126,7 +126,9 @@ export class Shell {
   protected readonly navigation = computed<readonly NavGroup[]>(() =>
     NAVIGATION.map((group) => ({
       ...group,
-      items: group.items.filter((item) => this.capabilities.has(item.capability)),
+      items: group.items.filter((item) =>
+        admitsSection(item, (capability) => this.capabilities.has(capability)),
+      ),
     })).filter((group) => group.items.length > 0),
   );
 
