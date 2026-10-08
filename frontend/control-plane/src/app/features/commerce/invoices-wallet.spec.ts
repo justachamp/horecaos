@@ -77,6 +77,8 @@ const WALLET: WalletOverviewView = {
   bonusSpendableBalance: UZS(200_000),
   paymentMethod: 'INVOICE',
   cardTokenReference: null,
+  hasCard: false,
+  card: null,
 };
 
 const LEDGER: readonly WalletEntryView[] = [

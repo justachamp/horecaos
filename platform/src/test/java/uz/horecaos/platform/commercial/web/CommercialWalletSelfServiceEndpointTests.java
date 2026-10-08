@@ -246,6 +246,40 @@ class CommercialWalletSelfServiceEndpointTests {
     }
 
     @Test
+    void theStaffOverviewOfAWalletSaysWhichCardAndNeverWhichReference() throws Exception {
+        String installationId = staffActivatesTheFake();
+        ownerBindsCard(FakeCardProvider.APPROVING_CARD);
+        String storedReference = jdbc.sql(
+                        "SELECT card_token_reference FROM commercial.tenant_billing" + " WHERE tenant_id = :tenant")
+                .param("tenant", TENANT)
+                .query(String.class)
+                .single();
+        assertThat(storedReference)
+                .as("the premise: the column holds the installation and the provider's vault token")
+                .startsWith(installationId + ":")
+                .contains("fake_card_");
+
+        MvcResult read = mvc.perform(get("/api/v1/control-plane/tenants/" + TENANT + "/wallet")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        String body = read.getResponse().getContentAsString();
+        assertThat(body)
+                .as("a support agent with commercial.wallet.read sees which card, never which reference")
+                .doesNotContain(storedReference)
+                .doesNotContain("fake_card_")
+                .doesNotContain(installationId);
+        JsonNode view = JSON.readTree(body);
+        assertThat(view.get("cardTokenReference").isNull())
+                .as("the field stays, so no client breaks (ADR 0031), and is always null")
+                .isTrue();
+        assertThat(view.get("card").get("last4").asString()).isEqualTo("4242");
+        assertThat(view.get("card").get("lapsed").asBoolean()).isFalse();
+        assertThat(view.get("hasCard").asBoolean()).isTrue();
+    }
+
+    @Test
     void withNoMerchantAccountTheTenantIsToldCardsAreNotAvailableYet() throws Exception {
         MvcResult refused = mvc.perform(post(WALLET + "/card/enrolments")
                         .with(tokenFor(OWNER))

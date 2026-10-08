@@ -368,7 +368,27 @@ export interface WalletOverviewView {
   /** What the live grants have left between them: the bonus money a statement can actually spend. */
   readonly bonusSpendableBalance: Money;
   readonly paymentMethod: 'INVOICE' | 'WALLET' | 'CARD' | (string & {});
+  /**
+   * Always null. The field stays so no client breaks, but the reference is the card adapter's alone:
+   * for a card the tenant bound itself it carries the merchant installation and the provider's vault
+   * token, and no screen or log line may reach it.
+   */
   readonly cardTokenReference: string | null;
+  /** Whether a card is on file, which is all a card typed in by staff can say about itself. */
+  readonly hasCard: boolean;
+  /** Which card, as the provider's own form reported it; null when none is on file. */
+  readonly card: WalletCardView | null;
+}
+
+/** What is safe to say about a card on file: never which reference it is. */
+export interface WalletCardView {
+  readonly last4: string | null;
+  readonly brand: string | null;
+  readonly expiryMonth: number | null;
+  readonly expiryYear: number | null;
+  readonly lapsed: boolean;
+  readonly lapsesSoon: boolean;
+  readonly boundAt: string | null;
 }
 
 /** One entry of the append-only ledger. Nothing ever edits or deletes one. */
