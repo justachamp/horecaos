@@ -227,7 +227,9 @@ public class ScenarioRunner {
         OfferRow offer = null;
         if (step.offerId() != null) {
             offer = offers.find(tenantId, step.offerId()).orElse(null);
-            if (offer == null || !offer.appliesAt(now)) {
+            // Honoured, not merely "the newest": a newer version published since this scenario
+            // was approved supersedes the one it carries for new authors and does not end it.
+            if (offer == null || !offer.honouredAt(now)) {
                 stop(
                         campaign,
                         guest,

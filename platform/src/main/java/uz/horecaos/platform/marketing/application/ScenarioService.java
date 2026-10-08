@@ -338,8 +338,11 @@ public class ScenarioService {
             }
             if (step.offerId() != null) {
                 Optional<OfferRow> offer = offers.find(campaign.tenantId(), step.offerId());
+                // The version the scenario was approved with, even if a newer one has been
+                // published since: a launch is refused for an offer that was retired or whose
+                // window has ended, and not for one that merely has a successor.
                 if (offer.isEmpty()
-                        || !"PUBLISHED".equals(offer.get().status())
+                        || !offer.get().carriedByApprovedCampaigns()
                         || (offer.get().validUntil() != null
                                 && !offer.get().validUntil().isAfter(now))) {
                     throw new ApiException(

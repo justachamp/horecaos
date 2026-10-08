@@ -490,6 +490,65 @@ class ScenarioEngineTests {
     }
 
     @Test
+    @DisplayName(
+            "publishing a newer version of an offer does not end a run approved with the old one: the scenario keeps its version")
+    void aNewerOfferVersionDoesNotEndAnApprovedRun() {
+        UUID guest = h.reachableGuest("+998901000090");
+        UUID offer = h.publishedOffer("Autumn ten");
+        UUID scenario =
+                h.launched(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), offerStep("SMS", offer, 3600)));
+        h.enrolEverybody(scenario);
+        h.decide(scenario);
+
+        UUID newer = h.publishedNewVersion(offer);
+        // The situation under test is real: the version the scenario carries has been superseded and
+        // a different one is in force, so "the offer is not the published one" is true of this step.
+        assertThat(h.offerService.require(TENANT, BRAND, offer).status()).isEqualTo("SUPERSEDED");
+        assertThat(h.offerService.require(TENANT, BRAND, newer).status()).isEqualTo("PUBLISHED");
+
+        h.clock.advance(Duration.ofHours(1));
+        h.decide(scenario);
+
+        assertThat(h.decisions(scenario, guest).stream().map(DecisionRow::decision))
+                .containsExactlyInAnyOrder("SENT", "SENT");
+        assertThat(h.outcomeOf(scenario, guest)).isEqualTo("COMPLETED");
+        assertThat(h.port.sent()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName(
+            "retiring the version an approved scenario carries still ends it, even after a newer one was published")
+    void retiringASupersededVersionEndsTheRun() {
+        UUID guest = h.reachableGuest("+998901000091");
+        UUID offer = h.publishedOffer("Autumn ten");
+        UUID scenario =
+                h.launched(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), offerStep("SMS", offer, 3600)));
+        h.enrolEverybody(scenario);
+        h.decide(scenario);
+        h.publishedNewVersion(offer);
+
+        h.offerService.retire(
+                TENANT,
+                BRAND,
+                offer,
+                h.offerService.require(TENANT, BRAND, offer).rowVersion(),
+                h.author,
+                "The old wording was wrong",
+                "corr");
+        h.clock.advance(Duration.ofHours(1));
+        h.decide(scenario);
+
+        assertThat(h.outcomeOf(scenario, guest)).isEqualTo("STOPPED_BY_CONDITION");
+        assertThat(h.decisions(scenario, guest).stream()
+                        .filter(row -> row.decision().equals("BLOCKED"))
+                        .findFirst()
+                        .orElseThrow()
+                        .reasonText())
+                .contains("RETIRED");
+        assertThat(h.port.sent()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("two live scenarios do not hand one guest two offers in a day: the later waits, then goes")
     void twoScenariosDoNotCollideOnOffers() {
         UUID guest = h.reachableGuest("+998901000013");

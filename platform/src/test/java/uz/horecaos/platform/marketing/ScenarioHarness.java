@@ -573,6 +573,37 @@ final class ScenarioHarness {
                 .id();
     }
 
+    /**
+     * A newer version of the offer's lineage, drafted and published: what the offer's author does when
+     * the wording or the window changes. The version passed in becomes SUPERSEDED.
+     */
+    UUID publishedNewVersion(UUID offerId) {
+        var current = offerService.require(TENANT, BRAND, offerId);
+        OfferService.OfferDraft draft = new OfferService.OfferDraft(
+                current.displayName() + " (revised)",
+                current.pricingPromotionId(),
+                current.loyaltyAccrualRuleId(),
+                current.validFrom(),
+                current.validUntil(),
+                current.audienceId(),
+                current.allowedChannels(),
+                current.templateKey(),
+                current.templateVersion(),
+                current.bannerImageReference());
+        var next = offerService.newVersion(
+                TENANT, BRAND, offerId, draft, author, UUID.fromString(author.subject()), "corr");
+        return offerService
+                .publish(
+                        TENANT,
+                        BRAND,
+                        next.id(),
+                        next.rowVersion(),
+                        approver,
+                        UUID.fromString(approver.subject()),
+                        "corr")
+                .id();
+    }
+
     UUID seedPromotion(String status) {
         return seedPromotion(BRAND, status);
     }

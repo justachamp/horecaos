@@ -363,6 +363,25 @@ class ScenarioAuthoringTests {
     }
 
     @Test
+    @DisplayName(
+            "a newer version of an offer published between approval and launch does not stop the launch: the scenario was approved with the old one")
+    void launchKeepsTheVersionTheScenarioWasApprovedWith() {
+        UUID offer = h.publishedOffer("Autumn ten");
+        UUID scenario =
+                h.approved(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), offerStep("SMS", offer, 60)));
+        h.publishedNewVersion(offer);
+        assertThat(h.offerService.require(TENANT, BRAND, offer).status()).isEqualTo("SUPERSEDED");
+
+        assertThat(h.campaigns.start(TENANT, scenario)).isTrue();
+
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.SENDING);
+        // But the superseded version is not on offer to a new author: a step names what is in force.
+        assertRefused(
+                () -> create(List.of(offerStep("SMS", offer, 0))), ErrorCode.VALIDATION_FAILED, "only a published");
+    }
+
+    @Test
     @DisplayName("an offer retired between approval and launch stops the launch rather than the third step")
     void launchRefusesARetiredOffer() {
         UUID offer = h.publishedOffer("Autumn ten");
