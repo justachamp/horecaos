@@ -770,6 +770,50 @@ class EInvoicingServiceTests {
     }
 
     @Test
+    @DisplayName(
+            "a lost send is asked about with the documents of the statement's earlier attempts, and never adopts one")
+    void aLostSendNeverAdoptsAnEarlierAttemptsDocument() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-A", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice first = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-A", EInvoiceOperatorState.REFUSED, "3"));
+        service.refresh(TENANT, first.id(), STAFF, "c");
+
+        // The statement is sent again as B under the same number, and B's answer is lost.
+        didox.sends.add(() -> new EInvoiceSendOutcome.Uncertain("READ_TIMEOUT", "lost"));
+        StatementEInvoice second = send(statement);
+        assertThat(second.delivery()).isEqualTo(EInvoiceDelivery.UNCERTAIN);
+
+        // An adapter that picked the first row of a number-keyed list would answer with A's document.
+        didox.asked.clear();
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-A", EInvoiceOperatorState.REFUSED, "3"));
+        EInvoicingService.Refreshed refreshed = service.refresh(TENANT, second.id(), STAFF, "c");
+
+        assertThat(didox.asked.getFirst().otherAttemptDocumentIds())
+                .as("the lookup is told which documents already belong to other attempts")
+                .containsExactly("DOC-A");
+        assertThat(refreshed.unavailableCode()).isEqualTo("DOCUMENT_OF_ANOTHER_ATTEMPT");
+        StatementEInvoice held = store.find(TENANT, second.id()).orElseThrow();
+        assertThat(held.delivery()).isEqualTo(EInvoiceDelivery.UNCERTAIN);
+        assertThat(held.operatorDocumentId()).isNull();
+        assertThat(held.live())
+                .as("still holds the statement; a third send would duplicate B")
+                .isTrue();
+        assertThatThrownBy(() -> send(statement))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "EINVOICE_LIVE"));
+
+        // The right document, once the operator names it, is adopted.
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-B", EInvoiceOperatorState.DRAFT, "0"));
+        StatementEInvoice found =
+                service.refresh(TENANT, second.id(), STAFF, "c").einvoice();
+        assertThat(found.delivery()).isEqualTo(EInvoiceDelivery.SUBMITTED);
+        assertThat(found.operatorDocumentId()).isEqualTo("DOC-B");
+    }
+
+    @Test
     @DisplayName("an adapter that throws has not said whether the operator acted: uncertain, with the class name only")
     void anAdapterThatThrowsIsUncertain() {
         connect(true);

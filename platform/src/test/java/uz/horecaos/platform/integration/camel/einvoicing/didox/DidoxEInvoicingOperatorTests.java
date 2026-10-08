@@ -10,10 +10,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.commercial.api.EInvoiceDocumentReference;
 import uz.horecaos.platform.commercial.api.EInvoiceOperatorAccount;
 import uz.horecaos.platform.commercial.api.EInvoiceOperatorState;
 import uz.horecaos.platform.commercial.api.EInvoiceSendOutcome;
@@ -402,16 +404,141 @@ class DidoxEInvoicingOperatorTests {
     }
 
     @Test
-    @DisplayName("a list with nothing under our number is not found, and so is one holding only other numbers")
+    @DisplayName("only a list that is positively there and empty says the operator holds nothing under our number")
     void stateByNumberNotFound() {
         assertThat(operator(new ScriptedTransport().then(token("s")).then(body(Map.of("data", List.of()))))
                         .state(account, EInvoiceFixtures.reference(null)))
                 .isInstanceOf(EInvoiceStateOutcome.NotFound.class);
-        assertThat(operator(new ScriptedTransport()
-                                .then(token("s"))
-                                .then(body(Map.of("data", List.of(Map.of("_id", "x", "name", "S-1", "status", 1))))))
-                        .state(account, EInvoiceFixtures.reference(null)))
+    }
+
+    @Test
+    @DisplayName("an answer with no list this adapter reads is not 'the operator holds nothing'")
+    void anUnrecognisedListIsUnreadableAndNotAbsent() {
+        // Didox nests its rows under a key other than `data`, answers an empty body, or answers `data` as a
+        // thing that is not a list: none of them is the operator saying it holds nothing.
+        for (Map<String, Object> answer : List.<Map<String, Object>>of(
+                Map.of(),
+                Map.of("documents", List.of()),
+                Map.of("data", Map.of("rows", List.of())),
+                Map.of("total", 0))) {
+            EInvoiceStateOutcome outcome = operator(
+                            new ScriptedTransport().then(token("s")).then(body(answer)))
+                    .state(account, EInvoiceFixtures.reference(null));
+
+            assertThat(outcome).as(answer.toString()).isInstanceOf(EInvoiceStateOutcome.Unavailable.class);
+            assertThat(((EInvoiceStateOutcome.Unavailable) outcome).code()).isEqualTo("STATE_UNREADABLE");
+        }
+    }
+
+    @Test
+    @DisplayName("a list of other documents proves nothing about ours: the filter may have been ignored")
+    void aListHoldingOnlyOtherNumbersIsNotAbsence() {
+        EInvoiceStateOutcome outcome = operator(new ScriptedTransport()
+                        .then(token("s"))
+                        .then(body(Map.of("data", List.of(Map.of("_id", "x", "name", "S-1", "status", 1))))))
+                .state(account, EInvoiceFixtures.reference(null));
+
+        assertThat(outcome).isInstanceOf(EInvoiceStateOutcome.Unavailable.class);
+        assertThat(((EInvoiceStateOutcome.Unavailable) outcome).code()).isEqualTo("STATE_UNREADABLE");
+    }
+
+    @Test
+    @DisplayName("a row whose number this adapter cannot read keeps the list from proving anything")
+    void aRowWithoutAReadableNumberIsUnreadable() {
+        EInvoiceStateOutcome outcome = operator(new ScriptedTransport()
+                        .then(token("s"))
+                        .then(body(Map.of(
+                                "data",
+                                List.of(
+                                        Map.of("_id", "x", "title", "S-2026-09-000001", "status", 1),
+                                        Map.of("_id", "y", "name", "S-1", "status", 1))))))
+                .state(account, EInvoiceFixtures.reference(null));
+
+        assertThat(outcome).isInstanceOf(EInvoiceStateOutcome.Unavailable.class);
+    }
+
+    @Test
+    @DisplayName("every attempt for a statement shares its number: a document of an earlier attempt is never adopted")
+    void aDocumentOfAnEarlierAttemptIsNotAdopted() {
+        // Attempt A was refused by the buyer and the statement was sent again as B under the same number;
+        // B's answer was lost. The list holds both, A first.
+        ScriptedTransport transport = new ScriptedTransport()
+                .then(token("s"))
+                .then(body(Map.of(
+                        "data",
+                        List.of(
+                                Map.of("_id", "doc-A", "name", EInvoiceFixtures.NUMBER, "status", 3),
+                                Map.of("_id", "doc-B", "name", EInvoiceFixtures.NUMBER, "status", 0)))));
+
+        EInvoiceStateOutcome outcome = operator(transport).state(account, lookup(Set.of("doc-A")));
+
+        assertThat(outcome).isEqualTo(new EInvoiceStateOutcome.Known("doc-B", EInvoiceOperatorState.DRAFT, "0"));
+    }
+
+    @Test
+    @DisplayName("when only earlier attempts' documents carry the number, nothing was created for this one")
+    void onlyEarlierAttemptsDocumentsMeansNothingNew() {
+        ScriptedTransport transport = new ScriptedTransport()
+                .then(token("s"))
+                .then(body(
+                        Map.of("data", List.of(Map.of("_id", "doc-A", "name", EInvoiceFixtures.NUMBER, "status", 3)))));
+
+        assertThat(operator(transport).state(account, lookup(Set.of("doc-A"))))
                 .isInstanceOf(EInvoiceStateOutcome.NotFound.class);
+    }
+
+    @Test
+    @DisplayName("two documents under our number that no earlier attempt accounts for are ambiguous, never a guess")
+    void twoUnaccountedDocumentsAreAmbiguous() {
+        ScriptedTransport transport = new ScriptedTransport()
+                .then(token("s"))
+                .then(body(Map.of(
+                        "data",
+                        List.of(
+                                Map.of("_id", "doc-A", "name", EInvoiceFixtures.NUMBER, "status", 3),
+                                Map.of("_id", "doc-B", "name", EInvoiceFixtures.NUMBER, "status", 0)))));
+
+        EInvoiceStateOutcome outcome = operator(transport).state(account, EInvoiceFixtures.reference(null));
+
+        assertThat(outcome).isInstanceOf(EInvoiceStateOutcome.Unavailable.class);
+        assertThat(((EInvoiceStateOutcome.Unavailable) outcome).code()).isEqualTo("STATE_AMBIGUOUS");
+    }
+
+    @Test
+    @DisplayName("a matching row with no readable identifier cannot be told from an earlier attempt's")
+    void aMatchWithoutAnIdentifierIsUnreadable() {
+        ScriptedTransport transport = new ScriptedTransport()
+                .then(token("s"))
+                .then(body(Map.of("data", List.of(Map.of("name", EInvoiceFixtures.NUMBER, "status", 0)))));
+
+        EInvoiceStateOutcome outcome = operator(transport).state(account, lookup(Set.of("doc-A")));
+
+        assertThat(outcome).isInstanceOf(EInvoiceStateOutcome.Unavailable.class);
+    }
+
+    @Test
+    @DisplayName("a full page of matches may hide the one we want on the next page")
+    void aFullPageThatHoldsNothingNewIsIncomplete() {
+        List<Map<String, Object>> page = new java.util.ArrayList<>();
+        Set<String> known = new java.util.HashSet<>();
+        for (int i = 0; i < 10; i++) {
+            page.add(Map.of("_id", "doc-" + i, "name", EInvoiceFixtures.NUMBER, "status", 3));
+            known.add("doc-" + i);
+        }
+        ScriptedTransport transport = new ScriptedTransport().then(token("s")).then(body(Map.of("data", page)));
+
+        EInvoiceStateOutcome outcome = operator(transport).state(account, lookup(known));
+
+        assertThat(outcome).isInstanceOf(EInvoiceStateOutcome.Unavailable.class);
+    }
+
+    private static EInvoiceDocumentReference lookup(Set<String> otherAttemptDocumentIds) {
+        return new EInvoiceDocumentReference(
+                null,
+                EInvoiceFixtures.CLIENT_REFERENCE,
+                EInvoiceFixtures.NUMBER,
+                java.time.LocalDate.parse("2026-10-07"),
+                otherAttemptDocumentIds);
     }
 
     @Test

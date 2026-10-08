@@ -798,6 +798,9 @@ public class EInvoicingService {
 
     // ------------------------------------------------------------ the state
 
+    /** The code of a lookup that found only a document recorded against another attempt for the same statement. */
+    static final String ANOTHER_ATTEMPTS_DOCUMENT = "DOCUMENT_OF_ANOTHER_ATTEMPT";
+
     /** What asking the operator did: the document as it stands, and why nothing could be learned if so. */
     public record Refreshed(
             StatementEInvoice einvoice, @Nullable String unavailableCode) {}
@@ -832,7 +835,8 @@ public class EInvoicingService {
                             row.operatorDocumentId(),
                             StatementEInvoice.clientReferenceOf(row.id()),
                             row.documentNumber(),
-                            row.documentDate()));
+                            row.documentDate(),
+                            store.documentIdsOfOtherAttempts(row.tenantId(), row.statementId(), row.id())));
         } catch (RuntimeException failure) {
             outcome = new EInvoiceStateOutcome.Unavailable(
                     "ADAPTER_FAILURE", failure.getClass().getSimpleName());
@@ -900,6 +904,14 @@ public class EInvoicingService {
         Instant now = clock.instant();
         switch (outcome) {
             case EInvoiceStateOutcome.Known known -> {
+                if (row.operatorDocumentId() == null
+                        && store.documentIdsOfOtherAttempts(row.tenantId(), row.statementId(), row.id())
+                                .contains(known.operatorDocumentId())) {
+                    // Found by the statement's number, which every attempt for it shares, and the document
+                    // belongs to an attempt with a record of its own. Adopting it would give this attempt
+                    // that attempt's state (a refused one releases the statement for a duplicate send).
+                    return new Refreshed(row, ANOTHER_ATTEMPTS_DOCUMENT);
+                }
                 boolean differs = row.delivery() != EInvoiceDelivery.SUBMITTED
                         || row.operatorState() != known.state()
                         || !Objects.equals(row.operatorStatus(), known.rawStatus())

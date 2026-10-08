@@ -69,6 +69,9 @@ public class DidoxEInvoicingOperator implements EInvoicingOperator {
     /** A session lasts 360 minutes at Didox; refreshed an hour early so a long call never straddles its end. */
     static final Duration SESSION = Duration.ofMinutes(300);
 
+    /** How many documents one lookup by number asks for; a full page may have a next one. */
+    static final int LIST_LIMIT = 10;
+
     private static final List<String> ID_KEYS = List.of("_id", "id", "documentId", "document_id", "doc_id", "uuid");
     private static final List<String> STATUS_KEYS = List.of("status", "doc_status", "docStatus", "statusId");
     private static final List<String> NUMBER_KEYS = List.of("name", "number", "docNumber", "doc_number", "FacturaNo");
@@ -161,7 +164,7 @@ public class DidoxEInvoicingOperator implements EInvoicingOperator {
             String path = byId
                     ? "/v1/documents/" + encode(reference.operatorDocumentId())
                     : "/v2/documents?owner=1&doctype=" + INVOICE_TYPE + "&name=" + encode(reference.documentNumber())
-                            + "&page=1&limit=10";
+                            + "&page=1&limit=" + LIST_LIMIT;
             ProviderOutcome outcome = transport.exchange(call(
                     account,
                     byId ? "get" : "find",
@@ -203,36 +206,78 @@ public class DidoxEInvoicingOperator implements EInvoicingOperator {
                 DidoxStatus.raw(status));
     }
 
+    /**
+     * The answer to a lookup by number, which is how a send whose answer was lost is resolved.
+     *
+     * <p>Only a list that is <em>positively there and empty</em> says the operator holds nothing:
+     * the platform turns "not found" on a lost send into "this never arrived" and frees the
+     * statement for a second send, so an answer this adapter cannot read must never be read as
+     * "not found". The shapes of Didox's answers are unverified (HorecaOS has no account); a missing
+     * list, a row whose number or identifier this adapter does not read, or a list of other
+     * numbers (the filter may have been ignored) all leave the document unresolved instead.
+     *
+     * <p>A number is shared by every attempt for a statement, so the rows under it may include the
+     * documents of earlier attempts. Those, named in the reference, are set aside: the answer is
+     * about this attempt, and adopting an earlier attempt's document would record its state on
+     * this one and release a statement the earlier attempt's state has no say over.
+     */
     private static EInvoiceStateOutcome readList(Map<String, Object> body, EInvoiceDocumentReference reference) {
-        List<Object> items = EInvoicingOutcomes.list(body.get("data"));
-        if (items.isEmpty()) {
+        if (!(body.get("data") instanceof List<?> rows)) {
+            return unreadableList("Didox answered the document list without a list this adapter reads");
+        }
+        if (rows.isEmpty()) {
             return new EInvoiceStateOutcome.NotFound();
         }
-        Map<String, Object> match = null;
-        for (Object item : items) {
-            Map<String, Object> candidate = EInvoicingOutcomes.map(item);
-            if (candidate == null) {
-                continue;
+        List<Map<String, Object>> sameNumber = new ArrayList<>();
+        for (Object row : rows) {
+            Map<String, Object> candidate = EInvoicingOutcomes.map(row);
+            String number = candidate == null ? null : EInvoicingOutcomes.text(candidate, NUMBER_KEYS);
+            if (number == null) {
+                return unreadableList("Didox listed a document with no number this adapter reads");
             }
-            String number = EInvoicingOutcomes.text(candidate, NUMBER_KEYS);
             if (reference.documentNumber().equals(number)) {
-                match = candidate;
-                break;
+                sameNumber.add(candidate);
             }
         }
-        if (match == null) {
-            // A list that holds nothing under our number is not one that holds nothing at all,
-            // but the search was by this very number, so it is the answer: not found.
-            return new EInvoiceStateOutcome.NotFound();
+        if (sameNumber.isEmpty()) {
+            // Other numbers only: the search was by ours, but a filter Didox ignored would answer
+            // exactly this, with ours on a later page.
+            return unreadableList("Didox listed documents, none under this number");
         }
-        String id = documentId(match);
-        Integer status = firstInteger(match);
-        if (id == null || status == null) {
+        List<Map<String, Object>> ours = new ArrayList<>();
+        for (Map<String, Object> candidate : sameNumber) {
+            String id = documentId(candidate);
+            if (id == null) {
+                return unreadableList("Didox listed a document under this number without an identifier");
+            }
+            if (!reference.otherAttemptDocumentIds().contains(id)) {
+                ours.add(candidate);
+            }
+        }
+        if (ours.isEmpty()) {
+            // Everything under the number belongs to earlier attempts: nothing was created for this one,
+            // unless the page was full and the rest is on the next.
+            return rows.size() >= LIST_LIMIT
+                    ? unreadableList("Didox's page of documents under this number was full")
+                    : new EInvoiceStateOutcome.NotFound();
+        }
+        if (ours.size() > 1) {
             return new EInvoiceStateOutcome.Unavailable(
-                    "STATE_UNREADABLE",
-                    "Didox listed the document without an identifier and status this adapter reads");
+                    "STATE_AMBIGUOUS",
+                    "Didox lists more than one document under this number that no earlier attempt accounts for");
+        }
+        Map<String, Object> match = ours.getFirst();
+        String id = Objects.requireNonNull(documentId(match));
+        Integer status = firstInteger(match);
+        if (status == null) {
+            return new EInvoiceStateOutcome.Unavailable(
+                    "STATE_UNREADABLE", "Didox listed the document without a status this adapter reads");
         }
         return new EInvoiceStateOutcome.Known(id, DidoxStatus.of(status), DidoxStatus.raw(status));
+    }
+
+    private static EInvoiceStateOutcome unreadableList(String detail) {
+        return new EInvoiceStateOutcome.Unavailable("STATE_UNREADABLE", detail);
     }
 
     // ----------------------------------------------------------------- login

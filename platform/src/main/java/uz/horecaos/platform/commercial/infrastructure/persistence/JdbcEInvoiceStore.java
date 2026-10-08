@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -331,6 +332,24 @@ public class JdbcEInvoiceStore {
                 .param("statementId", statementId)
                 .query(this::einvoiceOf)
                 .list();
+    }
+
+    /**
+     * The identifiers the operators have given for the statement's <em>other</em> attempts. Every
+     * attempt for a statement carries the statement's number, so a lookup by number can meet the
+     * documents of earlier attempts; these are what it must set aside.
+     */
+    public Set<String> documentIdsOfOtherAttempts(UUID tenantId, UUID statementId, UUID exceptEinvoiceId) {
+        return Set.copyOf(jdbc.sql("""
+                        SELECT operator_document_id FROM commercial.statement_einvoices
+                         WHERE tenant_id = :tenantId AND statement_id = :statementId AND id <> :exceptId
+                           AND operator_document_id IS NOT NULL
+                        """)
+                .param("tenantId", tenantId)
+                .param("statementId", statementId)
+                .param("exceptId", exceptEinvoiceId)
+                .query(String.class)
+                .list());
     }
 
     public List<StatementEInvoice> forTenant(UUID tenantId) {
