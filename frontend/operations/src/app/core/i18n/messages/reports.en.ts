@@ -624,4 +624,28 @@ export const reportsEn = {
   'reports.geography.section.pins': "Today's orders as pins",
   'reports.geography.pins.intro':
     "Where this branch's delivery orders of the day are going, one pin per order, to see clusters and outliers. This opens doorsteps, so it is recorded and held by dispatchers and branch managers; it is not part of the report above.",
+  // ------------------------------------------- staff hours export (ADR 0156)
+  'reports.exportCentre.reportOption.staffAttendance': 'Staff hours (payroll)',
+  'reports.exportCentre.piiGroupLabel.staff':
+    'Names and employee numbers (needs staff.shift.export)',
+  'reports.exportCentre.piiGroupHidden.staff':
+    'Name and employee-number columns are hidden — you do not hold staff.shift.export',
+  'reports.exportCentre.includeUnresolved':
+    'Include shifts that are still open or awaiting approval (marked, with no paid hours)',
+  'reports.exportCentre.error.unresolvedShifts':
+    'Some shifts in this range are still open or awaiting approval. Settle them first, or tick the box to include them marked as unsettled.',
+  'reports.exportCentre.error.tooLarge':
+    'This range has more rows than one payroll file holds (20,000). Choose a shorter range; the file is never cut short.',
+  'reports.exportCentre.column.staffDisplayReference': 'Staff reference',
+  'reports.exportCentre.column.plannedSeconds': 'Planned (seconds)',
+  'reports.exportCentre.column.workedSeconds': 'Worked (seconds)',
+  'reports.exportCentre.column.breakSeconds': 'Break (seconds)',
+  'reports.exportCentre.column.paidSeconds': 'Paid (seconds)',
+  'reports.exportCentre.column.varianceSeconds': 'Against plan (seconds)',
+  'reports.exportCentre.column.approvalStatus': 'Approval',
+  'reports.exportCentre.column.startedAt': 'Started',
+  'reports.exportCentre.column.endedAt': 'Ended',
+  'reports.exportCentre.column.timezone': 'Time zone',
+  'reports.exportCentre.column.employeeNumber': 'Employee number',
+  'reports.exportCentre.column.staffName': 'Name',
 } as const;

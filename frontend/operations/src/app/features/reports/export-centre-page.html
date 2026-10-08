@@ -33,7 +33,7 @@
               (change)="selectReport($any($event.target).value)"
               data-testid="export-centre-report"
             >
-              @for (option of reportOptions; track option.key) {
+              @for (option of reportOptions(); track option.key) {
                 <option [value]="option.key">{{ option.labelKey | t }}</option>
               }
             </select>
@@ -42,6 +42,9 @@
           <q-export-column-chooser
             [columns]="columns()"
             [selected]="selectedColumns()"
+            [piiCapability]="selectedReport().piiCapability ?? 'CUSTOMER_PII_EXPORT'"
+            [piiLabelKey]="selectedReport().piiLabelKey ?? 'reports.exportCentre.piiGroupLabel'"
+            [piiHiddenKey]="selectedReport().piiHiddenKey ?? 'reports.exportCentre.piiGroupHidden'"
             (selectedChange)="onColumnsChange($event)"
           />
 
@@ -107,6 +110,18 @@
                 />
               </div>
             </div>
+          }
+
+          @if (selectedReport().supportsUnresolved) {
+            <label class="export-centre__field export-centre__check q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="includeUnresolved()"
+                (change)="includeUnresolved.set($any($event.target).checked)"
+                data-testid="export-centre-unresolved"
+              />
+              {{ 'reports.exportCentre.includeUnresolved' | t }}
+            </label>
           }
 
           <div class="export-centre__field">

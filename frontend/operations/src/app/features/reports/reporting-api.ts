@@ -96,6 +96,8 @@ export interface ReportExportRequest {
   readonly to?: string | null;
   readonly locationId?: readonly string[] | null;
   readonly purpose: string;
+  /** `STAFF_ATTENDANCE` only (ADR 0156): include shifts still open or awaiting approval instead of being refused. */
+  readonly includeUnresolved?: boolean | null;
 }
 
 /** Mirrors `ReportExportController.ReportExportQueuedResponse`. */

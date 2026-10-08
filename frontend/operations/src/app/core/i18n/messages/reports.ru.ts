@@ -629,4 +629,27 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.geography.section.pins': 'Сегодняшние заказы точками',
   'reports.geography.pins.intro':
     'Куда идут сегодняшние заказы на доставку этого филиала, по точке на заказ, чтобы видеть скопления и выбросы. Это открывает адреса доставки, поэтому записывается и доступно диспетчерам и управляющим филиала; к отчёту выше оно не относится.',
+  // ------------------------------------------- staff hours export (ADR 0156)
+  'reports.exportCentre.reportOption.staffAttendance': 'Часы сотрудников (для зарплаты)',
+  'reports.exportCentre.piiGroupLabel.staff': 'Имена и табельные номера (нужен staff.shift.export)',
+  'reports.exportCentre.piiGroupHidden.staff':
+    'Столбцы с именами и табельными номерами скрыты — у вас нет capability staff.shift.export',
+  'reports.exportCentre.includeUnresolved':
+    'Включить смены, которые ещё идут или ждут подтверждения (с пометкой, без оплачиваемых часов)',
+  'reports.exportCentre.error.unresolvedShifts':
+    'В этом периоде есть смены, которые ещё идут или ждут подтверждения. Сначала закройте их или отметьте галочку, чтобы включить их с пометкой.',
+  'reports.exportCentre.error.tooLarge':
+    'В этом периоде больше строк, чем помещается в один файл (20 000). Выберите период покороче: файл никогда не обрезается.',
+  'reports.exportCentre.column.staffDisplayReference': 'Номер сотрудника',
+  'reports.exportCentre.column.plannedSeconds': 'План (секунд)',
+  'reports.exportCentre.column.workedSeconds': 'Отработано (секунд)',
+  'reports.exportCentre.column.breakSeconds': 'Перерыв (секунд)',
+  'reports.exportCentre.column.paidSeconds': 'К оплате (секунд)',
+  'reports.exportCentre.column.varianceSeconds': 'К плану (секунд)',
+  'reports.exportCentre.column.approvalStatus': 'Подтверждение',
+  'reports.exportCentre.column.startedAt': 'Начало',
+  'reports.exportCentre.column.endedAt': 'Конец',
+  'reports.exportCentre.column.timezone': 'Часовой пояс',
+  'reports.exportCentre.column.employeeNumber': 'Табельный номер',
+  'reports.exportCentre.column.staffName': 'Имя',
 };

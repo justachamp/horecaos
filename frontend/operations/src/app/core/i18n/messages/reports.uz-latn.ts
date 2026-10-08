@@ -629,4 +629,28 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.geography.section.pins': 'Bugungi buyurtmalar nuqtalar sifatida',
   'reports.geography.pins.intro':
     'Shu filialning bugungi yetkazib berish buyurtmalari qayerga ketayotgani, har bir buyurtma uchun bitta nuqta: toʻplanishlar va chetga chiqqanlarni koʻrish uchun. Bu yetkazib berish manzillarini ochadi, shuning uchun qayd etiladi va dispetcherlar hamda filial menejerlarida bor; yuqoridagi hisobotga kirmaydi.',
+  // ------------------------------------------- staff hours export (ADR 0156)
+  'reports.exportCentre.reportOption.staffAttendance': 'Xodimlar soatlari (ish haqi uchun)',
+  'reports.exportCentre.piiGroupLabel.staff':
+    'Ismlar va tabel raqamlari (staff.shift.export kerak)',
+  'reports.exportCentre.piiGroupHidden.staff':
+    'Ism va tabel raqami ustunlari yashirilgan — sizda staff.shift.export huquqi yoʻq',
+  'reports.exportCentre.includeUnresolved':
+    'Hali davom etayotgan yoki tasdiq kutayotgan smenalarni qoʻshish (belgilangan, toʻlanadigan soatsiz)',
+  'reports.exportCentre.error.unresolvedShifts':
+    'Bu davrda hali davom etayotgan yoki tasdiq kutayotgan smenalar bor. Avval ularni hal qiling yoki belgilab qoʻshish uchun katakchani tanlang.',
+  'reports.exportCentre.error.tooLarge':
+    'Bu davrda bitta faylga sigʻadiganidan (20 000) koʻp qator bor. Qisqaroq davrni tanlang: fayl hech qachon kesilmaydi.',
+  'reports.exportCentre.column.staffDisplayReference': 'Xodim raqami',
+  'reports.exportCentre.column.plannedSeconds': 'Reja (soniya)',
+  'reports.exportCentre.column.workedSeconds': 'Ishlangan (soniya)',
+  'reports.exportCentre.column.breakSeconds': 'Tanaffus (soniya)',
+  'reports.exportCentre.column.paidSeconds': 'Toʻlanadi (soniya)',
+  'reports.exportCentre.column.varianceSeconds': 'Rejaga nisbatan (soniya)',
+  'reports.exportCentre.column.approvalStatus': 'Tasdiqlash',
+  'reports.exportCentre.column.startedAt': 'Boshlanishi',
+  'reports.exportCentre.column.endedAt': 'Tugashi',
+  'reports.exportCentre.column.timezone': 'Vaqt zonasi',
+  'reports.exportCentre.column.employeeNumber': 'Tabel raqami',
+  'reports.exportCentre.column.staffName': 'Ism',
 };
