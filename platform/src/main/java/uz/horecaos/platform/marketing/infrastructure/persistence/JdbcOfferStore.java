@@ -286,21 +286,11 @@ public class JdbcOfferStore {
             Instant updatedAt) {
 
         /**
-         * Whether this version may be <em>chosen</em> now, by a new step or a new presentation:
-         * published and inside its window. A superseded version is no longer on offer to a
-         * new author; {@link #honouredAt} is the question for a campaign that already carries it.
-         */
-        public boolean appliesAt(Instant now) {
-            return "PUBLISHED".equals(status)
-                    && !validFrom.isAfter(now)
-                    && (validUntil == null || validUntil.isAfter(now));
-        }
-
-        /**
          * Whether a campaign that was approved with this version still carries it.
          *
-         * <p>Publishing a newer version supersedes this one for anyone choosing an offer from
-         * now on, and does nothing to a campaign approved with it: an approved scenario keeps
+         * <p>Publishing a newer version supersedes this one for anyone <em>choosing</em> an
+         * offer from now on (authoring a step still requires a published version), and does
+         * nothing to a campaign approved with it: an approved scenario keeps
          * the version it was approved with until it is revised and approved again (ADR 0112),
          * for the reason an approver signs a specific offer and not a name. Only a retirement,
          * which is somebody saying this offer must stop, or the end of its own window,
