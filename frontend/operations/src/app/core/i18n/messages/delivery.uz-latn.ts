@@ -195,8 +195,10 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.paymentWindow.action': 'Shundan keyin',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Buyurtmani xodim uchun belgilash',
   'delivery.paymentWindow.action.CANCEL': 'Buyurtmani bekor qilish',
-  'delivery.paymentWindow.cancelLocked':
-    'Toʻlanmagan buyurtmani bekor qilish mahsulot jamoasi hal qilmaguncha mavjud emas.',
+  'delivery.paymentWindow.cancelNote':
+    'Bekor qilish buyurtmani «Bekor qilindi: toʻlanmagan» deb yakunlaydi: mahsulot va promokod qaytariladi, toʻlov sahifasi yopiladi. Keyin kelgan toʻlov buyurtmani qayta tiklamaydi; moliya qaytarish kerakligi haqida xabar oladi.',
+  'delivery.paymentWindow.cancelTooShort':
+    'Bekor qiladigan muddat kamida 15 daqiqa boʻlishi kerak.',
   'delivery.paymentWindow.save': 'Muddatni eʻlon qilish',
   'delivery.paymentWindow.saved': '{version}-versiya sifatida eʻlon qilindi.',
   'delivery.dialog.cancel': 'Bekor qilish',

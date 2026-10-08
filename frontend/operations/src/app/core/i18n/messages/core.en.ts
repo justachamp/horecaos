@@ -57,7 +57,7 @@ export const coreEn = {
   'orders.status.RECEIVED': 'Received',
   'orders.status.PAYMENT_AUTHORIZING': 'Payment',
   'orders.status.AWAITING_APPROVAL': 'Awaiting approval',
-  'orders.status.PAYMENT_FAILED': 'Payment failed',
+  'orders.status.PAYMENT_FAILED': 'Cancelled: not paid',
   'orders.status.CONFIRMED': 'Confirmed',
   'orders.status.REJECTED': 'Rejected',
   'orders.status.EXPIRED': 'Expired',

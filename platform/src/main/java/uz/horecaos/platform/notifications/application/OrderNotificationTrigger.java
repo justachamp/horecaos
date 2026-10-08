@@ -26,6 +26,7 @@ import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 
@@ -82,6 +83,13 @@ public class OrderNotificationTrigger {
 
     /** The restaurant never answered in time (ADR 0002). Distinct wording from a rejection — see {@link OrderExpired}. */
     public static final String ORDER_EXPIRED = "ORDER_EXPIRED";
+
+    /**
+     * ADR 0170: the order was not paid within its window and ended as {@code PAYMENT_FAILED}. Its own key,
+     * because «cancelled» would tell the customer someone decided, and «expired» that the restaurant never
+     * looked; neither is what happened. No amount is a variable (ADR 0020).
+     */
+    public static final String ORDER_PAYMENT_LAPSED = "ORDER_PAYMENT_LAPSED";
 
     /**
      * ADR 0075: the order is finished, and this is the message a rating prompt
@@ -177,6 +185,8 @@ public class OrderNotificationTrigger {
                         reasonVariables(cancelled.reasonCode()));
             case OrderExpired expired ->
                 create(expired, ORDER_EXPIRED, expired.brandId(), expired.locationId(), Map.of());
+            case OrderPaymentLapsed lapsed ->
+                create(lapsed, ORDER_PAYMENT_LAPSED, lapsed.brandId(), lapsed.locationId(), Map.of());
             // Every other ordering fact is deliberately silent. Adding a case here
             // is adding a message a customer receives, which is a product decision
             // and should look like one in a diff.

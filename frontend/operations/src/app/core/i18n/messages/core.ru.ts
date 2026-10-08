@@ -60,7 +60,7 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'orders.status.RECEIVED': 'Принят',
   'orders.status.PAYMENT_AUTHORIZING': 'Оплата',
   'orders.status.AWAITING_APPROVAL': 'На подтверждении',
-  'orders.status.PAYMENT_FAILED': 'Оплата не прошла',
+  'orders.status.PAYMENT_FAILED': 'Отменён: не оплачен',
   'orders.status.CONFIRMED': 'Подтверждён',
   'orders.status.REJECTED': 'Отклонён',
   'orders.status.EXPIRED': 'Просрочен',

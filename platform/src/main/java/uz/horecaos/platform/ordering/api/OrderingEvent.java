@@ -22,6 +22,7 @@ public sealed interface OrderingEvent
                 OrderConfirmed,
                 OrderRejected,
                 OrderExpired,
+                OrderPaymentLapsed,
                 OrderCancelled,
                 OrderCompleted,
                 OrderAmendmentProposed,

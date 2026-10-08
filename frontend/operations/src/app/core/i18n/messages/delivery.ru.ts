@@ -192,8 +192,10 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.paymentWindow.action': 'После этого',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Отметить заказ для сотрудника',
   'delivery.paymentWindow.action.CANCEL': 'Отменить заказ',
-  'delivery.paymentWindow.cancelLocked':
-    'Отмена неоплаченного заказа недоступна, пока это не решит продукт.',
+  'delivery.paymentWindow.cancelNote':
+    'Отмена завершает заказ как «Отменён: не оплачен»: товар и промокод возвращаются, страница оплаты закрывается. Платёж, пришедший позже, заказ не оживляет; финансы получают уведомление, что нужен возврат.',
+  'delivery.paymentWindow.cancelTooShort':
+    'Срок, после которого заказ отменяется, не меньше 15 минут.',
   'delivery.paymentWindow.save': 'Опубликовать срок',
   'delivery.paymentWindow.saved': 'Опубликовано как версия {version}.',
   'delivery.dialog.cancel': 'Отмена',

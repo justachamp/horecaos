@@ -13,6 +13,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStateMachine;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -124,6 +125,17 @@ public class TerminalOrderPaymentVoid {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderExpired(OrderExpired event) {
         voidAnyLivePayment(event.tenantId().value(), event.orderId(), "ORDER_EXPIRED");
+    }
+
+    /**
+     * ADR 0170: the unpaid-order window elapsed and the order ended as {@code PAYMENT_FAILED}. The
+     * provider's side is closed exactly as it is for a cancellation or an expiry: asked once, never twice,
+     * an {@code UNCERTAIN} attempt left to its resolver. A capture that lands anyway never revives the
+     * order; it is recorded against the settlement and a refund is raised.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderPaymentLapsed(OrderPaymentLapsed event) {
+        voidAnyLivePayment(event.tenantId().value(), event.orderId(), "PAYMENT_WINDOW_ELAPSED");
     }
 
     /**

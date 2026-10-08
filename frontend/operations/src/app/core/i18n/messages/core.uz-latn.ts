@@ -59,7 +59,7 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'orders.status.RECEIVED': 'Qabul qilindi',
   'orders.status.PAYMENT_AUTHORIZING': 'Toʻlov',
   'orders.status.AWAITING_APPROVAL': 'Tasdiqlashda',
-  'orders.status.PAYMENT_FAILED': 'Toʻlov oʻtmadi',
+  'orders.status.PAYMENT_FAILED': 'Bekor qilindi: toʻlanmagan',
   'orders.status.CONFIRMED': 'Tasdiqlangan',
   'orders.status.REJECTED': 'Rad etilgan',
   'orders.status.EXPIRED': 'Muddati oʻtgan',

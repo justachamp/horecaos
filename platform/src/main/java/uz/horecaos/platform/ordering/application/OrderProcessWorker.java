@@ -4,12 +4,16 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.DueTimerRow;
 
@@ -47,6 +51,7 @@ public class OrderProcessWorker {
     private final Duration paymentRecheckInterval;
     private final Duration timerRetryBackoff;
     private final Duration timerStaleFiredAfter;
+    private final OrderPaymentProcess.@Nullable Lapse paymentLapse;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderProcessWorker(
@@ -74,7 +79,12 @@ public class OrderProcessWorker {
             // apply, not a thrown exception) rather than merely in flight. Far
             // longer than this worker's own PT5S tick so a live claim is never
             // mistaken for a stranded one.
-            @Value("${horecaos.ordering.workers.timers.stale-fired-after:PT2M}") Duration timerStaleFiredAfter) {
+            @Value("${horecaos.ordering.workers.timers.stale-fired-after:PT2M}") Duration timerStaleFiredAfter,
+            PlatformTransactionManager transactions,
+            // ADR 0170: SHADOW counts what a published CANCEL window would have ended and ends nothing,
+            // for the fortnight the rollout asks for; ENFORCE applies it. Shadow is the default, so a
+            // deployment that never reads this ends no order.
+            @Value("${horecaos.ordering.payment-window.cancel.mode:SHADOW}") String paymentWindowCancelMode) {
         this.orders = orders;
         this.state = state;
         this.inventoryProcess = inventoryProcess;
@@ -87,6 +97,25 @@ public class OrderProcessWorker {
         this.paymentRecheckInterval = paymentRecheckInterval;
         this.timerRetryBackoff = timerRetryBackoff;
         this.timerStaleFiredAfter = timerStaleFiredAfter;
+        this.paymentLapse =
+                "ENFORCE".equalsIgnoreCase(paymentWindowCancelMode) ? lapseThrough(state, transactions) : null;
+    }
+
+    /**
+     * Ends one unpaid order inside a savepoint of the sweep's own transaction (ADR 0170).
+     *
+     * <p>Nested rather than a transaction of its own: the sweep holds a {@code FOR UPDATE} lock on the
+     * order's payment process row, and the order's transition settles that same row, so a second
+     * connection would wait for a lock its own caller holds. A savepoint keeps one connection, and a
+     * failure rolls back to it alone, leaving the rest of the batch to commit rather than poisoning it.
+     */
+    private static OrderPaymentProcess.Lapse lapseThrough(
+            OrderStateService state, PlatformTransactionManager transactions) {
+        TransactionTemplate nested = new TransactionTemplate(transactions);
+        nested.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
+        return (tenantId, orderId, windowMinutes, policyVersion) -> Boolean.TRUE.equals(
+                nested.execute(status -> state.paymentWindowReached(tenantId, orderId, windowMinutes, policyVersion)
+                        .applied()));
     }
 
     /**
@@ -176,15 +205,17 @@ public class OrderProcessWorker {
     /**
      * The {@code ORDER_PAYMENT} safety net and stuck list (ADR 0019): closes a
      * row the synchronous settle at the order's own transition somehow missed,
-     * and flags — never cancels — an order that has sat in {@code
-     * PAYMENT_AUTHORIZING} past a configured threshold.
+     * flags an order that has sat in {@code PAYMENT_AUTHORIZING} past its window
+     * and, where a tenant published {@code CANCEL} and the deployment's
+     * {@code cancel.mode} is {@code ENFORCE} (ADR 0170), ends it as {@code PAYMENT_FAILED}.
      */
     @Scheduled(
             initialDelayString = "${horecaos.ordering.workers.payment.initial-delay:PT30S}",
             fixedDelayString = "${horecaos.ordering.workers.payment.interval:PT30S}")
     public void sweepStalePayments() {
         try {
-            int checked = paymentProcess.sweep(clock.instant(), paymentStaleAfter, paymentRecheckInterval, batchSize);
+            int checked = paymentProcess.sweep(
+                    clock.instant(), paymentStaleAfter, paymentRecheckInterval, batchSize, paymentLapse);
             if (checked > 0) {
                 log.debug("Checked {} payment process rows", checked);
             }

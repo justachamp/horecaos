@@ -189,8 +189,9 @@ export const deliveryEn = {
   'delivery.paymentWindow.action': 'After that',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Flag the order for a person',
   'delivery.paymentWindow.action.CANCEL': 'Cancel the order',
-  'delivery.paymentWindow.cancelLocked':
-    'Cancelling an unpaid order is not available until product decides it.',
+  'delivery.paymentWindow.cancelNote':
+    'Cancelling ends the order as «Cancelled: not paid»: its stock and promo code go back and the payment page is closed. A payment that arrives afterwards never revives it; finance is told a refund is due.',
+  'delivery.paymentWindow.cancelTooShort': 'A window that cancels is at least 15 minutes.',
   'delivery.paymentWindow.save': 'Publish the window',
   'delivery.paymentWindow.saved': 'Published as version {version}.',
   'delivery.dialog.cancel': 'Cancel',
