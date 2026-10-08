@@ -340,6 +340,10 @@ export const ru: Messages = {
   'tenants.column.currency': 'Валюта',
   'tenants.column.country': 'Страна',
   'tenants.column.businessType': 'Тип бизнеса',
+  'tenants.profileNote.courierServiceWithoutModule':
+    'Курьерская служба без консоли доставок: консоль открывается как ресторанная',
+  'tenants.profileNote.moduleWithoutCourierService':
+    'Есть консоль доставок, но это не курьерская служба',
   'tenants.column.plan': 'Тариф',
   'tenants.column.health': 'Открытые проблемы',
   'tenants.health.problems': '{count} ждут',
@@ -746,6 +750,8 @@ export const ru: Messages = {
     'Email владельца не удалось расшифровать для этого клиента. Запустите новое подключение с email владельца.',
   'onboarding.template.suggested':
     'Предложен для типа «{type}»: шаблон {code} указывает этот тип бизнеса.',
+  'onboarding.template.recommendedModule':
+    'Рекомендуется для такого бизнеса: модуль «{code}», который меняет начальный экран консоли. Тип бизнеса его не включает.',
   'onboarding.template.fallback':
     'Ни один шаблон пока не указывает тип «{type}», поэтому новые запуски идут по шаблону {code}.',
   'onboarding.template.choose': 'Шаблон',

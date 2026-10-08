@@ -202,7 +202,25 @@ public class TenantControlPlaneService {
                 row.status(),
                 row.createdAt(),
                 row.countryCode(),
-                row.businessType());
+                row.businessType(),
+                consoleProfileNote(row.businessType(), row.deliveriesConsole()));
+    }
+
+    /**
+     * ADR 0164 Decision 9: a read-only hint that a tenant looks half-configured. {@code COURIER_SERVICE}
+     * without the {@code deliveries-console} module opens as a restaurant console, and the module on a
+     * tenant of any other kind opens as a deliveries console. It blocks nothing and changes nothing: the
+     * business type is a label and the module is the profile, and neither grants the other (ADR 0090).
+     */
+    static @Nullable String consoleProfileNote(String businessType, boolean deliveriesConsole) {
+        boolean courierService = "COURIER_SERVICE".equals(businessType);
+        if (courierService && !deliveriesConsole) {
+            return "COURIER_SERVICE_WITHOUT_DELIVERIES_CONSOLE";
+        }
+        if (!courierService && deliveriesConsole) {
+            return "DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE";
+        }
+        return null;
     }
 
     /**
@@ -1362,7 +1380,8 @@ public class TenantControlPlaneService {
             TenantStatus status,
             java.time.Instant createdAt,
             String countryCode,
-            String businessType) {}
+            String businessType,
+            @Nullable String consoleProfileNote) {}
 
     /**
      * @param version  what a correction or deletion sends back as {@code

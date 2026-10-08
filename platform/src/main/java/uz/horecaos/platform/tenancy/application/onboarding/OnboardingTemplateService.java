@@ -95,10 +95,20 @@ public class OnboardingTemplateService {
                     .query(this::map)
                     .optional();
             if (suited.isPresent()) {
-                return new Suggestion(suited.get(), businessType, true);
+                return new Suggestion(suited.get(), businessType, true, recommendedModuleFor(businessType));
             }
         }
-        return new Suggestion(currentDefault(), businessType, false);
+        return new Suggestion(currentDefault(), businessType, false, recommendedModuleFor(businessType));
+    }
+
+    /**
+     * ADR 0164: the commercial module that shapes the console for this kind of tenant, named so the
+     * operator starting an onboarding run can offer it. A recommendation and never a grant: the module
+     * is bought or assigned through the commercial module screens, and the business type enables nothing
+     * on its own (ADR 0090).
+     */
+    static @Nullable String recommendedModuleFor(@Nullable String businessType) {
+        return "COURIER_SERVICE".equals(businessType) ? "deliveries-console" : null;
     }
 
     @SuppressWarnings("unchecked")
@@ -140,5 +150,13 @@ public class OnboardingTemplateService {
      * default was taken because none does.
      */
     public record Suggestion(
-            TemplateView template, @Nullable String businessType, boolean matched) {}
+            TemplateView template,
+            @Nullable String businessType,
+            boolean matched,
+            @Nullable String recommendedModule) {
+
+        public Suggestion(TemplateView template, @Nullable String businessType, boolean matched) {
+            this(template, businessType, matched, null);
+        }
+    }
 }

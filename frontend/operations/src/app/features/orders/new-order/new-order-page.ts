@@ -16,6 +16,7 @@ import { firstValueFrom } from 'rxjs';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { firstPage } from '../../../core/api/page';
 import { ApiError } from '../../../core/api/problem-details';
+import { ConsoleProfile } from '../../../core/auth/console-profile';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
@@ -262,6 +263,7 @@ export class NewOrderPage implements OnInit {
   private readonly customersApi = inject(CustomersApi);
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly location = inject(CurrentLocation);
+  private readonly consoleProfile = inject(ConsoleProfile);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(Toasts);
@@ -313,6 +315,8 @@ export class NewOrderPage implements OnInit {
 
   async ngOnInit(): Promise<void> {
     await this.location.ensureLoaded();
+    await this.consoleProfile.ensureLoaded();
+    this.applyOfferedHandovers();
     const scope = this.location.scope();
     if (!scope) {
       this.locationDenied.set(this.location.denied());
@@ -837,6 +841,29 @@ export class NewOrderPage implements OnInit {
         return this.i18n.t('orders.fulfillmentMode.DINE_IN');
       case 'PICKUP':
         return this.i18n.t('orders.fulfillmentMode.PICKUP');
+    }
+  }
+
+  /**
+   * ADR 0164 Decision 5c: the deliveries profile offers `DELIVERY` only. A standard console (or a profile
+   * that could not be read) offers all three, as it always did. A presentation, not a permission: the
+   * server accepts whatever the operator's grants allow.
+   */
+  protected handoverOffered(mode: 'PICKUP' | 'DELIVERY' | 'DINE_IN'): boolean {
+    const offered = this.consoleProfile.handovers();
+    return offered === null || offered.includes(mode);
+  }
+
+  /** The default `PICKUP` is not a choice a profile that does not offer it may start the screen on. */
+  private applyOfferedHandovers(): void {
+    if (this.handoverOffered(this.fulfillmentMode())) {
+      return;
+    }
+    const first = (['DELIVERY', 'PICKUP', 'DINE_IN'] as const).find((mode) =>
+      this.handoverOffered(mode),
+    );
+    if (first !== undefined) {
+      this.setFulfillmentMode(first);
     }
   }
 

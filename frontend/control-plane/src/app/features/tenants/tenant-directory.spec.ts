@@ -108,6 +108,40 @@ describe('TenantDirectory', () => {
     expect(row.querySelector('.health')?.getAttribute('data-problems')).toBe('3');
   });
 
+  it('notes a courier service that lacks the deliveries console, and the console on another kind (ADR 0164)', async () => {
+    api.listTenants.mockResolvedValue({
+      items: [
+        {
+          ...TENANT_A,
+          businessType: 'COURIER_SERVICE',
+          consoleProfileNote: 'COURIER_SERVICE_WITHOUT_DELIVERIES_CONSOLE',
+        },
+        {
+          ...TENANT_A,
+          id: 'tenant-b',
+          slug: 'tenant-b',
+          displayName: 'Tenant B',
+          consoleProfileNote: 'DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE',
+        },
+        { ...TENANT_A, id: 'tenant-c', slug: 'tenant-c', displayName: 'Tenant C', consoleProfileNote: null },
+      ],
+      nextCursor: null,
+    });
+
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    const notes = [...fixture.nativeElement.querySelectorAll('tbody tr')].map(
+      (row: HTMLElement) => row.querySelector('[data-testid="console-profile-note"]')?.textContent?.trim() ?? null,
+    );
+    expect(notes[0]).toContain('без консоли доставок');
+    expect(notes[1]).toContain('не курьерская служба');
+    expect(notes[2]).toBeNull();
+  });
+
   it('leaves a dash where a platform-wide read fails, not an error across the page', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
     api.tenantPlans.mockRejectedValue(

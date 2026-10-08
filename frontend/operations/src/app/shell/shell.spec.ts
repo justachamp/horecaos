@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { NEVER, Observable, Subject, of } from 'rxjs';
+import { NEVER, Observable, Subject, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Component, inject, signal } from '@angular/core';
 
@@ -731,6 +731,151 @@ describe('Shell: the location a screen rebuilt by a brand pick reads', () => {
     await pickEvos();
 
     expect(probeLocation.options()).toEqual([]);
+  });
+});
+
+/**
+ * ADR 0164: the deliveries profile is a presentation of the one console. It puts Kitchen, Marketing and
+ * Inbox away, calls Orders what they are for this tenant and opens with Delivery first -- and it can only
+ * ever remove things from a rail the capability filter already allowed.
+ */
+describe('Shell: the console profile (ADR 0164)', () => {
+  const DELIVERIES = {
+    variant: 'DELIVERIES',
+    landing: '/deliveries',
+    hiddenSections: ['/kitchen', '/marketing', '/inbox'],
+    handovers: ['DELIVERY'],
+  };
+  const STANDARD = {
+    variant: 'STANDARD',
+    landing: '/today',
+    hiddenSections: [],
+    handovers: ['DELIVERY', 'PICKUP', 'DINE_IN'],
+  };
+
+  function stubApi(profile: unknown, capabilities: readonly string[]) {
+    return {
+      get(path: string): Observable<unknown> {
+        if (path === '/api/v1/session/context') {
+          return of({
+            value: {
+              subject: 'operator-1',
+              activeTenantId: 't1',
+              scopes: [
+                {
+                  scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+                  roleCode: 'tenant-owner',
+                  capabilities,
+                },
+              ],
+            },
+          });
+        }
+        if (path === '/api/v1/session/console-profile') {
+          return profile === null ? throwError(() => new Error('down')) : of({ value: profile });
+        }
+        return NEVER;
+      },
+    };
+  }
+
+  async function open(
+    profile: unknown,
+    capabilities: readonly string[] = [...new Set(NAV_ITEMS.map((item) => item.capability))],
+  ): Promise<{ readonly fixture: ComponentFixture<Shell>; readonly host: HTMLElement }> {
+    localStorage.removeItem('horecaos.console.showAllSections');
+    await TestBed.configureTestingModule({
+      imports: [Shell],
+      providers: [
+        provideRouter([]),
+        { provide: ApiClient, useValue: stubApi(profile, capabilities) },
+        { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnProfile, useValue: new FakeOwnProfile() },
+        { provide: RealtimeClient, useValue: { state: signal(null), onFrame: () => () => {} } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(Shell);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    // The tenant read and then the profile read are promise chains the fixture cannot see.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    return { fixture, host: fixture.nativeElement as HTMLElement };
+  }
+
+  const railPaths = (host: HTMLElement): (string | null)[] =>
+    [...host.querySelectorAll('.rail__item')].map((a) => a.getAttribute('href'));
+  const railLabels = (host: HTMLElement): (string | undefined)[] =>
+    [...host.querySelectorAll('.rail__item')].map((a) => a.textContent?.trim());
+
+  afterEach(() => localStorage.removeItem('horecaos.console.showAllSections'));
+
+  it('removes exactly the put-away sections and keeps everything else', async () => {
+    const standard = railPaths((await open(STANDARD)).host);
+    TestBed.resetTestingModule();
+    const deliveries = railPaths((await open(DELIVERIES)).host);
+
+    expect(standard).toContain('/kitchen');
+    expect(standard).toContain('/marketing');
+    expect(standard).toContain('/inbox');
+    expect(deliveries).not.toContain('/kitchen');
+    expect(deliveries).not.toContain('/marketing');
+    expect(deliveries).not.toContain('/inbox');
+    expect([...deliveries].sort()).toEqual(
+      standard.filter((path) => !['/kitchen', '/marketing', '/inbox'].includes(path ?? '')).sort(),
+    );
+  });
+
+  it('puts Delivery first and calls Orders «Deliveries»', async () => {
+    const { host } = await open(DELIVERIES);
+
+    expect(railPaths(host)[0]).toBe('/delivery');
+    expect(railLabels(host)).toContain('Deliveries');
+    expect(railLabels(host)).not.toContain('Orders');
+  });
+
+  it('leaves the standard rail exactly as it was, Orders and Kitchen included', async () => {
+    const { host } = await open(STANDARD);
+
+    expect(railPaths(host)[0]).toBe('/today');
+    expect(railLabels(host)).toContain('Orders');
+    expect(host.querySelector('[data-testid="shell-show-all-sections"]')).toBeNull();
+  });
+
+  it('never puts back a section the capability filter removed', async () => {
+    // The profile hides Kitchen, but this operator never held its capability either: still absent.
+    const { host } = await open(DELIVERIES, [
+      'ORDER_READ',
+      'DELIVERY_PLAN_READ',
+      'KITCHEN_TICKET_READ',
+    ]);
+
+    expect(railPaths(host)).toEqual(['/delivery', '/today', '/orders']);
+  });
+
+  it('is the standard rail when the profile cannot be read', async () => {
+    const { host } = await open(null);
+
+    expect(railPaths(host)).toContain('/kitchen');
+    expect(railPaths(host)[0]).toBe('/today');
+  });
+
+  it('«Show all sections» restores the rail without another request, and hides it again', async () => {
+    const { fixture, host } = await open(DELIVERIES);
+    const button = host.querySelector('[data-testid="shell-show-all-sections"]') as HTMLElement;
+    expect(button.textContent?.trim()).toBe('Show all sections');
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(railPaths(host)).toContain('/kitchen');
+    expect(railPaths(host)).toContain('/marketing');
+    expect(button.textContent?.trim()).toBe('Hide the rest');
+
+    button.click();
+    fixture.detectChanges();
+    expect(railPaths(host)).not.toContain('/kitchen');
   });
 });
 

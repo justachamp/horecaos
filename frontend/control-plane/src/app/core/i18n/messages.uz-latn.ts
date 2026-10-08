@@ -345,6 +345,10 @@ export const uzLatn: Messages = {
   'tenants.column.currency': 'Valyuta',
   'tenants.column.country': 'Mamlakat',
   'tenants.column.businessType': 'Biznes turi',
+  'tenants.profileNote.courierServiceWithoutModule':
+    'Yetkazmalar konsolisiz kuryerlik xizmati: konsol restoran konsoli sifatida ochiladi',
+  'tenants.profileNote.moduleWithoutCourierService':
+    'Yetkazmalar konsoli bor, lekin kuryerlik xizmati emas',
   'tenants.column.plan': 'Tarif',
   'tenants.column.health': 'Ochiq muammolar',
   'tenants.health.problems': '{count} kutmoqda',
@@ -754,6 +758,8 @@ export const uzLatn: Messages = {
     'Ega emailini bu mijoz uchun ochib bo‘lmadi. Ega emaili bilan yangi jarayonni boshlang.',
   'onboarding.template.suggested':
     '«{type}» uchun taklif: {code} shabloni shu biznes turini ko‘rsatadi.',
+  'onboarding.template.recommendedModule':
+    'Bunday biznes uchun tavsiya: konsolning ochilish ekranini oʻzgartiruvchi «{code}» moduli. Biznes turi uni yoqmaydi.',
   'onboarding.template.fallback':
     'Hozircha «{type}» turini ko‘rsatadigan shablon yo‘q, shuning uchun yangi jarayonlar {code} shabloni bo‘yicha boradi.',
   'onboarding.template.choose': 'Shablon',

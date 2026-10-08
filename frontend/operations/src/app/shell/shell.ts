@@ -11,6 +11,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 
 import { Auth } from '../core/auth/auth';
 import { BrandChoice } from '../core/auth/brand-choice';
+import { ConsoleProfile } from '../core/auth/console-profile';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { OwnProfile } from '../core/auth/own-profile';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
@@ -28,7 +29,7 @@ import { ToastHost } from '../shared/ui/toast-host';
 import { CallBar } from './call-bar';
 import { ShellMessageKey, shellMessages } from './shell-messages';
 import { ShortcutSheet } from './shortcut-sheet';
-import { NAVIGATION, NavGroup } from './navigation';
+import { NAVIGATION, NavGroup, NavItem } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 import { VoicePresence } from './voice-presence';
@@ -110,6 +111,7 @@ export class Shell {
   private readonly toasts = inject(Toasts);
   private readonly shortcuts = inject(ShortcutRegistry);
   protected readonly brandChoice = inject(BrandChoice);
+  protected readonly consoleProfile = inject(ConsoleProfile);
 
   /**
    * The rail, filtered to sections this operator has any business in
@@ -123,12 +125,39 @@ export class Shell {
    * greyed-out rail item teaches an operator that grey means "try again
    * later", and a wrong refusal reads as a bug, not as her own job.
    */
-  protected readonly navigation = computed<readonly NavGroup[]>(() =>
-    NAVIGATION.map((group) => ({
+  protected readonly navigation = computed<readonly NavGroup[]>(() => {
+    const hidden = this.consoleProfile.hiddenSections();
+    const deliveries = this.consoleProfile.isDeliveries();
+    return NAVIGATION.map((group) => ({
       ...group,
-      items: group.items.filter((item) => this.capabilities.has(item.capability)),
-    })).filter((group) => group.items.length > 0),
-  );
+      // The capability filter first, then the profile (ADR 0164): the profile can only take things off
+      // a rail the capability filter already allowed, never put back a section the operator may not use.
+      items: this.forProfile(
+        group.items.filter(
+          (item) => this.capabilities.has(item.capability) && !hidden.includes(item.path),
+        ),
+        deliveries,
+      ),
+    })).filter((group) => group.items.length > 0);
+  });
+
+  /**
+   * The deliveries profile's rail (ADR 0164 Decision 5): Delivery first within its group, and Orders
+   * called what it is for this tenant -- deliveries. Nothing else about the rail changes, and a standard
+   * profile is returned untouched.
+   */
+  private forProfile(items: readonly NavItem[], deliveries: boolean): readonly NavItem[] {
+    if (!deliveries) {
+      return items;
+    }
+    const relabelled = items.map((item) =>
+      item.path === '/orders' ? { ...item, label: 'shell.nav.deliveries' as const } : item,
+    );
+    return [
+      ...relabelled.filter((item) => item.path === '/delivery'),
+      ...relabelled.filter((item) => item.path !== '/delivery'),
+    ];
+  }
 
   /**
    * The name on the account chip: the tenant's own record of the signed-in
@@ -187,6 +216,10 @@ export class Shell {
     void this.capabilities.ensureLoaded();
     // The chip's name (ADR 0139). Cosmetic: a refusal leaves the token claim.
     void this.ownProfile.ensureLoaded();
+    // ADR 0164: how the console opens for this tenant. Read here for the rail; the root redirect, the
+    // New order screen and Statistics ask the same service. A profile that cannot be read is the
+    // standard console, so a slow answer only ever shows the rail it always showed.
+    void this.consoleProfile.ensureLoaded();
     // Row 10.12: the brand's own money and phone formats, applied to every
     // formatter in the console. Constructing the sync is what starts it — it
     // follows the location's brand from here on, so it is built here, with
@@ -307,6 +340,11 @@ export class Shell {
       default:
         return option.displayName;
     }
+  }
+
+  /** ADR 0164: «Показать все» -- the put-away sections, for this person on this device. */
+  protected toggleShowAll(): void {
+    this.consoleProfile.toggleShowAll();
   }
 
   protected signOut(): void {

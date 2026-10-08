@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
+import { landingGuard, statisticsLandingGuard } from './core/auth/landing.guard';
 import { messagesGuard } from './core/i18n/messages.guard';
 import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { NAV_ITEMS } from './shell/navigation';
@@ -103,7 +104,18 @@ export const routes: Routes = [
     canActivate: [authGuard, platformLocalesGuard],
     canActivateChild: [capabilityGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'today' },
+      // ADR 0164: the profile decides where the console opens -- `/today`, or `/deliveries` for a tenant
+      // that bought the deliveries-console module. An unreadable profile is `/today`, as it always was.
+      { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
+      {
+        // ADR 0164, slice one: `/deliveries` is the landing route of the deliveries profile and is the
+        // dispatch board, which already shows a delivery (a plan with its courier, its non-PII
+        // destination, its promise and its state) as the record. Not a rail entry and not a second
+        // screen: slice two, the history list, waits for the first courier-service tenant.
+        path: 'deliveries',
+        pathMatch: 'full',
+        redirectTo: 'delivery/dispatch',
+      },
       {
         // operations IA §9.1c: where `capabilityGuard` sends a direct URL
         // into a section its own capability check refused. Declared before
@@ -874,7 +886,8 @@ export const routes: Routes = [
         canActivate: [messagesGuard('reports')],
         loadComponent: () => import('./features/reports/reports-shell').then((m) => m.ReportsShell),
         children: [
-          { path: '', pathMatch: 'full', redirectTo: 'overview' },
+          // ADR 0164: the couriers report for the deliveries profile, the overview for everyone else.
+          { path: '', pathMatch: 'full', canActivate: [statisticsLandingGuard], children: [] },
           {
             path: 'overview',
             loadComponent: () =>

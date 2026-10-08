@@ -39,7 +39,18 @@
             </td>
             <td class="q-body-sm q-tnum">{{ tenant.slug }}</td>
             <td class="q-body-sm q-tnum">{{ tenant.countryCode }}</td>
-            <td class="q-body-sm">{{ i18n.t(businessTypeKey(tenant.businessType)) }}</td>
+            <td class="q-body-sm">
+              {{ i18n.t(businessTypeKey(tenant.businessType)) }}
+              @if (tenant.consoleProfileNote === 'COURIER_SERVICE_WITHOUT_DELIVERIES_CONSOLE') {
+                <span class="q-caption muted profileNote" data-testid="console-profile-note">{{
+                  i18n.t('tenants.profileNote.courierServiceWithoutModule')
+                }}</span>
+              } @else if (tenant.consoleProfileNote === 'DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE') {
+                <span class="q-caption muted profileNote" data-testid="console-profile-note">{{
+                  i18n.t('tenants.profileNote.moduleWithoutCourierService')
+                }}</span>
+              }
+            </td>
             <td class="q-body-sm q-tnum plan">{{ planOf(tenant.id) }}</td>
             <td class="q-body-sm q-tnum">{{ tenant.defaultCurrency }}</td>
             <td class="q-body-sm">
