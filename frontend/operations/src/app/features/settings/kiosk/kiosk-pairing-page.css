@@ -1,0 +1,77 @@
+.pairing {
+  padding: 16px 20px;
+  max-width: 640px;
+}
+
+.hint {
+  color: var(--q-ink-subtle);
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input,
+.field select {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+}
+
+.code {
+  font-size: 1.25rem;
+  letter-spacing: 0.1em;
+}
+
+.confirm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.primary,
+.secondary {
+  align-self: flex-start;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.primary {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.secondary {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.link {
+  color: var(--q-primary);
+}

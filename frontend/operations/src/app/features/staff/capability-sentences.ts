@@ -521,6 +521,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     en: 'Approve a courier shift variance',
   },
 
+  'kiosk.device.manage': {
+    area: 'channel',
+    ru: 'Подключать, переносить на другой канал и отключать киоски самообслуживания',
+    'uz-Latn': 'Oʻzi-oʻzi xizmat kiosklarini ulash, boshqa kanalga oʻtkazish va oʻchirish',
+    en: 'Pair, move to another channel and switch off self-service kiosks',
+  },
   'terminal.read': {
     area: 'terminal',
     ru: 'Видеть устройства филиала и кто за ними работает',

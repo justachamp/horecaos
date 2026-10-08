@@ -382,6 +382,15 @@ export const routes: Routes = [
                 data: { spec: 'operations-spec/settings.md §10.5 (Channel setup)' },
               },
               {
+                // ADR 0162: the page a kiosk's QR opens. Declared before `:channelId`, which would otherwise take
+                // the literal segment as a channel id. It approves nothing on arrival.
+                path: 'kiosk-pairing',
+                loadComponent: () =>
+                  import('./features/settings/kiosk/kiosk-pairing-page').then(
+                    (m) => m.KioskPairingPage,
+                  ),
+              },
+              {
                 path: ':channelId',
                 loadComponent: () =>
                   import('./features/settings/channel-setup/channel-setup-page').then(

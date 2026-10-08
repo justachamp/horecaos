@@ -1466,4 +1466,73 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     '«{name}» отозвано: оно больше не может обслуживать этот бренд.',
   'settings.storefrontApps.denied':
     'Приложения витрин выбирают только владелец и администраторы аккаунта.',
+
+  // ------------------------------------------------------------------- kiosk pairing and the KIOSK card (ADR 0162)
+  'settings.kiosk.lead':
+    'Киоски самообслуживания этого филиала. Киоск сам показывает код и QR; вы подтверждаете код и выбираете канал, через который он продаёт.',
+  'settings.kiosk.pair': 'Подключить киоск',
+  'settings.kiosk.loading': 'Загружаем киоски',
+  'settings.kiosk.denied': 'Нет доступа к киоскам этого филиала',
+  'settings.kiosk.error': 'Не удалось загрузить киоски. Повторите чуть позже.',
+  'settings.kiosk.empty': 'В этом филиале пока нет подключённых киосков.',
+  'settings.kiosk.column.name': 'Название',
+  'settings.kiosk.column.channel': 'Канал продаж',
+  'settings.kiosk.column.lastSeen': 'Последний сигнал',
+  'settings.kiosk.column.enrolled': 'Подключил',
+  'settings.kiosk.channel.choose': 'Выберите канал',
+  'settings.kiosk.channel.none': 'Нет канала',
+  'settings.kiosk.needsAttention':
+    'Этот киоск не может продавать: у него нет канала или канал архивирован либо снят с продажи здесь.',
+  'settings.kiosk.lastSeen.never': 'Ещё не выходил на связь',
+  'settings.kiosk.lastSeen.now': 'Только что',
+  'settings.kiosk.lastSeen.minutes': '{minutes} мин назад',
+  'settings.kiosk.lastSeen.at': 'Последний сигнал {time}',
+  'settings.kiosk.edit.start': 'Изменить',
+  'settings.kiosk.edit.save': 'Сохранить',
+  'settings.kiosk.edit.cancel': 'Отмена',
+  'settings.kiosk.edit.stale':
+    'Кто-то уже изменил этот киоск. Список обновлён, повторите изменение.',
+  'settings.kiosk.edit.channelUnavailable':
+    'Этот канал не является активным киоск-каналом, продающим в этом филиале.',
+  'settings.kiosk.revoke.start': 'Отключить',
+  'settings.kiosk.revoke.confirm': 'Отключить киоск',
+  'settings.kiosk.revoke.cancel': 'Отмена',
+  'settings.kiosk.revoke.reasonPlaceholder': 'Причина',
+  'settings.kiosk.replace.start': 'Заменить',
+  'settings.kiosk.replace.hint':
+    'Чтобы заменить киоск, отключите его и подключите новый. Киоск сам показывает код на экране, консоль кодов не выдаёт.',
+  'settings.kiosk.revoked.title': 'Отключённые киоски',
+  'settings.kioskPairing.title': 'Подключение киоска',
+  'settings.kioskPairing.lead':
+    'Откройте эту страницу по QR на киоске или введите код, который он показывает. Пока вы не подтвердите ниже, ничего не подключится.',
+  'settings.kioskPairing.noBranch':
+    'Сначала выберите филиал в панели области: киоск подключается к одному филиалу.',
+  'settings.kioskPairing.branch': 'Филиал: {branch}',
+  'settings.kioskPairing.code.label': 'Код на экране киоска',
+  'settings.kioskPairing.code.look': 'Проверить код',
+  'settings.kioskPairing.notKiosk':
+    'Этот код принадлежит кухонному экрану, а не киоску. Подключите его в разделе «Кухня → Устройства».',
+  'settings.kioskPairing.claim.title': 'Устройство просит стать киоском',
+  'settings.kioskPairing.claim.expires': 'Код действует до {time}.',
+  'settings.kioskPairing.claim.label': 'Как устройство назвало себя',
+  'settings.kioskPairing.form.name': 'Название в списке',
+  'settings.kioskPairing.form.channel': 'Канал продаж',
+  'settings.kioskPairing.form.noChannels':
+    'В этом филиале нет активного киоск-канала. Сначала добавьте его.',
+  'settings.kioskPairing.form.confirm': 'Код на экране киоска передо мной: {code}.',
+  'settings.kioskPairing.form.submit': 'Подключить киоск',
+  'settings.kioskPairing.done': '{name} теперь продаёт через канал {channel}.',
+  'settings.kioskPairing.doneHint':
+    'Киоск прочитает настройки и покажет статус в течение минуты. На нём ничего вводить не нужно.',
+  'settings.kioskPairing.back': 'К каналам продаж',
+  'settings.kioskPairing.error.gone':
+    'Код неизвестен, уже использован или истёк. Попросите киоск показать новый.',
+  'settings.kioskPairing.error.tooMany':
+    'Проверено слишком много кодов. Подождите минуту и повторите.',
+  'settings.kioskPairing.error.denied': 'У вас нет права подключать киоски в этом филиале.',
+  'settings.kioskPairing.error.failed': 'Не удалось проверить код. Повторите чуть позже.',
+  'settings.kioskPairing.error.classMismatch':
+    'Этот код запрашивал другой тип устройства, поэтому подключить его как киоск нельзя.',
+  'settings.kioskPairing.error.channelUnavailable':
+    'Этот канал не является активным киоск-каналом, продающим в этом филиале.',
 };
