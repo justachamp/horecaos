@@ -53,7 +53,7 @@ public class ContentCountersController {
                     + "inflate them, and they are not a metric the reporting layer consumes. An event naming an "
                     + "item or revision the brand does not have, or one that makes no sense for the kind, is "
                     + "rejected and counted and the rest of the batch is kept.")
-    public ResponseEntity<AcceptedResponse> events(
+    public ResponseEntity<AcceptedResponse> recordContentEvents(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody EventsRequest body) {
         Accepted accepted = stats.record(
                 tenantId,

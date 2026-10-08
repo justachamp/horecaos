@@ -109,7 +109,7 @@ public class ContentOperationsController {
                     + "at the moment of the read and is never stored. Each row carries `problems[]`, the "
                     + "publication gates run as warnings. When the list is of one `placement` it carries an "
                     + "`orderToken` to present back when ordering that placement.")
-    public ItemPage list(
+    public ItemPage listItems(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam(required = false) @Nullable String kind,
@@ -136,7 +136,7 @@ public class ContentOperationsController {
             description = "A draft is in front of nobody. An editorial kind needs the content.editorial.enabled "
                     + "entitlement (403 ENTITLEMENT_REQUIRED) and the brand's content.editorial policy (422 "
                     + "CONTENT_KIND_NOT_ENABLED).")
-    public ResponseEntity<ItemView> create(
+    public ResponseEntity<ItemView> createItem(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody CreateItemRequest body) {
         ItemView created = authoring.create(
                 tenantId,
@@ -156,7 +156,7 @@ public class ContentOperationsController {
     @GetMapping("/items/{itemId}")
     @RequiresCapability(value = Capability.CONTENT_READ, scope = ScopeType.BRAND)
     @Operation(summary = "One item: its live revision, its draft and the ETag to change it with")
-    public ResponseEntity<ItemView> get(
+    public ResponseEntity<ItemView> getItem(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID itemId) {
         return versioned(authoring.get(tenantId, brandId, itemId));
     }
@@ -168,7 +168,7 @@ public class ContentOperationsController {
             description =
                     "Validates the grammar of the document (unknown keys are refused) and returns the "
                             + "publication gates as `problems[]`, warnings that become refusals at publication. Requires If-Match.")
-    public ResponseEntity<ItemView> replaceDraft(
+    public ResponseEntity<ItemView> replaceItemDraft(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
@@ -182,7 +182,7 @@ public class ContentOperationsController {
     @DeleteMapping("/items/{itemId}/draft")
     @RequiresCapability(value = Capability.CONTENT_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Discard the draft", description = "The item and its revisions remain. Requires If-Match.")
-    public ResponseEntity<ItemView> discardDraft(
+    public ResponseEntity<ItemView> discardItemDraft(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
@@ -198,11 +198,11 @@ public class ContentOperationsController {
                     + "pointer, the audit fact and the outbox row. 422 UNPROCESSABLE_STATE carries errors[].code "
                     + "from a closed list; two concurrent publishes have exactly one winner and a 409. "
                     + "Requires If-Match.")
-    public ResponseEntity<ItemView> publish(
+    public ResponseEntity<ItemView> publishItem(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
-            @Valid @RequestBody(required = false) @Nullable ReasonRequest body,
+            @Valid @RequestBody(required = false) @Nullable ContentReasonRequest body,
             HttpServletRequest request) {
         return versioned(publication.publish(
                 tenantId, brandId, actor(), itemId, AggregateVersion.requireIfMatch(request), reasonOf(body)));
@@ -214,11 +214,11 @@ public class ContentOperationsController {
             summary = "Take the item out of front of customers",
             description = "The live pointer is cleared and every revision is kept. Reaches customers within one "
                     + "cache window (a minute). Requires If-Match.")
-    public ResponseEntity<ItemView> withdraw(
+    public ResponseEntity<ItemView> withdrawItem(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
-            @Valid @RequestBody(required = false) @Nullable ReasonRequest body,
+            @Valid @RequestBody(required = false) @Nullable ContentReasonRequest body,
             HttpServletRequest request) {
         return versioned(publication.withdraw(
                 tenantId, brandId, actor(), itemId, AggregateVersion.requireIfMatch(request), reasonOf(body)));
@@ -229,11 +229,11 @@ public class ContentOperationsController {
     @Operation(
             summary = "Retire the item from lists",
             description = "Withdraws it first if it is live. Requires If-Match.")
-    public ResponseEntity<ItemView> archive(
+    public ResponseEntity<ItemView> archiveItem(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
-            @Valid @RequestBody(required = false) @Nullable ReasonRequest body,
+            @Valid @RequestBody(required = false) @Nullable ContentReasonRequest body,
             HttpServletRequest request) {
         return versioned(publication.archive(
                 tenantId, brandId, actor(), itemId, AggregateVersion.requireIfMatch(request), reasonOf(body)));
@@ -247,7 +247,7 @@ public class ContentOperationsController {
                     + "channel. Client-reported and labelled so: anyone can inflate them, no device, customer "
                     + "or network identifier is stored, and they are not a metric the reporting layer consumes. "
                     + "Defaults to the last 30 days.")
-    public StatsResponse stats(
+    public StatsResponse itemStats(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
@@ -278,7 +278,7 @@ public class ContentOperationsController {
     @GetMapping("/items/{itemId}/revisions")
     @RequiresCapability(value = Capability.CONTENT_READ, scope = ScopeType.BRAND)
     @Operation(summary = "The immutable history of an item, newest first")
-    public List<RevisionSummary> revisions(
+    public List<RevisionSummary> listRevisions(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID itemId) {
         return authoring.revisions(tenantId, brandId, itemId);
     }
@@ -286,7 +286,7 @@ public class ContentOperationsController {
     @GetMapping("/items/{itemId}/revisions/{revisionNo}")
     @RequiresCapability(value = Capability.CONTENT_READ, scope = ScopeType.BRAND)
     @Operation(summary = "One revision with its document: what a customer may have been shown")
-    public RevisionView revision(
+    public RevisionView getRevision(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
@@ -300,7 +300,7 @@ public class ContentOperationsController {
             summary = "Clone an older revision into the draft",
             description = "Publishing it is a separate act. A revision whose media was released is refused with "
                     + "CONTENT_REVISION_MEDIA_RELEASED. Requires If-Match.")
-    public ResponseEntity<ItemView> republish(
+    public ResponseEntity<ItemView> republishRevision(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID itemId,
@@ -319,14 +319,14 @@ public class ContentOperationsController {
             description = "Takes effect at once and is not a revision. The body names every non-archived item of "
                     + "the placement once and presents the order token the list returned; STALE_VERSION if the "
                     + "order moved since.")
-    public OrderResponse order(
+    public PlacementOrderResponse orderPlacement(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable String placement,
             @Valid @RequestBody OrderRequest body) {
         ContentAuthoringService.Ordered ordered = authoring.reorder(
                 tenantId, brandId, actor(), parsePlacement(placement), body.ids(), body.orderToken(), body.reason());
-        return new OrderResponse(ordered.ids(), ordered.orderToken());
+        return new PlacementOrderResponse(ordered.ids(), ordered.orderToken());
     }
 
     // ================================================================ preview
@@ -337,7 +337,7 @@ public class ContentOperationsController {
             summary = "The storefront document built from drafts",
             description = "The same assembler as the public read, with every draft overlaid, so the preview "
                     + "cannot drift from production. `asOf` previews a schedule.")
-    public HomeDocument preview(
+    public HomeDocument previewHome(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam String channel,
@@ -353,7 +353,7 @@ public class ContentOperationsController {
             description = "Live items with an unresolved target, a promotion that is not live, a link host that is "
                     + "no longer allowed, a missing language or an image that has not rendered. The storefront has "
                     + "already degraded each quietly; this is the operator's view of the same problems.")
-    public List<Unhealthy> health(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public List<Unhealthy> contentHealth(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return health.health(tenantId, brandId);
     }
 
@@ -365,7 +365,7 @@ public class ContentOperationsController {
             summary = "The hosts an external link may point at",
             description = "The hosts an author added, and the tenant's verified channel hostnames, which are read "
                     + "and never copied.")
-    public List<AllowedHost> allowedHosts(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public List<AllowedHost> listAllowedHosts(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return hosts.list(tenantId, brandId);
     }
 
@@ -375,7 +375,7 @@ public class ContentOperationsController {
             summary = "Allow a host, once",
             description = "One at a time: a bare lower-case DNS name, no wildcard, no port, no scheme. An audited "
                     + "security fact.")
-    public ResponseEntity<HostResponse> allowHost(
+    public ResponseEntity<HostResponse> addAllowedHost(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody HostRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new HostResponse(hosts.add(tenantId, brandId, actor(), body.host(), body.reason())));
@@ -386,7 +386,7 @@ public class ContentOperationsController {
     @Operation(
             summary = "Stop allowing a host",
             description = "A live link to it is served as NONE from the next read. An audited security fact.")
-    public ResponseEntity<Void> removeHost(
+    public ResponseEntity<Void> removeAllowedHost(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable String host) {
         hosts.remove(tenantId, brandId, actor(), host);
         return ResponseEntity.noContent().build();
@@ -400,7 +400,7 @@ public class ContentOperationsController {
             summary = "The brand's two content policies and whether the plan lets the editorial tier exist",
             description = "content.publishing (tightening only) and content.editorial (which editorial kinds the "
                     + "brand runs, all off by default). Each carries the version a save is checked against.")
-    public Policies policies(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public Policies getPolicies(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return policies.get(tenantId, brandId);
     }
 
@@ -409,7 +409,7 @@ public class ContentOperationsController {
     @Operation(
             summary = "Publish the next version of content.publishing",
             description = "Requires If-Match carrying the policy version last read.")
-    public Policies setPublishing(
+    public Policies setPublishingPolicy(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @Valid @RequestBody PublishingPolicyRequest body,
@@ -428,7 +428,7 @@ public class ContentOperationsController {
     @Operation(
             summary = "Publish the next version of content.editorial",
             description = "Requires If-Match carrying the policy version last read.")
-    public Policies setEditorial(
+    public Policies setEditorialPolicy(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @Valid @RequestBody EditorialPolicyRequest body,
@@ -448,7 +448,7 @@ public class ContentOperationsController {
         return currentActor.get().subject();
     }
 
-    private static @Nullable String reasonOf(@Nullable ReasonRequest body) {
+    private static @Nullable String reasonOf(@Nullable ContentReasonRequest body) {
         return body == null ? null : body.reason();
     }
 
@@ -525,7 +525,7 @@ public class ContentOperationsController {
             @NotBlank String orderToken,
             @Nullable @Size(max = 1000) String reason) {}
 
-    public record OrderResponse(List<UUID> ids, String orderToken) {}
+    public record PlacementOrderResponse(List<UUID> ids, String orderToken) {}
 
     /** {@code clientReported} is always true: say so on the screen. */
     public record StatsResponse(boolean clientReported, LocalDate from, LocalDate to, List<StatsRow> rows) {}
@@ -543,7 +543,8 @@ public class ContentOperationsController {
      * Why, in the author's words; optional, because publishing a banner is not worth a mandatory
      * field. ADR 0027 requires a reason on every fact a user produces, so a stated phrase stands in.
      */
-    public record ReasonRequest(@Nullable @Size(max = 1000) String reason) {}
+    public record ContentReasonRequest(
+            @Nullable @Size(max = 1000) String reason) {}
 
     public record HostRequest(
             @NotBlank @Size(max = 253) String host,

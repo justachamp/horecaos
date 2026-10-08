@@ -53,7 +53,7 @@ public class ContentEditorialController {
             description = "News, gallery, recipes and vacancies, each true only while the tenant's plan "
                     + "includes the editorial tier and the brand has turned the kind on. All false when it "
                     + "has not; an unknown brand is a 404.")
-    public ResponseEntity<Features> features(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<Features> editorialFeatures(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return StorefrontCaching.cacheable(
                 editorial.features(tenantId, brandId).orElseThrow(() -> notFound("No such brand")));
     }
@@ -62,7 +62,7 @@ public class ContentEditorialController {
 
     @GetMapping("/news")
     @Operation(summary = "A brand's published news, newest first")
-    public ResponseEntity<EntryPage> news(
+    public ResponseEntity<EntryPage> listNews(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam String channel,
@@ -74,7 +74,7 @@ public class ContentEditorialController {
 
     @GetMapping("/news/{slug}")
     @Operation(summary = "One news article, its body as typed blocks")
-    public ResponseEntity<EntryDetail> newsEntry(
+    public ResponseEntity<EntryDetail> getNews(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable String slug,
@@ -87,7 +87,7 @@ public class ContentEditorialController {
 
     @GetMapping("/gallery")
     @Operation(summary = "A brand's published gallery albums, newest first")
-    public ResponseEntity<EntryPage> gallery(
+    public ResponseEntity<EntryPage> listGallery(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam String channel,
@@ -99,7 +99,7 @@ public class ContentEditorialController {
 
     @GetMapping("/gallery/{slug}")
     @Operation(summary = "One gallery album with its images")
-    public ResponseEntity<EntryDetail> galleryEntry(
+    public ResponseEntity<EntryDetail> getGalleryAlbum(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable String slug,
@@ -112,7 +112,7 @@ public class ContentEditorialController {
 
     @GetMapping("/recipes")
     @Operation(summary = "A brand's published recipes, newest first")
-    public ResponseEntity<EntryPage> recipes(
+    public ResponseEntity<EntryPage> listRecipes(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam String channel,
@@ -124,7 +124,7 @@ public class ContentEditorialController {
 
     @GetMapping("/recipes/{slug}")
     @Operation(summary = "One recipe, its body as typed blocks")
-    public ResponseEntity<EntryDetail> recipe(
+    public ResponseEntity<EntryDetail> getRecipe(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable String slug,
@@ -141,7 +141,7 @@ public class ContentEditorialController {
             description = "A listing only. A vacancy carries one outbound contact the tenant chose to "
                     + "publish (a phone number, an e-mail address, a Telegram or web address) and nothing "
                     + "of a candidate: the platform has no application form and stores no applicant data.")
-    public ResponseEntity<EntryPage> careers(
+    public ResponseEntity<EntryPage> listVacancies(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam String channel,
@@ -153,7 +153,7 @@ public class ContentEditorialController {
 
     @GetMapping("/careers/{slug}")
     @Operation(summary = "One vacancy, with its branch and its one contact")
-    public ResponseEntity<EntryDetail> career(
+    public ResponseEntity<EntryDetail> getVacancy(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable String slug,

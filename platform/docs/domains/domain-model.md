@@ -15,6 +15,7 @@
 | `fulfillment` | Shipments, assignments, delivery partners, courier tracking, delivery zones | Order commercial totals |
 | `integration` | Installations, provider bindings, POS mappings/sync, inbox/outbox, Camel adapters | Domain decisions and aggregate state |
 | `media` | Asset upload, validation, derivatives, visibility, retention | Product or brand ownership rules |
+| `content` | A brand's storefront content (banners, promo cards, product groups, stories, pop-ups and, behind an entitlement and a policy, news, gallery, recipes, vacancies) as items with one mutable draft and insert-only revisions; the external-link allowlist; anonymous per-day counters | Media bytes, promotions, the menu, personalised offers |
 | `notifications` | Preferences, templates, notifications, attempts | Order decisions |
 | `commercial` (planned) | SaaS plans, subscriptions, entitlements, overrides, usage | User authorization, customer-order payments |
 | `recovery` (planned) | Service-recovery cases, remedy decisions and execution coordination | Payment/refund execution, price calculation, shipment cost facts |
@@ -231,6 +232,30 @@ lease and calls `HeadObject`, the ranged header read and the decoded-cost check
 outside any transaction — the same shape as the derivative worker, for the same
 reason. An asset is briefly `UPLOADED` and not yet displayable between those two
 steps, which is the state a synchronous finalize could never produce.
+
+## Storefront content
+
+ADR 0157. The `content` module keeps what a brand writes for its customers' screens as one item model:
+`content.items` (identity, lifecycle, order), at most one `content.item_drafts` row per item (the only
+mutable copy), and any number of `content.item_revisions` rows, **insert-only by grant**: a revision is
+what a customer may have been shown, and evidence in a disputed promotion claim. "Scheduled", "live" and
+"expired" are never stored; they are computed on every read from the live revision's window and the
+injected clock, so no sweeper can fail and leave a banner up past its end. `content_hash` is a SHA-256 of the
+canonical serialisation of the six values a customer-visible revision consists of (document, channel
+codes, start, end, promotion, branch); the revision number, author and publication time are excluded.
+
+Every foreign key names the tenant, so a row cannot point at another tenant's brand, promotion, branch or
+asset. Text lives in a typed `jsonb` document that the server decodes strictly on write (unknown keys are
+refused, locales are canonicalised, bidirectional and control characters are refused) and that no query
+looks inside; what must be referentially checked is lifted into columns or into `content.revision_media`.
+A rich-text body is a list of typed blocks and nothing else, so there is no markup to sanitise: the
+document model is the sanitiser.
+
+A video is a `media.assets` row with `verified_content_type = 'video/mp4'` and a `duration_ms`. The platform
+does not transcode: `VideoProbe` reads the container's own header and refuses by named code anything it will
+not serve. A superseded revision's media is released by `ContentRevisionMediaSweeper` through
+`MediaRelease` once the retention window has passed, and only if no module that stores an asset id still
+uses it (`MediaUsageProbe`).
 
 ## Cross-cutting database invariants
 

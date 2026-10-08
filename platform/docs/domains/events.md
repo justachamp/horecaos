@@ -208,7 +208,7 @@ synchronous paths (an operator's own withdrawal, and the TTL check inside
 
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
-| `MediaAssetAvailable` | 1 | `assetId` | [`MediaAssetAvailable.v1`](../../src/main/resources/events/media.events/MediaAssetAvailable.v1.schema.json) | `assetId`, owner scope/id, visibility, verified content type, size, `widthPx`, `heightPx` |
+| `MediaAssetAvailable` | 1 | `assetId` | [`MediaAssetAvailable.v1`](../../src/main/resources/events/media.events/MediaAssetAvailable.v1.schema.json) | `assetId`, owner scope/id, visibility, verified content type (an image type, or `video/mp4` since ADR 0157), size, `widthPx`, `heightPx` |
 
 The payload deliberately carries **no object key, no signed URL, and no original
 filename**. A topic is read by consumers with no authorization to the bytes, so a

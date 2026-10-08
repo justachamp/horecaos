@@ -198,6 +198,10 @@ Use these initial modules:
   assignments, tracking, and delivery zones
 - `media`: media assets, upload lifecycle, derivatives, access policy, and
   retention
+- `content`: a brand's storefront content (banners, promo cards, product groups,
+  stories, pop-ups and, behind an entitlement and a policy, news, gallery, recipes
+  and vacancies) as items with a draft and insert-only revisions, and its
+  anonymous storefront read (ADR 0157)
 - `notifications`: preferences, templates, notifications, and delivery attempts
 - `integration`: Apache Camel routes, provider installations, inbox messages,
   outbox events, protocol mediation, and external synchronization

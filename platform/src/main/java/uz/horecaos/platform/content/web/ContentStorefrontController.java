@@ -50,7 +50,7 @@ public class ContentStorefrontController {
                     + "tag, a bare `uz` read as `uz-Latn`. A text the visitor's language lacks is served in the "
                     + "brand's default and `textLocale` says which. The same for every visitor; an unknown "
                     + "brand, a brand of another tenant and an unknown channel are one 404.")
-    public ResponseEntity<HomeDocument> home(
+    public ResponseEntity<HomeDocument> contentHome(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam String channel,
