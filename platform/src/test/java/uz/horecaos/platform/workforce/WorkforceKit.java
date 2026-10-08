@@ -114,8 +114,8 @@ final class WorkforceKit {
         this.people = new StaffPeople(roster, roster, grants);
         WorkforceAudit audit = new WorkforceAudit(auditRecorder);
         this.rota = new StaffRosterService(rosterStore, shiftStore, people, attendance, audit, clock);
-        this.shifts = new StaffShiftService(
-                shiftStore, rosterStore, people, attendance, businessDay, grants, audit, clock);
+        this.shifts =
+                new StaffShiftService(shiftStore, rosterStore, people, attendance, businessDay, grants, audit, clock);
         this.today = new StaffTodayService(rosterStore, shiftStore, people, attendance, businessDay, orders, clock);
         this.queries = new StaffShiftQueryService(shiftStore, people, attendance);
         this.mine = new StaffAttendanceSelfService(shiftStore, rosterStore, people, attendance, clock);
@@ -138,7 +138,8 @@ final class WorkforceKit {
 
     /** Empties what a test wrote and seeds two tenants, three branches and no people. */
     void reset() {
-        jdbc.sql("TRUNCATE TABLE reporting.aggregate_divergences, reporting.close_runs").update();
+        jdbc.sql("TRUNCATE TABLE reporting.aggregate_divergences, reporting.close_runs")
+                .update();
         jdbc.sql("""
                 TRUNCATE TABLE reporting.fact_order, reporting.fact_order_line, reporting.fact_order_tender,
                     reporting.fact_refund, reporting.agg_branch_day, reporting.agg_sla_bucket_day,
@@ -172,19 +173,25 @@ final class WorkforceKit {
     private void brand(UUID tenantId, UUID id, String code) {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
-                VALUES (:id, :t, :code, :code, 'Brand', 'ACTIVE', 0)
-                """).param("id", id).param("t", tenantId).param("code", code.toUpperCase()).update();
+                VALUES (:id, :t, :code, :slug, 'Brand', 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("t", tenantId)
+                .param("code", code.toUpperCase())
+                .param("slug", code.toLowerCase())
+                .update();
     }
 
     private void location(UUID tenantId, UUID brandId, UUID id, String code) {
         jdbc.sql("""
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
-                VALUES (:id, :t, :b, :code, :code, 'Branch', :zone, 'ACTIVE', 0)
+                VALUES (:id, :t, :b, :code, :slug, 'Branch', :zone, 'ACTIVE', 0)
                 """)
                 .param("id", id)
                 .param("t", tenantId)
                 .param("b", brandId)
                 .param("code", code.toUpperCase())
+                .param("slug", code.toLowerCase())
                 .param("zone", ZONE)
                 .update();
     }
@@ -195,11 +202,14 @@ final class WorkforceKit {
      */
     Person person(UUID tenantId, String label, @Nullable UUID branchLocation, String status) {
         UUID memberId = UUID.randomUUID();
-        String subject = "subject-" + label + "-" + memberId.toString().substring(0, 8);
+        // Opaque, like a Keycloak subject: the label is a name, and a name must never be derivable from a subject.
+        String subject = "subject-" + memberId.toString().substring(0, 8);
         String reference = "S-%04d".formatted(roster.people.size() + 1 + (tenantId.equals(TENANT) ? 0 : 5000));
         jdbc.sql("""
-                INSERT INTO iam.staff_members (id, tenant_id, principal_subject, display_reference, employment_status)
-                VALUES (:id, :tenant, :subject, :reference, :status)
+                INSERT INTO iam.staff_members (id, tenant_id, principal_subject, display_reference,
+                    employment_status, employed_until)
+                VALUES (:id, :tenant, :subject, :reference, :status,
+                    CASE WHEN :status = 'ENDED' THEN DATE '2026-10-01' END)
                 """)
                 .param("id", memberId)
                 .param("tenant", tenantId)
@@ -222,6 +232,18 @@ final class WorkforceKit {
     }
 
     record Person(UUID tenantId, UUID memberId, String subject, String reference, String name, String status) {}
+
+    /** The branch's rota for the Monday-to-Sunday week that contains {@code day}. */
+    List<uz.horecaos.platform.workforce.application.StaffRosterService.EntryView> rotaWeek(java.time.LocalDate day) {
+        java.time.LocalDate monday = day.with(java.time.DayOfWeek.MONDAY);
+        return rota.week(branch(), monday, monday.plusDays(6), false).entries();
+    }
+
+    /** Publishes the draft entries of the local day that {@code at} falls on, at the first branch. */
+    void rotaPublish(Instant at) {
+        var day = at.atZone(ZoneId.of(ZONE)).toLocalDate();
+        rota.publish(branch(), day, day, "roster-manager", "publish");
+    }
 
     // ----------------------------------------------------------------------------- stand-ins
 
@@ -368,13 +390,15 @@ final class WorkforceKit {
         }
 
         private static Card card(Person person) {
-            return new Card(person.memberId(), person.subject(), person.reference(), person.name(), null, person.status());
+            return new Card(
+                    person.memberId(), person.subject(), person.reference(), person.name(), null, person.status());
         }
 
         @Override
         public @Nullable String nameOf(UUID tenantId, String subject) {
             return people.values().stream()
-                    .filter(person -> person.tenantId().equals(tenantId) && person.subject().equals(subject))
+                    .filter(person -> person.tenantId().equals(tenantId)
+                            && person.subject().equals(subject))
                     .map(Person::name)
                     .findFirst()
                     .orElse(null);
@@ -395,7 +419,8 @@ final class WorkforceKit {
         @Override
         public Optional<UUID> memberIdOf(UUID tenantId, String subject) {
             return people.values().stream()
-                    .filter(person -> person.tenantId().equals(tenantId) && person.subject().equals(subject))
+                    .filter(person -> person.tenantId().equals(tenantId)
+                            && person.subject().equals(subject))
                     .map(Person::memberId)
                     .findFirst();
         }
@@ -425,12 +450,10 @@ final class WorkforceKit {
 
     /** Everything a test lists from the audit table, newest last. */
     List<Map<String, Object>> auditFacts(String actionPrefix) {
-        return new ArrayList<>(jdbc.sql("""
+        return new ArrayList<>(
+                jdbc.sql("""
                         SELECT action_code, actor_subject, reason, target_type, target_id, change_document::text AS change_document
                           FROM audit.audit_events WHERE action_code LIKE :prefix ORDER BY occurred_at, id
-                        """)
-                .param("prefix", actionPrefix + "%")
-                .query()
-                .listOfRows());
+                        """).param("prefix", actionPrefix + "%").query().listOfRows());
     }
 }
