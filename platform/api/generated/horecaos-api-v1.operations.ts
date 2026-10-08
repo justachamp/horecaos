@@ -1553,6 +1553,7 @@ export interface CorrectionRequestResponse {
   documentId?: string;
   kind?: string;
   orderId?: string;
+  publicOrderNumber?: string;
   reasonCode?: string;
   requestId?: string;
   requestedAt?: string;

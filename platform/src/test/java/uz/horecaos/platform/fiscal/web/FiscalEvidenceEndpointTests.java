@@ -105,6 +105,12 @@ class FiscalEvidenceEndpointTests {
 
     private static final Instant NOW = Instant.parse("2026-10-08T09:00:00Z");
 
+    /** The realm the resource server trusts by default; a customer is the pair (issuer, subject). */
+    private static final String ISSUER = "http://localhost:8081/realms/horecaos";
+
+    private static final String CUSTOMER = "evidence-customer";
+    private static final String STRANGER = "evidence-other-customer";
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -160,6 +166,10 @@ class FiscalEvidenceEndpointTests {
     void reset() {
         lastBody = json.readTree("{}");
         for (String table : List.of(
+                // The forecast scheduler writes a run for every active tenant it finds, and this class
+                // keeps a tenant alive: a run that lands between two tests would stop the tenant's deletion.
+                "reporting.fact_forecast",
+                "reporting.forecast_run",
                 "fiscal.fiscal_correction_requests",
                 "fiscal.fiscal_documents",
                 "fiscal.fiscal_terminals",
@@ -171,6 +181,8 @@ class FiscalEvidenceEndpointTests {
                 "tenant.location_fiscal_assignments",
                 "tenant.legal_entities",
                 "ordering.orders",
+                "customer.principal_links",
+                "customer.customer_accounts",
                 "ordering.carts",
                 "pricing.quotes",
                 "catalog.publications",
@@ -684,6 +696,12 @@ class FiscalEvidenceEndpointTests {
                         .getContentAsString());
         assertThat(worklist).hasSize(1);
         assertThat(worklist.path(0).path("documentId").asText()).isEqualTo(documentId.toString());
+        assertThat(worklist.path(0).path("publicOrderNumber").asText())
+                .as("the worklist names the order by the number nobody has to look up")
+                .isEqualTo("E-201");
+        assertThat(body.path("request").path("publicOrderNumber").asText())
+                .as("and so does the answer to the request itself")
+                .isEqualTo("E-201");
     }
 
     @Test
@@ -748,6 +766,7 @@ class FiscalEvidenceEndpointTests {
         JsonNode body = json.readTree(attached.getResponse().getContentAsString());
         UUID linkedId = UUID.fromString(body.path("linkedDocumentId").asText());
         assertThat(body.path("request").path("status").asText()).isEqualTo("ATTACHED");
+        assertThat(body.path("request").path("publicOrderNumber").asText()).isEqualTo("E-204");
         assertThat(body.path("documentVersion").asInt()).isEqualTo(3);
 
         assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
@@ -955,6 +974,169 @@ class FiscalEvidenceEndpointTests {
         assertThat(coverage.path("issued").asLong()).isEqualTo(1L);
     }
 
+    // ------------------------------------------------------- the customer's own page
+
+    @Test
+    @DisplayName("a customer is shown the link to their own receipt and nothing a staff reveal would give")
+    void aCustomerSeesTheLinkToTheirOwnReceipt() throws Exception {
+        UUID account = customerAccount(CUSTOMER);
+        UUID orderId = ownOrder("E-301", account);
+        issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+
+        MvcResult result = mvc.perform(get(receiptsUrl(BRAND, orderId)).with(customerToken(CUSTOMER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getHeader("Cache-Control"))
+                .as("the link is the customer's and must not outlive their session in a shared cache")
+                .contains("no-store");
+        JsonNode receipt = json.readTree(result.getResponse().getContentAsString())
+                .path("receipts")
+                .path(0);
+        assertThat(receipt.path("kind").asText()).isEqualTo("SALE");
+        assertThat(receipt.path("url").asText()).isEqualTo(RECEIPT_URL);
+        assertThat(receipt.path("registeredAt").asText()).isEqualTo(NOW.toString());
+        assertThat(fieldNames(receipt))
+                .as("a link, what kind of document and when: no sign, terminal, INN, lines or split")
+                .containsExactlyInAnyOrder("kind", "url", "registeredAt");
+        assertThat(json.readTree(result.getResponse().getContentAsString()).path("receipts"))
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("another customer's order, a phone order and a missing one are all the same 404")
+    void aStrangersOrderIsNotFound() throws Exception {
+        UUID owner = customerAccount(CUSTOMER);
+        customerAccount(STRANGER);
+        UUID orderId = ownOrder("E-302", owner);
+        issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+        UUID phoneOrder = seedOrder("E-303");
+        issuedClickDocument(phoneOrder, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+
+        for (MvcResult refused : List.of(
+                mvc.perform(get(receiptsUrl(BRAND, orderId)).with(customerToken(STRANGER)))
+                        .andReturn(),
+                mvc.perform(get(receiptsUrl(BRAND, phoneOrder)).with(customerToken(CUSTOMER)))
+                        .andReturn(),
+                mvc.perform(get(receiptsUrl(BRAND, UUID.randomUUID())).with(customerToken(CUSTOMER)))
+                        .andReturn())) {
+            assertThat(refused.getResponse().getStatus()).isEqualTo(404);
+            assertThat(refused.getResponse().getContentAsString())
+                    .as("a refusal that told these apart would confirm an order id to whoever guessed it")
+                    .contains("RESOURCE_NOT_FOUND")
+                    .doesNotContain(RECEIPT_URL);
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "a staff member who is not this brand's customer cannot read a customer's receipts, whatever they hold")
+    void aStaffMemberIsNotACustomer() throws Exception {
+        UUID owner = customerAccount(CUSTOMER);
+        UUID orderId = ownOrder("E-304", owner);
+        issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+
+        MvcResult asFinance = mvc.perform(get(receiptsUrl(BRAND, orderId)).with(customerToken(FINANCE)))
+                .andReturn();
+        MvcResult wrongBrand = mvc.perform(
+                        get(receiptsUrl(UUID.randomUUID(), orderId)).with(customerToken(CUSTOMER)))
+                .andReturn();
+        MvcResult anonymous = mvc.perform(get(receiptsUrl(BRAND, orderId))).andReturn();
+
+        assertThat(asFinance.getResponse().getStatus()).isEqualTo(404);
+        assertThat(wrongBrand.getResponse().getStatus())
+                .as("the brand in the path must be the one the customer holds an account at")
+                .isEqualTo(404);
+        assertThat(anonymous.getResponse().getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("an order with no receipt answers an empty list, not an error")
+    void anOrderWithNoReceiptIsAnEmptyList() throws Exception {
+        UUID account = customerAccount(CUSTOMER);
+        UUID orderId = ownOrder("E-305", account);
+        blockedDocument(orderId);
+
+        MvcResult result = mvc.perform(get(receiptsUrl(BRAND, orderId)).with(customerToken(CUSTOMER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json.readTree(result.getResponse().getContentAsString()).path("receipts"))
+                .as("a blocked document has no link and is not offered as one")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a receipt that has been corrected is replaced by the document that corrected it, not listed beside it")
+    void aSupersededReceiptIsNotOffered() throws Exception {
+        UUID account = customerAccount(CUSTOMER);
+        UUID orderId = ownOrder("E-306", account);
+        UUID original = issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET status = 'CORRECTED' WHERE id = :id")
+                .param("id", original)
+                .update();
+        // One SALE per tender is a unique index, so the replacement is what the platform really writes:
+        // a REFUND linked to the sale it replaces.
+        UUID refund = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fiscal.fiscal_documents (id, tenant_id, order_id, legal_entity_id, provider_type,
+                    document_type, corrects_document_id, status, reason_code, reason_note, external_receipt_id,
+                    fiscal_sign, terminal_id, receipt_reference, registered_at, receipt_url, issued_at,
+                    created_at, updated_at)
+                VALUES (:id, :t, :o, :e, 'CLICK', 'REFUND', :original, 'ISSUED', 'PARTNER_FISCALIZED', 'refund',
+                    'R-REFUND', 'SIGN-REFUND', 'TERM-0042', 'R-REFUND', :later, :url, :later, :later, :later)
+                """)
+                .param("id", refund)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("e", ENTITY_A)
+                .param("original", original)
+                .param("url", "https://ofd.soliq.uz/epi?t=REFUND")
+                .param("later", NOW.plusSeconds(60).atOffset(ZoneOffset.UTC))
+                .update();
+
+        JsonNode receipts = receiptsOf(orderId);
+
+        assertThat(receipts)
+                .as("the corrected sale is gone, and its replacement is listed in its own right")
+                .hasSize(1);
+        assertThat(receipts.path(0).path("kind").asText()).isEqualTo("REFUND");
+        assertThat(receipts.path(0).path("url").asText()).isEqualTo("https://ofd.soliq.uz/epi?t=REFUND");
+
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET status = 'VOID_REQUESTED' WHERE id = :id")
+                .param("id", refund)
+                .update();
+        assertThat(receiptsOf(orderId))
+                .as("a void that is only requested leaves the receipt filed the one in force")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("only an https link is offered, because it is rendered as an anchor")
+    void onlyAnHttpsLinkIsOffered() throws Exception {
+        UUID account = customerAccount(CUSTOMER);
+        UUID orderId = ownOrder("E-307", account);
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+        for (String stored : List.of("javascript:alert(1)", "http://ofd.soliq.uz/epi?t=1", "//ofd.soliq.uz/epi")) {
+            jdbc.sql("UPDATE fiscal.fiscal_documents SET receipt_url = :url WHERE id = :id")
+                    .param("id", documentId)
+                    .param("url", stored)
+                    .update();
+
+            JsonNode receipts = json.readTree(
+                            mvc.perform(get(receiptsUrl(BRAND, orderId)).with(customerToken(CUSTOMER)))
+                                    .andReturn()
+                                    .getResponse()
+                                    .getContentAsString())
+                    .path("receipts");
+
+            assertThat(receipts)
+                    .as("%s is not a link to hand a browser", stored)
+                    .isEmpty();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private int lastStatus;
@@ -997,6 +1179,65 @@ class FiscalEvidenceEndpointTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"kind\":\"%s\",\"reasonCode\":\"%s\",\"reasonNote\":\"The printed total is wrong\"}"
                         .formatted(kind, reason));
+    }
+
+    private static String receiptsUrl(UUID brandId, UUID orderId) {
+        return "/api/v1/storefront/tenants/" + TENANT + "/brands/" + brandId + "/orders/" + orderId + "/receipts";
+    }
+
+    /** The receipts the order's own customer is shown. */
+    private JsonNode receiptsOf(UUID orderId) throws Exception {
+        MvcResult result = mvc.perform(get(receiptsUrl(BRAND, orderId)).with(customerToken(CUSTOMER)))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        return json.readTree(result.getResponse().getContentAsString()).path("receipts");
+    }
+
+    private static List<String> fieldNames(JsonNode node) {
+        List<String> names = new ArrayList<>();
+        node.propertyNames().forEach(names::add);
+        return names;
+    }
+
+    /** A customer account at the fixture tenant, signed in by the realm token of {@code subject}. */
+    private UUID customerAccount(String subject) {
+        UUID accountId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO customer.customer_accounts (id, tenant_id, status, created_at, updated_at)
+                VALUES (:id, :t, 'ACTIVE', :now, :now)
+                """)
+                .param("id", accountId)
+                .param("t", TENANT)
+                .param("now", NOW.atOffset(ZoneOffset.UTC))
+                .update();
+        jdbc.sql("""
+                INSERT INTO customer.principal_links (id, tenant_id, customer_account_id, issuer, subject,
+                    status, linked_at)
+                VALUES (:id, :t, :account, :issuer, :subject, 'ACTIVE', :now)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("account", accountId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
+                .param("now", NOW.atOffset(ZoneOffset.UTC))
+                .update();
+        return accountId;
+    }
+
+    /** An order placed by a signed-in customer rather than a guest: the schema allows exactly one of the two. */
+    private UUID ownOrder(String number, UUID accountId) {
+        UUID orderId = seedOrder(number);
+        jdbc.sql("""
+                UPDATE ordering.orders SET customer_account_id = :account, guest_reference_hash = NULL
+                 WHERE id = :id
+                """).param("account", accountId).param("id", orderId).update();
+        return orderId;
+    }
+
+    /** A realm token as the storefront presents it: the issuer is part of a customer's identity. */
+    private static RequestPostProcessor customerToken(String subject) {
+        return jwt().jwt(builder -> builder.issuer(ISSUER).subject(subject));
     }
 
     private String evidenceUrl(UUID orderId) {

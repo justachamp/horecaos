@@ -7713,6 +7713,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
           "reasonCode" : {
             "type" : "string"
           },
@@ -26725,6 +26728,32 @@
               "type" : "integer"
             },
             "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ReceiptResponse" : {
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "registeredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReceiptsResponse" : {
+        "properties" : {
+          "receipts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReceiptResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -73981,6 +74010,51 @@
         "tags" : [ "Storefront payments" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts" : {
+      "get" : {
+        "description" : "A list, possibly empty: an order paid in cash has no receipt from a payment provider, and a card payment has none until the provider reports it. A Payme refund is a second receipt beside the first, and a split payment can settle on two paths, so the answer is always a list. Only receipts still in force are listed (a receipt that has been corrected or voided is replaced by the document that corrected it), and only an https link. The link is the one the customer was sent when the receipt was issued; nothing else about the receipt is returned, and the customer's account is a predicate of the check, so another customer's order and a missing one are both 404.",
+        "operationId" : "receipts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The links to the receipts filed for one of the caller's own orders",
+        "tags" : [ "Storefront receipts" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder" : {
       "get" : {
         "description" : "ADR 0074. Resolves each line's stored variant and modifier ids against the menu as it stands now for this order's own location and channel, and answers READY, PARTIAL or UNAVAILABLE. A client shows its repeat button on the verdict rather than matching names against a menu it loaded separately. This is a read: apply it through the ordinary cart path, POST /carts then PUT /carts/{cartId}/lines/{lineKey} with the ids returned here, so a repeated basket is priced and checked out by the same code every other basket travels. The plan is a snapshot — a dish can be 86'd between reading it and rebuilding the cart, and pricing stays the authority that refuses.",
@@ -92632,6 +92706,9 @@
   }, {
     "description" : "Tenants past due or suspended, and what each stage restricts",
     "name" : "Arrears"
+  }, {
+    "description" : "The links to the receipts filed for a customer's own order",
+    "name" : "Storefront receipts"
   }, {
     "description" : "Month-to-date turns, outcomes, tokens and spend",
     "name" : "Assistant usage"

@@ -10,8 +10,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
@@ -171,9 +173,21 @@ public class OperationsFiscalEvidenceController {
                     + "is not enforced here.")
     public ResponseEntity<List<CorrectionRequestResponse>> openRequests(
             @PathVariable UUID tenantId, @RequestParam(defaultValue = "100") @Max(MAX_WORKLIST) int limit) {
+        Map<UUID, Optional<String>> numbers = new HashMap<>();
         return ResponseEntity.ok(evidence.openCorrections(tenantId, limit).stream()
-                .map(CorrectionRequestResponse::of)
+                .map(row -> CorrectionRequestResponse.of(
+                        row,
+                        numbers.computeIfAbsent(row.orderId(), orderId -> publicNumberOf(tenantId, orderId))
+                                .orElse(null)))
                 .toList());
+    }
+
+    /**
+     * The number an operator knows an order by. A request names an order by its id, which nobody
+     * outside the console has ever seen, so a list that printed it would be a list nobody could act on.
+     */
+    private Optional<String> publicNumberOf(UUID tenantId, UUID orderId) {
+        return orders.summary(tenantId, orderId).map(OrderDirectory.OrderSummary::publicOrderNumber);
     }
 
     @PostMapping("/fiscal/documents/{documentId}/correction-requests")
@@ -217,7 +231,10 @@ public class OperationsFiscalEvidenceController {
 
         return switch (result) {
             case FiscalCorrectionService.RequestResult.Raised raised ->
-                ResponseEntity.ok(CorrectionRequestedResponse.of(raised.request(), raised.documentVersion()));
+                ResponseEntity.ok(CorrectionRequestedResponse.of(
+                        raised.request(),
+                        raised.documentVersion(),
+                        publicNumberOf(tenantId, raised.request().orderId()).orElse(null)));
             case FiscalCorrectionService.RequestResult.Awaiting awaiting -> throw awaitingApproval(awaiting.outcome());
         };
     }
@@ -251,7 +268,9 @@ public class OperationsFiscalEvidenceController {
                             body.registeredAt()),
                     actor(),
                     httpRequest.getHeader("X-Correlation-Id"));
-            return ResponseEntity.ok(AttachedResponse.of(attached));
+            return ResponseEntity.ok(AttachedResponse.of(
+                    attached,
+                    publicNumberOf(tenantId, attached.request().orderId()).orElse(null)));
         } catch (FiscalCorrectionService.UnknownRequestException
                 | FiscalDocumentService.UnknownDocumentException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
@@ -555,10 +574,12 @@ public class OperationsFiscalEvidenceController {
             @Nullable @Size(max = 64) String terminalId,
             @Nullable Instant registeredAt) {}
 
+    /** @param publicOrderNumber the number the order is known by, null only if the order cannot be resolved */
     public record CorrectionRequestResponse(
             UUID requestId,
             UUID documentId,
             UUID orderId,
+            @Nullable String publicOrderNumber,
             String kind,
             String reasonCode,
             String status,
@@ -569,11 +590,12 @@ public class OperationsFiscalEvidenceController {
             @Nullable Instant attachedAt,
             int version) {
 
-        static CorrectionRequestResponse of(CorrectionRow row) {
+        static CorrectionRequestResponse of(CorrectionRow row, @Nullable String publicOrderNumber) {
             return new CorrectionRequestResponse(
                     row.id(),
                     row.documentId(),
                     row.orderId(),
+                    publicOrderNumber,
                     row.kind(),
                     row.reasonCode(),
                     row.status(),
@@ -588,16 +610,18 @@ public class OperationsFiscalEvidenceController {
 
     public record CorrectionRequestedResponse(CorrectionRequestResponse request, int documentVersion) {
 
-        static CorrectionRequestedResponse of(CorrectionRow row, int documentVersion) {
-            return new CorrectionRequestedResponse(CorrectionRequestResponse.of(row), documentVersion);
+        static CorrectionRequestedResponse of(
+                CorrectionRow row, int documentVersion, @Nullable String publicOrderNumber) {
+            return new CorrectionRequestedResponse(
+                    CorrectionRequestResponse.of(row, publicOrderNumber), documentVersion);
         }
     }
 
     public record AttachedResponse(CorrectionRequestResponse request, UUID linkedDocumentId, int documentVersion) {
 
-        static AttachedResponse of(FiscalCorrectionService.Attached attached) {
+        static AttachedResponse of(FiscalCorrectionService.Attached attached, @Nullable String publicOrderNumber) {
             return new AttachedResponse(
-                    CorrectionRequestResponse.of(attached.request()),
+                    CorrectionRequestResponse.of(attached.request(), publicOrderNumber),
                     attached.linkedDocumentId(),
                     attached.documentVersion());
         }

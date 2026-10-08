@@ -481,6 +481,36 @@ public class FiscalEvidenceService {
                 .build());
     }
 
+    // --------------------------------------------------------- the customer's side
+
+    /**
+     * A receipt link on the customer's own order page.
+     *
+     * @param documentType {@code SALE}, {@code REFUND} or {@code CORRECTION}
+     */
+    public record CustomerReceipt(
+            String documentType,
+            String receiptUrl,
+            @Nullable Instant registeredAt) {}
+
+    /**
+     * The links to the receipts filed for an order, for the customer whose order it is.
+     *
+     * <p>The caller has already established that the order is the customer's; this class cannot, and
+     * does not look at who is asking. What it returns is the link and nothing else: the customer was
+     * sent the same link when the receipt was issued (ADR 0058: a legal artifact, not a courtesy), so
+     * showing it on the order page opens nothing the notification did not, and the fiscal sign, the
+     * terminal, the INN and the lines stay behind the staff reveal. No audit fact is written, because
+     * the staff reveal exists to record someone looking at a customer's data and this is the customer
+     * looking at their own receipt.
+     */
+    @Transactional(readOnly = true)
+    public List<CustomerReceipt> customerReceipts(UUID tenantId, UUID orderId) {
+        return store.receiptLinksOfOrder(tenantId, orderId).stream()
+                .map(row -> new CustomerReceipt(row.documentType(), row.receiptUrl(), row.registeredAt()))
+                .toList();
+    }
+
     // ------------------------------------------------------------ payment types
 
     /**

@@ -1996,6 +1996,32 @@
         "required" : [ "variantId" ],
         "type" : "object"
       },
+      "ReceiptResponse" : {
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "registeredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReceiptsResponse" : {
+        "properties" : {
+          "receipts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReceiptResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "RedeemRequest" : {
         "properties" : {
           "code" : {
@@ -5109,6 +5135,52 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts" : {
+      "get" : {
+        "description" : "A list, possibly empty: an order paid in cash has no receipt from a payment provider, and a card payment has none until the provider reports it. A Payme refund is a second receipt beside the first, and a split payment can settle on two paths, so the answer is always a list. Only receipts still in force are listed (a receipt that has been corrected or voided is replaced by the document that corrected it), and only an https link. The link is the one the customer was sent when the receipt was issued; nothing else about the receipt is returned, and the customer's account is a predicate of the check, so another customer's order and a missing one are both 404.",
+        "operationId" : "receipts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The links to the receipts filed for one of the caller's own orders",
+        "tags" : [ "Storefront receipts" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder" : {
       "get" : {
         "description" : "ADR 0074. Resolves each line's stored variant and modifier ids against the menu as it stands now for this order's own location and channel, and answers READY, PARTIAL or UNAVAILABLE. A client shows its repeat button on the verdict rather than matching names against a menu it loaded separately. This is a read: apply it through the ordinary cart path, POST /carts then PUT /carts/{cartId}/lines/{lineKey} with the ids returned here, so a repeated basket is priced and checked out by the same code every other basket travels. The plan is a snapshot — a dish can be 86'd between reading it and rebuilding the cart, and pricing stays the authority that refuses.",
@@ -6096,20 +6168,8 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
-    "name" : "Customer identity"
-  }, {
-    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
-    "name" : "Telegram sign-in"
-  }, {
     "description" : "A customer's own profile, their own saved addresses, and the products they marked",
     "name" : "Customer self-service"
-  }, {
-    "description" : "Public, non-secret analytics identifiers for a brand",
-    "name" : "Storefront analytics"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
   }, {
     "description" : "Opening a payment attempt and getting the checkout surface for it",
     "name" : "Storefront payments"
@@ -6119,9 +6179,6 @@
   }, {
     "description" : "Pictures on the published menu",
     "name" : "Storefront media"
-  }, {
-    "description" : "Scanning a table code, and the bill it leads to",
-    "name" : "QR dine-in"
   }, {
     "description" : "Row 10.5: resolve a Host header to a tenant and channel",
     "name" : "Storefront channel hostname lookup"
@@ -6138,12 +6195,6 @@
     "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
     "name" : "Presented offers"
   }, {
-    "description" : "A customer's own referral code, and redeeming a friend's",
-    "name" : "Referrals"
-  }, {
-    "description" : "The tenant's own document, or the platform default (ADR 0068)",
-    "name" : "Storefront terms of service"
-  }, {
     "description" : "Availability and remaining quantity a customer can see",
     "name" : "Storefront inventory"
   }, {
@@ -6156,16 +6207,40 @@
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"
   }, {
-    "description" : "A customer's points balance and its movements",
-    "name" : "Loyalty"
-  }, {
     "description" : "A customer's own 1:1 chat with the brand's bot (ADR 0058 stage 2)",
     "name" : "Customer Telegram linking"
   }, {
-    "description" : "Whether a location serves this channel and mode now",
-    "name" : "Serviceability"
-  }, {
     "description" : "A brand's FAQ and its social links",
     "name" : "Storefront support"
+  }, {
+    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
+    "name" : "Customer identity"
+  }, {
+    "description" : "The links to the receipts filed for a customer's own order",
+    "name" : "Storefront receipts"
+  }, {
+    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
+    "name" : "Telegram sign-in"
+  }, {
+    "description" : "Public, non-secret analytics identifiers for a brand",
+    "name" : "Storefront analytics"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Scanning a table code, and the bill it leads to",
+    "name" : "QR dine-in"
+  }, {
+    "description" : "A customer's own referral code, and redeeming a friend's",
+    "name" : "Referrals"
+  }, {
+    "description" : "The tenant's own document, or the platform default (ADR 0068)",
+    "name" : "Storefront terms of service"
+  }, {
+    "description" : "A customer's points balance and its movements",
+    "name" : "Loyalty"
+  }, {
+    "description" : "Whether a location serves this channel and mode now",
+    "name" : "Serviceability"
   } ]
 }

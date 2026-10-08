@@ -114,6 +114,44 @@ public class JdbcFiscalEvidenceStore {
                 .list();
     }
 
+    /**
+     * A receipt link the customer whose order it is may be shown (ADR 0166, ADR 0058).
+     *
+     * <p>Deliberately not an {@link EvidenceRow}: the customer's page needs the link and when it was
+     * registered, and a type that also carried the fiscal sign, the terminal or the seller could one
+     * day be serialised whole.
+     */
+    public record CustomerReceiptRow(
+            String documentType,
+            String receiptUrl,
+            @Nullable Instant registeredAt) {}
+
+    /**
+     * The receipts of an order that are still the one in force, oldest first.
+     *
+     * <p>A document that has been corrected or voided is no longer the receipt, and showing its link
+     * beside the order would point a customer at a document that has been superseded; the correction
+     * or refund document that replaced it is listed in its own right. An issued receipt with a
+     * correction merely <em>requested</em> is still the one filed and stays. Only an {@code https}
+     * link is returned: the link is rendered as an anchor, and whatever is stored in a column the
+     * providers write must not become a {@code javascript:} target.
+     */
+    public List<CustomerReceiptRow> receiptLinksOfOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                        SELECT document_type, receipt_url, COALESCE(registered_at, issued_at) AS registered
+                          FROM fiscal.fiscal_documents
+                         WHERE tenant_id = :tenantId AND order_id = :orderId
+                           AND status IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED')
+                           AND receipt_url LIKE 'https://%'
+                         ORDER BY created_at, id
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new CustomerReceiptRow(
+                        row.getString("document_type"), row.getString("receipt_url"), instant(row, "registered")))
+                .list();
+    }
+
     /** One correction or void request, as the surface and the worklist show it. */
     public record CorrectionRow(
             UUID id,
