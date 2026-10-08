@@ -1,0 +1,71 @@
+<div class="keypad" data-testid="pin-keypad">
+  <h2 class="keypad__title">{{ title() }}</h2>
+  <div class="keypad__entry" aria-live="polite" data-testid="pin-entry">
+    {{ shown() }}<span class="keypad__caret" aria-hidden="true"></span>
+  </div>
+  @if (error(); as message) {
+    <p class="keypad__error" role="alert" data-testid="pin-error">{{ message }}</p>
+  }
+  <div class="keypad__grid">
+    @for (key of keys; track key) {
+      <button
+        type="button"
+        class="keypad__key"
+        [disabled]="busy()"
+        (click)="press(key)"
+        [attr.data-testid]="'pin-key-' + key"
+      >
+        {{ key }}
+      </button>
+    }
+    <button
+      type="button"
+      class="keypad__key keypad__key--aux"
+      [disabled]="busy() || shown().length === 0"
+      (click)="clear()"
+      data-testid="pin-clear"
+    >
+      {{ 'device.terminal.keypad.clear' | t }}
+    </button>
+    <button
+      type="button"
+      class="keypad__key"
+      [disabled]="busy()"
+      (click)="press('0')"
+      data-testid="pin-key-0"
+    >
+      0
+    </button>
+    <button
+      type="button"
+      class="keypad__key keypad__key--aux"
+      [disabled]="busy() || shown().length === 0"
+      (click)="back()"
+      data-testid="pin-back"
+    >
+      ⌫
+    </button>
+  </div>
+  <div class="keypad__actions">
+    @if (cancelLabel(); as label) {
+      <button
+        type="button"
+        class="keypad__action"
+        [disabled]="busy()"
+        (click)="cancelled.emit()"
+        data-testid="pin-cancel"
+      >
+        {{ label }}
+      </button>
+    }
+    <button
+      type="button"
+      class="keypad__action keypad__action--primary"
+      [disabled]="!canSubmit()"
+      (click)="submit()"
+      data-testid="pin-submit"
+    >
+      {{ submitLabel() ?? ('device.terminal.keypad.ok' | t) }}
+    </button>
+  </div>
+</div>

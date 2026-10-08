@@ -106,6 +106,8 @@ export class DeviceSession {
     readonly userCode: string;
     readonly expiresAt: string;
     readonly pollIntervalSeconds: number;
+    /** For a kiosk only (ADR 0162): the console page a manager's phone opens from the QR. Never holds the device code. */
+    readonly approvalUrl?: string | null;
   }> {
     const response = await fetch(
       `${environment.apiBaseUrl}/api/v1/control-plane/device-enrolments`,

@@ -54,4 +54,39 @@ describe('toDeviceProfile', () => {
 
     expect(profile?.station?.displayNameEn).toBe('GRILL');
   });
+
+  it('reads a kiosk with the channel it sells through (ADR 0162)', () => {
+    const profile = toDeviceProfile({
+      ...WALL,
+      deviceClass: 'KIOSK',
+      station: null,
+      kiosk: {
+        channelId: 'c1',
+        channelCode: 'KIOSK_A',
+        channelName: 'Lobby channel',
+        channelStatus: 'ACTIVE',
+      },
+    });
+
+    expect(profile?.deviceClass).toBe('KIOSK');
+    expect(profile?.kiosk?.channelName).toBe('Lobby channel');
+    expect(profile?.kiosk?.channelStatus).toBe('ACTIVE');
+  });
+
+  it('reads a kiosk the platform has not yet bound as one with no channel, not as a broken record', () => {
+    const profile = toDeviceProfile({ ...WALL, deviceClass: 'KIOSK', station: null, kiosk: null });
+
+    expect(profile?.deviceClass).toBe('KIOSK');
+    expect(profile?.kiosk).toBeNull();
+  });
+
+  it('names a channel by its code when the server sends no display name', () => {
+    const profile = toDeviceProfile({
+      ...WALL,
+      deviceClass: 'KIOSK',
+      kiosk: { channelId: 'c1', channelCode: 'KIOSK_A' },
+    });
+
+    expect(profile?.kiosk?.channelName).toBe('KIOSK_A');
+  });
 });

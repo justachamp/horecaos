@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StaffTokenStore } from '../core/auth/staff-token-store';
 import { LocationScope } from '../core/api/operations-paths';
-import { DeviceBoardApi } from './device-board-api';
+import { DeviceBoardApi, DeviceBoardError } from './device-board-api';
 import { DeviceSession } from './device-session';
+import { TerminalSession } from './terminal-session';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -219,5 +220,106 @@ describe('DeviceBoardApi — the wall display’s two reads', () => {
     expect(url).toContain('/tenants/t1/brands/b1/locations/l1/kitchen/vdu');
     expect(String(url)).not.toContain('station=');
     expect(init.method).toBe('GET');
+  });
+});
+
+/**
+ * ADR 0155: a person unlocked at the terminal is named on the actions they take, by the session the server issued, and a
+ * read carries nothing of the kind -- polling the board is not a person using the screen.
+ */
+describe('DeviceBoardApi — who is at the terminal', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      'horecaos.kds.credential',
+      JSON.stringify({
+        tokenEndpoint: 'https://auth.example.uz/realms/horecaos/protocol/openid-connect/token',
+        clientId: 'kds-device-abc',
+        clientSecret: 'device-secret',
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function use(sessionToken: string | null): void {
+    TestBed.configureTestingModule({
+      providers: [{ provide: TerminalSession, useValue: { sessionToken: () => sessionToken } }],
+    });
+  }
+
+  it('presents the session on a mutating call and not on a read', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'device-access-token', expires_in: 300 }))
+      .mockResolvedValueOnce(jsonResponse({ tickets: [], warnings: [] }))
+      .mockResolvedValueOnce(jsonResponse({ applied: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    use('session-token-1');
+    const boardApi = TestBed.inject(DeviceBoardApi);
+
+    await boardApi.board(SCOPE);
+    await boardApi.start(SCOPE, 'item-1');
+
+    const read = fetchMock.mock.calls[1][1].headers as Record<string, string>;
+    const mutation = fetchMock.mock.calls[2][1].headers as Record<string, string>;
+    expect(read['X-Terminal-Session']).toBeUndefined();
+    expect(mutation['X-Terminal-Session']).toBe('session-token-1');
+    expect(mutation['Authorization']).toBe('Bearer device-access-token');
+  });
+
+  it('sends no session header while nobody is unlocked', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'device-access-token', expires_in: 300 }))
+      .mockResolvedValueOnce(jsonResponse({ applied: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    use(null);
+
+    await TestBed.inject(DeviceBoardApi).ready(SCOPE, 'item-1');
+
+    const headers = fetchMock.mock.calls[1][1].headers as Record<string, string>;
+    expect(headers['X-Terminal-Session']).toBeUndefined();
+  });
+
+  it('reports its build on every request, which is how the registry shows what a device runs', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'device-access-token', expires_in: 300 }))
+      .mockResolvedValueOnce(jsonResponse({ tickets: [], warnings: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    use(null);
+
+    await TestBed.inject(DeviceBoardApi).board(SCOPE);
+
+    const headers = fetchMock.mock.calls[1][1].headers as Record<string, string>;
+    expect(headers['X-Device-Build']).toBeTruthy();
+  });
+
+  it('tells a refusal about the person from a refusal of the device by the code in the problem body', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'device-access-token', expires_in: 300 }))
+      .mockResolvedValueOnce(jsonResponse({ code: 'TERMINAL_UNLOCK_REQUIRED', status: 403 }, 403))
+      .mockResolvedValueOnce(jsonResponse({ code: 'INSUFFICIENT_CAPABILITY', status: 403 }, 403));
+    vi.stubGlobal('fetch', fetchMock);
+    use(null);
+    const boardApi = TestBed.inject(DeviceBoardApi);
+
+    const person = (await boardApi
+      .start(SCOPE, 'item-1')
+      .catch((e: unknown) => e)) as DeviceBoardError;
+    const device = (await boardApi
+      .start(SCOPE, 'item-1')
+      .catch((e: unknown) => e)) as DeviceBoardError;
+
+    expect(person.status).toBe(403);
+    expect(person.code).toBe('TERMINAL_UNLOCK_REQUIRED');
+    expect(person.isTerminalRefusal).toBe(true);
+    expect(device.code).toBe('INSUFFICIENT_CAPABILITY');
+    expect(device.isTerminalRefusal).toBe(false);
   });
 });
