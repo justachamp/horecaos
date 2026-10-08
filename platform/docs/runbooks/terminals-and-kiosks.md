@@ -2,7 +2,7 @@
 
 - Last executed: never
 - Reader: the person on call, or the restaurant's operations lead with the owner's console
-- Records: [ADR 0155](../adr/partial/0155-terminals-and-staff-pins.md) (terminals and staff PINs), [ADR 0162](../adr/partial/0162-kiosk-device-pairing.md) (kiosk pairing), [ADR 0079](../adr/partial/0079-kitchen-display-device-principal.md) (device principals)
+- Records: [ADR 0155](../adr/partial/0155-terminals-and-staff-pins.md) (terminals and staff PINs), [ADR 0162](../adr/partial/0162-kiosk-device-pairing.md) (kiosk pairing), [ADR 0079](../adr/partial/0079-kitchen-display-device-principal-and-enrolment.md) (device principals)
 
 A PIN names the person at a shared screen. It is attribution, never authentication: it signs nobody in to the
 console, and a stolen PIN opens exactly what the device and the person both already could. Everything below is done
