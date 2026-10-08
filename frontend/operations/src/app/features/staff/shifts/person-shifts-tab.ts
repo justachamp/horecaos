@@ -10,7 +10,12 @@ import {
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
-import { TimeZone, formatDateTime, formatDuration, formatTime } from '../../../core/format/datetime';
+import {
+  TimeZone,
+  formatDateTime,
+  formatDuration,
+  formatTime,
+} from '../../../core/format/datetime';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';

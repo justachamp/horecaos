@@ -34,7 +34,7 @@ describe('RosterWeekGrid (ADR 0156)', () => {
 
   async function setUp(
     entries: RosterEntry[],
-    options: { canManage?: boolean; extra?: typeof aziza[] } = {},
+    options: { canManage?: boolean; extra?: (typeof aziza)[] } = {},
   ): Promise<{ added: unknown[]; opened: RosterEntry[] }> {
     await TestBed.configureTestingModule({ imports: [RosterWeekGrid] }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -71,7 +71,9 @@ describe('RosterWeekGrid (ADR 0156)', () => {
   it('shows a name beside the reference only when the platform sent one', async () => {
     await setUp([entry(), entry({ id: 'e-2', person: named })]);
 
-    const people = all('roster-row-person').map((node) => node.textContent?.replace(/\s+/g, ' ').trim());
+    const people = all('roster-row-person').map((node) =>
+      node.textContent?.replace(/\s+/g, ' ').trim(),
+    );
     // Rows sort by what is shown: a name sorts before a reference.
     expect(people).toEqual(['Bekzod Aliyev S-0002', 'S-0001']);
   });
@@ -109,7 +111,11 @@ describe('RosterWeekGrid (ADR 0156)', () => {
   it('opens an entry for change, and marks a draft apart from a published one', async () => {
     const { opened } = await setUp([
       entry({ status: 'DRAFT' }),
-      entry({ id: 'e-2', person: { memberId: 'm-3', displayReference: 'S-0003', name: null }, status: 'PUBLISHED' }),
+      entry({
+        id: 'e-2',
+        person: { memberId: 'm-3', displayReference: 'S-0003', name: null },
+        status: 'PUBLISHED',
+      }),
     ]);
 
     expect(all('roster-entry')[0].className).toContain('grid__entry--draft');
@@ -132,7 +138,15 @@ describe('RosterWeekGrid (ADR 0156)', () => {
   });
 
   it('moves between cells with the arrow keys', async () => {
-    await setUp([entry(), entry({ id: 'e-2', person: named, plannedStart: '2026-10-09T04:00:00Z', plannedEnd: '2026-10-09T13:00:00Z' })]);
+    await setUp([
+      entry(),
+      entry({
+        id: 'e-2',
+        person: named,
+        plannedStart: '2026-10-09T04:00:00Z',
+        plannedEnd: '2026-10-09T13:00:00Z',
+      }),
+    ]);
 
     const first = root().querySelector<HTMLElement>('[data-cell="0:0"]');
     first?.focus();

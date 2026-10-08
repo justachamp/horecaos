@@ -31,7 +31,11 @@ export const ENTRY_REASONS: readonly ShiftReason[] = [
   'SHIFT_SWAP',
   'COVERED_SHORTAGE',
 ];
-export const VOID_REASONS: readonly ShiftReason[] = ['ENTERED_IN_ERROR', 'DUPLICATE', 'DID_NOT_WORK'];
+export const VOID_REASONS: readonly ShiftReason[] = [
+  'ENTERED_IN_ERROR',
+  'DUPLICATE',
+  'DID_NOT_WORK',
+];
 export const APPROVAL_REASONS: readonly ShiftReason[] = [
   'WORKED_AS_RECORDED',
   'PLAN_CHANGED',
@@ -173,7 +177,9 @@ export class StaffShiftsApi {
 
   /** Whether the tenant records staff hours at all; the shift screens exist only when it does. */
   async enabled(tenantId: string): Promise<boolean> {
-    const read = await firstValueFrom(this.api.get<{ enabled: boolean }>(`${this.tenant(tenantId)}/attendance`));
+    const read = await firstValueFrom(
+      this.api.get<{ enabled: boolean }>(`${this.tenant(tenantId)}/attendance`),
+    );
     return read.value.enabled === true;
   }
 
@@ -187,17 +193,26 @@ export class StaffShiftsApi {
   }
 
   async rosterable(scope: LocationScope): Promise<readonly ShiftPerson[]> {
-    const read = await firstValueFrom(this.api.get<ShiftPerson[]>(`${this.branch(scope)}/roster/people`));
+    const read = await firstValueFrom(
+      this.api.get<ShiftPerson[]>(`${this.branch(scope)}/roster/people`),
+    );
     return read.value;
   }
 
   async createEntry(scope: LocationScope, draft: EntryDraft): Promise<RosterEntry> {
     return firstValueFrom(
-      this.api.post<EntryDraft, RosterEntry>(`${this.branch(scope)}/roster/entries`, command(draft)),
+      this.api.post<EntryDraft, RosterEntry>(
+        `${this.branch(scope)}/roster/entries`,
+        command(draft),
+      ),
     );
   }
 
-  async updateEntry(scope: LocationScope, entry: RosterEntry, draft: EntryDraft): Promise<RosterEntry> {
+  async updateEntry(
+    scope: LocationScope,
+    entry: RosterEntry,
+    draft: EntryDraft,
+  ): Promise<RosterEntry> {
     return firstValueFrom(
       this.api.put<EntryDraft, RosterEntry>(
         `${this.branch(scope)}/roster/entries/${enc(entry.id)}`,
@@ -207,7 +222,11 @@ export class StaffShiftsApi {
     );
   }
 
-  async cancelEntry(scope: LocationScope, entry: RosterEntry, reasonCode: ShiftReason): Promise<void> {
+  async cancelEntry(
+    scope: LocationScope,
+    entry: RosterEntry,
+    reasonCode: ShiftReason,
+  ): Promise<void> {
     const body = { reasonCode };
     await firstValueFrom(
       this.api.send<typeof body, void>(
@@ -250,7 +269,9 @@ export class StaffShiftsApi {
   // ----------------------------------------------------------------------------- the timesheet
 
   async today(scope: LocationScope): Promise<TodayList> {
-    const read = await firstValueFrom(this.api.get<TodayList>(`${this.branch(scope)}/shifts/today`));
+    const read = await firstValueFrom(
+      this.api.get<TodayList>(`${this.branch(scope)}/shifts/today`),
+    );
     return read.value;
   }
 
@@ -283,7 +304,9 @@ export class StaffShiftsApi {
     reasonCode: ShiftReason | null,
   ): Promise<StaffShift> {
     const body = { memberId, startedAt, ...(reasonCode === null ? {} : { reasonCode }) };
-    return firstValueFrom(this.api.post<typeof body, StaffShift>(`${this.branch(scope)}/shifts`, command(body)));
+    return firstValueFrom(
+      this.api.post<typeof body, StaffShift>(`${this.branch(scope)}/shifts`, command(body)),
+    );
   }
 
   async closeFor(
@@ -299,9 +322,13 @@ export class StaffShiftsApi {
       ...(reasonCode === null ? {} : { reasonCode }),
     };
     return firstValueFrom(
-      this.api.post<typeof body, StaffShift>(`${this.branch(scope)}/shifts/${enc(shift.id)}/closures`, command(body), {
-        expectedVersion: shift.version,
-      }),
+      this.api.post<typeof body, StaffShift>(
+        `${this.branch(scope)}/shifts/${enc(shift.id)}/closures`,
+        command(body),
+        {
+          expectedVersion: shift.version,
+        },
+      ),
     );
   }
 
@@ -313,48 +340,76 @@ export class StaffShiftsApi {
   ): Promise<StaffShift> {
     const body = { ...change, reasonCode };
     return firstValueFrom(
-      this.api.put<typeof body, StaffShift>(`${this.branch(scope)}/shifts/${enc(shift.id)}`, command(body), {
-        expectedVersion: shift.version,
-      }),
+      this.api.put<typeof body, StaffShift>(
+        `${this.branch(scope)}/shifts/${enc(shift.id)}`,
+        command(body),
+        {
+          expectedVersion: shift.version,
+        },
+      ),
     );
   }
 
-  async voidShift(scope: LocationScope, shift: ShiftRef, reasonCode: ShiftReason): Promise<StaffShift> {
+  async voidShift(
+    scope: LocationScope,
+    shift: ShiftRef,
+    reasonCode: ShiftReason,
+  ): Promise<StaffShift> {
     const body = { reasonCode };
     return firstValueFrom(
-      this.api.post<typeof body, StaffShift>(`${this.branch(scope)}/shifts/${enc(shift.id)}/voidings`, command(body), {
-        expectedVersion: shift.version,
-      }),
+      this.api.post<typeof body, StaffShift>(
+        `${this.branch(scope)}/shifts/${enc(shift.id)}/voidings`,
+        command(body),
+        {
+          expectedVersion: shift.version,
+        },
+      ),
     );
   }
 
-  async approve(scope: LocationScope, shift: ShiftRef, reasonCode: ShiftReason): Promise<StaffShift> {
+  async approve(
+    scope: LocationScope,
+    shift: ShiftRef,
+    reasonCode: ShiftReason,
+  ): Promise<StaffShift> {
     const body = { reasonCode };
     return firstValueFrom(
-      this.api.post<typeof body, StaffShift>(`${this.branch(scope)}/shifts/${enc(shift.id)}/approvals`, command(body), {
-        expectedVersion: shift.version,
-      }),
+      this.api.post<typeof body, StaffShift>(
+        `${this.branch(scope)}/shifts/${enc(shift.id)}/approvals`,
+        command(body),
+        {
+          expectedVersion: shift.version,
+        },
+      ),
     );
   }
 
   // ------------------------------------------------------------------------- a person's own
 
   async mine(tenantId: string): Promise<MyAttendance> {
-    const read = await firstValueFrom(this.api.get<MyAttendance>(`${this.tenant(tenantId)}/me/attendance`));
+    const read = await firstValueFrom(
+      this.api.get<MyAttendance>(`${this.tenant(tenantId)}/me/attendance`),
+    );
     return read.value;
   }
 
   async clockIn(tenantId: string, locationId: string): Promise<StaffShift> {
     const body = { locationId };
     return firstValueFrom(
-      this.api.post<typeof body, StaffShift>(`${this.tenant(tenantId)}/me/attendance/clock-ins`, command(body)),
+      this.api.post<typeof body, StaffShift>(
+        `${this.tenant(tenantId)}/me/attendance/clock-ins`,
+        command(body),
+      ),
     );
   }
 
   async clockOut(tenantId: string): Promise<StaffShift> {
     const body = {};
     return firstValueFrom(
-      this.api.post<typeof body, StaffShift>(`${this.tenant(tenantId)}/me/attendance/clock-outs`, command(body)),
+      this.api.post<typeof body, StaffShift>(
+        `${this.tenant(tenantId)}/me/attendance/clock-outs`,
+        command(body),
+      ),
     );
   }
 }

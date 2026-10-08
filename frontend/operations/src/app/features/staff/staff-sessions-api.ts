@@ -5,7 +5,8 @@ import { ApiClient } from '../../core/api/api-client';
 import { command } from '../../core/api/idempotency';
 
 /** `StaffSessionsController` (ADR 0176): the signed-in account's own sessions, and nobody else's. */
-export type SessionBrowser = 'CHROME' | 'SAFARI' | 'FIREFOX' | 'EDGE' | 'YANDEX' | 'SAMSUNG' | 'OTHER';
+export type SessionBrowser =
+  'CHROME' | 'SAFARI' | 'FIREFOX' | 'EDGE' | 'YANDEX' | 'SAMSUNG' | 'OTHER';
 export type SessionOs = 'WINDOWS' | 'MACOS' | 'LINUX' | 'ANDROID' | 'IOS' | 'CHROMEOS' | 'OTHER';
 export type SessionForm = 'DESKTOP' | 'PHONE' | 'TABLET';
 
@@ -20,11 +21,7 @@ export type SessionState = 'ACTIVE' | 'ENDED';
 
 /** Why the platform believes a session ended (`EndReason`). */
 export type SessionEndReason =
-  | 'SIGNED_OUT'
-  | 'SIGNED_OUT_EVERYWHERE'
-  | 'PASSWORD_RESET'
-  | 'ENDED_ONE'
-  | 'EXPIRED';
+  'SIGNED_OUT' | 'SIGNED_OUT_EVERYWHERE' | 'PASSWORD_RESET' | 'ENDED_ONE' | 'EXPIRED';
 
 /** The closed list a person picks from; never typed (`StaffSessionService.Reason`). */
 export const TERMINATION_REASONS = [
@@ -69,14 +66,20 @@ export class StaffSessionsApi {
   }
 
   list(tenantId: string): Promise<OwnSessions> {
-    return firstValueFrom(this.api.get<OwnSessions>(this.base(tenantId))).then((read) => read.value);
+    return firstValueFrom(this.api.get<OwnSessions>(this.base(tenantId))).then(
+      (read) => read.value,
+    );
   }
 
   /** Ends every session of the account, this one included. 204; nothing is ended when it throws. */
   terminateAll(tenantId: string, reasonCode: TerminationReason): Promise<void> {
     const body = { scope: 'ALL' as const, reasonCode };
     return firstValueFrom(
-      this.api.send<typeof body, void>('POST', `${this.base(tenantId)}/terminations`, command(body)),
+      this.api.send<typeof body, void>(
+        'POST',
+        `${this.base(tenantId)}/terminations`,
+        command(body),
+      ),
     ).then(() => undefined);
   }
 

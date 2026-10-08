@@ -9,7 +9,9 @@
         <p class="q-body-sm mine__error" role="alert" data-testid="my-attendance-error">
           {{ 'staff.shifts.mine.error' | t }}
         </p>
-        <button type="button" class="mine__button" (click)="retry()">{{ 'reports.error.retry' | t }}</button>
+        <button type="button" class="mine__button" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
       }
       @case ('ready') {
         @if (open(); as shift) {
@@ -48,7 +50,9 @@
           </button>
         }
         @if (failure(); as message) {
-          <p class="q-body-sm mine__error" role="alert" data-testid="my-attendance-failure">{{ message }}</p>
+          <p class="q-body-sm mine__error" role="alert" data-testid="my-attendance-failure">
+            {{ message }}
+          </p>
         }
         @if (recent().length > 0) {
           <ul class="mine__recent q-body-sm" data-testid="my-attendance-recent">

@@ -55,7 +55,11 @@ const NOT_WORKING: MyAttendance = {
 
 describe('MyAttendanceCard (ADR 0156)', () => {
   let fixture: ComponentFixture<MyAttendanceCard>;
-  let api: { mine: ReturnType<typeof vi.fn>; clockIn: ReturnType<typeof vi.fn>; clockOut: ReturnType<typeof vi.fn> };
+  let api: {
+    mine: ReturnType<typeof vi.fn>;
+    clockIn: ReturnType<typeof vi.fn>;
+    clockOut: ReturnType<typeof vi.fn>;
+  };
 
   async function setUp(options: {
     on?: boolean;
@@ -197,7 +201,9 @@ describe('MyAttendanceCard (ADR 0156)', () => {
 
   it('puts the platform’s refusal under the button', async () => {
     await setUp({});
-    api.clockIn.mockRejectedValue(new ApiError('STALE_VERSION', 409, { status: 409, detail: 'x' }, 'c-1'));
+    api.clockIn.mockRejectedValue(
+      new ApiError('STALE_VERSION', 409, { status: 409, detail: 'x' }, 'c-1'),
+    );
 
     q<HTMLButtonElement>('my-attendance-clock-in')?.click();
     await settle();

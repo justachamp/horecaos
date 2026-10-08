@@ -9,13 +9,7 @@ import { Capability, SessionCapabilities } from '../../../core/auth/session-capa
 import { I18n } from '../../../core/i18n/i18n';
 import { ConfigurationApi } from '../../settings/configuration-api';
 import { AttendanceStatus } from './attendance-status';
-import {
-  RosterEntry,
-  RosterWeek,
-  StaffShift,
-  StaffShiftsApi,
-  TodayList,
-} from './staff-shifts-api';
+import { RosterEntry, RosterWeek, StaffShift, StaffShiftsApi, TodayList } from './staff-shifts-api';
 import { StaffShiftsPage } from './staff-shifts-page';
 
 const TENANT = '018fb100-6000-7000-8000-0000000000a1';
@@ -131,7 +125,9 @@ describe('StaffShiftsPage (ADR 0156)', () => {
     week?: RosterWeek | Error;
   }): Promise<void> {
     enabled = signal<boolean | null>(options.on ?? true);
-    held = new Set(options.capabilities ?? ['STAFF_SHIFT_READ', 'STAFF_SHIFT_MANAGE', 'STAFF_SHIFT_APPROVE']);
+    held = new Set(
+      options.capabilities ?? ['STAFF_SHIFT_READ', 'STAFF_SHIFT_MANAGE', 'STAFF_SHIFT_APPROVE'],
+    );
     api = {
       week: vi.fn(),
       rosterable: vi.fn().mockResolvedValue([aziza, bekzod]),
@@ -167,11 +163,19 @@ describe('StaffShiftsPage (ADR 0156)', () => {
         },
         {
           provide: CurrentTenant,
-          useValue: { ensureLoaded: () => Promise.resolve(), tenantId: () => TENANT, denied: () => false },
+          useValue: {
+            ensureLoaded: () => Promise.resolve(),
+            tenantId: () => TENANT,
+            denied: () => false,
+          },
         },
         {
           provide: CurrentLocation,
-          useValue: { ensureLoaded: () => Promise.resolve(), scope: () => SCOPE, denied: () => false },
+          useValue: {
+            ensureLoaded: () => Promise.resolve(),
+            scope: () => SCOPE,
+            denied: () => false,
+          },
         },
         { provide: SessionCapabilities, useValue: { has: (c: Capability) => held.has(c) } },
       ],
@@ -224,7 +228,10 @@ describe('StaffShiftsPage (ADR 0156)', () => {
 
   it('switches attendance on only after the notice is acknowledged and a reason is given, then shows the rota', async () => {
     enabled = signal<boolean | null>(false);
-    await setUp({ on: false, capabilities: ['TENANT_CONFIGURATION_WRITE', 'STAFF_SHIFT_READ', 'STAFF_SHIFT_MANAGE'] });
+    await setUp({
+      on: false,
+      capabilities: ['TENANT_CONFIGURATION_WRITE', 'STAFF_SHIFT_READ', 'STAFF_SHIFT_MANAGE'],
+    });
 
     await click(q('shifts-enable'));
     const confirm = q<HTMLButtonElement>('attendance-notice-confirm');
@@ -256,7 +263,10 @@ describe('StaffShiftsPage (ADR 0156)', () => {
     await setUp({});
 
     expect(api['week']).toHaveBeenCalledWith(SCOPE, '2026-10-05', '2026-10-11');
-    expect(all('roster-row-person').map((n) => n.textContent?.trim())).toEqual(['S-0001', 'S-0002']);
+    expect(all('roster-row-person').map((n) => n.textContent?.trim())).toEqual([
+      'S-0001',
+      'S-0002',
+    ]);
     expect(q('roster-today-column')?.getAttribute('aria-current')).toBe('date');
     expect(q('roster-today-column')?.textContent).toContain('08.10');
     expect(all('roster-entry')).toHaveLength(1);

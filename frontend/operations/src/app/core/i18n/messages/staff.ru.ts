@@ -232,13 +232,14 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.myProfile.telegram.issue': 'Получить код',
   'staff.myProfile.telegram.sendThis': 'Отправьте это боту в личном чате:',
   'staff.myProfile.security.title': 'Безопасность',
-  'staff.myProfile.security.notBuilt':
-    'Смена пароля и PIN на терминале пока не построены',
+  'staff.myProfile.security.notBuilt': 'Смена пароля и PIN на терминале пока не построены',
   'staff.myProfile.sessions.title': 'Сеансы',
-  'staff.myProfile.sessions.lead': 'Это сеансы вашей учётной записи. Они общие для всех компаний, где вы работаете: завершить один — значит выйти из него во всех.',
+  'staff.myProfile.sessions.lead':
+    'Это сеансы вашей учётной записи. Они общие для всех компаний, где вы работаете: завершить один — значит выйти из него во всех.',
   'staff.myProfile.sessions.loading': 'Читаем ваши сеансы…',
   'staff.myProfile.sessions.loadFailed': 'Не удалось прочитать сеансы. Перезагрузите страницу.',
-  'staff.myProfile.sessions.unavailable': 'Сервис входа не ответил, поэтому в списке только то, что записала эта система, — он может быть неточным. Выйти на всех устройствах всё равно можно.',
+  'staff.myProfile.sessions.unavailable':
+    'Сервис входа не ответил, поэтому в списке только то, что записала эта система, — он может быть неточным. Выйти на всех устройствах всё равно можно.',
   'staff.myProfile.sessions.empty': 'Активных сеансов нет.',
   'staff.myProfile.sessions.thisDevice': 'Это устройство',
   'staff.myProfile.sessions.unknownDevice': 'Неизвестное устройство',
@@ -251,14 +252,18 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.myProfile.sessions.endedOne': 'Сеанс завершён.',
   'staff.myProfile.sessions.confirmAll': 'Выйти на всех устройствах?',
   'staff.myProfile.sessions.confirmOne': 'Завершить этот сеанс?',
-  'staff.myProfile.sessions.confirmAllBody': 'Сеансов будет завершено: {count}. Это устройство тоже выйдет, и вас попросят войти снова.',
+  'staff.myProfile.sessions.confirmAllBody':
+    'Сеансов будет завершено: {count}. Это устройство тоже выйдет, и вас попросят войти снова.',
   'staff.myProfile.sessions.confirmOneBody': 'Сеансов будет завершено: {count}.',
-  'staff.myProfile.sessions.confirmEveryCompany': 'Сеанс принадлежит вашей учётной записи, поэтому он завершится во всех компаниях, где вы работаете.',
-  'staff.myProfile.sessions.confirmInFlight': 'Запрос, который уже выполняется, может пройти ещё несколько минут.',
+  'staff.myProfile.sessions.confirmEveryCompany':
+    'Сеанс принадлежит вашей учётной записи, поэтому он завершится во всех компаниях, где вы работаете.',
+  'staff.myProfile.sessions.confirmInFlight':
+    'Запрос, который уже выполняется, может пройти ещё несколько минут.',
   'staff.myProfile.sessions.reasonLegend': 'Почему',
   'staff.myProfile.sessions.reason.LOST_DEVICE': 'Я потерял(а) устройство',
   'staff.myProfile.sessions.reason.SHARED_DEVICE': 'Устройством пользовался кто-то другой',
-  'staff.myProfile.sessions.reason.SUSPECTED_COMPROMISE': 'Моей учётной записью могли воспользоваться без меня',
+  'staff.myProfile.sessions.reason.SUSPECTED_COMPROMISE':
+    'Моей учётной записью могли воспользоваться без меня',
   'staff.myProfile.sessions.reason.JUST_IN_CASE': 'На всякий случай',
   'staff.myProfile.sessions.confirmGo': 'Завершить сеансы',
   'staff.myProfile.sessions.confirmCancel': 'Отмена',
@@ -284,10 +289,12 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.myProfile.sessions.endedBy.PASSWORD_RESET': 'завершён сбросом пароля',
   'staff.myProfile.sessions.endedBy.ENDED_ONE': 'завершён из списка',
   'staff.myProfile.sessions.endedBy.EXPIRED': 'истёк',
-  'staff.myProfile.sessions.notEnded': 'Ничего не завершено: сервис входа недоступен. Попробуйте ещё раз через минуту.',
+  'staff.myProfile.sessions.notEnded':
+    'Ничего не завершено: сервис входа недоступен. Попробуйте ещё раз через минуту.',
   'staff.myProfile.sessions.rateLimited': 'Слишком много попыток. Попробуйте через час.',
   'staff.myProfile.sessions.gone': 'Такого сеанса больше нет.',
-  'staff.myProfile.sessions.failed': 'Не удалось завершить сеансы. Попробуйте ещё раз через минуту.',
+  'staff.myProfile.sessions.failed':
+    'Не удалось завершить сеансы. Попробуйте ещё раз через минуту.',
   'staff.myProfile.myJobs.title': 'Мои должности',
   'staff.myProfile.myJobs.empty': 'Пока нет ни одной должности.',
 

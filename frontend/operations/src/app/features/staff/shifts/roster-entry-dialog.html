@@ -87,11 +87,18 @@
   }
 
   @if (failure(); as message) {
-    <p class="q-body-sm entry__error" role="alert" data-testid="roster-entry-failure">{{ message }}</p>
+    <p class="q-body-sm entry__error" role="alert" data-testid="roster-entry-failure">
+      {{ message }}
+    </p>
   }
 
   <ng-container qModalActions>
-    <button type="button" class="entry__dismiss q-body-sm" (click)="dismiss.emit()" [disabled]="busy()">
+    <button
+      type="button"
+      class="entry__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
       {{ 'staff.shifts.entry.close' | t }}
     </button>
     @if (!cancelling()) {

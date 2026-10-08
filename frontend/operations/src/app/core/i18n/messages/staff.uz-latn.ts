@@ -233,13 +233,14 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.myProfile.telegram.issue': 'Kod olish',
   'staff.myProfile.telegram.sendThis': 'Buni botga shaxsiy chatda yuboring:',
   'staff.myProfile.security.title': 'Xavfsizlik',
-  'staff.myProfile.security.notBuilt':
-    'Parolni almashtirish va terminal PIN-kodi hali qurilmagan',
+  'staff.myProfile.security.notBuilt': 'Parolni almashtirish va terminal PIN-kodi hali qurilmagan',
   'staff.myProfile.sessions.title': 'Seanslar',
-  'staff.myProfile.sessions.lead': 'Bu sizning hisobingizdagi seanslar. Ular siz ishlaydigan barcha kompaniyalar uchun umumiy: birini yakunlash sizni hammasidan chiqaradi.',
+  'staff.myProfile.sessions.lead':
+    'Bu sizning hisobingizdagi seanslar. Ular siz ishlaydigan barcha kompaniyalar uchun umumiy: birini yakunlash sizni hammasidan chiqaradi.',
   'staff.myProfile.sessions.loading': 'Seanslaringiz oʻqilmoqda…',
   'staff.myProfile.sessions.loadFailed': 'Seanslaringizni oʻqib boʻlmadi. Sahifani qayta yuklang.',
-  'staff.myProfile.sessions.unavailable': 'Kirish xizmatidan soʻrab boʻlmadi, shuning uchun bu roʻyxat faqat shu tizim qayd etganini koʻrsatadi va eskirgan boʻlishi mumkin. Baribir barcha qurilmalardan chiqishingiz mumkin.',
+  'staff.myProfile.sessions.unavailable':
+    'Kirish xizmatidan soʻrab boʻlmadi, shuning uchun bu roʻyxat faqat shu tizim qayd etganini koʻrsatadi va eskirgan boʻlishi mumkin. Baribir barcha qurilmalardan chiqishingiz mumkin.',
   'staff.myProfile.sessions.empty': 'Faol seanslar yoʻq.',
   'staff.myProfile.sessions.thisDevice': 'Shu qurilma',
   'staff.myProfile.sessions.unknownDevice': 'Nomaʻlum qurilma',
@@ -252,14 +253,18 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.myProfile.sessions.endedOne': 'Seans yakunlandi.',
   'staff.myProfile.sessions.confirmAll': 'Barcha qurilmalardan chiqasizmi?',
   'staff.myProfile.sessions.confirmOne': 'Bu seansni yakunlaysizmi?',
-  'staff.myProfile.sessions.confirmAllBody': 'Yakunlanadigan seanslar: {count}. Shu qurilma ham chiqadi va qayta kirishingiz soʻraladi.',
+  'staff.myProfile.sessions.confirmAllBody':
+    'Yakunlanadigan seanslar: {count}. Shu qurilma ham chiqadi va qayta kirishingiz soʻraladi.',
   'staff.myProfile.sessions.confirmOneBody': 'Yakunlanadigan seanslar: {count}.',
-  'staff.myProfile.sessions.confirmEveryCompany': 'Seans hisobingizga tegishli, shuning uchun u siz ishlaydigan barcha kompaniyalarda ham yakunlanadi.',
-  'staff.myProfile.sessions.confirmInFlight': 'Allaqachon yuborilgan soʻrov yana bir necha daqiqa davomida bajarilishi mumkin.',
+  'staff.myProfile.sessions.confirmEveryCompany':
+    'Seans hisobingizga tegishli, shuning uchun u siz ishlaydigan barcha kompaniyalarda ham yakunlanadi.',
+  'staff.myProfile.sessions.confirmInFlight':
+    'Allaqachon yuborilgan soʻrov yana bir necha daqiqa davomida bajarilishi mumkin.',
   'staff.myProfile.sessions.reasonLegend': 'Sabab',
   'staff.myProfile.sessions.reason.LOST_DEVICE': 'Qurilmani yoʻqotdim',
   'staff.myProfile.sessions.reason.SHARED_DEVICE': 'Qurilmadan boshqa odam foydalangan',
-  'staff.myProfile.sessions.reason.SUSPECTED_COMPROMISE': 'Hisobimdan menga bildirmay foydalanilgan boʻlishi mumkin',
+  'staff.myProfile.sessions.reason.SUSPECTED_COMPROMISE':
+    'Hisobimdan menga bildirmay foydalanilgan boʻlishi mumkin',
   'staff.myProfile.sessions.reason.JUST_IN_CASE': 'Ehtiyot uchun',
   'staff.myProfile.sessions.confirmGo': 'Seanslarni yakunlash',
   'staff.myProfile.sessions.confirmCancel': 'Bekor qilish',
@@ -285,7 +290,8 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.myProfile.sessions.endedBy.PASSWORD_RESET': 'parol tiklangani uchun yakunlangan',
   'staff.myProfile.sessions.endedBy.ENDED_ONE': 'roʻyxatdan yakunlangan',
   'staff.myProfile.sessions.endedBy.EXPIRED': 'muddati tugagan',
-  'staff.myProfile.sessions.notEnded': 'Hech narsa yakunlanmadi: kirish xizmatiga ulanib boʻlmadi. Birozdan soʻng qayta urining.',
+  'staff.myProfile.sessions.notEnded':
+    'Hech narsa yakunlanmadi: kirish xizmatiga ulanib boʻlmadi. Birozdan soʻng qayta urining.',
   'staff.myProfile.sessions.rateLimited': 'Urinishlar juda koʻp. Bir soatdan keyin qayta urining.',
   'staff.myProfile.sessions.gone': 'Bunday seans endi mavjud emas.',
   'staff.myProfile.sessions.failed': 'Seanslarni yakunlab boʻlmadi. Birozdan soʻng qayta urining.',

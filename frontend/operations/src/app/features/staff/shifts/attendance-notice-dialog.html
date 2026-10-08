@@ -41,7 +41,12 @@
   }
 
   <ng-container qModalActions>
-    <button type="button" class="notice__dismiss q-body-sm" (click)="dismiss.emit()" [disabled]="busy()">
+    <button
+      type="button"
+      class="notice__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
       {{ 'staff.shifts.notice.cancel' | t }}
     </button>
     <button

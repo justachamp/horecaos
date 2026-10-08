@@ -95,11 +95,18 @@
   </label>
 
   @if (failure(); as message) {
-    <p class="q-body-sm action__error" role="alert" data-testid="shift-action-failure">{{ message }}</p>
+    <p class="q-body-sm action__error" role="alert" data-testid="shift-action-failure">
+      {{ message }}
+    </p>
   }
 
   <ng-container qModalActions>
-    <button type="button" class="action__dismiss q-body-sm" (click)="dismiss.emit()" [disabled]="busy()">
+    <button
+      type="button"
+      class="action__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
       {{ 'staff.shifts.entry.close' | t }}
     </button>
     <button

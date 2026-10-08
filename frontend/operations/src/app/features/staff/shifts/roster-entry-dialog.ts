@@ -105,7 +105,9 @@ export class RosterEntryDialog implements OnInit {
   }
 
   protected personLabel(person: ShiftPerson): string {
-    return person.name === null ? person.displayReference : `${person.name} · ${person.displayReference}`;
+    return person.name === null
+      ? person.displayReference
+      : `${person.name} · ${person.displayReference}`;
   }
 
   protected reasonLabel(reason: string): string {
@@ -142,7 +144,10 @@ export class RosterEntryDialog implements OnInit {
     if (this.selectedMember() === '' || !this.start() || !this.end() || this.windowInvalid()) {
       return;
     }
-    const plannedBreakMinutes = Math.max(0, Math.min(240, Math.trunc(Number(this.breakMinutes()) || 0)));
+    const plannedBreakMinutes = Math.max(
+      0,
+      Math.min(240, Math.trunc(Number(this.breakMinutes()) || 0)),
+    );
     this.result.emit({
       kind: 'save',
       draft: {

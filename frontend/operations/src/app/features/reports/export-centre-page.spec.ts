@@ -277,9 +277,7 @@ describe('ExportCentrePage (row 7.2e)', () => {
   });
 
   describe('the payroll file (ADR 0156)', () => {
-    async function openStaffAttendance(
-      options: Parameters<typeof render>[0] = {},
-    ): Promise<void> {
+    async function openStaffAttendance(options: Parameters<typeof render>[0] = {}): Promise<void> {
       await render({
         capabilities: ['REPORT_EXPORT', 'STAFF_SHIFT_READ'],
         attendanceOn: true,
@@ -376,7 +374,9 @@ describe('ExportCentrePage (row 7.2e)', () => {
       el<HTMLButtonElement>('export-centre-submit')!.click();
       await flushMicrotasks();
 
-      expect((requestExportSpy.mock.calls[1][1] as ReportExportRequest).includeUnresolved).toBe(true);
+      expect((requestExportSpy.mock.calls[1][1] as ReportExportRequest).includeUnresolved).toBe(
+        true,
+      );
     });
 
     it('sends no includeUnresolved for a report that has no such thing', async () => {
@@ -388,7 +388,9 @@ describe('ExportCentrePage (row 7.2e)', () => {
       el<HTMLButtonElement>('export-centre-submit')!.click();
       await flushMicrotasks();
 
-      expect((requestExportSpy.mock.calls[0][1] as ReportExportRequest).includeUnresolved).toBeNull();
+      expect(
+        (requestExportSpy.mock.calls[0][1] as ReportExportRequest).includeUnresolved,
+      ).toBeNull();
     });
 
     it('says why the platform refused: unsettled shifts, or a range over the ceiling', async () => {

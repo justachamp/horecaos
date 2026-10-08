@@ -54,7 +54,9 @@
                 <p class="q-caption muted">
                   {{ 'staff.myProfile.sessions.signedIn' | t: { date: when(session.signedInAt) } }}
                   &middot;
-                  {{ 'staff.myProfile.sessions.lastActive' | t: { date: when(session.lastSeenAt) } }}
+                  {{
+                    'staff.myProfile.sessions.lastActive' | t: { date: when(session.lastSeenAt) }
+                  }}
                 </p>
               </li>
             }
@@ -93,15 +95,26 @@
       }
 
       @if (pending(); as ask) {
-        <div class="confirm" role="alertdialog" aria-labelledby="sessions-confirm-title" data-testid="sessions-confirm">
+        <div
+          class="confirm"
+          role="alertdialog"
+          aria-labelledby="sessions-confirm-title"
+          data-testid="sessions-confirm"
+        >
           <h3 id="sessions-confirm-title" class="q-emphasis">
-            {{ (ask.scope === 'ALL' ? 'staff.myProfile.sessions.confirmAll' : 'staff.myProfile.sessions.confirmOne') | t }}
+            {{
+              (ask.scope === 'ALL'
+                ? 'staff.myProfile.sessions.confirmAll'
+                : 'staff.myProfile.sessions.confirmOne'
+              ) | t
+            }}
           </h3>
           <p class="q-body-sm" data-testid="sessions-confirm-body">
             {{
               (ask.scope === 'ALL'
                 ? 'staff.myProfile.sessions.confirmAllBody'
-                : 'staff.myProfile.sessions.confirmOneBody') | t: { count: endingCount() }
+                : 'staff.myProfile.sessions.confirmOneBody'
+              ) | t: { count: endingCount() }
             }}
           </p>
           <p class="q-body-sm">{{ 'staff.myProfile.sessions.confirmEveryCompany' | t }}</p>

@@ -149,9 +149,15 @@ export class ShiftActionDialog implements OnInit {
   protected readonly titleKey = computed(() => TITLES[this.kind()]);
   protected readonly leadKey = computed(() => LEADS[this.kind()]);
   protected readonly confirmKey = computed(() => CONFIRMS[this.kind()]);
-  protected readonly showsStart = computed(() => this.kind() === 'open' || this.kind() === 'correct');
-  protected readonly showsEnd = computed(() => this.kind() === 'close' || this.kind() === 'correct');
-  protected readonly showsBreak = computed(() => this.kind() === 'close' || this.kind() === 'correct');
+  protected readonly showsStart = computed(
+    () => this.kind() === 'open' || this.kind() === 'correct',
+  );
+  protected readonly showsEnd = computed(
+    () => this.kind() === 'close' || this.kind() === 'correct',
+  );
+  protected readonly showsBreak = computed(
+    () => this.kind() === 'close' || this.kind() === 'correct',
+  );
   protected readonly reasonRequired = computed(() => {
     switch (this.kind()) {
       case 'open':
@@ -181,9 +187,13 @@ export class ShiftActionDialog implements OnInit {
         if (shift !== null) {
           this.start.set(toZonedDatetimeLocal(new Date(shift.startedAt), this.zone()));
           this.end.set(
-            shift.endedAt === null ? '' : toZonedDatetimeLocal(new Date(shift.endedAt), this.zone()),
+            shift.endedAt === null
+              ? ''
+              : toZonedDatetimeLocal(new Date(shift.endedAt), this.zone()),
           );
-          this.breakMinutes.set(shift.endedAt === null ? '' : String(Math.round(shift.breakSeconds / 60)));
+          this.breakMinutes.set(
+            shift.endedAt === null ? '' : String(Math.round(shift.breakSeconds / 60)),
+          );
         }
         break;
       default:
@@ -192,7 +202,9 @@ export class ShiftActionDialog implements OnInit {
   }
 
   protected personLabel(person: ShiftPerson): string {
-    return person.name === null ? person.displayReference : `${person.name} · ${person.displayReference}`;
+    return person.name === null
+      ? person.displayReference
+      : `${person.name} · ${person.displayReference}`;
   }
 
   protected reasonLabel(reason: ShiftReason): string {
@@ -270,7 +282,9 @@ export class ShiftActionDialog implements OnInit {
         const minutes = this.breakMinutes().trim();
         this.result.emit({
           kind: 'correct',
-          startedAt: this.start() ? parseZonedDatetimeLocal(this.start(), zone).toISOString() : null,
+          startedAt: this.start()
+            ? parseZonedDatetimeLocal(this.start(), zone).toISOString()
+            : null,
           endedAt: this.end() ? parseZonedDatetimeLocal(this.end(), zone).toISOString() : null,
           breakSeconds: minutes === '' ? null : Math.max(0, Math.round(Number(minutes) * 60)),
           reason,

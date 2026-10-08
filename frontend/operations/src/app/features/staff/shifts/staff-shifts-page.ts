@@ -95,13 +95,7 @@ const TODAY_POLL_MS = 30_000;
  */
 @Component({
   selector: 'q-staff-shifts-page',
-  imports: [
-    TPipe,
-    RosterWeekGrid,
-    RosterEntryDialog,
-    ShiftActionDialog,
-    AttendanceNoticeDialog,
-  ],
+  imports: [TPipe, RosterWeekGrid, RosterEntryDialog, ShiftActionDialog, AttendanceNoticeDialog],
   templateUrl: './staff-shifts-page.html',
   styleUrl: './staff-shifts-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -408,7 +402,10 @@ export class StaffShiftsPage {
     await this.run(async () => {
       const copied = await this.api.copyWeek(scope, addDays(to, -7), to);
       this.notice.set(
-        this.i18n.t('staff.shifts.week.copied', { created: copied.created, skipped: copied.skipped }),
+        this.i18n.t('staff.shifts.week.copied', {
+          created: copied.created,
+          skipped: copied.skipped,
+        }),
       );
       await this.loadWeek();
     });
@@ -470,7 +467,13 @@ export class StaffShiftsPage {
           break;
         case 'close':
           if (target.shift !== null) {
-            await this.api.closeFor(scope, target.shift, result.endedAt, result.breakSeconds, result.reason);
+            await this.api.closeFor(
+              scope,
+              target.shift,
+              result.endedAt,
+              result.breakSeconds,
+              result.reason,
+            );
           }
           break;
         case 'correct':

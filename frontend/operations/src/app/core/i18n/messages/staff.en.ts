@@ -233,10 +233,12 @@ export const staffEn = {
   'staff.myProfile.security.notBuilt':
     'Changing your password and your terminal PIN are not built yet',
   'staff.myProfile.sessions.title': 'Sessions',
-  'staff.myProfile.sessions.lead': 'These are the sessions of your account. They are shared by every company where you work: ending one signs you out of it in all of them.',
+  'staff.myProfile.sessions.lead':
+    'These are the sessions of your account. They are shared by every company where you work: ending one signs you out of it in all of them.',
   'staff.myProfile.sessions.loading': 'Reading your sessions…',
   'staff.myProfile.sessions.loadFailed': 'Could not read your sessions. Reload the page.',
-  'staff.myProfile.sessions.unavailable': 'The sign-in service could not be asked, so this list is only what this system recorded and may be out of date. You can still sign out everywhere.',
+  'staff.myProfile.sessions.unavailable':
+    'The sign-in service could not be asked, so this list is only what this system recorded and may be out of date. You can still sign out everywhere.',
   'staff.myProfile.sessions.empty': 'No active sessions.',
   'staff.myProfile.sessions.thisDevice': 'This device',
   'staff.myProfile.sessions.unknownDevice': 'Unknown device',
@@ -249,14 +251,18 @@ export const staffEn = {
   'staff.myProfile.sessions.endedOne': 'The session was ended.',
   'staff.myProfile.sessions.confirmAll': 'Sign out on all devices?',
   'staff.myProfile.sessions.confirmOne': 'End this session?',
-  'staff.myProfile.sessions.confirmAllBody': 'Sessions that will end: {count}. This device signs out too, and you will be asked to sign in again.',
+  'staff.myProfile.sessions.confirmAllBody':
+    'Sessions that will end: {count}. This device signs out too, and you will be asked to sign in again.',
   'staff.myProfile.sessions.confirmOneBody': 'Sessions that will end: {count}.',
-  'staff.myProfile.sessions.confirmEveryCompany': 'A session belongs to your account, so it ends in every company where you work.',
-  'staff.myProfile.sessions.confirmInFlight': 'A request already in progress may still succeed for a few minutes.',
+  'staff.myProfile.sessions.confirmEveryCompany':
+    'A session belongs to your account, so it ends in every company where you work.',
+  'staff.myProfile.sessions.confirmInFlight':
+    'A request already in progress may still succeed for a few minutes.',
   'staff.myProfile.sessions.reasonLegend': 'Why',
   'staff.myProfile.sessions.reason.LOST_DEVICE': 'I lost a device',
   'staff.myProfile.sessions.reason.SHARED_DEVICE': 'Someone else used a device',
-  'staff.myProfile.sessions.reason.SUSPECTED_COMPROMISE': 'My account may have been used without me',
+  'staff.myProfile.sessions.reason.SUSPECTED_COMPROMISE':
+    'My account may have been used without me',
   'staff.myProfile.sessions.reason.JUST_IN_CASE': 'Just in case',
   'staff.myProfile.sessions.confirmGo': 'End sessions',
   'staff.myProfile.sessions.confirmCancel': 'Cancel',
@@ -282,7 +288,8 @@ export const staffEn = {
   'staff.myProfile.sessions.endedBy.PASSWORD_RESET': 'ended by a password reset',
   'staff.myProfile.sessions.endedBy.ENDED_ONE': 'ended from the list',
   'staff.myProfile.sessions.endedBy.EXPIRED': 'expired',
-  'staff.myProfile.sessions.notEnded': 'Nothing was ended: the sign-in service could not be reached. Try again in a moment.',
+  'staff.myProfile.sessions.notEnded':
+    'Nothing was ended: the sign-in service could not be reached. Try again in a moment.',
   'staff.myProfile.sessions.rateLimited': 'Too many attempts. Try again in an hour.',
   'staff.myProfile.sessions.gone': 'That session no longer exists.',
   'staff.myProfile.sessions.failed': 'Could not end the sessions. Try again in a moment.',

@@ -74,7 +74,11 @@ export class RosterWeekGrid {
     }
     const days = this.days();
     return [...byMember.values()]
-      .filter((row) => row.entries.length > 0 || this.extraPeople().some((p) => p.memberId === row.person.memberId))
+      .filter(
+        (row) =>
+          row.entries.length > 0 ||
+          this.extraPeople().some((p) => p.memberId === row.person.memberId),
+      )
       .sort((a, b) => this.label(a.person).localeCompare(this.label(b.person)))
       .map((row) => ({
         memberId: row.person.memberId,

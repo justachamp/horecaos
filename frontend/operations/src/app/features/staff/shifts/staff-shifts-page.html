@@ -7,7 +7,9 @@
       <p class="q-body-sm" data-testid="shifts-loading">{{ 'customers.loading' | t }}</p>
     }
     @case ('denied') {
-      <p class="q-body-sm shifts__muted" data-testid="shifts-denied">{{ 'settings.scope.denied' | t }}</p>
+      <p class="q-body-sm shifts__muted" data-testid="shifts-denied">
+        {{ 'settings.scope.denied' | t }}
+      </p>
     }
     @case ('error') {
       <div class="shifts__band" role="alert" data-testid="shifts-error">
@@ -75,22 +77,38 @@
       </div>
 
       @if (notice(); as message) {
-        <p class="q-body-sm shifts__notice" role="status" data-testid="shifts-notice">{{ message }}</p>
+        <p class="q-body-sm shifts__notice" role="status" data-testid="shifts-notice">
+          {{ message }}
+        </p>
       }
       @if (failure(); as message) {
         @if (entryTarget() === null && actionTarget() === null && !noticeOpen()) {
-          <p class="q-body-sm shifts__error" role="alert" data-testid="shifts-failure">{{ message }}</p>
+          <p class="q-body-sm shifts__error" role="alert" data-testid="shifts-failure">
+            {{ message }}
+          </p>
         }
       }
 
       @switch (tab()) {
         @case ('week') {
           <div class="shifts__toolbar">
-            <button type="button" class="shifts__button" (click)="shiftWeek(-1)" data-testid="shifts-prev">
+            <button
+              type="button"
+              class="shifts__button"
+              (click)="shiftWeek(-1)"
+              data-testid="shifts-prev"
+            >
               {{ 'staff.shifts.week.prev' | t }}
             </button>
-            <span class="q-body-sm shifts__range q-tnum" data-testid="shifts-range">{{ weekLabel() }}</span>
-            <button type="button" class="shifts__button" (click)="shiftWeek(1)" data-testid="shifts-next">
+            <span class="q-body-sm shifts__range q-tnum" data-testid="shifts-range">{{
+              weekLabel()
+            }}</span>
+            <button
+              type="button"
+              class="shifts__button"
+              (click)="shiftWeek(1)"
+              data-testid="shifts-next"
+            >
               {{ 'staff.shifts.week.next' | t }}
             </button>
             <button type="button" class="shifts__button" (click)="thisWeek()">
@@ -147,7 +165,9 @@
                 <th class="q-caption">{{ 'staff.shifts.column.status' | t }}</th>
                 <th class="q-caption">{{ 'staff.shifts.column.planned' | t }}</th>
                 <th class="q-caption">{{ 'staff.shifts.column.recorded' | t }}</th>
-                <th class="q-caption"><span class="shifts__sr">{{ 'staff.shifts.column.actions' | t }}</span></th>
+                <th class="q-caption">
+                  <span class="shifts__sr">{{ 'staff.shifts.column.actions' | t }}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -250,7 +270,9 @@
                 <th class="q-caption">{{ 'staff.shifts.column.paid' | t }}</th>
                 <th class="q-caption">{{ 'staff.shifts.column.variance' | t }}</th>
                 <th class="q-caption">{{ 'staff.shifts.column.status' | t }}</th>
-                <th class="q-caption"><span class="shifts__sr">{{ 'staff.shifts.column.actions' | t }}</span></th>
+                <th class="q-caption">
+                  <span class="shifts__sr">{{ 'staff.shifts.column.actions' | t }}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -261,7 +283,9 @@
                   <td class="q-body-sm q-tnum">
                     {{ time(shift.startedAt) }}–{{ time(shift.endedAt) }}
                   </td>
-                  <td class="q-body-sm q-tnum" data-testid="shifts-paid">{{ hours(shift.paidSeconds) }}</td>
+                  <td class="q-body-sm q-tnum" data-testid="shifts-paid">
+                    {{ hours(shift.paidSeconds) }}
+                  </td>
                   <td class="q-body-sm q-tnum" data-testid="shifts-variance">
                     {{ variance(shift.varianceSeconds) }}
                   </td>

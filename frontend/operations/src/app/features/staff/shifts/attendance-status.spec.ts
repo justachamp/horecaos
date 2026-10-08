@@ -13,7 +13,10 @@ describe('AttendanceStatus (ADR 0156)', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: StaffShiftsApi, useValue: api },
-        { provide: CurrentTenant, useValue: { ensureLoaded: () => Promise.resolve(), tenantId: () => tenantId } },
+        {
+          provide: CurrentTenant,
+          useValue: { ensureLoaded: () => Promise.resolve(), tenantId: () => tenantId },
+        },
       ],
     });
     return TestBed.inject(AttendanceStatus);

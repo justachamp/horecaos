@@ -44,7 +44,9 @@ export class StaffShell {
    */
   protected readonly showsShifts = computed(() => {
     if (this.attendance.enabled() === true) {
-      return this.capabilities.has('STAFF_SHIFT_READ') || this.capabilities.has('STAFF_SHIFT_MANAGE');
+      return (
+        this.capabilities.has('STAFF_SHIFT_READ') || this.capabilities.has('STAFF_SHIFT_MANAGE')
+      );
     }
     return this.capabilities.has('TENANT_CONFIGURATION_WRITE');
   });

@@ -41,7 +41,9 @@ describe('ShiftActionDialog (ADR 0156)', () => {
     fixture.componentRef.setInput('kind', kind);
     fixture.componentRef.setInput('zone', ZONE);
     fixture.componentRef.setInput('shift', shift);
-    fixture.componentRef.setInput('people', [{ memberId: 'm-1', displayReference: 'S-0001', name: null }]);
+    fixture.componentRef.setInput('people', [
+      { memberId: 'm-1', displayReference: 'S-0001', name: null },
+    ]);
     results = [];
     fixture.componentInstance.result.subscribe((value) => results.push(value));
     fixture.detectChanges();
@@ -99,7 +101,11 @@ describe('ShiftActionDialog (ADR 0156)', () => {
     set('shift-action-reason', 'FORGOT_CLOCK_OUT', 'change');
     confirm();
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ kind: 'close', reason: 'FORGOT_CLOCK_OUT', endedAt: '2026-10-08T04:00:00.000Z' });
+    expect(results[0]).toMatchObject({
+      kind: 'close',
+      reason: 'FORGOT_CLOCK_OUT',
+      endedAt: '2026-10-08T04:00:00.000Z',
+    });
   });
 
   it('reads a typed time as the branch’s local time, not the device’s', async () => {
@@ -110,7 +116,12 @@ describe('ShiftActionDialog (ADR 0156)', () => {
     confirm();
 
     // 11:00 in Tashkent (UTC+5) is 06:00Z, i.e. now: no reason is needed.
-    expect(results[0]).toMatchObject({ kind: 'open', memberId: 'm-1', startedAt: '2026-10-08T06:00:00.000Z', reason: null });
+    expect(results[0]).toMatchObject({
+      kind: 'open',
+      memberId: 'm-1',
+      startedAt: '2026-10-08T06:00:00.000Z',
+      reason: null,
+    });
   });
 
   it('will not record a start for nobody', async () => {
@@ -127,7 +138,9 @@ describe('ShiftActionDialog (ADR 0156)', () => {
     expect(q<HTMLInputElement>('shift-action-start')?.value).toBe('2026-10-08T09:00');
     expect(q<HTMLInputElement>('shift-action-end')?.value).toBe('2026-10-08T17:00');
     expect(q<HTMLInputElement>('shift-action-break')?.value).toBe('30');
-    const reasons = Array.from(q<HTMLSelectElement>('shift-action-reason')?.options ?? []).map((o) => o.value);
+    const reasons = Array.from(q<HTMLSelectElement>('shift-action-reason')?.options ?? []).map(
+      (o) => o.value,
+    );
     expect(reasons).toContain('FORGOT_CLOCK_OUT');
     expect(reasons).not.toContain('DUPLICATE');
 
@@ -142,17 +155,18 @@ describe('ShiftActionDialog (ADR 0156)', () => {
 
     confirm();
 
-    expect(results[0]).toMatchObject({ kind: 'correct', breakSeconds: 2700, reason: 'SYSTEM_PROBLEM' });
+    expect(results[0]).toMatchObject({
+      kind: 'correct',
+      breakSeconds: 2700,
+      reason: 'SYSTEM_PROBLEM',
+    });
   });
 
   it('voids only for a reason from the void list, and approves only from the approval list', async () => {
     await open('void', SHIFT);
-    expect(Array.from(q<HTMLSelectElement>('shift-action-reason')?.options ?? []).map((o) => o.value)).toEqual([
-      '',
-      'ENTERED_IN_ERROR',
-      'DUPLICATE',
-      'DID_NOT_WORK',
-    ]);
+    expect(
+      Array.from(q<HTMLSelectElement>('shift-action-reason')?.options ?? []).map((o) => o.value),
+    ).toEqual(['', 'ENTERED_IN_ERROR', 'DUPLICATE', 'DID_NOT_WORK']);
     confirm();
     expect(results).toHaveLength(0);
     set('shift-action-reason', 'DUPLICATE', 'change');

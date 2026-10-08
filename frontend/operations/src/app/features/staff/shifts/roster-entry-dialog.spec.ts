@@ -26,7 +26,11 @@ describe('RosterEntryDialog (ADR 0156)', () => {
   let fixture: ComponentFixture<RosterEntryDialog>;
   let results: EntryDialogResult[];
 
-  async function open(inputs: { entry?: RosterEntry; date?: string; memberId?: string }): Promise<void> {
+  async function open(inputs: {
+    entry?: RosterEntry;
+    date?: string;
+    memberId?: string;
+  }): Promise<void> {
     await TestBed.configureTestingModule({ imports: [RosterEntryDialog] }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
     fixture = TestBed.createComponent(RosterEntryDialog);

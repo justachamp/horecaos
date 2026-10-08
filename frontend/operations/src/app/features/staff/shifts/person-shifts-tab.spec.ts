@@ -39,7 +39,10 @@ describe('PersonShiftsTab (ADR 0156)', () => {
   let fixture: ComponentFixture<PersonShiftsTab>;
   let api: { shiftsOf: ReturnType<typeof vi.fn> };
 
-  async function setUp(result: StaffShift[] | Error, scope: typeof SCOPE | null = SCOPE): Promise<void> {
+  async function setUp(
+    result: StaffShift[] | Error,
+    scope: typeof SCOPE | null = SCOPE,
+  ): Promise<void> {
     api = { shiftsOf: vi.fn() };
     if (result instanceof Error) {
       api.shiftsOf.mockRejectedValue(result);
@@ -50,7 +53,10 @@ describe('PersonShiftsTab (ADR 0156)', () => {
       imports: [PersonShiftsTab],
       providers: [
         { provide: StaffShiftsApi, useValue: api },
-        { provide: CurrentLocation, useValue: { ensureLoaded: () => Promise.resolve(), scope: () => scope } },
+        {
+          provide: CurrentLocation,
+          useValue: { ensureLoaded: () => Promise.resolve(), scope: () => scope },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -73,7 +79,9 @@ describe('PersonShiftsTab (ADR 0156)', () => {
     await setUp([shift(), shift({ id: 's-2', status: 'AWAITING_APPROVAL' })]);
 
     expect(api.shiftsOf).toHaveBeenCalledWith(SCOPE, 'm-1');
-    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="person-shifts-row"]');
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="person-shifts-row"]',
+    );
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('7 h 30 min');
     expect(rows[1].textContent).toContain('Awaiting approval');

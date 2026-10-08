@@ -1,5 +1,9 @@
 <table class="grid" data-testid="roster-week-grid">
-  <caption class="q-caption grid__caption">{{ 'staff.shifts.week.caption' | t }}</caption>
+  <caption class="q-caption grid__caption">
+    {{
+      'staff.shifts.week.caption' | t
+    }}
+  </caption>
   <thead>
     <tr>
       <th scope="col" class="grid__person q-caption">{{ 'staff.shifts.week.person' | t }}</th>
@@ -62,7 +66,11 @@
       </tr>
     } @empty {
       <tr>
-        <td [attr.colspan]="days().length + 1" class="grid__none q-body-sm" data-testid="roster-none">
+        <td
+          [attr.colspan]="days().length + 1"
+          class="grid__none q-body-sm"
+          data-testid="roster-none"
+        >
           {{ 'staff.shifts.week.none' | t }}
         </td>
       </tr>
