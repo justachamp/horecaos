@@ -2,6 +2,7 @@ package uz.horecaos.platform.commercial.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -15,6 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -44,7 +52,11 @@ import uz.horecaos.platform.commercial.domain.EInvoicingInstallation;
 import uz.horecaos.platform.commercial.domain.EInvoicingLineClassification;
 import uz.horecaos.platform.commercial.domain.StatementEInvoice;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcEInvoiceStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlanStore;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcStatementStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcSubscriptionStore;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.api.LegalParty;
@@ -1279,6 +1291,159 @@ class EInvoicingServiceTests {
         assertThat(statements.hasLiveEInvoice(TENANT, statement)).isFalse();
         assertThat(statements.voidStatement(TENANT, statement, "finance.staff", "wrong month", NOW))
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a send that overlaps a void in flight waits for it and finds a void statement: no invoice is sent for it")
+    void aSendWaitsForAVoidInFlight() throws Exception {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        CountDownLatch changed = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // The void: its check found nothing live, its UPDATE has run, and it has not committed yet.
+            Future<?> voiding = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                jdbc.sql("""
+                                UPDATE commercial.statements
+                                   SET status = 'VOID', voided_by = 'finance.staff', voided_at = now(), void_reason = 'wrong'
+                                 WHERE id = :id
+                                """).param("id", statement).update();
+                changed.countDown();
+                holdUntilSomeoneWaits(() -> count("commercial.statement_einvoices") > 0);
+            }));
+            assertThat(changed.await(15, TimeUnit.SECONDS)).isTrue();
+            Future<StatementEInvoice> sending = pool.submit(() -> send(statement));
+            voiding.get(40, TimeUnit.SECONDS);
+
+            assertThatThrownBy(() -> sending.get(40, TimeUnit.SECONDS))
+                    .as("the send read the statement as the void left it")
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            refusal ->
+                                    assertThat(refusal.properties()).containsEntry("reason", "STATEMENT_NOT_ISSUED"));
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(didox.sent)
+                .as("nothing was sent to an operator for a void statement")
+                .isEmpty();
+        assertThat(count("commercial.statement_einvoices")).isZero();
+        assertThat(jdbc.sql("SELECT status FROM commercial.statements WHERE id = :id")
+                        .param("id", statement)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("VOID");
+    }
+
+    @Test
+    @DisplayName(
+            "a void that overlaps a send in flight waits for it and is refused for the live invoice, not by the database")
+    void aVoidWaitsForASendInFlight() throws Exception {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        JdbcStatementStore statements = new JdbcStatementStore(jdbc);
+        StatementService voidService = new StatementService(
+                mock(JdbcSubscriptionStore.class),
+                mock(JdbcPlanStore.class),
+                mock(JdbcModuleStore.class),
+                statements,
+                mock(JdbcUsageStore.class),
+                mock(WalletService.class),
+                facts::add,
+                clock);
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        CountDownLatch attempted = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // The send: it holds the statement and has written its attempt, and has not committed yet.
+            Future<?> sending = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                assertThat(statements.lockShared(TENANT, statement)).isTrue();
+                jdbc.sql("""
+                                INSERT INTO commercial.statement_einvoices (
+                                    id, tenant_id, statement_id, installation_id, provider_type, legal_entity_id,
+                                    buyer_tin, buyer_name, seller_tin, document_number, document_date, currency,
+                                    net_minor, vat_minor, total_minor, classification_provisional, sent_document,
+                                    delivery, send_reason, sent_by, created_at, updated_at, version)
+                                VALUES (:id, :tenant, :statement, :didox, 'DIDOX', :company, '301234567', 'x',
+                                    '305000001', 'S-2026-09-000001', '2026-10-07', 'UZS', 100, 12, 112, true,
+                                    '{}'::jsonb, 'PENDING', 'r', 'someone', now(), now(), 0)
+                                """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenant", TENANT)
+                        .param("statement", statement)
+                        .param("didox", DIDOX_ID)
+                        .param("company", COMPANY)
+                        .update();
+                attempted.countDown();
+                holdUntilSomeoneWaits(() -> false);
+            }));
+            assertThat(attempted.await(15, TimeUnit.SECONDS)).isTrue();
+            Future<?> voiding = pool.submit(() -> transaction.executeWithoutResult(
+                    status -> voidService.voidStatement(TENANT, statement, STAFF, "wrong month", "c")));
+            sending.get(40, TimeUnit.SECONDS);
+
+            assertThatThrownBy(() -> voiding.get(40, TimeUnit.SECONDS))
+                    .as("the void saw the attempt once it committed")
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            refusal -> assertThat(refusal.properties()).containsEntry("reason", "EINVOICE_LIVE"));
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.sql("SELECT status FROM commercial.statements WHERE id = :id")
+                        .param("id", statement)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("ISSUED");
+        assertThat(count("commercial.statement_einvoices")).isEqualTo(1);
+    }
+
+    /**
+     * Holds the open transaction until the other one has run into it: a backend is waiting on a lock
+     * (it had to wait), or {@code itDidNotNeedTo} says it got through without. Giving up after a while
+     * only lets the assertions say what happened. {@code itDidNotNeedTo} runs inside the open
+     * transaction, so it must not be a question the transaction's own writes would answer.
+     */
+    private void holdUntilSomeoneWaits(BooleanSupplier itDidNotNeedTo) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        try {
+            while (System.nanoTime() < deadline) {
+                if (backendsWaitingOnALock() > 0 || itDidNotNeedTo.getAsBoolean()) {
+                    return;
+                }
+                Thread.sleep(20);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Asked on a connection of its own, outside any transaction: inside one, PostgreSQL serves
+     * {@code pg_stat_activity} from the snapshot it took at the first look, and a backend that began
+     * waiting afterwards is never seen.
+     */
+    private long backendsWaitingOnALock() {
+        try (java.sql.Connection connection = db.dataSource().getConnection();
+                java.sql.Statement statement = connection.createStatement();
+                java.sql.ResultSet rows = statement.executeQuery("""
+                        SELECT count(*) FROM pg_stat_activity
+                         WHERE datname = current_database() AND wait_event_type = 'Lock'
+                        """)) {
+            rows.next();
+            return rows.getLong(1);
+        } catch (java.sql.SQLException failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 
     // ----------------------------------------------------------------- fixtures

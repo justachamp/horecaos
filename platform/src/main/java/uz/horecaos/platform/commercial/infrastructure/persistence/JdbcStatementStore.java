@@ -85,6 +85,47 @@ public class JdbcStatementStore {
         return number;
     }
 
+    /**
+     * Takes a share lock on the statement row, held to the end of the transaction, and says whether
+     * the row exists. A send takes it before reading the statement, so a void that has changed the
+     * row but not yet committed makes the send wait and then read the statement as it became, and a
+     * void that arrives later waits for the send to commit and then sees its attempt.
+     *
+     * <p>The foreign key from {@code statement_einvoices} takes only a key-share lock, which a
+     * void's non-key {@code UPDATE} does not conflict with, and {@code V0516}'s trigger sees
+     * committed rows only: without this lock a send and a void that overlap both commit.
+     */
+    public boolean lockShared(UUID tenantId, UUID id) {
+        return jdbc.sql("""
+                        SELECT 1 FROM commercial.statements
+                         WHERE tenant_id = :tenantId AND id = :id
+                           FOR SHARE
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /**
+     * The void's side of {@link #lockShared}: waits for a send in flight to commit, and holds off a
+     * new one until the void does, so the check for a live e-invoice that follows sees every attempt
+     * that was started.
+     */
+    public boolean lockForChange(UUID tenantId, UUID id) {
+        return jdbc.sql("""
+                        SELECT 1 FROM commercial.statements
+                         WHERE tenant_id = :tenantId AND id = :id
+                           FOR NO KEY UPDATE
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
     /** ISSUED to VOID; false when it was already void. */
     public boolean voidStatement(UUID tenantId, UUID id, String voidedBy, String reason, Instant now) {
         return jdbc.sql("""

@@ -86,6 +86,11 @@ failed for one account. The breaker half-opens after 30s on its own. Suspending 
 **A statement cannot be voided ("has an e-invoice at an operator").** An invoice made from it stands
 at the operator, or may. Cancel the invoice in the operator's product, refresh its state until it
 reads `CANCELLED` or `REFUSED`, and void the statement then.
+A send and a void of the same statement are serialised on the statement's row (the send takes a
+share lock before it reads the statement, the void a change lock before it looks for a live
+invoice), so a void pressed while a send is in flight waits and is then refused for the invoice,
+and a send pressed while a void is in flight waits and is then refused because the statement is
+void; the database trigger stays as the backstop.
 
 ## Rollout
 

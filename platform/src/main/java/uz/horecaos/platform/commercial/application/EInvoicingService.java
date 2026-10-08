@@ -484,6 +484,14 @@ public class EInvoicingService {
     }
 
     private Prepared prepare(SendRequest request, ActorRef actor, String correlationId) {
+        // The statement row is locked before it is read, and the lock is held to the end of this
+        // transaction. A void that has changed the row but not committed makes this wait and then read
+        // the statement as it became; a void that comes later waits for this attempt to commit and then
+        // sees it. Without the lock both commit: the attempt's foreign key takes only a key-share lock,
+        // which the void's UPDATE does not conflict with, and V0516's trigger sees committed rows only.
+        if (!statements.lockShared(request.tenantId(), request.statementId())) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such statement");
+        }
         Statement statement = statements
                 .find(request.tenantId(), request.statementId())
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such statement"));
