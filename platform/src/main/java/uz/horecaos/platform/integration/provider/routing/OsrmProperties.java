@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.provider.routing;
 import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
@@ -22,14 +23,30 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                       returns, so an enabled adapter without one would measure fees
  *                       against an unnamed map; it is treated as not answering
  * @param timeout        the whole call, including the body. ADR 0147 gives the
- *                       checkout path 500 ms, and a local engine answers in tens
+ *                       checkout path 500 ms, and a local engine answers in tens. Held to
+ *                       {@link #MAX_TIMEOUT} whatever is configured ({@link #effectiveTimeout}):
+ *                       the quote thread waits this long for every uncached ROAD quote, and
+ *                       "30s" in an environment file must not become a 30-second checkout
  * @param snapRadiusMeters how far from a road a coordinate may be and still count as
  *                       on the network. Past it the engine says there is no segment
  *                       and the fee falls back, rather than measuring from the
- *                       nearest road of some other district
+ *                       nearest road of some other district. Within it, the distance
+ *                       from the coordinate to the road is added to the route's metres,
+ *                       so a pin in a courtyard is not priced as if it stood on the street
  * @param breakerMinimumCalls calls the breaker sees before it may open, so a couple
  *                       of early failures do not open it on an engine barely called
  * @param breakerOpenFor how long an open breaker answers empty without calling
+ * @param slowCallThreshold how long an answered call may take before the breaker counts
+ *                       it as slow. A degraded engine that still answers in 450 ms is not
+ *                       a fault, so the fault count never sees it, yet every uncached
+ *                       quote waits that long; when half of the recent calls are slow the
+ *                       breaker opens and quotes stop waiting. The p95 the route
+ *                       descriptor expects is under 100 ms
+ * @param maxConcurrentCalls how many quote threads may be inside an engine call at once.
+ *                       Past it a call returns empty at once ({@code saturated}) instead of
+ *                       parking one more thread for up to the timeout, so a hung engine
+ *                       costs a bounded number of threads however many quotes arrive
+ *                       before the breaker has seen enough calls to open
  */
 @ConfigurationProperties(prefix = "horecaos.routing.osrm")
 public record OsrmProperties(
@@ -38,8 +55,36 @@ public record OsrmProperties(
         @DefaultValue("500ms") Duration timeout,
         @DefaultValue("1000") int snapRadiusMeters,
         @DefaultValue("10") int breakerMinimumCalls,
-        @DefaultValue("30s") Duration breakerOpenFor) {
+        @DefaultValue("30s") Duration breakerOpenFor,
+        @DefaultValue("250ms") Duration slowCallThreshold,
+        @DefaultValue("16") int maxConcurrentCalls) {
 
+    /**
+     * The longest the quote thread is ever kept waiting for the engine, whatever the
+     * deployment configures. Twice ADR 0147's figure: room to tune, none to stall a checkout.
+     */
+    public static final Duration MAX_TIMEOUT = Duration.ofSeconds(1);
+
+    /** The settings that predate the slow-call and concurrency bounds; those take their defaults. */
+    public OsrmProperties(
+            boolean enabled,
+            @Nullable String datasetVersion,
+            Duration timeout,
+            int snapRadiusMeters,
+            int breakerMinimumCalls,
+            Duration breakerOpenFor) {
+        this(
+                enabled,
+                datasetVersion,
+                timeout,
+                snapRadiusMeters,
+                breakerMinimumCalls,
+                breakerOpenFor,
+                Duration.ofMillis(250),
+                16);
+    }
+
+    @ConstructorBinding
     public OsrmProperties {
         datasetVersion = datasetVersion == null || datasetVersion.isBlank() ? null : datasetVersion.trim();
         if (timeout.isNegative() || timeout.isZero()) {
@@ -51,6 +96,17 @@ public record OsrmProperties(
         if (breakerMinimumCalls <= 0) {
             throw new IllegalArgumentException("horecaos.routing.osrm.breaker-minimum-calls must be positive");
         }
+        if (slowCallThreshold.isNegative() || slowCallThreshold.isZero()) {
+            throw new IllegalArgumentException("horecaos.routing.osrm.slow-call-threshold must be positive");
+        }
+        if (maxConcurrentCalls <= 0) {
+            throw new IllegalArgumentException("horecaos.routing.osrm.max-concurrent-calls must be positive");
+        }
+    }
+
+    /** The timeout the adapter applies: the configured one, held to {@link #MAX_TIMEOUT}. */
+    public Duration effectiveTimeout() {
+        return timeout.compareTo(MAX_TIMEOUT) > 0 ? MAX_TIMEOUT : timeout;
     }
 
     /** A test or a local run: switched on against a named dataset, with every other setting at its default. */

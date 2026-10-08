@@ -4,12 +4,14 @@
 
 **The way back, before the first command.** Road distance for `ROAD` delivery tariffs
 comes from the platform's own OSRM engine (ADR 0147). Everything below is reversible
-without a deploy of code and without a failed checkout: set
-`HORECAOS_ROUTING_OSRM_ENABLED=false` (or suspend the tenant's routing installation),
-and every `ROAD` fee prices from the straight line times the tariff's detour factor and
-records `RADIUS_FALLBACK`. Nothing in this procedure can stop an order being taken. The
-one thing it cannot undo is a fee that was measured by the engine and already issued: that
-quote keeps the fee it was issued with, by design.
+without a deploy of code and without a failed checkout. For everyone: set
+`HORECAOS_ROUTING_OSRM_ENABLED=false` and recreate `platform-app`, and every `ROAD` fee
+prices from the straight line times the tariff's detour factor and records
+`RADIUS_FALLBACK`. For one tenant: activate a new version of that tenant's `ROAD` tariff
+in **Straight line** mode (step 7.1), which is a price change the tenant should be told
+about; there is no routing switch in Integrations. Nothing in this procedure can stop an
+order being taken. The one thing it cannot undo is a fee that was measured by the engine
+and already issued: that quote keeps the fee it was issued with, by design.
 
 **Who:** a devops engineer with a laptop or a CI runner that has Docker, and with SSH
 access to the host for steps 4 onward. **Never on the host:** building the dataset. ADR
@@ -179,45 +181,87 @@ SELECT date_trunc('day', created_at) AS day, distance_source, routing_dataset_ve
 
 ## 6. The monthly refresh
 
-Run steps 1 to 3 with the new extract's date, then:
+Run steps 1 to 3 with the new extract's date, then move the engine first and the
+application second, back to back. The order is the point: the application is what stamps
+the dataset tag on a fee and keys its route cache by that tag, so the tag must not move
+before the engine holds the map it names.
 
 ```bash
 sed -i 's/^HORECAOS_ROUTING_DATASET_TAG=.*/HORECAOS_ROUTING_DATASET_TAG=2026-11-01/' /etc/horecaos/production.env
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env pull osrm-dataset
-docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env up -d osrm-dataset osrm platform-app
+# 1. The engine. osrm-dataset replaces the volume's files; osrm is recreated after it
+#    because its configuration names the tag, and so loads the new map from scratch.
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env up -d osrm-dataset osrm
+# 2. Wait until osrm says healthy (the engine takes a while to load the graph):
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env ps osrm
+# 3. Prove the engine is the new one, not the old one left running:
+docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  "$(docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env ps -q osrm)" \
+  | grep '^HORECAOS_ROUTING_DATASET_TAG='
+# 4. Only then the application, which starts stamping the new tag:
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env up -d platform-app
 ```
 
+**Check:** step 3 prints `HORECAOS_ROUTING_DATASET_TAG=2026-11-01`. If it prints the old
+tag, `osrm` was not recreated: stop here, do not run step 4, and run
+`docker compose … up -d --force-recreate osrm`. Never run `up -d platform-app` for a new
+tag against an engine that has not been recreated: the fees would say the new map measured
+them and the metres would come from the old one.
+
 **What changes and what does not.** The dataset tag on new fees is `2026-11-01`, the cache
-misses every entry (the tag is part of its key), and a tenant comparing two weeks of fee
+misses every entry (the tag is part of its key, and the cache lives in the application's
+memory, so recreating the application empties it), and a tenant comparing two weeks of fee
 reports will see small shifts that nobody edited a tariff for: the dataset version on the
 fee's evidence is what explains them. A quote **issued before** the refresh is accepted at
-the fee it was issued with, and the next quote measures against the new map. Between
-`osrm-dataset` replacing the files and `osrm` restarting there is a short window in which
-the engine answers from the old graph in memory: harmless, since the application's
-dataset tag moves in the same `up`.
+the fee it was issued with, and the next quote measures against the new map.
+
+**The windows, and which way they lean.** While `osrm` reloads (step 1 to healthy) the
+engine does not answer, so `ROAD` quotes fall back to the straight line and say
+`RADIUS_FALLBACK`; expect a burst of `outcome="error"` and, if it lasts, `breaker_open`.
+That is the designed behaviour and it clears when the engine is healthy. Between the engine
+turning healthy and the application restarting (the seconds between steps 2 and 4) a fee is
+measured on the new map and stamped with the old tag, and its cached route dies with the
+old application process; no fee is ever stamped with a tag whose map has not been loaded.
+Keep steps 2 to 4 together to keep that window short.
 
 ## 7. Roll back
 
 In order of how little they undo:
 
-1. **One tenant:** suspend its routing installation (Integrations, the *Platform routing*
-   row, or `UPDATE integration.installations SET status = 'SUSPENDED' WHERE id = …`). Takes
-   effect on the next quote, cached routes included.
-2. **Everyone:** `HORECAOS_ROUTING_OSRM_ENABLED=false` and `up -d platform-app`.
+1. **One tenant:** in the operations console, Delivery tariffs, open the tenant's `ROAD`
+   tariff, **Draft a version** with the same bands and distance **Straight line**, then
+   **Activate draft**. The next quote reads the new active version, so that tariff stops
+   asking the engine at once; a quote already issued keeps its fee. Repeat for each `ROAD`
+   tariff the tenant has (a branch bound to another `ROAD` tariff keeps road pricing, and
+   **Bind branch** moves a branch to a straight-line tariff instead). This is the real
+   per-tenant switch: the choice of road or straight line lives on the tariff version, and
+   the tariff screen's *Distance measured by* line then reads *The straight line from the
+   branch*. It is **not** the same as the fallback: a `RADIUS` fee records
+   `distance_source = RADIUS` and applies no detour factor, so it is lower than the
+   `RADIUS_FALLBACK` fee for the same address, which is a price change to agree with the
+   tenant first. There is no Integrations screen or API that suspends the *Platform routing*
+   installation (Integrations suspends bindings, and a platform routing installation is
+   created only by choosing "use platform routing" on a draft), so do not look for one and
+   do not edit `integration.installations` by hand: that write leaves no audit record.
+2. **Everyone:** `HORECAOS_ROUTING_OSRM_ENABLED=false` and `up -d platform-app`. Every
+   `ROAD` fee then prices from the straight line times the tariff's detour factor and
+   records `RADIUS_FALLBACK`.
 3. **The previous map:** set `HORECAOS_ROUTING_DATASET_TAG` back and run the step 6
-   commands. The old tag's image is still in the registry.
+   commands in the same order, engine first and application last. The old tag's image is
+   still in the registry, and the tag is in the engine's configuration, so the engine is
+   recreated on the old map before the application stamps the old tag.
 4. **The engine itself:** remove `routing` from `COMPOSE_PROFILES` and
    `docker compose … rm -sf osrm osrm-dataset`. The `osrm-data` volume holds only files
    the dataset image can recreate.
 
-Each of these leaves every `ROAD` fee on `RADIUS_FALLBACK` with a working checkout, which
-the tariff screen says in words.
+Each of these leaves every affected `ROAD` fee on a straight-line figure with a working
+checkout, which the tariff screen says in words.
 
 ## 8. When it goes wrong
 
 | What you see | What it is | What to do |
 |---|---|---|
-| `HorecaosRoadRoutingFallingBack` in the morning digest | More than 5% of `ROAD` quotes over fifteen minutes fell back | `horecaos_routing_calls_total` by `outcome`: `timeout`/`error` is the engine (step 4's `ps` and `logs osrm`); `unavailable` is the flag, the dataset tag or a suspended installation; `breaker_open` means it was already failing and has stopped being asked for thirty seconds at a time |
+| `HorecaosRoadRoutingFallingBack` in the morning digest | More than 5% of `ROAD` quotes over fifteen minutes fell back | `horecaos_routing_calls_total` by `outcome`: `timeout`/`error` is the engine (step 4's `ps` and `logs osrm`); `unavailable` is the flag, the dataset tag or an installation that is not active; `breaker_open` means it was already failing, or answering too slowly (half of recent calls over 250 ms), and has stopped being asked for thirty seconds at a time; `saturated` means 16 quote threads were already waiting on it, which is a hung engine seen before the breaker opened |
 | `HorecaosRoutingDatasetStale` | The dataset tag's date is more than 60 days old | The monthly refresh has stopped: run step 6, then find out why the workflow did not |
 | `osrm` restarts and the log says the dataset was built for another algorithm | The image's files and `--algorithm` disagree | Rebuild with `deploy/routing/build-dataset.sh`, which uses MLD; do not edit the command |
 | Every `ROAD` fee says `RADIUS_FALLBACK` and `outcome="unavailable"` | Engine flag off, dataset tag empty, or no active routing installation | `HORECAOS_ROUTING_OSRM_ENABLED`, `HORECAOS_ROUTING_DATASET_TAG`, and the tariff's installation status |
