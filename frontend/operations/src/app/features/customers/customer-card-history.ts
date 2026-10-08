@@ -95,11 +95,24 @@ export class CustomerCardHistory {
   readonly error = input<string | null>(null);
   readonly canRecord = input(false);
   readonly recordBusy = input(false);
+  /** Why the last submit was refused, or null; the form stays open under it with everything typed. */
+  readonly recordError = input<string | null>(null);
+  /**
+   * How many calls the pane has recorded for this guest so far. The form closes when it moves past the
+   * number it was opened at, and not before: the journal is append-only and the form's attempt id is what
+   * makes a retried submit land on one row, so a form that closed on submit would drop both the input
+   * and the id of a call whose answer was refused or lost.
+   */
+  readonly recordedCount = input(0);
 
   readonly olderRequested = output<void>();
   readonly callRecorded = output<RecordContactAttemptRequest>();
 
-  protected readonly recording = signal(false);
+  private readonly formOpen = signal(false);
+  private readonly openedAtCount = signal(0);
+  protected readonly recording = computed(
+    () => this.formOpen() && this.recordedCount() === this.openedAtCount(),
+  );
   protected readonly hasMore = computed(() => this.card()?.nextBefore != null);
 
   protected kindLabel(entry: HistoryEntry): string {
@@ -140,8 +153,13 @@ export class CustomerCardHistory {
     return formatDateTime(new Date(instant), PLACEHOLDER_TIME_ZONE);
   }
 
+  protected openRecorder(): void {
+    this.openedAtCount.set(this.recordedCount());
+    this.formOpen.set(true);
+  }
+
+  /** Hands the request up and leaves the form where it is: the pane says when the call was written. */
   protected record(request: RecordContactAttemptRequest): void {
     this.callRecorded.emit(request);
-    this.recording.set(false);
   }
 }

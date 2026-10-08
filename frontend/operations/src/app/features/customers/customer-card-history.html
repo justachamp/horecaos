@@ -74,12 +74,15 @@
     <h3 class="q-subtitle">{{ 'customers.card.record.title' | t }}</h3>
     @if (canRecord()) {
       @if (recording()) {
+        @if (recordError(); as message) {
+          <p class="q-body-sm error" role="alert" data-testid="card-record-error">{{ message }}</p>
+        }
         <q-call-recorder [busy]="recordBusy()" (submitted)="record($event)" />
       } @else {
         <button
           type="button"
           class="secondary"
-          (click)="recording.set(true)"
+          (click)="openRecorder()"
           data-testid="card-record-call"
         >
           {{ 'customers.leads.attempts.record' | t }}

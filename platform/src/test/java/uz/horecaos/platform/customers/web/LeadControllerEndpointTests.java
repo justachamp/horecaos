@@ -1119,6 +1119,49 @@ class LeadControllerEndpointTests {
                 .isEqualTo("NEW");
     }
 
+    @Test
+    @DisplayName("erasing a customer also reaches a phoned-in lead nobody linked, by the number she held")
+    void erasingACustomerReachesAnUnlinkedLeadHoldingHerNumber(
+            @Autowired uz.horecaos.platform.customers.application.CustomerErasureService erasure) throws Exception {
+        UUID accountId = account("Erasable Guest");
+        addPhone(accountId, "+998901234567");
+        UUID otherAccount = account("Other Guest");
+        MvcResult phonedIn = register(CALL_CENTRE, "CALLBACK_REQUEST", "998 (90) 123-45-67", NAME, NOTES, null);
+        MvcResult someoneElse = register(CALL_CENTRE, "SITE", "+998 91 555 00 11", "Someone Else", null, null);
+        MvcResult linkedElsewhere = register(CALL_CENTRE, "SITE", PHONE, "Household Member", null, null, otherAccount);
+        String hashBefore = hashOf(idOf(phonedIn));
+
+        var request = erasure.request(
+                TENANT,
+                accountId,
+                uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia.OPERATIONS,
+                uz.horecaos.platform.audit.api.ActorRef.user(OWNER, null));
+        erasure.execute(TENANT, accountId, request.id(), uz.horecaos.platform.audit.api.ActorRef.user(OWNER, null));
+
+        assertThat(jdbc.sql("SELECT phone_masked || '|' || coalesce(display_name_encrypted, 'none') || '|' "
+                                + "|| coalesce(notes_encrypted, 'none') FROM customer.leads WHERE id = :id")
+                        .param("id", idOf(phonedIn))
+                        .query(String.class)
+                        .single())
+                .as("the lead she phoned in as a guest holds her number: it is erased with her")
+                .isEqualTo("[erased]|none|none");
+        assertThat(hashOf(idOf(phonedIn)))
+                .as("and its lookup hash no longer equals the hash of her former number")
+                .isNotEqualTo(hashBefore);
+        assertThat(jdbc.sql("SELECT phone_masked FROM customer.leads WHERE id = :id")
+                        .param("id", idOf(someoneElse))
+                        .query(String.class)
+                        .single())
+                .as("a lead on a different number is not hers")
+                .isEqualTo("+998 ** *** 00 11");
+        assertThat(jdbc.sql("SELECT phone_masked FROM customer.leads WHERE id = :id")
+                        .param("id", idOf(linkedElsewhere))
+                        .query(String.class)
+                        .single())
+                .as("a lead an operator linked to another account is that account's, whatever number it holds")
+                .isEqualTo("+998 ** *** 45 67");
+    }
+
     // ===================================================================== helpers
 
     private MvcResult register(
@@ -1265,6 +1308,16 @@ class LeadControllerEndpointTests {
         return jdbc.sql("SELECT event_type FROM integration.outbox_events ORDER BY occurred_at, event_id")
                 .query(String.class)
                 .list();
+    }
+
+    private void addPhone(UUID accountId, String value) throws Exception {
+        MvcResult added = mvc.perform(post("/api/v1/tenants/" + TENANT + "/customers/" + accountId + "/contact-points")
+                        .with(token(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"PHONE\",\"value\":\"" + value + "\",\"primary\":true}"))
+                .andReturn();
+        assertThat(added.getResponse().getStatus()).isEqualTo(201);
     }
 
     private UUID account(String displayName) {
