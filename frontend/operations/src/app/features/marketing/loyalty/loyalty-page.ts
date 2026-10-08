@@ -44,8 +44,13 @@ type ScopeType = 'BRAND' | 'LOCATION' | 'CHANNEL';
  * Deposit accounts (Депозит): ADR 0046 withdrew customer-funded stored value
  * from scope outright — "Loyalty is points only" — because nobody has a
  * Central Bank of Uzbekistan authorisation to hold customer funds. That is a
- * closed decision, not a gap to fill. POS balance sync: no ADR, no capability,
- * no adapter — the IA row names it and nothing beneath it exists yet.
+ * closed decision, not a gap to fill.
+ *
+ * **The till tab (ADR 0171, row 6.3b).** The platform is the one ledger and a
+ * till's balance is a mirror of it; `PosSyncPanel` shows, per POS binding, whether
+ * its vendor can mirror a balance at all (Clopos is not yet assessed and says so),
+ * runs a reconciliation that changes nothing, lists the differences and settles
+ * them one at a time.
  *
  * **Reduced relative to the spec.** The location and channel pickers below
  * list every branch/channel this brand has, but a rule's own `scopeId` is
