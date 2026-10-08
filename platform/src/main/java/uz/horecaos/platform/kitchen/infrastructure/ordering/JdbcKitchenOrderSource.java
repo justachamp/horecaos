@@ -169,6 +169,27 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    @Override
+    public Map<UUID, Instant> createdAtByOrders(UUID tenantId, Set<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT id, created_at
+                FROM ordering.orders
+                WHERE tenant_id = :tenantId AND id IN (:orderIds)
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) -> Map.entry(
+                        row.getObject("id", UUID.class),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant()))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }

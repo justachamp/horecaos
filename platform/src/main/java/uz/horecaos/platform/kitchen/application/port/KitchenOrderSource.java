@@ -64,6 +64,20 @@ public interface KitchenOrderSource {
     Map<UUID, String> externalReferences(UUID tenantId, Set<UUID> orderIds);
 
     /**
+     * When each of these orders was created: the instant its lateness clock started (ADR 0036,
+     * ADR 0150 decision 1).
+     *
+     * <p>A ticket's own {@code created_at} is when the kitchen opened it, which for an order that
+     * waited in {@code AWAITING_APPROVAL} or was taken for a slot is long after checkout. The
+     * no-promise fallback measures from the order, never from the ticket, so a board, a header and a
+     * wall agree about an unpromised order at one instant; a ticket's own opening time would start the
+     * clock again on acceptance, which ADR 0150 refuses.
+     *
+     * @return only orders of this tenant that exist; an id with no order is absent from the map
+     */
+    Map<UUID, Instant> createdAtByOrders(UUID tenantId, Set<UUID> orderIds);
+
+    /**
      * The order facts one ticket is built from.
      *
      * @param promisedAt          when the customer was promised the food, or null

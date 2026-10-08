@@ -1356,6 +1356,14 @@ public class KitchenTicketService {
         return orders.externalReferences(tenantId, orderIds);
     }
 
+    /**
+     * When each of these orders was created, which is where a wall or a queue measures an unpromised
+     * ticket's lateness from (ADR 0150): not from the ticket, which opens only after acceptance.
+     */
+    public Map<UUID, Instant> orderCreatedAtByOrder(UUID tenantId, Set<UUID> orderIds) {
+        return orders.createdAtByOrders(tenantId, orderIds);
+    }
+
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {
         return kitchen.itemsOf(tenantId, ticketId);
     }

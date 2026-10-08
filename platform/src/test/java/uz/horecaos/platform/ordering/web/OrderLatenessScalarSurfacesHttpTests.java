@@ -74,6 +74,8 @@ class OrderLatenessScalarSurfacesHttpTests {
     private static final String CONFIG = "/api/v1/operations/tenants/" + TENANT + "/configuration";
     private static final String ORDERS = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/";
     private static final String LATENESS = "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/locations/";
+    private static final String KITCHEN =
+            "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/kitchen";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -125,6 +127,7 @@ class OrderLatenessScalarSurfacesHttpTests {
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("TRUNCATE TABLE tenant.configuration_values").update();
         fixtures = new OrderBoardFixtures(jdbc);
+        jdbc.sql("TRUNCATE TABLE kitchen.tickets CASCADE").update();
         fixtures.clean();
         roleRegistry.synchronize();
 
@@ -206,7 +209,71 @@ class OrderLatenessScalarSurfacesHttpTests {
                 .isEqualTo(2700);
     }
 
+    @Test
+    @DisplayName("the kitchen queue and the VDU measure an unpromised ticket from the order, not from the later "
+            + "instant the kitchen opened it, so they call it late exactly when the board does")
+    void theKitchenSurfacesAgreeWithTheBoardAboutAnUnpromisedTicketOpenedAfterApproval() throws Exception {
+        setThreshold("LOCATION", LOCATION, 20, "aggregator orders should go red sooner");
+        // The order was created thirty minutes ago and waited for approval; its ticket opens only now, so
+        // a clock started at the ticket reads zero minutes while the board's reads thirty.
+        seedTicket(aggregatorUnpromised, "KS-AGG");
+        Instant orderCreatedAt = jdbc.sql("SELECT created_at FROM ordering.orders WHERE id = :id")
+                .param("id", aggregatorUnpromised)
+                .query(java.time.OffsetDateTime.class)
+                .single()
+                .toInstant();
+        assertThat(lateOnTheBoard(LOCATION)).contains(aggregatorUnpromised);
+
+        JsonNode queue = get(KITCHEN + "/tickets").get("tickets").get(0);
+        JsonNode wall = get(KITCHEN + "/vdu");
+        JsonNode wallTicket = wall.get("tickets").get(0);
+        int fallback = wall.get("lateness").get("delivery").get("noPromiseFallbackSeconds").asInt();
+
+        for (JsonNode ticket : List.of(queue, wallTicket)) {
+            Instant carried = Instant.parse(ticket.get("orderCreatedAt").asString());
+            assertThat(carried)
+                    .as("the order's own creation instant, the one the board measures from")
+                    .isEqualTo(orderCreatedAt);
+            assertThat(Instant.parse(ticket.get("createdAt").asString()))
+                    .as("the ticket itself opened long after the order")
+                    .isAfter(carried.plus(Duration.ofMinutes(29)));
+            assertThat(ticket.get("targetReadyAt").isNull())
+                    .as("an unpromised order has no target, so the fallback is what colours it")
+                    .isTrue();
+            assertThat(carried.plusSeconds(fallback).isBefore(Instant.now()))
+                    .as("late by the scalar of 20 minutes, from the order's creation, as on the board")
+                    .isTrue();
+        }
+    }
+
     // ---------------------------------------------------------------- helpers
+
+    private JsonNode get(String path) throws Exception {
+        MvcResult result = mvc.perform(get(path).with(tokenFor(OWNER))).andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as(result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** A FIRED ticket for the order, opened now: the shape the live queue and the wall read. */
+    private void seedTicket(UUID orderId, String label) {
+        jdbc.sql("""
+                INSERT INTO kitchen.tickets (
+                    id, tenant_id, brand_id, location_id, order_id, sequence_label,
+                    fulfilment_mode, channel_code, status, release_mode, released_at,
+                    routing_version, version, created_at, updated_at)
+                VALUES (:id, :t, :b, :loc, :orderId, :label, 'DELIVERY', 'TELEGRAM', 'FIRED',
+                    'AUTO_ON_CONFIRM', now(), 1, 1, now(), now())
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("orderId", orderId)
+                .param("label", label)
+                .update();
+    }
 
     private List<UUID> lateOnTheBoard(UUID location) throws Exception {
         MvcResult result = mvc.perform(get(ORDERS + location + "/orders/board")

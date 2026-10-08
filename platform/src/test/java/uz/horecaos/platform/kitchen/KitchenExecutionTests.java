@@ -679,6 +679,28 @@ class KitchenExecutionTests {
                 .doesNotContainKey(otherOrderId);
     }
 
+    @Test
+    @DisplayName("the order's own creation instant is what a wall measures an unpromised ticket from, "
+            + "not the later instant the kitchen opened the ticket (ADR 0150)")
+    void anOrdersCreationInstantIsReadApartFromItsTicketsOpening() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-052", null, null, null, burger);
+        UUID missing = UUID.randomUUID();
+        // The order sat thirty minutes before anyone accepted it; the ticket opens only now.
+        jdbc.sql("UPDATE ordering.orders SET created_at = now() - interval '30 minutes' WHERE id = :id")
+                .param("id", orderId)
+                .update();
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        Map<UUID, Instant> createdAt = tickets.orderCreatedAtByOrder(TENANT, Set.of(orderId, missing));
+
+        assertThat(createdAt).containsOnlyKeys(orderId);
+        assertThat(createdAt.get(orderId))
+                .as("the order's clock started at checkout")
+                .isBefore(ticket.createdAt().minus(java.time.Duration.ofMinutes(29)));
+        assertThat(tickets.orderCreatedAtByOrder(TENANT, Set.of())).isEmpty();
+    }
+
     private void insertExternalReference(UUID orderId, String type, String value, String issuedBy) {
         jdbc.sql("""
                 INSERT INTO ordering.order_external_references
