@@ -10,7 +10,9 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.EntitlementGate;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.application.MediaAssetService;
@@ -46,12 +49,20 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 @Tag(name = "Media", description = "Presigned upload lifecycle for catalog and brand imagery")
 public class MediaController {
 
+    /**
+     * The commercial entitlement that admits video (ADR 0157). Named as a string, as {@code content}
+     * does, so media takes no edge to {@code commercial}.
+     */
+    private static final String VIDEO_ENTITLEMENT = "content.video.enabled";
+
     private final MediaAssetService media;
     private final CurrentActor currentActor;
+    private final List<EntitlementGate> entitlements;
 
-    public MediaController(MediaAssetService media, CurrentActor currentActor) {
+    public MediaController(MediaAssetService media, CurrentActor currentActor, List<EntitlementGate> entitlements) {
         this.media = media;
         this.currentActor = currentActor;
+        this.entitlements = List.copyOf(entitlements);
     }
 
     @PostMapping("/upload-requests")
@@ -63,6 +74,9 @@ public class MediaController {
     public ResponseEntity<UploadTicketResponse> requestUpload(
             @PathVariable UUID tenantId, @Valid @RequestBody UploadRequest request) {
         MediaOwner owner = new MediaOwner(request.ownerScope(), request.ownerId());
+        if (MediaAssetService.VIDEO_MP4.equalsIgnoreCase(request.contentType().strip())) {
+            requireVideoEntitlement(tenantId);
+        }
 
         MediaAssetService.UploadTicket ticket;
         try {
@@ -135,6 +149,25 @@ public class MediaController {
     }
 
     /**
+     * Video is off until the platform owner grants it to the tenant (ADR 0157). Asked of
+     * {@code checkGranted}: the plain feature check answers yes for a feature nobody granted under the
+     * meter-only default, which is the wrong answer for a switch that is off by default. An unknown key
+     * or no gate at all reads as not entitled.
+     */
+    private void requireVideoEntitlement(UUID tenantId) {
+        for (EntitlementGate gate : entitlements) {
+            Optional<EntitlementGate.Answer> answer = gate.checkGranted(tenantId, VIDEO_ENTITLEMENT);
+            if (answer.isPresent()) {
+                if (answer.get().entitled()) {
+                    return;
+                }
+                break;
+            }
+        }
+        throw ApiException.entitlementRequired(VIDEO_ENTITLEMENT);
+    }
+
+    /**
      * The Keycloak subject as a UUID, or null if this realm ever issues a
      * non-UUID subject. Recorded for attribution only, so an unparseable one is
      * not worth failing an upload over.
@@ -151,7 +184,9 @@ public class MediaController {
      * What a client asks to upload.
      *
      * @param sizeBytes the exact byte count. The presigned URL is signed for it,
-     *                  so an upload of a different size will not be accepted
+     *                  so an upload of a different size will not be accepted. An image is
+     *                  at most 10 MiB and an MP4 video at most 12 MiB; the service applies
+     *                  the cap that fits the type
      * @param renditionProfile omitted for the standard renditions; {@code CREATIVE} for an
      *                  image the console uploads for the storefront's home content, which
      *                  is also rendered at {@code HERO} (ADR 0157)
@@ -161,7 +196,7 @@ public class MediaController {
             @NotNull UUID ownerId,
             @NotNull MediaVisibility visibility,
             @NotBlank String contentType,
-            @Positive @Max(10 * 1024 * 1024) long sizeBytes,
+            @Positive @Max(12 * 1024 * 1024) long sizeBytes,
             String filename,
             @Nullable @Pattern(regexp = "CREATIVE") String renditionProfile) {}
 

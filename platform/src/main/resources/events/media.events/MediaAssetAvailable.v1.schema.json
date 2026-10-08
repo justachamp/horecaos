@@ -13,8 +13,8 @@
     "visibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"] },
     "contentType": {
       "type": "string",
-      "description": "What the stored image's own header says, not what the client declared.",
-      "enum": ["image/jpeg", "image/png", "image/webp", "image/avif"]
+      "description": "What the stored object's own header says, not what the client declared. video/mp4 is admitted for storefront content video (ADR 0157); the dimensions are the video's.",
+      "enum": ["image/jpeg", "image/png", "image/webp", "image/avif", "video/mp4"]
     },
     "sizeBytes": { "type": "integer", "minimum": 1 },
     "widthPx": { "type": "integer", "minimum": 1 },

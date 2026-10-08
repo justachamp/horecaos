@@ -36,6 +36,7 @@ import uz.horecaos.platform.media.domain.MediaAsset;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
 import uz.horecaos.platform.media.domain.ProbedImage;
+import uz.horecaos.platform.media.domain.VideoProbe;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore;
@@ -66,6 +67,16 @@ public class MediaAssetService implements MediaAvailability {
     private static final Duration DOWNLOAD_WINDOW = Duration.ofMinutes(5);
 
     /**
+     * A browser plays a video by repeated range requests against the final URL, so the five-minute
+     * image window can expire mid-play (ADR 0157, Media and video). The redirect itself stays cached
+     * for five minutes; only the signature behind it lasts this long.
+     */
+    private static final Duration VIDEO_DOWNLOAD_WINDOW = Duration.ofMinutes(30);
+
+    /** The one video type the platform admits (ADR 0157, Decision 8). */
+    public static final String VIDEO_MP4 = "video/mp4";
+
+    /**
      * Image types only, and checked against what the bytes actually are rather
      * than what the request said. SVG is excluded deliberately: it is a document
      * format that can carry script, so serving user-supplied SVG from our own
@@ -75,6 +86,8 @@ public class MediaAssetService implements MediaAvailability {
             Set.of("image/jpeg", "image/png", "image/webp", "image/avif");
 
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+
+    private static final long MAX_VIDEO_BYTES = VideoProbe.MAX_BYTES;
 
     private final JdbcMediaAssetStore store;
     private final JdbcDerivativeJobStore derivativeJobs;
@@ -157,11 +170,21 @@ public class MediaAssetService implements MediaAvailability {
         }
         String normalizedType =
                 contentType == null ? "" : contentType.toLowerCase(Locale.ROOT).strip();
-        if (!ALLOWED_IMAGE_TYPES.contains(normalizedType)) {
+        boolean video = VIDEO_MP4.equals(normalizedType);
+        if (!video && !ALLOWED_IMAGE_TYPES.contains(normalizedType)) {
             throw new IllegalArgumentException("Unsupported media type: " + contentType);
         }
-        if (sizeBytes <= 0 || sizeBytes > MAX_IMAGE_BYTES) {
-            throw new IllegalArgumentException("Media size must be between 1 and " + MAX_IMAGE_BYTES + " bytes");
+        long cap = video ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+        if (sizeBytes <= 0 || sizeBytes > cap) {
+            // A video over the cap is refused before a byte is uploaded, by name, so the console can say
+            // how to export a smaller file (ADR 0157, Decision 8).
+            throw new IllegalArgumentException(
+                    video && sizeBytes > cap
+                            ? VideoProbe.TOO_LARGE + ": a video is at most " + cap + " bytes"
+                            : "Media size must be between 1 and " + cap + " bytes");
+        }
+        if (video && renditionProfile != null) {
+            throw new IllegalArgumentException("A video has no rendition profile");
         }
 
         MediaAssetId assetId = MediaAssetId.generate();
@@ -314,8 +337,12 @@ public class MediaAssetService implements MediaAvailability {
         }
         ObjectStorage.StoredObject object = stored.get();
 
-        if (object.sizeBytes() > MAX_IMAGE_BYTES) {
-            return reject(asset, "SIZE_EXCEEDED", "Stored object is %d bytes".formatted(object.sizeBytes()));
+        boolean video = VIDEO_MP4.equals(asset.declaredContentType());
+        if (object.sizeBytes() > (video ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) {
+            return reject(
+                    asset,
+                    video ? VideoProbe.TOO_LARGE : "SIZE_EXCEEDED",
+                    "Stored object is %d bytes".formatted(object.sizeBytes()));
         }
         if (object.sizeBytes() != asset.declaredSizeBytes()) {
             // A mismatch means the upload was not what was authorised. It is
@@ -330,8 +357,11 @@ public class MediaAssetService implements MediaAvailability {
         String storedType = object.contentType() == null
                 ? ""
                 : object.contentType().toLowerCase(Locale.ROOT).strip();
-        if (!ALLOWED_IMAGE_TYPES.contains(storedType)) {
+        if (!ALLOWED_IMAGE_TYPES.contains(storedType) && !VIDEO_MP4.equals(storedType)) {
             return reject(asset, "TYPE_NOT_ALLOWED", "Stored content type is " + storedType);
+        }
+        if (video) {
+            return verifyVideo(asset, object, storedType);
         }
 
         // Everything above this line is still the client's word. The presigned
@@ -387,8 +417,38 @@ public class MediaAssetService implements MediaAvailability {
             }
         }
 
-        publishAvailable(asset, image, object, clock.instant());
+        publishAvailable(asset, image.contentType(), image.widthPx(), image.heightPx(), null, object, clock.instant());
         log.info("Media asset {} verified and available", assetId);
+        return MediaAssetStatus.AVAILABLE;
+    }
+
+    /**
+     * The video half of {@link #verifyUpload} (ADR 0157, Decision 8): a bounded ranged read of the
+     * first 256 KiB, the {@link VideoProbe}'s verdict, and nothing else. <strong>Never a decode and
+     * never a transcode</strong>: a file the probe refuses is {@code REJECTED} with a named code and
+     * the operator exports another; the platform runs no native decoder on hostile input. No
+     * derivative job is written for a video.
+     */
+    private MediaAssetStatus verifyVideo(MediaAsset asset, ObjectStorage.StoredObject object, String storedType) {
+        if (!VIDEO_MP4.equals(storedType)) {
+            return reject(asset, "TYPE_MISMATCH", "Declared %s, stored %s".formatted(VIDEO_MP4, storedType));
+        }
+        byte[] prefix = storage.readPrefix(asset.bucket(), asset.objectKey(), VideoProbe.PROBE_BYTES);
+        VideoProbe.Verdict verdict = VideoProbe.probe(prefix, object.sizeBytes());
+        if (verdict instanceof VideoProbe.Rejected refused) {
+            log.info("Media video {} refused: {}", asset.assetId(), refused.code());
+            return reject(asset, refused.code(), refused.detail());
+        }
+        VideoProbe.Accepted video = (VideoProbe.Accepted) verdict;
+        if (malwareScanner.isPresent()) {
+            MalwareScanner.Verdict scan = malwareScanner.get().scan(asset.bucket(), asset.objectKey());
+            if (!scan.clean()) {
+                return reject(asset, "MALWARE_DETECTED", "Scanner reported " + scan.signature());
+            }
+        }
+        publishAvailable(
+                asset, storedType, video.widthPx(), video.heightPx(), video.durationMs(), object, clock.instant());
+        log.info("Media video {} verified and available", asset.assetId());
         return MediaAssetStatus.AVAILABLE;
     }
 
@@ -415,23 +475,33 @@ public class MediaAssetService implements MediaAvailability {
      * connection for microseconds rather than for however long a degraded RustFS
      * takes to answer a head request.
      */
-    private void publishAvailable(MediaAsset asset, ProbedImage image, ObjectStorage.StoredObject object, Instant now) {
+    private void publishAvailable(
+            MediaAsset asset,
+            String contentType,
+            int widthPx,
+            int heightPx,
+            @Nullable Integer durationMs,
+            ObjectStorage.StoredObject object,
+            Instant now) {
 
         transactions.executeWithoutResult(status -> {
             store.markAvailable(
                     asset.assetId(),
-                    image.contentType(),
+                    contentType,
                     object.sizeBytes(),
                     object.checksumSha256().orElse(object.eTag()),
-                    image.widthPx(),
-                    image.heightPx(),
+                    widthPx,
+                    heightPx,
+                    durationMs,
                     now);
 
             // Enqueued rather than rendered here. Rendering decodes a raster and
             // re-encodes it three times; on this thread it would put an
             // attacker-chosen decode on a request and hold this transaction open
             // across three object writes.
-            derivativeJobs.enqueue(UUID.randomUUID(), asset.tenantId(), asset.assetId(), now);
+            if (durationMs == null) {
+                derivativeJobs.enqueue(UUID.randomUUID(), asset.tenantId(), asset.assetId(), now);
+            }
 
             events.publishEvent(new MediaAssetAvailable(
                     UUID.randomUUID(),
@@ -441,13 +511,14 @@ public class MediaAssetService implements MediaAvailability {
                     asset.owner().scope().name(),
                     asset.owner().id(),
                     asset.visibility().name(),
-                    image.contentType(),
+                    contentType,
                     object.sizeBytes(),
-                    image.widthPx(),
-                    image.heightPx()));
+                    widthPx,
+                    heightPx));
 
             audit.record(auditFact("media.asset.available", asset, now)
-                    .changed(ChangeDocuments.diff(availabilityBefore(asset), availabilityAfter(asset, image, object)))
+                    .changed(ChangeDocuments.diff(
+                            availabilityBefore(asset), availabilityAfter(asset, contentType, object)))
                     .build());
         });
     }
@@ -511,10 +582,10 @@ public class MediaAssetService implements MediaAvailability {
     }
 
     private static Map<String, Object> availabilityAfter(
-            MediaAsset asset, ProbedImage image, ObjectStorage.StoredObject object) {
+            MediaAsset asset, String contentType, ObjectStorage.StoredObject object) {
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", MediaAssetStatus.AVAILABLE.name());
-        after.put("verifiedContentType", image.contentType());
+        after.put("verifiedContentType", contentType);
         after.put("verifiedSizeBytes", object.sizeBytes());
         if (asset.createdBy() != null) {
             after.put("uploadedBy", asset.createdBy());
@@ -556,7 +627,11 @@ public class MediaAssetService implements MediaAvailability {
         }
         if (variant == null) {
             MediaAsset original = asset.get();
-            return Optional.of(storage.presignDownload(original.bucket(), original.objectKey(), DOWNLOAD_WINDOW));
+            // A video is played by range requests against the final URL, so its signature outlives the
+            // five minutes that suit a picture (ADR 0157, Media and video).
+            boolean video = VIDEO_MP4.equals(original.verifiedContentType());
+            return Optional.of(storage.presignDownload(
+                    original.bucket(), original.objectKey(), video ? VIDEO_DOWNLOAD_WINDOW : DOWNLOAD_WINDOW));
         }
         return derivatives
                 .find(tenantId, assetId, variant)

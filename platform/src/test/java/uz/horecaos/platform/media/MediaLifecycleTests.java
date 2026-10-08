@@ -61,6 +61,7 @@ import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.domain.MediaDerivative;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
+import uz.horecaos.platform.media.domain.Mp4;
 import uz.horecaos.platform.media.domain.ProbedImage;
 import uz.horecaos.platform.media.infrastructure.imaging.ImageIoDerivativeRenderer;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
@@ -1315,6 +1316,130 @@ class MediaLifecycleTests {
      * reached AVAILABLE the way a real one does: through the worker, not by
      * calling {@code verifyUpload} directly from a test.
      */
+    // ===================================================================== video (ADR 0157)
+
+    @Test
+    @DisplayName(
+            "an MP4 is verified from its own header: available with its size and duration, owed no rendition, served on a 30-minute signature")
+    void anMp4VideoBecomesAvailableWithItsDuration() throws Exception {
+        byte[] video = Mp4.valid();
+        MediaAssetId id = anAvailableAsset("video/mp4", video);
+
+        var asset = media.find(TENANT_A, id).orElseThrow();
+        assertThat(asset.verifiedContentType()).isEqualTo("video/mp4");
+        assertThat(asset.widthPx()).isEqualTo(1280);
+        assertThat(asset.heightPx()).isEqualTo(720);
+        assertThat(asset.durationMs()).isEqualTo(10_000);
+        assertThat(asset.verifiedSizeBytes()).isEqualTo((long) video.length);
+
+        assertThat(jdbc.sql("SELECT count(*) FROM media.derivative_jobs WHERE asset_id = :id")
+                        .param("id", id.value())
+                        .query(Long.class)
+                        .single())
+                .as("the platform does not transcode and renders nothing from a video")
+                .isZero();
+
+        // A browser plays a video by range requests against the final URL; a five-minute signature would
+        // lapse mid-play. An image keeps the five minutes.
+        URI videoUrl = media.downloadUrl(TENANT_A, id).orElseThrow();
+        assertThat(videoUrl.getQuery()).contains("X-Amz-Expires=1800");
+        assertThat(get(videoUrl)).isEqualTo(video);
+        MediaAssetId image = anAvailableAsset("image/jpeg", JPEG);
+        assertThat(media.downloadUrl(TENANT_A, image).orElseThrow().getQuery()).contains("X-Amz-Expires=300");
+
+        var lookup = new uz.horecaos.platform.media.application.MediaCreativeLookupAdapter(
+                new JdbcMediaAssetStore(jdbc), derivativeRows);
+        var described = java.util.Objects.requireNonNull(
+                lookup.describe(TENANT_A, Set.of(id.value())).get(id.value()));
+        assertThat(described.kind()).isEqualTo(uz.horecaos.platform.media.api.MediaCreativeLookup.Kind.VIDEO);
+        assertThat(described.durationMs()).isEqualTo(10_000);
+        assertThat(described.renditions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a video the platform will not serve is rejected by name on its own header, never decoded: HEVC, and a movie box after the media data")
+    void aRefusedVideoIsRejectedByName() throws Exception {
+        byte[] hevc = Mp4.withMoov(Mp4.mvhd(1000, 10_000), Mp4.video("hvc1", 1280, 720));
+        byte[] slowStart = Mp4.concat(
+                Mp4.ftyp("isom"), Mp4.mdat(1000), Mp4.moov(Mp4.mvhd(1000, 10_000), Mp4.video("avc1", 1280, 720)));
+
+        assertThat(rejectedVideoCode(hevc)).isEqualTo("VIDEO_CODEC_NOT_ACCEPTED");
+        assertThat(rejectedVideoCode(slowStart)).isEqualTo("VIDEO_NOT_FASTSTART");
+    }
+
+    @Test
+    @DisplayName("a file that is not an MP4 at all is rejected even when it arrives labelled video/mp4")
+    void aVideoLabelIsNotEvidence() throws Exception {
+        assertThat(rejectedVideoCode(HTML)).isEqualTo("VIDEO_TYPE_NOT_ALLOWED");
+    }
+
+    @Test
+    @DisplayName("a video over the cap never gets an upload URL, and says which cap; an image keeps its own")
+    void aVideoOverTheCapIsRefusedBeforeUpload() {
+        long cap = 12L * 1024 * 1024;
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "video/mp4",
+                        cap + 1,
+                        "promo.mp4",
+                        null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VIDEO_TOO_LARGE");
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "image/jpeg",
+                        11L * 1024 * 1024,
+                        "big.jpg",
+                        null)))
+                .as("an image is still capped at 10 MiB")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(media.requestUpload(
+                                TENANT_A,
+                                MediaOwner.brand(BRAND),
+                                MediaVisibility.PUBLIC,
+                                "video/mp4",
+                                cap,
+                                "promo.mp4",
+                                null)
+                        .uploadUrl())
+                .as("exactly the cap is allowed")
+                .isNotNull();
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "video/mp4",
+                        1024,
+                        "promo.mp4",
+                        null,
+                        "CREATIVE")))
+                .as("a video has no rendition profile")
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private String rejectedVideoCode(byte[] content) throws Exception {
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "video/mp4",
+                content.length,
+                "promo.mp4",
+                null);
+        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
+        return rejectionCode(ticket.assetId());
+    }
+
     private MediaAssetId anAvailableAsset(String contentType, byte[] content) throws Exception {
         return anAvailableAsset(contentType, content, null);
     }

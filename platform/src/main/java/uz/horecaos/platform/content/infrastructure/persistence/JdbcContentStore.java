@@ -494,6 +494,23 @@ public class JdbcContentStore {
     }
 
     /**
+     * The brand's stored-published items of one kind with their live revisions, newest first by publication
+     * (the editorial reads). As {@link #publishedItems}, the window is not applied here.
+     */
+    public List<LiveItem> publishedByKind(UUID tenantId, UUID brandId, ContentKind kind) {
+        return jdbc.sql("SELECT " + ITEM_COLUMNS + ", " + REVISION_COLUMNS
+                        + " FROM content.items i JOIN content.item_revisions r"
+                        + " ON r.item_id = i.id AND r.revision_no = i.live_revision_no AND r.tenant_id = i.tenant_id"
+                        + " WHERE i.tenant_id = :tenantId AND i.brand_id = :brandId AND i.state = 'PUBLISHED'"
+                        + " AND i.kind = :kind ORDER BY r.published_at DESC, i.id")
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("kind", kind.name())
+                .query((row, number) -> new LiveItem(mapItem(row, number), mapRevision(row, number)))
+                .list();
+    }
+
+    /**
      * Every non-archived item with its draft and its live revision, for the preview: what the
      * storefront would show if every draft were published now.
      */
@@ -561,6 +578,96 @@ public class JdbcContentStore {
                 .param("excluded", excludingItem)
                 .query(UUID.class)
                 .list();
+    }
+
+    // ------------------------------------------------------ media retention
+
+    /** Tenants that have at least one revision whose successor has been published: the sweeper's work list. */
+    public List<UUID> tenantsWithSupersededMedia() {
+        return jdbc.sql("""
+                SELECT DISTINCT rm.tenant_id
+                FROM content.revision_media rm
+                WHERE EXISTS (
+                    SELECT 1 FROM content.item_revisions n
+                    WHERE n.item_id = rm.item_id AND n.tenant_id = rm.tenant_id AND n.revision_no > rm.revision_no)
+                """).query(UUID.class).list();
+    }
+
+    /**
+     * Assets of this tenant whose <em>every</em> use is by a superseded revision, the newest of which was
+     * superseded before {@code supersededBefore} (ADR 0157, retention). Oldest first, keyset-paged on
+     * {@code (superseded_at, asset)} so a long tail of assets already released cannot hide a newer one.
+     *
+     * <p>A revision is superseded the moment the next revision of its item is published; the last revision
+     * of an item is never superseded, even if the item is withdrawn, because a withdrawn item may be
+     * published again. A draft that names an asset is not visible here: the release asks
+     * {@link #mediaStillUsed} (through the usage probe), which reads drafts.
+     */
+    public List<SupersededAsset> supersededAssets(
+            UUID tenantId, Instant supersededBefore, Instant afterAt, UUID afterAsset, int limit) {
+        return jdbc.sql("""
+                SELECT s.media_asset_id, max(s.superseded_at) AS superseded_at
+                FROM (
+                    SELECT rm.media_asset_id,
+                           (SELECT min(n.published_at) FROM content.item_revisions n
+                             WHERE n.item_id = rm.item_id AND n.tenant_id = rm.tenant_id
+                               AND n.revision_no > rm.revision_no) AS superseded_at
+                    FROM content.revision_media rm
+                    WHERE rm.tenant_id = :tenantId
+                ) s
+                GROUP BY s.media_asset_id
+                HAVING bool_and(s.superseded_at IS NOT NULL)
+                   AND max(s.superseded_at) < :before
+                   AND (max(s.superseded_at), s.media_asset_id) > (:afterAt, :afterAsset)
+                ORDER BY max(s.superseded_at), s.media_asset_id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("before", utc(supersededBefore))
+                .param("afterAt", utc(afterAt))
+                .param("afterAsset", afterAsset)
+                .param("limit", limit)
+                .query((row, rowNumber) -> new SupersededAsset(
+                        row.getObject("media_asset_id", UUID.class),
+                        row.getObject("superseded_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /**
+     * Of these assets, the ones the content module still needs: used by the <em>latest</em> revision of
+     * any item (live, or withdrawn and publishable again) or named anywhere in a draft's document.
+     *
+     * <p>The draft check is a text match on the asset's UUID inside the {@code jsonb}, which is exact for
+     * a UUID (36 characters, no substring of another value) and avoids a column that would duplicate the
+     * document.
+     */
+    public java.util.Set<UUID> mediaStillUsed(UUID tenantId, Collection<UUID> assetIds) {
+        if (assetIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        UUID[] ids = assetIds.toArray(UUID[]::new);
+        java.util.Set<UUID> used = new java.util.HashSet<>(jdbc.sql("""
+                SELECT DISTINCT rm.media_asset_id
+                FROM content.revision_media rm
+                WHERE rm.tenant_id = :tenantId AND rm.media_asset_id = ANY(:ids)
+                  AND rm.revision_no = (
+                      SELECT max(r.revision_no) FROM content.item_revisions r
+                      WHERE r.item_id = rm.item_id AND r.tenant_id = rm.tenant_id)
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", ids)
+                .query(UUID.class)
+                .list());
+        used.addAll(jdbc.sql("""
+                SELECT DISTINCT a.id
+                FROM unnest(CAST(:ids AS uuid[])) AS a(id)
+                JOIN content.item_drafts d ON d.tenant_id = :tenantId AND position(a.id::text IN d.document::text) > 0
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", ids)
+                .query(UUID.class)
+                .list());
+        return used;
     }
 
     // -------------------------------------------------------- allowed hosts
@@ -745,6 +852,9 @@ public class JdbcContentStore {
             ItemRow item,
             @Nullable DraftRow draft,
             @Nullable RevisionRow live) {}
+
+    /** An asset whose every use is by a superseded revision, and when the last of them was superseded. */
+    public record SupersededAsset(UUID assetId, Instant supersededAt) {}
 
     public record AllowedHostRow(String host, String createdBy, Instant createdAt) {}
 }
