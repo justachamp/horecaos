@@ -360,6 +360,10 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.approvals.action.pricingPromotionActivate': 'Запуск акции',
 
   // end: Promotion activation approval (ADR 0140)
+
+  // Fiscal receipt correction approval (ADR 0166)
+  'staff.approvals.action.fiscalCorrectionRequest': 'Коррекция или аннулирование фискального чека',
+  // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',
   'staff.approvals.column.status': 'Решение',

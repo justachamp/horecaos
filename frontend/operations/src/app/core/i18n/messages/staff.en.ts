@@ -357,6 +357,10 @@ export const staffEn = {
   'staff.approvals.action.pricingPromotionActivate': 'Promotion activation',
 
   // end: Promotion activation approval (ADR 0140)
+
+  // Fiscal receipt correction approval (ADR 0166)
+  'staff.approvals.action.fiscalCorrectionRequest': 'Fiscal receipt correction or void',
+  // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',
   'staff.approvals.column.status': 'Outcome',
