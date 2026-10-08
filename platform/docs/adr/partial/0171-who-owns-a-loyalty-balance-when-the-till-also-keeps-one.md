@@ -1,33 +1,32 @@
 # ADR 0171: Who owns a loyalty balance when the till also keeps one
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the ledger is complete and the till is not
-  connected to it. The platform side is built: `loyalty.accounts` is keyed
-  `(tenant_id, brand_id, customer_account_id)` and carries `balance_minor` (spendable;
-  points held by a reservation are already debited), `reserved_minor` and `version`;
-  `loyalty.entries` is append-only with a closed `entry_type`; a credited
-  `ADJUSTMENT` grants a lot that expires like any other (`LoyaltyAdjustmentService`);
-  `ReferralGrantPort` and the accrual clawback are the two precedents for a *system*
-  actor writing an `ADJUSTMENT` with no human approval; `loyalty.clawbacks` (V0079)
-  holds what a refunded order cost the brand. `LoyaltyBalanceChanged` is published only
-  by `LoyaltyAccrualService.accrue` and `PointsRedemptionService.reserve`, so it is not a
-  complete trigger for anything that must follow every movement. The till side has no
-  loyalty at all. `PosAdapter` has no balance or movement method; `PosCapability` has
-  ten constants and none is a loyalty one; `integration.pos_provider_capabilities`
-  holds rows for `clopos` only, and `integration.pos_capability_is_supported()` refuses
-  to enable a capability nobody has assessed; exactly one `PosAdapter` bean is wired
-  (Clopos) and `docs/providers/` holds notes for Click, Payme, Clopos and an SMS gateway,
-  none for iiko or R-Keeper, so nothing in the repository says what either exposes for a
-  customer wallet. The identity machinery a sync would reuse exists:
-  `integration.provider_entity_mappings` (ADR 0026) with `MappingEntityType` (nine
-  types today; `OPERATOR` was the latest, added by ADR 0139 on the same footing this
-  record needs), and
-  `CustomerPhoneLookup.findByPhone`, which takes a plaintext number and hashes it inside
-  the customers module. The console says what is missing in one place: the «POS balance
-  sync» card on the loyalty page (`marketing.loyalty.posSync.*`: "Not built. No ADR owns a
-  point-of-sale terminal reading or writing a loyalty balance, and no provider capability
-  declares it"). A tenant whose till keeps bonus balances today runs two ledgers and
-  nothing says so to anyone.
+- Implementation status: Partial — the platform is the one ledger and a till's number is a
+  mirror of it, and the whole path is built against a fake till; no real vendor adapter
+  implements it. V0555 adds the capability `LOYALTY_BALANCE_SYNC` (four-valued like the rest
+  of the matrix; `fake-pos` is SUPPORTED, `clopos` has no assessed row and so stays
+  UNASSESSED, which `integration.pos_capability_is_supported()` enforces and the console
+  reports plainly), `PosAdapter`'s default methods for listing till customers, reading a
+  balance and its movements and writing a balance, and the tables for runs, per-binding
+  state, imported movements and discrepancies. `PosLoyaltyBalanceBridge` in `pos`
+  implements `loyalty.api.PosLoyaltyBalancePort`; loyalty never imports `pos`. Matching is
+  by phone, exact and never guessed (an ambiguous or missing match is reported); pull
+  imports a till's own earns and spends as order-free `ADJUSTMENT` entries under a system
+  actor, once, with the binding and per-customer caps holding a credit nobody has seen;
+  push is a version sweep that sets the till to the platform's number; a binding runs
+  `REPORT_ONLY` (the default), `PULL` or `PULL_AND_PUSH`. The reconciliation report names
+  each difference with both balances and the delta and changes neither side, and the
+  resolutions (accept the till, accept the platform, absorb, suspend) are guarded by
+  `loyalty.sync.manage`, If-Match and, above the manual-adjustment threshold, a second
+  signature. The loyalty page has a till-sync tab and the liability report shows the spend
+  the till absorbed beyond a balance; the old "not built" card is gone. Not built: a real
+  iiko, R-Keeper or Clopos adapter (each needs a provider note and an assessed ceiling row
+  first, and the record defers to what the vendor exposes); the push as an outbox command
+  (`PosLoyaltyBalancePushRequested.v1`; built as a sweep over `loyalty.accounts.version`
+  instead); the consent gate (`NOT_CONSENTED`); fan-out of `LoyaltySyncDiscrepancyOpened`
+  to the operations alerts (the event is published in-process, with no consumer); and a
+  console control for a binding's sync mode and for `till_keeps_balance`, which are
+  configuration keys only.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
