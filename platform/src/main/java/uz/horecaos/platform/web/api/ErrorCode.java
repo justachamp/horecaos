@@ -108,6 +108,14 @@ public enum ErrorCode {
      */
     APPROVAL_POLICY_REQUIRED(HttpStatus.CONFLICT, "Approval policy required"),
 
+    /**
+     * ADR 0168: a buffered ticket is held because its order's payment is required and has not arrived.
+     * Firing it by hand needs {@code kitchen.ticket.release.override} and a reason code from the closed
+     * registry. Distinct from {@link #RESOURCE_CONFLICT}: the remedy is not to re-read, it is to wait for
+     * the customer, or to say, by name and by code, that the kitchen starts anyway.
+     */
+    PAYMENT_HOLD(HttpStatus.CONFLICT, "Held for payment"),
+
     /** ADR 0018: the quote's inputs changed; never silently charge the difference. */
     PRICE_CHANGED(HttpStatus.CONFLICT, "Price changed"),
 

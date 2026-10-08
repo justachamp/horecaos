@@ -293,6 +293,11 @@ public enum PlatformRole {
                     DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0168 and ADR 0163: the buffer's paid-only hold and the cook plan are the manager's own,
+                    // beside the stations they plan, and no line role's.
+                    KITCHEN_PAID_HOLD_MANAGE,
+                    KITCHEN_HEADCOUNT_READ,
+                    KITCHEN_PRODUCTIVITY_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -526,6 +531,11 @@ public enum PlatformRole {
                     DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0168 and ADR 0163: the buffer's paid-only hold and the cook plan are the manager's own,
+                    // beside the stations they plan, and no line role's.
+                    KITCHEN_PAID_HOLD_MANAGE,
+                    KITCHEN_HEADCOUNT_READ,
+                    KITCHEN_PRODUCTIVITY_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -835,6 +845,11 @@ public enum PlatformRole {
                     // release are held here and not by the line, because each of them
                     // undoes or delays something the line has already reported.
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0168 and ADR 0163: the buffer's paid-only hold and the cook plan are the manager's own,
+                    // beside the stations they plan, and no line role's.
+                    KITCHEN_PAID_HOLD_MANAGE,
+                    KITCHEN_HEADCOUNT_READ,
+                    KITCHEN_PRODUCTIVITY_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,

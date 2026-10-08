@@ -101,6 +101,19 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
     'Требуется причина — это откладывает запуск позже обещанного времени заказа',
   'kitchen.buffer.edit.save': 'Сохранить',
   'kitchen.buffer.edit.cancel': 'Отмена',
+  'kitchen.buffer.hold.awaitingPayment': 'Ждёт оплаты',
+  'kitchen.buffer.hold.blockedOnPayment': 'Не запущен: нет оплаты',
+  'kitchen.buffer.hold.stuckOnPayment': 'Завис: оплата просрочена',
+  'kitchen.buffer.hold.releaseDisabled':
+    'Удерживается, пока заказ не оплачен. Используйте «Запустить всё равно» с причиной.',
+  'kitchen.buffer.override.action': 'Запустить всё равно',
+  'kitchen.buffer.override.lead':
+    'Тикет удерживается, потому что заказ не оплачен. Запуск всё равно будет записан на ваше имя.',
+  'kitchen.buffer.override.reason': 'Почему',
+  'kitchen.buffer.override.confirm': 'Запустить всё равно',
+  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Оплату обещали на кассе',
+  'kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH': 'Клиента знают в филиале',
+  'kitchen.buffer.override.reason.MANAGER_DECISION': 'Решение менеджера',
 
   'kitchen.expo.handOver': 'Передать',
   'kitchen.expo.empty': 'Нечего передавать',

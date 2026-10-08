@@ -101,6 +101,19 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
     'Sabab talab qilinadi — bu ishga tushirishni buyurtmaning oʻz vaʻdasidan keyinga suradi',
   'kitchen.buffer.edit.save': 'Saqlash',
   'kitchen.buffer.edit.cancel': 'Bekor qilish',
+  'kitchen.buffer.hold.awaitingPayment': 'Toʻlov kutilmoqda',
+  'kitchen.buffer.hold.blockedOnPayment': 'Toʻlovsiz ishga tushmadi',
+  'kitchen.buffer.hold.stuckOnPayment': 'Qotib qoldi: toʻlov kechikdi',
+  'kitchen.buffer.hold.releaseDisabled':
+    'Buyurtma toʻlanmaguncha ushlab turiladi. Sabab bilan «Baribir ishga tushirish»dan foydalaning.',
+  'kitchen.buffer.override.action': 'Baribir ishga tushirish',
+  'kitchen.buffer.override.lead':
+    'Tiket buyurtma toʻlanmagani uchun ushlab turilibdi. Baribir ishga tushirish sizning nomingizdan yoziladi.',
+  'kitchen.buffer.override.reason': 'Nega',
+  'kitchen.buffer.override.confirm': 'Baribir ishga tushirish',
+  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Toʻlov kassada vaʼda qilingan',
+  'kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH': 'Mijoz filialga tanish',
+  'kitchen.buffer.override.reason.MANAGER_DECISION': 'Menejer qarori',
 
   'kitchen.expo.handOver': 'Topshirish',
   'kitchen.expo.empty': 'Topshirish uchun hech narsa yoʻq',

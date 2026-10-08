@@ -3,10 +3,12 @@ package uz.horecaos.platform.kitchen;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -30,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.dinein.api.OrderTablesPort;
@@ -43,8 +48,14 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ReservationResult;
+import uz.horecaos.platform.kitchen.application.KitchenOrderTerminalListener;
+import uz.horecaos.platform.kitchen.application.KitchenPaidHoldPolicies;
+import uz.horecaos.platform.kitchen.application.KitchenPaymentHoldService;
 import uz.horecaos.platform.kitchen.application.KitchenStationService;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
+import uz.horecaos.platform.kitchen.application.port.KitchenPaymentSource;
+import uz.horecaos.platform.kitchen.domain.KitchenPaidHoldPolicy;
+import uz.horecaos.platform.kitchen.domain.KitchenPaidHoldPolicy.Mode;
 import uz.horecaos.platform.kitchen.domain.KitchenStateMachine;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
@@ -52,12 +63,14 @@ import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.TicketStatus;
 import uz.horecaos.platform.kitchen.infrastructure.ordering.JdbcKitchenOrderSource;
+import uz.horecaos.platform.kitchen.infrastructure.ordering.JdbcKitchenPaymentSource;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
 import uz.horecaos.platform.kitchen.web.KitchenBoardController;
+import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
@@ -74,6 +87,7 @@ import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.telemetry.infrastructure.realtime.NoopRealtimeSignalPublisher;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -2340,6 +2354,529 @@ class KitchenExecutionTests {
         @Override
         public void record(AuditFact fact) {
             facts.add(fact);
+        }
+    }
+
+    // =========================================================== ADR 0168: the paid-only hold
+
+    /** A clock a test moves, because a hold is a duration and a fixed clock asserts against an instant. */
+    private static final class MutableClock extends Clock {
+
+        private final AtomicReference<Instant> now;
+
+        MutableClock(Instant start) {
+            this.now = new AtomicReference<>(start);
+        }
+
+        void advance(Duration by) {
+            now.updateAndGet(current -> current.plus(by));
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return Objects.requireNonNull(now.get());
+        }
+    }
+
+    /**
+     * The buffer's paid-only hold, the terminal-order void and the guard that backs it (ADR 0168), against a
+     * real PostgreSQL and the same fixtures the rest of this class uses. Nothing here is a mock of the
+     * decision: the payment state is the real {@code ordering.orders} column, the policy is a real
+     * published document, and the clock is moved.
+     */
+    @Nested
+    class PaidHold {
+
+        private MutableClock clock;
+        private SimpleMeterRegistry meters;
+        private KitchenTicketService guarded;
+        private KitchenPaymentHoldService holds;
+        private KitchenPaidHoldPolicies policies;
+        private KitchenOrderTerminalListener terminalListener;
+        private final ActorRef owner = ActorRef.user("owner", null);
+
+        @BeforeEach
+        void assemble() {
+            clock = new MutableClock(NOON);
+            meters = new SimpleMeterRegistry();
+            ObjectMapper mapper = JsonMapper.builder().build();
+            KitchenPaymentSource source = new JdbcKitchenPaymentSource(jdbc);
+            guarded = new KitchenTicketService(
+                    store,
+                    new JdbcKitchenOrderSource(jdbc),
+                    proposals,
+                    audit,
+                    clock,
+                    new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                    realtime,
+                    source,
+                    meters);
+            policies = new KitchenPaidHoldPolicies(
+                    new JdbcPolicyResolver(jdbc, mapper),
+                    new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                            jdbc, mapper, audit, clock, (keyCode, scope) -> {}),
+                    audit,
+                    clock);
+            holds = new KitchenPaymentHoldService(store, source, policies, guarded, audit, clock, meters);
+            terminalListener = new KitchenOrderTerminalListener(guarded);
+            jdbc.sql("TRUNCATE TABLE tenant.policies CASCADE").update();
+            brandRule(null, burger.productId(), null, StationRole.GRILL);
+        }
+
+        // ------------------------------------------------------------------ fixtures
+
+        /** A cash pre-order promised nine hours out: held in the buffer, to fire at 20:15. */
+        private TicketRow bufferedPreorder(String number) {
+            UUID orderId = seedConfirmedOrder(number, NOON.plus(Duration.ofHours(9)), 25, 20, burger);
+            return guarded.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        }
+
+        private void setPayment(UUID orderId, String projection) {
+            jdbc.sql("UPDATE ordering.orders SET payment_status_projection = :p WHERE id = :id")
+                    .param("p", projection)
+                    .param("id", orderId)
+                    .update();
+        }
+
+        private void publish(ResourceScope scope, Mode mode) {
+            int version = policyVersionAt(scope);
+            policies.author(scope, new KitchenPaidHoldPolicy(1, mode, 10), version, owner, "test");
+        }
+
+        private int policyVersionAt(ResourceScope scope) {
+            return policies.view(scope).versionAtScope();
+        }
+
+        private TicketRow ticketOf(UUID orderId) {
+            return store.findTicketByOrder(TENANT, orderId).orElseThrow();
+        }
+
+        private List<String> triggers(UUID ticketId) {
+            return store.eventsOf(TENANT, ticketId).stream()
+                    .map(JdbcKitchenStore.TicketEventRow::trigger)
+                    .toList();
+        }
+
+        private double count(String outcome) {
+            var counter =
+                    meters.find("kitchen.payment_hold").tag("outcome", outcome).counter();
+            return counter == null ? 0 : counter.count();
+        }
+
+        private ResourceScope platformScope() {
+            return ResourceScope.platform();
+        }
+
+        private ResourceScope locationScope() {
+            return ResourceScope.location(TENANT, BRAND, branch);
+        }
+
+        // ------------------------------------------------------------------ the gate
+
+        @Test
+        @DisplayName("only PENDING and FAILED hold: cash, paid, voided and refunded orders never do")
+        void onlyRequiredAndAbsentPaymentHolds() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            Map<String, Boolean> expectedHeld = new java.util.LinkedHashMap<>();
+            expectedHeld.put("NOT_REQUIRED", false);
+            expectedHeld.put("PENDING", true);
+            expectedHeld.put("AUTHORIZED", false);
+            expectedHeld.put("CAPTURED", false);
+            expectedHeld.put("FAILED", true);
+            expectedHeld.put("VOIDED", false);
+            expectedHeld.put("REFUNDED", false);
+
+            int n = 0;
+            for (var entry : expectedHeld.entrySet()) {
+                TicketRow ticket = bufferedPreorder("H-" + (++n));
+                setPayment(ticket.orderId(), entry.getKey());
+
+                holds.sweep(50);
+
+                assertThat(ticketOf(ticket.orderId()).heldForPayment())
+                        .as("payment projection %s", entry.getKey())
+                        .isEqualTo(entry.getValue());
+            }
+        }
+
+        @Test
+        @DisplayName("a ticket is never held at open, even for a projection that reads PENDING at that instant")
+        void openingATicketNeverHolds() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            UUID orderId = seedConfirmedOrder("H-OPEN", NOON.plus(Duration.ofHours(9)), 25, 20, burger);
+            setPayment(orderId, "PENDING");
+
+            TicketRow opened = guarded.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+            assertThat(opened.heldForPayment())
+                    .as("a hold decided at ConfirmOrder races the projection listener and delays a paid order")
+                    .isFalse();
+            assertThat(triggers(opened.id())).doesNotContain("PAYMENT_HOLD_PLACED");
+        }
+
+        // ------------------------------------------------------------------ the one path, end to end
+
+        @Test
+        @DisplayName(
+                "a cash pre-order switched to Click holds, the capture clears it, and it fires at its own release_at")
+        void captureBeforeReleaseAtFiresOnSchedule() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            TicketRow ticket = bufferedPreorder("H-CAP-1");
+
+            setPayment(ticket.orderId(), "PENDING");
+            holds.reconcileOrder(TENANT, ticket.orderId());
+
+            TicketRow held = ticketOf(ticket.orderId());
+            assertThat(held.holdReason()).isEqualTo("PAYMENT");
+            assertThat(held.holdSince()).isEqualTo(NOON);
+            assertThat(held.holdPolicyVersion())
+                    .as("the ticket pins the policy it was held under")
+                    .isEqualTo(1);
+            assertThat(held.releaseMode())
+                    .as("the ticket keeps its own schedule")
+                    .isEqualTo(ReleaseMode.SCHEDULED);
+            assertThat(held.releaseAt()).isEqualTo(ticket.releaseAt());
+            assertThat(triggers(ticket.id())).contains("PAYMENT_HOLD_PLACED");
+
+            setPayment(ticket.orderId(), "CAPTURED");
+            holds.onPaymentCaptured(TENANT, ticket.orderId());
+
+            TicketRow cleared = ticketOf(ticket.orderId());
+            assertThat(cleared.heldForPayment()).isFalse();
+            assertThat(cleared.status()).as("clearing does not fire by itself").isEqualTo(TicketStatus.HELD);
+            assertThat(triggers(ticket.id())).contains("PAYMENT_HOLD_CLEARED");
+
+            assertThat(guarded.releaseDue(50)).as("not yet due").isZero();
+            clock.advance(Duration.ofHours(8).plusMinutes(16));
+            assertThat(guarded.releaseDue(50)).isEqualTo(1);
+            assertThat(ticketOf(ticket.orderId()).status()).isEqualTo(TicketStatus.FIRED);
+        }
+
+        @Test
+        @DisplayName("a capture that arrives after release_at fires the ticket at once")
+        void captureAfterReleaseAtFiresAtOnce() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            TicketRow ticket = bufferedPreorder("H-CAP-2");
+            setPayment(ticket.orderId(), "PENDING");
+            holds.reconcileOrder(TENANT, ticket.orderId());
+
+            clock.advance(Duration.ofHours(8).plusMinutes(30));
+            assertThat(guarded.releaseDue(50))
+                    .as("a payment-held due ticket is left alone by the worker")
+                    .isZero();
+
+            setPayment(ticket.orderId(), "CAPTURED");
+            holds.onPaymentCaptured(TENANT, ticket.orderId());
+
+            assertThat(ticketOf(ticket.orderId()).status()).isEqualTo(TicketStatus.FIRED);
+        }
+
+        @Test
+        @DisplayName("a capture that never arrives is blocked once, overdue once, and nothing is fired or cancelled")
+        void aMissingCaptureIsBlockedThenOverdueAndNothingMore() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            TicketRow ticket = bufferedPreorder("H-CAP-3");
+            setPayment(ticket.orderId(), "PENDING");
+            holds.reconcileOrder(TENANT, ticket.orderId());
+
+            clock.advance(Duration.ofHours(8).plusMinutes(16));
+            holds.sweep(50);
+            holds.sweep(50);
+
+            assertThat(triggers(ticket.id()).stream()
+                            .filter("PAYMENT_HOLD_BLOCKED_RELEASE"::equals)
+                            .count())
+                    .as("once per hold, however many ticks")
+                    .isEqualTo(1);
+            assertThat(triggers(ticket.id())).doesNotContain("PAYMENT_HOLD_OVERDUE");
+
+            clock.advance(Duration.ofMinutes(11));
+            holds.sweep(50);
+            holds.sweep(50);
+
+            assertThat(triggers(ticket.id()).stream()
+                            .filter("PAYMENT_HOLD_OVERDUE"::equals)
+                            .count())
+                    .isEqualTo(1);
+            assertThat(guarded.releaseDue(50)).isZero();
+            TicketRow stuck = ticketOf(ticket.orderId());
+            assertThat(stuck.status()).as("nothing fired").isEqualTo(TicketStatus.HELD);
+            assertThat(statusOf(ticket.orderId())).as("nothing cancelled").isEqualTo(OrderStatus.CONFIRMED);
+            assertThat(stuck.heldForPayment()).isTrue();
+        }
+
+        // ------------------------------------------------------------------ the schedule
+
+        @Test
+        @DisplayName("editing the fire time does not clear the hold, and a MANUAL_HOLD ticket stays held after payment")
+        void theScheduleAndTheHoldAreIndependent() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            TicketRow ticket = bufferedPreorder("H-SCHED");
+            setPayment(ticket.orderId(), "PENDING");
+            holds.reconcileOrder(TENANT, ticket.orderId());
+
+            TicketRow held = ticketOf(ticket.orderId());
+            Instant earlier = Objects.requireNonNull(held.releaseAt()).minus(Duration.ofMinutes(5));
+            guarded.reschedule(
+                    TENANT, ticket.id(), held.version(), ReleaseMode.SCHEDULED, earlier, false, null, "manager", null);
+            assertThat(ticketOf(ticket.orderId()).heldForPayment())
+                    .as("re-timing a payment-held ticket is not a payment")
+                    .isTrue();
+
+            TicketRow retimed = ticketOf(ticket.orderId());
+            guarded.reschedule(
+                    TENANT,
+                    ticket.id(),
+                    retimed.version(),
+                    ReleaseMode.MANUAL_HOLD,
+                    null,
+                    true,
+                    "WAIT",
+                    "manager",
+                    null);
+            setPayment(ticket.orderId(), "CAPTURED");
+            holds.onPaymentCaptured(TENANT, ticket.orderId());
+
+            TicketRow afterPayment = ticketOf(ticket.orderId());
+            assertThat(afterPayment.heldForPayment()).isFalse();
+            assertThat(afterPayment.status())
+                    .as("a ticket a person held stays held for that person")
+                    .isEqualTo(TicketStatus.HELD);
+            assertThat(afterPayment.releaseMode()).isEqualTo(ReleaseMode.MANUAL_HOLD);
+        }
+
+        @Test
+        @DisplayName("a ticket that has already fired is never held, and an unpaid order does not recall it")
+        void aFiredTicketIsNeverHeld() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            UUID orderId = seedConfirmedOrder("H-FIRED", null, null, null, burger);
+            TicketRow fired = guarded.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+            assertThat(fired.status()).isEqualTo(TicketStatus.FIRED);
+
+            setPayment(orderId, "PENDING");
+            holds.reconcileOrder(TENANT, orderId);
+            holds.sweep(50);
+
+            assertThat(ticketOf(orderId).heldForPayment()).isFalse();
+            assertThat(ticketOf(orderId).status()).isEqualTo(TicketStatus.FIRED);
+        }
+
+        // ------------------------------------------------------------------ the policy
+
+        @Test
+        @DisplayName(
+                "under SHADOW, the built-in default, nothing is held: the amendment counts once and the ticket fires on schedule")
+        void shadowCountsAndHoldsNothing() {
+            TicketRow ticket = bufferedPreorder("H-SHADOW");
+            setPayment(ticket.orderId(), "PENDING");
+
+            holds.reconcileOrder(TENANT, ticket.orderId());
+            holds.sweep(50);
+
+            TicketRow after = ticketOf(ticket.orderId());
+            assertThat(after.heldForPayment()).isFalse();
+            assertThat(triggers(ticket.id())).noneMatch(trigger -> trigger.startsWith("PAYMENT_HOLD"));
+            assertThat(count("shadow_would_hold"))
+                    .as("once, for the amendment; the sweep only gauges")
+                    .isEqualTo(1.0);
+
+            clock.advance(Duration.ofHours(8).plusMinutes(16));
+            assertThat(guarded.releaseDue(50))
+                    .as("shadow changes no ticket's fate")
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("publishing HOLD_UNTIL_PAID holds on the next tick, and OFF at a location beats the platform")
+        void theMostSpecificScopeWins() {
+            TicketRow ticket = bufferedPreorder("H-SCOPE");
+            setPayment(ticket.orderId(), "PENDING");
+            holds.sweep(50);
+            assertThat(ticketOf(ticket.orderId()).heldForPayment()).isFalse();
+
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            holds.sweep(50);
+            assertThat(ticketOf(ticket.orderId()).heldForPayment()).isTrue();
+
+            publish(locationScope(), Mode.OFF);
+            holds.sweep(50);
+            assertThat(ticketOf(ticket.orderId()).heldForPayment())
+                    .as("OFF at the location clears the holds the sweep finds")
+                    .isFalse();
+            assertThat(count("cleared_policy")).isEqualTo(1.0);
+
+            TicketRow second = bufferedPreorder("H-SCOPE-2");
+            setPayment(second.orderId(), "PENDING");
+            holds.sweep(50);
+            assertThat(ticketOf(second.orderId()).heldForPayment())
+                    .as("a location's own OFF is kept whatever the platform value is")
+                    .isFalse();
+        }
+
+        // ------------------------------------------------------------------ the terminal order
+
+        @Test
+        @DisplayName(
+                "cancelling a payment-held pre-order voids its ticket in the cancellation's transaction, and no FIRED follows")
+        void cancellingAHeldPreorderVoidsItsTicket() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            TicketRow ticket = bufferedPreorder("H-CANCEL");
+            setPayment(ticket.orderId(), "PENDING");
+            holds.reconcileOrder(TENANT, ticket.orderId());
+
+            terminalListener.onOrderCancelled(cancelled(ticket));
+
+            TicketRow voided = ticketOf(ticket.orderId());
+            assertThat(voided.status()).isEqualTo(TicketStatus.VOIDED);
+            assertThat(voided.holdReason())
+                    .as("a voided ticket keeps its hold columns")
+                    .isEqualTo("PAYMENT");
+            assertThat(triggers(ticket.id())).contains("ORDER_TERMINAL", "PAYMENT_HOLD_CLEARED");
+
+            clock.advance(Duration.ofHours(9));
+            holds.sweep(50);
+            assertThat(guarded.releaseDue(50)).isZero();
+            assertThat(triggers(ticket.id())).doesNotContain("RELEASE_SCHEDULED");
+            assertThat(count("voided_terminal")).isEqualTo(1.0);
+            assertThat(count("cleared_terminal")).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName(
+                "a cancelled cash pre-order that never carried a hold is voided too: no code voided a ticket before")
+        void cancellingACashPreorderVoidsItsTicketToo() {
+            TicketRow ticket = bufferedPreorder("H-CASH-CANCEL");
+
+            terminalListener.onOrderCancelled(cancelled(ticket));
+
+            assertThat(ticketOf(ticket.orderId()).status()).isEqualTo(TicketStatus.VOIDED);
+            assertThat(triggers(ticket.id())).contains("ORDER_TERMINAL").doesNotContain("PAYMENT_HOLD_CLEARED");
+        }
+
+        @Test
+        @DisplayName("with the listener absent, releaseDue voids a cancelled order's ticket and never fires it; "
+                + "a kitchen that knows no order fires it, which is what happened before")
+        void theReleaseGuardCatchesAnOrderTheListenerMissed() {
+            TicketRow ticket = bufferedPreorder("H-GUARD");
+            jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED' WHERE id = :id")
+                    .param("id", ticket.orderId())
+                    .update();
+            clock.advance(Duration.ofHours(8).plusMinutes(16));
+
+            assertThat(guarded.releaseDue(50)).as("voided, not fired").isZero();
+            assertThat(ticketOf(ticket.orderId()).status()).isEqualTo(TicketStatus.VOIDED);
+
+            // The same sequence without the order facts: the ticket of a cancelled pre-order fires on schedule.
+            // Opened at the advanced clock, scheduled so its release lies five minutes ahead, then made due.
+            UUID otherOrder =
+                    seedConfirmedOrder("H-GUARD-OLD", clock.instant().plus(Duration.ofMinutes(50)), 25, 20, burger);
+            TicketRow other = guarded.open(TENANT, otherOrder, ReleaseMode.AUTO_ON_CONFIRM);
+            assertThat(ticketOf(other.orderId()).status())
+                    .as("not yet due when opened")
+                    .isEqualTo(TicketStatus.HELD);
+            jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED' WHERE id = :id")
+                    .param("id", other.orderId())
+                    .update();
+            clock.advance(Duration.ofMinutes(10));
+            KitchenTicketService blind = new KitchenTicketService(
+                    store,
+                    new JdbcKitchenOrderSource(jdbc),
+                    proposals,
+                    audit,
+                    clock,
+                    new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                    realtime);
+            assertThat(blind.releaseDue(50)).isEqualTo(1);
+            assertThat(ticketOf(other.orderId()).status()).isEqualTo(TicketStatus.FIRED);
+        }
+
+        @Test
+        @DisplayName("a ticket that fired before its order was cancelled is left exactly as it is")
+        void aFiredTicketIsNotVoidedByACancellation() {
+            UUID orderId = seedConfirmedOrder("H-FIRED-CANCEL", null, null, null, burger);
+            TicketRow fired = guarded.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+            terminalListener.onOrderCancelled(cancelled(fired));
+
+            assertThat(ticketOf(orderId).status()).isEqualTo(TicketStatus.FIRED);
+        }
+
+        private OrderCancelled cancelled(TicketRow ticket) {
+            return new OrderCancelled(
+                    UUID.randomUUID(),
+                    new TenantId(TENANT),
+                    ticket.orderId(),
+                    clock.instant(),
+                    BRAND,
+                    branch,
+                    "USER",
+                    "TEST",
+                    "CONFIRMED",
+                    "CANCELLED",
+                    2);
+        }
+
+        // ------------------------------------------------------------------ the override
+
+        @Test
+        @DisplayName(
+                "firing a payment-held ticket needs the capability and a registered reason; with both it fires and says who")
+        void theOverrideNeedsBothAndIsAudited() {
+            publish(platformScope(), Mode.HOLD_UNTIL_PAID);
+            TicketRow ticket = bufferedPreorder("H-OVERRIDE");
+            setPayment(ticket.orderId(), "PENDING");
+            holds.reconcileOrder(TENANT, ticket.orderId());
+            TicketRow held = ticketOf(ticket.orderId());
+
+            Throwable noCapability = catchThrowable(() -> holds.release(
+                    TENANT, ticket.id(), held.version(), "RUSH", false, "MANAGER_DECISION", "manager", null));
+            Throwable noCode = catchThrowable(
+                    () -> holds.release(TENANT, ticket.id(), held.version(), "RUSH", true, null, "manager", null));
+            Throwable freeText = catchThrowable(() -> holds.release(
+                    TENANT, ticket.id(), held.version(), "RUSH", true, "because I said so", "manager", null));
+
+            for (Throwable refusal : List.of(noCapability, noCode, freeText)) {
+                assertThat(refusal).isInstanceOf(ApiException.class);
+                assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.PAYMENT_HOLD);
+            }
+            assertThat(ticketOf(ticket.orderId()).status()).isEqualTo(TicketStatus.HELD);
+
+            TicketRow fired = holds.release(
+                    TENANT, ticket.id(), held.version(), "RUSH", true, "PAYMENT_PROMISED_AT_COUNTER", "manager", null);
+
+            assertThat(fired.status()).isEqualTo(TicketStatus.FIRED);
+            assertThat(fired.heldForPayment()).isFalse();
+            assertThat(triggers(ticket.id())).contains("PAYMENT_HOLD_OVERRIDDEN");
+            assertThat(audit.facts)
+                    .anyMatch(fact -> "kitchen.ticket.payment_hold.override".equals(fact.actionCode())
+                            && "PAYMENT_PROMISED_AT_COUNTER".equals(fact.reason()));
+            assertThat(count("overridden")).isEqualTo(1.0);
+            assertThat(jdbc.sql("SELECT payment_status_projection FROM ordering.orders WHERE id = :id")
+                            .param("id", ticket.orderId())
+                            .query(String.class)
+                            .single())
+                    .as("the override does not touch the payment")
+                    .isEqualTo("PENDING");
+        }
+
+        @Test
+        @DisplayName("a ticket that is not held is released exactly as before, whoever asks")
+        void anOrdinaryReleaseIsUnchanged() {
+            TicketRow ticket = bufferedPreorder("H-ORDINARY");
+
+            TicketRow fired = holds.release(TENANT, ticket.id(), ticket.version(), "RUSH", false, null, "cook", null);
+
+            assertThat(fired.status()).isEqualTo(TicketStatus.FIRED);
         }
     }
 }

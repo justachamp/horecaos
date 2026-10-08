@@ -14,6 +14,7 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.ordering.api.PaymentStatusFacts;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -291,7 +292,7 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
      * customer twice or lets them pay nobody.
      */
     private static boolean isPrepaid(@Nullable String paymentStatus) {
-        return "AUTHORIZED".equals(paymentStatus) || "CAPTURED".equals(paymentStatus);
+        return PaymentStatusFacts.moneyIsHeld(paymentStatus);
     }
 
     /**

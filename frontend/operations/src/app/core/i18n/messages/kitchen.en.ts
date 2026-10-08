@@ -99,6 +99,19 @@ export const kitchenEn = {
     'A reason is required — this pushes the fire time past the ticket’s own promise',
   'kitchen.buffer.edit.save': 'Save',
   'kitchen.buffer.edit.cancel': 'Cancel',
+  'kitchen.buffer.hold.awaitingPayment': 'Awaiting payment',
+  'kitchen.buffer.hold.blockedOnPayment': 'Blocked on payment',
+  'kitchen.buffer.hold.stuckOnPayment': 'Stuck: payment overdue',
+  'kitchen.buffer.hold.releaseDisabled':
+    'Held until the order is paid. Use “Release anyway” with a reason.',
+  'kitchen.buffer.override.action': 'Release anyway',
+  'kitchen.buffer.override.lead':
+    'This ticket is held because its order is not paid. Firing it anyway is recorded under your name.',
+  'kitchen.buffer.override.reason': 'Why',
+  'kitchen.buffer.override.confirm': 'Release anyway',
+  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Payment promised at the counter',
+  'kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH': 'The customer is known to the branch',
+  'kitchen.buffer.override.reason.MANAGER_DECISION': 'Manager’s decision',
 
   'kitchen.expo.handOver': 'Hand over',
   'kitchen.expo.empty': 'Nothing ready for handover',

@@ -601,6 +601,33 @@ public enum Capability {
      */
     KITCHEN_STATION_MANAGE("kitchen.station.manage", "kitchen", "station.manage"),
 
+    /**
+     * ADR 0168: publishing the {@code kitchen.paid_hold} policy at a tenant, a brand or a location -- whether a
+     * buffered ticket is held until its order's payment arrives, and the minutes before a blocked one counts as
+     * stuck. Its own capability rather than {@link #KITCHEN_STATION_MANAGE}: that one decides where dishes appear,
+     * this decides whether a kitchen may start cooking against money that has not arrived. Held by the same roles
+     * (tenant-owner, tenant-admin, location-manager) for the argument that capability's documentation makes, and
+     * by no line role. The platform-wide mode is not published through this: the owner publishes it at platform
+     * scope through {@code PolicyAuthor}.
+     */
+    KITCHEN_PAID_HOLD_MANAGE("kitchen.paid-hold.manage", "kitchen", "paid-hold.manage"),
+
+    /**
+     * ADR 0163: reading one branch's cook headcount plan -- the portions the kitchen is forecast to fire in each
+     * hour, per station, and the cooks that needs at the tenant's own stated pace. A manager's planning aid, so it
+     * is held where {@link #KITCHEN_STATION_MANAGE} is and not by a line cook or a device: a cook has no business
+     * reading what the branch plans to pay for. Not {@code REPORTING_READ}, which grants branch and company
+     * figures; this reads one branch's kitchen.
+     */
+    KITCHEN_HEADCOUNT_READ("kitchen.headcount.read", "kitchen", "headcount.read"),
+
+    /**
+     * ADR 0163: publishing the {@code kitchen.station_productivity} policy -- how many portions one cook produces
+     * in an hour at a station role or station, which the platform never supplies. A pace, never a person: nothing
+     * it holds is keyed to a named employee. Held by the same bundles as {@link #KITCHEN_HEADCOUNT_READ}.
+     */
+    KITCHEN_PRODUCTIVITY_MANAGE("kitchen.productivity.manage", "kitchen", "productivity.manage"),
+
     /** ADR 0041: reading a branch's production tickets. Line, expo, and manager. */
     KITCHEN_TICKET_READ("kitchen.ticket.read", "kitchen", "ticket.read"),
 
