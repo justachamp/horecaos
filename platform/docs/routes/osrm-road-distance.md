@@ -53,7 +53,7 @@ quote measures against the new map.
 | 5xx, refused connection | Empty | failure | The engine is unhealthy |
 | Timeout, connection lost | Empty | failure | The engine did not answer in time. Never retried |
 | 200 with no route, or an impossible figure | Empty | failure | An answer that is not a route is a broken engine |
-| Engine switched off, dataset unnamed, installation absent or not `ACTIVE`, installation not `ROUTING`/`OSRM` | Empty, nothing sent | not consulted | The rollback: suspending the installation takes effect at once, even for a cached route, because the installation is read before the cache |
+| Engine switched off, dataset unnamed, installation absent or not `ACTIVE`, installation not `ROUTING`/`OSRM` | Empty, nothing sent | not consulted | The engine-wide rollback is the flag. The installation is read before the cache, so a status that is not `ACTIVE` takes effect at once even for a cached route; but no console or API door sets one for a platform routing installation today (Integrations suspends bindings only), so this is a guard and not an operator's switch |
 | Breaker open | Empty, nothing sent | n/a | A slightly wrong fee, never a failed quote |
 
 ## The cache
@@ -69,5 +69,8 @@ the metres it used, not a cache key.
 Off by default (`horecaos.routing.osrm.enabled=false`), so nothing changes until a
 deployment runs the `routing` compose profile and sets the flag. Enable it for one pilot
 tenant's `ROAD` tariff and compare a week of fees with their `RADIUS_FALLBACK` shadow.
-Rollback is switching the flag off or suspending the installation: the port answers empty,
-the resolver falls back, and every fee says so. Neither needs a deploy of code.
+Rollback is switching the flag off, which answers empty for every tenant so the resolver
+falls back and every fee says `RADIUS_FALLBACK`, or, for one tenant, activating a new
+version of its `ROAD` tariff in `RADIUS` mode, which stops that tariff asking the engine at
+all (its fees say `RADIUS`, with no detour factor, so it is a price change to agree with the
+tenant). Neither needs a deploy of code; runbook step 7 has the procedure.

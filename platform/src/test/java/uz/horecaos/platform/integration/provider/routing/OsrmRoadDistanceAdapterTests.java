@@ -303,8 +303,8 @@ class OsrmRoadDistanceAdapterTests {
     // ------------------------------------------------------- standing and switches
 
     @Test
-    @DisplayName("suspending the installation is the rollback: it stops answering at once, cached or not")
-    void suspendingTheInstallationStopsTheAnswer() {
+    @DisplayName("an installation that is no longer ACTIVE stops answering at once, cached or not")
+    void anInstallationThatIsNotActiveStopsTheAnswer() {
         OsrmRoadDistanceAdapter adapter = adapter(OsrmProperties.enabledWith(DATASET));
         assertThat(adapter.measure(BRANCH, DOORSTEP, installation)).isPresent();
 
@@ -313,7 +313,7 @@ class OsrmRoadDistanceAdapterTests {
                 .update();
 
         // The route is in the cache, and the installation is read before the cache is:
-        // a cache that outlived the rollback would make the rollback slower than the incident.
+        // a cache that outlived the status change would make it slower than the incident.
         assertThat(adapter.measure(BRANCH, DOORSTEP, installation)).isEmpty();
         assertThat(count("unavailable")).isEqualTo(1.0);
         assertThat(engine.hits()).isEqualTo(1);
