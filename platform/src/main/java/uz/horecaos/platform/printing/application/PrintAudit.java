@@ -44,7 +44,7 @@ public class PrintAudit {
             String targetType,
             UUID targetId,
             String actorSubject,
-            @Nullable String reason) {}
+            String reason) {}
 
     /** A row that did not exist a moment ago. */
     void created(String action, AuditClass auditClass, Subject subject, Map<String, Object> after) {

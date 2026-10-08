@@ -35,8 +35,8 @@ public class PrintJobFactory {
 
     public static final Duration RETENTION_AFTER_DEAD = Duration.ofDays(30);
 
-    static final String TABLE = "printing.print_jobs";
-    static final String COLUMN = "protected_document";
+    public static final String TABLE = "printing.print_jobs";
+    public static final String COLUMN = "protected_document";
 
     private final FieldProtection protection;
     private final PrintDocumentCodec codec;

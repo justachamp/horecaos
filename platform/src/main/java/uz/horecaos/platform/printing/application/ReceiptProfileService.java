@@ -103,7 +103,14 @@ public class ReceiptProfileService {
         audit.changed(
                 "printing.profile.changed",
                 AuditClass.BUSINESS,
-                new Subject(tenantId, brandId, null, "printing.receipt_profile", brandId, actorSubject, null),
+                new Subject(
+                        tenantId,
+                        brandId,
+                        null,
+                        "printing.receipt_profile",
+                        brandId,
+                        actorSubject,
+                        "Receipt profile changed"),
                 snapshot(before),
                 snapshot(after));
         return after;

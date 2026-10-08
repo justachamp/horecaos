@@ -112,7 +112,14 @@ public class PrinterService {
         audit.created(
                 "printing.printer.registered",
                 AuditClass.BUSINESS,
-                new Subject(tenantId, brandId, locationId, "printing.printer", printer.id(), actorSubject, null),
+                new Subject(
+                        tenantId,
+                        brandId,
+                        locationId,
+                        "printing.printer",
+                        printer.id(),
+                        actorSubject,
+                        "Printer registered"),
                 snapshot(printer));
         return printer;
     }
@@ -170,10 +177,11 @@ public class PrinterService {
         PrinterRow after = store.findPrinter(tenantId, printerId).orElseThrow();
         String action =
                 before.active() && "RETIRED".equals(status) ? "printing.printer.retired" : "printing.printer.changed";
+        String changeReason = "printing.printer.retired".equals(action) ? "Printer retired" : "Printer changed";
         audit.changed(
                 action,
                 AuditClass.BUSINESS,
-                new Subject(tenantId, brandId, locationId, "printing.printer", printerId, actorSubject, null),
+                new Subject(tenantId, brandId, locationId, "printing.printer", printerId, actorSubject, changeReason),
                 snapshot(before),
                 snapshot(after));
         return after;

@@ -92,7 +92,14 @@ public class RouteService {
         audit.created(
                 "printing.route.changed",
                 AuditClass.BUSINESS,
-                new Subject(tenantId, brandId, locationId, "printing.route", route.id(), actorSubject, "created"),
+                new Subject(
+                        tenantId,
+                        brandId,
+                        locationId,
+                        "printing.route",
+                        route.id(),
+                        actorSubject,
+                        "Print route created"),
                 snapshot(route));
         return route;
     }
@@ -143,7 +150,8 @@ public class RouteService {
         audit.changed(
                 "printing.route.changed",
                 AuditClass.BUSINESS,
-                new Subject(tenantId, brandId, locationId, "printing.route", routeId, actorSubject, "updated"),
+                new Subject(
+                        tenantId, brandId, locationId, "printing.route", routeId, actorSubject, "Print route changed"),
                 snapshot(before),
                 snapshot(after));
         return after;
@@ -170,7 +178,8 @@ public class RouteService {
         audit.changed(
                 "printing.route.changed",
                 AuditClass.BUSINESS,
-                new Subject(tenantId, brandId, locationId, "printing.route", routeId, actorSubject, "deleted"),
+                new Subject(
+                        tenantId, brandId, locationId, "printing.route", routeId, actorSubject, "Print route removed"),
                 was,
                 gone);
     }
