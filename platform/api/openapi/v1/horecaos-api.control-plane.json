@@ -412,6 +412,9 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "depositDue" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
           "latestStatement" : {
             "$ref" : "#/components/schemas/LatestStatementView"
           },
@@ -1727,6 +1730,25 @@
         },
         "type" : "object"
       },
+      "CardInstallationSuspendRequest" : {
+        "properties" : {
+          "acknowledgeUnresolvedCharges" : {
+            "type" : "boolean"
+          },
+          "expectedVersion" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "reason" ],
+        "type" : "object"
+      },
       "CardInstallationView" : {
         "properties" : {
           "configuration" : {
@@ -1764,6 +1786,34 @@
           "version" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CardOnFileView" : {
+        "properties" : {
+          "boundAt" : {
+            "type" : "string"
+          },
+          "brand" : {
+            "type" : "string"
+          },
+          "expiryMonth" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expiryYear" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lapsed" : {
+            "type" : "boolean"
+          },
+          "lapsesSoon" : {
+            "type" : "boolean"
+          },
+          "last4" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -12896,8 +12946,14 @@
           "bonusSpendableBalance" : {
             "$ref" : "#/components/schemas/ApiMoney"
           },
+          "card" : {
+            "$ref" : "#/components/schemas/CardOnFileView"
+          },
           "cardTokenReference" : {
             "type" : "string"
+          },
+          "hasCard" : {
+            "type" : "boolean"
           },
           "paidBalance" : {
             "$ref" : "#/components/schemas/ApiMoney"
@@ -13291,7 +13347,7 @@
     },
     "/api/v1/control-plane/arrears" : {
       "get" : {
-        "description" : "Past-due and suspended subscriptions with how long each has been there and the last statement issued, beside what each stage restricts. owed is what the tenant still owes on issued statements; paidInFull is true when it owes nothing, which is the cue to restore it — nothing moves a subscription by itself (ADR 0089), so moving a tenant between stages stays the subscription transition, with its reason.",
+        "description" : "Past-due and suspended subscriptions with how long each has been there and the last statement issued, beside what each stage restricts. owed is what the tenant still owes on issued statements, and depositDue the activation deposit it owes beside them, which is on no statement; paidInFull is true when it owes neither. For a PAST_DUE tenant, whose stage is about money by definition, that is the cue to restore it. For a SUSPENDED one it is a fact and not a cue: the suspension's reason is free text, so the platform cannot tell whether paying addressed it — nothing moves a subscription by itself (ADR 0089), so moving a tenant between stages stays the subscription transition, with its reason.",
         "operationId" : "board",
         "responses" : {
           "200" : {
@@ -27803,7 +27859,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/wallet" : {
       "get" : {
-        "description" : "Each balance is the SUM of the tenant's own ledger entries; no balance is stored. bonusSpendableBalance is the part of the bonus balance a statement could draw on now — the sum of the live grants' remainders. It is lower than bonusBalance between a grant's expiry and the hourly sweep that lapses it, and after a voided statement hands a draw back to a grant that has already expired.",
+        "description" : "Each balance is the SUM of the tenant's own ledger entries; no balance is stored. bonusSpendableBalance is the part of the bonus balance a statement could draw on now — the sum of the live grants' remainders. It is lower than bonusBalance between a grant's expiry and the hourly sweep that lapses it, and after a voided statement hands a draw back to a grant that has already expired. The card on file is described by its last four digits, brand and expiry only: its token reference, which for a card the tenant bound itself carries the merchant installation and the provider's vault token, is never returned, so cardTokenReference is always null (ADR 0028).",
         "operationId" : "overview",
         "parameters" : [ {
           "in" : "path",
@@ -28153,7 +28209,7 @@
     },
     "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/suspension" : {
       "post" : {
-        "description" : "Every card tenant is then collected like an invoice tenant until an account is active.",
+        "description" : "Every card tenant is then collected like an invoice tenant until an account is active. Refused with UNRESOLVED_CARD_CHARGES while top-ups or statement charges asked through this account have no answer yet: an idempotency key means something only to the account it was sent to, so the account that replaces this one cannot say whether they took the money. They are resolved by the settlement sweep within minutes. acknowledgeUnresolvedCharges suspends anyway, for an account that is unreachable; the charges then stay PENDING, never declined, and resolve when this account is active again.",
         "operationId" : "suspend_2",
         "parameters" : [ {
           "in" : "path",
@@ -28168,7 +28224,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/CommercialBillingSetupControllerTransitionRequest"
+                "$ref" : "#/components/schemas/CardInstallationSuspendRequest"
               }
             }
           },

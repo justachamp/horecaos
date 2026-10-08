@@ -142,6 +142,7 @@ export interface ApprovalRequestControllerDecisionResponse {
 export interface ArrearView {
   allowedNext?: Array<string>;
   daysInStatus?: number;
+  depositDue?: ApiMoney;
   latestStatement?: LatestStatementView;
   owed?: OwedView;
   paidInFull?: boolean;
@@ -566,6 +567,12 @@ export interface CardInstallationCreated {
   installationId?: string;
 }
 
+export interface CardInstallationSuspendRequest {
+  acknowledgeUnresolvedCharges?: boolean;
+  expectedVersion: number;
+  reason: string;
+}
+
 export interface CardInstallationView {
   configuration?: {  };
   createdAt?: string;
@@ -578,6 +585,16 @@ export interface CardInstallationView {
   status?: string;
   updatedAt?: string;
   version?: number;
+}
+
+export interface CardOnFileView {
+  boundAt?: string;
+  brand?: string;
+  expiryMonth?: number;
+  expiryYear?: number;
+  lapsed?: boolean;
+  lapsesSoon?: boolean;
+  last4?: string;
 }
 
 export interface CatalogAuthoringControllerIdResponse {
@@ -4141,7 +4158,9 @@ export interface WalletEntryView {
 export interface WalletOverviewView {
   bonusBalance?: ApiMoney;
   bonusSpendableBalance?: ApiMoney;
+  card?: CardOnFileView;
   cardTokenReference?: string;
+  hasCard?: boolean;
   paidBalance?: ApiMoney;
   paymentMethod?: string;
 }
@@ -4564,7 +4583,7 @@ export interface Operations {
   "proposeBankDetails": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/bank-details"; request: { parameters: Record<string, never>; body: ProposeBankDetailsRequest }; responses: { "200": CommercialBillingSetupControllerWalletChangeResponse } };
   "createCardInstallation": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/card-installations"; request: { parameters: Record<string, never>; body: CreateCardInstallationRequest }; responses: { "200": CardInstallationCreated } };
   "activate_3": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/activation"; request: { parameters: { path: { installationId: string } }; body: CommercialBillingSetupControllerTransitionRequest }; responses: { "200": CardInstallationView } };
-  "suspend_2": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/suspension"; request: { parameters: { path: { installationId: string } }; body: CommercialBillingSetupControllerTransitionRequest }; responses: { "200": CardInstallationView } };
+  "suspend_2": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/suspension"; request: { parameters: { path: { installationId: string } }; body: CardInstallationSuspendRequest }; responses: { "200": CardInstallationView } };
   "update": { method: "PUT"; path: "/api/v1/platform-admin/commercial/einvoicing/installations/{installationId}"; request: { parameters: { path: { installationId: string } }; body: EInvoicingAccountUpdate }; responses: { "200": EInvoicingAccountView } };
   "activate_2": { method: "POST"; path: "/api/v1/platform-admin/commercial/einvoicing/installations/{installationId}/activation"; request: { parameters: { path: { installationId: string } }; body: EInvoicingReasonRequest }; responses: { "200": EInvoicingAccountView } };
   "suspend_1": { method: "POST"; path: "/api/v1/platform-admin/commercial/einvoicing/installations/{installationId}/suspension"; request: { parameters: { path: { installationId: string } }; body: EInvoicingReasonRequest }; responses: { "200": EInvoicingAccountView } };
