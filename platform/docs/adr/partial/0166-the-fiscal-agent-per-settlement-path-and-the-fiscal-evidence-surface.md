@@ -1,8 +1,12 @@
 # ADR 0166: The fiscal agent per settlement path and the fiscal evidence surface
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Partial — the backend of the evidence surface is built (batch 20); the
-  real receipt line builder, the console block and the events are not. Built: V0551 snapshots the
+- Implementation status: Partial — the evidence surface is built from the read to the screens
+  (batch 20): the backend, the console's evidence card on the order detail and the payments page,
+  the payments page's payment-types table, the fiscalization settings projection and the receipt
+  link on the storefront's order page; the real receipt line builder and the events are not, so
+  what the screens show of a filing is the Click path's lines, the INN and the identifiers, and
+  «not kept» elsewhere. Built: V0551 snapshots the
   issuing INN and legal name onto each `fiscal.fiscal_documents` row at insert, by a trigger (so
   the cash decision written through the payments view has one too; rows that predate it are
   backfilled from the entity and marked `BACKFILL`; an UPDATE cannot rewrite a snapshot), widens
@@ -30,8 +34,21 @@
   `FiscalTerminalPort` and its fake adapter, the reader for `order_revisions.fiscal_correction_required`,
   `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the
   `FiscalNodeFacts.requiresMarkingCapablePayment` call sites, the adapter from `OrderMarkCounts`
-  to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»), and the
-  console's evidence block and payment-types table.
+  to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»).
+  The console (`q-fiscal-evidence`) draws the read on the order detail's fiscal panel, under the
+  tenders of the payments page, where each tender links to its document, and beneath the order
+  lookup of the finance fiscal page, which also lists the open correction requests, aged in days
+  and not alarmed; it masks identifiers until
+  a role holding `fiscal.evidence.reveal` chooses a purpose, holds an opened read for two minutes at
+  most, draws a link only for an `https` URL, names a delivery-fee line as its own row with its ИКПУ
+  and package code (nothing writes one until the line builder does), shows marking as a count, and raises correction and void requests and attaches
+  the agent's reference. The payments page's payment-types table and the fiscalization settings
+  tab's responsibility projection read `GET .../fiscal/payment-types`. `GET
+  /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts`
+  (`StorefrontFiscalReceiptController`, ownership-authorised, `Cache-Control: no-store`) gives the
+  customer the same link ADR 0058 already sends them, for the receipts still in force and nothing
+  else about them, and the storefront's order page shows it (`storefront-milliy` has no order
+  detail page to show it on).
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

@@ -126,21 +126,64 @@ split, marking as a count, identifiers masked unless the caller holds
 (derived, not settable), and the correction and void requests
 (`POST .../fiscal/documents/{documentId}/correction-requests`,
 `POST .../fiscal/correction-requests/{requestId}/attachments`,
-`GET .../fiscal/correction-requests`). The console block that draws them is the
-next piece of work; until it ships this screen still renders only what the
-paragraph below describes. `retry` now answers 409 with `reasonCode
+`GET .../fiscal/correction-requests`). `retry` now answers 409 with `reasonCode
 FISCAL_LINES_NOT_BUILT` where only the one-line placeholder receipt could be
 filed and the environment is not a sandbox the platform has allowed it in.
 
-**Deliberately absent from this screen, per the controller's own doc:** no
-fiscal sign, receipt URL, or marking code. Those are ADR 0029-protected
-evidence, read through "the payments module's authorized order-payment
-view, with a recorded purpose" — a view `FiscalDocumentController`'s own
-comment names as not existing yet. `OperationsPaymentController` (new this
-wave, §1 above) is not that view either: it exists for payment status and
-re-presentation, holds no fiscal evidence field, and was not built to
-satisfy this gap. A worklist needs to know a document *has* evidence
-(`hasEvidence`), not what the evidence says, and that is all 8.2 renders.
+**Since then (ADR 0166, batch 20, console):** `q-fiscal-evidence`
+(`features/finance/fiscal/fiscal-evidence.ts`) draws that read, and it appears in
+two places: beneath the document table of the order detail's fiscal panel, and
+under the tenders of the payments page, where each tender links to the card of
+the document it is. A card shows the INN the document was filed under and where
+that came from (`OPENING`, `BACKFILL` said as the weaker claim it is, or
+`UNRESOLVED` with no INN stated), the merchant account (masked), the identifiers
+(masked to the last four characters), the lines as filed with their ИКПУ and
+package code (the delivery fee marked as its own line; a sandbox placeholder
+called a placeholder; «not kept» where nothing was kept, never a
+reconstruction), how the payment was split, the number of marking codes sent and
+the captured-of-required count where ADR 0161's store answers («not built»
+where it does not). **No receipt is drawn:** the card shows identifiers, a link
+to the tax authority's page, and the lines.
+
+Opening an identifier in full is a separate act: a role holding
+`fiscal.evidence.reveal` chooses one of four purposes and the server records
+each look; the opened read lives in the component only, hides itself after two
+minutes and is dropped with the order. The link is an anchor only for an `https`
+URL. A marking code is on no screen under any purpose. The controls are shown to
+the roles that hold the capability (`SessionCapabilities`, an affordance only:
+the server decides, and a `403` is still answered in words).
+
+The same card asks for a correction or a void on an issued sale
+(`fiscal.document.resolve`; a second person approves first, which the form
+reports as «waiting for approval request …» and keeps what was typed), shows an
+open request as waiting on the tenant's fiscal agent, and attaches the agent's
+reference (an `https` link, the sign and the receipt number) as a linked
+document. HorecaOS records and the agent issues: nothing here edits the original.
+
+The payments page also gains the per-tenant table of **fiscalized payment
+types** (`GET .../fiscal/payment-types`): who issues the receipt, under which
+path, whether a receipt can be issued today, and the legal entities and INN
+behind it. It has nothing on it to set. The fiscalization settings tab's
+«who issues the receipt» projection reads the same model, so a method
+registered under a responsibility nothing implements (cash as `OPERATOR`) reads
+«no fiscal path» there as well, instead of looking fiscalized.
+
+This screen gains two things from it. The order lookup draws the same card
+beneath the order's documents, and **«Correction and void requests»** lists what
+the tenant's fiscal agent has not answered (`GET .../fiscal/correction-requests`),
+longest first: the order by its number, what was asked for and why in words,
+and the days waited. It is aged and not alarmed, because the legal deadline per
+path is an open input and nothing here enforces one. «Open the order» puts that
+order's documents and evidence above, where the agent's reference is attached.
+
+**Not on any console screen yet:** a reader for
+`order_revisions.fiscal_correction_required` (an amendment that changed a filed
+total does not open a request on its own).
+
+**What the blocked worklist and the per-order table on this screen still do not
+show:** the fiscal sign, receipt URL and marking codes stay off both, which need
+to know a document *has* evidence (`hasEvidence`), not what it says. That reads
+in the evidence card, where there is an order to be about and a purpose to give.
 
 ---
 
