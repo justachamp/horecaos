@@ -201,6 +201,11 @@ public final class OrderBoardFixtures {
         @Nullable
         String createdByActorId;
 
+        /** {@code USER}, the person who keyed the order in; {@code SYSTEM_JOB} or {@code PROVIDER} for one nobody keyed. */
+        String createdByActorType = "USER";
+
+        String acceptedByActorId = "manager-1";
+
         boolean confirmed;
         String origin = "HORECAOS";
         String paymentStatusProjection = "NOT_REQUIRED";
@@ -247,6 +252,18 @@ public final class OrderBoardFixtures {
 
         public OrderSpec createdByActorId(String value) {
             this.createdByActorId = value;
+            return this;
+        }
+
+        /** An order created by something that is not a person (ADR 0160: its id is not a staff subject). */
+        public OrderSpec createdBy(String actorType, String actorId) {
+            this.createdByActorType = actorType;
+            this.createdByActorId = actorId;
+            return this;
+        }
+
+        public OrderSpec acceptedByActorId(String value) {
+            this.acceptedByActorId = value;
             return this;
         }
 
@@ -356,8 +373,8 @@ public final class OrderBoardFixtures {
                     1000, 2000, 101000, :quote,
                     :hash, :pub, :cart, :key,
                     :promisedAt, :promiseBasis, :prepMinutes, 1, :createdAt,
-                    :confirmedAt, 'USER', :createdBy,
-                    'USER', 'manager-1', :createdAt,
+                    :confirmedAt, :createdByType, :createdBy,
+                    'USER', :acceptedBy, :createdAt,
                     :origin, :pricingAuthority, :marketplaceBinding, :callbackRequested)
                 """)
                 .param("id", orderId)
@@ -385,7 +402,9 @@ public final class OrderBoardFixtures {
                         spec.confirmed || confirmedStatus(spec.status)
                                 ? spec.createdAt.plusSeconds(60).atOffset(ZoneOffset.UTC)
                                 : null)
+                .param("createdByType", spec.createdByActorType)
                 .param("createdBy", spec.createdByActorId == null ? "operator-1" : spec.createdByActorId)
+                .param("acceptedBy", spec.acceptedByActorId)
                 .param("origin", spec.origin)
                 .param("pricingAuthority", marketplace ? "EXTERNAL" : "HORECAOS")
                 .param("marketplaceBinding", spec.marketplaceBindingId)

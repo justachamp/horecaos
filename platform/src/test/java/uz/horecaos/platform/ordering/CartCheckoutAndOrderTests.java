@@ -551,7 +551,8 @@ class CartCheckoutAndOrderTests {
                         orderStore,
                         org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
-                        clock));
+                        clock),
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class));
         // ADR 0074, production classes end to end: the real publication reader,
         // the real price lookup pricing implements, and the real InventoryService
         // behind InventoryReservationPort. A stub for any of the three would let

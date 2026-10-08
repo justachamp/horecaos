@@ -2789,6 +2789,18 @@ public class OperationsOrderController {
      *                   bill (ADR 0029). Null for every order not attached to a
      *                   table session: a delivery, a pickup, or a DINE_IN order
      *                   an operator keyed in without seating anyone
+     * @param createdByDisplayName  the name the tenant keeps for the staff member
+     *                   who took the order (ADR 0160, the board's optional «Создал»
+     *                   column), resolved with one {@code StaffDirectory#namesOf}
+     *                   batch per page -- the same tenant-scoped, read-time
+     *                   resolution the detail read uses (row {@code 9.2d}). Null
+     *                   for an actor that is not a {@code USER} (a system job, an
+     *                   integration), for a subject this tenant has no name for, and
+     *                   on a summary read outside the board. A staff member's name
+     *                   is not a customer's: it goes only to a caller {@code
+     *                   order.read} already admits, and never carries the raw
+     *                   subject (the console draws a dash instead)
+     * @param acceptedByDisplayName the same resolution for {@code acceptedByActorId}
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -2816,7 +2828,9 @@ public class OperationsOrderController {
             @Nullable String acceptedByActorId,
             @Nullable String processAttention,
             @Nullable UUID courierId,
-            OrderTablesPort.@Nullable OrderTable table) {
+            OrderTablesPort.@Nullable OrderTable table,
+            @Nullable String createdByDisplayName,
+            @Nullable String acceptedByDisplayName) {
 
         /**
          * The summary of an order read outside the board — the detail read's own
@@ -2837,6 +2851,9 @@ public class OperationsOrderController {
          * @param table      resolved separately by the caller ({@link
          *                   OrderQueryService#tableFor}), the single-order
          *                   counterpart to the board's batched lookup
+         * @param createdByDisplayName the caller's own resolution of the creating
+         *                   actor, the same one the detail header carries
+         * @param acceptedByDisplayName the same for the accepting actor
          */
         static OrderSummaryResponse of(
                 JdbcOrderStore.OrderRow order,
@@ -2844,10 +2861,19 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
-                OrderTablesPort.@Nullable OrderTable table) {
+                OrderTablesPort.@Nullable OrderTable table,
+                @Nullable String createdByDisplayName,
+                @Nullable String acceptedByDisplayName) {
             return of(
                     new JdbcOrderStore.OrderBoardRow(
-                            order, null, courierId, amendmentAwaitingOperator, presentablePayment, table),
+                            order,
+                            null,
+                            courierId,
+                            amendmentAwaitingOperator,
+                            presentablePayment,
+                            table,
+                            createdByDisplayName,
+                            acceptedByDisplayName),
                     grantedCapabilities);
         }
 
@@ -2886,7 +2912,9 @@ public class OperationsOrderController {
                     order.acceptedByActorId(),
                     row.processAttention(),
                     row.courierId(),
-                    row.table());
+                    row.table(),
+                    row.createdByDisplayName(),
+                    row.acceptedByDisplayName());
         }
     }
 
@@ -2992,6 +3020,10 @@ public class OperationsOrderController {
                 StaffDirectory staffDirectory,
                 Map<UUID, BigDecimal> portionSteps) {
             var order = detail.order();
+            String createdByName = displayNameOf(
+                    staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId());
+            String acceptedByName = displayNameOf(
+                    staffDirectory, order.tenantId(), order.acceptedByActorType(), order.acceptedByActorId());
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
                             order,
@@ -2999,7 +3031,9 @@ public class OperationsOrderController {
                             courierId,
                             amendmentAwaitingOperator,
                             presentablePayment,
-                            table),
+                            table,
+                            createdByName,
+                            acceptedByName),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),
@@ -3008,12 +3042,10 @@ public class OperationsOrderController {
                     order.currentRevision(),
                     order.createdByActorType(),
                     order.createdByActorId(),
-                    displayNameOf(
-                            staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId()),
+                    createdByName,
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
-                    displayNameOf(
-                            staffDirectory, order.tenantId(), order.acceptedByActorType(), order.acceptedByActorId()),
+                    acceptedByName,
                     order.acceptedAt(),
                     order.callbackRequested(),
                     order.callbackResolvedAt(),

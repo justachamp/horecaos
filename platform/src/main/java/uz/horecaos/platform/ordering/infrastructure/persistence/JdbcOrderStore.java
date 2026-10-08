@@ -3247,6 +3247,17 @@ public class JdbcOrderStore {
      *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
      *                         through {@link OrderTablesPort}, the same two-step
      *                         shape {@code courierId} has
+     * @param createdByDisplayName  the name the tenant keeps for the {@code USER}
+     *                         who took the order (ADR 0160, gap map row 1.1's
+     *                         «Создал» column), or null for a system or
+     *                         integration actor and for a subject this tenant has
+     *                         no name for. Always null as this class constructs
+     *                         the row -- {@code iam.*} is not this store's to
+     *                         join -- and filled in afterward by {@link
+     *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         with one {@code StaffDirectory#namesOf} batch per
+     *                         page
+     * @param acceptedByDisplayName the same resolution for the accepting actor
      */
     public record OrderBoardRow(
             OrderRow order,
@@ -3254,39 +3265,93 @@ public class JdbcOrderStore {
             @Nullable UUID courierId,
             boolean amendmentAwaitingOperator,
             boolean presentablePayment,
-            OrderTablesPort.@Nullable OrderTable table) {
+            OrderTablesPort.@Nullable OrderTable table,
+            @Nullable String createdByDisplayName,
+            @Nullable String acceptedByDisplayName) {
 
         /**
          * The row as this store constructs it: no courier, no open amendment, no
-         * presentable payment and no table, each filled in afterward by {@code
+         * presentable payment, no table and no actor names, each filled in afterward by {@code
          * OrderQueryService} through the port or store that owns the fact.
          */
         public OrderBoardRow(OrderRow order, @Nullable String processAttention) {
-            this(order, processAttention, null, false, false, null);
+            this(order, processAttention, null, false, false, null, null, null);
+        }
+
+        /** The row with no actor names, as the single-order summary builds it. */
+        public OrderBoardRow(
+                OrderRow order,
+                @Nullable String processAttention,
+                @Nullable UUID courierId,
+                boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
+                OrderTablesPort.@Nullable OrderTable table) {
+            this(order, processAttention, courierId, amendmentAwaitingOperator, presentablePayment, table, null, null);
         }
 
         /** {@link #courierId} filled in, once the caller has resolved it through the port. */
         public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
             return new OrderBoardRow(
-                    order, processAttention, resolvedCourierId, amendmentAwaitingOperator, presentablePayment, table);
+                    order,
+                    processAttention,
+                    resolvedCourierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
         }
 
         /** {@link #amendmentAwaitingOperator} filled in, once the caller has resolved it through the store. */
         public OrderBoardRow withAmendmentAwaitingOperator(boolean resolvedAmendmentAwaitingOperator) {
             return new OrderBoardRow(
-                    order, processAttention, courierId, resolvedAmendmentAwaitingOperator, presentablePayment, table);
+                    order,
+                    processAttention,
+                    courierId,
+                    resolvedAmendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
         }
 
         /** {@link #presentablePayment} filled in, once the caller has resolved it through the payments port. */
         public OrderBoardRow withPresentablePayment(boolean resolvedPresentablePayment) {
             return new OrderBoardRow(
-                    order, processAttention, courierId, amendmentAwaitingOperator, resolvedPresentablePayment, table);
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    resolvedPresentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
         }
 
         /** {@link #table} filled in, once the caller has resolved it through {@link OrderTablesPort}. */
         public OrderBoardRow withTable(OrderTablesPort.@Nullable OrderTable resolvedTable) {
             return new OrderBoardRow(
-                    order, processAttention, courierId, amendmentAwaitingOperator, presentablePayment, resolvedTable);
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    resolvedTable,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
+        }
+
+        /** The two actor names filled in, once the caller has resolved them through the staff directory. */
+        public OrderBoardRow withActorNames(@Nullable String resolvedCreatedBy, @Nullable String resolvedAcceptedBy) {
+            return new OrderBoardRow(
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    resolvedCreatedBy,
+                    resolvedAcceptedBy);
         }
     }
 

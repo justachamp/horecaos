@@ -350,7 +350,8 @@ class OrderAmendmentAndOutcomeTests {
                         orderStore,
                         org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
-                        clock));
+                        clock),
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class));
         reasons = new OrderOutcomeReasonService(reasonStore, auditRecorder, clock);
         rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
         outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);

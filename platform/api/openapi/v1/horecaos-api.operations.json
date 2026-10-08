@@ -12614,6 +12614,9 @@
           "acceptedByActorType" : {
             "type" : "string"
           },
+          "acceptedByDisplayName" : {
+            "type" : "string"
+          },
           "actions" : {
             "items" : {
               "$ref" : "#/components/schemas/OrderActionResponse"
@@ -12639,6 +12642,9 @@
             "type" : "string"
           },
           "createdByActorType" : {
+            "type" : "string"
+          },
+          "createdByDisplayName" : {
             "type" : "string"
           },
           "currency" : {
@@ -13204,6 +13210,40 @@
           },
           "targetStatus" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderBoardColumnsChange" : {
+        "properties" : {
+          "hide" : {
+            "items" : {
+              "enum" : [ "branch", "channel", "customer", "items", "payment", "courier", "createdBy", "acceptedBy", "courierType", "discount" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "show" : {
+            "items" : {
+              "enum" : [ "branch", "channel", "customer", "items", "payment", "courier", "createdBy", "acceptedBy", "courierType", "discount" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderBoardPreferencesDocument" : {
+        "description" : "The ORDER_BOARD surface: optional columns, as a change from the default, and saved views",
+        "properties" : {
+          "columns" : {
+            "$ref" : "#/components/schemas/OrderBoardColumnsChange"
+          },
+          "savedViews" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavedView"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -14236,6 +14276,37 @@
           "requirement" : {
             "enum" : [ "NOT_REQUIRED", "OFFERED", "REQUIRED" ],
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OwnPreferenceResponse" : {
+        "properties" : {
+          "document" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ShellPreferencesDocument"
+            }, {
+              "$ref" : "#/components/schemas/OrderBoardPreferencesDocument"
+            } ]
+          },
+          "documentSchema" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OwnPreferencesResponse" : {
+        "properties" : {
+          "surfaces" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/OwnPreferenceResponse"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -19514,6 +19585,84 @@
         },
         "type" : "object"
       },
+      "SaveOwnPreferenceRequest" : {
+        "properties" : {
+          "document" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ShellPreferencesDocument"
+            }, {
+              "$ref" : "#/components/schemas/OrderBoardPreferencesDocument"
+            } ]
+          }
+        },
+        "required" : [ "document" ],
+        "type" : "object"
+      },
+      "SavedView" : {
+        "properties" : {
+          "filters" : {
+            "$ref" : "#/components/schemas/SavedViewFilters"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "tab" : {
+            "enum" : [ "attention", "new", "preparing", "delivering", "completed", "cancelled", "all" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SavedViewFilters" : {
+        "properties" : {
+          "allBranches" : {
+            "type" : "boolean"
+          },
+          "callbackRequested" : {
+            "type" : "boolean"
+          },
+          "channelCode" : {
+            "type" : "string"
+          },
+          "dateRange" : {
+            "enum" : [ "TODAY", "YESTERDAY", "LAST_7_DAYS", "THIS_MONTH" ],
+            "type" : "string"
+          },
+          "fiscalStatus" : {
+            "enum" : [ "ATTENTION", "NOT_APPLICABLE", "PENDING", "SUBMITTED", "ISSUED", "FAILED", "BLOCKED" ],
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          },
+          "lateOnly" : {
+            "type" : "boolean"
+          },
+          "mineOnly" : {
+            "type" : "boolean"
+          },
+          "origin" : {
+            "enum" : [ "HORECAOS", "MARKETPLACE" ],
+            "type" : "string"
+          },
+          "paymentMethodCode" : {
+            "type" : "string"
+          },
+          "paymentStatus" : {
+            "enum" : [ "NOT_REQUIRED", "PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED" ],
+            "type" : "string"
+          },
+          "problemOnly" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "ScenarioBody" : {
         "properties" : {
           "channelId" : {
@@ -20300,6 +20449,16 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ShellPreferencesDocument" : {
+        "description" : "The SHELL surface: the person's default branch",
+        "properties" : {
+          "defaultLocationId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -40098,6 +40257,108 @@
         "tags" : [ "My profile" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/staff/me/preferences" : {
+      "get" : {
+        "description" : "One entry per surface I have saved something for; a surface I never saved is absent and the console uses its default. Resolved from the signed-in subject and this tenant. 404 when this tenant keeps no record for the account (a HorecaOS support session, a device): those keep their choices in the browser. The console reads this once per session.",
+        "operationId" : "readMyPreferences",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnPreferencesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "All of my stored preference documents",
+        "tags" : [ "My preferences" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/staff/me/preferences/{surface}" : {
+      "delete" : {
+        "description" : "Deletes my stored document for the surface; the console falls back to the code's default. Resetting what was never saved answers the same 204.",
+        "operationId" : "resetMyPreference",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "surface",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "Reset, or there was nothing saved to reset"
+          }
+        },
+        "summary" : "Reset one surface to its default",
+        "tags" : [ "My preferences" ]
+      },
+      "put" : {
+        "description" : "`SHELL` (the default branch) or `ORDER_BOARD` (optional columns and saved views). The first write for a surface carries no If-Match; every later write carries the version last read, and a second first write, or a write from a version that has moved on, is `STALE_VERSION`: re-read, re-apply the one change, try once more. The document is replaced whole. It is validated against the surface's closed schema before anything is stored: an unknown key, value or surface, a column the board shows anyway, a view label that is a number, more than 20 views or a document over 8 KB is refused, naming the field. A search term, a customer, an order, a courier and an absolute date are never part of a saved view. Nothing is audited.",
+        "operationId" : "saveMyPreference",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "surface",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveOwnPreferenceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnPreferenceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Save my document for one surface",
+        "tags" : [ "My preferences" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/staff/members" : {
       "get" : {
         "description" : "Tenant-wide, for the owner and the administrator. `brandId` and `locationId` narrow the result to people holding an active job there and never widen it. A person with no active job appears only here. `q` matches a name substring (decrypted in the application) and nothing else; a phone search is not offered because a number in a query string lands in an access log.",
@@ -57824,6 +58085,9 @@
   }, {
     "description" : "The call centre's callback queue and its contact journal (ADR 0111)",
     "name" : "Leads"
+  }, {
+    "description" : "A staff member's own interface preferences (ADR 0160)",
+    "name" : "My preferences"
   }, {
     "description" : "ADR 0060 section 3: the staff identity /link handshake",
     "name" : "Telegram staff linking"

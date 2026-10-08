@@ -41,6 +41,7 @@ import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore.ActiveGrant;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore.GrantPlace;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore.MemberRow;
+import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffPreferencesStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -101,6 +102,8 @@ public class StaffMemberService implements StaffMemberRegistry {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final LocaleVocabulary locales;
+    private final JdbcStaffPreferencesStore preferences;
+    private final StaffPreferencesCache preferenceCache;
 
     public StaffMemberService(
             JdbcStaffMemberStore store,
@@ -112,8 +115,12 @@ public class StaffMemberService implements StaffMemberRegistry {
             StaffPhotos photos,
             TransactionTemplate transactions,
             Clock clock,
-            LocaleVocabulary locales) {
+            LocaleVocabulary locales,
+            JdbcStaffPreferencesStore preferences,
+            StaffPreferencesCache preferenceCache) {
         this.locales = locales;
+        this.preferences = preferences;
+        this.preferenceCache = preferenceCache;
         this.store = store;
         this.codec = codec;
         this.names = names;
@@ -832,6 +839,11 @@ public class StaffMemberService implements StaffMemberRegistry {
                 current.employedUntil(),
                 now);
         int contacts = store.deleteEmergencyContactsOf(tenantId, memberId);
+        // ADR 0160: the person's interface preferences go in the same transaction as the member's own
+        // update. They hold a label the person typed, so they are personal data with nothing else to be
+        // retained for.
+        int preferenceDocuments = preferences.deleteAllOf(tenantId, current.principalSubject());
+        preferenceCache.evictAfterCommit(tenantId, current.principalSubject());
         if (!store.update(next, current.version())) {
             throw ApiException.staleVersion(current.version(), current.version() + 1);
         }
@@ -848,6 +860,7 @@ public class StaffMemberService implements StaffMemberRegistry {
         before.put("employeeNumber", markerOf(current.protectedEmployeeNumber()));
         before.put("photo", markerOf(current.photoAssetId() == null ? null : "photo"));
         before.put("emergencyContacts", contacts == 0 ? null : SET);
+        before.put("preferences", preferenceDocuments == 0 ? null : SET);
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("firstName", null);
         after.put("lastName", null);
@@ -855,6 +868,7 @@ public class StaffMemberService implements StaffMemberRegistry {
         after.put("employeeNumber", null);
         after.put("photo", null);
         after.put("emergencyContacts", null);
+        after.put("preferences", null);
         publish(
                 ANONYMISED,
                 tenantId,
