@@ -239,6 +239,49 @@ class DayCloseDeliveryFactTests {
                 .isNotEqualTo(BRAND);
     }
 
+    @Test
+    @DisplayName("a delivery accrued after its day closed, dated on the courier's tap, is announced by the recut")
+    void aDeliveryAccruedAfterTheCloseIsADivergence() {
+        // The shape the accrual produces since it dates a delivery on the courier's own tap: the day
+        // closes, and an operator completes the order afterwards, so the earning lands in a day that
+        // is already closed. The stored fact is left alone (ADR 0043: the recut does not write), but
+        // the recut must say so -- it used to compare nothing about deliveries.
+        OtherTenancy late = seedOtherTenancy();
+        close.close(late.tenantId(), DAY);
+        seedCourierDeliveryEarning(late.tenantId(), late.brandId(), late.locationId(), "K-LATE", "312345678903");
+
+        DayCloseService.CloseResult recut = close.recut(late.tenantId(), DAY);
+
+        assertThat(recut.divergences())
+                .containsExactly(new DayCloseService.Divergence(
+                        "location=%s".formatted(late.locationId()), "delivery.count", 1, 0, 1));
+        assertThat(jdbc.sql("""
+                                SELECT metric_id, dimension_key, stored_value, recut_value
+                                  FROM reporting.aggregate_divergences WHERE tenant_id = :t
+                                """).param("t", late.tenantId()).query().listOfRows())
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.get("metric_id")).isEqualTo("delivery.count");
+                    assertThat(row.get("dimension_key")).isEqualTo("location=%s".formatted(late.locationId()));
+                    assertThat(row.get("stored_value")).isEqualTo(0L);
+                    assertThat(row.get("recut_value")).isEqualTo(1L);
+                });
+        assertThat(jdbc.sql("SELECT count(*) FROM reporting.fact_delivery WHERE tenant_id = :t")
+                        .param("t", late.tenantId())
+                        .query(Long.class)
+                        .single())
+                .as("the recut reports the drift and leaves the stored day alone")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a recut over an unchanged day reports no delivery divergence")
+    void anUnchangedDayHasNoDeliveryDivergence() {
+        close.close(TENANT, DAY);
+
+        assertThat(close.recut(TENANT, DAY).divergences()).isEmpty();
+    }
+
     // --------------------------------------------------------------- fixture
 
     private void seedTenancy() {
@@ -274,6 +317,13 @@ class DayCloseDeliveryFactTests {
      * @return the other tenant's id
      */
     private UUID seedOtherTenantDeliveryFact() {
+        OtherTenancy other = seedOtherTenancy();
+        seedCourierDeliveryEarning(other.tenantId(), other.brandId(), other.locationId(), "K-OTHER", "312345678902");
+        return other.tenantId();
+    }
+
+    /** A second tenant with its own brand and location and no delivery yet. */
+    private OtherTenancy seedOtherTenancy() {
         UUID tenantId = UUID.randomUUID();
         UUID brandId = UUID.randomUUID();
         UUID locationId = UUID.randomUUID();
@@ -299,10 +349,10 @@ class DayCloseDeliveryFactTests {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .update();
-
-        seedCourierDeliveryEarning(tenantId, brandId, locationId, "K-OTHER", "312345678902");
-        return tenantId;
+        return new OtherTenancy(tenantId, brandId, locationId);
     }
+
+    private record OtherTenancy(UUID tenantId, UUID brandId, UUID locationId) {}
 
     /** Courier, rate card, a delivered shipment chain, and one real accrual — see the class doc for why. */
     private UUID seedCourierDeliveryEarning() {

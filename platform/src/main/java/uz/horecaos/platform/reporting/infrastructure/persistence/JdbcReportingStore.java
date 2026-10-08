@@ -1076,6 +1076,29 @@ public class JdbcReportingStore {
             Instant acceptedAt,
             Instant deliveredAt) {}
 
+    /** One branch's stored delivery facts for a day, counted: what a recut compares against. */
+    public record DeliveryDayCount(UUID locationId, long deliveries) {}
+
+    /**
+     * The deliveries the close stored for a day, per branch. The recut's side of the comparison
+     * with {@link #readSourceDeliveries}: an earning written after its day closed (the accrual is
+     * dated on the courier's tap, an operator may complete the order after the close) is in the
+     * source and not in this count.
+     */
+    public List<DeliveryDayCount> readDeliveryDayCounts(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT location_id, count(*) AS deliveries
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new DeliveryDayCount(
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)), row.getLong("deliveries")))
+                .list();
+    }
+
     public void insertDeliveryFact(ReportingFacts.DeliveryFact fact) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", fact.tenantId());

@@ -198,6 +198,12 @@ public class DayCloseService {
      * snapshot taken at close, so a refund that lands the next morning, or a capture the
      * acquirer confirms after the day closed, leaves the stored figure behind the payment
      * ledger. The recut is the one place that says so; nothing rewrites the stored row.
+     *
+     * <p>The delivery fact (ADR 0125, {@code delivery.count}) is compared per branch the same
+     * way. The accrual is dated on the courier's own «delivered» tap, but the earning is written
+     * when the operator completes the order, which can be after the tap's business day has closed:
+     * the close built {@code fact_delivery} before that earning existed and never builds the day
+     * again, while the courier ledger pays the delivery. Only the recut can say so.
      */
     @Transactional
     public CloseResult recut(UUID tenantId, LocalDate businessDate) {
@@ -250,6 +256,7 @@ public class DayCloseService {
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
+        compareDeliveries(divergences, tenantId, businessDate, derived.deliveries());
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(
@@ -734,6 +741,40 @@ public class DayCloseService {
                     1,
                     stored.getOrDefault(slice, 0L),
                     fresh.getOrDefault(slice, 0L));
+        }
+    }
+
+    /**
+     * ADR 0125 ({@code delivery.count}): the internal deliveries per branch, over the earnings
+     * whose courier tap falls in the day, against the rows the close stored.
+     *
+     * <p>The close selects earnings by their {@code delivered_at}, so an earning written after its
+     * day closed is in this derivation and not in the stored fact. That is not a bug in either
+     * side, it is the order of events (tap, close, operator's «completed»), and the record that
+     * dates the accrual on the tap leaves it to the recut to say so. Like every other
+     * comparison here it only reports: the stored day, and the SLA buckets and leaderboards cut
+     * from it, stay as the manager saw them.
+     */
+    private void compareDeliveries(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> derived) {
+        Map<UUID, Long> stored = new LinkedHashMap<>();
+        store.readDeliveryDayCounts(tenantId, businessDate)
+                .forEach(count -> stored.put(count.locationId(), count.deliveries()));
+        Map<UUID, Long> fresh = new LinkedHashMap<>();
+        derived.forEach(fact -> fresh.merge(fact.locationId(), 1L, Long::sum));
+        java.util.Set<UUID> locations = new java.util.LinkedHashSet<>(stored.keySet());
+        locations.addAll(fresh.keySet());
+        for (UUID location : locations) {
+            compare(
+                    into,
+                    "location=%s".formatted(location),
+                    "delivery.count",
+                    1,
+                    stored.getOrDefault(location, 0L),
+                    fresh.getOrDefault(location, 0L));
         }
     }
 
