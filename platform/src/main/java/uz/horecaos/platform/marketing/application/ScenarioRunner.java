@@ -14,6 +14,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
+import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
@@ -101,6 +103,7 @@ public class ScenarioRunner {
     private final CampaignCostEstimator estimator;
     private final PresentedOfferService presented;
     private final OrderDirectory orders;
+    private final EntitlementService entitlements;
     private final ConfigurationResolver configuration;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transactions;
@@ -118,6 +121,7 @@ public class ScenarioRunner {
             CampaignCostEstimator estimator,
             PresentedOfferService presented,
             OrderDirectory orders,
+            EntitlementService entitlements,
             ConfigurationResolver configuration,
             ApplicationEventPublisher events,
             TransactionTemplate transactions,
@@ -133,6 +137,7 @@ public class ScenarioRunner {
         this.estimator = estimator;
         this.presented = presented;
         this.orders = orders;
+        this.entitlements = entitlements;
         this.configuration = configuration;
         this.events = events;
         this.transactions = transactions;
@@ -263,6 +268,23 @@ public class ScenarioRunner {
                         ScenarioOutcome.STOPPED_BY_CONDITION,
                         RefusalReason.SCENARIO_STOPPED,
                         "%s can no longer deliver for this brand (%s)".formatted(channel, wiring.reason()),
+                        now);
+                return;
+            }
+            // The plan, asked for this step's own channel and again now: the entitlement
+            // launch checked can lapse, and a scenario's later step can be on a channel its
+            // first was not. A channel the tenant is no longer sold cannot deliver.
+            if (messaging.get() == MarketingChannel.MESSAGING_APP
+                    && !entitlements.featureEnabled(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED)) {
+                stop(
+                        campaign,
+                        guest,
+                        step,
+                        channel,
+                        ScenarioOutcome.STOPPED_BY_CONDITION,
+                        RefusalReason.SCENARIO_STOPPED,
+                        "The current plan does not include Telegram broadcasts, so %s cannot deliver this step"
+                                .formatted(channel),
                         now);
                 return;
             }

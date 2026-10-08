@@ -2,13 +2,16 @@ package uz.horecaos.platform.marketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static uz.horecaos.platform.marketing.ScenarioHarness.BRAND;
+import static uz.horecaos.platform.marketing.ScenarioHarness.LONG_TEMPLATE;
 import static uz.horecaos.platform.marketing.ScenarioHarness.OTHER_BRAND;
 import static uz.horecaos.platform.marketing.ScenarioHarness.OTHER_TENANT;
 import static uz.horecaos.platform.marketing.ScenarioHarness.PURPOSE;
+import static uz.horecaos.platform.marketing.ScenarioHarness.SHORT_TEMPLATE;
 import static uz.horecaos.platform.marketing.ScenarioHarness.START;
 import static uz.horecaos.platform.marketing.ScenarioHarness.TENANT;
 import static uz.horecaos.platform.marketing.ScenarioHarness.offerStep;
 import static uz.horecaos.platform.marketing.ScenarioHarness.smsStep;
+import static uz.horecaos.platform.marketing.ScenarioHarness.telegramStep;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort.MarketingMessage;
 import uz.horecaos.platform.marketing.api.MarketingConfigurationKeys;
 import uz.horecaos.platform.marketing.api.ScenarioParticipantStopped;
@@ -649,12 +653,15 @@ class ScenarioEngineTests {
     @Test
     @DisplayName("a step that would exceed the approved cost ceiling halts the scenario and sends nothing")
     void theCostCeilingHaltsTheScenario() {
-        h.priceSegmentsAt(1_000);
+        h.priceSegmentsAt(100);
         UUID first = h.reachableGuest("+998901000018");
         UUID second = h.reachableGuest("+998901000019");
-        // One segment costs 1,000; a ceiling of 1,500 admits one message and not two.
+        // At 100 a segment the whole scenario is 200 and the ceiling holds it, so it launches. The gateway
+        // then re-prices: at 1,000 a segment a ceiling of 1,500 admits one message and not two, and the
+        // runner holds each step to it as it is sent, because launch checked the price of that day.
         UUID scenario = h.launched(h.draftScenario(PURPOSE, null, 1_500L, smsStep("MARKETING_PROMOTION", 0)));
         h.enrolEverybody(scenario);
+        h.priceSegmentsAt(1_000);
 
         h.decide(scenario);
 
@@ -668,6 +675,70 @@ class ScenarioEngineTests {
             assertThat(row.reasonText()).contains("cost ceiling");
             assertThat(List.of(first, second)).contains(row.customerAccountId());
         });
+    }
+
+    @Test
+    @DisplayName(
+            "each step is held to the ceiling on its own template: a long second message is what halts the scenario")
+    void eachStepIsPricedOnItsOwnTemplate() {
+        h.templatesOfOneAndThreeSegments();
+        h.priceSegmentsAt(100);
+        UUID guest = h.reachableGuest("+998901000093");
+        // 100 for the short step and 300 for the long one is 400, which the ceiling of 450 holds.
+        UUID scenario = h.launched(
+                h.draftScenario(PURPOSE, null, 450L, smsStep(SHORT_TEMPLATE, 0), smsStep(LONG_TEMPLATE, 3600)));
+        h.enrolEverybody(scenario);
+        // The price rises after launch, to 120: the short step is 120, the long one 360, and 480 is over.
+        h.priceSegmentsAt(120);
+
+        h.decide(scenario);
+        assertThat(h.port.sent()).hasSize(1);
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().reservedCostMinor())
+                .isEqualTo(120L);
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.SENDING);
+
+        h.clock.advance(Duration.ofHours(1));
+        h.decide(scenario);
+
+        assertThat(h.port.sent()).as("the long step was not sent").hasSize(1);
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.HALTED_BUDGET);
+        assertThat(h.decisions(scenario, guest).stream()
+                        .filter(row -> row.decision().equals("BLOCKED"))
+                        .findFirst()
+                        .orElseThrow()
+                        .stepSequence())
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName(
+            "a step on a channel the plan no longer includes ends the run without sending, whatever the first step's channel was")
+    void aLapsedPlanStopsATelegramStep() {
+        UUID guest = h.reachableGuest("+998901000092");
+        h.grantConsent(guest, PURPOSE, "TELEGRAM");
+        UUID scenario = h.launched(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), telegramStep(3600)));
+        h.enrolEverybody(scenario);
+        h.decide(scenario);
+        assertThat(h.port.sent()).hasSize(1);
+
+        // The plan lapses between the two steps: launch checked it, and a day later it is not so.
+        h.entitlements.deny(EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+        h.clock.advance(Duration.ofHours(1));
+        h.decide(scenario);
+
+        DecisionRow stopped = h.decisions(scenario, guest).stream()
+                .filter(row -> row.decision().equals("BLOCKED"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(stopped.stepSequence()).isEqualTo(2);
+        assertThat(stopped.refusalReason()).isEqualTo("SCENARIO_STOPPED");
+        assertThat(stopped.reasonText()).contains("plan").contains("Telegram");
+        assertThat(h.outcomeOf(scenario, guest)).isEqualTo("STOPPED_BY_CONDITION");
+        assertThat(h.port.sent())
+                .as("nothing is sent on a channel the plan does not include")
+                .hasSize(1);
     }
 
     // ---------------------------------------------------------------- priority
