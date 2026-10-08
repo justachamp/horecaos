@@ -3061,6 +3061,44 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/attribution-links/{token}/clicks" : {
+      "post" : {
+        "description" : "Public. Answers 202 whether or not the token names a live link of this brand (unknown, archived, expired and other-brand tokens count nothing and say nothing), so the endpoint cannot be used to probe which tokens exist. Records no address, user agent or cookie. Non-idempotent by design: each open is one click. Limited per token and visitor.",
+        "operationId" : "click",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Count one open of an attribution link",
+        "tags" : [ "Attribution link clicks" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts" : {
       "post" : {
         "description" : "The cart is bound to this location and channel for its whole life. Moving location rebuilds it, because catalog, availability, tax, fee and promise all change with the branch.",
@@ -6096,20 +6134,8 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
-    "name" : "Customer identity"
-  }, {
-    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
-    "name" : "Telegram sign-in"
-  }, {
     "description" : "A customer's own profile, their own saved addresses, and the products they marked",
     "name" : "Customer self-service"
-  }, {
-    "description" : "Public, non-secret analytics identifiers for a brand",
-    "name" : "Storefront analytics"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
   }, {
     "description" : "Opening a payment attempt and getting the checkout surface for it",
     "name" : "Storefront payments"
@@ -6119,9 +6145,6 @@
   }, {
     "description" : "Pictures on the published menu",
     "name" : "Storefront media"
-  }, {
-    "description" : "Scanning a table code, and the bill it leads to",
-    "name" : "QR dine-in"
   }, {
     "description" : "Row 10.5: resolve a Host header to a tenant and channel",
     "name" : "Storefront channel hostname lookup"
@@ -6138,12 +6161,6 @@
     "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
     "name" : "Presented offers"
   }, {
-    "description" : "A customer's own referral code, and redeeming a friend's",
-    "name" : "Referrals"
-  }, {
-    "description" : "The tenant's own document, or the platform default (ADR 0068)",
-    "name" : "Storefront terms of service"
-  }, {
     "description" : "Availability and remaining quantity a customer can see",
     "name" : "Storefront inventory"
   }, {
@@ -6156,16 +6173,40 @@
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"
   }, {
-    "description" : "A customer's points balance and its movements",
-    "name" : "Loyalty"
+    "description" : "Anonymous click counting for ?ref= landings (ADR 0167)",
+    "name" : "Attribution link clicks"
   }, {
     "description" : "A customer's own 1:1 chat with the brand's bot (ADR 0058 stage 2)",
     "name" : "Customer Telegram linking"
   }, {
-    "description" : "Whether a location serves this channel and mode now",
-    "name" : "Serviceability"
-  }, {
     "description" : "A brand's FAQ and its social links",
     "name" : "Storefront support"
+  }, {
+    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
+    "name" : "Customer identity"
+  }, {
+    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
+    "name" : "Telegram sign-in"
+  }, {
+    "description" : "Public, non-secret analytics identifiers for a brand",
+    "name" : "Storefront analytics"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Scanning a table code, and the bill it leads to",
+    "name" : "QR dine-in"
+  }, {
+    "description" : "A customer's own referral code, and redeeming a friend's",
+    "name" : "Referrals"
+  }, {
+    "description" : "The tenant's own document, or the platform default (ADR 0068)",
+    "name" : "Storefront terms of service"
+  }, {
+    "description" : "A customer's points balance and its movements",
+    "name" : "Loyalty"
+  }, {
+    "description" : "Whether a location serves this channel and mode now",
+    "name" : "Serviceability"
   } ]
 }
