@@ -811,7 +811,7 @@ and writer-ownership review.
 
 ### 8.1a Legacy deposit balances are not imported as platform-held value
 
-[ADR 0165](adr/not-started/0165-customer-stored-value-horecaos-holds-no-customer-funds.md)
+[ADR 0165](adr/partial/0165-customer-stored-value-horecaos-holds-no-customer-funds.md)
 (Decision 7): HorecaOS holds no customer funds, and a Delever tenant's customers may
 hold deposit balances there. Those balances are never imported as value the platform
 holds.

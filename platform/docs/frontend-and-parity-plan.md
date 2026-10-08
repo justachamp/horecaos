@@ -169,7 +169,7 @@ on an answer only a person can give:
 | ~~0040~~ | ~~Who issues the fiscal receipt for an aggregator-collected payment~~ — closed by ADR 0038 on 2026-08-22: the restaurant's legal entity is the seller and the legal principal | Legal, finance |
 | 0042 | Courier employment classification | Legal, finance |
 | 0045 | Lawful basis for continuous courier location telemetry | Legal |
-| ~~0046~~ | ~~Whether HorecaOS may hold customer prepaid balances at all~~ — closed as a decline by [ADR 0165](adr/not-started/0165-customer-stored-value-horecaos-holds-no-customer-funds.md) on 2026-10-07: HorecaOS holds no customer funds (rows `5.2f`, `6.3a` and the deposit tender of §8 `X.1` leave this table; reopened only by an authorisation HorecaOS itself holds) | Legal |
+| ~~0046~~ | ~~Whether HorecaOS may hold customer prepaid balances at all~~ — closed as a decline by [ADR 0165](adr/partial/0165-customer-stored-value-horecaos-holds-no-customer-funds.md) on 2026-10-07: HorecaOS holds no customer funds (rows `5.2f`, `6.3a` and the deposit tender of §8 `X.1` leave this table; reopened only by an authorisation HorecaOS itself holds) | Legal |
 
 Four of those five are the same question wearing different clothes: who is the
 legal principal when money or a tax obligation moves. That is one conversation,

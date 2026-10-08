@@ -1,40 +1,31 @@
 # ADR 0165: Customer stored value: HorecaOS holds no customer funds
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — there is nothing to build to hold this
-  position, and that is the point; what exists is the structure that already makes
-  it true, and three loose ends this record names. The ledger is points only:
-  `loyalty.entries.entry_type` is a closed set at the database
-  (`ck_loyalty_entry_type`, V0042) with no top-up and no withdrawal,
-  `loyalty.accounts` has no account-type column, and the application role holds
-  `SELECT` and `INSERT` on `loyalty.entries` and nothing else. Settlement refuses a
-  balance that behaves like money: `payments.payment_methods.settles_from_balance`
-  is pinned to the `OPERATOR` responsibility
-  (`ck_payment_method_balance_is_not_a_fiscal_path`), a balance tender carries no
-  payment intent (`ck_tender_balance_has_no_intent`), and
-  `ux_tender_one_balance_per_settlement` admits one balance leg per settlement;
-  `PaymentMethod` is exactly `CASH`, `CLICK`, `PAYME`, `TELEGRAM` and
-  `MARKETPLACE`, plus the `LOYALTY_POINTS` leg that
-  `CheckoutSettlementPlanner.POINTS_METHOD_CODE` registers. `NoDepositTenderTests`
-  holds the method set and
-  `LoyaltyLedgerAndSplitTenderTests.theDatabaseRejectsTopUpAndWithdrawal` the entry
-  types; of the three settlement constraints only `ck_tender_balance_has_no_intent`
-  has a test today, and a weak one, so the Specification adds a guard for each of
-  the other two and tightens that one. The operations console says so in three places
-  and three languages:
-  the «Deposit accounts» card on the loyalty page (`marketing.loyalty.deposit.*`,
-  `data-testid="loyalty-deposit-not-built"`), the customer pane's
-  `customers.cashback.depositNotBuilt`, and an order payment read
-  (`OperationsPaymentController`, `payment[]`) that can name no deposit method.
-  Three loose ends are open. The manual adjustment endpoint
-  (`POST /api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments`,
-  `LoyaltyOperationsController.AdjustmentRequest`) takes `reasonCode` as any
-  non-blank string, and the console's adjustment dialog
-  (`customer-detail-pane.ts`, `adjustReasonCode`) lets the operator type it, so
-  points can be credited against cash received under any label. No record says what
-  a refund does when the original method cannot take the money back. And the three
-  gap-map rows are still `BLOCKED` or `PARTIAL` on a legal question instead of
-  closed on a decision.
+- Implementation status: Partial — the decline is written where a build can see it, and the
+  switch that makes the closed list bite is one platform write away (batch 20). The guards
+  of the Specification exist: `StoredValueCapabilityStemTests` (no capability code contains a
+  stored-value stem; the exceptions are asserted exactly and are four, not three: the
+  `commercial.wallet.read`, `.manage` and `.topup` codes of ADR 0095's tenant wallet,
+  `.topup` having been added after this record was written, and `courier.payout.authorise`),
+  `NoStoredValueProviderTests` (the provider types and the `PAYMENT` capability catalogue
+  name no wallet or deposit), guards 4 and 5 and the tightened `pointsCannotReachAProvider`
+  in `LoyaltyLedgerAndSplitTenderTests` (it now names a real payment intent, so it fails on
+  `ck_tender_balance_has_no_intent` and on nothing else). The policy
+  `loyalty.adjustment_reason_codes` is `PLATFORM`-only (`AdjustmentReasonPolicyService`),
+  seeded `REPORT_ONLY` with the five codes by V0552, applied by
+  `LoyaltyAdjustmentService.adjust` before an approval is asked for, counted by
+  `loyalty.adjustment.reason_code_unlisted` (labelled by mode alone), and its policy id
+  and version are in the `loyalty.balance.adjust` audit fact. `GET
+  /api/v1/operations/tenants/{tenantId}/loyalty/adjustment-reason-codes` serves it
+  (`loyalty.adjust`); the adjustment dialog reads it (suggestions while it is reported, a
+  closed choice once it is enforced); an enforced list refuses with 400 `VALIDATION_FAILED`
+  and an `errors[]` entry for `reasonCode`, never echoing the code. The two console notices
+  say «not offered» in the Decision 8 sentence, with what would reopen it and the ADR 0046
+  condition it narrows, in ru, uz-Latn and en. IA rows 5.2, 6.3, 8.1 and 10.6, the parity
+  matrix, the finance spec, the parity plan's blocked table and the migration plan carry
+  the decline. Not done: flipping the policy to `ENFORCE` (a platform write after one
+  release of counter data, `AdjustmentReasonPolicyService.author`; no console edits it), and
+  the refund-without-a-source rule in ADR 0048's runbook, which does not exist yet.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

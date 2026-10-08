@@ -117,6 +117,21 @@ misreport either a compliant cash-heavy branch or a genuine unreceipted
 majority), and the two operator actions, `retry` and `unblock`. This wave
 adds no fiscal endpoint — only the console that reads them.
 
+**Since then (ADR 0166, batch 20, backend):** the evidence the paragraph below
+says does not exist is served by `OperationsFiscalEvidenceController` —
+`GET /api/v1/operations/tenants/{tenantId}/orders/{orderId}/fiscal-evidence`
+(documents with the INN each was issued under, the lines as filed, the tender
+split, marking as a count, identifiers masked unless the caller holds
+`fiscal.evidence.reveal` and states a purpose), `GET .../fiscal/payment-types`
+(derived, not settable), and the correction and void requests
+(`POST .../fiscal/documents/{documentId}/correction-requests`,
+`POST .../fiscal/correction-requests/{requestId}/attachments`,
+`GET .../fiscal/correction-requests`). The console block that draws them is the
+next piece of work; until it ships this screen still renders only what the
+paragraph below describes. `retry` now answers 409 with `reasonCode
+FISCAL_LINES_NOT_BUILT` where only the one-line placeholder receipt could be
+filed and the environment is not a sandbox the platform has allowed it in.
+
 **Deliberately absent from this screen, per the controller's own doc:** no
 fiscal sign, receipt URL, or marking code. Those are ADR 0029-protected
 evidence, read through "the payments module's authorized order-payment
