@@ -94,7 +94,7 @@ export interface Lead {
   readonly version: number;
   readonly createdAt: string;
   readonly updatedAt: string;
-  /** Accounts holding the same number — a hint to confirm, never a link. */
+  /** Accounts holding the same number — a hint to confirm with `linkCustomer`, never a link of its own. */
   readonly possibleAccountIds: readonly string[];
   readonly otherOpenLeadIds: readonly string[];
 }
@@ -279,6 +279,25 @@ export class LeadsApi {
       this.api.post<{ locationId: string }, Lead>(
         leadPaths.assignment(reach, leadId),
         command({ locationId }),
+        { expectedVersion },
+      ),
+    );
+  }
+
+  /**
+   * Confirms the guest behind a lead (ADR 0111 §4): the operator looked at an account the detail hinted at
+   * and says it is her. The lead then belongs to that account's card, and to its erasure.
+   */
+  linkCustomer(
+    reach: LeadReach,
+    leadId: string,
+    customerAccountId: string,
+    expectedVersion: number,
+  ): Promise<Lead> {
+    return firstValueFrom(
+      this.api.post<{ customerAccountId: string }, Lead>(
+        leadPaths.customerLink(reach, leadId),
+        command({ customerAccountId }),
         { expectedVersion },
       ),
     );

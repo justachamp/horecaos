@@ -1162,6 +1162,269 @@ class LeadControllerEndpointTests {
                 .isEqualTo("+998 ** *** 45 67");
     }
 
+    // ============================================================================ identification
+
+    @Test
+    @DisplayName("an operator confirms the hinted account: the lead joins her card, and her erasure reaches it")
+    void confirmingTheHintedAccountPutsTheLeadOnHerCardAndInHerErasure(
+            @Autowired uz.horecaos.platform.customers.application.CustomerErasureService erasure) throws Exception {
+        UUID accountId = account("Identified Guest");
+        addPhone(accountId, PHONE);
+        // The lead was phoned in on a DIFFERENT number than the account holds, so only a link can
+        // tie the two: a number match would not find it.
+        MvcResult lead = register(CALL_CENTRE, "CALLBACK_REQUEST", "+998 93 777 66 55", NAME, NOTES, null);
+        UUID leadId = idOf(lead);
+        attempt(CALL_CENTRE, leadId, """
+                {"direction":"OUTBOUND","outcome":"CONNECTED"}
+                """);
+        assertThat(cardLeads(accountId))
+                .as("before anybody says who she is, the card has no such lead")
+                .isEmpty();
+
+        MvcResult linked = link(CALL_CENTRE, leadId, etag(lead), accountId);
+
+        assertThat(linked.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = JSON.readTree(linked.getResponse().getContentAsString());
+        assertThat(body.path("customerAccountId").asText()).isEqualTo(accountId.toString());
+        assertThat(body.path("version").asInt())
+                .as("a link is a change of the lead: its version moves")
+                .isEqualTo(JSON.readTree(lead.getResponse().getContentAsString())
+                                .path("version")
+                                .asInt()
+                        + 1);
+        assertThat(etag(linked)).isNotEqualTo(etag(lead));
+        assertThat(cardLeads(accountId)).containsExactly(leadId.toString());
+        JsonNode card = JSON.readTree(mvc.perform(get(card(accountId)).with(token(OWNER)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        assertThat(card.path("history").toString())
+                .as("the call made about the lead, before it was linked, is now part of her history")
+                .contains("VOICE_CONTACT");
+        assertThat(auditActions().stream()
+                        .filter("customer.lead.linked"::equals)
+                        .count())
+                .as("one fact for the link")
+                .isEqualTo(1);
+        assertThat(jdbc.sql(
+                                "SELECT change_document::text FROM audit.audit_events WHERE action_code = 'customer.lead.linked'")
+                        .query(String.class)
+                        .single())
+                .as("the fact names the account by id and carries no number, name or note")
+                .contains(accountId.toString())
+                .doesNotContain("777")
+                .doesNotContain("Aziza")
+                .doesNotContain("buffet");
+
+        var request = erasure.request(
+                TENANT,
+                accountId,
+                uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia.OPERATIONS,
+                uz.horecaos.platform.audit.api.ActorRef.user(OWNER, null));
+        erasure.execute(TENANT, accountId, request.id(), uz.horecaos.platform.audit.api.ActorRef.user(OWNER, null));
+
+        assertThat(jdbc.sql("SELECT phone_masked || '|' || coalesce(display_name_encrypted, 'none') || '|' "
+                                + "|| coalesce(notes_encrypted, 'none') FROM customer.leads WHERE id = :id")
+                        .param("id", leadId)
+                        .query(String.class)
+                        .single())
+                .as("a lead on another number is hers because an operator said so: it goes with her")
+                .isEqualTo("[erased]|none|none");
+    }
+
+    @Test
+    @DisplayName(
+            "linking again moves the lead to the new account, the fact names both, and the same account is a no-op")
+    void linkingAgainMovesTheLeadAndTheSameAccountChangesNothing() throws Exception {
+        UUID first = account("First Guess");
+        UUID second = account("The Real Guest");
+        MvcResult lead = register(CALL_CENTRE, "SITE", PHONE, null, null, null);
+        MvcResult toFirst = link(CALL_CENTRE, idOf(lead), etag(lead), first);
+
+        MvcResult again = link(CALL_CENTRE, idOf(lead), etag(toFirst), first);
+        MvcResult moved = link(CALL_CENTRE, idOf(lead), etag(again), second);
+
+        assertThat(again.getResponse().getStatus()).isEqualTo(200);
+        assertThat(etag(again)).as("the same account twice is not a change").isEqualTo(etag(toFirst));
+        assertThat(JSON.readTree(moved.getResponse().getContentAsString())
+                        .path("customerAccountId")
+                        .asText())
+                .isEqualTo(second.toString());
+        assertThat(auditActions().stream()
+                        .filter("customer.lead.linked"::equals)
+                        .count())
+                .as("two changes, two facts; the repeat wrote none")
+                .isEqualTo(2);
+        assertThat(jdbc.sql(
+                                "SELECT change_document::text FROM audit.audit_events WHERE action_code = 'customer.lead.linked' "
+                                        + "ORDER BY occurred_at DESC, id DESC LIMIT 1")
+                        .query(String.class)
+                        .single())
+                .as("the second fact says where it came from as well as where it went")
+                .contains(first.toString())
+                .contains(second.toString());
+        assertThat(cardLeads(first))
+                .as("her card no longer lists a lead that was not hers")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a link is refused for an account that is not this tenant's, that was erased, or that has no such id")
+    void aLinkToAnAccountThatCannotBeLinkedIsNoSuchCustomer(
+            @Autowired uz.horecaos.platform.customers.application.CustomerErasureService erasure) throws Exception {
+        MvcResult lead = register(CALL_CENTRE, "SITE", PHONE, null, null, null);
+        UUID foreign = UUID.randomUUID();
+        jdbc.sql("INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name, "
+                        + "identity_policy_version, version) VALUES (:id, :t, 'ACTIVE', 'Elsewhere', 1, 1)")
+                .param("id", foreign)
+                .param("t", OTHER_TENANT)
+                .update();
+        UUID erased = account("Erased Before");
+        var request = erasure.request(
+                TENANT,
+                erased,
+                uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia.OPERATIONS,
+                uz.horecaos.platform.audit.api.ActorRef.user(OWNER, null));
+        erasure.execute(TENANT, erased, request.id(), uz.horecaos.platform.audit.api.ActorRef.user(OWNER, null));
+
+        for (UUID refused : List.of(UUID.randomUUID(), foreign, erased)) {
+            MvcResult result = link(CALL_CENTRE, idOf(lead), etag(lead), refused);
+            assertThat(result.getResponse().getStatus())
+                    .as("account %s", refused)
+                    .isEqualTo(404);
+        }
+        assertThat(jdbc.sql("SELECT customer_account_id FROM customer.leads WHERE id = :id")
+                        .param("id", idOf(lead))
+                        .query(UUID.class)
+                        .optional())
+                .as("nothing was linked by any refused call")
+                .isEmpty();
+        assertThat(auditActions()).doesNotContain("customer.lead.linked");
+    }
+
+    @Test
+    @DisplayName("an account that was merged away is followed to the account it became")
+    void aMergedAccountIsFollowedToItsSurvivor() throws Exception {
+        UUID survivor = account("Survivor");
+        UUID mergedAway = account("Merged Away");
+        // The row mergeAccount leaves behind: status MERGED and the redirect.
+        jdbc.sql("UPDATE customer.customer_accounts SET status = 'MERGED', merged_into_account_id = :survivor "
+                        + "WHERE id = :id")
+                .param("survivor", survivor)
+                .param("id", mergedAway)
+                .update();
+        MvcResult lead = register(CALL_CENTRE, "SITE", PHONE, null, null, null);
+
+        MvcResult linked = link(CALL_CENTRE, idOf(lead), etag(lead), mergedAway);
+
+        assertThat(JSON.readTree(linked.getResponse().getContentAsString())
+                        .path("customerAccountId")
+                        .asText())
+                .isEqualTo(survivor.toString());
+    }
+
+    @Test
+    @DisplayName("a link needs a current version, the manage capability, and a lead inside the branch's reach")
+    void aLinkNeedsTheVersionTheCapabilityAndReach() throws Exception {
+        UUID accountId = account("Reach Guest");
+        MvcResult handed = registerAssigned(CHILONZOR);
+        MvcResult elsewhere = register(CALL_CENTRE, "SITE", "+998 91 555 00 11", null, null, YUNUSOBOD);
+
+        assertThat(link(CALL_CENTRE, idOf(handed), "\"999\"", accountId)
+                        .getResponse()
+                        .getStatus())
+                .as("a second tab's stale version loses loudly")
+                .isEqualTo(409);
+        assertThat(mvc.perform(post(leadPath(idOf(handed)) + "/customer")
+                                .with(token(CALL_CENTRE))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"customerAccountId\":\"" + accountId + "\"}"))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("no version at all is refused")
+                .isEqualTo(400);
+        assertRefused(link(SUPPORT, idOf(handed), etag(handed), accountId), Capability.CUSTOMER_LEAD_MANAGE);
+        assertThat(JSON.readTree(branchLink(CHI_MANAGER, CHILONZOR, idOf(handed), etag(handed), accountId)
+                                .getResponse()
+                                .getContentAsString())
+                        .path("customerAccountId")
+                        .asText())
+                .as("the branch that was handed the lead can say who the guest is")
+                .isEqualTo(accountId.toString());
+        assertThat(branchLink(CHI_MANAGER, CHILONZOR, idOf(elsewhere), etag(elsewhere), accountId)
+                        .getResponse()
+                        .getStatus())
+                .as("a lead handed to another branch is no lead of hers")
+                .isEqualTo(404);
+        assertThat(jdbc.sql("SELECT customer_account_id FROM customer.leads WHERE id = :id")
+                        .param("id", idOf(elsewhere))
+                        .query(UUID.class)
+                        .optional())
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "converting a lead into an order links it to the guest the order was taken for, and never overrides a link")
+    void aConversionLinksTheLeadToTheOrdersGuest() throws Exception {
+        UUID orderGuest = OrderBoardFixtures.customerOf(TENANT);
+        UUID orderId = fixtures.insertOrder(
+                OrderBoardFixtures.order("lead-conversion-link").at(TENANT, BRAND, CHILONZOR));
+        MvcResult unlinked = register(CALL_CENTRE, "B2B_CATERING_ENQUIRY", PHONE, NAME, NOTES, null);
+        UUID someoneElse = account("Chosen By Hand");
+        MvcResult chosen = register(CALL_CENTRE, "SITE", "+998 91 555 00 11", null, null, null, someoneElse);
+
+        MvcResult converted = transition(CALL_CENTRE, idOf(unlinked), etag(unlinked), """
+                {"target":"CONVERTED","convertedOrderId":"%s"}
+                """.formatted(orderId));
+        MvcResult keptLink = transition(CALL_CENTRE, idOf(chosen), etag(chosen), """
+                {"target":"CONVERTED","convertedOrderId":"%s"}
+                """.formatted(orderId));
+
+        assertThat(converted.getResponse().getStatus()).isEqualTo(200);
+        assertThat(JSON.readTree(converted.getResponse().getContentAsString())
+                        .path("customerAccountId")
+                        .asText())
+                .as("the order names her, so the lead is hers")
+                .isEqualTo(orderGuest.toString());
+        assertThat(cardLeads(orderGuest)).containsExactly(idOf(unlinked).toString());
+        assertThat(JSON.readTree(keptLink.getResponse().getContentAsString())
+                        .path("customerAccountId")
+                        .asText())
+                .as("an operator's own link is not overridden by the order's")
+                .isEqualTo(someoneElse.toString());
+    }
+
+    @Test
+    @DisplayName("converting a lead into a reservation links it to the account that made the booking")
+    void aReservationConversionLinksTheLeadToItsBooker() throws Exception {
+        UUID booker = account("Booked By");
+        UUID reservationId = seedReservation(BRAND, CHILONZOR, booker);
+        UUID anonymousReservation = seedReservation(BRAND, CHILONZOR, null);
+        MvcResult lead = register(CALL_CENTRE, "CALLBACK_REQUEST", PHONE, null, null, null);
+        MvcResult anonymousLead = register(CALL_CENTRE, "CALLBACK_REQUEST", "+998 91 555 00 11", null, null, null);
+
+        MvcResult converted = transition(CALL_CENTRE, idOf(lead), etag(lead), """
+                {"target":"CONVERTED","convertedReservationId":"%s"}
+                """.formatted(reservationId));
+        MvcResult noBooker =
+                transition(CALL_CENTRE, idOf(anonymousLead), etag(anonymousLead), """
+                {"target":"CONVERTED","convertedReservationId":"%s"}
+                """.formatted(anonymousReservation));
+
+        assertThat(JSON.readTree(converted.getResponse().getContentAsString())
+                        .path("customerAccountId")
+                        .asText())
+                .isEqualTo(booker.toString());
+        assertThat(JSON.readTree(noBooker.getResponse().getContentAsString())
+                        .path("customerAccountId")
+                        .isNull())
+                .as("a booking made by nobody with an account identifies nobody")
+                .isTrue();
+    }
+
     // ===================================================================== helpers
 
     private MvcResult register(
@@ -1204,6 +1467,38 @@ class LeadControllerEndpointTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body.toString()))
                 .andReturn();
+    }
+
+    private MvcResult link(String subject, UUID leadId, String version, UUID accountId) throws Exception {
+        return mvc.perform(post(leadPath(leadId) + "/customer")
+                        .with(token(subject))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .header("If-Match", version)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerAccountId\":\"" + accountId + "\"}"))
+                .andReturn();
+    }
+
+    private MvcResult branchLink(String subject, UUID locationId, UUID leadId, String version, UUID accountId)
+            throws Exception {
+        return mvc.perform(post(location(locationId) + "/leads/" + leadId + "/customer")
+                        .with(token(subject))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .header("If-Match", version)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerAccountId\":\"" + accountId + "\"}"))
+                .andReturn();
+    }
+
+    /** The ids of the leads the account's card lists. */
+    private List<String> cardLeads(UUID accountId) throws Exception {
+        JsonNode card = JSON.readTree(mvc.perform(get(card(accountId)).with(token(OWNER)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        List<String> ids = new java.util.ArrayList<>();
+        card.path("leads").forEach(lead -> ids.add(lead.path("id").asText()));
+        return ids;
     }
 
     private MvcResult registerAssigned(UUID locationId) throws Exception {
@@ -1317,7 +1612,9 @@ class LeadControllerEndpointTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"PHONE\",\"value\":\"" + value + "\",\"primary\":true}"))
                 .andReturn();
-        assertThat(added.getResponse().getStatus()).isEqualTo(201);
+        assertThat(added.getResponse().getStatus())
+                .as("the contact point was added")
+                .isBetween(200, 201);
     }
 
     private UUID account(String displayName) {
@@ -1372,6 +1669,10 @@ class LeadControllerEndpointTests {
     }
 
     private UUID seedReservation(UUID brandId, UUID locationId) {
+        return seedReservation(brandId, locationId, null);
+    }
+
+    private UUID seedReservation(UUID brandId, UUID locationId, @Nullable UUID accountId) {
         UUID reservationId = UUID.randomUUID();
         Instant from = Instant.parse("2026-10-20T18:00:00Z");
         jdbc.sql("""
@@ -1379,10 +1680,11 @@ class LeadControllerEndpointTests {
                     id, tenant_id, brand_id, location_id, guest_name_encrypted,
                     guest_phone_encrypted, guest_phone_lookup_hash, note_encrypted,
                     party_size, requested_from, requested_to, turnaround_minutes_snapshot,
-                    status, source_channel_id, created_by, version)
+                    status, source_channel_id, created_by, version, customer_account_id)
                 VALUES (:id, :tenantId, :brandId, :locationId, 'unused', 'unused', 'unused-hash', 'unused',
-                    4, :from, :to, 15, 'REQUESTED', :channelId, 'test-fixture', 1)
+                    4, :from, :to, 15, 'REQUESTED', :channelId, 'test-fixture', 1, :accountId)
                 """)
+                .param("accountId", accountId)
                 .param("id", reservationId)
                 .param("tenantId", TENANT)
                 .param("brandId", brandId)

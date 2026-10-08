@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -40,5 +41,20 @@ public class OrderLeadConversionTargets implements LeadConversionTargets {
     @Override
     public boolean reservationExists(UUID tenantId, UUID brandId, UUID reservationId) {
         return false;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> orderCustomer(UUID tenantId, UUID brandId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT customer_account_id FROM ordering.orders
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :orderId
+                   AND customer_account_id IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .optional();
     }
 }

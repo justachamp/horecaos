@@ -1,5 +1,6 @@
 package uz.horecaos.platform.customers.api;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -17,4 +18,18 @@ public interface LeadConversionTargets {
 
     /** A reservation of this brand exists. */
     boolean reservationExists(UUID tenantId, UUID brandId, UUID reservationId);
+
+    /**
+     * The account the order was taken for, when it has one. A lead that converts into this order is
+     * that guest: the order is the evidence the call centre acted on, so the lead is linked to the
+     * account without anybody matching a phone number (ADR 0015).
+     */
+    default Optional<UUID> orderCustomer(UUID tenantId, UUID brandId, UUID orderId) {
+        return Optional.empty();
+    }
+
+    /** The account the reservation was made by, when it was made by one. */
+    default Optional<UUID> reservationCustomer(UUID tenantId, UUID brandId, UUID reservationId) {
+        return Optional.empty();
+    }
 }

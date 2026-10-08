@@ -10243,6 +10243,16 @@
         },
         "type" : "object"
       },
+      "LinkLeadCustomerRequest" : {
+        "properties" : {
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerAccountId" ],
+        "type" : "object"
+      },
       "ListVariantRequest" : {
         "properties" : {
           "trackingMode" : {
@@ -41676,6 +41686,61 @@
         "tags" : [ "Leads" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/leads/{leadId}/customer" : {
+      "post" : {
+        "description" : "The operator's confirmation of the hint the detail gives (an account holding the same number): the lead is linked to that account, appears on its card, and is erased with it. Never made by the platform on a number match alone. Allowed at any status; an account merged away is followed to the account it became. Needs If-Match with the lead's version.",
+        "operationId" : "linkCustomer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "leadId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LinkLeadCustomerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LeadView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Identify the guest behind a lead",
+        "tags" : [ "Leads" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/leads/{leadId}/transitions" : {
       "post" : {
         "description" : "Needs If-Match with the lead's version. CONVERTED needs exactly one of an order and a reservation of this brand; DECLINED and LOST need a coded reason; CALLBACK_SCHEDULED needs a time. An edge the machine does not have is 422.",
@@ -45676,6 +45741,69 @@
           }
         },
         "summary" : "Record a call about a lead handed to this branch",
+        "tags" : [ "Leads" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/leads/{leadId}/customer" : {
+      "post" : {
+        "description" : "As the brand route, for a lead this branch was handed: the branch that rings the guest is the one that learns who she is.",
+        "operationId" : "linkCustomerForLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "leadId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LinkLeadCustomerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LeadView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Identify the guest behind a lead handed to this branch",
         "tags" : [ "Leads" ]
       }
     },

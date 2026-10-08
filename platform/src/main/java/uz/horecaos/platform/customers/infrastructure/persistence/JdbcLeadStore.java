@@ -258,24 +258,37 @@ public class JdbcLeadStore {
     }
 
     /**
-     * Overwrites what identifies the guest on every lead linked to an erased account (ADR 0029,
-     * ADR 0015): the ciphertext is replaced, the hash is a fresh random value so erased rows do not
-     * all collide on one, and the name and notes are dropped. The lead's own facts -- its status,
-     * its source, its branch -- stay: they say nothing about who the guest was.
+     * Overwrites what identifies the guest on every lead of an erased account (ADR 0029, ADR 0015):
+     * the ciphertext is replaced, the hash is a fresh random value so erased rows do not all collide
+     * on one, and the name and notes are dropped. The lead's own facts -- its status, its source, its
+     * branch -- stay: they say nothing about who the guest was.
+     *
+     * <p>Two kinds of lead are the account's. A lead an operator <em>linked</em> to it is reached by
+     * the link. A lead nobody linked is reached by the number: it holds one of the numbers the
+     * account held ({@code phoneLookupHashes}, read before the account's own were overwritten),
+     * which is her personal data wherever it was written down. A lead linked to a <em>different</em>
+     * account is that account's whatever number it holds, and is left alone.
+     *
+     * @return how many leads were overwritten
      */
     public int erasePersonalFields(
             UUID tenantId,
             UUID accountId,
+            Collection<String> phoneLookupHashes,
             java.util.function.Function<UUID, String> tombstoneFor,
             String tombstoneMasked,
             Instant now) {
-        List<UUID> ids = jdbc.sql("""
-                SELECT id FROM customer.leads WHERE tenant_id = :tenantId AND customer_account_id = :accountId
-                """)
+        String byNumber = phoneLookupHashes.isEmpty()
+                ? ""
+                : " OR (customer_account_id IS NULL AND phone_lookup_hash IN (:hashes))";
+        var select = jdbc.sql("SELECT id FROM customer.leads WHERE tenant_id = :tenantId "
+                        + "AND (customer_account_id = :accountId" + byNumber + ")")
                 .param("tenantId", tenantId)
-                .param("accountId", accountId)
-                .query(UUID.class)
-                .list();
+                .param("accountId", accountId);
+        if (!phoneLookupHashes.isEmpty()) {
+            select = select.param("hashes", phoneLookupHashes);
+        }
+        List<UUID> ids = select.query(UUID.class).list();
         for (UUID id : ids) {
             jdbc.sql("""
                     UPDATE customer.leads
@@ -425,6 +438,34 @@ public class JdbcLeadStore {
                     displayNameEncrypted,
                     notesEncrypted,
                     customerAccountId,
+                    assignedLocationId,
+                    assignedAt,
+                    callbackDueAt,
+                    originCampaignId,
+                    originStepSequence,
+                    convertedOrderId,
+                    convertedReservationId,
+                    closedReason,
+                    createdBy,
+                    version,
+                    createdAt,
+                    updatedAt);
+        }
+
+        /** The same lead, linked to the account an operator identified it as (ADR 0111 §4). */
+        public LeadRow withAccount(UUID accountId) {
+            return new LeadRow(
+                    id,
+                    tenantId,
+                    brandId,
+                    status,
+                    source,
+                    phoneLookupHash,
+                    phoneEncrypted,
+                    phoneMasked,
+                    displayNameEncrypted,
+                    notesEncrypted,
+                    accountId,
                     assignedLocationId,
                     assignedAt,
                     callbackDueAt,

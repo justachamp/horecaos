@@ -378,8 +378,10 @@ export const customersEn = {
   'customers.leads.detail.customer': 'Customer',
   'customers.leads.detail.open': 'Open',
   'customers.leads.detail.hints.accounts':
-    'Customers with this number — confirm before merging, never assume',
+    'Customers with this number — confirm before linking, never assume',
   'customers.leads.detail.hints.leads': 'Other open callbacks with this number',
+  'customers.leads.detail.hints.link': 'This is her',
+  'customers.leads.detail.linked': 'Linked to a customer',
   'customers.leads.detail.reveal': 'Show number, name and notes',
   'customers.leads.detail.revealing': 'Showing…',
   'customers.leads.detail.revealNote': 'Recorded in the audit log.',

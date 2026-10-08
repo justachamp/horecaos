@@ -379,9 +379,10 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.leads.detail.reservation': 'Bron',
   'customers.leads.detail.customer': 'Mijoz',
   'customers.leads.detail.open': 'Ochish',
-  'customers.leads.detail.hints.accounts':
-    'Bu raqamli mijozlar — birlashtirishdan oldin tekshiring',
+  'customers.leads.detail.hints.accounts': 'Bu raqamli mijozlar — bogʻlashdan oldin tekshiring',
   'customers.leads.detail.hints.leads': 'Shu raqamli boshqa ochiq arizalar',
+  'customers.leads.detail.hints.link': 'Aynan shu mijoz',
+  'customers.leads.detail.linked': 'Mijozga bogʻlangan',
   'customers.leads.detail.reveal': 'Raqam, ism va izohlarni koʻrsatish',
   'customers.leads.detail.revealing': 'Koʻrsatilmoqda…',
   'customers.leads.detail.revealNote': 'Audit jurnaliga yoziladi.',
