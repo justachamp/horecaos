@@ -1,7 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DeviceAuthError, DeviceSession } from './device-session';
+import {
+  DEVICE_TOKEN_RETRY_DELAYS_MS,
+  DeviceAuthError,
+  DeviceSession,
+  DeviceTokenUnavailableError,
+} from './device-session';
 
 const CREDENTIAL_KEY = 'horecaos.kds.credential';
 const SETUP_KEY = 'horecaos.kds.setup';
@@ -194,6 +199,113 @@ describe('DeviceSession', () => {
 
     expect(session.isEnrolled()).toBe(false);
     expect(localStorage.getItem(CREDENTIAL_KEY)).toBeNull();
+  });
+
+  describe('an identity-provider outage is not a revoked device', () => {
+    const CREDENTIAL = {
+      tokenEndpoint: 'https://auth.example.uz/token',
+      clientId: 'c',
+      clientSecret: 's',
+    };
+
+    beforeEach(() => {
+      localStorage.setItem(CREDENTIAL_KEY, JSON.stringify(CREDENTIAL));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Runs `accessToken()` to its end with the fake clock running, returning how it settled. */
+    async function settle(session: DeviceSession): Promise<unknown> {
+      const outcome = session.accessToken().then(
+        (token) => token,
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(
+        DEVICE_TOKEN_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0) + 1,
+      );
+      return outcome;
+    }
+
+    for (const status of [500, 502, 503, 504, 429, 408]) {
+      it(`keeps the credential when Keycloak answers ${status}, and says it was unavailable rather than refused`, async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn().mockResolvedValue(new Response('', { status }));
+        vi.stubGlobal('fetch', fetchMock);
+        const session = TestBed.inject(DeviceSession);
+
+        const outcome = await settle(session);
+
+        expect(outcome).toBeInstanceOf(DeviceTokenUnavailableError);
+        expect(outcome).not.toBeInstanceOf(DeviceAuthError);
+        expect((outcome as DeviceTokenUnavailableError).status).toBe(status);
+        expect(session.isEnrolled()).toBe(true);
+        expect(localStorage.getItem(CREDENTIAL_KEY)).not.toBeNull();
+        // Tried again, a bounded number of times, before giving up for this poll.
+        expect(fetchMock).toHaveBeenCalledTimes(DEVICE_TOKEN_RETRY_DELAYS_MS.length + 1);
+      });
+    }
+
+    it('rides out a blip: a 503 followed by a token is a token, from the very same call', async () => {
+      vi.useFakeTimers();
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(new Response('', { status: 503 }))
+        .mockResolvedValueOnce(tokenResponse('recovered-token'));
+      vi.stubGlobal('fetch', fetchMock);
+      const session = TestBed.inject(DeviceSession);
+
+      const outcome = await settle(session);
+
+      expect(outcome).toBe('recovered-token');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(session.isEnrolled()).toBe(true);
+    });
+
+    it('keeps the credential when Keycloak cannot be reached at all, and mints again once it can', async () => {
+      vi.useFakeTimers();
+      const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+      vi.stubGlobal('fetch', fetchMock);
+      const session = TestBed.inject(DeviceSession);
+
+      const outcome = await settle(session);
+
+      expect(outcome).toBeInstanceOf(DeviceTokenUnavailableError);
+      expect((outcome as DeviceTokenUnavailableError).status).toBeNull();
+      expect(session.isEnrolled()).toBe(true);
+
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValue(tokenResponse('after-the-outage'));
+      expect(await session.accessToken()).toBe('after-the-outage');
+    });
+
+    it('does not take a 200 that is not a token for a refusal', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(new Response('<html>bad gateway</html>', { status: 200 })),
+      );
+      const session = TestBed.inject(DeviceSession);
+
+      const outcome = await settle(session);
+
+      expect(outcome).toBeInstanceOf(DeviceTokenUnavailableError);
+      expect(session.isEnrolled()).toBe(true);
+    });
+
+    for (const status of [401, 403]) {
+      it(`still ends the session on a real refusal (${status}), and does not retry it`, async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response('', { status }));
+        vi.stubGlobal('fetch', fetchMock);
+        const session = TestBed.inject(DeviceSession);
+
+        await expect(session.accessToken()).rejects.toBeInstanceOf(DeviceAuthError);
+
+        expect(session.isEnrolled()).toBe(false);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    }
   });
 
   it('stores the credential the first time a poll observes APPROVED with one, and never again re-requests it', async () => {
