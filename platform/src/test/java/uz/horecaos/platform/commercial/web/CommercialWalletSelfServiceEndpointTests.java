@@ -825,7 +825,7 @@ class CommercialWalletSelfServiceEndpointTests {
                 .param("tenantId", tenantId)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
-                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .param("validFrom", OCTOBER.minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }
 
@@ -841,7 +841,7 @@ class CommercialWalletSelfServiceEndpointTests {
                 .param("id", UUID.nameUUIDFromBytes(("platform-" + subject).getBytes(UTF_8)))
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
-                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .param("validFrom", OCTOBER.minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }
 
