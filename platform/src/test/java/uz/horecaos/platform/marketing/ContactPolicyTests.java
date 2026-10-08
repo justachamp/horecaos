@@ -80,6 +80,16 @@ class ContactPolicyTests {
                 override("SMS", "DAILY", null, LocalTime.of(21, 0), LocalTime.of(9, 0)),
                 "never loosened",
                 "earlier than 10:00");
+        // Both bounds hold for these and they still loosen: a window inside one day closes a
+        // few morning hours and leaves the evening open. The shape is part of the rule.
+        assertRefused(
+                override("SMS", "DAILY", null, LocalTime.of(5, 0), LocalTime.of(11, 0)),
+                "never loosened",
+                "does not wrap midnight");
+        assertRefused(
+                override("SMS", "DAILY", null, LocalTime.of(10, 0), LocalTime.of(21, 0)),
+                "never loosened",
+                "does not wrap midnight");
         assertThat(h.contactPolicy.list(TENANT, BRAND)).isEmpty();
     }
 
@@ -132,6 +142,8 @@ class ContactPolicyTests {
                 new Bad("ROLLING_30D", "9", "NULL", "NULL", "ck_contact_policy_cap_tighten_only"),
                 new Bad("DAILY", "NULL", "'21:30'", "'10:00'", "ck_contact_policy_quiet_tighten_only"),
                 new Bad("DAILY", "NULL", "'21:00'", "'09:00'", "ck_contact_policy_quiet_tighten_only"),
+                new Bad("DAILY", "NULL", "'05:00'", "'11:00'", "ck_contact_policy_quiet_wraps_midnight"),
+                new Bad("WEEKLY", "NULL", "'10:00'", "'21:00'", "ck_contact_policy_quiet_wraps_midnight"),
                 new Bad("DAILY", "NULL", "'21:00'", "NULL", "ck_contact_policy_quiet_pair"))) {
             assertThatThrownBy(() -> h.jdbc.sql(
                                     "INSERT INTO marketing.contact_policy_overrides (tenant_id, brand_id, channel, "
