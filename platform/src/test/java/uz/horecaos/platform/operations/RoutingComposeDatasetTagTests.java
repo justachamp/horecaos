@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
@@ -36,12 +37,14 @@ class RoutingComposeDatasetTagTests {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> service(String name) throws IOException {
         try (Reader reader = Files.newBufferedReader(COMPOSE, StandardCharsets.UTF_8)) {
-            Map<String, Object> file = new Yaml().load(reader);
+            Map<String, Object> file = Objects.requireNonNull(new Yaml().load(reader), "an empty compose file");
             Map<String, Object> services = (Map<String, Object>) file.get("services");
             assertThat(services).as("a services block").isNotNull();
-            Map<String, Object> service = (Map<String, Object>) services.get(name);
+            Map<String, Object> service = Objects.requireNonNull(services).get(name) instanceof Map<?, ?> found
+                    ? (Map<String, Object>) found
+                    : null;
             assertThat(service).as("a service named " + name).isNotNull();
-            return service;
+            return Objects.requireNonNull(service);
         }
     }
 

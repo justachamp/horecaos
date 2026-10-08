@@ -179,22 +179,48 @@ SELECT date_trunc('day', created_at) AS day, distance_source, routing_dataset_ve
 
 ## 6. The monthly refresh
 
-Run steps 1 to 3 with the new extract's date, then:
+Run steps 1 to 3 with the new extract's date, then move the engine first and the
+application second, back to back. The order is the point: the application is what stamps
+the dataset tag on a fee and keys its route cache by that tag, so the tag must not move
+before the engine holds the map it names.
 
 ```bash
 sed -i 's/^HORECAOS_ROUTING_DATASET_TAG=.*/HORECAOS_ROUTING_DATASET_TAG=2026-11-01/' /etc/horecaos/production.env
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env pull osrm-dataset
-docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env up -d osrm-dataset osrm platform-app
+# 1. The engine. osrm-dataset replaces the volume's files; osrm is recreated after it
+#    because its configuration names the tag, and so loads the new map from scratch.
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env up -d osrm-dataset osrm
+# 2. Wait until osrm says healthy (the engine takes a while to load the graph):
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env ps osrm
+# 3. Prove the engine is the new one, not the old one left running:
+docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  "$(docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env ps -q osrm)" \
+  | grep '^HORECAOS_ROUTING_DATASET_TAG='
+# 4. Only then the application, which starts stamping the new tag:
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env up -d platform-app
 ```
 
+**Check:** step 3 prints `HORECAOS_ROUTING_DATASET_TAG=2026-11-01`. If it prints the old
+tag, `osrm` was not recreated: stop here, do not run step 4, and run
+`docker compose … up -d --force-recreate osrm`. Never run `up -d platform-app` for a new
+tag against an engine that has not been recreated: the fees would say the new map measured
+them and the metres would come from the old one.
+
 **What changes and what does not.** The dataset tag on new fees is `2026-11-01`, the cache
-misses every entry (the tag is part of its key), and a tenant comparing two weeks of fee
+misses every entry (the tag is part of its key, and the cache lives in the application's
+memory, so recreating the application empties it), and a tenant comparing two weeks of fee
 reports will see small shifts that nobody edited a tariff for: the dataset version on the
 fee's evidence is what explains them. A quote **issued before** the refresh is accepted at
-the fee it was issued with, and the next quote measures against the new map. Between
-`osrm-dataset` replacing the files and `osrm` restarting there is a short window in which
-the engine answers from the old graph in memory: harmless, since the application's
-dataset tag moves in the same `up`.
+the fee it was issued with, and the next quote measures against the new map.
+
+**The windows, and which way they lean.** While `osrm` reloads (step 1 to healthy) the
+engine does not answer, so `ROAD` quotes fall back to the straight line and say
+`RADIUS_FALLBACK`; expect a burst of `outcome="error"` and, if it lasts, `breaker_open`.
+That is the designed behaviour and it clears when the engine is healthy. Between the engine
+turning healthy and the application restarting (the seconds between steps 2 and 4) a fee is
+measured on the new map and stamped with the old tag, and its cached route dies with the
+old application process; no fee is ever stamped with a tag whose map has not been loaded.
+Keep steps 2 to 4 together to keep that window short.
 
 ## 7. Roll back
 
@@ -205,7 +231,9 @@ In order of how little they undo:
    effect on the next quote, cached routes included.
 2. **Everyone:** `HORECAOS_ROUTING_OSRM_ENABLED=false` and `up -d platform-app`.
 3. **The previous map:** set `HORECAOS_ROUTING_DATASET_TAG` back and run the step 6
-   commands. The old tag's image is still in the registry.
+   commands in the same order, engine first and application last. The old tag's image is
+   still in the registry, and the tag is in the engine's configuration, so the engine is
+   recreated on the old map before the application stamps the old tag.
 4. **The engine itself:** remove `routing` from `COMPOSE_PROFILES` and
    `docker compose … rm -sf osrm osrm-dataset`. The `osrm-data` volume holds only files
    the dataset image can recreate.

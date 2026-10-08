@@ -911,6 +911,19 @@ services:
     # engine refuses to start. The file name is the extract's, kept stable across
     # dataset tags so only the tag changes between months.
     command: ["osrm-routed", "--algorithm", "mld", "--ip", "0.0.0.0", "--port", "5000", "/data/uzbekistan-latest.osrm"]
+    environment:
+      # Not read by the engine. It is here so the engine's own resolved configuration
+      # names the dataset it was started on: Compose recreates a service only when that
+      # configuration changed, and `osrm` named nothing that varies with the tag. A
+      # refresh (`up -d osrm-dataset osrm`) then replaced the files in the volume under a
+      # running engine that had loaded the old graph into memory, while platform-app
+      # started stamping the new tag on every fee: the fee said it was measured on the
+      # new map and the metres came from the old one, and the route cache kept those
+      # metres under the new tag for a day (ADR 0147: the dataset version on a fee is the
+      # one that produced it). Rolling the tag back had the same hole. With the tag here,
+      # any change of tag, in either direction, recreates the engine after osrm-dataset
+      # has finished writing the volume (`depends_on` below).
+      HORECAOS_ROUTING_DATASET_TAG: ${HORECAOS_ROUTING_DATASET_TAG:-unset}
     volumes:
       - osrm-data:/data:ro
     depends_on:
