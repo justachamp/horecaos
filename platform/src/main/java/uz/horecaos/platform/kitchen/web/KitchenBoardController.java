@@ -344,7 +344,7 @@ public class KitchenBoardController {
                 ticketId,
                 body.expectedVersion(),
                 body.reasonCode(),
-                currentActor.get().subject(),
+                currentActor.attributed().subject(),
                 null);
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
     }
@@ -383,7 +383,7 @@ public class KitchenBoardController {
                 body.releaseAt(),
                 overrideGranted,
                 body.reasonCode(),
-                currentActor.get().subject(),
+                currentActor.attributed().subject(),
                 null);
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
     }
@@ -404,7 +404,7 @@ public class KitchenBoardController {
 
         atLocation(tenantId, ticketId, locationId);
         TicketRow after = tickets.handOver(
-                        tenantId, ticketId, currentActor.get().subject(), null)
+                        tenantId, ticketId, currentActor.attributed().subject(), null)
                 .orElseGet(() -> tickets.require(tenantId, ticketId));
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
     }
@@ -419,7 +419,7 @@ public class KitchenBoardController {
             @PathVariable UUID itemId) {
 
         itemAtLocation(tenantId, itemId, locationId);
-        var outcome = tickets.start(tenantId, itemId, currentActor.get().subject(), null);
+        var outcome = tickets.start(tenantId, itemId, currentActor.attributed().subject(), null);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -436,7 +436,7 @@ public class KitchenBoardController {
             @PathVariable UUID itemId) {
 
         itemAtLocation(tenantId, itemId, locationId);
-        var outcome = tickets.ready(tenantId, itemId, currentActor.get().subject(), null);
+        var outcome = tickets.ready(tenantId, itemId, currentActor.attributed().subject(), null);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -456,7 +456,7 @@ public class KitchenBoardController {
 
         itemAtLocation(tenantId, itemId, locationId);
         var outcome = tickets.recall(
-                tenantId, itemId, body.reasonCode(), currentActor.get().subject(), null);
+                tenantId, itemId, body.reasonCode(), currentActor.attributed().subject(), null);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 

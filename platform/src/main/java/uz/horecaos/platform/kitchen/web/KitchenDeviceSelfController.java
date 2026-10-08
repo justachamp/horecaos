@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.devices.DevicePrincipalClass;
 import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService;
 import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService.DeviceSelf;
 import uz.horecaos.platform.kitchen.web.KitchenDeviceController.StationRef;
+import uz.horecaos.platform.tenancy.api.KioskDeviceLookup;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -33,23 +35,28 @@ import uz.horecaos.platform.web.api.ErrorCode;
  */
 @RestController
 @RequestMapping("/api/v1/devices/me")
-@Tag(name = "Kitchen device self", description = "ADR 0151: an enrolled kitchen device reads its own record")
+@Tag(
+        name = "Kitchen device self",
+        description = "ADR 0151, ADR 0162: an enrolled device (a kitchen display or a kiosk) reads its own record")
 public class KitchenDeviceSelfController {
 
     private final KitchenDeviceDisplayService displays;
     private final CurrentActor currentActor;
+    private final KioskDeviceLookup kiosks;
 
-    public KitchenDeviceSelfController(KitchenDeviceDisplayService displays, CurrentActor currentActor) {
+    public KitchenDeviceSelfController(
+            KitchenDeviceDisplayService displays, CurrentActor currentActor, KioskDeviceLookup kiosks) {
         this.displays = displays;
         this.currentActor = currentActor;
+        this.kiosks = kiosks;
     }
 
     @GetMapping
     @Operation(
-            summary = "The calling kitchen device's own record",
+            summary = "The calling device's own record",
             description = "Its id, class, tenant, brand and branch, the branch's display name and IANA time "
-                    + "zone, and for a wall display the station it shows with its display names in the three "
-                    + "languages. A device principal only: a person's token and a revoked device's are 403. "
+                    + "zone, for a wall display the station it shows with its display names in the three "
+                    + "languages, and for a kiosk the channel it sells through. A device principal only: a person's token and a revoked device's are 403. "
                     + "Never a secret, a client id or a token.")
     public ResponseEntity<DeviceSelfResponse> me() {
         DeviceSelf self = displays.selfOf(currentActor.get().subject())
@@ -64,7 +71,19 @@ public class KitchenDeviceSelfController {
                 self.device().locationId(),
                 self.location().displayName(),
                 self.location().timezone(),
-                StationRef.of(self.station())));
+                StationRef.of(self.station()),
+                kioskOf(self)));
+    }
+
+    /** A kiosk's channel (ADR 0162); null for every other class and for a kiosk with no binding row. */
+    private @Nullable KioskRef kioskOf(DeviceSelf self) {
+        if (self.device().deviceClass() != DevicePrincipalClass.KIOSK) {
+            return null;
+        }
+        return kiosks.bindingOf(self.device().tenantId(), self.device().id())
+                .map(binding -> new KioskRef(
+                        binding.channelId(), binding.channelCode(), binding.channelName(), binding.channelStatus()))
+                .orElse(null);
     }
 
     /**
@@ -72,6 +91,8 @@ public class KitchenDeviceSelfController {
      * @param locationName the branch's display name
      * @param timezone     the branch's IANA zone, so the wall reads its clock where the kitchen is
      * @param station      for a wall display, the station it shows; null for the whole branch and for a touch KDS
+     * @param kiosk        for a paired kiosk, the channel it sells through (ADR 0162); null for every other class
+     *                     and for a kiosk that is not configured, which its shell shows as «not configured»
      */
     record DeviceSelfResponse(
             UUID deviceId,
@@ -82,5 +103,8 @@ public class KitchenDeviceSelfController {
             UUID locationId,
             String locationName,
             String timezone,
-            @Nullable StationRef station) {}
+            @Nullable StationRef station,
+            @Nullable KioskRef kiosk) {}
+
+    record KioskRef(UUID channelId, String channelCode, String channelName, String channelStatus) {}
 }

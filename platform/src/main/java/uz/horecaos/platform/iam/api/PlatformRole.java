@@ -293,6 +293,12 @@ public enum PlatformRole {
                     DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0162 and ADR 0155: pairing a kiosk, and the class-neutral terminals
+                    // registry. Held at LOCATION by the branch manager and above; the tenant policy
+                    // card is reached only through a TENANT-scope grant (the owner and administrator).
+                    KIOSK_DEVICE_MANAGE,
+                    TERMINAL_READ,
+                    TERMINAL_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -526,6 +532,12 @@ public enum PlatformRole {
                     DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0162 and ADR 0155: pairing a kiosk, and the class-neutral terminals
+                    // registry. Held at LOCATION by the branch manager and above; the tenant policy
+                    // card is reached only through a TENANT-scope grant (the owner and administrator).
+                    KIOSK_DEVICE_MANAGE,
+                    TERMINAL_READ,
+                    TERMINAL_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -703,6 +715,9 @@ public enum PlatformRole {
                     // that name a brand in the path -- the tenant-wide grants routes still need the
                     // capability at TENANT scope.
                     IAM_GRANT_MANAGE,
+                    // ADR 0155: a brand manager reads the terminals registry of the branches under
+                    // them and changes none of it -- the branch manager and above manage a device.
+                    TERMINAL_READ,
                     // ADR 0139: a brand manager sees the people of their brand and edits none of
                     // them -- changing a person is the branch manager's and above.
                     STAFF_PROFILE_READ,
@@ -835,6 +850,12 @@ public enum PlatformRole {
                     // release are held here and not by the line, because each of them
                     // undoes or delays something the line has already reported.
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0162 and ADR 0155: pairing a kiosk, and the class-neutral terminals
+                    // registry. Held at LOCATION by the branch manager and above; the tenant policy
+                    // card is reached only through a TENANT-scope grant (the owner and administrator).
+                    KIOSK_DEVICE_MANAGE,
+                    TERMINAL_READ,
+                    TERMINAL_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
@@ -978,7 +999,10 @@ public enum PlatformRole {
     KITCHEN_DEVICE(
             "kitchen-device",
             ScopeType.LOCATION,
-            EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_DISPLAY_READ, KITCHEN_TICKET_ADVANCE)),
+            // ADR 0155: terminal.unlock is the machine's half of a staff PIN unlock -- the roster, the
+            // keypad's request, the lock. It opens no board data and a session confers nothing the
+            // device and the person do not both hold.
+            EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_DISPLAY_READ, KITCHEN_TICKET_ADVANCE, TERMINAL_UNLOCK)),
 
     /**
      * ADR 0151: the whole of what a kitchen wall display (a VDU) may do — read the VDU projection
@@ -992,6 +1016,16 @@ public enum PlatformRole {
      * {@code KITCHEN_VDU}, and never to a staff member.
      */
     KITCHEN_VDU_DEVICE("kitchen-vdu-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_DISPLAY_READ)),
+
+    /**
+     * ADR 0162: the whole of what a customer-facing kiosk may do in this record -- read its own
+     * configuration. Exactly one capability, {@code kiosk.device.read}: it cannot read the kitchen
+     * board, an order, a customer or a settings document, and it cannot place an order, because the
+     * record that decides how a kiosk orders and takes payment has not been written and a device holds
+     * nothing it cannot yet use. Not a person's bundle and not offered by {@link TenantRoleCatalog}: only
+     * approving a pairing as {@code KIOSK} grants it, and never to a staff member.
+     */
+    KIOSK_DEVICE("kiosk-device", ScopeType.LOCATION, EnumSet.of(KIOSK_DEVICE_READ)),
 
     /**
      * ADR 0081: what a HorecaOS support person may see inside one tenant during

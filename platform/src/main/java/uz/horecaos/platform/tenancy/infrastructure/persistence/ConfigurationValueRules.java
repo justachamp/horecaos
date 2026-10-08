@@ -42,15 +42,40 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
-    private static final Map<String, Consumer<Object>> RULES = Map.of(
-            "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode,
-            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
-            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes,
-            "assistant.disclosure_text_en", value -> requirePlainShortText("assistant.disclosure_text_en", value),
-            "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
-            "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
+    private static final Map<String, Consumer<Object>> RULES = Map.ofEntries(
+            Map.entry("ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour),
+            Map.entry("ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay),
+            Map.entry("iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode),
+            Map.entry("ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold),
+            Map.entry("kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes),
+            Map.entry(
+                    "assistant.disclosure_text_en",
+                    value -> requirePlainShortText("assistant.disclosure_text_en", value)),
+            Map.entry(
+                    "assistant.disclosure_text_ru",
+                    value -> requirePlainShortText("assistant.disclosure_text_ru", value)),
+            Map.entry(
+                    "assistant.disclosure_text_uz",
+                    value -> requirePlainShortText("assistant.disclosure_text_uz", value)),
+            // ADR 0155: the five terminal policy values. Refused here, at the one place every writer passes through, so
+            // a PIN length of 5 or a session of 40 hours is never stored for a reader to trip over.
+            Map.entry("terminal.pin.length", value -> requireOneOf("terminal.pin.length", value, 4, 6)),
+            Map.entry(
+                    "terminal.auto_lock_seconds",
+                    value -> requireBetween("terminal.auto_lock_seconds", value, 30, 3_600)),
+            Map.entry(
+                    "terminal.session.max_hours", value -> requireBetween("terminal.session.max_hours", value, 1, 16)),
+            Map.entry(
+                    "terminal.roster.display",
+                    value -> requireText("terminal.roster.display", value, "NAME_INITIAL", "REFERENCE")),
+            Map.entry(
+                    "terminal.attribution.default",
+                    value -> requireText(
+                            "terminal.attribution.default",
+                            value,
+                            "DEVICE_ONLY",
+                            "PERSON_OPTIONAL",
+                            "PERSON_REQUIRED")));
 
     private ConfigurationValueRules() {}
 
@@ -109,6 +134,42 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     code + " must be plain text: no control characters other than a line break");
         }
+    }
+
+    private static void requireOneOf(String code, Object value, int... allowed) {
+        int number = ((Number) value).intValue();
+        for (int candidate : allowed) {
+            if (candidate == number) {
+                return;
+            }
+        }
+        throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                code + " must be one of " + java.util.Arrays.toString(allowed),
+                Map.of("field", code));
+    }
+
+    private static void requireBetween(String code, Object value, int minimum, int maximum) {
+        int number = ((Number) value).intValue();
+        if (number < minimum || number > maximum) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "%s must be between %d and %d".formatted(code, minimum, maximum),
+                    Map.of("field", code));
+        }
+    }
+
+    private static void requireText(String code, Object value, String... allowed) {
+        String text = String.valueOf(value);
+        for (String candidate : allowed) {
+            if (candidate.equals(text)) {
+                return;
+            }
+        }
+        throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                code + " must be one of " + String.join(", ", allowed),
+                Map.of("field", code));
     }
 
     private static void requireMinutesWithinADay(Object value) {

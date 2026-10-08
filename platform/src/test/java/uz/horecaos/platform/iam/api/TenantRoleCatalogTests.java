@@ -51,6 +51,9 @@ class TenantRoleCatalogTests {
                 .as(
                         "a device is not a colleague (ADR 0079, ADR 0151): its role is granted only by an approved enrolment")
                 .extracting(TenantRoleCatalog.RoleDescriptor::code)
-                .doesNotContain(PlatformRole.KITCHEN_DEVICE.code(), PlatformRole.KITCHEN_VDU_DEVICE.code());
+                .doesNotContain(
+                        PlatformRole.KITCHEN_DEVICE.code(),
+                        PlatformRole.KITCHEN_VDU_DEVICE.code(),
+                        PlatformRole.KIOSK_DEVICE.code());
     }
 }

@@ -13,14 +13,20 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort;
 import uz.horecaos.platform.iam.api.devices.DevicePrincipalClass;
+import uz.horecaos.platform.iam.api.devices.DeviceRevoked;
+import uz.horecaos.platform.iam.api.terminals.TerminalPolicy.AttributionMode;
+import uz.horecaos.platform.iam.api.terminals.TerminalPolicySource;
 import uz.horecaos.platform.iam.application.GrantManagementService;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -67,6 +73,15 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
     private static final String BEGIN_OPERATION = "device-enrolment-begin";
 
     private static final String POLL_OPERATION = "device-enrolment-poll";
+
+    /**
+     * ADR 0162: reading what a code claims is a second oracle on the code approval spends, so it is
+     * limited per approver (keyed by the staff subject, never the code). A manager reads a handful of
+     * codes in a day; a guesser needs a trillion.
+     */
+    private static final String PEEK_OPERATION = "device-enrolment-peek";
+
+    private static final RateLimiter.Policy PEEK_PER_APPROVER = RateLimiter.Policy.strictPerMinute(30);
     private static final RateLimiter.Policy BEGIN_PER_CALLER = RateLimiter.Policy.strictPerMinute(6);
 
     /** Polling is expected to happen every few seconds for up to ten minutes. */
@@ -77,18 +92,49 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
     private final GrantManagementService grants;
     private final RateLimiter rateLimiter;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
+    private final @Nullable TerminalPolicySource terminalPolicies;
 
+    /** For code wired by hand: no policy source and nobody listening. */
     public DeviceEnrolmentService(
             JdbcClient jdbc,
             DeviceClientProvisioner provisioner,
             GrantManagementService grants,
             RateLimiter rateLimiter,
             Clock clock) {
+        this(jdbc, provisioner, grants, rateLimiter, clock, event -> {}, null);
+    }
+
+    @Autowired
+    public DeviceEnrolmentService(
+            JdbcClient jdbc,
+            DeviceClientProvisioner provisioner,
+            GrantManagementService grants,
+            RateLimiter rateLimiter,
+            Clock clock,
+            ApplicationEventPublisher events,
+            @Nullable TerminalPolicySource terminalPolicies) {
         this.jdbc = jdbc;
         this.provisioner = provisioner;
         this.grants = grants;
         this.rateLimiter = rateLimiter;
         this.clock = clock;
+        this.events = events;
+        this.terminalPolicies = terminalPolicies;
+    }
+
+    /**
+     * The role each device class is granted: exactly one, the same for every device of the class, and
+     * decided here and nowhere else (ADR 0162). An open choice at a call site is the "a device that can
+     * do what a manager can do" failure ADR 0079 exists to end; a switch with no default is the closed
+     * set, and a class added to the enum without a row here does not compile.
+     */
+    public static PlatformRole roleOf(DevicePrincipalClass deviceClass) {
+        return switch (deviceClass) {
+            case KITCHEN_KDS -> PlatformRole.KITCHEN_DEVICE;
+            case KITCHEN_VDU -> PlatformRole.KITCHEN_VDU_DEVICE;
+            case KIOSK -> PlatformRole.KIOSK_DEVICE;
+        };
     }
 
     @Override
@@ -249,7 +295,8 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
             // pending for the approver to approve as the class it asked for.
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
-                    "A device that asked to be %s cannot be approved as %s".formatted(requestedClass, deviceClass));
+                    "A device that asked to be %s cannot be approved as %s".formatted(requestedClass, deviceClass),
+                    Map.of("requestedClass", requestedClass.name(), "approvedClass", deviceClass.name()));
         }
 
         DeviceClientProvisioner.ProvisionedClient client = provisioner.create(command.displayName());
@@ -257,23 +304,30 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
         UUID grantId = grants.grantSystemInitiated(
                 new GrantManagementService.GrantCommand(
                         client.serviceAccountSubject(),
-                        command.roleCode(),
+                        roleOf(deviceClass).code(),
                         command.scope(),
-                        "ADR 0079/0151 kitchen device enrolment as %s, approved by %s"
+                        "ADR 0079/0151/0162 device enrolment as %s, approved by %s"
                                 .formatted(deviceClass, approverSubject),
                         null),
                 SYSTEM_ACTOR);
 
         UUID deviceId = Ids.newId();
+        // ADR 0155: a new device starts in the tenant's default attribution mode, which is DEVICE_ONLY unless a manager
+        // changed the default -- and only a class a person unlocks can start in any other mode.
+        String attributionMode = AttributionMode.DEVICE_ONLY.name();
+        if (terminalPolicies != null && deviceClass.unlockable()) {
+            attributionMode = terminalPolicies.of(tenantId).attributionDefault().name();
+        }
         jdbc.sql("""
                 INSERT INTO iam.device_principals (
                     id, tenant_id, brand_id, location_id, device_class, display_name,
                     keycloak_client_internal_id, keycloak_client_id, principal_subject, grant_id,
-                    status, enrolled_by, enrolled_at)
+                    status, enrolled_by, enrolled_at, attribution_mode)
                 VALUES (:id, :tenantId, :brandId, :locationId, :deviceClass, :displayName,
                         :internalId, :clientId, :subject, :grantId,
-                        'ACTIVE', :enrolledBy, :enrolledAt)
+                        'ACTIVE', :enrolledBy, :enrolledAt, :attributionMode)
                 """)
+                .param("attributionMode", attributionMode)
                 .param("id", deviceId)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
@@ -327,6 +381,10 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
                 now,
                 null,
                 null,
+                null,
+                attributionMode,
+                null,
+                null,
                 null);
     }
 
@@ -362,6 +420,8 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
         // before, never the control this depends on.
         grants.revoke(device.tenantId(), device.grantId(), revokerSubject, reason);
         provisioner.disable(device.keycloakClientInternalId());
+        // Whatever hangs off a device ends in the same commit (ADR 0155: a revoked device's terminal sessions).
+        events.publishEvent(new DeviceRevoked(device.tenantId(), devicePrincipalId, revokerSubject, reason));
         return true;
     }
 
@@ -370,7 +430,8 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
             SELECT d.id, d.tenant_id, d.brand_id, d.location_id, d.device_class,
                    COALESCE(r.requested_class, d.device_class) AS requested_class,
                    d.display_name, d.status, d.enrolled_by, d.enrolled_at,
-                   d.revoked_by, d.revoked_at, d.revoked_reason
+                   d.revoked_by, d.revoked_at, d.revoked_reason,
+                   d.attribution_mode, d.auto_lock_seconds, d.last_seen_at, d.last_seen_build
               FROM iam.device_principals d
               LEFT JOIN iam.device_enrolment_requests r
                      ON r.tenant_id = d.tenant_id AND r.device_principal_id = d.id
@@ -386,6 +447,47 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
                 .param("locationId", locationId)
                 .query(DeviceEnrolmentService::toView)
                 .list();
+    }
+
+    @Override
+    public long activeCount(DevicePrincipalClass deviceClass) {
+        return jdbc.sql("SELECT count(*) FROM iam.device_principals WHERE device_class = :class AND status = 'ACTIVE'")
+                .param("class", deviceClass.name())
+                .query(Long.class)
+                .single();
+    }
+
+    @Override
+    public Optional<DevicePrincipalView> find(UUID tenantId, UUID deviceId) {
+        return jdbc.sql(VIEW_COLUMNS + """
+                 WHERE d.tenant_id = :tenantId AND d.id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", deviceId)
+                .query(DeviceEnrolmentService::toView)
+                .optional();
+    }
+
+    @Override
+    @Transactional
+    public boolean rename(UUID tenantId, UUID deviceId, String displayName) {
+        return jdbc.sql("""
+                        UPDATE iam.device_principals
+                           SET display_name = :name, version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :id AND status = 'ACTIVE'
+                        """)
+                        .param("name", displayName)
+                        .param("now", at(clock.instant()))
+                        .param("tenantId", tenantId)
+                        .param("id", deviceId)
+                        .update()
+                == 1;
+    }
+
+    @Override
+    public Optional<PendingEnrolmentView> peek(String userCode, String approverSubject) {
+        requireNotRateLimited(PEEK_OPERATION, approverSubject, PEEK_PER_APPROVER);
+        return pendingEnrolment(userCode);
     }
 
     @Override
@@ -457,7 +559,11 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
                 rs.getObject("enrolled_at", OffsetDateTime.class).toInstant(),
                 rs.getString("revoked_by"),
                 optionalInstant(rs, "revoked_at"),
-                rs.getString("revoked_reason"));
+                rs.getString("revoked_reason"),
+                rs.getString("attribution_mode"),
+                (Integer) rs.getObject("auto_lock_seconds"),
+                optionalInstant(rs, "last_seen_at"),
+                rs.getString("last_seen_build"));
     }
 
     private static @Nullable Instant optionalInstant(ResultSet rs, String column) throws SQLException {

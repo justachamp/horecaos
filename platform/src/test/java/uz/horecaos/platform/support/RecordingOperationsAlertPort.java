@@ -51,6 +51,11 @@ public final class RecordingOperationsAlertPort implements OperationsAlertPort {
         return List.copyOf(calls);
     }
 
+    /** Forgets every recorded call, for a suite that shares one instance across tests. */
+    public void clear() {
+        calls.clear();
+    }
+
     public record Call(
             UUID tenantId,
             UUID brandId,

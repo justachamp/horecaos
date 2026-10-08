@@ -350,16 +350,26 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         if (!bumpVersion(tenantId, channelId, expectedVersion, now)) {
             return false;
         }
-        jdbc.sql("DELETE FROM tenant.sales_channel_locations "
-                        + "WHERE tenant_id = :tenantId AND channel_id = :channelId")
+        // The set is replaced as a diff and not as a delete-all-then-insert. A kiosk (ADR 0162) is bound to a
+        // channel at a location through a foreign key onto this very row, so a blind delete of every row would
+        // be refused for a binding the new set keeps. Only a location that is leaving the set is deleted, and
+        // a kiosk still paired through it refuses that delete by name (see explain).
+        jdbc.sql("""
+                DELETE FROM tenant.sales_channel_locations
+                 WHERE tenant_id = :tenantId AND channel_id = :channelId
+                   AND NOT (location_id = ANY (:locationIds))
+                """)
                 .param("tenantId", tenantId)
                 .param("channelId", channelId)
+                .param("locationIds", locationIds.toArray(UUID[]::new))
                 .update();
         for (UUID locationId : locationIds) {
             jdbc.sql("""
                     INSERT INTO tenant.sales_channel_locations (
                         tenant_id, channel_id, location_id, status, created_at, updated_at)
                     VALUES (:tenantId, :channelId, :locationId, 'ACTIVE', :now, :now)
+                    ON CONFLICT (channel_id, location_id)
+                    DO UPDATE SET status = 'ACTIVE', updated_at = :now
                     """)
                     .param("tenantId", tenantId)
                     .param("channelId", channelId)
@@ -515,6 +525,13 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         }
         if (message.contains("fk_channel_location_location")) {
             return new IllegalArgumentException("That location does not belong to this tenant");
+        }
+        // ADR 0162: a kiosk is paired through this channel at this location (fk_kiosk_device_channel_location),
+        // so the location cannot leave the channel's set while the kiosk is paired. Its own sentence, because
+        // the fix is a different act (revoke or rebind the kiosk) from anything the operator was doing here.
+        if (message.contains("fk_kiosk_device_channel_location")) {
+            return new IllegalStateException("A kiosk is paired through this channel at a location you are removing; "
+                    + "revoke the kiosk or move it to another kiosk channel first");
         }
         if (message.contains("fk_sales_channel_price_plane")) {
             return new IllegalArgumentException("That price plane channel does not belong to this tenant");

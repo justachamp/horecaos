@@ -4,7 +4,7 @@ package uz.horecaos.platform.integration.provider.telegram;
  * Every event class a bound Telegram chat may subscribe to today, restated
  * from {@code integration.telegram_binding_events}'s own {@code
  * ck_telegram_binding_event_class} check (currently last widened by
- * {@code V0488}) — kept beside the schema constraint deliberately rather than
+ * {@code V0527}) — kept beside the schema constraint deliberately rather than
  * generated from it, so the admin routing screen (gap map row {@code 10.9b},
  * wave P36) can offer the set without a schema round trip, and a value here
  * that the check does not also admit fails a test rather than a real insert.
@@ -26,7 +26,9 @@ public enum TelegramEventClass {
     DEAD_LETTER_RECORDED("Integration dead letter recorded"),
     POS_EXPORT_AWAITING_OPERATOR("POS export awaiting operator"),
     CAMPAIGN_BLOCK_RATE_PAUSED("Campaign paused by the block-rate guard"),
-    MARKETPLACE_CHANNEL_STALE("Marketplace channel not confirming stop-list changes");
+    MARKETPLACE_CHANNEL_STALE("Marketplace channel not confirming stop-list changes"),
+    TERMINAL_CREDENTIAL_LOCKED("A staff PIN was locked at a terminal"),
+    TERMINAL_DEVICE_UNSEEN("A terminal that must be unlocked has not been seen");
 
     private final String description;
 

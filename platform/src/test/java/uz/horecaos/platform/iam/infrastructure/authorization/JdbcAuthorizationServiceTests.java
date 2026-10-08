@@ -388,6 +388,12 @@ class JdbcAuthorizationServiceTests {
                 // reads, through the same projection, so a suspended tenant's wall keeps showing the
                 // kitchen exactly as its staff's board does; it takes nothing out.
                 Capability.KITCHEN_DISPLAY_READ,
+                // ADR 0162: a kiosk reading its own configuration. A machine-only read of the channel,
+                // branch and matrix rows the tenant itself configured; it takes nothing out.
+                Capability.KIOSK_DEVICE_READ,
+                // ADR 0155: the terminals registry and the tenant's terminal policy -- device names, states
+                // and last-seen times. No credential, PIN or session token is ever in a read.
+                Capability.TERMINAL_READ,
                 Capability.RESERVATION_READ,
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,

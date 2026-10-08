@@ -106,7 +106,12 @@ public class MfaPolicy {
     }
 
     private static boolean isStaffRole(PlatformRole role) {
-        return role != PlatformRole.KITCHEN_DEVICE && !role.supportSessionOnly();
+        // ADR 0148 leaves device principals outside the policy: a device authenticates as its own
+        // Keycloak service account and never signs in with a password, so no second factor exists for it.
+        return role != PlatformRole.KITCHEN_DEVICE
+                && role != PlatformRole.KITCHEN_VDU_DEVICE
+                && role != PlatformRole.KIOSK_DEVICE
+                && !role.supportSessionOnly();
     }
 
     private static Requirement stricter(Requirement left, Requirement right) {
