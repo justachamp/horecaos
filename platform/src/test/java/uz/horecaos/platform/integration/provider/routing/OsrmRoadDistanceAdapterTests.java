@@ -15,6 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -218,6 +223,115 @@ class OsrmRoadDistanceAdapterTests {
         assertThat(took).as("an open breaker answers without a round trip").isLessThan(Duration.ofMillis(100));
         assertThat(engine.hits()).as("and without asking the engine").isEqualTo(hitsWhenItOpened);
         assertThat(count("breaker_open")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("an engine that answers, but slowly, opens the breaker: the quote thread stops waiting for it")
+    void aSlowButAnsweringEngineOpensTheBreaker() {
+        engine.slow(Duration.ofMillis(150));
+        // 150 ms is inside the 500 ms deadline, so every call below is an answer and none is a fault;
+        // 60 ms is the line past which an answer counts as slow.
+        OsrmProperties properties = new OsrmProperties(
+                true, DATASET, Duration.ofMillis(500), 1_000, 4, Duration.ofMinutes(5), Duration.ofMillis(60), 16);
+        OsrmRoadDistanceAdapter adapter = adapter(properties);
+
+        for (int i = 0; i < 4; i++) {
+            assertThat(adapter.measure(BRANCH, new GeoPoint(41.33 + i * 0.001, 69.26), installation))
+                    .isPresent();
+        }
+        int hitsWhenItOpened = engine.hits();
+
+        long started = System.nanoTime();
+        Optional<RoadRoute> afterwards = adapter.measure(BRANCH, new GeoPoint(41.40, 69.30), installation);
+        Duration took = Duration.ofNanos(System.nanoTime() - started);
+
+        // Without the slow-call rule the fault rate is zero for ever, the breaker stays closed, and
+        // this call waits another 150 ms for a route.
+        assertThat(afterwards).isEmpty();
+        assertThat(took).as("an open breaker answers without a round trip").isLessThan(Duration.ofMillis(100));
+        assertThat(engine.hits()).as("and without asking the engine").isEqualTo(hitsWhenItOpened);
+        assertThat(count("breaker_open")).isEqualTo(1.0);
+        assertThat(count("timeout")).as("the engine never failed to answer").isZero();
+        assertThat(count("error")).isZero();
+    }
+
+    @Test
+    @DisplayName("an engine that answers quickly never trips the slow-call rule")
+    void aFastEngineNeverTripsTheSlowCallRule() {
+        OsrmProperties properties = new OsrmProperties(
+                true, DATASET, Duration.ofMillis(500), 1_000, 4, Duration.ofMinutes(5), Duration.ofMillis(250), 16);
+        OsrmRoadDistanceAdapter adapter = adapter(properties);
+
+        for (int i = 0; i < 25; i++) {
+            assertThat(adapter.measure(BRANCH, new GeoPoint(41.33 + i * 0.001, 69.26), installation))
+                    .isPresent();
+        }
+
+        assertThat(count("breaker_open")).isZero();
+        assertThat(count("ok")).isEqualTo(25.0);
+    }
+
+    @Test
+    @DisplayName("a timeout configured past the ceiling is held to it, so the quote thread is back in about a second")
+    void aTimeoutPastTheCeilingIsHeldToIt() {
+        engine.slow(Duration.ofSeconds(4));
+        OsrmProperties properties =
+                new OsrmProperties(true, DATASET, Duration.ofSeconds(30), 1_000, 10, Duration.ofSeconds(30));
+        assertThat(properties.effectiveTimeout()).isEqualTo(OsrmProperties.MAX_TIMEOUT);
+
+        long started = System.nanoTime();
+        Optional<RoadRoute> route = adapter(properties).measure(BRANCH, DOORSTEP, installation);
+        Duration took = Duration.ofNanos(System.nanoTime() - started);
+
+        // Configured as "30s", the adapter used to wait the engine's four seconds out and price from
+        // a road figure it had held a checkout for.
+        assertThat(route).isEmpty();
+        assertThat(took).isLessThan(Duration.ofMillis(2_500));
+        assertThat(count("timeout")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("a hung engine holds at most the configured number of quote threads; the others fall back at once")
+    void aHungEngineHoldsABoundedNumberOfThreads() throws Exception {
+        engine.slow(Duration.ofSeconds(5));
+        OsrmProperties properties = new OsrmProperties(
+                true, DATASET, Duration.ofMillis(900), 1_000, 10, Duration.ofMinutes(5), Duration.ofMillis(250), 2);
+        OsrmRoadDistanceAdapter adapter = adapter(properties);
+        int quotes = 6;
+
+        ExecutorService quoteThreads = Executors.newFixedThreadPool(quotes);
+        try {
+            CountDownLatch together = new CountDownLatch(1);
+            List<Future<Duration>> waits = new ArrayList<>();
+            for (int i = 0; i < quotes; i++) {
+                GeoPoint doorstep = new GeoPoint(41.33 + i * 0.001, 69.26);
+                waits.add(quoteThreads.submit(() -> {
+                    together.await();
+                    long started = System.nanoTime();
+                    assertThat(adapter.measure(BRANCH, doorstep, installation)).isEmpty();
+                    return Duration.ofNanos(System.nanoTime() - started);
+                }));
+            }
+            together.countDown();
+
+            List<Duration> took = new ArrayList<>();
+            for (Future<Duration> wait : waits) {
+                took.add(wait.get());
+            }
+
+            // Two threads were let in and each waited the engine's deadline out; the other four did
+            // not wait at all. Without the cap all six reach the engine and all six wait.
+            assertThat(engine.hits()).isEqualTo(2);
+            assertThat(count("saturated")).isEqualTo(4.0);
+            assertThat(count("timeout")).isEqualTo(2.0);
+            assertThat(took.stream().filter(wait -> wait.compareTo(Duration.ofMillis(600)) < 0))
+                    .as("the quotes that were turned away")
+                    .hasSize(4);
+        } catch (ExecutionException failure) {
+            throw new AssertionError("a quote thread failed", failure.getCause());
+        } finally {
+            quoteThreads.shutdownNow();
+        }
     }
 
     @Test

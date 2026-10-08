@@ -261,7 +261,7 @@ checkout, which the tariff screen says in words.
 
 | What you see | What it is | What to do |
 |---|---|---|
-| `HorecaosRoadRoutingFallingBack` in the morning digest | More than 5% of `ROAD` quotes over fifteen minutes fell back | `horecaos_routing_calls_total` by `outcome`: `timeout`/`error` is the engine (step 4's `ps` and `logs osrm`); `unavailable` is the flag, the dataset tag or an installation that is not active; `breaker_open` means it was already failing and has stopped being asked for thirty seconds at a time |
+| `HorecaosRoadRoutingFallingBack` in the morning digest | More than 5% of `ROAD` quotes over fifteen minutes fell back | `horecaos_routing_calls_total` by `outcome`: `timeout`/`error` is the engine (step 4's `ps` and `logs osrm`); `unavailable` is the flag, the dataset tag or an installation that is not active; `breaker_open` means it was already failing, or answering too slowly (half of recent calls over 250 ms), and has stopped being asked for thirty seconds at a time; `saturated` means 16 quote threads were already waiting on it, which is a hung engine seen before the breaker opened |
 | `HorecaosRoutingDatasetStale` | The dataset tag's date is more than 60 days old | The monthly refresh has stopped: run step 6, then find out why the workflow did not |
 | `osrm` restarts and the log says the dataset was built for another algorithm | The image's files and `--algorithm` disagree | Rebuild with `deploy/routing/build-dataset.sh`, which uses MLD; do not edit the command |
 | Every `ROAD` fee says `RADIUS_FALLBACK` and `outcome="unavailable"` | Engine flag off, dataset tag empty, or no active routing installation | `HORECAOS_ROUTING_OSRM_ENABLED`, `HORECAOS_ROUTING_DATASET_TAG`, and the tariff's installation status |

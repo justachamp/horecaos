@@ -155,8 +155,15 @@ horecaos:
       # answers nothing and logs why at start.
       enabled: ${HORECAOS_ROUTING_OSRM_ENABLED:false}
       dataset-version: ${HORECAOS_ROUTING_OSRM_DATASET_VERSION:}
-      # The whole exchange, body included. ADR 0147 gives the checkout path 500 ms.
+      # The whole exchange, body included. ADR 0147 gives the checkout path 500 ms. The quote
+      # thread waits this long for every uncached ROAD quote, so the adapter holds it to 1 s
+      # whatever is set here (OsrmProperties.MAX_TIMEOUT).
       timeout: ${HORECAOS_ROUTING_OSRM_TIMEOUT:500ms}
+      # An answered call slower than this counts towards opening the breaker, like a fault does:
+      # an engine that answers in 450 ms is not failing and is stalling every quote.
+      slow-call-threshold: ${HORECAOS_ROUTING_OSRM_SLOW_CALL_THRESHOLD:250ms}
+      # How many quote threads may wait on the engine at once; the rest fall back at once.
+      max-concurrent-calls: ${HORECAOS_ROUTING_OSRM_MAX_CONCURRENT_CALLS:16}
       # How far from a road a coordinate may be and still count as on the network.
       snap-radius-meters: ${HORECAOS_ROUTING_OSRM_SNAP_RADIUS_METERS:1000}
   iam:

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -48,12 +49,18 @@ import uz.horecaos.platform.web.cache.CacheRegistry;
  * an empty answer, and the resolver turns that into a straight-line fee that says
  * {@code RADIUS_FALLBACK}. Nothing here may fail a quote.
  *
- * <p><b>The call is bounded and the engine is breakable.</b> One attempt, no retry,
- * under {@link OsrmProperties#timeout()} for the whole exchange. Repeated engine
- * faults open a breaker, after which a call returns empty without waiting at all.
- * The breaker counts faults only: "no route between these two points" is the engine
- * working, and counting it would take a healthy engine offline because customers
- * kept pinning the far side of a canal.
+ * <p><b>The call is bounded, the engine is breakable, and the waiting is capped.</b> One
+ * attempt, no retry, under {@link OsrmProperties#effectiveTimeout()} for the whole exchange
+ * (never more than {@link OsrmProperties#MAX_TIMEOUT}, whatever the deployment sets), on the
+ * quote thread. Repeated engine faults open a breaker, and so do repeated <em>slow</em>
+ * answers: an engine that still answers in 450 ms is not faulting, and would otherwise hold
+ * every uncached quote for 450 ms indefinitely. After it opens a call returns empty without
+ * waiting at all. At most {@link OsrmProperties#maxConcurrentCalls()} threads are inside an
+ * engine call at once; the rest return empty immediately, so a hung engine parks a bounded
+ * number of threads in the interval before the breaker has seen enough calls to open. The
+ * breaker counts faults and slowness only: "no route between these points" is the engine
+ * working, and counting it would take a healthy engine offline because customers kept
+ * pinning the far side of a canal.
  *
  * <p><b>Personal data.</b> What leaves is two coordinates and no identifier. The path
  * holds the customer's delivery point, so the HTTP client logs the label
@@ -86,6 +93,7 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
     private final CacheManager caches;
     private final MeterRegistry meters;
     private final CircuitBreaker breaker;
+    private final Semaphore inFlight;
 
     public OsrmRoadDistanceAdapter(
             ProviderHttpClient http,
@@ -105,13 +113,29 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
                 .slidingWindowSize(Math.max(20, properties.breakerMinimumCalls()))
                 .minimumNumberOfCalls(properties.breakerMinimumCalls())
                 .failureRateThreshold(50)
+                // A call that answers, but slower than this, is "slow": it is not a fault, so the
+                // failure rate never sees it, yet the quote thread waited for it. Half of the
+                // recent calls being slow opens the breaker the same way half being faults does.
+                .slowCallDurationThreshold(properties.slowCallThreshold())
+                .slowCallRateThreshold(50)
                 .waitDurationInOpenState(properties.breakerOpenFor())
                 .permittedNumberOfCallsInHalfOpenState(3)
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 .recordException(failure -> failure instanceof EngineFault)
                 .build());
         this.breaker = registry.circuitBreaker(PROVIDER);
+        this.inFlight = new Semaphore(properties.maxConcurrentCalls());
         ProviderCircuitMetrics.bind(registry, meters, "routing", clock);
+
+        if (properties.timeout().compareTo(OsrmProperties.MAX_TIMEOUT) > 0) {
+            // Loud once, at start, and never a refusal to start: the quote thread waits this long
+            // for every uncached ROAD quote, so the adapter keeps to the ceiling instead.
+            log.warn(
+                    "horecaos.routing.osrm.timeout is longer than {} ms; the engine is called with {} ms, because the "
+                            + "quote thread waits for it",
+                    OsrmProperties.MAX_TIMEOUT.toMillis(),
+                    OsrmProperties.MAX_TIMEOUT.toMillis());
+        }
 
         if (properties.enabled() && !properties.datasetVersionUsable()) {
             // Loud once, at start, and never a refusal to start: ADR 0147 puts routing
@@ -145,6 +169,26 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         }
         meters.counter(CACHE, "result", "miss").increment();
 
+        // The cheap refusal first and the permit second: a thread that is turned away here has
+        // not taken one of the breaker's half-open probes.
+        if (!inFlight.tryAcquire()) {
+            return record(Outcome.SATURATED);
+        }
+        try {
+            return askEngine(installation.get(), origin, destination, dataset, key, cache);
+        } finally {
+            inFlight.release();
+        }
+    }
+
+    /** The engine call itself, with the breaker's permit taken and returned. */
+    private Optional<RoadRoute> askEngine(
+            RoutingInstallation installation,
+            GeoPoint origin,
+            GeoPoint destination,
+            String dataset,
+            String key,
+            @Nullable Cache cache) {
         if (!breaker.tryAcquirePermission()) {
             return record(Outcome.BREAKER_OPEN);
         }
@@ -153,7 +197,7 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         ProviderOutcome outcome;
         try {
             outcome = http.getWithSensitivePath(
-                    new ProviderCall(installation.get().baseUrl(), "", null, properties.timeout()),
+                    new ProviderCall(installation.baseUrl(), "", null, properties.effectiveTimeout()),
                     pathFor(origin, destination),
                     LOG_LABEL,
                     Map.of(),
@@ -405,6 +449,8 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         TIMEOUT("timeout"),
         NO_ROUTE("no_route"),
         BREAKER_OPEN("breaker_open"),
+        /** Too many quote threads were already waiting on the engine; this one did not wait. */
+        SATURATED("saturated"),
         /** The engine answered with a fault, or an answer that was not a route. */
         ERROR("error"),
         /** The engine is off, the dataset unnamed, or the installation absent or not active: nothing was asked. */
