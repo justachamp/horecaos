@@ -169,22 +169,33 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    /**
+     * The statuses no transition leaves ({@code OrderStatus.terminal()}), spelled out because the kitchen
+     * reads the order's table and does not import ordering's domain. {@code
+     * KitchenExecutionTests#theTerminalStatusesTheClockNamesAreOrderings} holds the two lists together.
+     */
+    static final String TERMINAL_STATUSES = "'PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED'";
+
     @Override
-    public Map<UUID, Instant> createdAtByOrders(UUID tenantId, Set<UUID> orderIds) {
+    public Map<UUID, OrderClock> clocksByOrders(UUID tenantId, Set<UUID> orderIds) {
         if (orderIds.isEmpty()) {
             return Map.of();
         }
         return jdbc
                 .sql("""
-                SELECT id, created_at
+                SELECT id, created_at, promised_at, status IN (%s) AS terminal
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND id IN (:orderIds)
-                """)
+                """.formatted(TERMINAL_STATUSES))
                 .param("tenantId", tenantId)
                 .param("orderIds", orderIds)
                 .query((row, number) -> Map.entry(
                         row.getObject("id", UUID.class),
-                        row.getObject("created_at", OffsetDateTime.class).toInstant()))
+                        new OrderClock(
+                                row.getObject("created_at", OffsetDateTime.class)
+                                        .toInstant(),
+                                instant(row.getObject("promised_at", OffsetDateTime.class)),
+                                row.getBoolean("terminal"))))
                 .list()
                 .stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));

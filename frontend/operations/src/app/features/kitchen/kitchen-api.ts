@@ -74,7 +74,19 @@ export interface TicketResponse {
   readonly startedAt?: string | null;
   readonly readyAt?: string | null;
   readonly version: number;
+  /** When the kitchen opened the ticket — not where a lateness clock starts (see `orderCreatedAt`). */
   readonly createdAt: string;
+  /**
+   * The order's lateness clock (ADR 0150): when the order was created, the promise it carries (null
+   * for an order never promised a time) and whether it is over. These — not `createdAt`, which is
+   * when the kitchen opened the ticket, and not `targetReadyAt`, which is the promise less the road —
+   * are what a ticket is coloured by, through `ticketSeverityInput`, so the queue, the walls and the
+   * order board call the same order late at the same instant. Present on every response, mutations
+   * included; optional only so a response from a server that predates them still parses.
+   */
+  readonly orderCreatedAt?: string | null;
+  readonly orderPromisedAt?: string | null;
+  readonly orderTerminal?: boolean | null;
   /**
    * The winning partner quote's own delivery ETA (wave P11, gap map row
    * 2.1a) — absent for a pickup/dine-in ticket, a plan an in-house courier
@@ -189,6 +201,10 @@ export interface VduTicketResponse {
   readonly status: string;
   readonly targetReadyAt?: string | null;
   readonly createdAt: string;
+  /** The order's lateness clock a wall colours the ticket by (ADR 0150); see `TicketResponse`. */
+  readonly orderCreatedAt?: string | null;
+  readonly orderPromisedAt?: string | null;
+  readonly orderTerminal?: boolean | null;
   readonly courierEtaAt?: string | null;
   readonly items: readonly VduItemView[];
 }

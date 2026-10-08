@@ -191,6 +191,48 @@ describe('VduPage', () => {
     expect(cardOf('P').classList.contains('vdu__card--danger')).toBe(true);
   });
 
+  it('colours a ticket by its ORDER’s clock, as the board does: an unpromised order that waited for approval is late though its ticket just opened (ADR 0150)', async () => {
+    const twenty: LatenessPolicy = {
+      delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+    };
+    await render(
+      {
+        tickets: [
+          ticket({
+            ticketId: 'late',
+            sequenceLabel: 'L',
+            createdAt: new Date(Date.now() - 10_000).toISOString(),
+            targetReadyAt: null,
+            orderCreatedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+            orderPromisedAt: null,
+            orderTerminal: false,
+          }),
+          ticket({
+            ticketId: 'road',
+            sequenceLabel: 'R',
+            targetReadyAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+            orderCreatedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+            orderPromisedAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+            orderTerminal: false,
+          }),
+        ],
+        warnings: [],
+      },
+      twenty,
+    );
+
+    const cardOf = (label: string): HTMLElement =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+          '[data-testid="vdu-card"]',
+        ),
+      ).find((card) => card.textContent?.trim() === label) as HTMLElement;
+    expect(cardOf('L').classList.contains('vdu__card--danger')).toBe(true);
+    expect(cardOf('R').classList.contains('vdu__card--danger')).toBe(false);
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [VduPage],

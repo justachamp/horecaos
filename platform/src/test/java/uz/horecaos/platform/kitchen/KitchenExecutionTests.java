@@ -45,6 +45,7 @@ import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ReservationResult;
 import uz.horecaos.platform.kitchen.application.KitchenStationService;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
+import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderClock;
 import uz.horecaos.platform.kitchen.domain.KitchenStateMachine;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
@@ -680,25 +681,60 @@ class KitchenExecutionTests {
     }
 
     @Test
-    @DisplayName("the order's own creation instant is what a wall measures an unpromised ticket from, "
-            + "not the later instant the kitchen opened the ticket (ADR 0150)")
-    void anOrdersCreationInstantIsReadApartFromItsTicketsOpening() {
+    @DisplayName("an order's lateness clock is its own creation and promise, read apart from the later instant "
+            + "its ticket opened and from the promise less the road (ADR 0150)")
+    void anOrdersClockIsReadApartFromItsTicket() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
-        UUID orderId = seedConfirmedOrder("A-052", null, null, null, burger);
+        Instant promisedAt = Instant.parse("2026-03-02T13:00:00Z");
+        UUID promised = seedConfirmedOrder("A-052", promisedAt, 15, 20, burger);
+        UUID unpromised = seedConfirmedOrder("A-053", null, null, null, burger);
         UUID missing = UUID.randomUUID();
-        // The order sat thirty minutes before anyone accepted it; the ticket opens only now.
-        jdbc.sql("UPDATE ordering.orders SET created_at = now() - interval '30 minutes' WHERE id = :id")
-                .param("id", orderId)
+        // Both were placed at checkout, long before anyone accepted them; their tickets open only now.
+        Instant placedAt = Instant.parse("2026-03-02T11:30:00Z");
+        jdbc.sql("UPDATE ordering.orders SET created_at = :at WHERE id IN (:a, :b)")
+                .param("at", java.time.OffsetDateTime.ofInstant(placedAt, ZoneOffset.UTC))
+                .param("a", promised)
+                .param("b", unpromised)
                 .update();
-        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketRow promisedTicket = tickets.open(TENANT, promised, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketRow unpromisedTicket = tickets.open(TENANT, unpromised, ReleaseMode.AUTO_ON_CONFIRM);
 
-        Map<UUID, Instant> createdAt = tickets.orderCreatedAtByOrder(TENANT, Set.of(orderId, missing));
+        Map<UUID, OrderClock> clocks = tickets.orderClocksByOrder(TENANT, Set.of(promised, unpromised, missing));
 
-        assertThat(createdAt).containsOnlyKeys(orderId);
-        assertThat(createdAt.get(orderId))
-                .as("the order's clock started at checkout")
-                .isBefore(ticket.createdAt().minus(java.time.Duration.ofMinutes(29)));
-        assertThat(tickets.orderCreatedAtByOrder(TENANT, Set.of())).isEmpty();
+        assertThat(clocks).containsOnlyKeys(promised, unpromised);
+        assertThat(Objects.requireNonNull(clocks.get(unpromised)).createdAt())
+                .as("the clock started at checkout, not when the kitchen opened the ticket")
+                .isEqualTo(placedAt)
+                .isNotEqualTo(unpromisedTicket.createdAt());
+        assertThat(Objects.requireNonNull(clocks.get(unpromised)).promisedAt()).isNull();
+        assertThat(Objects.requireNonNull(clocks.get(promised)).promisedAt())
+                .as("the order's promise, not the ticket's target")
+                .isEqualTo(promisedAt)
+                .isNotEqualTo(promisedTicket.targetReadyAt());
+        assertThat(promisedTicket.targetReadyAt())
+                .as("the ticket's own target is the promise less the road, which is why it cannot be the promise")
+                .isEqualTo(promisedAt.minus(Duration.ofMinutes(20)));
+        assertThat(clocks.values()).noneMatch(OrderClock::terminal);
+        assertThat(tickets.orderClocksByOrder(TENANT, Set.of())).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "the kitchen's list of finished order statuses is ordering's: every status says the same thing in both")
+    void theTerminalStatusesTheClockNamesAreOrderings() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-054", null, null, null, burger);
+
+        for (OrderStatus status : OrderStatus.values()) {
+            jdbc.sql("UPDATE ordering.orders SET status = :status WHERE id = :id")
+                    .param("status", status.name())
+                    .param("id", orderId)
+                    .update();
+
+            OrderClock clock = Objects.requireNonNull(
+                    tickets.orderClocksByOrder(TENANT, Set.of(orderId)).get(orderId));
+            assertThat(clock.terminal()).as("%s", status).isEqualTo(status.terminal());
+        }
     }
 
     private void insertExternalReference(UUID orderId, String type, String value, String issuedBy) {

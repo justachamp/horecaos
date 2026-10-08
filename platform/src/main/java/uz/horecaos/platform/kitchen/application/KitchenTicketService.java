@@ -33,6 +33,7 @@ import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort.OrderProgress;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
+import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderClock;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderForKitchen;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderLineForKitchen;
 import uz.horecaos.platform.kitchen.domain.KitchenStateMachine;
@@ -1357,11 +1358,11 @@ public class KitchenTicketService {
     }
 
     /**
-     * When each of these orders was created, which is where a wall or a queue measures an unpromised
-     * ticket's lateness from (ADR 0150): not from the ticket, which opens only after acceptance.
+     * The order's own lateness inputs (ADR 0150): where the board measures an order from, which is
+     * neither the later instant the kitchen opened its ticket nor the promise less the road.
      */
-    public Map<UUID, Instant> orderCreatedAtByOrder(UUID tenantId, Set<UUID> orderIds) {
-        return orders.createdAtByOrders(tenantId, orderIds);
+    public Map<UUID, OrderClock> orderClocksByOrder(UUID tenantId, Set<UUID> orderIds) {
+        return orders.clocksByOrders(tenantId, orderIds);
     }
 
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {

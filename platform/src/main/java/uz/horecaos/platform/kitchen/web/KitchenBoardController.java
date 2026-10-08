@@ -37,6 +37,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService;
 import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService.WallCaller;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
+import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderClock;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
@@ -138,6 +139,9 @@ public class KitchenBoardController {
         Set<UUID> orderIds = ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet());
         Map<UUID, String> externalReferences = tickets.externalReferencesByOrder(tenantId, orderIds);
         Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(tenantId, orderIds);
+        // The order's own lateness clock (ADR 0150), one batch over the same ids: the colour of a ticket
+        // is the board's rule applied to the order, not to the ticket the kitchen opened later.
+        Map<UUID, OrderClock> clocks = tickets.orderClocksByOrder(tenantId, orderIds);
 
         // The table beside a dine-in ticket: one batch over the page's DINE_IN
         // orders only -- a delivery or pickup ticket can never sit at a table --
@@ -152,12 +156,13 @@ public class KitchenBoardController {
 
         List<TicketResponse> board = ticketRows.stream()
                 .map(ticket -> TicketResponse.of(
-                        ticket,
-                        tickets.items(tenantId, ticket.id()),
-                        channelSystemTypes.get(ticket.channelCode()),
-                        externalReferences.get(ticket.orderId()),
-                        courierEtaByOrder.get(ticket.orderId()),
-                        tableByOrder.get(ticket.orderId())))
+                                ticket,
+                                tickets.items(tenantId, ticket.id()),
+                                channelSystemTypes.get(ticket.channelCode()),
+                                externalReferences.get(ticket.orderId()),
+                                courierEtaByOrder.get(ticket.orderId()),
+                                tableByOrder.get(ticket.orderId()))
+                        .withClock(clocks.get(ticket.orderId())))
                 .toList();
 
         // The gap travels on every response rather than in a startup log. A branch
@@ -180,8 +185,9 @@ public class KitchenBoardController {
      * <p><strong>A dedicated read model, not a filtered reuse of {@link
      * #board}.</strong> {@link VduTicketResponse} carries only what a screen
      * mounted above the pass and read from across the room needs — a
-     * sequence, a provider reference, a fulfilment mode, a status, the two
-     * timing facts the wall colour-codes against, and each item's station and
+     * sequence, a provider reference, a fulfilment mode, a status, the
+     * order's lateness clock the wall colour-codes against (its creation, its
+     * promise and whether it is over, ADR 0150), and each item's station and
      * quantity. It has no {@code orderId} (an internal identifier nobody
      * reads off a wall), no {@code releaseMode}/{@code releaseAt}/{@code
      * releasedAt}/{@code prepEstimateSeconds} (buffer-management facts a
@@ -241,6 +247,7 @@ public class KitchenBoardController {
         Set<UUID> orderIds = ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet());
         Map<UUID, String> externalReferences = tickets.externalReferencesByOrder(tenantId, orderIds);
         Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(tenantId, orderIds);
+        Map<UUID, OrderClock> clocks = tickets.orderClocksByOrder(tenantId, orderIds);
 
         List<VduTicketResponse> board = ticketRows.stream()
                 .map(ticket -> VduTicketResponse.of(
@@ -248,7 +255,8 @@ public class KitchenBoardController {
                         tickets.items(tenantId, ticket.id()),
                         effectiveStation,
                         externalReferences.get(ticket.orderId()),
-                        courierEtaByOrder.get(ticket.orderId())))
+                        courierEtaByOrder.get(ticket.orderId()),
+                        clocks.get(ticket.orderId())))
                 // A ticket that touches no line at the requested station has
                 // nothing for that wall to show -- a grill wall does not
                 // render an empty tile for a ticket that never routed to the
@@ -281,7 +289,8 @@ public class KitchenBoardController {
                 : null;
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(ticket.version()))
-                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, null, eta, table));
+                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, null, eta, table)
+                        .withClock(clockOf(tenantId, ticket.orderId())));
     }
 
     /**
@@ -346,7 +355,8 @@ public class KitchenBoardController {
                 body.reasonCode(),
                 currentActor.get().subject(),
                 null);
-        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
+        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId))
+                .withClock(clockOf(tenantId, after.orderId())));
     }
 
     @PutMapping("/tickets/{ticketId}/release-schedule")
@@ -385,7 +395,8 @@ public class KitchenBoardController {
                 body.reasonCode(),
                 currentActor.get().subject(),
                 null);
-        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
+        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId))
+                .withClock(clockOf(tenantId, after.orderId())));
     }
 
     @PostMapping("/tickets/{ticketId}/hand-over")
@@ -406,7 +417,8 @@ public class KitchenBoardController {
         TicketRow after = tickets.handOver(
                         tenantId, ticketId, currentActor.get().subject(), null)
                 .orElseGet(() -> tickets.require(tenantId, ticketId));
-        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId)));
+        return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId))
+                .withClock(clockOf(tenantId, after.orderId())));
     }
 
     @PostMapping("/ticket-items/{itemId}/start")
@@ -485,6 +497,10 @@ public class KitchenBoardController {
         requireLocation(tickets.ticketOfItem(tenantId, itemId), locationId);
     }
 
+    private @Nullable OrderClock clockOf(UUID tenantId, UUID orderId) {
+        return tickets.orderClocksByOrder(tenantId, Set.of(orderId)).get(orderId);
+    }
+
     private TicketRow atLocation(UUID tenantId, UUID ticketId, UUID locationId) {
         TicketRow ticket = tickets.require(tenantId, ticketId);
         requireLocation(ticket, locationId);
@@ -545,6 +561,18 @@ public class KitchenBoardController {
      * already holds either value from its last board read loses nothing by a
      * mutation response not repeating it.
      *
+     * <p><strong>{@code orderCreatedAt}, {@code orderPromisedAt} and {@code orderTerminal} are the
+     * ORDER's lateness clock (ADR 0150), and the only inputs a screen colours a ticket by.</strong>
+     * {@code createdAt} above is when the kitchen opened the ticket, which for an order that waited for
+     * approval or was taken for a slot is long after checkout, and {@code targetReadyAt} is the promise
+     * less the road. The board's rule is the order's -- late once its promise plus the grace has passed,
+     * or, with no promise, once its creation plus the fallback has, never for a finished order -- so a
+     * queue or a wall that coloured by the ticket's two instants would start the clock again on
+     * acceptance and call a delivery late a road-time before the board does. All three are on every
+     * response, mutations included, so a ticket does not change colour when a cook presses a button.
+     * {@code orderCreatedAt} is null only on a response built without a clock, which a screen reads as
+     * "colour from the ticket's own instants, as before".
+     *
      * <p>{@code table} (batch 14, gap map rows {@code 1.1}/{@code 2.1}'s
      * dine-in visibility) is the table -- or joined tables -- and session a
      * DINE_IN ticket's order was seated at, resolved through {@link
@@ -571,9 +599,43 @@ public class KitchenBoardController {
             @Nullable Instant readyAt,
             int version,
             Instant createdAt,
+            @Nullable Instant orderCreatedAt,
+            @Nullable Instant orderPromisedAt,
+            boolean orderTerminal,
             @Nullable Instant courierEtaAt,
             OrderTablesPort.@Nullable OrderTable table,
             List<ItemView> items) {
+
+        /** This response with the order's lateness clock (ADR 0150); unchanged when the order has none. */
+        TicketResponse withClock(@Nullable OrderClock clock) {
+            if (clock == null) {
+                return this;
+            }
+            return new TicketResponse(
+                    ticketId,
+                    orderId,
+                    sequenceLabel,
+                    externalReference,
+                    fulfilmentMode,
+                    channelCode,
+                    channelSystemType,
+                    status,
+                    releaseMode,
+                    releaseAt,
+                    releasedAt,
+                    targetReadyAt,
+                    prepEstimateSeconds,
+                    startedAt,
+                    readyAt,
+                    version,
+                    createdAt,
+                    clock.createdAt(),
+                    clock.promisedAt(),
+                    clock.terminal(),
+                    courierEtaAt,
+                    table,
+                    items);
+        }
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
             return of(ticket, items, null, null, null);
@@ -617,6 +679,9 @@ public class KitchenBoardController {
                     ticket.readyAt(),
                     ticket.version(),
                     ticket.createdAt(),
+                    null,
+                    null,
+                    false,
                     courierEtaAt,
                     table,
                     items.stream().map(ItemView::of).toList());
@@ -763,6 +828,12 @@ public class KitchenBoardController {
     /**
      * {@link #vdu}'s own narrow ticket shape -- see that method's own doc for
      * exactly what this deliberately omits relative to {@link TicketResponse}.
+     *
+     * <p>{@code orderCreatedAt}, {@code orderPromisedAt} and {@code orderTerminal} are the order's
+     * lateness clock (ADR 0150) and what a wall colours the ticket by, exactly as on {@link
+     * TicketResponse}: not {@code createdAt}, which is when the kitchen opened the ticket, and not
+     * {@code targetReadyAt}, which is the promise less the road. They are timing facts about an order,
+     * not customer data, and carry no identifier.
      */
     record VduTicketResponse(
             UUID ticketId,
@@ -772,8 +843,24 @@ public class KitchenBoardController {
             String status,
             @Nullable Instant targetReadyAt,
             Instant createdAt,
+            @Nullable Instant orderCreatedAt,
+            @Nullable Instant orderPromisedAt,
+            boolean orderTerminal,
             @Nullable Instant courierEtaAt,
             List<VduItemView> items) {
+
+        /**
+         * The same projection without an order clock (an order the kitchen cannot read), which a wall
+         * colours from the ticket's own instants as it did before ADR 0150.
+         */
+        static Optional<VduTicketResponse> of(
+                TicketRow ticket,
+                List<TicketItemRow> items,
+                @Nullable UUID station,
+                @Nullable String externalReference,
+                @Nullable Instant courierEtaAt) {
+            return of(ticket, items, station, externalReference, courierEtaAt, null);
+        }
 
         /**
          * @param station when non-null, narrows {@code items} to that station's
@@ -787,7 +874,8 @@ public class KitchenBoardController {
                 List<TicketItemRow> items,
                 @Nullable UUID station,
                 @Nullable String externalReference,
-                @Nullable Instant courierEtaAt) {
+                @Nullable Instant courierEtaAt,
+                @Nullable OrderClock clock) {
 
             List<TicketItemRow> visible = station == null
                     ? items
@@ -805,6 +893,9 @@ public class KitchenBoardController {
                     ticket.status().name(),
                     ticket.targetReadyAt(),
                     ticket.createdAt(),
+                    clock == null ? null : clock.createdAt(),
+                    clock == null ? null : clock.promisedAt(),
+                    clock != null && clock.terminal(),
                     courierEtaAt,
                     visible.stream().map(VduItemView::of).toList()));
         }

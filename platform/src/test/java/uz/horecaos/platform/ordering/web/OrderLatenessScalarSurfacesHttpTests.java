@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +43,11 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
+import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
+import uz.horecaos.platform.ordering.domain.OrderPromise;
+import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.port.ConfigurationValueCache;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -210,45 +215,77 @@ class OrderLatenessScalarSurfacesHttpTests {
     }
 
     @Test
-    @DisplayName("the kitchen queue and the VDU measure an unpromised ticket from the order, not from the later "
-            + "instant the kitchen opened it, so they call it late exactly when the board does")
-    void theKitchenSurfacesAgreeWithTheBoardAboutAnUnpromisedTicketOpenedAfterApproval() throws Exception {
+    @DisplayName("the kitchen queue and the VDU carry the ORDER's clock, so a ticket is late exactly when the board "
+            + "says its order is: an unpromised order accepted late, a delivery with road time, a finished order")
+    void theKitchenSurfacesCarryTheOrdersClockAndAgreeWithTheBoard() throws Exception {
         setThreshold("LOCATION", LOCATION, 20, "aggregator orders should go red sooner");
-        // The order was created thirty minutes ago and waited for approval; its ticket opens only now, so
-        // a clock started at the ticket reads zero minutes while the board's reads thirty.
-        seedTicket(aggregatorUnpromised, "KS-AGG");
-        Instant orderCreatedAt = jdbc.sql("SELECT created_at FROM ordering.orders WHERE id = :id")
-                .param("id", aggregatorUnpromised)
-                .query(java.time.OffsetDateTime.class)
-                .single()
-                .toInstant();
-        assertThat(lateOnTheBoard(LOCATION)).contains(aggregatorUnpromised);
+        Instant now = Instant.now();
+        // Promised in ten minutes with twenty on the road: its ticket's own target passed ten minutes ago, the
+        // order's promise has not, and the board says it is not late.
+        UUID onTheRoad = fixtures.insertOrder(order("LS-ROAD")
+                .at(TENANT, BRAND, LOCATION)
+                .createdAt(now.minus(Duration.ofMinutes(30)))
+                .promisedAt(now.plus(Duration.ofMinutes(10))));
+        // Over, with its ticket still on the pass: a finished order is never flagged.
+        UUID finished = fixtures.insertOrder(order("LS-FIN")
+                .at(TENANT, BRAND, LOCATION)
+                .status("COMPLETED")
+                .createdAt(now.minus(Duration.ofMinutes(50)))
+                .unpromised());
+        // Every ticket opens only now, as a ticket does after approval; the targets are the promise less the
+        // road, the way the kitchen writes them.
+        seedTicket(aggregatorUnpromised, "KS-AGG", null);
+        seedTicket(nativePromised, "KS-NAT", now.plus(Duration.ofMinutes(25)));
+        seedTicket(scheduledHoursAhead, "KS-SCH", now.plus(Duration.ofHours(2)));
+        seedTicket(onTheRoad, "KS-ROAD", now.minus(Duration.ofMinutes(10)));
+        seedTicket(finished, "KS-FIN", null);
 
-        JsonNode queue = get(KITCHEN + "/tickets").get("tickets").get(0);
-        JsonNode wall = get(KITCHEN + "/vdu");
-        JsonNode wallTicket = wall.get("tickets").get(0);
-        int fallback = wall.get("lateness").get("delivery").get("noPromiseFallbackSeconds").asInt();
+        List<UUID> lateOnTheBoard = lateOnTheBoard(LOCATION);
+        assertThat(lateOnTheBoard)
+                .as("the board, which the kitchen's surfaces must agree with")
+                .contains(aggregatorUnpromised)
+                .doesNotContain(nativePromised, scheduledHoursAhead, onTheRoad, finished);
 
-        for (JsonNode ticket : List.of(queue, wallTicket)) {
-            Instant carried = Instant.parse(ticket.get("orderCreatedAt").asString());
-            assertThat(carried)
-                    .as("the order's own creation instant, the one the board measures from")
-                    .isEqualTo(orderCreatedAt);
-            assertThat(Instant.parse(ticket.get("createdAt").asString()))
-                    .as("the ticket itself opened long after the order")
-                    .isAfter(carried.plus(Duration.ofMinutes(29)));
-            assertThat(ticket.get("targetReadyAt").isNull())
-                    .as("an unpromised order has no target, so the fallback is what colours it")
-                    .isTrue();
-            assertThat(carried.plusSeconds(fallback).isBefore(Instant.now()))
-                    .as("late by the scalar of 20 minutes, from the order's creation, as on the board")
-                    .isTrue();
+        JsonNode queue = readJson(KITCHEN + "/tickets");
+        JsonNode wall = readJson(KITCHEN + "/vdu");
+        Map<UUID, String> labelled = Map.of(
+                aggregatorUnpromised, "KS-AGG",
+                nativePromised, "KS-NAT",
+                scheduledHoursAhead, "KS-SCH",
+                onTheRoad, "KS-ROAD",
+                finished, "KS-FIN");
+
+        for (JsonNode surface : List.of(queue, wall)) {
+            assertThat(surface.get("tickets")).as("one ticket per order").hasSize(labelled.size());
+            for (Map.Entry<UUID, String> order : labelled.entrySet()) {
+                JsonNode ticket = ticketLabelled(surface, order.getValue());
+                assertThat(levelOnTheWire(ticket, wall.get("lateness"), now))
+                        .as("%s, read the way a screen reads it, against the board", order.getValue())
+                        .isEqualTo(levelOnTheBoard(order.getKey()));
+            }
         }
+
+        JsonNode aggregator = ticketLabelled(queue, "KS-AGG");
+        assertThat(Instant.parse(aggregator.get("orderCreatedAt").asString()))
+                .as("the order's own creation, not the ticket's opening")
+                .isEqualTo(createdAtOf(aggregatorUnpromised))
+                .isBefore(Instant.parse(aggregator.get("createdAt").asString()).minus(Duration.ofMinutes(29)));
+        assertThat(ticketLabelled(wall, "KS-AGG").get("orderCreatedAt").asString())
+                .isEqualTo(aggregator.get("orderCreatedAt").asString());
+        assertThat(ticketLabelled(queue, "KS-ROAD").get("orderPromisedAt").asString())
+                .as("the order's promise, not the ticket's target less the road")
+                .isEqualTo(promisedAtOf(onTheRoad).toString())
+                .isNotEqualTo(
+                        ticketLabelled(queue, "KS-ROAD").get("targetReadyAt").asString());
+        assertThat(ticketLabelled(queue, "KS-FIN").get("orderTerminal").asBoolean())
+                .isTrue();
+        assertThat(ticketLabelled(wall, "KS-FIN").get("orderTerminal").asBoolean())
+                .isTrue();
     }
 
     // ---------------------------------------------------------------- helpers
 
-    private JsonNode get(String path) throws Exception {
+    private JsonNode readJson(String path) throws Exception {
         MvcResult result = mvc.perform(get(path).with(tokenFor(OWNER))).andReturn();
         assertThat(result.getResponse().getStatus())
                 .as(result.getResponse().getContentAsString())
@@ -256,15 +293,76 @@ class OrderLatenessScalarSurfacesHttpTests {
         return JSON.readTree(result.getResponse().getContentAsString());
     }
 
-    /** A FIRED ticket for the order, opened now: the shape the live queue and the wall read. */
-    private void seedTicket(UUID orderId, String label) {
+    private static JsonNode ticketLabelled(JsonNode surface, String label) {
+        for (JsonNode ticket : surface.get("tickets")) {
+            if (label.equals(ticket.get("sequenceLabel").asString())) {
+                return ticket;
+            }
+        }
+        throw new AssertionError("no ticket labelled " + label + " in " + surface);
+    }
+
+    /**
+     * What a screen concludes about a ticket from the fields the server sent it and the policy the wall
+     * carries, by the domain's own evaluator ({@link OrderLatenessPolicy#evaluate}) -- the rule the board's
+     * filter is held to.
+     */
+    private static OrderLatenessPolicy.LatenessLevel levelOnTheWire(JsonNode ticket, JsonNode policy, Instant now) {
+        JsonNode delivery = policy.get("delivery");
+        OrderLatenessPolicy.LatenessThresholds thresholds = new OrderLatenessPolicy.LatenessThresholds(
+                delivery.get("atRiskBeforeSeconds").asInt(),
+                delivery.get("lateAfterSeconds").asInt(),
+                delivery.get("noPromiseFallbackSeconds").asInt());
+        JsonNode promised = ticket.get("orderPromisedAt");
+        OrderPromise promise = promised.isNull()
+                ? OrderPromise.notPromised()
+                : OrderPromise.scheduled(Instant.parse(promised.asString()));
+        return new OrderLatenessPolicy(thresholds, thresholds, thresholds)
+                .evaluate(
+                        FulfillmentMode.DELIVERY,
+                        promise,
+                        ticket.get("orderTerminal").asBoolean() ? OrderStatus.COMPLETED : OrderStatus.CONFIRMED,
+                        Instant.parse(ticket.get("orderCreatedAt").asString()),
+                        now);
+    }
+
+    /** The order header's read of the order, as a domain level (the board's other face). */
+    private OrderLatenessPolicy.LatenessLevel levelOnTheBoard(UUID orderId) throws Exception {
+        return switch (severityOf(orderId)) {
+            case "LATE" -> OrderLatenessPolicy.LatenessLevel.LATE;
+            case "AT_RISK" -> OrderLatenessPolicy.LatenessLevel.AT_RISK;
+            default -> OrderLatenessPolicy.LatenessLevel.NORMAL;
+        };
+    }
+
+    private Instant createdAtOf(UUID orderId) {
+        return jdbc.sql("SELECT created_at FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(java.time.OffsetDateTime.class)
+                .single()
+                .toInstant();
+    }
+
+    private Instant promisedAtOf(UUID orderId) {
+        return jdbc.sql("SELECT promised_at FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(java.time.OffsetDateTime.class)
+                .single()
+                .toInstant();
+    }
+
+    /**
+     * A FIRED ticket for the order, opened now: the shape the live queue and the wall read. {@code
+     * targetReadyAt} is what the kitchen would have written, the promise less the road.
+     */
+    private void seedTicket(UUID orderId, String label, @Nullable Instant targetReadyAt) {
         jdbc.sql("""
                 INSERT INTO kitchen.tickets (
                     id, tenant_id, brand_id, location_id, order_id, sequence_label,
-                    fulfilment_mode, channel_code, status, release_mode, released_at,
+                    fulfilment_mode, channel_code, status, release_mode, released_at, target_ready_at,
                     routing_version, version, created_at, updated_at)
                 VALUES (:id, :t, :b, :loc, :orderId, :label, 'DELIVERY', 'TELEGRAM', 'FIRED',
-                    'AUTO_ON_CONFIRM', now(), 1, 1, now(), now())
+                    'AUTO_ON_CONFIRM', now(), :target, 1, 1, now(), now())
                 """)
                 .param("id", UUID.randomUUID())
                 .param("t", TENANT)
@@ -272,6 +370,7 @@ class OrderLatenessScalarSurfacesHttpTests {
                 .param("loc", LOCATION)
                 .param("orderId", orderId)
                 .param("label", label)
+                .param("target", targetReadyAt == null ? null : targetReadyAt.atOffset(ZoneOffset.UTC))
                 .update();
     }
 

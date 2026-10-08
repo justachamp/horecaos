@@ -64,18 +64,30 @@ public interface KitchenOrderSource {
     Map<UUID, String> externalReferences(UUID tenantId, Set<UUID> orderIds);
 
     /**
-     * When each of these orders was created: the instant its lateness clock started (ADR 0036,
-     * ADR 0150 decision 1).
+     * The facts a lateness clock is measured from, one per order (ADR 0150 decision 1; ADR 0036).
      *
      * <p>A ticket's own {@code created_at} is when the kitchen opened it, which for an order that
-     * waited in {@code AWAITING_APPROVAL} or was taken for a slot is long after checkout. The
-     * no-promise fallback measures from the order, never from the ticket, so a board, a header and a
-     * wall agree about an unpromised order at one instant; a ticket's own opening time would start the
-     * clock again on acceptance, which ADR 0150 refuses.
+     * waited in {@code AWAITING_APPROVAL} or was taken for a slot is long after checkout, and its
+     * {@code target_ready_at} is the promise less the road. Neither is what the order board measures
+     * from. The board's rule is the order's: late once {@code promised_at + lateAfter} has passed, or,
+     * with no promise, once {@code created_at + noPromiseFallback} has, and never for a terminal order.
+     * A wall or a queue that read the ticket's two instants would start the clock again on acceptance
+     * (which ADR 0150 refuses) and call a delivery order late a road-time before the board does, so the
+     * kitchen's surfaces read these instead.
      *
      * @return only orders of this tenant that exist; an id with no order is absent from the map
      */
-    Map<UUID, Instant> createdAtByOrders(UUID tenantId, Set<UUID> orderIds);
+    Map<UUID, OrderClock> clocksByOrders(UUID tenantId, Set<UUID> orderIds);
+
+    /**
+     * One order's lateness inputs.
+     *
+     * @param createdAt  when the order was created: where the no-promise fallback measures from
+     * @param promisedAt the promise made at checkout, null when V0023 recorded it as NOT_PROMISED
+     * @param terminal   the order is over (completed, cancelled, rejected, expired, payment failed): a
+     *                   terminal order is never flagged, whatever its history
+     */
+    record OrderClock(Instant createdAt, @Nullable Instant promisedAt, boolean terminal) {}
 
     /**
      * The order facts one ticket is built from.
