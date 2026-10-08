@@ -167,6 +167,49 @@ class TelegramOperationsMessageClassificationTests {
         assertThat(ClassificationScanner.isProtectedName("courierNote")).isTrue();
     }
 
+    @Test
+    void theTerminalAlertVariablesCarryNoProtectedFieldAndAreExhaustive() {
+        // ADR 0155: a PIN lock names the member's non-personal reference and the device's label; an unseen device names
+        // the
+        // device and when it was last seen. A third key -- a name, a phone, a PIN -- fails here rather than in a group
+        // chat.
+        uz.horecaos.platform.iam.api.terminals.TerminalAlert locked =
+                new uz.horecaos.platform.iam.api.terminals.TerminalAlert(
+                        "TERMINAL_CREDENTIAL_LOCKED",
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "StaffMember",
+                        UUID.randomUUID(),
+                        "Pass tablet",
+                        "S-0142",
+                        "DAILY_LIMIT",
+                        Instant.now(),
+                        UUID.randomUUID());
+        Map<String, String> lockVariables = TerminalOperationsAlertTrigger.variablesFor(locked);
+        assertClean(lockVariables, "TerminalOperationsAlertTrigger.variablesFor(locked)");
+        assertThat(lockVariables.keySet()).containsExactlyInAnyOrder("deviceLabel", "staffReference", "lockRule");
+
+        uz.horecaos.platform.iam.api.terminals.TerminalAlert unseen =
+                new uz.horecaos.platform.iam.api.terminals.TerminalAlert(
+                        "TERMINAL_DEVICE_UNSEEN",
+                        locked.tenantId(),
+                        locked.brandId(),
+                        locked.locationId(),
+                        locked.deviceId(),
+                        "Device",
+                        locked.deviceId(),
+                        "Pass tablet",
+                        "",
+                        "",
+                        Instant.now(),
+                        UUID.randomUUID());
+        Map<String, String> unseenVariables = TerminalOperationsAlertTrigger.variablesFor(unseen);
+        assertClean(unseenVariables, "TerminalOperationsAlertTrigger.variablesFor(unseen)");
+        assertThat(unseenVariables.keySet()).containsExactlyInAnyOrder("deviceLabel", "lastSeenAt");
+    }
+
     private static void assertClean(Map<String, String> variables, String source) {
         Set<String> protectedNames = variables.keySet().stream()
                 .filter(ClassificationScanner::isProtectedName)
