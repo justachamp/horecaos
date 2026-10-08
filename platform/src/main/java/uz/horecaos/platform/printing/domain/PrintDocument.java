@@ -1,7 +1,5 @@
 package uz.horecaos.platform.printing.domain;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -78,12 +76,6 @@ public record PrintDocument(
     // ----------------------------------------------------------------- values
 
     /** What sits on the right of a key: a word, an amount, or a moment. The renderer formats the last two. */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind")
-    @JsonSubTypes({
-        @JsonSubTypes.Type(value = Value.Plain.class, name = "PLAIN"),
-        @JsonSubTypes.Type(value = Value.Amount.class, name = "AMOUNT"),
-        @JsonSubTypes.Type(value = Value.Moment.class, name = "MOMENT")
-    })
     public sealed interface Value permits Value.Plain, Value.Amount, Value.Moment {
 
         record Plain(String text) implements Value {
@@ -137,19 +129,6 @@ public record PrintDocument(
 
     // ----------------------------------------------------------------- blocks
 
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind")
-    @JsonSubTypes({
-        @JsonSubTypes.Type(value = Text.class, name = "TEXT"),
-        @JsonSubTypes.Type(value = KeyValue.class, name = "KEY_VALUE"),
-        @JsonSubTypes.Type(value = Item.class, name = "ITEM"),
-        @JsonSubTypes.Type(value = Rule.class, name = "RULE"),
-        @JsonSubTypes.Type(value = Qr.class, name = "QR"),
-        @JsonSubTypes.Type(value = Fiscal.class, name = "FISCAL"),
-        @JsonSubTypes.Type(value = Logo.class, name = "LOGO"),
-        @JsonSubTypes.Type(value = Feed.class, name = "FEED"),
-        @JsonSubTypes.Type(value = Cut.class, name = "CUT"),
-        @JsonSubTypes.Type(value = StatusSlot.class, name = "STATUS_SLOT")
-    })
     public sealed interface Block permits Text, KeyValue, Item, Rule, Qr, Fiscal, Logo, Feed, Cut, StatusSlot {}
 
     /** How big a run of text is drawn: the multiple of the 12 by 24 dot cell. */
