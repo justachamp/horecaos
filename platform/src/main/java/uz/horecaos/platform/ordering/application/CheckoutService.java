@@ -129,7 +129,7 @@ public class CheckoutService {
         // committed before it.
         var reserved = reservation.reserve(command, eligible, now);
         if (reserved instanceof CheckoutReservationStep.ItemsUnavailable unavailable) {
-            return ledger.settleUnavailable(attemptId, unavailable.decision(), now);
+            return ledger.settleUnavailable(attemptId, unavailable.decision(), eligible, now);
         }
         if (reserved instanceof CheckoutReservationStep.Refused refused) {
             return ledger.settle(attemptId, null, refused.code(), refused.detail(), now);

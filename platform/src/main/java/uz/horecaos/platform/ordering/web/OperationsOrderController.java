@@ -3086,7 +3086,9 @@ public class OperationsOrderController {
                             OrderLineCatchweightResponse.of(line.line()),
                             line.line().isComboComponent()
                                     ? null
-                                    : portionSteps.get(line.line().sourceVariantId())))
+                                    : portionSteps.get(line.line().sourceVariantId()),
+                            line.line().origin(),
+                            line.line().autoAddMandatory()))
                     .toList();
         }
     }
@@ -3337,7 +3339,12 @@ public class OperationsOrderController {
             // ADR 0137: the step this line may be amended in, present only on a line of a splittable
             // dish whose order can still be amended -- so a console offers 1,5 of a plov and never of
             // a can. Absent means whole units; it is the published rule, not a property of the line.
-            @Nullable BigDecimal portionSize) {}
+            @Nullable BigDecimal portionSize,
+            // ADR 0158: CUSTOMER for a line the customer chose, AUTO_ADD for one an auto-add rule put in
+            // the basket. The console prints «добавлено автоматически» beside the latter, and a line
+            // that was mandatory could not be removed by the customer.
+            String origin,
+            boolean autoAddMandatory) {}
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}

@@ -545,6 +545,7 @@ public class JdbcCatalogStore {
                     case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
                     case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
                     case COMBO_GROUP -> "SELECT 1 FROM catalog.combo_groups";
+                    case AUTO_ADD_RULE -> "SELECT 1 FROM catalog.auto_add_rules";
                     // ADR 0136: a pairing is named by the variant it offers; it has no
                     // translations of its own to write against.
                     case COMBO_COMPONENT -> null;

@@ -151,7 +151,8 @@ public class JdbcCartStore {
                 SELECT id, line_key, variant_id, quantity,
                        selected_modifier_snapshot::text AS modifiers, comment_preset_codes,
                        customer_note_encrypted,
-                       combo_picks::text AS combo_picks, nested_modifiers::text AS nested_modifiers
+                       combo_picks::text AS combo_picks, nested_modifiers::text AS nested_modifiers,
+                       origin, auto_add_rule_id, auto_add_rule_version, customer_adjusted
                 FROM ordering.cart_lines
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
                 ORDER BY line_key
@@ -167,8 +168,117 @@ public class JdbcCartStore {
                         commentPresetCodes(row.getArray("comment_preset_codes")),
                         row.getString("customer_note_encrypted"),
                         row.getString("combo_picks"),
-                        row.getString("nested_modifiers")))
+                        row.getString("nested_modifiers"),
+                        row.getString("origin"),
+                        row.getObject("auto_add_rule_id", UUID.class),
+                        row.getObject("auto_add_rule_version", Integer.class),
+                        row.getBoolean("customer_adjusted")))
                 .list();
+    }
+
+    // ------------------------------------------------------------------ auto-add (ADR 0158)
+
+    /** Writes a line the cart injected itself, with the rule and version that put it there. */
+    public void insertInjectedLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID cartId,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            UUID ruleId,
+            int ruleVersion,
+            Instant now) {
+        jdbc.sql("""
+                INSERT INTO ordering.cart_lines (
+                    id, tenant_id, cart_id, line_key, variant_id, quantity,
+                    origin, auto_add_rule_id, auto_add_rule_version, customer_adjusted,
+                    version, created_at, updated_at)
+                VALUES (:id, :tenantId, :cartId, :lineKey, :variantId, :quantity,
+                    'AUTO_ADD', :ruleId, :ruleVersion, false, 1, :now, :now)
+                """)
+                .param("id", lineId)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
+                .param("lineKey", lineKey)
+                .param("variantId", variantId)
+                .param("quantity", quantity)
+                .param("ruleId", ruleId)
+                .param("ruleVersion", ruleVersion)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /**
+     * Changes an injected line's variant and quantity, or only marks it as the customer's own
+     * quantity. {@code customerAdjusted} is written as given: a re-evaluation that changes the variant
+     * resets it, and a customer's edit sets it.
+     */
+    public void updateInjectedLine(
+            UUID tenantId,
+            UUID cartId,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity,
+            int ruleVersion,
+            boolean customerAdjusted,
+            Instant now) {
+        jdbc.sql("""
+                UPDATE ordering.cart_lines
+                SET variant_id = :variantId, quantity = :quantity, auto_add_rule_version = :ruleVersion,
+                    customer_adjusted = :customerAdjusted, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND cart_id = :cartId AND line_key = :lineKey
+                  AND origin = 'AUTO_ADD'
+                """)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
+                .param("lineKey", lineKey)
+                .param("variantId", variantId)
+                .param("quantity", quantity)
+                .param("ruleVersion", ruleVersion)
+                .param("customerAdjusted", customerAdjusted)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /** The rules whose line the customer removed from this cart: never evaluated into it again. */
+    public java.util.Set<UUID> declinedRules(UUID tenantId, UUID cartId) {
+        return java.util.Set.copyOf(jdbc.sql("""
+                        SELECT rule_id FROM ordering.cart_auto_add_declines
+                        WHERE tenant_id = :tenantId AND cart_id = :cartId
+                        """)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
+                .query(UUID.class)
+                .list());
+    }
+
+    public void recordDecline(UUID tenantId, UUID cartId, UUID ruleId, Instant now) {
+        jdbc.sql("""
+                INSERT INTO ordering.cart_auto_add_declines (cart_id, tenant_id, rule_id, declined_at)
+                VALUES (:cartId, :tenantId, :ruleId, :now)
+                ON CONFLICT (cart_id, rule_id) DO NOTHING
+                """)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
+                .param("ruleId", ruleId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /** A rebuilt cart inherits what the customer already removed: moving branch is not a new chance for the bag. */
+    public void copyDeclines(UUID tenantId, UUID fromCartId, UUID toCartId, Instant now) {
+        jdbc.sql("""
+                INSERT INTO ordering.cart_auto_add_declines (cart_id, tenant_id, rule_id, declined_at)
+                SELECT :toCartId, tenant_id, rule_id, :now FROM ordering.cart_auto_add_declines
+                WHERE tenant_id = :tenantId AND cart_id = :fromCartId
+                ON CONFLICT (cart_id, rule_id) DO NOTHING
+                """)
+                .param("tenantId", tenantId)
+                .param("fromCartId", fromCartId)
+                .param("toCartId", toCartId)
+                .param("now", utc(now))
+                .update();
     }
 
     /** {@code text[]} reads back as a JDBC {@link Array}; empty rather than null when absent. */
@@ -818,6 +928,11 @@ public class JdbcCartStore {
      * @param comboPicksJson ADR 0136: {@code [{componentId, quantity}]}, non-empty exactly
      *                       when {@code variantId} is a combo's container
      * @param nestedModifiersJson ADR 0136: {@code [{parentOptionId, optionId}]}
+     * @param origin ADR 0158: {@code CUSTOMER}, {@code AUTO_ADD} (injected by a rule) or {@code OFFER_ACCEPTED}
+     * @param autoAddRuleId the rule that put the line there, or null for a customer's own line
+     * @param autoAddRuleVersion the rule's published version, null exactly when {@code autoAddRuleId} is
+     * @param customerAdjusted whether the customer set an injected line's quantity themselves, so a
+     *                         re-evaluation does not overwrite it
      */
     public record CartLineRow(
             UUID lineId,
@@ -828,10 +943,49 @@ public class JdbcCartStore {
             List<String> commentPresetCodes,
             @Nullable String customerNoteEncrypted,
             String comboPicksJson,
-            String nestedModifiersJson) {
+            String nestedModifiersJson,
+            String origin,
+            @Nullable UUID autoAddRuleId,
+            @Nullable Integer autoAddRuleVersion,
+            boolean customerAdjusted) {
+
+        public static final String ORIGIN_CUSTOMER = "CUSTOMER";
+        public static final String ORIGIN_AUTO_ADD = "AUTO_ADD";
 
         public CartLineRow {
             quantity = Quantities.normalise(quantity);
+        }
+
+        /** A customer's own line, which is every line there was before ADR 0158. */
+        public CartLineRow(
+                UUID lineId,
+                String lineKey,
+                UUID variantId,
+                BigDecimal quantity,
+                String selectedModifiersJson,
+                List<String> commentPresetCodes,
+                @Nullable String customerNoteEncrypted,
+                String comboPicksJson,
+                String nestedModifiersJson) {
+            this(
+                    lineId,
+                    lineKey,
+                    variantId,
+                    quantity,
+                    selectedModifiersJson,
+                    commentPresetCodes,
+                    customerNoteEncrypted,
+                    comboPicksJson,
+                    nestedModifiersJson,
+                    ORIGIN_CUSTOMER,
+                    null,
+                    null,
+                    false);
+        }
+
+        /** Whether a rule put this line in the cart. */
+        public boolean injected() {
+            return ORIGIN_AUTO_ADD.equals(origin);
         }
     }
 

@@ -10,6 +10,13 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.catalog.domain.AutoAddFindings;
+import uz.horecaos.platform.catalog.domain.AutoAddRules;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.AutoAddRule;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Band;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Kind;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Mode;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Trigger;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Fee;
@@ -69,6 +76,7 @@ public class CatalogValidator {
         validateOfferings(snapshot, findings);
         validateFiscalClassification(snapshot, findings);
         validatePhysicalAttributes(snapshot, findings);
+        validateAutoAdd(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
     }
@@ -194,6 +202,221 @@ public class CatalogValidator {
                                     + "the Payme path there is no later checkpoint — the line data is "
                                     + "fixed before the customer pays.")
                             .formatted(incomplete)));
+        }
+    }
+
+    /**
+     * The cart-injection rules (ADR 0158): what a rule would put in a customer's basket has to be a
+     * line the cart can actually sell, must not duplicate what a hidden modifier or a promotion's gift
+     * already does, and a rule the customer cannot decline is gated behind a legal switch.
+     *
+     * <p>Only active rules are looked at: a draft reaches no customer. Errors block publication and
+     * name the rule; the two warnings (a portion band that counts nothing, a gap between bands) do not.
+     */
+    private void validateAutoAdd(Snapshot snapshot, List<ValidationFinding> findings) {
+        AutoAddContext autoAdd = snapshot.autoAdd();
+        if (autoAdd.rules().isEmpty()) {
+            return;
+        }
+        Map<UUID, Status> variantStatuses = new java.util.HashMap<>();
+        snapshot.variants().forEach(variant -> variantStatuses.put(variant.id(), variant.status()));
+        Map<UUID, Status> productStatuses = new java.util.HashMap<>();
+        snapshot.products().forEach(product -> productStatuses.put(product.id(), product.status()));
+        Map<UUID, Status> categoryStatuses = new java.util.HashMap<>();
+        snapshot.categories().forEach(category -> categoryStatuses.put(category.id(), category.status()));
+        Map<UUID, Set<String>> hiddenModesByVariant = hiddenPackagingVariants(snapshot);
+        boolean anyPortions = snapshot.physicalByVariant().values().stream()
+                .anyMatch(physical -> physical.portionsPerUnit() != null
+                        && physical.portionsPerUnit().signum() > 0);
+
+        for (AutoAddRule rule : autoAdd.rules()) {
+            for (UUID added : rule.addedVariantIds()) {
+                boolean onMenu = variantStatuses.get(added) == Status.ACTIVE;
+                boolean priced =
+                        !snapshot.pricingWired() || snapshot.pricedVariantIds().contains(added);
+                if (!onMenu || !priced) {
+                    findings.add(autoAddBlocker(
+                            AutoAddFindings.AUTO_ADD_VARIANT_NOT_SELLABLE,
+                            rule,
+                            !onMenu
+                                    ? "The variant this rule adds (%s) is not an active variant on this menu"
+                                            .formatted(added)
+                                    : "The variant this rule adds (%s) has no active price".formatted(added)));
+                }
+                Set<String> hiddenModes = hiddenModesByVariant.get(added);
+                if (hiddenModes != null && intersects(hiddenModes, rule.fulfillmentModes())) {
+                    findings.add(autoAddBlocker(
+                            AutoAddFindings.AUTO_ADD_DUPLICATES_HIDDEN_PACKAGING,
+                            rule,
+                            "A hidden modifier already charges variant %s in the same fulfilment modes; a per-product box stays a hidden modifier, a per-order or per-portion line is a rule"
+                                    .formatted(added)));
+                }
+                if (autoAdd.promotionGiftVariantIds().contains(added)) {
+                    String detail =
+                            "Variant %s is the gift of an active FREE_ITEM promotion; a rule cannot read the money the promotion's condition reads, so an injected gift would be charged in full whenever the promotion does not fire"
+                                    .formatted(added);
+                    findings.add(
+                            rule.mode() == Mode.INJECT
+                                    ? autoAddBlocker(AutoAddFindings.AUTO_ADD_VARIANT_IS_PROMOTION_GIFT, rule, detail)
+                                    : ValidationFinding.warning(
+                                            AutoAddFindings.AUTO_ADD_VARIANT_IS_PROMOTION_GIFT,
+                                            EntityType.AUTO_ADD_RULE,
+                                            rule.id(),
+                                            rule.code(),
+                                            detail + "; as an offer the customer taps, so this only warns"));
+                }
+            }
+            if (rule.kind() == Kind.PRODUCT_TRIGGERED
+                    && rule.triggers().stream()
+                            .noneMatch(trigger ->
+                                    triggerIsLive(trigger, variantStatuses, productStatuses, categoryStatuses))) {
+                findings.add(
+                        autoAddBlocker(
+                                AutoAddFindings.AUTO_ADD_TRIGGER_MISSING,
+                                rule,
+                                "A product-triggered rule needs at least one trigger whose product, variant or category is not archived"));
+            }
+            if (rule.mandatory() && !autoAdd.mandatoryAllowed()) {
+                findings.add(
+                        autoAddBlocker(
+                                AutoAddFindings.AUTO_ADD_MANDATORY_NOT_ALLOWED,
+                                rule,
+                                "A line the customer cannot remove is a charge the customer did not choose; mandatory rules are blocked until a platform administrator turns catalog.auto_add_mandatory_allowed on"));
+            }
+            if (rule.mandatory()
+                    && !snapshot.hasTranslation(EntityType.AUTO_ADD_RULE, rule.id(), snapshot.defaultLocale())) {
+                findings.add(
+                        autoAddBlocker(
+                                AutoAddFindings.AUTO_ADD_MANDATORY_UNDISCLOSED,
+                                rule,
+                                "A mandatory rule shows the customer why the line is there; it needs customer text in the brand's default language"));
+            }
+            if (rule.kind() == Kind.PORTION_BAND) {
+                if (!anyPortions) {
+                    findings.add(ValidationFinding.warning(
+                            AutoAddFindings.AUTO_ADD_PORTION_BAND_COUNTS_NOTHING,
+                            EntityType.AUTO_ADD_RULE,
+                            rule.id(),
+                            rule.code(),
+                            "No variant of this brand states portions per unit, so this rule never fires"));
+                }
+                List<Band> ordered = rule.bands().stream()
+                        .sorted(java.util.Comparator.comparing(Band::portionsFrom))
+                        .toList();
+                for (int index = 1; index < ordered.size(); index++) {
+                    java.math.BigDecimal previousEnd = ordered.get(index - 1).portionsTo();
+                    if (previousEnd != null
+                            && previousEnd.compareTo(ordered.get(index).portionsFrom()) < 0) {
+                        findings.add(ValidationFinding.warning(
+                                AutoAddFindings.AUTO_ADD_BAND_GAP,
+                                EntityType.AUTO_ADD_RULE,
+                                rule.id(),
+                                rule.code(),
+                                "A basket worth %s to %s portions falls between two bands and injects nothing"
+                                        .formatted(
+                                                previousEnd.toPlainString(),
+                                                ordered.get(index)
+                                                        .portionsFrom()
+                                                        .toPlainString())));
+                    }
+                }
+            }
+        }
+
+        List<AutoAddRule> rules = autoAdd.rules();
+        for (int i = 0; i < rules.size(); i++) {
+            for (int j = i + 1; j < rules.size(); j++) {
+                AutoAddRule first = rules.get(i);
+                AutoAddRule second = rules.get(j);
+                if (intersects(first.addedVariantIds(), second.addedVariantIds())
+                        && intersects(first.fulfillmentModes(), second.fulfillmentModes())
+                        && intersects(first.channelSystemTypes(), second.channelSystemTypes())
+                        && locationsOverlap(first, second)) {
+                    findings.add(autoAddBlocker(
+                            AutoAddFindings.AUTO_ADD_RULES_OVERLAP,
+                            second,
+                            "Rules %s and %s add the same variant in overlapping fulfilment modes, channel types and locations"
+                                    .formatted(first.code(), second.code())));
+                }
+            }
+        }
+    }
+
+    private static ValidationFinding autoAddBlocker(String code, AutoAddRule rule, String detail) {
+        return ValidationFinding.blocker(code, EntityType.AUTO_ADD_RULE, rule.id(), rule.code(), detail);
+    }
+
+    private static <T> boolean intersects(Set<T> left, Set<T> right) {
+        return left.stream().anyMatch(right::contains);
+    }
+
+    private static boolean locationsOverlap(AutoAddRule first, AutoAddRule second) {
+        // No rows means every location of the brand.
+        return first.locationIds().isEmpty()
+                || second.locationIds().isEmpty()
+                || intersects(first.locationIds(), second.locationIds());
+    }
+
+    private static boolean triggerIsLive(
+            Trigger trigger,
+            Map<UUID, Status> variantStatuses,
+            Map<UUID, Status> productStatuses,
+            Map<UUID, Status> categoryStatuses) {
+        if (trigger.variantId() != null) {
+            Status status = variantStatuses.get(trigger.variantId());
+            return status != null && status != Status.ARCHIVED;
+        }
+        if (trigger.productId() != null) {
+            Status status = productStatuses.get(trigger.productId());
+            return status != null && status != Status.ARCHIVED;
+        }
+        Status status = categoryStatuses.get(trigger.categoryId());
+        return status != null && status != Status.ARCHIVED;
+    }
+
+    /**
+     * The variants a hidden, auto-selected modifier group already charges (ADR 0136), with the fulfilment modes
+     * it applies in: the linked variant of every active option of every hidden attachment. A hidden attachment
+     * with no mode list applies in all three.
+     */
+    private static Map<UUID, Set<String>> hiddenPackagingVariants(Snapshot snapshot) {
+        Map<UUID, Set<String>> byVariant = new java.util.HashMap<>();
+        CompositeContext composite = snapshot.composite();
+        for (ModifierAttachment attachment : composite.attachments()) {
+            if (!attachment.hidden()) {
+                continue;
+            }
+            Set<String> modes = attachment.modes() == null
+                    ? AutoAddRules.FULFILLMENT_MODES
+                    : attachment.modes().stream().map(Enum::name).collect(Collectors.toCollection(LinkedHashSet::new));
+            for (ModifierOption option : composite.activeOptionsOf(attachment.modifierGroupId())) {
+                if (option.linkedVariantId() != null) {
+                    byVariant
+                            .computeIfAbsent(option.linkedVariantId(), id -> new LinkedHashSet<>())
+                            .addAll(modes);
+                }
+            }
+        }
+        return byVariant;
+    }
+
+    /**
+     * Everything the auto-add rules need (ADR 0158), loaded with the rest of the snapshot.
+     *
+     * @param rules                   the brand's active rules; a draft reaches no customer
+     * @param promotionGiftVariantIds variants named by an active {@code FREE_ITEM} promotion, contributed
+     *                                by pricing through a port
+     * @param mandatoryAllowed        {@code catalog.auto_add_mandatory_allowed} for the tenant
+     */
+    public record AutoAddContext(List<AutoAddRule> rules, Set<UUID> promotionGiftVariantIds, boolean mandatoryAllowed) {
+
+        public AutoAddContext {
+            rules = List.copyOf(rules);
+            promotionGiftVariantIds = Set.copyOf(promotionGiftVariantIds);
+        }
+
+        public static AutoAddContext empty() {
+            return new AutoAddContext(List.of(), Set.of(), false);
         }
     }
 
@@ -834,7 +1057,54 @@ public class CatalogValidator {
             FiscalContext fiscal,
             boolean pricingWired,
             CompositeContext composite,
-            Map<UUID, PhysicalAttributes> physicalByVariant) {
+            Map<UUID, PhysicalAttributes> physicalByVariant,
+            AutoAddContext autoAdd) {
+
+        /** A snapshot with composite products and physical attributes and no auto-add rules (ADR 0158). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                CompositeContext composite,
+                Map<UUID, PhysicalAttributes> physicalByVariant) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    composite,
+                    physicalByVariant,
+                    AutoAddContext.empty());
+        }
 
         /**
          * A snapshot with no composite products (ADR 0136) and no variant carrying

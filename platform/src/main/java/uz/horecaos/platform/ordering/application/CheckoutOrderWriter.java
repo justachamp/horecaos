@@ -302,6 +302,10 @@ class CheckoutOrderWriter {
         Map<String, CommentPresetLookup.ResolvedPreset> resolvedPresets =
                 commentPresets.resolve(command.tenantId(), presetCodes);
 
+        // ADR 0158: which lines a rule added, and whether the customer could have removed them, so the
+        // order carries the origin, the rule id and the rule's version as evidence.
+        Map<String, AutoAddReconciler.LineInfo> autoAddInfo = cartService.autoAddInfoOf(cart, cartLines);
+
         Map<String, UUID> orderLineIdsByKey = new HashMap<>();
         int lineNumber = 0;
 
@@ -337,7 +341,8 @@ class CheckoutOrderWriter {
                     reEncryptNote(command.tenantId(), cartLine, orderLineId),
                     comboFacts(line, variants),
                     // ADR 0137: what a provisional figure was provisional against.
-                    line.catchweight());
+                    line.catchweight(),
+                    originOf(cartLine, autoAddInfo));
 
             orderLineIdsByKey.put(line.lineKey(), orderLineId);
 
@@ -566,6 +571,19 @@ class CheckoutOrderWriter {
      * person's words; copying the cart's ciphertext into an order line would
      * produce a note nobody could ever read again.
      */
+    /** An injected cart line becomes an order line that says so, with the rule, its version and whether it could be removed. */
+    private static JdbcOrderStore.LineOrigin originOf(
+            @Nullable CartLineRow cartLine, Map<String, AutoAddReconciler.LineInfo> autoAddInfo) {
+        if (cartLine == null || !cartLine.injected() || cartLine.autoAddRuleId() == null) {
+            return JdbcOrderStore.LineOrigin.CUSTOMER;
+        }
+        AutoAddReconciler.LineInfo info = autoAddInfo.get(cartLine.lineKey());
+        return JdbcOrderStore.LineOrigin.autoAdded(
+                cartLine.autoAddRuleId(),
+                cartLine.autoAddRuleVersion() == null ? 1 : cartLine.autoAddRuleVersion(),
+                info != null && info.mandatory());
+    }
+
     private @Nullable String reEncryptNote(UUID tenantId, @Nullable CartLineRow cartLine, UUID orderLineId) {
         if (cartLine == null || cartLine.customerNoteEncrypted() == null) {
             return null;

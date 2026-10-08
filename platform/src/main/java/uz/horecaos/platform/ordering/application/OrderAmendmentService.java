@@ -1621,7 +1621,10 @@ public class OrderAmendmentService {
                                 : null,
                         // ADR 0137: the replacement keeps what its provisional figures were
                         // provisional against.
-                        priced.catchweight());
+                        priced.catchweight(),
+                        // ADR 0158: and what put it in the basket, so a quantity change does not
+                        // turn a rule's line into a customer's.
+                        original.lineOrigin());
                 carryOver(
                         tenantId,
                         original,

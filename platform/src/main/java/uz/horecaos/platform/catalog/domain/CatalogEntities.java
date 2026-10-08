@@ -49,6 +49,11 @@ public final class CatalogEntities {
          */
         COMBO_COMPONENT,
         /**
+         * An auto-add rule (ADR 0158). Its customer text, shown beside the line it injects,
+         * lives in the translations; it has no media of its own.
+         */
+        AUTO_ADD_RULE,
+        /**
          * A charge that reaches a receipt as an ordinary line without being a
          * catalog item — today only the delivery fee (ADR 0038).
          *

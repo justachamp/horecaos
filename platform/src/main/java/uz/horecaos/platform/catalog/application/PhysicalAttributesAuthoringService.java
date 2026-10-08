@@ -168,6 +168,7 @@ public class PhysicalAttributesAuthoringService {
         summary.put("proteinGramsPer100", plain(attributes.proteinGramsPer100()));
         summary.put("fatGramsPer100", plain(attributes.fatGramsPer100()));
         summary.put("carbohydratesGramsPer100", plain(attributes.carbohydratesGramsPer100()));
+        summary.put("portionsPerUnit", plain(attributes.portionsPerUnit()));
         return summary;
     }
 

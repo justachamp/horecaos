@@ -36,6 +36,10 @@ import org.jspecify.annotations.Nullable;
  * @param caloriesKcalPer100        КБЖУ per 100 g (or per 100 mL when the variant
  *                                  is volume-measured); display data that takes
  *                                  part in no price, constraint or fiscal document
+ * @param portionsPerUnit           ADR 0158: how many servings one unit is worth, for portion-band
+ *                                  auto-add rules. Not {@code portionSize}, which is the step a
+ *                                  splittable dish is ordered in; blank counts as zero and no value
+ *                                  is guessed from weight, price or category
  */
 public record PhysicalAttributes(
         @Nullable Integer netWeightGrams,
@@ -48,9 +52,38 @@ public record PhysicalAttributes(
         @Nullable BigDecimal caloriesKcalPer100,
         @Nullable BigDecimal proteinGramsPer100,
         @Nullable BigDecimal fatGramsPer100,
-        @Nullable BigDecimal carbohydratesGramsPer100) {
+        @Nullable BigDecimal carbohydratesGramsPer100,
+        @Nullable BigDecimal portionsPerUnit) {
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+
+    /** Every attribute set that predates ADR 0158's portions-per-unit fact. */
+    public PhysicalAttributes(
+            @Nullable Integer netWeightGrams,
+            @Nullable Integer netVolumeMillilitres,
+            boolean catchweight,
+            @Nullable Integer catchweightQuantumGrams,
+            @Nullable Integer catchweightNominalGrams,
+            boolean splittable,
+            @Nullable BigDecimal portionSize,
+            @Nullable BigDecimal caloriesKcalPer100,
+            @Nullable BigDecimal proteinGramsPer100,
+            @Nullable BigDecimal fatGramsPer100,
+            @Nullable BigDecimal carbohydratesGramsPer100) {
+        this(
+                netWeightGrams,
+                netVolumeMillilitres,
+                catchweight,
+                catchweightQuantumGrams,
+                catchweightNominalGrams,
+                splittable,
+                portionSize,
+                caloriesKcalPer100,
+                proteinGramsPer100,
+                fatGramsPer100,
+                carbohydratesGramsPer100,
+                null);
+    }
 
     public PhysicalAttributes {
         require(netWeightGrams == null || netWeightGrams > 0, "NET_WEIGHT_NOT_POSITIVE", "Net weight must be positive");
@@ -109,7 +142,20 @@ public record PhysicalAttributes(
         requireMacro(proteinGramsPer100, "PROTEIN");
         requireMacro(fatGramsPer100, "FAT");
         requireMacro(carbohydratesGramsPer100, "CARBOHYDRATES");
+        require(
+                portionsPerUnit == null || portionsPerUnit.signum() >= 0,
+                "PORTIONS_PER_UNIT_NEGATIVE",
+                "Portions per unit cannot be negative");
+        require(
+                portionsPerUnit == null || portionsPerUnit.stripTrailingZeros().scale() <= 3,
+                "PORTIONS_PER_UNIT_TOO_PRECISE",
+                "Portions per unit has at most three fraction digits");
+        require(
+                portionsPerUnit == null || portionsPerUnit.compareTo(new BigDecimal("999.999")) <= 0,
+                "PORTIONS_PER_UNIT_TOO_LARGE",
+                "Portions per unit is at most 999.999");
         portionSize = portionSize == null ? null : canonical(portionSize);
+        portionsPerUnit = portionsPerUnit == null ? null : canonical(portionsPerUnit);
     }
 
     /** No trailing zeros and never a negative scale: 0.50 is 0.5 and 10 stays 10, not 1E+1. */
@@ -146,7 +192,8 @@ public record PhysicalAttributes(
                 && caloriesKcalPer100 == null
                 && proteinGramsPer100 == null
                 && fatGramsPer100 == null
-                && carbohydratesGramsPer100 == null;
+                && carbohydratesGramsPer100 == null
+                && portionsPerUnit == null;
     }
 
     /**
