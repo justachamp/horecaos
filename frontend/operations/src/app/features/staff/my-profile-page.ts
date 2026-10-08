@@ -18,6 +18,7 @@ import { StaffApi, TelegramLinkCodeResponse } from './staff-api';
 import { StaffMembersApi } from './staff-members-api';
 import { ProfileDraft, draftOf, toSelfRequest } from './staff-profile-draft';
 import { MyProfileMfaCard } from './my-profile-mfa-card';
+import { MyProfileSessionsCard } from './my-profile-sessions-card';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 
@@ -67,14 +68,14 @@ interface CapabilityGroup {
  *
  * **«Вход в два шага» is real (ADR 0148):** {@link MyProfileMfaCard}.
  *
- * The rest of «Безопасность» (sign-in history, active sessions, «Выйти везде»,
- * PIN) needs the Keycloak session projection (staff-and-access.md §11.6, §11.7)
- * and still renders as a named absence, the same "omit, do not disable" rule
- * `not-built-page.ts` follows.
+ * **«Сеансы» is real (ADR 0176):** {@link MyProfileSessionsCard} lists the account's sessions by
+ * device and ends them. The rest of «Безопасность» (the password, the terminal PIN) is not built
+ * and renders as a named absence, the same "omit, do not disable" rule `not-built-page.ts`
+ * follows.
  */
 @Component({
   selector: 'q-my-profile-page',
-  imports: [TPipe, StaffProfileForm, MyProfileMfaCard],
+  imports: [TPipe, StaffProfileForm, MyProfileMfaCard, MyProfileSessionsCard],
   templateUrl: './my-profile-page.html',
   styleUrl: './my-profile-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

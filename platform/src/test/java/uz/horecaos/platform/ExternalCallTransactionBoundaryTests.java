@@ -625,7 +625,12 @@ class ExternalCallTransactionBoundaryTests {
                     fact -> {},
                     transactions,
                     clock,
-                    new PlatformLocaleVocabulary());
+                    new PlatformLocaleVocabulary(),
+                    new uz.horecaos.platform.iam.application.sessions.StaffSessionLedger(
+                            new uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffSignInStore(client),
+                            new uz.horecaos.platform.iam.application.sessions.DeviceLabelParser(),
+                            clock,
+                            new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
         }
 
         @Bean

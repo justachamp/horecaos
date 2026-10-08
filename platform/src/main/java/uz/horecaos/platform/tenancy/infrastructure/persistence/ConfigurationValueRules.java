@@ -42,15 +42,37 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
-    private static final Map<String, Consumer<Object>> RULES = Map.of(
-            "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode,
-            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
-            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes,
-            "assistant.disclosure_text_en", value -> requirePlainShortText("assistant.disclosure_text_en", value),
-            "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
-            "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
+    private static final Map<String, Consumer<Object>> RULES = Map.ofEntries(
+            Map.entry("ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour),
+            Map.entry("ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay),
+            Map.entry("iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode),
+            Map.entry("ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold),
+            Map.entry("kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes),
+            Map.entry(
+                    "assistant.disclosure_text_en",
+                    value -> requirePlainShortText("assistant.disclosure_text_en", value)),
+            Map.entry(
+                    "assistant.disclosure_text_ru",
+                    value -> requirePlainShortText("assistant.disclosure_text_ru", value)),
+            Map.entry(
+                    "assistant.disclosure_text_uz",
+                    value -> requirePlainShortText("assistant.disclosure_text_uz", value)),
+            // ADR 0176: a sign-in row is kept thirty days to two years; past either end it is a typo.
+            Map.entry("iam.staff_sign_in_retention_days", integerBetween("iam.staff_sign_in_retention_days", 30, 730)),
+            // ADR 0156: the working-time keys. Each range is the record's own.
+            Map.entry(
+                    "workforce.shift.variance_threshold_minutes",
+                    integerBetween("workforce.shift.variance_threshold_minutes", 5, 240)),
+            Map.entry(
+                    "workforce.shift.retroactive_edit_days",
+                    integerBetween("workforce.shift.retroactive_edit_days", 0, 60)),
+            Map.entry("workforce.shift.max_open_hours", integerBetween("workforce.shift.max_open_hours", 4, 16)),
+            Map.entry(
+                    "workforce.roster.late_after_minutes",
+                    integerBetween("workforce.roster.late_after_minutes", 1, 120)),
+            Map.entry(
+                    "workforce.roster.match_window_minutes",
+                    integerBetween("workforce.roster.match_window_minutes", 30, 480)));
 
     private ConfigurationValueRules() {}
 
@@ -143,5 +165,16 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     "kitchen.display.not_seen_after_minutes must be between 1 and " + MAXIMUM_MINUTES);
         }
+    }
+
+    /** A whole number inside the record's stated range; the key's own type already refuses a string. */
+    private static Consumer<Object> integerBetween(String code, int minimum, int maximum) {
+        return value -> {
+            long number = ((Number) value).longValue();
+            if (number < minimum || number > maximum) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "%s must be between %d and %d".formatted(code, minimum, maximum));
+            }
+        };
     }
 }

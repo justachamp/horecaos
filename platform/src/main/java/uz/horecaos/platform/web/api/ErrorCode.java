@@ -204,6 +204,13 @@ public enum ErrorCode {
      */
     MFA_CONFIRMATION_CODE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmation code invalid"),
 
+    /**
+     * ADR 0176: the identity provider could not be asked, so a session the person asked to end is
+     * not known to have ended. Distinct from a generic 500 because the console must say, in words,
+     * that nothing was ended: a falsely reassuring "done" is the one failure that matters here.
+     */
+    IDENTITY_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Identity provider unavailable"),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
 
     /**

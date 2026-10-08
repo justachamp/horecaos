@@ -73,7 +73,7 @@ class StaffSessionControllerTests {
     @Test
     @DisplayName("control-plane sign-in is reachable with no bearer token")
     void controlPlaneSignInIsUnauthenticated() throws Exception {
-        when(auth.signIn(anyString(), anyString(), any(), anyString()))
+        when(auth.signIn(anyString(), anyString(), any(), anyString(), any()))
                 .thenReturn(new StaffAuthService.StaffSession(
                         "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
 
@@ -90,7 +90,7 @@ class StaffSessionControllerTests {
     @Test
     @DisplayName("operations sign-in is reachable with no bearer token")
     void operationsSignInIsUnauthenticated() throws Exception {
-        when(auth.signIn(anyString(), anyString(), any(), anyString()))
+        when(auth.signIn(anyString(), anyString(), any(), anyString(), any()))
                 .thenReturn(new StaffAuthService.StaffSession(
                         "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
 
@@ -107,7 +107,7 @@ class StaffSessionControllerTests {
     @Test
     @DisplayName("the one-time code travels as otp, and a client that does not know about it keeps working")
     void theCodeIsForwardedAsOtp() throws Exception {
-        when(auth.signIn(anyString(), anyString(), any(), anyString()))
+        when(auth.signIn(anyString(), anyString(), any(), anyString(), any()))
                 .thenReturn(new StaffAuthService.StaffSession(
                         "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
 
@@ -119,7 +119,34 @@ class StaffSessionControllerTests {
 
         assertThat(response.getStatus()).isEqualTo(201);
         assertThat(response.getContentAsString()).contains("\"mfaEnrolmentOffered\":false");
-        verify(auth).signIn(eq("cook"), eq("correct horse"), eq("482913"), anyString());
+        verify(auth).signIn(eq("cook"), eq("correct horse"), eq("482913"), anyString(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "the User-Agent travels to the service, to be reduced to a device label there, and nothing else about the caller does")
+    void theUserAgentIsPassedOnAndTheAddressIsNot() throws Exception {
+        when(auth.signIn(anyString(), anyString(), any(), anyString(), any()))
+                .thenReturn(new StaffAuthService.StaffSession(
+                        "access", "refresh", Instant.parse("2026-09-01T10:05:00Z"), null, "Bearer"));
+
+        mvc.perform(post("/api/v1/operations/auth/sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Chrome/126.0")
+                        .content("{\"username\":\"cook\",\"password\":\"correct horse\"}")
+                        .with(request -> {
+                            request.setRemoteAddr("198.51.100.77");
+                            return request;
+                        }))
+                .andReturn();
+
+        org.mockito.ArgumentCaptor<String> rateKey = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<String> agent = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(auth).signIn(eq("cook"), eq("correct horse"), any(), rateKey.capture(), agent.capture());
+        assertThat(agent.getValue()).isEqualTo("Mozilla/5.0 (X11; Linux x86_64) Chrome/126.0");
+        assertThat(rateKey.getValue())
+                .as("the address reaches the limiter only as a hash")
+                .doesNotContain("198.51.100.77");
     }
 
     @Test
@@ -134,7 +161,7 @@ class StaffSessionControllerTests {
             assertThat(response.getStatus()).as("otp=" + bad).isEqualTo(400);
             assertThat(response.getContentAsString()).contains("VALIDATION_FAILED");
         }
-        verify(auth, org.mockito.Mockito.never()).signIn(anyString(), anyString(), any(), anyString());
+        verify(auth, org.mockito.Mockito.never()).signIn(anyString(), anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -152,7 +179,7 @@ class StaffSessionControllerTests {
                 uz.horecaos.platform.web.api.ErrorCode.RATE_LIMIT_EXCEEDED,
                 "Too many.",
                 java.util.Map.of("retryAfterSeconds", 720L));
-        when(auth.signIn(anyString(), anyString(), any(), anyString()))
+        when(auth.signIn(anyString(), anyString(), any(), anyString(), any()))
                 .thenThrow(required)
                 .thenThrow(invalid)
                 .thenThrow(enrol)

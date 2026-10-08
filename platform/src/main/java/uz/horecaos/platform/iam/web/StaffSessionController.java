@@ -118,8 +118,13 @@ public class StaffSessionController {
     }
 
     private ResponseEntity<StaffSessionResponse> signIn(StaffSignInRequest body, HttpServletRequest request) {
-        StaffSession session =
-                auth.signIn(body.username(), body.password(), body.otp(), rateLimitKey(request, body.username()));
+        StaffSession session = auth.signIn(
+                body.username(),
+                body.password(),
+                body.otp(),
+                rateLimitKey(request, body.username()),
+                // Read only to be reduced to a closed device label (ADR 0176); never stored or logged.
+                request.getHeader("User-Agent"));
         return ResponseEntity.status(HttpStatus.CREATED).body(StaffSessionResponse.of(session));
     }
 

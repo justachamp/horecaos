@@ -1010,6 +1010,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Доступ личность расхождение обнаружено',
       'uz-Latn': 'Huquq shaxs farq aniqlandi',
     },
+    'iam.staff_session.terminated_all': {
+      en: 'A staff member signed out of every device (sessions ended, count only)',
+      ru: 'Сотрудник вышел на всех устройствах (завершены сеансы, только число)',
+      'uz-Latn': 'Xodim barcha qurilmalardan chiqdi (seanslar yakunlandi, faqat soni)',
+    },
+    'iam.staff_session.terminated': {
+      en: 'A staff member ended one of their own sessions',
+      ru: 'Сотрудник завершил один из своих сеансов',
+      'uz-Latn': 'Xodim oʻz seanslaridan birini yakunladi',
+    },
     'iam.location_contact.updated': {
       en: 'Branch contact persons changed',
       ru: 'Контактные лица филиала изменены',

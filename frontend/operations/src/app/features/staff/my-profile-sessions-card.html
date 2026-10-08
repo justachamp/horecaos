@@ -1,0 +1,155 @@
+<section class="section" id="sessions" data-testid="my-profile-sessions">
+  <h2 class="q-emphasis">{{ 'staff.myProfile.sessions.title' | t }}</h2>
+  <p class="q-caption lead" data-testid="sessions-scope-note">
+    {{ 'staff.myProfile.sessions.lead' | t }}
+  </p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'staff.myProfile.sessions.loading' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error" role="alert" data-testid="sessions-error">
+        {{ 'staff.myProfile.sessions.loadFailed' | t }}
+      </p>
+    }
+    @default {
+      @if (sessions(); as read) {
+        @if (read.keycloak === 'UNAVAILABLE') {
+          <p class="q-body-sm unavailable" role="status" data-testid="sessions-unavailable">
+            {{ 'staff.myProfile.sessions.unavailable' | t }}
+          </p>
+        }
+
+        @if (notice(); as message) {
+          <p class="q-body-sm notice" role="status" data-testid="sessions-notice">{{ message }}</p>
+        }
+
+        @if (active().length === 0) {
+          <p class="q-body-sm" data-testid="sessions-empty">
+            {{ 'staff.myProfile.sessions.empty' | t }}
+          </p>
+        } @else {
+          <ul class="sessions" data-testid="sessions-active">
+            @for (session of active(); track session.id) {
+              <li class="session" [attr.data-current]="session.current">
+                <div class="session__line">
+                  <span class="q-body" data-testid="session-device">{{
+                    deviceName(session.deviceLabel)
+                  }}</span>
+                  @if (session.current) {
+                    <span class="q-caption badge" data-testid="session-current">{{
+                      'staff.myProfile.sessions.thisDevice' | t
+                    }}</span>
+                  }
+                  <button
+                    type="button"
+                    class="text-button"
+                    (click)="askToEndOne(session)"
+                    data-testid="session-end"
+                  >
+                    {{ 'staff.myProfile.sessions.endOne' | t }}
+                  </button>
+                </div>
+                <p class="q-caption muted">
+                  {{ 'staff.myProfile.sessions.signedIn' | t: { date: when(session.signedInAt) } }}
+                  &middot;
+                  {{ 'staff.myProfile.sessions.lastActive' | t: { date: when(session.lastSeenAt) } }}
+                </p>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (ended().length > 0) {
+          <h3 class="q-caption muted ended-title">
+            {{ 'staff.myProfile.sessions.endedTitle' | t }}
+          </h3>
+          <ul class="sessions sessions--ended" data-testid="sessions-ended">
+            @for (session of ended(); track session.id) {
+              <li class="session session--ended">
+                <span class="q-body-sm">{{ deviceName(session.deviceLabel) }}</span>
+                <span class="q-caption muted">
+                  {{ when(session.signedInAt) }}
+                  @if (endedBy(session); as why) {
+                    &middot; {{ why }}
+                  }
+                </span>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (pending() === null) {
+          <button
+            type="button"
+            class="primary-button"
+            (click)="askToEndAll()"
+            data-testid="sessions-end-all"
+          >
+            {{ 'staff.myProfile.sessions.endAll' | t }}
+          </button>
+        }
+      }
+
+      @if (pending(); as ask) {
+        <div class="confirm" role="alertdialog" aria-labelledby="sessions-confirm-title" data-testid="sessions-confirm">
+          <h3 id="sessions-confirm-title" class="q-emphasis">
+            {{ (ask.scope === 'ALL' ? 'staff.myProfile.sessions.confirmAll' : 'staff.myProfile.sessions.confirmOne') | t }}
+          </h3>
+          <p class="q-body-sm" data-testid="sessions-confirm-body">
+            {{
+              (ask.scope === 'ALL'
+                ? 'staff.myProfile.sessions.confirmAllBody'
+                : 'staff.myProfile.sessions.confirmOneBody') | t: { count: endingCount() }
+            }}
+          </p>
+          <p class="q-body-sm">{{ 'staff.myProfile.sessions.confirmEveryCompany' | t }}</p>
+          <p class="q-caption muted">{{ 'staff.myProfile.sessions.confirmInFlight' | t }}</p>
+
+          <fieldset class="reasons">
+            <legend class="q-caption">{{ 'staff.myProfile.sessions.reasonLegend' | t }}</legend>
+            @for (code of reasons; track code) {
+              <label class="reason">
+                <input
+                  type="radio"
+                  name="sessions-reason"
+                  [value]="code"
+                  [checked]="reason() === code"
+                  (change)="chooseReason(code)"
+                  data-testid="sessions-reason"
+                />
+                <span class="q-body-sm">{{ reasonLabel(code) }}</span>
+              </label>
+            }
+          </fieldset>
+
+          @if (failure(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="sessions-failure">{{ message }}</p>
+          }
+
+          <div class="actions">
+            <button
+              type="button"
+              class="primary-button"
+              (click)="confirm()"
+              [disabled]="busy() || reason() === null"
+              data-testid="sessions-confirm-go"
+            >
+              {{ 'staff.myProfile.sessions.confirmGo' | t }}
+            </button>
+            <button
+              type="button"
+              class="text-button"
+              (click)="cancel()"
+              [disabled]="busy()"
+              data-testid="sessions-confirm-cancel"
+            >
+              {{ 'staff.myProfile.sessions.confirmCancel' | t }}
+            </button>
+          </div>
+        </div>
+      }
+    }
+  }
+</section>

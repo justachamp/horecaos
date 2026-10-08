@@ -84,6 +84,8 @@ export const ApiErrorCode = {
   CURRENT_PASSWORD_INVALID: 'CURRENT_PASSWORD_INVALID',
   /** ADR 0148: the code that confirms an enrolment or a removal did not verify. */
   MFA_CONFIRMATION_CODE_INVALID: 'MFA_CONFIRMATION_CODE_INVALID',
+  /** ADR 0176: the sign-in service could not be asked, so a session the person asked to end was not ended. */
+  IDENTITY_PROVIDER_UNAVAILABLE: 'IDENTITY_PROVIDER_UNAVAILABLE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   /** Not from the server. The request never reached it. */
   NETWORK_UNREACHABLE: 'NETWORK_UNREACHABLE',

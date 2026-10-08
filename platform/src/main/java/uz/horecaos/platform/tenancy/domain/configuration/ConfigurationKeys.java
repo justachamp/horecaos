@@ -844,6 +844,22 @@ public final class ConfigurationKeys {
                     + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
             .build();
 
+    /**
+     * ADR 0176: days a staff sign-in row is kept, read by {@code iam}'s {@code StaffSignInSweeper}
+     * (which holds the code and the default as constants, because importing this registry's key
+     * type would close an {@code iam -> tenancy -> audit -> iam} cycle; {@code
+     * IamConfigurationKeyTests} keeps the two equal).
+     */
+    public static final ConfigurationKey<Integer> IAM_STAFF_SIGN_IN_RETENTION_DAYS = ConfigurationKey.of(
+                    "iam.staff_sign_in_retention_days", Integer.class)
+            .defaultValue(180)
+            .ownedBy("iam")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days a staff sign-in record (browser, system, form and times; no address) is "
+                    + "kept before it is deleted. Between 30 and 730.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -860,6 +876,7 @@ public final class ConfigurationKeys {
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
             IAM_STAFF_MFA_REQUIREMENT,
+            IAM_STAFF_SIGN_IN_RETENTION_DAYS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,

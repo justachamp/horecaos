@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
+import uz.horecaos.platform.iam.api.accounts.StaffSessions;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -65,6 +66,16 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
     public static final String LOGIN_CLIENT = "horecaos-staff-login";
     public static final String PROBE_CLIENT = "horecaos-staff-password-check";
     public static final String CLIENT_SECRET = "a-fixed-test-secret";
+
+    /** The sign-in client's internal id: what ADR 0176's offline-session listing takes in place of its clientId. */
+    public static final String LOGIN_CLIENT_UUID = "5d9f6a52-6a7e-4a58-9d44-0c1b6f1e0001";
+
+    /**
+     * The address the fake puts on every session representation, as the real Keycloak does. The
+     * platform must never copy it out; a test scans every response and row for it.
+     */
+    public static final String SESSION_ADDRESS = "203.0.113.77";
+
     public static final int FAILURE_FACTOR = 8;
 
     /** One request Keycloak received. {@code totp} is the code the request carried, if any. */
@@ -98,6 +109,9 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         public final List<String> realmRoles = new ArrayList<>();
         public int failures;
         public boolean disabled;
+        /** Keycloak organization ids the account belongs to: the {@code organization} claim of its tokens. */
+        public final List<String> organizationIds = new ArrayList<>();
+
         public final Map<String, Object> attributes = new LinkedHashMap<>();
 
         User(String username, String password, @Nullable String email) {
@@ -115,8 +129,26 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         }
     }
 
+    /** One offline session: what the direct grant with {@code offline_access} creates. */
+    public static final class Session {
+        public final String id =
+                "kc-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+        public final String userId;
+        public final long startMillis;
+        public long lastAccessMillis;
+
+        Session(String userId, long startMillis) {
+            this.userId = userId;
+            this.startMillis = startMillis;
+            this.lastAccessMillis = startMillis;
+        }
+    }
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
+    private final Map<String, Session> offlineSessions = new LinkedHashMap<>();
+    private volatile boolean sessionAdminFails;
+    private volatile boolean logoutFails;
     private final HttpServer server;
     private final Clock clock;
     private final Map<String, User> users = new LinkedHashMap<>();
@@ -137,6 +169,7 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         server.createContext("/realms/horecaos/protocol/openid-connect/revoke", realm::revoke);
         server.createContext("/realms/horecaos/protocol/openid-connect/logout", realm::logout);
         server.createContext("/admin/realms/horecaos/users", realm::admin);
+        server.createContext("/admin/realms/horecaos/sessions", realm::deleteSession);
         server.setExecutor(Executors.newFixedThreadPool(4));
         server.start();
         return realm;
@@ -164,6 +197,29 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         Credential credential = new Credential(label, secret, clock.instant().toEpochMilli());
         user.otp.add(credential);
         return credential;
+    }
+
+    /** Keycloak's session endpoints (list, single delete) answer 503; the token endpoint is unaffected. */
+    public void failSessionAdmin(boolean fails) {
+        this.sessionAdminFails = fails;
+    }
+
+    /** {@code POST /users/{id}/logout} answers 503, so {@code logoutEverywhere} fails. */
+    public void failLogout(boolean fails) {
+        this.logoutFails = fails;
+    }
+
+    /** The ids of the offline sessions Keycloak holds for the account right now. */
+    public synchronized List<String> liveSessionIds(User user) {
+        return offlineSessions.values().stream()
+                .filter(session -> session.userId.equals(user.id))
+                .map(session -> session.id)
+                .toList();
+    }
+
+    /** Ends a session behind the platform's back, as an idle timeout would. */
+    public synchronized void expireSession(String sessionId) {
+        offlineSessions.remove(sessionId);
     }
 
     /** Models a realm that never had the password-only client created. */
@@ -224,10 +280,15 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         return new Adapters(
                 new StaffDirectGrantClient(client, "horecaos", LOGIN_CLIENT, login, secrets, clock),
                 new StaffPasswordCheckClient(client, "horecaos", PROBE_CLIENT, probe, secrets),
-                new KeycloakStaffAccounts(client, "horecaos", LOGIN_CLIENT));
+                new KeycloakStaffAccounts(client, "horecaos", LOGIN_CLIENT),
+                new KeycloakStaffSessions(client, "horecaos", LOGIN_CLIENT_UUID));
     }
 
-    public record Adapters(StaffDirectGrantClient login, StaffPasswordCheckClient probe, StaffAccounts accounts) {}
+    public record Adapters(
+            StaffDirectGrantClient login,
+            StaffPasswordCheckClient probe,
+            StaffAccounts accounts,
+            StaffSessions sessions) {}
 
     // ------------------------------------------------------------------ the token endpoint
 
@@ -249,6 +310,10 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
                             "invalid_client",
                             "error_description",
                             "Invalid client or Invalid client credentials")));
+            return;
+        }
+        if ("refresh_token".equals(form.get("grant_type"))) {
+            refreshGrant(exchange, form, login);
             return;
         }
         if (!"password".equals(form.get("grant_type"))) {
@@ -291,13 +356,116 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         Map<String, Object> claims = new LinkedHashMap<>();
         claims.put("sub", user.id);
         claims.put("realm_access", Map.of("roles", user.realmRoles));
+        // Probed live: a direct grant with offline_access creates one offline session, and the
+        // access token's sid is that session's id. The password-only client asks for none.
+        String sid = null;
+        if (login && String.valueOf(form.get("scope")).contains("offline_access")) {
+            Session session = new Session(user.id, clock.instant().toEpochMilli());
+            offlineSessions.put(session.id, session);
+            sid = session.id;
+        }
+        if (sid != null) {
+            claims.put("sid", sid);
+        }
+        addOrganizations(claims, user);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("access_token", jwt(claims));
-        body.put("refresh_token", "refresh-" + UUID.randomUUID());
+        body.put("refresh_token", sid == null ? "refresh-" + UUID.randomUUID() : refreshToken(user, sid));
         body.put("expires_in", probe ? 1 : 300);
         body.put("refresh_expires_in", 0);
         body.put("token_type", "Bearer");
         respond(exchange, 200, json(body));
+    }
+
+    private static void addOrganizations(Map<String, Object> claims, User user) {
+        if (!user.organizationIds.isEmpty()) {
+            Map<String, Object> organizations = new LinkedHashMap<>();
+            int n = 0;
+            for (String id : user.organizationIds) {
+                organizations.put("org" + (++n), Map.of("id", id));
+            }
+            claims.put("organization", organizations);
+        }
+    }
+
+    /** An offline refresh token is a JWT that names its session, as Keycloak's is. */
+    private static String refreshToken(User user, String sid) {
+        Map<String, Object> claims = new LinkedHashMap<>();
+        claims.put("sub", user.id);
+        claims.put("sid", sid);
+        claims.put("typ", "Offline");
+        claims.put("jti", UUID.randomUUID().toString());
+        return jwt(claims);
+    }
+
+    private void refreshGrant(HttpExchange exchange, Map<String, String> form, boolean login) throws IOException {
+        calls.add(new Call("REFRESH", form.get("client_id"), null, null));
+        String sid = sessionIdOf(form.getOrDefault("refresh_token", ""));
+        Session session = sid == null ? null : offlineSessions.get(sid);
+        User user = session == null
+                ? null
+                : users.values().stream()
+                        .filter(candidate -> candidate.id.equals(session.userId))
+                        .findFirst()
+                        .orElse(null);
+        if (!login || session == null || user == null) {
+            respond(
+                    exchange,
+                    400,
+                    json(Map.of("error", "invalid_grant", "error_description", "Offline user session not found")));
+            return;
+        }
+        session.lastAccessMillis = clock.instant().toEpochMilli();
+        Map<String, Object> claims = new LinkedHashMap<>();
+        claims.put("sub", user.id);
+        claims.put("sid", session.id);
+        claims.put("realm_access", Map.of("roles", user.realmRoles));
+        addOrganizations(claims, user);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("access_token", jwt(claims));
+        body.put("refresh_token", form.get("refresh_token"));
+        body.put("expires_in", 300);
+        body.put("refresh_expires_in", 0);
+        body.put("token_type", "Bearer");
+        respond(exchange, 200, json(body));
+    }
+
+    private static @Nullable String sessionIdOf(String jwt) {
+        String[] parts = jwt.split("\\.");
+        if (parts.length < 2) {
+            return null;
+        }
+        try {
+            Map<?, ?> claims = JSON.readValue(
+                    new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8), Map.class);
+            return claims.get("sid") instanceof String sid ? sid : null;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /** The {@code sid} of an access or refresh token this realm issued, for assertions. */
+    public static @Nullable String sidOf(String token) {
+        return sessionIdOf(token);
+    }
+
+    private synchronized void deleteSession(HttpExchange exchange) throws IOException {
+        URI uri = exchange.getRequestURI();
+        String id = uri.getPath().substring("/admin/realms/horecaos/sessions/".length());
+        calls.add(new Call("ADMIN " + exchange.getRequestMethod() + " /sessions/" + id, null, null, null));
+        exchange.getRequestBody().readAllBytes();
+        if (sessionAdminFails) {
+            respond(exchange, 503, json(Map.of("error", "unavailable")));
+            return;
+        }
+        boolean offline = "true".equals(queryOf(uri).get("isOffline"));
+        if (!"DELETE".equals(exchange.getRequestMethod())) {
+            respond(exchange, 405, "");
+        } else if (offline && offlineSessions.remove(id) != null) {
+            respond(exchange, 204, "");
+        } else {
+            respond(exchange, 404, json(Map.of("error", "Session not found")));
+        }
     }
 
     private void fail(User user) {
@@ -327,6 +495,10 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
         Map<String, String> form = readForm(exchange);
         calls.add(new Call("REVOKE", form.get("client_id"), null, null));
         sessions.updateAndGet(open -> Math.max(0, open - 1));
+        String revoked = sessionIdOf(form.getOrDefault("token", ""));
+        if (revoked != null) {
+            offlineSessions.remove(revoked);
+        }
         respond(exchange, 200, "");
     }
 
@@ -395,10 +567,45 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
             }
             respond(exchange, removed ? 204 : 404, "");
         } else if (parts.length == 2 && "logout".equals(parts[1]) && "POST".equals(method)) {
+            if (logoutFails) {
+                respond(exchange, 503, json(Map.of("error", "unavailable")));
+                return;
+            }
+            // Probed live: the admin logout ends online sessions only. The offline ones this
+            // platform creates survive it, and end when the consent is deleted below.
             sessions.set(0);
             respond(exchange, 204, "");
         } else if (parts.length == 3 && "consents".equals(parts[1]) && "DELETE".equals(method)) {
-            respond(exchange, 204, "");
+            boolean had = offlineSessions.values().removeIf(session -> session.userId.equals(user.id));
+            respond(exchange, had ? 204 : 404, "");
+        } else if (parts.length == 3 && "offline-sessions".equals(parts[1]) && "GET".equals(method)) {
+            if (sessionAdminFails) {
+                respond(exchange, 503, json(Map.of("error", "unavailable")));
+                return;
+            }
+            List<Map<String, Object>> list = new ArrayList<>();
+            if (LOGIN_CLIENT_UUID.equals(parts[2])) {
+                for (Session session : offlineSessions.values()) {
+                    if (session.userId.equals(user.id)) {
+                        Map<String, Object> rep = new LinkedHashMap<>();
+                        rep.put("id", session.id);
+                        rep.put("username", user.username);
+                        rep.put("userId", user.id);
+                        rep.put("ipAddress", SESSION_ADDRESS);
+                        rep.put("start", session.startMillis);
+                        rep.put("lastAccess", session.lastAccessMillis);
+                        rep.put("clients", Map.of(LOGIN_CLIENT_UUID, LOGIN_CLIENT));
+                        list.add(rep);
+                    }
+                }
+            }
+            respond(exchange, 200, json(list));
+        } else if (parts.length == 2 && "sessions".equals(parts[1]) && "GET".equals(method)) {
+            if (sessionAdminFails) {
+                respond(exchange, 503, json(Map.of("error", "unavailable")));
+                return;
+            }
+            respond(exchange, 200, "[]");
         } else {
             respond(exchange, 404, json(Map.of("error", "not modelled: " + method + " " + path)));
         }
