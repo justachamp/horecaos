@@ -153,6 +153,28 @@ public class CommercialEInvoicingController {
                 new EInvoiceRefreshView(EInvoiceView.summary(refreshed.einvoice()), refreshed.unavailableCode()));
     }
 
+    @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/einvoices/{einvoiceId}/release")
+    @RequiresCapability(value = Capability.COMMERCIAL_EINVOICE_SEND, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Release a statement from a document the operator no longer holds",
+            description = "Documents go out as drafts, and a draft can be deleted in the operator's own product "
+                    + "to be fixed and sent again. Once the operator has said it holds nothing under the "
+                    + "document's identifier (state UNKNOWN, status NOT_FOUND_AT_OPERATOR), this records that "
+                    + "staff released it: the attempt reads CANCELLED, status RELEASED_BY_STAFF, and the "
+                    + "statement can be sent again or voided. A reason is required and is audited. Requires "
+                    + "If-Match. 422 NOT_RELEASABLE for any other attempt: a document the operator holds, or "
+                    + "reports in a status this adapter cannot read, is not released.")
+    public ResponseEntity<EInvoiceView> release(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID einvoiceId,
+            @Valid @RequestBody EInvoicingReasonRequest body,
+            HttpServletRequest request) {
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
+        EInvoiceView view = EInvoiceView.summary(
+                einvoicing.release(tenantId, einvoiceId, expectedVersion, actor(), body.reason(), correlationId()));
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(view.version())).body(view);
+    }
+
     // ------------------------------------------------- the accounts (finance)
 
     @PutMapping(ACCOUNTS + "/{installationId}")

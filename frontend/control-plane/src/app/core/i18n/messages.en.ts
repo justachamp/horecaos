@@ -2179,6 +2179,14 @@ export const en = {
     'That attempt reached no operator, so there is nothing to ask about.',
   'einvoicing.error.SETTLED_AT_OPERATOR':
     'The operator has settled this document (signed, refused or cancelled); there is nothing further to ask.',
+  'einvoicing.release': 'Release statement',
+  'einvoicing.release.confirm': 'Release',
+  'einvoicing.release.hint':
+    'Release only when the draft was deleted at the operator on purpose. The attempt is recorded as cancelled by staff, and the statement can be sent again.',
+  'einvoicing.released': 'Released: the statement can be sent again.',
+  'einvoicing.attempt.notFound': 'The operator no longer holds this document.',
+  'einvoicing.error.NOT_RELEASABLE':
+    'Only a document the operator no longer holds can be released.',
   'einvoicing.link': 'E-invoice',
 };
 

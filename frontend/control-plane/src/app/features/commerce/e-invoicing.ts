@@ -162,6 +162,9 @@ export class EInvoicing {
     reason: '',
   });
   protected readonly detail = signal<EInvoiceView | null>(null);
+  /** The attempt whose release is waiting for its reason. */
+  protected readonly releasing = signal<string | null>(null);
+  protected readonly releaseReason = signal('');
 
   constructor() {
     void this.load();
@@ -528,6 +531,34 @@ export class EInvoicing {
       return answer.unavailableCode === null
         ? this.i18n.t('einvoicing.refreshed')
         : this.i18n.t('einvoicing.refresh.unavailable', { code: answer.unavailableCode });
+    });
+  }
+
+  /** Whether the operator has said it no longer holds a document it was once given. */
+  protected missingAtOperator(attempt: EInvoiceView): boolean {
+    return (
+      attempt.delivery === 'SUBMITTED' &&
+      attempt.operatorState === 'UNKNOWN' &&
+      attempt.operatorStatus === 'NOT_FOUND_AT_OPERATOR'
+    );
+  }
+
+  protected startRelease(attempt: EInvoiceView): void {
+    this.releasing.set(this.releasing() === attempt.einvoiceId ? null : attempt.einvoiceId);
+    this.releaseReason.set('');
+    this.resetNotices();
+  }
+
+  protected async confirmRelease(attempt: EInvoiceView): Promise<void> {
+    const reason = this.releaseReason().trim();
+    if (this.releasing() !== attempt.einvoiceId || reason.length === 0 || this.busy()) {
+      return;
+    }
+    await this.run(async () => {
+      await this.api.releaseEInvoice(this.tenantId(), attempt.einvoiceId, attempt.version, reason);
+      this.releasing.set(null);
+      await this.loadTenant();
+      return this.i18n.t('einvoicing.released');
     });
   }
 

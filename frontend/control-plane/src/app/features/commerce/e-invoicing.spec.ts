@@ -174,6 +174,7 @@ class FakeCommerceApi {
   tenantEInvoices = vi.fn().mockResolvedValue([] as EInvoiceView[]);
   readonly sendEInvoice = vi.fn().mockResolvedValue(SENT);
   readonly refreshEInvoice = vi.fn().mockResolvedValue({ einvoice: SENT, unavailableCode: null });
+  readonly releaseEInvoice = vi.fn().mockResolvedValue(SENT);
   readonly eInvoice = vi.fn().mockResolvedValue({
     ...SENT,
     lines: [
@@ -544,6 +545,54 @@ describe('EInvoicing', () => {
 
     expect(el('[data-einvoice="ei-1"]')).not.toBeNull();
     expect(el('[data-einvoice="ei-1"] .refresh')).toBeNull();
+  });
+
+  it('releases a statement from a document the operator no longer holds, on a reason and at the version read', async () => {
+    const missing: EInvoiceView = {
+      ...SENT,
+      operatorState: 'UNKNOWN',
+      operatorStatus: 'NOT_FOUND_AT_OPERATOR',
+      version: 4,
+    };
+    await create({ prepare: (fake) => fake.tenantEInvoices.mockResolvedValue([missing]) });
+
+    expect(el('[data-einvoice="ei-1"] .missingAtOperator').textContent).toContain(
+      ru['einvoicing.attempt.notFound'],
+    );
+    await click('[data-einvoice="ei-1"] .release');
+    expect(el<HTMLButtonElement>('.confirmRelease').disabled).toBe(true);
+
+    await type('[name="releaseReason"]', 'draft deleted to fix the codes');
+    await click('.confirmRelease');
+
+    expect(api.releaseEInvoice).toHaveBeenCalledWith(
+      'tenant-1',
+      'ei-1',
+      4,
+      'draft deleted to fix the codes',
+    );
+    expect(el('[role="status"]').textContent).toContain(ru['einvoicing.released']);
+  });
+
+  it('offers no release for a document the operator still holds', async () => {
+    await create({ prepare: (fake) => fake.tenantEInvoices.mockResolvedValue([SENT]) });
+
+    expect(el('[data-einvoice="ei-1"]')).not.toBeNull();
+    expect(el('[data-einvoice="ei-1"] .release')).toBeNull();
+    expect(el('[data-einvoice="ei-1"] .missingAtOperator')).toBeNull();
+  });
+
+  it('says a document is missing at the operator but offers no release to someone who cannot send', async () => {
+    await create({
+      held: (capability) => capability !== 'COMMERCIAL_EINVOICE_SEND',
+      prepare: (fake) =>
+        fake.tenantEInvoices.mockResolvedValue([
+          { ...SENT, operatorState: 'UNKNOWN', operatorStatus: 'NOT_FOUND_AT_OPERATOR' },
+        ]),
+    });
+
+    expect(el('[data-einvoice="ei-1"] .missingAtOperator')).not.toBeNull();
+    expect(el('[data-einvoice="ei-1"] .release')).toBeNull();
   });
 
   it('shows the document that was sent, line by line', async () => {

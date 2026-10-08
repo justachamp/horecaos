@@ -984,6 +984,109 @@ class EInvoicingServiceTests {
     }
 
     @Test
+    @DisplayName(
+            "a draft deleted at the operator holds its statement until staff release it, and then it can be sent again")
+    void aDraftDeletedAtTheOperatorIsReleasedByStaff() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        JdbcStatementStore statements = new JdbcStatementStore(jdbc);
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice sent = send(statement);
+
+        // Staff delete the draft in the operator's product to fix its classification; it is asked about next.
+        didox.states.add(EInvoiceStateOutcome.NotFound::new);
+        StatementEInvoice gone = service.refresh(TENANT, sent.id(), STAFF, "c").einvoice();
+        assertThat(gone.operatorState()).isEqualTo(EInvoiceOperatorState.UNKNOWN);
+        assertThat(gone.operatorStatus()).isEqualTo("NOT_FOUND_AT_OPERATOR");
+        assertThat(gone.live()).as("nothing but staff can free it").isTrue();
+        assertThat(statements.hasLiveEInvoice(TENANT, statement)).isTrue();
+        assertThatThrownBy(() -> send(statement))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "EINVOICE_LIVE"));
+        facts.clear();
+
+        StatementEInvoice released = service.release(
+                TENANT, gone.id(), gone.version(), STAFF, "draft deleted to correct its classification", "corr-r");
+
+        assertThat(released.operatorState()).isEqualTo(EInvoiceOperatorState.CANCELLED);
+        assertThat(released.operatorStatus()).as("a release says it is one").isEqualTo("RELEASED_BY_STAFF");
+        assertThat(released.operatorDocumentId())
+                .as("the record of what was sent is kept")
+                .isEqualTo("DOC-1");
+        assertThat(released.live()).isFalse();
+        assertThat(released.version()).isEqualTo(gone.version() + 1);
+        assertThat(statements.hasLiveEInvoice(TENANT, statement)).isFalse();
+        assertThat(facts.stream().map(AuditFact::actionCode)).containsExactly("commercial.einvoice.released");
+        AuditFact fact = facts.getFirst();
+        assertThat(fact.capabilityUsed()).isEqualTo("commercial.einvoice.send");
+        assertThat(fact.reason()).isEqualTo("draft deleted to correct its classification");
+        assertThat(fact.changeDocument().toString()).contains("UNKNOWN", "CANCELLED", "RELEASED_BY_STAFF");
+
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-2", EInvoiceOperatorState.DRAFT, "created"));
+        assertThat(send(statement).delivery()).as("free to be sent again").isEqualTo(EInvoiceDelivery.SUBMITTED);
+        assertThatThrownBy(() -> service.refresh(TENANT, released.id(), STAFF, "c"))
+                .as("a released document is settled and no answer moves it")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "SETTLED_AT_OPERATOR"));
+    }
+
+    @Test
+    @DisplayName("only a document the operator says it does not hold is released, at the version staff read")
+    void onlyAMissingDocumentIsReleased() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice held = send(statement);
+        facts.clear();
+
+        assertThatThrownBy(() -> service.release(TENANT, held.id(), held.version(), STAFF, "r", "c"))
+                .as("the operator holds it as a draft: nothing to release")
+                .isInstanceOfSatisfying(ApiException.class, refusal -> {
+                    assertThat(refusal.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+                    assertThat(refusal.properties()).containsEntry("reason", "NOT_RELEASABLE");
+                });
+
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.UNKNOWN, "5"));
+        StatementEInvoice unreadable =
+                service.refresh(TENANT, held.id(), STAFF, "c").einvoice();
+        assertThat(unreadable.operatorState()).isEqualTo(EInvoiceOperatorState.UNKNOWN);
+        facts.clear();
+        assertThatThrownBy(() -> service.release(TENANT, unreadable.id(), unreadable.version(), STAFF, "r", "c"))
+                .as("a status the adapter cannot read is a document the operator holds")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "NOT_RELEASABLE"));
+
+        didox.states.add(EInvoiceStateOutcome.NotFound::new);
+        StatementEInvoice gone = service.refresh(TENANT, held.id(), STAFF, "c").einvoice();
+        assertThat(gone.operatorStatus()).isEqualTo("NOT_FOUND_AT_OPERATOR");
+        facts.clear();
+        assertThatThrownBy(() -> service.release(TENANT, gone.id(), gone.version() - 1, STAFF, "r", "c"))
+                .as("the document moved since staff read it")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        stale -> assertThat(stale.errorCode()).isEqualTo(ErrorCode.STALE_VERSION));
+        assertThatThrownBy(() -> service.release(TENANT, UUID.randomUUID(), 0, STAFF, "r", "c"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        missing -> assertThat(missing.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+        assertThat(facts).as("a refusal leaves no fact").isEmpty();
+        assertThat(store.find(TENANT, gone.id()).orElseThrow().version()).isEqualTo(gone.version());
+
+        UUID second = statement("S-2026-10-000002", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Uncertain("READ_TIMEOUT", "lost"));
+        StatementEInvoice lost = send(second);
+        assertThat(lost.delivery()).isEqualTo(EInvoiceDelivery.UNCERTAIN);
+        assertThatThrownBy(() -> service.release(TENANT, lost.id(), lost.version(), STAFF, "r", "c"))
+                .as("a send whose answer was lost is resolved by asking, never by a release")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "NOT_RELEASABLE"));
+    }
+
+    @Test
     @DisplayName("only an attempt that reached an operator can be asked about, and only through a connected account")
     void whatMayBeRefreshed() {
         connect(true);

@@ -2197,5 +2197,12 @@ export const uzLatn: Messages = {
     'Bu urinish operatorga yetib bormagan, so‘raladigan narsa yo‘q.',
   'einvoicing.error.SETTLED_AT_OPERATOR':
     'Operator bu hujjatni yakunlagan (imzolangan, rad etilgan yoki bekor qilingan), so‘raladigan narsa qolmagan.',
+  'einvoicing.release': 'Ko‘chirmani bo‘shatish',
+  'einvoicing.release.confirm': 'Bo‘shatish',
+  'einvoicing.release.hint':
+    'Faqat qoralama operatorda ataylab o‘chirilgan bo‘lsa bo‘shating. Urinish xodim tomonidan bekor qilingan deb yoziladi va ko‘chirmani qayta yuborish mumkin bo‘ladi.',
+  'einvoicing.released': 'Bo‘shatildi: ko‘chirmani qayta yuborish mumkin.',
+  'einvoicing.attempt.notFound': 'Operatorda bu hujjat endi yo‘q.',
+  'einvoicing.error.NOT_RELEASABLE': 'Faqat operatorda endi yo‘q hujjatni bo‘shatish mumkin.',
   'einvoicing.link': 'Elektron hisob-faktura',
 };

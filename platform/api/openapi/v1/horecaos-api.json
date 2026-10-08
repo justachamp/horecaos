@@ -68882,6 +68882,53 @@
         "tags" : [ "Commercial administration" ]
       }
     },
+    "/api/v1/platform-admin/commercial/tenants/{tenantId}/einvoices/{einvoiceId}/release" : {
+      "post" : {
+        "description" : "Documents go out as drafts, and a draft can be deleted in the operator's own product to be fixed and sent again. Once the operator has said it holds nothing under the document's identifier (state UNKNOWN, status NOT_FOUND_AT_OPERATOR), this records that staff released it: the attempt reads CANCELLED, status RELEASED_BY_STAFF, and the statement can be sent again or voided. A reason is required and is audited. Requires If-Match. 422 NOT_RELEASABLE for any other attempt: a document the operator holds, or reports in a status this adapter cannot read, is not released.",
+        "operationId" : "release_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "einvoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoicingReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoiceView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Release a statement from a document the operator no longer holds",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
     "/api/v1/platform-admin/commercial/tenants/{tenantId}/einvoices/{einvoiceId}/state-refresh" : {
       "post" : {
         "description" : "Records the state the operator reports (sent, signed by the buyer, refused, cancelled). Also how an invoice whose send had no answer is resolved: by asking, never by sending again.",
