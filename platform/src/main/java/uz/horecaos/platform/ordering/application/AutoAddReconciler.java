@@ -269,6 +269,20 @@ public class AutoAddReconciler {
         }
     }
 
+    /**
+     * Whether a customer (or an operator on the customer's behalf) may not decline this rule: it is published
+     * as mandatory and the gate is open. A rule the publication no longer carries cannot be mandatory.
+     */
+    public boolean isMandatory(CartRow cart, UUID ruleId) {
+        if (!enabled(cart)) {
+            return false;
+        }
+        return channels.byId(cart.tenantId(), cart.channelId())
+                .map(channel -> rules.rulesFor(cart.tenantId(), cart.brandId(), channel.code()).stream()
+                        .anyMatch(rule -> rule.ruleId().equals(ruleId) && rule.mandatory()))
+                .orElse(false);
+    }
+
     // ------------------------------------------------------------------------------ internals
 
     private record Evaluation(List<Outcome> outcomes) {}

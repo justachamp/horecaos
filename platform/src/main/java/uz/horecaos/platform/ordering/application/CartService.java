@@ -716,6 +716,27 @@ public class CartService {
     }
 
     /**
+     * Records that these rules are not wanted in this cart (ADR 0158), before any line is put in it: the
+     * operator's composer sends the rules whose lines it took off the basket the last quote showed, and the
+     * cart then never evaluates them in. The same memory a customer's removal leaves, without the line.
+     *
+     * @throws CartRefusedException {@code AUTO_ADD_LINE_MANDATORY} for a rule the customer may not decline
+     */
+    @Transactional
+    public void declineAutoAddRules(
+            UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId, java.util.Collection<UUID> ruleIds) {
+        CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        Instant now = clock.instant();
+        for (UUID ruleId : ruleIds) {
+            if (autoAdd.isMandatory(cart, ruleId)) {
+                throw new CartRefusedException(
+                        AutoAddReconciler.AUTO_ADD_LINE_MANDATORY, "A mandatory line cannot be taken off the basket");
+            }
+            carts.recordDecline(tenantId, cartId, ruleId, now);
+        }
+    }
+
+    /**
      * Names where a delivery cart is going (ADR 0019, ADR 0015, ADR 0029).
      *
      * <p><strong>A saved address, never an ad-hoc one.</strong> The command names
