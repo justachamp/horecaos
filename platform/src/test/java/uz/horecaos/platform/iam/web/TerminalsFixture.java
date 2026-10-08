@@ -125,6 +125,8 @@ abstract class TerminalsFixture {
         registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
         // The release worker calls the mocked ticket service from another thread, which corrupts Mockito's stubbing.
         registry.add("horecaos.kitchen.release-worker.enabled", () -> "false");
+        // The housekeeping jobs are driven by the tests that cover them, never by the scheduler against a test's clock.
+        registry.add("horecaos.terminals.maintenance.enabled", () -> "false");
     }
 
     @Autowired

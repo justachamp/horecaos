@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ public class StaffPinController {
     private final StaffTerminalFacts staff;
     private final StaffDirectory directory;
     private final CurrentActor currentActor;
+    private final Clock clock;
 
     public StaffPinController(
             PinService pins,
@@ -69,13 +71,15 @@ public class StaffPinController {
             StaffMemberService members,
             StaffTerminalFacts staff,
             StaffDirectory directory,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            Clock clock) {
         this.pins = pins;
         this.sessions = sessions;
         this.members = members;
         this.staff = staff;
         this.directory = directory;
         this.currentActor = currentActor;
+        this.clock = clock;
     }
 
     // ------------------------------------------------------------------------------- my own PIN
@@ -100,7 +104,9 @@ public class StaffPinController {
                         state.setAt(),
                         state.lockedAt(),
                         pendingOf(tenantId, state),
-                        recent.stream().map(Unlock::of).toList()));
+                        recent.stream()
+                                .map(row -> Unlock.of(row, clock.instant()))
+                                .toList()));
     }
 
     @PostMapping("/staff/me/pin-activations")
@@ -276,9 +282,9 @@ public class StaffPinController {
             @Nullable Instant endedAt,
             @Nullable String endedReason) {
 
-        static Unlock of(SessionHistoryRow row) {
+        static Unlock of(SessionHistoryRow row, Instant now) {
             return new Unlock(
-                    row.id(), row.deviceId(), row.deviceName(), row.openedAt(), row.endedAt(), row.endedReason());
+                    row.id(), row.deviceId(), row.deviceName(), row.openedAt(), row.endedAt(), row.endedReasonAt(now));
         }
     }
 

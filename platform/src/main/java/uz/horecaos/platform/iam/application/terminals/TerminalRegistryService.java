@@ -343,7 +343,7 @@ public class TerminalRegistryService {
                     row.memberReference(),
                     row.openedAt(),
                     row.endedAt(),
-                    endedReasonOf(row),
+                    row.endedReasonAt(clock.instant()),
                     row.lastActivityAt()));
         }
         String next = null;
@@ -355,25 +355,6 @@ public class TerminalRegistryService {
                             (last.openedAt() + "|" + last.id()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
         return new SessionPage(out, next);
-    }
-
-    /**
-     * How a session ended, derived for one that nobody ended: the row carries {@code IDLE} or {@code MAX_AGE} only once a
-     * request found it expired, and a screen listing history should not call an abandoned session «still open».
-     */
-    @Nullable
-    String endedReasonOf(SessionHistoryRow row) {
-        if (row.endedReason() != null) {
-            return row.endedReason();
-        }
-        Instant now = clock.instant();
-        if (!now.isBefore(row.hardExpiresAt())) {
-            return "MAX_AGE";
-        }
-        if (!now.isBefore(row.lastActivityAt().plusSeconds(row.idleSeconds()))) {
-            return "IDLE";
-        }
-        return null;
     }
 
     private int versionOf(UUID deviceId) {

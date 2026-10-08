@@ -361,7 +361,26 @@ public class JdbcTerminalStore {
             @Nullable String endedReason,
             Instant lastActivityAt,
             int idleSeconds,
-            Instant hardExpiresAt) {}
+            Instant hardExpiresAt) {
+
+        /**
+         * How the session ended as of {@code now}, derived for one that nobody ended: the row carries {@code IDLE} or
+         * {@code MAX_AGE} only once a request found it expired, and a list of history must not call an abandoned session
+         * «still open». {@code null} while it really is open.
+         */
+        public @Nullable String endedReasonAt(Instant now) {
+            if (endedReason != null) {
+                return endedReason;
+            }
+            if (!now.isBefore(hardExpiresAt)) {
+                return "MAX_AGE";
+            }
+            if (!now.isBefore(lastActivityAt.plusSeconds(idleSeconds))) {
+                return "IDLE";
+            }
+            return null;
+        }
+    }
 
     /**
      * Serializes session changes per device for the rest of the transaction: two people tapping their names at one tablet at
@@ -526,6 +545,38 @@ public class JdbcTerminalStore {
         return jdbc.sql("DELETE FROM iam.staff_pin_activations WHERE status <> 'PENDING' AND created_at < :horizon")
                 .param("horizon", at(horizon))
                 .update();
+    }
+
+    // ------------------------------------------------------------------------------- the unseen monitor
+
+    /** A device that a person must unlock and that the platform has not heard from since {@code lastSeenAt}. */
+    public record UnseenDevice(
+            UUID deviceId, UUID tenantId, UUID brandId, UUID locationId, String displayName, Instant lastSeenAt) {}
+
+    /**
+     * The active devices of a class a person unlocks, set to {@code PERSON_REQUIRED}, last heard from before {@code
+     * cutoff}. A device never heard from is not listed: it has not been seen to go quiet, and a tablet enrolled an hour ago
+     * is not an incident. The set is small (one row per kitchen tablet that must be unlocked) and the scan is the monitor's
+     * once a minute.
+     */
+    public List<UnseenDevice> unseenRequiredDevices(Instant cutoff) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, brand_id, location_id, display_name, last_seen_at
+                  FROM iam.device_principals
+                 WHERE status = 'ACTIVE' AND device_class = 'KITCHEN_KDS'
+                   AND attribution_mode = 'PERSON_REQUIRED'
+                   AND last_seen_at IS NOT NULL AND last_seen_at < :cutoff
+                 ORDER BY last_seen_at
+                """)
+                .param("cutoff", at(cutoff))
+                .query((rs, n) -> new UnseenDevice(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getObject("location_id", UUID.class),
+                        rs.getString("display_name"),
+                        rs.getObject("last_seen_at", OffsetDateTime.class).toInstant()))
+                .list();
     }
 
     // ---------------------------------------------------------------------------------- the roster

@@ -552,6 +552,12 @@ class TerminalPinHttpTests extends TerminalsFixture {
                 .isTrue();
         assertThat(body.get("unlocks").get(1).get("endedReason").asString()).isEqualTo("SUPERSEDED");
         assertThat(body.get("unlocks").get(0).get("deviceName").asString()).isNotBlank();
+
+        advance(Duration.ofMinutes(6));
+        JsonNode later = ok(get(OPS + "/staff/me/pin").with(token(AZIZA)));
+        assertThat(later.get("unlocks").get(0).get("endedReason").asString())
+                .as("a session nobody ended is named by how it lapsed, not left «open» for ever")
+                .isEqualTo("IDLE");
     }
 
     // ---------------------------------------------------- nothing secret is logged, stored or measured

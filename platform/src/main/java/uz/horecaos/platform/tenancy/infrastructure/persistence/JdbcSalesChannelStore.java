@@ -214,6 +214,23 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         return counts;
     }
 
+    /** The ids of the active channels that are active at this branch, for the "is the branch in service" probe. */
+    public List<UUID> activeChannelIdsAt(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT c.id
+                  FROM tenant.sales_channels c
+                  JOIN tenant.sales_channel_locations scl
+                    ON scl.tenant_id = c.tenant_id AND scl.channel_id = c.id
+                 WHERE c.tenant_id = :tenantId AND c.status = 'ACTIVE'
+                   AND scl.location_id = :locationId AND scl.status = 'ACTIVE'
+                 ORDER BY c.code
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query((rs, n) -> rs.getObject("id", UUID.class))
+                .list();
+    }
+
     /** Every channel's enabled fulfilment modes, for the registry list's "Типы получения" chips. */
     public Map<UUID, List<FulfillmentMode>> enabledFulfillmentModesByChannel(UUID tenantId) {
         Map<UUID, List<FulfillmentMode>> modes = new LinkedHashMap<>();
