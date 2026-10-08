@@ -1978,6 +1978,10 @@ export const en = {
     'Cards bound under another account will have to be added again by their tenants. A test double is refused outside a local or test run.',
   'billing.installation.suspend.note':
     'Every card tenant is collected like an invoice tenant until an account is active again.',
+  'billing.installation.suspend.unresolved':
+    'Card charges asked through this account are still waiting for its answer: {topUps} top-ups and {charges} statement charges. The account that replaces it cannot tell whether they took the money; the settlement sweep resolves them within minutes.',
+  'billing.installation.suspend.acknowledge':
+    'Suspend anyway. Those charges stay pending, never declined, and resolve when this account is active again.',
   'billing.installation.activated': '{name} is now the account cards are charged through.',
   'billing.installation.suspended': '{name} is suspended. No card is charged.',
   'billing.installation.created': 'The account was declared, in draft.',

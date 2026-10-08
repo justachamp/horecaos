@@ -226,6 +226,17 @@
                           [value]="moveReason()"
                           (input)="moveReason.set($any($event.target).value)"
                         />
+                        @if (unresolvedCharges() !== null) {
+                          <label class="q-caption unresolvedAcknowledge">
+                            <input
+                              type="checkbox"
+                              name="acknowledgeUnresolved"
+                              [checked]="acknowledgeUnresolved()"
+                              (change)="acknowledgeUnresolved.set($any($event.target).checked)"
+                            />
+                            {{ i18n.t('billing.installation.suspend.acknowledge') }}
+                          </label>
+                        }
                         <button
                           type="button"
                           class="confirmMove activateConfirm"

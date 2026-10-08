@@ -1096,16 +1096,29 @@ export class CommerceApi {
     );
   }
 
-  /** Every card tenant is then collected like an invoice tenant until an account is active. */
+  /**
+   * Every card tenant is then collected like an invoice tenant until an account is active.
+   *
+   * Refused with `UNRESOLVED_CARD_CHARGES` while top-ups or statement charges asked through the account
+   * have no answer yet: the account that replaces it cannot say whether they took the money.
+   * `acknowledgeUnresolvedCharges` suspends anyway, for an account that cannot answer; the charges then
+   * stay pending, never declined, and resolve when the account is active again.
+   */
   async suspendCardInstallation(
     installationId: string,
     expectedVersion: number,
     reason: string,
+    acknowledgeUnresolvedCharges = false,
   ): Promise<CardInstallationView> {
     return firstValueFrom(
       this.api.post<CardInstallationView>(
         `/api/v1/platform-admin/commercial/billing/card-installations/${installationId}/suspension`,
-        { expectedVersion, reason },
+        // Absent, not false: the console's ordinary body stays the version and the reason.
+        {
+          expectedVersion,
+          reason,
+          ...(acknowledgeUnresolvedCharges ? { acknowledgeUnresolvedCharges: true } : {}),
+        },
       ),
     );
   }

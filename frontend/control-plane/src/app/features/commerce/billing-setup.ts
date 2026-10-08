@@ -18,6 +18,12 @@ export type BillingForm = 'bankDetails' | 'installation';
 /** What an installation may be moved to from where it is. */
 export type InstallationMove = 'activation' | 'suspension';
 
+/** The charges a suspension was refused over: asked through the account and not yet answered. */
+export interface UnresolvedCharges {
+  readonly topUps: number;
+  readonly statementCharges: number;
+}
+
 /**
  * IA 5.5 Invoices & wallet, platform half -- what HorecaOS itself sets up so it can be paid (ADR 0095).
  *
@@ -67,6 +73,10 @@ export class BillingSetup {
   protected readonly actionError = signal<string | null>(null);
   protected readonly actionMessage = signal<string | null>(null);
   protected readonly form = signal<BillingForm | null>(null);
+
+  /** Set when the server refuses a suspension over charges still waiting for the account's answer. */
+  protected readonly unresolvedCharges = signal<UnresolvedCharges | null>(null);
+  protected readonly acknowledgeUnresolved = signal(false);
 
   protected readonly beneficiary = signal('');
   protected readonly bankName = signal('');
@@ -243,6 +253,8 @@ export class BillingSetup {
         : { id: installation.installationId, move },
     );
     this.moveReason.set('');
+    this.unresolvedCharges.set(null);
+    this.acknowledgeUnresolved.set(false);
     this.actionError.set(null);
     this.actionMessage.set(null);
     this.form.set(null);
@@ -266,13 +278,28 @@ export class BillingSetup {
           reason,
         );
       } else {
-        await this.api.suspendCardInstallation(
-          installation.installationId,
-          installation.version,
-          reason,
-        );
+        try {
+          // The ordinary call stays three arguments; the fourth is only ever a person saying "I know".
+          await (this.acknowledgeUnresolved()
+            ? this.api.suspendCardInstallation(
+                installation.installationId,
+                installation.version,
+                reason,
+                true,
+              )
+            : this.api.suspendCardInstallation(
+                installation.installationId,
+                installation.version,
+                reason,
+              ));
+        } catch (error) {
+          this.unresolvedCharges.set(unresolvedChargesOf(error));
+          throw error;
+        }
       }
       this.moving.set(null);
+      this.unresolvedCharges.set(null);
+      this.acknowledgeUnresolved.set(false);
       return this.i18n.t(
         move.move === 'activation'
           ? 'billing.installation.activated'
@@ -290,9 +317,28 @@ export class BillingSetup {
       this.actionMessage.set(await write());
       await this.load();
     } catch (error) {
-      this.actionError.set(this.i18n.describe(error as ApiError));
+      const unresolved = unresolvedChargesOf(error);
+      this.actionError.set(
+        unresolved === null
+          ? this.i18n.describe(error as ApiError)
+          : this.i18n.t('billing.installation.suspend.unresolved', {
+              topUps: String(unresolved.topUps),
+              charges: String(unresolved.statementCharges),
+            }),
+      );
     } finally {
       this.busy.set(false);
     }
   }
+}
+
+/** What a refused suspension says is still waiting, or null for any other failure. */
+function unresolvedChargesOf(error: unknown): UnresolvedCharges | null {
+  if (!(error instanceof ApiError) || error.problem['reason'] !== 'UNRESOLVED_CARD_CHARGES') {
+    return null;
+  }
+  return {
+    topUps: Number(error.problem['unresolvedTopUps'] ?? 0),
+    statementCharges: Number(error.problem['unresolvedStatementCharges'] ?? 0),
+  };
 }

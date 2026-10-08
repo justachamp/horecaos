@@ -1996,6 +1996,10 @@ export const uzLatn: Messages = {
     'Boshqa hisob ostida bog‘langan kartalarni mijozlar qayta qo‘shishi kerak bo‘ladi. Test o‘rnini bosuvchi lokal yoki test ishga tushirishdan tashqarida rad etiladi.',
   'billing.installation.suspend.note':
     'Biror hisob qayta faollashmaguncha karta bilan to‘lovchi barcha mijozlar hisob-faktura bo‘yicha mijoz kabi yig‘iladi.',
+  'billing.installation.suspend.unresolved':
+    'Shu hisob orqali so‘ralgan karta yechimlari hali uning javobini kutmoqda: to‘ldirishlar {topUps}, hisob-fakturalar bo‘yicha yechimlar {charges}. Almashtiruvchi hisob ular pulni olgan-olmaganini ayta olmaydi; tekshiruv ularni bir necha daqiqada hal qiladi.',
+  'billing.installation.suspend.acknowledge':
+    'Baribir to‘xtatish. Bu yechimlar rad etilmaydi, kutilgan holda qoladi va bu hisob qayta faollashganda hal qilinadi.',
   'billing.installation.activated': '{name} endi kartalar yechiladigan hisob.',
   'billing.installation.suspended': '{name} to‘xtatildi. Hech bir karta yechilmaydi.',
   'billing.installation.created': 'Hisob qoralama sifatida e’lon qilindi.',
