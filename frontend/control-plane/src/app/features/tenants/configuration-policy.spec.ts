@@ -47,7 +47,10 @@ const UNWIRED_KEY: ConfigurationKeyView = {
   description: 'A registered key with no consumer, for testing the read-only path.',
 };
 
-function resolutionFor(value: unknown, currentVersionAtScope: number | null): ConfigurationResolutionView {
+function resolutionFor(
+  value: unknown,
+  currentVersionAtScope: number | null,
+): ConfigurationResolutionView {
   return {
     keyCode: 'ignored',
     value,
@@ -73,7 +76,9 @@ class FakeConfigurationApi {
       ) => Promise<ConfigurationResolutionView>
     >();
   readonly setValue =
-    vi.fn<(keyCode: string, request: SetConfigurationValueRequest) => Promise<ConfigurationValueView>>();
+    vi.fn<
+      (keyCode: string, request: SetConfigurationValueRequest) => Promise<ConfigurationValueView>
+    >();
 }
 
 async function fillPicker(
@@ -97,7 +102,9 @@ async function fillPicker(
   tenantInput.dispatchEvent(new Event('input'));
   fixture.detectChanges();
 
-  fixture.nativeElement.querySelector('form.pickerForm').dispatchEvent(new Event('submit', { cancelable: true }));
+  fixture.nativeElement
+    .querySelector('form.pickerForm')
+    .dispatchEvent(new Event('submit', { cancelable: true }));
   await fixture.whenStable();
   fixture.detectChanges();
 }
@@ -147,15 +154,21 @@ describe('ConfigurationPolicy', () => {
     api.resolve.mockResolvedValue(resolutionFor('METER_ONLY', null));
 
     await fillPicker(fixture, 'commercial.enforcement_ceiling', 'LOCATION', 'tenant-1');
-    const brandInput = fixture.nativeElement.querySelectorAll('input[type="text"]')[1] as HTMLInputElement;
+    const brandInput = fixture.nativeElement.querySelectorAll(
+      'input[type="text"]',
+    )[1] as HTMLInputElement;
     brandInput.value = 'brand-1';
     brandInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    const locationInput = fixture.nativeElement.querySelectorAll('input[type="text"]')[2] as HTMLInputElement;
+    const locationInput = fixture.nativeElement.querySelectorAll(
+      'input[type="text"]',
+    )[2] as HTMLInputElement;
     locationInput.value = 'location-1';
     locationInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    fixture.nativeElement.querySelector('form.pickerForm').dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.nativeElement
+      .querySelector('form.pickerForm')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -168,7 +181,9 @@ describe('ConfigurationPolicy', () => {
     await fillPicker(fixture, 'commercial.enforcement_ceiling', 'TENANT', 'tenant-1');
     expect(fixture.nativeElement.querySelector('.writeForm')).not.toBeNull();
 
-    const tenantInput = fixture.nativeElement.querySelector('input[type="text"]') as HTMLInputElement;
+    const tenantInput = fixture.nativeElement.querySelector(
+      'input[type="text"]',
+    ) as HTMLInputElement;
     tenantInput.value = 'tenant-2';
     tenantInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -181,12 +196,16 @@ describe('ConfigurationPolicy', () => {
     api.resolve.mockResolvedValueOnce(resolutionFor('METER_ONLY', 3));
     await fillPicker(fixture, 'commercial.enforcement_ceiling', 'TENANT', 'tenant-1');
 
-    const stringInput = fixture.nativeElement.querySelector('.writeForm input[type="text"]') as HTMLInputElement;
+    const stringInput = fixture.nativeElement.querySelector(
+      '.writeForm input[type="text"]',
+    ) as HTMLInputElement;
     stringInput.value = 'METERED_LIMIT';
     stringInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    const reasonInput = fixture.nativeElement.querySelectorAll('.writeForm input[type="text"]')[1] as HTMLInputElement;
+    const reasonInput = fixture.nativeElement.querySelectorAll(
+      '.writeForm input[type="text"]',
+    )[1] as HTMLInputElement;
     reasonInput.value = 'Raising the ceiling for a pilot tenant';
     reasonInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -201,7 +220,9 @@ describe('ConfigurationPolicy', () => {
     });
     api.resolve.mockResolvedValueOnce(resolutionFor('METERED_LIMIT', 4));
 
-    fixture.nativeElement.querySelector('.writeForm').dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.nativeElement
+      .querySelector('.writeForm')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -225,34 +246,46 @@ describe('ConfigurationPolicy', () => {
     api.resolve.mockResolvedValue(resolutionFor('METER_ONLY', 3));
     await fillPicker(fixture, 'commercial.enforcement_ceiling', 'TENANT', 'tenant-1');
 
-    const stringInput = fixture.nativeElement.querySelector('.writeForm input[type="text"]') as HTMLInputElement;
+    const stringInput = fixture.nativeElement.querySelector(
+      '.writeForm input[type="text"]',
+    ) as HTMLInputElement;
     stringInput.value = 'METERED_LIMIT';
     stringInput.dispatchEvent(new Event('input'));
-    const reasonInput = fixture.nativeElement.querySelectorAll('.writeForm input[type="text"]')[1] as HTMLInputElement;
+    const reasonInput = fixture.nativeElement.querySelectorAll(
+      '.writeForm input[type="text"]',
+    )[1] as HTMLInputElement;
     reasonInput.value = 'Retry after a race';
     reasonInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     api.setValue.mockRejectedValue(new ApiError({ status: 409, code: 'STALE_VERSION' }));
 
-    fixture.nativeElement.querySelector('.writeForm').dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.nativeElement
+      .querySelector('.writeForm')
+      .dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).not.toContain('STALE_VERSION');
-    expect(fixture.nativeElement.textContent).toContain('Кто-то изменил эту запись, пока вы её редактировали');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Кто-то изменил эту запись, пока вы её редактировали',
+    );
   });
 
   it('disables Save until a reason is entered', async () => {
     api.resolve.mockResolvedValue(resolutionFor('METER_ONLY', 3));
     await fillPicker(fixture, 'commercial.enforcement_ceiling', 'TENANT', 'tenant-1');
 
-    const stringInput = fixture.nativeElement.querySelector('.writeForm input[type="text"]') as HTMLInputElement;
+    const stringInput = fixture.nativeElement.querySelector(
+      '.writeForm input[type="text"]',
+    ) as HTMLInputElement;
     stringInput.value = 'METERED_LIMIT';
     stringInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    const saveButton = fixture.nativeElement.querySelector('.writeForm button.primary') as HTMLButtonElement;
+    const saveButton = fixture.nativeElement.querySelector(
+      '.writeForm button.primary',
+    ) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
   });
 
@@ -277,13 +310,17 @@ describe('ConfigurationPolicy', () => {
     api.resolve.mockResolvedValue(resolutionFor(30, null));
     await fillPicker(fixture, 'telemetry.track_retention_days', 'TENANT', 'tenant-1');
 
-    const numberInput = fixture.nativeElement.querySelector('.writeForm input[inputmode="numeric"]') as HTMLInputElement;
+    const numberInput = fixture.nativeElement.querySelector(
+      '.writeForm input[inputmode="numeric"]',
+    ) as HTMLInputElement;
     numberInput.value = 'not-a-number';
     numberInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.writeForm .error')).not.toBeNull();
-    const saveButton = fixture.nativeElement.querySelector('.writeForm button.primary') as HTMLButtonElement;
+    const saveButton = fixture.nativeElement.querySelector(
+      '.writeForm button.primary',
+    ) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
     expect(api.setValue).not.toHaveBeenCalled();
   });

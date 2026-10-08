@@ -22,13 +22,13 @@ export interface SseConnectionOptions {
  * of a client: `Last-Event-Id` resync, a jittered exponential backoff, and the server's own
  * `closing` request for a delay respected.
  *
- * **This is a second copy of the transport `RealtimeClient` carries, and that is deliberate for
- * now.** It was written for the brand-wide board stream (gap map row `1.1`, `BrandOrderStream`), a
- * screen-scoped, lazy-loaded consumer. `RealtimeClient` is in the initial bundle, whose budget
- * (`angular.json`, 832 kB) had 0.6 kB of headroom when this was written; folding the client onto
- * this class cost 0.4 kB of it. When the budget has room, `RealtimeClient` should be reduced to
- * this class plus its channel list, and the duplication goes. Until then a change to one's
- * reconnect rules is a change to both.
+ * **This is the console's one SSE transport.** `RealtimeClient` (the branch stream every screen
+ * shares, in the initial bundle) and `BrandOrderStream` (the brand-wide board's second stream,
+ * screen-scoped) each own one of these and differ only in what they ask for and where they
+ * report state; a change to the reconnect rules is a change to this class alone. It used to be
+ * written out twice, the client's own copy beside this one, because the initial-bundle budget had
+ * no room for the fold when the brand stream arrived (gap map row `1.1`); folding the client onto
+ * this class has since cost that bundle nothing.
  *
  * Nothing here decides *which* stream is wanted; the owner calls {@link open} to (re)start it
  * and {@link close} to end it. A superseded attempt is recognised by its generation, so a slow

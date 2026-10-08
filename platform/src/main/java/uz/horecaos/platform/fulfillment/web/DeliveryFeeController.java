@@ -169,8 +169,10 @@ public class DeliveryFeeController {
     @Operation(
             summary = "Every fee resolution recorded against one quote",
             description = "Zone version, tariff version, band, time rule, distance, distance "
-                    + "source, and the zones that contained the address and lost the ranking. "
-                    + "Carries no address and no coordinates (ADR 0029).")
+                    + "source, the routing provider, dataset version and free-flow travel time "
+                    + "behind a road distance (ADR 0147), and the zones that contained the "
+                    + "address and lost the ranking. Carries no address and no coordinates "
+                    + "(ADR 0029).")
     public List<EvidenceView> evidence(@PathVariable UUID tenantId, @PathVariable UUID quoteId) {
         return resolutions.forQuote(tenantId, quoteId).stream()
                 .map(EvidenceView::of)
@@ -227,6 +229,8 @@ public class DeliveryFeeController {
             String distanceMode,
             String distanceSource,
             String routingProvider,
+            @Nullable Integer routingSeconds,
+            @Nullable String routingDatasetVersion,
             Long computedFeeMinor,
             Long finalFeeMinor,
             String currency,
@@ -249,6 +253,8 @@ public class DeliveryFeeController {
                     row.distanceMode(),
                     row.distanceSource(),
                     row.routingProvider(),
+                    row.routingSeconds(),
+                    row.routingDatasetVersion(),
                     row.computedFeeMinor(),
                     row.finalFeeMinor(),
                     row.currency(),

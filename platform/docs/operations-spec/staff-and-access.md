@@ -392,7 +392,7 @@ no shift-tracked job, the tab is **absent**, not empty.
 
 | Field | Type | Source |
 |---|---|---|
-| Способ входа | Text: «Логин и пароль» \| «Логин, пароль и код» | Keycloak — **not projected, §11.9** |
+| Способ входа | Text: «Логин и пароль» \| «Логин, пароль и код», with each authenticator's name and date and **Сбросить второй фактор** | Keycloak's credential list, cached 60 s — **not projected, §11.9** (ADR 0148) |
 | Последний вход | Timestamp + coarse device string | **Not built — §11.6** |
 | Активные сеансы | Count + **Завершить все** | **Not built — §11.6** |
 | PIN на терминале | Set / not set + **Сбросить** | **Not built — §11.7** |
@@ -1095,9 +1095,23 @@ endpoint once a tenant regularly onboards ten people at once. **ADR 0025.**
 
 ### 11.9 Staff MFA state
 
-Whether a person has a second factor is a Keycloak fact with no projection. The
-IA's component gap list already names `OtpInput` for staff MFA, so the intent
-exists. **ADR 0003 / ADR 0009.**
+Whether a person has a second factor is a Keycloak fact, and it stays one: **no
+projection table** (ADR 0148, Decision 6). The platform asks Keycloak for the
+person's credential list, caches it for sixty seconds (`iam.staff_mfa_credentials`,
+ADR 0033) and evicts it on every enrolment, removal and reset, and shows the
+answer: «Способ входа» on the Безопасность tab (`GET .../staff/members/{memberId}/mfa`,
+`iam.staff.mfa.read`, each authenticator's name and date) and a column on the staff
+list (`GET .../staff/mfa-summary`, read a few people at a time; a person Keycloak
+could not answer for shows as unknown and the rest of the list still renders). A
+person with no Keycloak account yet (an invitation not accepted) shows neither.
+
+What the state is *for*: a person enrols from «Мой профиль» (password re-proved, QR
+code, first code in `q-otp-input`); a lost phone is reset by another administrator
+(`POST .../mfa/resets`, `iam.staff.mfa.reset`, `If-Match`, a reason) and never by a
+link, and a platform account's reset waits for a second signature. Who is *required*
+to hold one: every platform account (deploy setting), and a tenant's people by its
+setting `iam.staff_mfa_requirement` (`OFF`, `SENSITIVE_ROLES`, `ALL_STAFF`). The
+runbook is `docs/runbooks/staff-second-factor.md`. **ADR 0148, ADR 0003 / ADR 0009.**
 
 ### 11.10 Entitlement state
 

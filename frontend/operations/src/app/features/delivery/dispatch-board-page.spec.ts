@@ -5,13 +5,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope } from '../../core/api/operations-paths';
+import { OrderMapPointsApi, OrderMapPointsResponse } from '../../core/api/order-map-points-api';
+import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
+import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { CourierPositionsApi } from './courier-positions-api';
 import { DispatchApi, ExceptionResponse, PlanQueueResponse } from './dispatch-api';
 import { DispatchBoardPage } from './dispatch-board-page';
+import { MapRegionService } from './map-region';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -105,8 +110,36 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+const REVEALED: OrderMapPointsResponse = {
+  windowFrom: '2026-10-07T00:00:00Z',
+  windowTo: '2026-10-08T00:00:00Z',
+  points: [
+    {
+      orderId: 'o-open',
+      publicOrderNumber: 'F-100',
+      status: 'FULFILLING',
+      createdAt: '2026-10-07T08:00:00Z',
+      latitude: 41.31,
+      longitude: 69.24,
+    },
+    {
+      orderId: 'o-done',
+      publicOrderNumber: 'F-099',
+      status: 'COMPLETED',
+      createdAt: '2026-10-07T07:00:00Z',
+      latitude: 41.3,
+      longitude: 69.22,
+    },
+  ],
+  withoutPoint: 1,
+  truncated: false,
+};
+
 describe('DispatchBoardPage', () => {
   let fixture: ComponentFixture<DispatchBoardPage>;
+  let mapProvider: NullMapProvider;
+  let positions: { fleet: ReturnType<typeof vi.fn> };
+  let orderPoints: { reveal: ReturnType<typeof vi.fn> };
 
   afterEach(() => resetRegionalFormats());
   let dispatchApi: {
@@ -154,9 +187,33 @@ describe('DispatchBoardPage', () => {
       externalBook: vi.fn(),
       cancelShipment: vi.fn(),
     };
+    mapProvider = new NullMapProvider();
+    positions = {
+      fleet: vi.fn().mockResolvedValue({
+        pins: [
+          {
+            courierId: 'courier-1',
+            latitude: 41.32,
+            longitude: 69.25,
+            accuracyMeters: 10,
+            activeAssignmentCount: 1,
+            capturedAt: new Date().toISOString(),
+          },
+        ],
+        withoutPin: [],
+      }),
+    };
+    orderPoints = { reveal: vi.fn().mockResolvedValue(REVEALED) };
     await TestBed.configureTestingModule({
       imports: [DispatchBoardPage],
       providers: [
+        provideNullMapProvider(mapProvider),
+        { provide: CourierPositionsApi, useValue: positions },
+        { provide: OrderMapPointsApi, useValue: orderPoints },
+        {
+          provide: MapRegionService,
+          useValue: { ensureLoaded: () => Promise.resolve(), primary: () => null },
+        },
         {
           provide: CurrentLocation,
           useValue: {
@@ -408,6 +465,11 @@ describe('DispatchBoardPage', () => {
         { provide: CouriersApi, useValue: { roster: vi.fn() } },
         { provide: ApiClient, useValue: { get: () => of({ value: [], version: null }) } },
         { provide: RealtimeClient, useValue: fakeRealtimeClient() },
+        { provide: CourierPositionsApi, useValue: { fleet: vi.fn() } },
+        {
+          provide: MapRegionService,
+          useValue: { ensureLoaded: () => Promise.resolve(), primary: () => null },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -718,5 +780,120 @@ describe('DispatchBoardPage', () => {
     const host = fixture.nativeElement as HTMLElement;
 
     expect(host.querySelectorAll('[data-testid="dispatch-card-select"]')).toHaveLength(1);
+  });
+
+  // ------------------------------------------------ ADR 0145, row 3.1: the map pane
+
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  const press = (testId: string): void =>
+    host().querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click();
+  const settle = async (): Promise<void> => {
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  };
+
+  it('keeps the map closed until it is asked for, and reads no position and no doorstep before then', async () => {
+    await render();
+
+    expect(host().querySelector('[data-testid="dispatch-map"]')).toBeNull();
+    expect(positions.fleet).not.toHaveBeenCalled();
+    expect(orderPoints.reveal).not.toHaveBeenCalled();
+  });
+
+  it('opens the map with the couriers on it by the reference the roster shows, and no doorsteps yet', async () => {
+    await render([CARRIED_PLAN]);
+
+    press('dispatch-map-toggle');
+    await settle();
+
+    expect(positions.fleet).toHaveBeenCalledWith(SCOPE);
+    expect(mapProvider.map.livePins).toHaveLength(1);
+    expect(mapProvider.map.livePins[0].tone).toBe('courier');
+    expect(mapProvider.map.livePins[0].label).toBe('K-014');
+    expect(orderPoints.reveal).not.toHaveBeenCalled();
+  });
+
+  it('opens the day’s delivery orders only when the dispatcher presses the button, stating this screen as the purpose', async () => {
+    await render();
+    press('dispatch-map-toggle');
+    await settle();
+
+    press('order-points-reveal');
+    await settle();
+
+    expect(orderPoints.reveal).toHaveBeenCalledTimes(1);
+    expect(orderPoints.reveal).toHaveBeenCalledWith(
+      SCOPE,
+      expect.stringContaining('dispatch board'),
+    );
+    const orderPins = mapProvider.map.livePins.filter((pin) => pin.tone === 'order');
+    expect(orderPins).toHaveLength(1);
+    expect(orderPins[0].label).toContain('F-100');
+    expect(host().querySelector('[data-testid="order-points-without"]')).not.toBeNull();
+  });
+
+  it('shows finished orders too, as closed pins, when asked', async () => {
+    await render();
+    press('dispatch-map-toggle');
+    await settle();
+    press('order-points-reveal');
+    await settle();
+    expect(mapProvider.map.livePins.some((pin) => pin.tone === 'closed')).toBe(false);
+
+    const toggle = host().querySelector<HTMLInputElement>(
+      '[data-testid="order-points-open-only"]',
+    )!;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    await settle();
+
+    expect(mapProvider.map.livePins.filter((pin) => pin.tone === 'closed')).toHaveLength(1);
+  });
+
+  it('keeps the couriers moving with the board but does not open the doorsteps again on a refresh', async () => {
+    await render();
+    press('dispatch-map-toggle');
+    await settle();
+    press('order-points-reveal');
+    await settle();
+    const reads = positions.fleet.mock.calls.length;
+
+    press('dispatch-map-toggle');
+    press('dispatch-map-toggle');
+    await settle();
+    host().querySelector<HTMLButtonElement>('.dispatch__refresh')!.click();
+    await settle();
+
+    expect(positions.fleet.mock.calls.length).toBeGreaterThan(reads);
+    expect(orderPoints.reveal).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so, and keeps the couriers, when the caller may not open the day’s doorsteps', async () => {
+    await render([CARRIED_PLAN]);
+    orderPoints.reveal.mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
+    press('dispatch-map-toggle');
+    await settle();
+
+    press('order-points-reveal');
+    await settle();
+
+    expect(host().querySelector('[data-testid="order-points-denied"]')).not.toBeNull();
+    expect(mapProvider.map.livePins.filter((pin) => pin.tone === 'courier')).toHaveLength(1);
+  });
+
+  it('stops reading positions once the map is hidden', async () => {
+    await render();
+    press('dispatch-map-toggle');
+    await settle();
+    press('dispatch-map-toggle');
+    await settle();
+    const reads = positions.fleet.mock.calls.length;
+
+    host().querySelector<HTMLButtonElement>('.dispatch__refresh')!.click();
+    await settle();
+
+    expect(positions.fleet.mock.calls.length).toBe(reads);
   });
 });

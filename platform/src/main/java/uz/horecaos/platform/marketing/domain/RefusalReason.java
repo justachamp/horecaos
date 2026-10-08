@@ -52,10 +52,41 @@ public enum RefusalReason {
      * outcome rather than a set of rows left in {@code PENDING} forever, which
      * reads to an operator as a stuck job rather than a deliberate stop.
      */
-    CAMPAIGN_HALTED;
+    CAMPAIGN_HALTED,
+
+    /**
+     * ADR 0112: the step would hand this guest a second offer while another live
+     * scenario's offer is still fresh. Scenario-only, which is why it is not a
+     * value broadcast-only code ever has to handle.
+     */
+    SCENARIO_CONFLICT,
+
+    /**
+     * ADR 0112: a simultaneously due broadcast outranks this step under the
+     * tenant's {@code marketing.channel.priority.order}. The step is deferred to
+     * the next eligible slot and never dropped.
+     */
+    SCENARIO_PRIORITY_LOST,
+
+    /**
+     * ADR 0112: the scenario no longer applies to this guest or at all — its
+     * offer has expired or been retired, its channel can no longer deliver, its
+     * campaign has been halted, or the guest's own continuation or stop condition
+     * has been met.
+     */
+    SCENARIO_STOPPED;
 
     /** Whether this reason can be reached while building a snapshot. */
     public boolean appliesAtSnapshotBuild() {
-        return this != CAMPAIGN_HALTED;
+        return this != CAMPAIGN_HALTED && !isScenarioOnly();
+    }
+
+    /**
+     * The three ADR 0112 additions. A separate predicate rather than a second enum
+     * (the record's own choice): a full block history is read from this enum alone,
+     * and broadcast code asks this question to know it can never meet them.
+     */
+    public boolean isScenarioOnly() {
+        return this == SCENARIO_CONFLICT || this == SCENARIO_PRIORITY_LOST || this == SCENARIO_STOPPED;
     }
 }

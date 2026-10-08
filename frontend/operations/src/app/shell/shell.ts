@@ -16,6 +16,7 @@ import { OwnProfile } from '../core/auth/own-profile';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
 import { RegionalFormatSync } from '../core/format/regional-format-sync';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
+import { PlatformLocales } from '../core/i18n/platform-locales';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
 import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
@@ -139,7 +140,17 @@ export class Shell {
     () => this.ownProfile.displayName() ?? this.auth.displayName(),
   );
 
-  protected readonly locales = LOCALES;
+  private readonly registry = inject(PlatformLocales);
+
+  /**
+   * The languages the switcher offers: those this build has a catalogue for **and** the registry has
+   * live in the staff-UI tier (ADR 0149). A language declared but not live is never offered; before
+   * the registry has been read (it is read before the shell draws) every catalogue is on offer.
+   */
+  protected readonly locales = computed<readonly Locale[]>(() => {
+    const live = this.registry.active('STAFF_UI');
+    return live.length === 0 ? LOCALES : LOCALES.filter((locale) => live.includes(locale));
+  });
   protected readonly locale = this.i18n.locale;
 
   /** Every location the picker may offer — see this class's own doc comment. */

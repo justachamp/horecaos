@@ -48,10 +48,18 @@ enum OpenApiSurface {
      * Brand and location staff, plus everything operator-facing that is not one of the other
      * three groups: today {@code /api/v1/tenants/**} (kitchen, dine-in, inventory, orders,
      * reporting, and more), {@code /api/v1/session/**}, the {@code operations} Angular app's own
-     * {@code /api/v1/operations/**}, and the courier's own {@code /api/v1/courier/**}.
+     * {@code /api/v1/operations/**}, the courier's own {@code /api/v1/courier/**}, and an enrolled
+     * kitchen device's read of its own record, {@code /api/v1/devices/me} (ADR 0151; the device
+     * is operations' own principal, enrolled by a branch manager from the operations console).
      * {@code /api/v1/platform-admin/**} moved out to {@link #CONTROL_PLANE} in ADR 0066.
      */
-    OPERATIONS("operations", "/api/v1/tenants/**", "/api/v1/session/**", "/api/v1/operations/**", "/api/v1/courier/**");
+    OPERATIONS(
+            "operations",
+            "/api/v1/tenants/**",
+            "/api/v1/session/**",
+            "/api/v1/operations/**",
+            "/api/v1/courier/**",
+            "/api/v1/devices/**");
 
     private final String id;
 

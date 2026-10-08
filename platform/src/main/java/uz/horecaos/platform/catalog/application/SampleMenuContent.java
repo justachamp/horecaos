@@ -3,6 +3,9 @@ package uz.horecaos.platform.catalog.application;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import uz.horecaos.platform.tenancy.api.PlatformLocale;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * What the sample menu contains (ADR 0099).
@@ -196,9 +199,17 @@ final class SampleMenuContent {
 
     private SampleMenuContent() {}
 
-    /** The locales every sample entity is named in. */
+    /**
+     * The catalog codes every sample entity is named in: the languages the registry has live in the
+     * content tier (ADR 0149) <em>that the sample has wording for</em>. A language activated later
+     * is not given the Uzbek fallback under its own code, which would be a name in the wrong
+     * language in a translation row; it is left out until someone writes the sample in it.
+     */
     static List<String> locales() {
-        return List.of("uz", "ru", "en");
+        return PlatformLocales.active(Tier.CONTENT).stream()
+                .map(PlatformLocale::catalogCode)
+                .filter(CATALOG_NAME::containsKey)
+                .toList();
     }
 
     /**

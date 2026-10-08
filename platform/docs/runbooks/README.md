@@ -21,6 +21,7 @@ That shapes them more than any style guide would.
 | [alerts.md](alerts.md) | **Start here when something woke you.** Every alert, its tier, and the one runbook that answers it |
 | [production-setup.md](production-setup.md) | Bare OS to a running platform — first-time setup by a devops engineer with no server access for CI or the assistant (ADR 0061) |
 | [platform-email.md](platform-email.md) | Turning on the platform's own email: provider, DNS records, the SMTP password in OpenBao, and why an invitation is not sending (ADR 0097) |
+| [connect-assistant-provider.md](connect-assistant-provider.md) | Turning on the grounded assistant: the platform's model-provider key in OpenBao, the pilot tenant's entitlement and switch, what bounds its cost, and what to check when it hands customers to a person (ADR 0069) |
 | [deploy.md](deploy.md) | Shipping a release, bootstrapping a host, rolling back, and everything that goes wrong in between |
 | [restore.md](restore.md) | The database is gone, corrupted, or a migration has to be undone |
 | [postgresql-down.md](postgresql-down.md) | Night alert: the database is not answering while the host is |
@@ -36,8 +37,13 @@ That shapes them more than any style guide would.
 | [customers-cannot-sign-in.md](customers-cannot-sign-in.md) | No SMS is arriving, or a customer cannot get past the code screen |
 | [laptop-lost.md](laptop-lost.md) | Revoking your own access from the second device |
 | [control-band-response.md](control-band-response.md) | A control band breached and an agent wrote an `intent.md` to triage |
+| [staff-second-factor.md](staff-second-factor.md) | Authenticator-app codes for staff sign-in: the rollout order and its realm steps, the code-budget alert, resetting a lost phone, and the break-glass for the night no administrator can (ADR 0148) |
 | [staff-member-backfill.md](staff-member-backfill.md) | The tenant's own staff record against Keycloak: how many active staff have no row, what the reconciler says, the drift gauge, and when the retention sweeper may enforce (ADR 0139) |
 | [catalog-offering-listing-backfill.md](catalog-offering-listing-backfill.md) | A pre-existing tenant's offerings were set `AVAILABLE` before the auto-listing fix and still read as unsellable |
+| [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md) | Measuring, building, deploying, refreshing and rolling back the road-distance engine's dataset; and the two routing digest alerts (ADR 0147) |
+| [scenario-guest-did-not-get-a-message.md](scenario-guest-did-not-get-a-message.md) | A marketer asks why a guest did not get a step of a scenario, why a marketing text is refused, or why a late order was not apologised for (ADR 0112) |
+| [late-order-threshold-stored-values.md](late-order-threshold-stored-values.md) | Before the ADR 0150 release: which tenants saved a «late after» number while it did nothing, what it will now do to their unpromised orders, and how to tell them |
+| [connect-card-merchant-account.md](connect-card-merchant-account.md) | Connecting HorecaOS's own card merchant account (ADR 0095): the installation to fill, the adapter it needs, replacing an account, and an unanswered charge |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

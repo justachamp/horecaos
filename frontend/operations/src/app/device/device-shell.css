@@ -192,3 +192,27 @@
   padding: 0 16px;
   cursor: pointer;
 }
+
+/* A wall display fills the screen: the shared rendering owns its own layout, and the shell adds no chrome. */
+.device-shell__wall {
+  position: fixed;
+  inset: 0;
+}
+
+.device-shell__wall q-vdu-wall {
+  display: block;
+  height: 100%;
+}
+
+.device-shell__link {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 12px 0;
+  min-height: 48px;
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}

@@ -59,6 +59,9 @@ public class ConversationInboxService {
     /** Falls back to this when an operator does not type one — {@code OrderStateService}'s own idiom for an optional reason. */
     private static final String NO_REASON_GIVEN = "No reason given";
 
+    /** What a takeover from the assistant (ADR 0069) records when the operator types no reason of their own. */
+    private static final String TOOK_OVER_FROM_ASSISTANT = "Operator took the conversation over from the assistant";
+
     private final ConversationRepository conversations;
     private final FlowRunRepository runs;
     private final ConversationMessageStore messages;
@@ -139,8 +142,10 @@ public class ConversationInboxService {
         }
         conversations.markRead(tenantId, conversationId, actorSubject);
 
+        boolean assistantTookPart =
+                decrypted.stream().anyMatch(row -> row.direction() == ConversationMessageStore.Direction.ASSISTANT);
         return new ConversationHistory(
-                ConversationView.of(conversation),
+                ConversationView.of(conversation, assistantTookPart),
                 decrypted.stream().map(ConversationMessageView::of).toList());
     }
 
@@ -191,6 +196,14 @@ public class ConversationInboxService {
      * run (status {@code HANDED_TO_OPERATOR}, same terminal status a flow
      * document's own handoff block produces) and assigns the conversation to
      * the acting operator.
+     *
+     * <p>ADR 0069: the same action takes a conversation over from the
+     * assistant. A conversation the assistant has been answering is usually
+     * {@code IDLE} — no flow run is involved at all — and "take over" is how a
+     * person becomes its author, so an {@code IDLE} conversation the assistant
+     * has spoken in is takeable too. An {@code IDLE} conversation nobody has
+     * answered is not: there is nothing to take over from, and an operator who
+     * wants to speak to a customer has no thread to speak in yet.
      */
     @Transactional
     public ConversationView takeover(
@@ -201,7 +214,7 @@ public class ConversationInboxService {
             String actorSubject,
             @Nullable String reason) {
         ConversationRepository.Row conversation = requireConversation(tenantId, brandId, conversationId);
-        requireState(conversation, ConversationState.FLOW_ACTIVE, "takeover");
+        boolean fromAssistant = requireTakeable(conversation);
 
         runs.findActive(tenantId, conversationId)
                 .ifPresent(run -> runs.end(tenantId, run.id(), run.version(), FlowRunStatus.HANDED_TO_OPERATOR));
@@ -216,13 +229,13 @@ public class ConversationInboxService {
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("Conversation", conversationId)
-                .because(reasonOrDefault(reason))
+                .because(reasonOrDefault(reason, fromAssistant ? TOOK_OVER_FROM_ASSISTANT : NO_REASON_GIVEN))
                 .usingCapability(Capability.CONVERSATION_INBOX_MANAGE.code())
                 .correlatedBy(conversationId.toString())
                 .occurredAt(clock.instant())
                 .build());
 
-        return ConversationView.of(requireConversation(tenantId, brandId, conversationId));
+        return viewOf(requireConversation(tenantId, brandId, conversationId));
     }
 
     // ------------------------------------------------------- return to flow
@@ -307,7 +320,7 @@ public class ConversationInboxService {
                 .occurredAt(clock.instant())
                 .build());
 
-        return ConversationView.of(requireConversation(tenantId, brandId, conversationId));
+        return viewOf(requireConversation(tenantId, brandId, conversationId));
     }
 
     /** Where return-to-flow should land, and whether/where to reactivate the run — see {@link #returnToFlow}'s own doc. */
@@ -375,16 +388,43 @@ public class ConversationInboxService {
                 .occurredAt(clock.instant())
                 .build());
 
-        return ConversationView.of(requireConversation(tenantId, brandId, conversationId));
+        return viewOf(requireConversation(tenantId, brandId, conversationId));
     }
 
     // --------------------------------------------------------------- shared
+
+    private ConversationView viewOf(ConversationRepository.Row row) {
+        return ConversationView.of(row, messages.assistantHasSpokenIn(row.tenantId(), row.id()));
+    }
 
     private ConversationRepository.Row requireConversation(UUID tenantId, UUID brandId, UUID conversationId) {
         return conversations
                 .findById(tenantId, conversationId)
                 .filter(row -> row.brandId().equals(brandId))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such conversation"));
+    }
+
+    /**
+     * @return whether the conversation is being taken from the assistant alone (as opposed to from a flow run)
+     * @throws ApiException {@link ErrorCode#RESOURCE_CONFLICT} when nothing is answering this conversation
+     */
+    private boolean requireTakeable(ConversationRepository.Row conversation) {
+        if (conversation.state() == ConversationState.FLOW_ACTIVE) {
+            return false;
+        }
+        if (conversation.state() == ConversationState.IDLE
+                && messages.assistantHasSpokenIn(conversation.tenantId(), conversation.id())) {
+            return true;
+        }
+        throw new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Cannot takeover a conversation in state %s (needs FLOW_ACTIVE, or IDLE while the assistant is answering)"
+                        .formatted(conversation.state()),
+                Map.of(
+                        "actualState",
+                        conversation.state().name(),
+                        "requiredState",
+                        ConversationState.FLOW_ACTIVE.name()));
     }
 
     private static void requireState(
@@ -405,7 +445,11 @@ public class ConversationInboxService {
     }
 
     private static String reasonOrDefault(@Nullable String reason) {
-        return reason == null || reason.isBlank() ? NO_REASON_GIVEN : reason;
+        return reasonOrDefault(reason, NO_REASON_GIVEN);
+    }
+
+    private static String reasonOrDefault(@Nullable String reason, String fallback) {
+        return reason == null || reason.isBlank() ? fallback : reason;
     }
 
     private static ConversationChannelRef channelRef(ConversationRepository.Row conversation) {

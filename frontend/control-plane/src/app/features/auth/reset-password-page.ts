@@ -10,7 +10,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
-import { I18nService, Locale } from '../../core/i18n/i18n.service';
+import { DEFAULT_LOCALE, I18nService, Locale, isLocale } from '../../core/i18n/i18n.service';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { PasswordResetsApi, ResetInspection } from './password-resets-api';
 
@@ -428,9 +428,11 @@ function messageFor(failure: unknown): MessageKey {
   return 'resetPassword.failed';
 }
 
+/**
+ * The console language a reset link was written in. The platform answers with the registry's tag
+ * (`uz-Latn`, ADR 0149), which is what the catalogues are keyed by, so there is no conversion to do;
+ * a language this build has no catalogue for opens in the default.
+ */
 function localeFor(language: string): Locale {
-  if (language === 'uz') {
-    return 'uz-Latn';
-  }
-  return language === 'en' ? 'en' : 'ru';
+  return isLocale(language) ? language : DEFAULT_LOCALE;
 }

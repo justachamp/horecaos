@@ -47,4 +47,12 @@ public final class AutomationGuardKeys {
     public static String cart(UUID cartId) {
         return "CART:" + cartId;
     }
+
+    /**
+     * Once per order, ever: an order is late once, and apologising for it twice because a
+     * second sweep found it again is the failure the database guard exists to stop.
+     */
+    public static String order(UUID orderId) {
+        return "ORDER:" + orderId;
+    }
 }

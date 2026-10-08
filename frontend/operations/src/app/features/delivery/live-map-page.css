@@ -146,3 +146,8 @@
   padding: 4px 8px;
   border-top: 1px solid var(--q-hairline);
 }
+
+.live-map__hint {
+  margin: 4px 0 12px;
+  color: var(--q-ink-subtle);
+}

@@ -141,3 +141,15 @@ tr.void td {
 .ledgerNote {
   margin-top: 8px;
 }
+
+/* A figure or a number is read whole: the payer copies the invoice number into a transfer's purpose. */
+.invoicesTable .q-tnum,
+.topUpsTable .q-tnum {
+  white-space: nowrap;
+}
+
+/* A table cell holding buttons stays a table cell, which `.actions` (a flex row) does not. */
+.rowActions {
+  text-align: right;
+  white-space: nowrap;
+}

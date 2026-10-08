@@ -7,20 +7,47 @@ import { ru } from '../../core/i18n/messages.ru';
 import { AlertsIncidents } from './alerts-incidents';
 import { IncidentView, IncidentsApi } from './incidents-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const OPEN: IncidentView = {
-  id: 'inc-1', eventClass: 'CONTROL_BAND_ESCALATED', subjectType: 'CONTROL_BAND', subjectId: 'outbox.dead',
-  variables: { band: 'outbox.dead', value: '12' }, firstRaisedAt: '2026-09-10T08:00:00Z', lastRaisedAt: '2026-09-10T09:00:00Z',
-  occurrences: 3, status: 'OPEN', acknowledgedBy: null, acknowledgedAt: null, resolvedBy: null, resolvedAt: null, resolutionNote: null,
+  id: 'inc-1',
+  eventClass: 'CONTROL_BAND_ESCALATED',
+  subjectType: 'CONTROL_BAND',
+  subjectId: 'outbox.dead',
+  variables: { band: 'outbox.dead', value: '12' },
+  firstRaisedAt: '2026-09-10T08:00:00Z',
+  lastRaisedAt: '2026-09-10T09:00:00Z',
+  occurrences: 3,
+  status: 'OPEN',
+  acknowledgedBy: null,
+  acknowledgedAt: null,
+  resolvedBy: null,
+  resolvedAt: null,
+  resolutionNote: null,
 };
-const UNKNOWN_CLASS: IncidentView = { ...OPEN, id: 'inc-2', eventClass: 'SOMETHING_NEW', subjectId: 'x', variables: {} };
+const UNKNOWN_CLASS: IncidentView = {
+  ...OPEN,
+  id: 'inc-2',
+  eventClass: 'SOMETHING_NEW',
+  subjectId: 'x',
+  variables: {},
+};
 
 describe('AlertsIncidents', () => {
   let fixture: ComponentFixture<AlertsIncidents>;
-  let api: { list: ReturnType<typeof vi.fn>; acknowledge: ReturnType<typeof vi.fn>; resolve: ReturnType<typeof vi.fn> };
+  let api: {
+    list: ReturnType<typeof vi.fn>;
+    acknowledge: ReturnType<typeof vi.fn>;
+    resolve: ReturnType<typeof vi.fn>;
+  };
 
-  async function create(canManage = true, incidents: IncidentView[] = [OPEN, UNKNOWN_CLASS]): Promise<void> {
+  async function create(
+    canManage = true,
+    incidents: IncidentView[] = [OPEN, UNKNOWN_CLASS],
+  ): Promise<void> {
     api = {
       list: vi.fn().mockResolvedValue(incidents),
       acknowledge: vi.fn().mockResolvedValue(undefined),
@@ -33,7 +60,10 @@ describe('AlertsIncidents', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: IncidentsApi, useValue: api },
-        { provide: SessionContextService, useValue: { has: () => canManage, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => canManage, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(AlertsIncidents);

@@ -37,11 +37,17 @@ export class SandboxContractTests {
 
   /** Installations whose endpoint is a sandbox, which is what may be tried freely. */
   protected readonly sandboxInstallations = computed(() => {
-    const sandbox = new Set(this.environments().filter((e) => !e.production).map((e) => e.code));
+    const sandbox = new Set(
+      this.environments()
+        .filter((e) => !e.production)
+        .map((e) => e.code),
+    );
     return this.installations().filter((installation) => sandbox.has(installation.environmentCode));
   });
 
-  protected readonly sandboxEnvironments = computed(() => this.environments().filter((e) => !e.production));
+  protected readonly sandboxEnvironments = computed(() =>
+    this.environments().filter((e) => !e.production),
+  );
 
   constructor() {
     void this.load();
@@ -65,7 +71,9 @@ export class SandboxContractTests {
   /** What the last check here found, else what the installation last reported. */
   protected connection(installation: PlatformInstallationView): string {
     const here = this.results()[installation.id] as string | undefined;
-    return here ?? installation.lastConnectionStatus ?? this.i18n.t('installationsExplorer.neverChecked');
+    return (
+      here ?? installation.lastConnectionStatus ?? this.i18n.t('installationsExplorer.neverChecked')
+    );
   }
 
   protected async check(installation: PlatformInstallationView): Promise<void> {
@@ -81,7 +89,10 @@ export class SandboxContractTests {
         [installation.id]: this.i18n.t('installationsExplorer.check.result', { status }),
       }));
     } catch (error) {
-      this.results.update((current) => ({ ...current, [installation.id]: this.i18n.describe(error as ApiError) }));
+      this.results.update((current) => ({
+        ...current,
+        [installation.id]: this.i18n.describe(error as ApiError),
+      }));
     } finally {
       this.checking.set(null);
     }

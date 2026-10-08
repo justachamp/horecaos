@@ -38,6 +38,8 @@ export const wallboardRu: AreaMessages<typeof wallboardEn> = {
   'wallboardVdu.denied': 'Нет доступа к кухонной доске этой точки',
   'wallboardVdu.loading': 'Загрузка экрана выдачи',
   'wallboardVdu.empty': 'Сейчас ничего не готовится',
+  'wallboardVdu.previewNote':
+    'Предпросмотр настенного экрана для менеджера. Телевизор на кухне подключается в «Кухня → Устройства» как настенный экран и работает под собственным доступом, а не под вошедшим сотрудником.',
   'wallboardVdu.offline': 'Нет связи — показан последний загруженный экран',
   'wallboardVdu.stationFilter.label': 'Станция',
   'wallboardVdu.stationFilter.all': 'Все станции',

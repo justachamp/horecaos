@@ -10,7 +10,6 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.LocaleVocabulary;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedException;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.ProviderUnreachableException;
@@ -72,8 +72,6 @@ public class PasswordResetService {
      */
     public static final Duration REQUEST_COOLDOWN = Duration.ofMinutes(5);
 
-    public static final Set<String> LOCALES = Set.of("uz", "ru", "en");
-
     /**
      * Who the audit trail says asked for a reset.
      *
@@ -91,13 +89,16 @@ public class PasswordResetService {
     private final StaffSecurityAudit audit;
     private final TransactionTemplate transactions;
     private final Clock clock;
+    private final LocaleVocabulary locales;
 
     public PasswordResetService(
             JdbcPasswordResetStore store,
             StaffAccounts accounts,
             StaffSecurityAudit audit,
             TransactionTemplate transactions,
-            Clock clock) {
+            Clock clock,
+            LocaleVocabulary locales) {
+        this.locales = locales;
         this.store = store;
         this.accounts = accounts;
         this.audit = audit;
@@ -161,7 +162,7 @@ public class PasswordResetService {
             return;
         }
         Instant now = clock.instant();
-        String language = locale != null && LOCALES.contains(locale) ? locale : "ru";
+        String language = locales.message(locale);
         transactions.executeWithoutResult(status -> queue(subjectId.get(), console, language, correlationId, now));
     }
 

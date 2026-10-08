@@ -17,8 +17,10 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.PlatformLocale;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
-import uz.horecaos.platform.tenancy.domain.channel.ChannelPageLocale;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPageSlug;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPageVersion;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPageVersionSummary;
@@ -80,7 +82,7 @@ public class ChannelPageService {
     /**
      * Publishes the next version of one page.
      *
-     * @param contentsByLocale keyed by {@link ChannelPageLocale#tag()}; a
+     * @param contentsByLocale keyed by {@link PlatformLocale#tag()}; a
      *                         tenant may author fewer than all three
      *                         languages but must author at least one
      */
@@ -149,9 +151,9 @@ public class ChannelPageService {
         }
         Map<String, String> normalized = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : contentsByLocale.entrySet()) {
-            ChannelPageLocale locale = ChannelPageLocale.parse(entry.getKey())
+            PlatformLocale locale = PlatformLocales.parseActive(entry.getKey(), Tier.CONTENT)
                     .orElseThrow(() -> new IllegalArgumentException("\"" + entry.getKey()
-                            + "\" is not one of the supported locales " + ChannelPageLocale.tags()));
+                            + "\" is not one of the supported locales " + PlatformLocales.activeTags(Tier.CONTENT)));
             String body = entry.getValue() == null ? "" : entry.getValue().strip();
             if (body.isEmpty()) {
                 // An operator clearing a field drops that language from this

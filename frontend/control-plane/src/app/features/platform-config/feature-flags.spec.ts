@@ -7,7 +7,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { ConfigurationApi, FeatureFlagView } from './configuration-api';
 import { FeatureFlags } from './feature-flags';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const flag = (overrides: Partial<FeatureFlagView>): FeatureFlagView => ({
   code: 'feature.support_visits',
@@ -24,7 +27,10 @@ describe('FeatureFlags', () => {
   let api: { featureFlags: ReturnType<typeof vi.fn>; setValue: ReturnType<typeof vi.fn> };
 
   async function create(flags: FeatureFlagView[]): Promise<void> {
-    api = { featureFlags: vi.fn().mockResolvedValue(flags), setValue: vi.fn().mockResolvedValue({}) };
+    api = {
+      featureFlags: vi.fn().mockResolvedValue(flags),
+      setValue: vi.fn().mockResolvedValue({}),
+    };
     await TestBed.configureTestingModule({
       imports: [FeatureFlags],
       providers: [
@@ -66,7 +72,9 @@ describe('FeatureFlags', () => {
   }
 
   it('names a known flag in the operator’s words and says where it is on', async () => {
-    await create([flag({ tenants: [{ tenantId: 'tenant-1', tenantName: 'Oshxona', value: true, version: 0 }] })]);
+    await create([
+      flag({ tenants: [{ tenantId: 'tenant-1', tenantName: 'Oshxona', value: true, version: 0 }] }),
+    ]);
 
     const text = el('.flag').textContent ?? '';
     expect(text).toContain(ru['featureFlags.flag.supportVisits']);
@@ -91,7 +99,9 @@ describe('FeatureFlags', () => {
   });
 
   it('hands a tenant back to the setting for everyone by clearing its own', async () => {
-    await create([flag({ tenants: [{ tenantId: 'tenant-1', tenantName: 'Oshxona', value: true, version: 2 }] })]);
+    await create([
+      flag({ tenants: [{ tenantId: 'tenant-1', tenantName: 'Oshxona', value: true, version: 2 }] }),
+    ]);
 
     el<HTMLButtonElement>('.handBack').click();
     await settle();

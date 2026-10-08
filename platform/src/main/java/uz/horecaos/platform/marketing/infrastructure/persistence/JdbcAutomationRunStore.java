@@ -96,6 +96,23 @@ public class JdbcAutomationRunStore {
                 .update();
     }
 
+    /**
+     * A refusal with the sentence that explains it (ADR 0112): which rule, and the numbers it
+     * was applied with. The sentence names no contact value and no message body.
+     */
+    public void markRefused(UUID tenantId, UUID id, String refusalReason, @Nullable String detail) {
+        jdbc.sql("""
+                UPDATE marketing.automation_runs
+                   SET status = 'REFUSED', refusal_reason = :reason, refusal_detail = :detail
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .param("reason", refusalReason)
+                .param("detail", detail == null ? null : detail.length() > 500 ? detail.substring(0, 500) : detail)
+                .update();
+    }
+
     public void markCancelled(UUID tenantId, UUID id, String reason) {
         jdbc.sql("""
                 UPDATE marketing.automation_runs
@@ -111,7 +128,7 @@ public class JdbcAutomationRunStore {
     /** The rule's own recent firing history, newest first — the console's audit view. */
     public List<AutomationRunRow> recentByRule(UUID tenantId, UUID automationRuleId, int limit) {
         return jdbc.sql("""
-                SELECT id, customer_account_id, trigger_type, status, refusal_reason,
+                SELECT id, customer_account_id, trigger_type, status, refusal_reason, refusal_detail,
                        cancelled_reason, notification_id, fired_at
                   FROM marketing.automation_runs
                  WHERE tenant_id = :tenantId AND automation_rule_id = :ruleId
@@ -132,6 +149,7 @@ public class JdbcAutomationRunStore {
                 row.getString("trigger_type"),
                 row.getString("status"),
                 row.getString("refusal_reason"),
+                row.getString("refusal_detail"),
                 row.getString("cancelled_reason"),
                 row.getObject("notification_id", UUID.class),
                 row.getObject("fired_at", OffsetDateTime.class).toInstant());
@@ -147,6 +165,7 @@ public class JdbcAutomationRunStore {
             String triggerType,
             String status,
             @Nullable String refusalReason,
+            @Nullable String refusalDetail,
             @Nullable String cancelledReason,
             @Nullable UUID notificationId,
             Instant firedAt) {}

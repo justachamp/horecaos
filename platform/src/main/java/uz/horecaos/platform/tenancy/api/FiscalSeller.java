@@ -28,6 +28,10 @@ import org.jspecify.annotations.Nullable;
  *                          same cart at the same location under a re-registered
  *                          entity must not hash identically and price differently
  * @param effectiveUntil    null while this is the assignment in force
+ * @param registeredAddress the company's registered address as the tenant entered it, null when none
+ *                          was (ADR 0154: a paper slip prints the seller's address beside its name
+ *                          and number, and reads it here rather than from {@code tenant.legal_entities})
+ * @param contactPhone      the company's business number, null when none was entered -- never a person's
  */
 public record FiscalSeller(
         UUID legalEntityId,
@@ -41,7 +45,40 @@ public record FiscalSeller(
         UUID assignmentId,
         int assignmentVersion,
         LocalDate effectiveFrom,
-        @Nullable LocalDate effectiveUntil) {
+        @Nullable LocalDate effectiveUntil,
+        @Nullable String registeredAddress,
+        @Nullable String contactPhone) {
+
+    /** The seller as every reader before ADR 0154 built it: no address and no phone on record. */
+    public FiscalSeller(
+            UUID legalEntityId,
+            UUID tenantId,
+            String code,
+            String legalName,
+            String taxpayerNumber,
+            boolean vatRegistered,
+            UUID taxProfileId,
+            boolean active,
+            UUID assignmentId,
+            int assignmentVersion,
+            LocalDate effectiveFrom,
+            @Nullable LocalDate effectiveUntil) {
+        this(
+                legalEntityId,
+                tenantId,
+                code,
+                legalName,
+                taxpayerNumber,
+                vatRegistered,
+                taxProfileId,
+                active,
+                assignmentId,
+                assignmentVersion,
+                effectiveFrom,
+                effectiveUntil,
+                null,
+                null);
+    }
 
     public FiscalSeller {
         Objects.requireNonNull(legalEntityId, "A legal entity ID is required");

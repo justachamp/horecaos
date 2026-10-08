@@ -1,0 +1,50 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.q-address-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.q-address-picker__search {
+  display: grid;
+  gap: 4px;
+}
+
+.q-address-picker__attribution {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.q-address-picker__confirm {
+  justify-self: start;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--q-primary);
+  cursor: pointer;
+}
+
+.q-address-picker__parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14ch, 1fr));
+  gap: 8px 12px;
+}
+
+.q-address-picker__parts label {
+  display: grid;
+  gap: 2px;
+}
+
+.q-address-picker__parts input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.q-address-picker__landmark {
+  grid-column: 1 / -1;
+}

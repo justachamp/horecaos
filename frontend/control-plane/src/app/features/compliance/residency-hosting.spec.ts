@@ -8,7 +8,10 @@ import { ru } from '../../core/i18n/messages.ru';
 import { ResidencyApi, ResidencyView } from './residency-api';
 import { ResidencyHosting } from './residency-hosting';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const VIEW: ResidencyView = {
   hostingCountry: 'UZ',
@@ -17,7 +20,16 @@ const VIEW: ResidencyView = {
     { code: 'KZ', name: 'Kazakhstan', defaultCurrency: 'KZT', defaultTimezone: 'Asia/Almaty' },
   ],
   tenants: [
-    { tenantId: 'tenant-1', slug: 'non', displayName: 'Non uyi', status: 'ACTIVE', countryCode: 'UZ', businessType: 'BAKERY', defaultCurrency: 'UZS', defaultTimezone: 'Asia/Tashkent' },
+    {
+      tenantId: 'tenant-1',
+      slug: 'non',
+      displayName: 'Non uyi',
+      status: 'ACTIVE',
+      countryCode: 'UZ',
+      businessType: 'BAKERY',
+      defaultCurrency: 'UZS',
+      defaultTimezone: 'Asia/Tashkent',
+    },
   ],
 };
 
@@ -37,7 +49,10 @@ describe('ResidencyHosting', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: ResidencyApi, useValue: api },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ResidencyHosting);

@@ -41,6 +41,7 @@ import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * Catalog persistence (ADR 0016).
@@ -51,6 +52,14 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
  */
 @Repository
 public class JdbcCatalogStore {
+
+    /**
+     * The order a name falls back in when the wanted language has none: the registry's rank
+     * (ADR 0149), not a {@code CASE} spelled here. {@code catalog.translations} holds the catalog's
+     * own {@code uz}, which the registry ranks with {@code uz-Latn}; two of the four orderings this
+     * replaces ranked only the tag and so placed every Uzbek name last.
+     */
+    private static final String FALLBACK_ORDER = PlatformLocales.fallbackOrderSql("t.locale");
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
@@ -1605,9 +1614,9 @@ public class JdbcCatalogStore {
                 JOIN catalog.translations t
                     ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
                 WHERE v.tenant_id = :tenantId AND v.id = :variantId
-                ORDER BY CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz-Latn' THEN 1 WHEN 'en' THEN 2 ELSE 3 END
+                ORDER BY %s
                 LIMIT 1
-                """)
+                """.formatted(FALLBACK_ORDER))
                 .param("tenantId", tenantId)
                 .param("variantId", variantId)
                 .query(String.class)
@@ -1645,8 +1654,8 @@ public class JdbcCatalogStore {
                     ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
                 WHERE v.tenant_id = :tenantId AND v.id = ANY(:variantIds)
                 ORDER BY v.id,
-                         CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz-Latn' THEN 1 WHEN 'en' THEN 2 ELSE 3 END
-                """)
+                         %s
+                """.formatted(FALLBACK_ORDER))
                 .param("tenantId", tenantId)
                 .param("variantIds", variantIds.toArray(UUID[]::new))
                 .query((row, number) -> Map.entry(
@@ -2389,8 +2398,7 @@ public class JdbcCatalogStore {
                     FROM catalog.translations t
                     WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
                     ORDER BY (t.locale = :locale) DESC,
-                             CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz' THEN 1 WHEN 'uz-Latn' THEN 2
-                                           WHEN 'en' THEN 3 ELSE 4 END,
+                             %1$s,
                              t.locale
                     LIMIT 1
                 ) pt ON true
@@ -2399,8 +2407,7 @@ public class JdbcCatalogStore {
                     FROM catalog.translations t
                     WHERE t.entity_type = 'VARIANT' AND t.entity_id = v.id AND t.tenant_id = v.tenant_id
                     ORDER BY (t.locale = :locale) DESC,
-                             CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz' THEN 1 WHEN 'uz-Latn' THEN 2
-                                           WHEN 'en' THEN 3 ELSE 4 END,
+                             %1$s,
                              t.locale
                     LIMIT 1
                 ) vt ON true
@@ -2411,7 +2418,7 @@ public class JdbcCatalogStore {
                   AND lo.status = 'AVAILABLE' AND si.id IS NULL
                 ORDER BY COALESCE(pt.name, p.code), lo.variant_id
                 LIMIT :limit
-                """)
+                """.formatted(FALLBACK_ORDER))
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)

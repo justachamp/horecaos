@@ -38,6 +38,8 @@ export const wallboardEn = {
   'wallboardVdu.denied': 'No access to this location’s kitchen board',
   'wallboardVdu.loading': 'Loading the display board',
   'wallboardVdu.empty': 'Nothing in production right now',
+  'wallboardVdu.previewNote':
+    'A manager’s preview of a wall display. A TV in the kitchen is enrolled from Kitchen → Devices as a wall display and runs on its own access, not on a signed-in person.',
   'wallboardVdu.offline': 'Disconnected — showing the last board this screen saw',
   'wallboardVdu.stationFilter.label': 'Station',
   'wallboardVdu.stationFilter.all': 'All stations',

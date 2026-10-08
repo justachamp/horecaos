@@ -5,6 +5,7 @@ import { LocationScope, operationsPaths } from '../api/operations-paths';
 import { CurrentLocation } from '../auth/current-location';
 import { Capability, SessionCapabilities } from '../auth/session-capabilities';
 import { StaffTokenStore } from '../auth/staff-token-store';
+import { SseConnection } from './sse-connection';
 
 /**
  * What every operational screen may show about the accelerator, not about
@@ -76,12 +77,6 @@ const CHANNEL_CAPABILITY: Record<(typeof DEFAULT_CHANNELS)[number], Capability> 
   kitchen_board: 'KITCHEN_TICKET_READ',
 };
 
-const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_MAX_MS = 30_000;
-
-/** Past this many consecutive failures the connection state reads `unavailable` rather than `reconnecting` — a UI distinction only; retrying never stops. */
-const UNAVAILABLE_AFTER_FAILURES = 3;
-
 /**
  * The ADR 0045 push client, and the app's one connection to it (wave P08, row
  * `0.1f`).
@@ -111,22 +106,26 @@ const UNAVAILABLE_AFTER_FAILURES = 3;
  * themselves. Reconnects when the operator switches branch, because a
  * channel's scope key is the location this connection was opened at.
  *
- * **`Last-Event-Id` resync.** The server never replays — a reconnect with any
- * `Last-Event-Id` value at all answers with a `resync` frame meaning "your
- * whole scope may have changed while you were gone, re-read it", never with
- * the frames that were missed. This class tracks the last event id it saw and
- * sends it as the `Last-Event-Id` header on every reconnect, and turns that
- * `resync` event into a {@link RealtimeResyncFrame} every listener receives.
+ * **The transport is {@link SseConnection}'s, shared with `BrandOrderStream`.**
+ * This class decides *which* stream is wanted — the channel list, filtered by
+ * capability, at the operator's branch — and fans every frame out to its
+ * listeners; the connection does the rest, identically for both owners:
  *
- * **Jittered reconnect, and the server's own request for one respected.** A
- * deploy drops every stream on the box at once (ADR 0034 has no rolling
- * deploy), so reconnecting at a fixed delay would produce a herd against the
- * API the moment it comes back. A `closing` frame carries
- * `reconnectAfterSecondsMin`/`reconnectAfterSecondsMax` for exactly this, and
- * this class waits a random delay in that range when one arrives. Any other
- * disconnect (a network drop, a proxy timeout, the initial connect failing
- * outright) backs off exponentially from {@link RECONNECT_BASE_MS}, capped at
- * {@link RECONNECT_MAX_MS}, with its own jitter.
+ * - **`Last-Event-Id` resync.** The server never replays — a reconnect with any
+ *   `Last-Event-Id` value at all answers with a `resync` frame meaning "your
+ *   whole scope may have changed while you were gone, re-read it", never with
+ *   the frames that were missed. The connection tracks the last event id it
+ *   saw, sends it as the `Last-Event-Id` header on every reconnect, and turns
+ *   that `resync` event into a {@link RealtimeResyncFrame} every listener
+ *   receives.
+ * - **Jittered reconnect, and the server's own request for one respected.** A
+ *   deploy drops every stream on the box at once (ADR 0034 has no rolling
+ *   deploy), so reconnecting at a fixed delay would produce a herd against the
+ *   API the moment it comes back. A `closing` frame carries
+ *   `reconnectAfterSecondsMin`/`reconnectAfterSecondsMax` for exactly this, and
+ *   the connection waits a random delay in that range when one arrives. Any
+ *   other disconnect (a network drop, a proxy timeout, the initial connect
+ *   failing outright) backs off exponentially, capped, with its own jitter.
  *
  * **Degrade to poll — meaning nothing else changes.** {@link state} exists so
  * `X.34`'s `ConnectionState`/`LiveBadge` can tell an operator whether the
@@ -148,14 +147,16 @@ export class RealtimeClient {
 
   private readonly listeners = new Set<FrameListener>();
 
-  private generation = 0;
-  private lastEventId: string | null = null;
-  private consecutiveFailures = 0;
   private currentScopeKey: string | null = null;
-  private reconnectHandle: ReturnType<typeof setTimeout> | null = null;
-  private abortController: AbortController | null = null;
-  /** Set by a `closing` frame just before the socket actually ends, so the reconnect that follows honours the server's own jittered-delay request. */
-  private pendingClosingDelay: { readonly min: number; readonly max: number } | null = null;
+  /** The branch the open connection was made at; every reconnect of that connection asks for the same one. */
+  private streamScope: LocationScope | null = null;
+
+  private readonly connection = new SseConnection({
+    url: () => this.streamUrl(),
+    token: () => this.tokens.accessToken(),
+    onFrame: (frame) => this.emit(frame),
+    onState: (state) => this.stateSignal.set(state),
+  });
 
   /**
    * Wired up once, here, rather than behind an idempotent `start()` a
@@ -186,158 +187,13 @@ export class RealtimeClient {
   }
 
   private restart(scope: LocationScope | null): void {
-    this.generation += 1;
-    this.abortController?.abort();
-    this.abortController = null;
-    if (this.reconnectHandle !== null) {
-      clearTimeout(this.reconnectHandle);
-      this.reconnectHandle = null;
-    }
-    this.lastEventId = null;
-    this.consecutiveFailures = 0;
+    this.streamScope = scope;
     if (!scope) {
+      this.connection.close();
       this.stateSignal.set('connecting');
       return;
     }
-    this.stateSignal.set('connecting');
-    void this.connect(scope, this.generation);
-  }
-
-  private async connect(scope: LocationScope, generation: number): Promise<void> {
-    if (generation !== this.generation) {
-      return;
-    }
-    const token = this.tokens.accessToken();
-    if (token === null) {
-      this.scheduleReconnect(scope, generation);
-      return;
-    }
-
-    const controller = new AbortController();
-    this.abortController = controller;
-    const headers: Record<string, string> = {
-      Accept: 'text/event-stream',
-      Authorization: `Bearer ${token}`,
-    };
-    if (this.lastEventId !== null) {
-      headers['Last-Event-Id'] = this.lastEventId;
-    }
-
-    try {
-      const response = await fetch(this.streamUrl(scope), { headers, signal: controller.signal });
-      if (!response.ok || response.body === null) {
-        throw new Error(`realtime stream connect failed: ${response.status}`);
-      }
-      this.stateSignal.set('open');
-      this.consecutiveFailures = 0;
-      await this.pump(response.body, generation);
-      // A clean end of stream (the async timeout, or the server closing the
-      // socket) is a disconnect like any other — reconnect rather than
-      // treating "the response finished" as "nothing more will ever change".
-      this.scheduleReconnect(scope, generation);
-    } catch {
-      if (controller.signal.aborted) {
-        // This generation was superseded by a branch switch — the newer
-        // attempt owns reconnecting, not this one.
-        return;
-      }
-      this.scheduleReconnect(scope, generation);
-    }
-  }
-
-  private async pump(body: ReadableStream<Uint8Array>, generation: number): Promise<void> {
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (generation !== this.generation) {
-        await reader.cancel().catch(() => undefined);
-        return;
-      }
-      if (done) {
-        return;
-      }
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split('\n\n');
-      buffer = blocks.pop() ?? '';
-      for (const block of blocks) {
-        this.handleBlock(block);
-      }
-    }
-  }
-
-  private handleBlock(block: string): void {
-    let eventName = 'message';
-    let id: string | null = null;
-    const dataLines: string[] = [];
-    for (const line of block.split('\n')) {
-      if (line.startsWith(':')) {
-        continue; // a heartbeat comment — the open connection is proof enough of itself
-      }
-      if (line.startsWith('event:')) {
-        eventName = line.slice('event:'.length).trim();
-      } else if (line.startsWith('id:')) {
-        id = line.slice('id:'.length).trim();
-      } else if (line.startsWith('data:')) {
-        dataLines.push(line.slice('data:'.length).trim());
-      }
-    }
-    if (id !== null) {
-      this.lastEventId = id;
-    }
-    if (dataLines.length === 0 && eventName !== 'resync') {
-      return;
-    }
-    const data = dataLines.length > 0 ? parseJson(dataLines.join('\n')) : null;
-    this.dispatch(eventName, data);
-  }
-
-  private dispatch(eventName: string, data: Record<string, unknown> | null): void {
-    if (eventName === 'resync') {
-      this.emit({ kind: 'resync' });
-      return;
-    }
-    if (eventName === 'closing') {
-      // The next `pump()` read resolves with `done: true` or throws right
-      // after this arrives; `scheduleReconnect` reads these two fields off
-      // the frame the *next* time it is called for this generation, via the
-      // closing-frame delay captured here.
-      const min =
-        typeof data?.['reconnectAfterSecondsMin'] === 'number'
-          ? data['reconnectAfterSecondsMin']
-          : null;
-      const max =
-        typeof data?.['reconnectAfterSecondsMax'] === 'number'
-          ? data['reconnectAfterSecondsMax']
-          : null;
-      this.pendingClosingDelay = min !== null && max !== null ? { min, max } : null;
-      return;
-    }
-    if (eventName === 'signal' && data !== null) {
-      this.emit({
-        kind: 'signal',
-        channel: String(data['channel'] ?? ''),
-        scope: String(data['scope'] ?? ''),
-        resourceType: String(data['resourceType'] ?? ''),
-        resourceId:
-          data['resourceId'] === null || data['resourceId'] === undefined
-            ? null
-            : String(data['resourceId']),
-        version: typeof data['version'] === 'number' ? data['version'] : null,
-        occurredAt: String(data['occurredAt'] ?? ''),
-      });
-      return;
-    }
-    if (eventName === 'snapshot' && data !== null) {
-      this.emit({
-        kind: 'snapshot',
-        channel: String(data['channel'] ?? ''),
-        scope: String(data['scope'] ?? ''),
-        occurredAt: String(data['occurredAt'] ?? ''),
-        snapshot: data['snapshot'],
-      });
-    }
+    this.connection.open();
   }
 
   private emit(frame: RealtimeFrame): void {
@@ -346,28 +202,11 @@ export class RealtimeClient {
     }
   }
 
-  private scheduleReconnect(scope: LocationScope, generation: number): void {
-    if (generation !== this.generation) {
-      return;
+  private streamUrl(): string {
+    const scope = this.streamScope;
+    if (!scope) {
+      throw new Error('a realtime stream is only opened at a resolved location');
     }
-    this.consecutiveFailures += 1;
-    this.stateSignal.set(
-      this.consecutiveFailures >= UNAVAILABLE_AFTER_FAILURES ? 'unavailable' : 'reconnecting',
-    );
-
-    const closing = this.pendingClosingDelay;
-    this.pendingClosingDelay = null;
-    const delayMs = closing
-      ? randomBetween(closing.min * 1000, closing.max * 1000)
-      : jitteredBackoff(this.consecutiveFailures);
-
-    this.reconnectHandle = setTimeout(() => {
-      this.reconnectHandle = null;
-      void this.connect(scope, generation);
-    }, delayMs);
-  }
-
-  private streamUrl(scope: LocationScope): string {
     const params = new URLSearchParams();
     for (const channel of DEFAULT_CHANNELS) {
       if (this.capabilities.has(CHANNEL_CAPABILITY[channel])) {
@@ -380,28 +219,4 @@ export class RealtimeClient {
 
 function scopeKey(scope: LocationScope): string {
   return `${scope.tenantId}:${scope.brandId}:${scope.locationId}`;
-}
-
-/** Full-jitter exponential backoff: a random delay between 0 and the doubling ceiling, so a herd of clients does not retry in lockstep. */
-function jitteredBackoff(failureCount: number): number {
-  const ceiling = Math.min(RECONNECT_BASE_MS * 2 ** (failureCount - 1), RECONNECT_MAX_MS);
-  return Math.random() * ceiling;
-}
-
-function randomBetween(minMs: number, maxMs: number): number {
-  if (maxMs <= minMs) {
-    return minMs;
-  }
-  return minMs + Math.random() * (maxMs - minMs);
-}
-
-function parseJson(text: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
 }

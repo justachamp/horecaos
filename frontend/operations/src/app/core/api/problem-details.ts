@@ -74,6 +74,16 @@ export const ApiErrorCode = {
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   /** ADR 0062: a staff sign-in's credentials were correct but a required action stands in the way. */
   ACCOUNT_ACTION_REQUIRED: 'ACCOUNT_ACTION_REQUIRED',
+  /** ADR 0148: the password was right and the account holds a second factor; no code was sent. */
+  MFA_REQUIRED: 'MFA_REQUIRED',
+  /** ADR 0148: the password was right and the code was not. */
+  MFA_CODE_INVALID: 'MFA_CODE_INVALID',
+  /** ADR 0148: the account must hold a second factor and holds none; the answer carries an `enrolmentTicket`. */
+  MFA_ENROLMENT_REQUIRED: 'MFA_ENROLMENT_REQUIRED',
+  /** ADR 0148: an enrolment or a removal re-proves the current password, and this was not it. */
+  CURRENT_PASSWORD_INVALID: 'CURRENT_PASSWORD_INVALID',
+  /** ADR 0148: the code that confirms an enrolment or a removal did not verify. */
+  MFA_CONFIRMATION_CODE_INVALID: 'MFA_CONFIRMATION_CODE_INVALID',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   /** Not from the server. The request never reached it. */
   NETWORK_UNREACHABLE: 'NETWORK_UNREACHABLE',

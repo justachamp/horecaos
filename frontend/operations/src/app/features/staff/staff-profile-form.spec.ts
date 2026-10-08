@@ -149,4 +149,49 @@ describe('StaffProfileForm', () => {
 
     expect(cancelled).toHaveBeenCalledTimes(1);
   });
+
+  it('offers the interface languages the registry has live in the staff-UI tier, as tags, and no other', async () => {
+    const { fixture } = await setUp(staffMemberDetail({ uiLocale: 'uz-Latn' }), false);
+
+    const select = field(fixture, 'staff-profile-ui-locale') as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.value)).toEqual([
+      '',
+      'ru',
+      'uz-Latn',
+      'en',
+    ]);
+    expect(select.value).toBe('uz-Latn');
+  });
+
+  it('submits the tag for Uzbek, never the bare uz, and the ISO 639 code for what a person speaks', async () => {
+    const { fixture, submitted } = await setUp(
+      staffMemberDetail({ uiLocale: 'ru', spokenLanguages: ['ru'] }),
+      false,
+    );
+
+    type(fixture, 'staff-profile-ui-locale', 'uz-Latn');
+    (field(fixture, 'staff-profile-spoken-uz') as HTMLInputElement).click();
+    fixture.detectChanges();
+    save(fixture);
+
+    const draft: ProfileDraft = submitted.mock.calls[0][0];
+    expect(draft.uiLocale).toBe('uz-Latn');
+    expect(draft.spokenLanguages).toEqual(['ru', 'uz']);
+  });
+
+  it('offers a spoken language once per ISO 639 code, however many scripts the registry has it in', async () => {
+    const { fixture } = await setUp(staffMemberDetail(), false);
+
+    const offered = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-testid^="staff-profile-spoken-"]',
+      ) as NodeListOf<HTMLElement>,
+    ).map((box) => box.getAttribute('data-testid'));
+
+    expect(offered).toEqual([
+      'staff-profile-spoken-ru',
+      'staff-profile-spoken-uz',
+      'staff-profile-spoken-en',
+    ]);
+  });
 });

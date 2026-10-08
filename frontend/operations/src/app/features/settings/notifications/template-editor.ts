@@ -12,6 +12,8 @@ import {
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { InlineAlert } from '../../../shared/ui/inline-alert';
 import { PhoneFrame } from '../../../shared/ui/phone-frame';
@@ -23,10 +25,6 @@ import {
   WIRED_CHANNELS,
   WordingResponse,
 } from './notifications-api';
-
-/** The three locales ADR 0035 requires, in the tag shape the platform stores. */
-type LocaleTag = 'ru' | 'uz-Latn' | 'en';
-const LOCALE_TAGS: readonly LocaleTag[] = ['ru', 'uz-Latn', 'en'];
 
 /** Mirrors `TemplateRenderer`'s own placeholder grammar exactly: `{{name}}`, letters/digits/underscore. */
 const PLACEHOLDER = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
@@ -87,10 +85,29 @@ export class TemplateEditor {
   readonly saved = output<VersionResult>();
   readonly cancelled = output<void>();
 
-  protected readonly localeTags = LOCALE_TAGS;
-  protected readonly activeLocale = signal<LocaleTag>('ru');
-  protected readonly bodies = signal<Record<LocaleTag, string>>(emptyBodies());
-  protected readonly subjects = signal<Record<LocaleTag, string>>(emptyBodies());
+  private readonly registry = inject(PlatformLocales);
+  private readonly localeSet = inject(LocaleSet);
+
+  /**
+   * The languages a version of this template must be written in (ADR 0020 as ADR 0149 changed it):
+   * the ones **this brand serves** that the platform can send in, default first, not every language
+   * the platform has. The server counts the same set when it saves and when it activates, and
+   * refuses with the missing one named; the editor asks for exactly what it will be asked for.
+   * A brand that has chosen nothing serves the registry's content tier, as every editor reads it.
+   */
+  protected readonly localeTags = computed<readonly string[]>(() => {
+    const sendable = new Set(this.registry.active('MESSAGES'));
+    const served = this.localeSet.locales().filter((tag) => sendable.has(tag));
+    return served.length > 0 ? served : [this.registry.fallback()];
+  });
+  private readonly chosenLocale = signal<string | null>(null);
+  protected readonly activeLocale = computed<string>(() => {
+    const tags = this.localeTags();
+    const chosen = this.chosenLocale();
+    return chosen !== null && tags.includes(chosen) ? chosen : tags[0];
+  });
+  protected readonly bodies = signal<Readonly<Record<string, string>>>({});
+  protected readonly subjects = signal<Readonly<Record<string, string>>>({});
   protected readonly hasSubject = computed(() => this.channel() === 'EMAIL');
   protected readonly isWired = computed(() => WIRED_CHANNELS.has(this.channel()));
 
@@ -106,14 +123,25 @@ export class TemplateEditor {
   protected readonly error = signal<string | null>(null);
   protected readonly result = signal<VersionResult | null>(null);
 
-  protected readonly preview = computed(() => renderPreview(this.bodies()[this.activeLocale()]));
+  protected readonly preview = computed(() => renderPreview(this.bodyOf(this.activeLocale())));
 
   protected readonly canSave = computed(
-    () => !this.submitting() && LOCALE_TAGS.every((tag) => this.bodies()[tag].trim().length > 0),
+    () =>
+      !this.submitting() && this.localeTags().every((tag) => this.bodyOf(tag).trim().length > 0),
   );
   protected readonly anyBodyStarted = computed(() =>
-    LOCALE_TAGS.some((tag) => this.bodies()[tag].trim().length > 0),
+    this.localeTags().some((tag) => this.bodyOf(tag).trim().length > 0),
   );
+
+  /** The wording typed (or prefilled) for a language, empty when there is none. */
+  protected bodyOf(tag: string): string {
+    return this.bodies()[tag] ?? '';
+  }
+
+  /** The subject typed (or prefilled) for a language, empty when there is none. */
+  protected subjectOf(tag: string): string {
+    return this.subjects()[tag] ?? '';
+  }
 
   /**
    * Guards the two constructor effects below against re-running: both read a
@@ -128,6 +156,7 @@ export class TemplateEditor {
   private catalogueRequested = false;
 
   constructor() {
+    void this.localeSet.ensureLoaded();
     effect(() => {
       if (this.prefillApplied) {
         return;
@@ -137,13 +166,13 @@ export class TemplateEditor {
         return;
       }
       this.prefillApplied = true;
-      const bodies = emptyBodies();
-      const subjects = emptyBodies();
+      // Every wording the version carries, including a language the brand does not serve today:
+      // the server keeps an extra wording, and dropping it here would lose it on the next save.
+      const bodies: Record<string, string> = {};
+      const subjects: Record<string, string> = {};
       for (const row of prefill) {
-        if (isLocaleTag(row.locale)) {
-          bodies[row.locale] = row.body;
-          subjects[row.locale] = row.subject ?? '';
-        }
+        bodies[row.locale] = row.body;
+        subjects[row.locale] = row.subject ?? '';
       }
       this.bodies.set(bodies);
       this.subjects.set(subjects);
@@ -162,22 +191,22 @@ export class TemplateEditor {
     });
   }
 
-  protected selectLocale(tag: LocaleTag): void {
-    this.activeLocale.set(tag);
+  protected selectLocale(tag: string): void {
+    this.chosenLocale.set(tag);
   }
 
-  protected setBody(tag: LocaleTag, value: string): void {
+  protected setBody(tag: string, value: string): void {
     this.bodies.update((current) => ({ ...current, [tag]: value }));
   }
 
-  protected setSubject(tag: LocaleTag, value: string): void {
+  protected setSubject(tag: string, value: string): void {
     this.subjects.update((current) => ({ ...current, [tag]: value }));
   }
 
   /** Appends the placeholder to the active locale's own body — see the class doc for why nothing else is needed. */
   protected insertVariable(name: string): void {
     const tag = this.activeLocale();
-    const current = this.bodies()[tag];
+    const current = this.bodyOf(tag);
     const separator = current.length === 0 || current.endsWith(' ') ? '' : ' ';
     this.setBody(tag, `${current}${separator}{{${name}}}`);
   }
@@ -192,12 +221,20 @@ export class TemplateEditor {
       const bodies = this.bodies();
       const subjects = this.subjects();
       const schema: Record<string, string> = {};
-      for (const tag of LOCALE_TAGS) {
-        for (const name of variablesUsedIn(bodies[tag])) {
+      // What is sent: every language the brand serves (all of them required), and any other the
+      // version already carries text in, which the server keeps rather than refuses.
+      const sent = [
+        ...this.localeTags(),
+        ...Object.keys(bodies).filter(
+          (tag) => !this.localeTags().includes(tag) && (bodies[tag] ?? '').trim().length > 0,
+        ),
+      ];
+      for (const tag of sent) {
+        for (const name of variablesUsedIn(bodies[tag] ?? '')) {
           schema[name] = 'string';
         }
         if (this.hasSubject()) {
-          for (const name of variablesUsedIn(subjects[tag])) {
+          for (const name of variablesUsedIn(subjects[tag] ?? '')) {
             schema[name] = 'string';
           }
         }
@@ -205,11 +242,11 @@ export class TemplateEditor {
 
       const outcome = await this.api.addVersion(this.scope(), this.templateId(), {
         wordings: Object.fromEntries(
-          LOCALE_TAGS.map((tag) => [
+          sent.map((tag) => [
             tag,
-            this.hasSubject() && subjects[tag].trim().length > 0
-              ? { subject: subjects[tag].trim(), body: bodies[tag] }
-              : { body: bodies[tag] },
+            this.hasSubject() && (subjects[tag] ?? '').trim().length > 0
+              ? { subject: (subjects[tag] ?? '').trim(), body: bodies[tag] ?? '' }
+              : { body: bodies[tag] ?? '' },
           ]),
         ),
         variablesSchema: schema,
@@ -242,12 +279,4 @@ export class TemplateEditor {
     }
     return this.i18n.t('error.unknown.noReference');
   }
-}
-
-function emptyBodies(): Record<LocaleTag, string> {
-  return { ru: '', 'uz-Latn': '', en: '' };
-}
-
-function isLocaleTag(value: string): value is LocaleTag {
-  return (LOCALE_TAGS as readonly string[]).includes(value);
 }

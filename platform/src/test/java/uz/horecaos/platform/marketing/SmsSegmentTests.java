@@ -6,9 +6,9 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.marketing.api.SmsSegments;
 import uz.horecaos.platform.marketing.application.CampaignCostEstimator;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
-import uz.horecaos.platform.marketing.domain.SmsSegments;
 
 /**
  * ADR 0044's cost model: segments per locale, not recipients.

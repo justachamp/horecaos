@@ -239,3 +239,8 @@
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
 }
+
+.recipients__hint {
+  margin: 8px 0 0;
+  color: var(--q-ink-muted);
+}

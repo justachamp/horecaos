@@ -2,41 +2,61 @@
   <section class="main">
     <header class="main__head">
       <h1 class="q-subhead">{{ 'marketing.campaigns.title' | t }}</h1>
-      <nav class="main__subnav" [attr.aria-label]="'marketing.campaigns.tab.campaigns' | t">
-        <button
-          type="button"
-          class="main__subnav-item"
-          [class.main__subnav-item--active]="view() === 'campaigns'"
-          (click)="switchView('campaigns')"
-        >
-          {{ 'marketing.campaigns.tab.campaigns' | t }}
-        </button>
-        <button
-          type="button"
-          class="main__subnav-item"
-          [class.main__subnav-item--active]="view() === 'audiences'"
-          (click)="switchView('audiences')"
-        >
-          {{ 'marketing.campaigns.tab.audiences' | t }}
-        </button>
-        <button
-          type="button"
-          class="main__subnav-item"
-          [class.main__subnav-item--active]="view() === 'suppressions'"
-          (click)="switchView('suppressions')"
-        >
-          {{ 'marketing.campaigns.tab.suppressions' | t }}
-        </button>
-        <button
-          type="button"
-          class="main__subnav-item"
-          data-testid="tab-courier-broadcasts"
-          [class.main__subnav-item--active]="view() === 'courierBroadcasts'"
-          (click)="switchView('courierBroadcasts')"
-        >
-          {{ 'marketing.courierBroadcasts.title' | t }}
-        </button>
-      </nav>
+      @if (!scenarioEditing()) {
+        <nav class="main__subnav" [attr.aria-label]="'marketing.campaigns.tab.campaigns' | t">
+          <button
+            type="button"
+            class="main__subnav-item"
+            [class.main__subnav-item--active]="view() === 'campaigns'"
+            (click)="switchView('campaigns')"
+          >
+            {{ 'marketing.campaigns.tab.campaigns' | t }}
+          </button>
+          <button
+            type="button"
+            class="main__subnav-item"
+            [class.main__subnav-item--active]="view() === 'audiences'"
+            (click)="switchView('audiences')"
+          >
+            {{ 'marketing.campaigns.tab.audiences' | t }}
+          </button>
+          <button
+            type="button"
+            class="main__subnav-item"
+            [class.main__subnav-item--active]="view() === 'suppressions'"
+            (click)="switchView('suppressions')"
+          >
+            {{ 'marketing.campaigns.tab.suppressions' | t }}
+          </button>
+          <button
+            type="button"
+            class="main__subnav-item"
+            data-testid="tab-offers"
+            [class.main__subnav-item--active]="view() === 'offers'"
+            (click)="switchView('offers')"
+          >
+            {{ 'marketing.campaigns.tab.offers' | t }}
+          </button>
+          <button
+            type="button"
+            class="main__subnav-item"
+            data-testid="tab-contact-policy"
+            [class.main__subnav-item--active]="view() === 'contactPolicy'"
+            (click)="switchView('contactPolicy')"
+          >
+            {{ 'marketing.campaigns.tab.contactPolicy' | t }}
+          </button>
+          <button
+            type="button"
+            class="main__subnav-item"
+            data-testid="tab-courier-broadcasts"
+            [class.main__subnav-item--active]="view() === 'courierBroadcasts'"
+            (click)="switchView('courierBroadcasts')"
+          >
+            {{ 'marketing.courierBroadcasts.title' | t }}
+          </button>
+        </nav>
+      }
     </header>
 
     <div class="main__body">
@@ -57,260 +77,283 @@
           </div>
         }
 
-        @switch (view()) {
-          @case ('campaigns') {
-            <div class="section-toolbar">
-              <button type="button" (click)="openCreateCampaign()">
-                {{ 'marketing.campaigns.create.action' | t }}
-              </button>
-            </div>
-            <table class="campaigns__table">
-              <thead>
-                <tr>
-                  <th>{{ 'marketing.campaigns.column.name' | t }}</th>
-                  <th>{{ 'marketing.campaigns.column.channel' | t }}</th>
-                  <th>{{ 'marketing.campaigns.column.status' | t }}</th>
-                  <th>{{ 'marketing.campaigns.column.recipients' | t }}</th>
-                  <th>{{ 'marketing.campaigns.column.cost' | t }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (campaign of campaigns(); track campaign.campaignId) {
-                  <tr
-                    class="row-clickable"
-                    tabindex="0"
-                    data-testid="campaign-row"
-                    (click)="openCampaign(campaign)"
-                    (keydown.enter)="openCampaign(campaign)"
-                  >
-                    <td>
-                      {{ campaign.name }}
-                      @if (fourEyesHint(campaign); as hint) {
-                        <div class="q-caption row-hint">{{ hint | t }}</div>
-                      }
-                      @if (isHaltedScheduledSend(campaign)) {
-                        <div class="q-caption row-hint" data-testid="campaign-row-halted-hint">
-                          {{ 'marketing.campaigns.list.haltedScheduledSend' | t }}
+        @if (scenarioEditing(); as editing) {
+          <q-scenario-editor
+            [campaignId]="editing.campaignId"
+            [audiences]="audiences()"
+            [channels]="channels()"
+            [templates]="templates()"
+            (saved)="onScenarioSaved($event)"
+            (cancelled)="closeScenarioEditor()"
+          />
+        } @else {
+          @switch (view()) {
+            @case ('campaigns') {
+              <div class="section-toolbar">
+                <button type="button" data-testid="new-scenario" (click)="openNewScenario()">
+                  {{ 'marketing.campaigns.create.scenario' | t }}
+                </button>
+                <button type="button" (click)="openCreateCampaign()">
+                  {{ 'marketing.campaigns.create.action' | t }}
+                </button>
+              </div>
+              <table class="campaigns__table">
+                <thead>
+                  <tr>
+                    <th>{{ 'marketing.campaigns.column.name' | t }}</th>
+                    <th>{{ 'marketing.campaigns.column.channel' | t }}</th>
+                    <th>{{ 'marketing.campaigns.column.status' | t }}</th>
+                    <th>{{ 'marketing.campaigns.column.recipients' | t }}</th>
+                    <th>{{ 'marketing.campaigns.column.cost' | t }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (campaign of campaigns(); track campaign.campaignId) {
+                    <tr
+                      class="row-clickable"
+                      tabindex="0"
+                      data-testid="campaign-row"
+                      (click)="openCampaign(campaign)"
+                      (keydown.enter)="openCampaign(campaign)"
+                    >
+                      <td>
+                        {{ campaign.name }}
+                        <div class="q-caption row-kind" data-testid="campaign-row-kind">
+                          {{ kindLabelKey(campaign.kind) | t }}
                         </div>
-                      }
-                    </td>
-                    <td>{{ channelLabelKey(campaign.channel) | t }}</td>
-                    <td>
-                      <span class="status-badge">{{ statusLabelKey(campaign.status) | t }}</span>
-                    </td>
-                    <td class="q-tnum">{{ campaign.estimatedRecipients ?? '—' }}</td>
-                    <td class="q-tnum">
-                      @if (
-                        campaign.estimatedCostLowMinor !== null &&
-                        campaign.estimatedCostHighMinor !== null
-                      ) {
-                        {{
-                          costRange(
-                            campaign,
-                            campaign.estimatedCostLowMinor,
-                            campaign.estimatedCostHighMinor
-                          )
-                        }}
-                      } @else {
-                        —
-                      }
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="5">
-                      <p class="q-body-sm" data-testid="campaigns-empty">
-                        {{ 'marketing.campaigns.empty' | t }}
-                      </p>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          }
-          @case ('audiences') {
-            <div class="section-toolbar">
-              <button type="button" (click)="openCreateAudience()">
-                {{ 'marketing.audiences.create.action' | t }}
-              </button>
-            </div>
-            <table class="campaigns__table">
-              <thead>
-                <tr>
-                  <th>{{ 'marketing.audiences.column.name' | t }}</th>
-                  <th>{{ 'marketing.audiences.column.description' | t }}</th>
-                  <th>{{ 'marketing.audiences.column.status' | t }}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (audience of audiences(); track audience.audienceId) {
-                  <tr
-                    class="row-clickable"
-                    tabindex="0"
-                    data-testid="audience-row"
-                    (click)="openAudienceDetail(audience)"
-                    (keydown.enter)="openAudienceDetail(audience)"
-                  >
-                    <td>{{ audience.name }}</td>
-                    <td>{{ audience.description ?? '—' }}</td>
-                    <td>{{ audience.status }}</td>
-                    <td>
-                      <button
-                        type="button"
-                        data-testid="audience-view"
-                        (click)="$event.stopPropagation(); openAudienceDetail(audience)"
-                      >
-                        {{ 'marketing.audiences.detail.view' | t }}
-                      </button>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="4">
-                      <p class="q-body-sm" data-testid="audiences-empty">
-                        {{ 'marketing.audiences.empty' | t }}
-                      </p>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          }
-          @case ('suppressions') {
-            <div class="section-toolbar">
-              <button
-                type="button"
-                data-testid="record-suppression-action"
-                (click)="openRecordSuppression()"
-              >
-                {{ 'marketing.suppressions.record.action' | t }}
-              </button>
-              <label class="q-body-sm">
-                <input
-                  type="checkbox"
-                  [checked]="suppressionsActiveOnly()"
-                  (change)="toggleSuppressionsActiveOnly()"
-                />
-                {{ 'marketing.suppressions.activeOnlyToggle' | t }}
-              </label>
-            </div>
-            @if (suppressionsError(); as error) {
-              <div class="error-band" role="alert">
-                <span class="q-body-sm">{{ error }}</span>
-              </div>
-            }
-            @if (suppressionsLoading()) {
-              <p class="q-body-sm">{{ 'marketing.campaigns.loading' | t }}</p>
-            } @else {
-              <table class="campaigns__table">
-                <thead>
-                  <tr>
-                    <th>{{ 'marketing.suppressions.column.channel' | t }}</th>
-                    <th>{{ 'marketing.suppressions.column.reason' | t }}</th>
-                    <th>{{ 'marketing.suppressions.column.appliedBy' | t }}</th>
-                    <th>{{ 'marketing.suppressions.column.statedReason' | t }}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (suppression of suppressions(); track suppression.suppressionId) {
-                    <tr data-testid="suppression-row">
-                      <td>{{ suppression.channel ?? '—' }}</td>
-                      <td>{{ suppression.reason }}</td>
-                      <td>{{ suppression.appliedByType }}</td>
-                      <td>{{ suppression.statedReason ?? '—' }}</td>
-                      <td>
-                        @if (suppression.liftedAt === null) {
-                          <button type="button" (click)="openLift(suppression)">
-                            {{ 'marketing.suppressions.lift.action' | t }}
-                          </button>
+                        @if (fourEyesHint(campaign); as hint) {
+                          <div class="q-caption row-hint">{{ hint | t }}</div>
                         }
-                      </td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="5">
-                        <p class="q-body-sm" data-testid="suppressions-empty">
-                          {{ 'marketing.suppressions.empty' | t }}
-                        </p>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            }
-          }
-          @case ('courierBroadcasts') {
-            <p class="q-body-sm">{{ 'marketing.courierBroadcasts.intro' | t }}</p>
-            <div class="section-toolbar">
-              <button type="button" (click)="openCreateBroadcast()">
-                {{ 'marketing.courierBroadcasts.create.action' | t }}
-              </button>
-            </div>
-            @if (courierBroadcastsError(); as error) {
-              <div class="error-band" role="alert">
-                <span class="q-body-sm">{{ error }}</span>
-              </div>
-            }
-            @if (courierBroadcastsLoading()) {
-              <p class="q-body-sm">{{ 'marketing.courierBroadcasts.loading' | t }}</p>
-            } @else {
-              <table class="campaigns__table">
-                <thead>
-                  <tr>
-                    <th>{{ 'marketing.courierBroadcasts.column.target' | t }}</th>
-                    <th>{{ 'marketing.courierBroadcasts.column.message' | t }}</th>
-                    <th>{{ 'marketing.courierBroadcasts.column.status' | t }}</th>
-                    <th>{{ 'marketing.courierBroadcasts.column.recipients' | t }}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (broadcast of courierBroadcasts(); track broadcast.broadcastId) {
-                    <tr data-testid="courier-broadcast-row">
-                      <td>
-                        {{ broadcastTargetKindLabelKey(broadcast.targetKind) | t }}
-                      </td>
-                      <td>{{ broadcast.message }}</td>
-                      <td>
-                        <span class="status-badge">{{
-                          broadcastStatusLabelKey(broadcast.status) | t
-                        }}</span>
-                        @if (broadcast.refusalReason) {
-                          <div class="q-caption row-hint">
-                            {{
-                              'marketing.courierBroadcasts.refusalReason'
-                                | t: { reason: broadcast.refusalReason }
-                            }}
+                        @if (isHaltedScheduledSend(campaign)) {
+                          <div class="q-caption row-hint" data-testid="campaign-row-halted-hint">
+                            {{ 'marketing.campaigns.list.haltedScheduledSend' | t }}
                           </div>
                         }
                       </td>
-                      <td class="q-tnum">{{ broadcast.recipientCount }}</td>
+                      <td>{{ channelLabelKey(campaign.channel) | t }}</td>
                       <td>
-                        @if (broadcast.status === 'DRAFT') {
-                          <button
-                            type="button"
-                            data-testid="courier-broadcast-send"
-                            [disabled]="sendingBroadcastId() === broadcast.broadcastId"
-                            (click)="sendBroadcast(broadcast)"
-                          >
-                            {{ 'marketing.courierBroadcasts.action.send' | t }}
-                          </button>
+                        <span class="status-badge">{{ statusLabelKey(campaign.status) | t }}</span>
+                      </td>
+                      <td class="q-tnum">{{ campaign.estimatedRecipients ?? '—' }}</td>
+                      <td class="q-tnum">
+                        @if (
+                          campaign.estimatedCostLowMinor !== null &&
+                          campaign.estimatedCostHighMinor !== null
+                        ) {
+                          {{
+                            costRange(
+                              campaign,
+                              campaign.estimatedCostLowMinor,
+                              campaign.estimatedCostHighMinor
+                            )
+                          }}
+                        } @else {
+                          —
                         }
                       </td>
                     </tr>
                   } @empty {
                     <tr>
                       <td colspan="5">
-                        <p class="q-body-sm" data-testid="courier-broadcasts-empty">
-                          {{ 'marketing.courierBroadcasts.empty' | t }}
+                        <p class="q-body-sm" data-testid="campaigns-empty">
+                          {{ 'marketing.campaigns.empty' | t }}
                         </p>
                       </td>
                     </tr>
                   }
                 </tbody>
               </table>
+            }
+            @case ('audiences') {
+              <div class="section-toolbar">
+                <button type="button" (click)="openCreateAudience()">
+                  {{ 'marketing.audiences.create.action' | t }}
+                </button>
+              </div>
+              <table class="campaigns__table">
+                <thead>
+                  <tr>
+                    <th>{{ 'marketing.audiences.column.name' | t }}</th>
+                    <th>{{ 'marketing.audiences.column.description' | t }}</th>
+                    <th>{{ 'marketing.audiences.column.status' | t }}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (audience of audiences(); track audience.audienceId) {
+                    <tr
+                      class="row-clickable"
+                      tabindex="0"
+                      data-testid="audience-row"
+                      (click)="openAudienceDetail(audience)"
+                      (keydown.enter)="openAudienceDetail(audience)"
+                    >
+                      <td>{{ audience.name }}</td>
+                      <td>{{ audience.description ?? '—' }}</td>
+                      <td>{{ audience.status }}</td>
+                      <td>
+                        <button
+                          type="button"
+                          data-testid="audience-view"
+                          (click)="$event.stopPropagation(); openAudienceDetail(audience)"
+                        >
+                          {{ 'marketing.audiences.detail.view' | t }}
+                        </button>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="4">
+                        <p class="q-body-sm" data-testid="audiences-empty">
+                          {{ 'marketing.audiences.empty' | t }}
+                        </p>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+            @case ('offers') {
+              <q-offers-panel />
+            }
+            @case ('contactPolicy') {
+              <q-contact-policy-panel />
+            }
+            @case ('suppressions') {
+              <div class="section-toolbar">
+                <button
+                  type="button"
+                  data-testid="record-suppression-action"
+                  (click)="openRecordSuppression()"
+                >
+                  {{ 'marketing.suppressions.record.action' | t }}
+                </button>
+                <label class="q-body-sm">
+                  <input
+                    type="checkbox"
+                    [checked]="suppressionsActiveOnly()"
+                    (change)="toggleSuppressionsActiveOnly()"
+                  />
+                  {{ 'marketing.suppressions.activeOnlyToggle' | t }}
+                </label>
+              </div>
+              @if (suppressionsError(); as error) {
+                <div class="error-band" role="alert">
+                  <span class="q-body-sm">{{ error }}</span>
+                </div>
+              }
+              @if (suppressionsLoading()) {
+                <p class="q-body-sm">{{ 'marketing.campaigns.loading' | t }}</p>
+              } @else {
+                <table class="campaigns__table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'marketing.suppressions.column.channel' | t }}</th>
+                      <th>{{ 'marketing.suppressions.column.reason' | t }}</th>
+                      <th>{{ 'marketing.suppressions.column.appliedBy' | t }}</th>
+                      <th>{{ 'marketing.suppressions.column.statedReason' | t }}</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (suppression of suppressions(); track suppression.suppressionId) {
+                      <tr data-testid="suppression-row">
+                        <td>{{ suppression.channel ?? '—' }}</td>
+                        <td>{{ suppression.reason }}</td>
+                        <td>{{ suppression.appliedByType }}</td>
+                        <td>{{ suppression.statedReason ?? '—' }}</td>
+                        <td>
+                          @if (suppression.liftedAt === null) {
+                            <button type="button" (click)="openLift(suppression)">
+                              {{ 'marketing.suppressions.lift.action' | t }}
+                            </button>
+                          }
+                        </td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="5">
+                          <p class="q-body-sm" data-testid="suppressions-empty">
+                            {{ 'marketing.suppressions.empty' | t }}
+                          </p>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            }
+            @case ('courierBroadcasts') {
+              <p class="q-body-sm">{{ 'marketing.courierBroadcasts.intro' | t }}</p>
+              <div class="section-toolbar">
+                <button type="button" (click)="openCreateBroadcast()">
+                  {{ 'marketing.courierBroadcasts.create.action' | t }}
+                </button>
+              </div>
+              @if (courierBroadcastsError(); as error) {
+                <div class="error-band" role="alert">
+                  <span class="q-body-sm">{{ error }}</span>
+                </div>
+              }
+              @if (courierBroadcastsLoading()) {
+                <p class="q-body-sm">{{ 'marketing.courierBroadcasts.loading' | t }}</p>
+              } @else {
+                <table class="campaigns__table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'marketing.courierBroadcasts.column.target' | t }}</th>
+                      <th>{{ 'marketing.courierBroadcasts.column.message' | t }}</th>
+                      <th>{{ 'marketing.courierBroadcasts.column.status' | t }}</th>
+                      <th>{{ 'marketing.courierBroadcasts.column.recipients' | t }}</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (broadcast of courierBroadcasts(); track broadcast.broadcastId) {
+                      <tr data-testid="courier-broadcast-row">
+                        <td>
+                          {{ broadcastTargetKindLabelKey(broadcast.targetKind) | t }}
+                        </td>
+                        <td>{{ broadcast.message }}</td>
+                        <td>
+                          <span class="status-badge">{{
+                            broadcastStatusLabelKey(broadcast.status) | t
+                          }}</span>
+                          @if (broadcast.refusalReason) {
+                            <div class="q-caption row-hint">
+                              {{
+                                'marketing.courierBroadcasts.refusalReason'
+                                  | t: { reason: broadcast.refusalReason }
+                              }}
+                            </div>
+                          }
+                        </td>
+                        <td class="q-tnum">{{ broadcast.recipientCount }}</td>
+                        <td>
+                          @if (broadcast.status === 'DRAFT') {
+                            <button
+                              type="button"
+                              data-testid="courier-broadcast-send"
+                              [disabled]="sendingBroadcastId() === broadcast.broadcastId"
+                              (click)="sendBroadcast(broadcast)"
+                            >
+                              {{ 'marketing.courierBroadcasts.action.send' | t }}
+                            </button>
+                          }
+                        </td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="5">
+                          <p class="q-body-sm" data-testid="courier-broadcasts-empty">
+                            {{ 'marketing.courierBroadcasts.empty' | t }}
+                          </p>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
             }
           }
         }
@@ -363,17 +406,21 @@
           "
         >
           @for (channel of channels(); track channel.channel) {
-            <option [value]="channel.channel" [disabled]="!channel.isWired">
+            <option
+              [value]="channel.channel"
+              [selected]="channel.channel === newCampaignChannel()"
+              [disabled]="!channel.isWired"
+            >
               {{ channelLabelKey(channel.channel) | t }}
               @if (!channel.isWired) {
-                {{ 'marketing.campaigns.create.channel.unwiredSuffix' | t }}
+                {{ 'marketing.wiring.notConnectedSuffix' | t }}
               }
             </option>
           }
         </select>
-        @if (!channelIsWired()) {
+        @if (selectedChannelSentence(); as sentence) {
           <p class="q-caption field__hint" data-testid="channel-unwired-hint">
-            {{ 'marketing.campaigns.create.channel.unwiredHint' | t }}
+            {{ sentence.key | t: sentence.values }}
           </p>
         }
       </label>

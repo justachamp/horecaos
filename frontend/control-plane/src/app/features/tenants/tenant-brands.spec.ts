@@ -127,7 +127,9 @@ describe('TenantBrands', () => {
     expect(input('code').value).toBe('OSHXONA');
     type('displayName', 'Oshxona No.1');
     await settle();
-    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
     expect(api.reviseBrand).toHaveBeenCalledWith(
@@ -204,7 +206,10 @@ describe('TenantBrands', () => {
       }),
     );
 
-    buttons(ru['tenantBrands.delete.action'], fixture.nativeElement.querySelector('.table'))[0].click();
+    buttons(
+      ru['tenantBrands.delete.action'],
+      fixture.nativeElement.querySelector('.table'),
+    )[0].click();
     await settle();
     buttons(ru['tenantBrands.delete.confirm'])[0].click();
     await settle();
@@ -217,7 +222,9 @@ describe('TenantBrands', () => {
 
   it('records a location’s place, sending a point as an operator’s pin', async () => {
     await createWith([brand()], [location()]);
-    api.describeLocation.mockResolvedValue(location({ addressLine: 'Bunyodkor 1', city: 'Tashkent', latitude: 41.28, longitude: 69.2 }));
+    api.describeLocation.mockResolvedValue(
+      location({ addressLine: 'Bunyodkor 1', city: 'Tashkent', latitude: 41.28, longitude: 69.2 }),
+    );
 
     buttons(ru['tenantBrands.place.action'])[0].click();
     await settle();
@@ -226,13 +233,21 @@ describe('TenantBrands', () => {
     type('latitude', '41.28');
     type('longitude', '69.2');
     await settle();
-    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
     expect(api.describeLocation).toHaveBeenCalledWith(
       'tenant-1',
       expect.objectContaining({ id: 'location-1' }),
-      expect.objectContaining({ addressLine: 'Bunyodkor 1', city: 'Tashkent', latitude: 41.28, longitude: 69.2, coordinateSource: 'OPERATOR_PIN' }),
+      expect.objectContaining({
+        addressLine: 'Bunyodkor 1',
+        city: 'Tashkent',
+        latitude: 41.28,
+        longitude: 69.2,
+        coordinateSource: 'OPERATOR_PIN',
+      }),
     );
     expect(fixture.nativeElement.textContent).toContain('Bunyodkor 1, Tashkent');
   });
@@ -244,14 +259,18 @@ describe('TenantBrands', () => {
     await settle();
     type('latitude', '41.28');
     await settle();
-    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
     expect(fixture.nativeElement.textContent).toContain(ru['tenantBrands.place.pairError']);
 
     type('latitude', '');
     type('contactPhone', '998712000000');
     await settle();
-    (fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('.drawer button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
     expect(fixture.nativeElement.textContent).toContain(ru['tenantBrands.place.phoneError']);
     expect(api.describeLocation).not.toHaveBeenCalled();

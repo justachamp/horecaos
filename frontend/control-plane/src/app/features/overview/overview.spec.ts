@@ -7,12 +7,20 @@ import { ru } from '../../core/i18n/messages.ru';
 import { Overview } from './overview';
 import { PlatformHealth, PlatformHealthApi } from './platform-health-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const HEALTH: PlatformHealth = {
   measuredAt: '2026-09-11T04:00:00Z',
   tenantsByStatus: { ACTIVE: 12, PROVISIONING: 2, SUSPENDED: 1 },
-  orders: { lastHour: 31, lastDay: 540, liveByStatus: { PREPARING: 4, READY: 2 }, oldestLiveAgeSeconds: 1500 },
+  orders: {
+    lastHour: 31,
+    lastDay: 540,
+    liveByStatus: { PREPARING: 4, READY: 2 },
+    oldestLiveAgeSeconds: 1500,
+  },
   receipts: { lastDayByStatus: { ISSUED: 500, BLOCKED: 3 }, blocked: 5 },
   queues: {
     outbox: [{ name: 'orders.events', pending: 7, oldestAgeSeconds: 1200 }],

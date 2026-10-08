@@ -69,6 +69,27 @@ enum SmsGateDeliveryState {
         return failure;
     }
 
+    /**
+     * ADR 0146's status table: the provider's state in ADR 0020's six words, or
+     * null for a value the document does not list.
+     *
+     * <p>Null rather than {@code UNKNOWN}. The provider's own {@code 6 Unknown} is
+     * a terminal, unresolved state; an undocumented number is not that, it is
+     * something this table has not met, and recording it as "unknown" would make a
+     * message terminal on the strength of a value nobody can read.
+     */
+    @Nullable
+    String normalizedStatus() {
+        return switch (this) {
+            case CREATED -> "ACCEPTED";
+            case SENDING, SENT -> "DISPATCHED";
+            case DELIVERED -> "DELIVERED";
+            case FAIL, REJECTED, IN_BLACKLIST -> "FAILED";
+            case UNKNOWN -> "UNKNOWN";
+            case UNRECOGNISED -> null;
+        };
+    }
+
     boolean isBlacklisted() {
         return this == IN_BLACKLIST;
     }

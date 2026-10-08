@@ -77,6 +77,7 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.application.PlatformLocaleVocabulary;
 import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingService;
@@ -619,7 +620,12 @@ class ExternalCallTransactionBoundaryTests {
         PasswordResetService passwordResetService(
                 JdbcClient client, WatchfulAccounts accounts, TransactionTemplate transactions, Clock clock) {
             return new PasswordResetService(
-                    new JdbcPasswordResetStore(client), accounts, fact -> {}, transactions, clock);
+                    new JdbcPasswordResetStore(client),
+                    accounts,
+                    fact -> {},
+                    transactions,
+                    clock,
+                    new PlatformLocaleVocabulary());
         }
 
         @Bean

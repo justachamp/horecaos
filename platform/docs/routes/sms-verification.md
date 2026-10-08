@@ -51,7 +51,27 @@ boundary can be absent from a search that is working perfectly. The answer is
 and gets a *fresh* code. That is one wasted SMS in the bad case, which is the
 trade `VerificationCodeTransport` documents itself as accepting.
 
-## Why the delivery-receipt callback is not built
+## The receipt endpoint (ADR 0146): built, and off until a callback is captured
+
+> This section replaces "Why the delivery-receipt callback is not built". The
+> reasoning below it is unchanged and is why the endpoint ships disabled.
+
+`POST /providers/sms/{installationId}/receipts` exists (`SmsReceiptController`,
+`permitAll` on the filter chain, authenticated inside) and answers **404 for every
+provider type that has not been named in `horecaos.sms.receipts.enabled-provider-types`**,
+which is empty as shipped. It is not a Camel route, so it has no descriptor of its
+own in this directory; its contract is:
+
+| Field | Value |
+|---|---|
+| Authentication | A per-installation secret in `X-HorecaOS-Receipt-Secret` (an ADR 0028 reference on `installations.webhook_secret_reference`, compared in constant time) where the provider can carry one; otherwise the provider's published source addresses allowed at the edge (`HORECAOS_SMS_RECEIPT_ALLOWED_IPS`, fail-closed) — which is the case for VAS |
+| Every refusal | The same 404, in the same time (a decoy secret is resolved when there is none to): an unknown installation, an inactive one, a type with no receipt source, a wrong or missing secret |
+| Idempotency | The ADR 0005 inbox, consumer `sms.receipts.<provider type>`, event id derived from installation, message id and normalised status; a duplicate is a no-op, a different fact about the same message (Sent, then Delivered) is its own row |
+| What it may do | Advance an attempt made under this installation's bindings, and only forward; record a status event; clear a "no receipt" mark; write one narrow `HARD_BOUNCE` suppression for a matched blacklist receipt. It creates no other data and never resends |
+| Counters | `horecaos.sms.receipts{provider, outcome}` with outcome one of `applied`, `duplicate`, `unknown_message`, `regressed`, `unauthenticated`, `unreadable`; `horecaos.sms.no_receipt{provider}`; `horecaos.sms.segments.mismatch{provider, estimate}`. Bounded labels: no number, no text, no message id |
+| Body | Never logged, never stored (a VAS callback has a `key` field) |
+
+## Why the delivery-receipt callback was not built first
 
 The provider POSTs delivery status to an endpoint we host, authenticating with
 the same `login`/`key` pair — and **the document's own example shows `key`

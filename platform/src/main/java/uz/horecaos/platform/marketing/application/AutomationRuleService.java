@@ -146,11 +146,13 @@ public class AutomationRuleService {
     public boolean activate(
             UUID tenantId, UUID brandId, UUID ruleId, int expectedVersion, ActorRef actor, String correlationId) {
         AutomationRuleRow rule = require(tenantId, brandId, ruleId);
-        if (!messages.isWired(rule.channel())) {
+        CampaignMessagePort.Wiring wiring =
+                messages.wiring(tenantId, brandId, rule.channel(), CampaignMessagePort.PURPOSE_MARKETING);
+        if (!wiring.isWired()) {
             throw new ApiException(
                     ErrorCode.UNPROCESSABLE_STATE,
-                    "No ADR 0020 delivery path is wired for %s yet; this rule cannot be armed"
-                            .formatted(rule.channel()));
+                    "No ADR 0020 delivery path is wired for %s for this brand (%s); this rule cannot be armed"
+                            .formatted(rule.channel(), wiring.reason()));
         }
         Instant now = clock.instant();
         boolean activated = rules.activate(tenantId, ruleId, expectedVersion, subjectOf(actor), now);

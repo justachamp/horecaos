@@ -12,7 +12,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,html,css,json}\"",
     "test:watch": "ng test",
     "lint": "eslint \"src/**/*.{ts,html,css}\"",
-    "lint:rules": "node tools/eslint-plugin-horecaos/no-raw-px-font-size.test.js",
+    "lint:rules": "node tools/eslint-plugin-horecaos/no-raw-px-font-size.test.js && node tools/eslint-plugin-horecaos/no-physical-direction.test.js",
     "i18n:dead": "node tools/i18n/dead-keys.mjs",
     "i18n:split": "node tools/i18n/split-catalogues.mjs",
     "i18n:areas": "node tools/i18n/areas.mjs",

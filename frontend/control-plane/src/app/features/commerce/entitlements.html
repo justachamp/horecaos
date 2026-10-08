@@ -20,13 +20,23 @@
     @if (subscription(); as sub) {
       <dl class="facts">
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.status') }}</dt>
-        <dd class="q-body-sm"><span class="chip q-caption" [attr.data-status]="sub.status">{{ i18n.t(statusKey(sub.status)) }}</span></dd>
+        <dd class="q-body-sm">
+          <span class="chip q-caption" [attr.data-status]="sub.status">{{
+            i18n.t(statusKey(sub.status))
+          }}</span>
+        </dd>
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.plan') }}</dt>
         <dd class="q-body-sm">{{ planName(sub.planVersionId) }}</dd>
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.since') }}</dt>
         <dd class="q-body-sm">{{ i18n.day(asDate(sub.startAt)) }}</dd>
         <dt class="q-caption">{{ i18n.t('entitlements.start.term') }}</dt>
-        <dd class="q-body-sm term">{{ sub.termMonths > 1 ? i18n.t('entitlements.subscription.termMonths', { months: sub.termMonths }) : i18n.t('entitlements.start.monthToMonth') }}</dd>
+        <dd class="q-body-sm term">
+          {{
+            sub.termMonths > 1
+              ? i18n.t('entitlements.subscription.termMonths', { months: sub.termMonths })
+              : i18n.t('entitlements.start.monthToMonth')
+          }}
+        </dd>
         @if (activationDepositDue(); as deposit) {
           <!--
             Money that is owed, on the screen that says what the tenant is on.
@@ -38,7 +48,10 @@
           <dd class="q-body-sm q-tnum depositDue">{{ i18n.money(deposit) }}</dd>
         }
         <dt class="q-caption">{{ i18n.t('entitlements.subscription.period') }}</dt>
-        <dd class="q-body-sm">{{ i18n.day(asDate(sub.currentPeriodStart)) }} – {{ i18n.day(asDate(sub.currentPeriodEnd)) }}</dd>
+        <dd class="q-body-sm">
+          {{ i18n.day(asDate(sub.currentPeriodStart)) }} –
+          {{ i18n.day(asDate(sub.currentPeriodEnd)) }}
+        </dd>
         @if (sub.trialEndAt; as trialEnd) {
           <dt class="q-caption">{{ i18n.t('entitlements.subscription.trialEnds') }}</dt>
           <dd class="q-body-sm">{{ i18n.day(asDate(trialEnd)) }}</dd>
@@ -57,17 +70,27 @@
             <h3 class="q-body-sm strong">{{ i18n.t('entitlements.transition.title') }}</h3>
             <label class="field">
               <span class="q-caption">{{ i18n.t('entitlements.transition.to') }}</span>
-              <select class="q-body-sm" name="nextStatus" (change)="nextStatus.set($any($event.target).value)">
-                <option value="" [selected]="nextStatus() === ''">{{ i18n.t('entitlements.transition.choose') }}</option>
+              <select
+                class="q-body-sm"
+                name="nextStatus"
+                (change)="nextStatus.set($any($event.target).value)"
+              >
+                <option value="" [selected]="nextStatus() === ''">
+                  {{ i18n.t('entitlements.transition.choose') }}
+                </option>
                 @for (status of sub.allowedNext; track status) {
-                  <option [value]="status" [selected]="status === nextStatus()">{{ i18n.t(statusKey(status)) }}</option>
+                  <option [value]="status" [selected]="status === nextStatus()">
+                    {{ i18n.t(statusKey(status)) }}
+                  </option>
                 }
               </select>
             </label>
             @if (nextStatus() === 'SUSPENDED') {
               <p class="q-caption muted">{{ i18n.t('entitlements.transition.suspendHint') }}</p>
               <label class="field">
-                <span class="q-caption">{{ i18n.t('entitlements.transition.suspensionReason') }}</span>
+                <span class="q-caption">{{
+                  i18n.t('entitlements.transition.suspensionReason')
+                }}</span>
                 <input
                   class="q-body-sm"
                   name="suspensionReason"
@@ -79,11 +102,19 @@
             @if (nextStatus() === 'CANCELLATION_SCHEDULED') {
               <label class="field">
                 <span class="q-caption">{{ i18n.t('entitlements.transition.cancelAt') }}</span>
-                <input class="q-body-sm" type="date" name="cancelAt" [value]="cancelAt()" (input)="cancelAt.set($any($event.target).value)" />
+                <input
+                  class="q-body-sm"
+                  type="date"
+                  name="cancelAt"
+                  [value]="cancelAt()"
+                  (input)="cancelAt.set($any($event.target).value)"
+                />
               </label>
             }
             @if (isTerminal(nextStatus())) {
-              <p class="q-body-sm warning">{{ i18n.t('entitlements.transition.terminalWarning') }}</p>
+              <p class="q-body-sm warning">
+                {{ i18n.t('entitlements.transition.terminalWarning') }}
+              </p>
             }
             <div class="inlineForm">
               <input
@@ -93,7 +124,9 @@
                 [value]="transitionReason()"
                 (input)="transitionReason.set($any($event.target).value)"
               />
-              <button type="submit" [disabled]="!canTransition()">{{ i18n.t('entitlements.transition.submit') }}</button>
+              <button type="submit" [disabled]="!canTransition()">
+                {{ i18n.t('entitlements.transition.submit') }}
+              </button>
             </div>
           </form>
         }
@@ -108,19 +141,41 @@
             <h3 class="q-body-sm strong">{{ i18n.t('entitlements.start.title') }}</h3>
             <label class="field">
               <span class="q-caption">{{ i18n.t('entitlements.subscription.plan') }}</span>
-              <select class="q-body-sm" name="startPlan" (change)="startPlan.set($any($event.target).value)">
-                <option value="" [selected]="startPlan() === ''">{{ i18n.t('entitlements.start.choose') }}</option>
+              <select
+                class="q-body-sm"
+                name="startPlan"
+                (change)="startPlan.set($any($event.target).value)"
+              >
+                <option value="" [selected]="startPlan() === ''">
+                  {{ i18n.t('entitlements.start.choose') }}
+                </option>
                 @for (choice of planChoices(); track choice.planVersionId) {
-                  <option [value]="choice.planVersionId" [selected]="choice.planVersionId === startPlan()">{{ choice.label }}</option>
+                  <option
+                    [value]="choice.planVersionId"
+                    [selected]="choice.planVersionId === startPlan()"
+                  >
+                    {{ choice.label }}
+                  </option>
                 }
               </select>
             </label>
             <label class="field">
               <span class="q-caption">{{ i18n.t('entitlements.start.term') }}</span>
-              <select class="q-body-sm" name="startTerm" (change)="startTerm.set($any($event.target).value)">
+              <select
+                class="q-body-sm"
+                name="startTerm"
+                (change)="startTerm.set($any($event.target).value)"
+              >
                 @for (term of termChoices(); track term.months) {
                   <option [value]="term.months" [selected]="term.months + '' === startTerm()">
-                    {{ term.months === 1 ? i18n.t('entitlements.start.monthToMonth') : i18n.t('entitlements.start.termOption', { months: term.months, percent: percent(term.basisPoints) }) }}
+                    {{
+                      term.months === 1
+                        ? i18n.t('entitlements.start.monthToMonth')
+                        : i18n.t('entitlements.start.termOption', {
+                            months: term.months,
+                            percent: percent(term.basisPoints),
+                          })
+                    }}
                   </option>
                 }
               </select>
@@ -144,7 +199,9 @@
                 [value]="startReason()"
                 (input)="startReason.set($any($event.target).value)"
               />
-              <button type="submit" [disabled]="!canStart()">{{ i18n.t('entitlements.start.submit') }}</button>
+              <button type="submit" [disabled]="!canStart()">
+                {{ i18n.t('entitlements.start.submit') }}
+              </button>
             </div>
           </form>
         }
@@ -175,7 +232,11 @@
                 <td class="q-body-sm">
                   {{ i18n.t(modeKey(entitlement.effectiveMode)) }}
                   @if (entitlement.declaredMode !== entitlement.effectiveMode) {
-                    <span class="q-caption muted">{{ i18n.t('entitlements.planSays', { mode: i18n.t(modeKey(entitlement.declaredMode)) }) }}</span>
+                    <span class="q-caption muted">{{
+                      i18n.t('entitlements.planSays', {
+                        mode: i18n.t(modeKey(entitlement.declaredMode)),
+                      })
+                    }}</span>
                   }
                 </td>
                 <td class="q-body-sm muted">{{ i18n.t(sourceKey(entitlement.source)) }}</td>
@@ -185,7 +246,11 @@
         </table>
       </div>
     }
-    <a class="q-body-sm" [routerLink]="['/commerce/usage']" [queryParams]="{ tenantId: tenantId() }">
+    <a
+      class="q-body-sm"
+      [routerLink]="['/commerce/usage']"
+      [queryParams]="{ tenantId: tenantId() }"
+    >
       {{ i18n.t('entitlements.usage.open') }}
     </a>
   </section>
@@ -197,10 +262,19 @@
       <form class="stack overrideForm" (submit)="submitOverride($event)">
         <label class="field">
           <span class="q-caption">{{ i18n.t('entitlements.override.key') }}</span>
-          <select class="q-body-sm" name="overrideKey" (change)="overrideKey.set($any($event.target).value)">
-            <option value="" [selected]="overrideKey() === ''">{{ i18n.t('entitlements.override.chooseKey') }}</option>
+          <select
+            class="q-body-sm"
+            name="overrideKey"
+            (change)="overrideKey.set($any($event.target).value)"
+          >
+            <option value="" [selected]="overrideKey() === ''">
+              {{ i18n.t('entitlements.override.chooseKey') }}
+            </option>
             @for (entitlement of snap.entitlements; track entitlement.entitlementKey) {
-              <option [value]="entitlement.entitlementKey" [selected]="entitlement.entitlementKey === overrideKey()">
+              <option
+                [value]="entitlement.entitlementKey"
+                [selected]="entitlement.entitlementKey === overrideKey()"
+              >
                 {{ entitlement.entitlementKey }} · {{ value(entitlement) }}
               </option>
             }
@@ -221,9 +295,17 @@
           } @else {
             <label class="field">
               <span class="q-caption">{{ i18n.t('entitlements.override.feature') }}</span>
-              <select class="q-body-sm" name="overrideEnabled" (change)="overrideEnabled.set($any($event.target).value === 'on')">
-                <option value="on" [selected]="overrideEnabled()">{{ i18n.t('commerce.on') }}</option>
-                <option value="off" [selected]="!overrideEnabled()">{{ i18n.t('commerce.off') }}</option>
+              <select
+                class="q-body-sm"
+                name="overrideEnabled"
+                (change)="overrideEnabled.set($any($event.target).value === 'on')"
+              >
+                <option value="on" [selected]="overrideEnabled()">
+                  {{ i18n.t('commerce.on') }}
+                </option>
+                <option value="off" [selected]="!overrideEnabled()">
+                  {{ i18n.t('commerce.off') }}
+                </option>
               </select>
             </label>
           }
@@ -241,10 +323,18 @@
         <label class="field">
           <span class="q-caption">{{ i18n.t('entitlements.override.approvedBy') }}</span>
           @if (approvers().length > 0) {
-            <select class="q-body-sm" name="overrideApprovedBy" (change)="overrideApprovedBy.set($any($event.target).value)">
-              <option value="" [selected]="overrideApprovedBy() === ''">{{ i18n.t('common.chooseColleague') }}</option>
+            <select
+              class="q-body-sm"
+              name="overrideApprovedBy"
+              (change)="overrideApprovedBy.set($any($event.target).value)"
+            >
+              <option value="" [selected]="overrideApprovedBy() === ''">
+                {{ i18n.t('common.chooseColleague') }}
+              </option>
               @for (subject of approvers(); track subject) {
-                <option [value]="subject" [selected]="subject === overrideApprovedBy()">{{ subject }}</option>
+                <option [value]="subject" [selected]="subject === overrideApprovedBy()">
+                  {{ subject }}
+                </option>
               }
             </select>
           } @else {
@@ -265,7 +355,9 @@
             [value]="overrideReason()"
             (input)="overrideReason.set($any($event.target).value)"
           />
-          <button type="submit" [disabled]="!canOverride()">{{ i18n.t('entitlements.override.submit') }}</button>
+          <button type="submit" [disabled]="!canOverride()">
+            {{ i18n.t('entitlements.override.submit') }}
+          </button>
         </div>
       </form>
     </section>

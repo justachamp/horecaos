@@ -203,7 +203,8 @@
   gap: 10px;
 }
 
-.tariff-detail__facts {
+.tariff-detail__facts,
+.tariff-detail__routing {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;

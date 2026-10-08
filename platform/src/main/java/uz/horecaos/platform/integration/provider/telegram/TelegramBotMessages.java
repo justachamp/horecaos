@@ -1,6 +1,7 @@
 package uz.horecaos.platform.integration.provider.telegram;
 
-import java.util.Locale;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The bot's own protocol-level replies (ADR 0058 stage 1's {@code /link}
@@ -10,8 +11,8 @@ import java.util.Locale;
  * <p>Deliberately not routed through {@code notifications.templates}: these are
  * not business notifications with a template key, a class, or an audit trail —
  * they are the bot answering the command that just ran, the same way a CLI
- * prints "done" or an error to the terminal that invoked it. Three fixed
- * languages, matching {@code MessageLocale}'s own closed set.
+ * prints "done" or an error to the terminal that invoked it. The languages
+ * are the registry's messages tier (ADR 0149), the same set {@code MessageLocale} holds.
  *
  * <p>Public rather than package-private: {@code TelegramChannelAdapter} lives
  * in {@code integration.camel.notification.telegram}, a different package
@@ -549,8 +550,12 @@ public final class TelegramBotMessages {
     }
 
     private static String pick(String locale, String uz, String ru, String en) {
-        return switch (locale == null ? "" : locale.toLowerCase(Locale.ROOT)) {
-            case "uz-latn", "uz" -> uz;
+        // The registry decides which language the bot's group or customer is in (ADR 0149): a tag in
+        // any casing or the bare "uz" alias reads as uz-Latn, and anything the messages tier does not
+        // speak answers in the fallback. The wordings themselves stay positional, one per live
+        // language, so activating a fourth is a change here and not a guess at a missing translation.
+        return switch (PlatformLocales.resolve(locale, Tier.MESSAGES)) {
+            case "uz-Latn" -> uz;
             case "en" -> en;
             default -> ru;
         };

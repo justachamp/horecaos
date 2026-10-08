@@ -1,0 +1,72 @@
+:host {
+  display: block;
+}
+
+.mfa {
+  padding: 12px 0;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.devices {
+  margin: 8px 0;
+  padding-inline-start: 18px;
+}
+
+.reset {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.field-label {
+  display: block;
+  margin-top: 12px;
+  color: var(--q-ink-muted);
+}
+
+.field {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.notice {
+  color: var(--q-ink);
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+}
+
+.text-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--q-primary);
+  cursor: pointer;
+}
+
+.text-button--destructive {
+  color: var(--q-error-text);
+}

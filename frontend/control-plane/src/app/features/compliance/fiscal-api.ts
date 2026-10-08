@@ -53,16 +53,21 @@ export class FiscalApi {
 
   async blocked(tenantId: string, reasonCode?: string): Promise<BlockedWorklistResponse> {
     return firstValueFrom(
-      this.api.get<BlockedWorklistResponse>(`/api/v1/tenants/${tenantId}/fiscal/documents/blocked`, {
-        query: { reasonCode },
-      }),
+      this.api.get<BlockedWorklistResponse>(
+        `/api/v1/tenants/${tenantId}/fiscal/documents/blocked`,
+        {
+          query: { reasonCode },
+        },
+      ),
     );
   }
 
   /** Every tenant's blocked receipts, longest-waiting first. */
   async blockedAcrossTenants(limit = 200): Promise<PlatformBlockedDocument[]> {
     return firstValueFrom(
-      this.api.get<PlatformBlockedDocument[]>('/api/v1/control-plane/fiscal-documents/blocked', { query: { limit } }),
+      this.api.get<PlatformBlockedDocument[]>('/api/v1/control-plane/fiscal-documents/blocked', {
+        query: { limit },
+      }),
     );
   }
 
@@ -73,7 +78,12 @@ export class FiscalApi {
     reason: string,
   ): Promise<{ documentId: string; outcome: string; version: number; warning: string | null }> {
     return firstValueFrom(
-      this.api.post<{ documentId: string; outcome: string; version: number; warning: string | null }>(
+      this.api.post<{
+        documentId: string;
+        outcome: string;
+        version: number;
+        warning: string | null;
+      }>(
         `/api/v1/tenants/${tenantId}/fiscal/documents/${documentId}/retries`,
         { reason },
         { expectedVersion },

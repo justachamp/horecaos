@@ -10,10 +10,26 @@
     <h2 class="q-subhead">{{ i18n.t('piiClassification.classes') }}</h2>
     <div class="classes">
       @for (dataClass of d.classes; track dataClass.code) {
-        <div class="dataClass" [class.guarded]="dataClass.requiresEncryption" [attr.data-class]="dataClass.code">
+        <div
+          class="dataClass"
+          [class.guarded]="dataClass.requiresEncryption"
+          [attr.data-class]="dataClass.code"
+        >
           <strong class="q-body-sm">{{ i18n.t(classKey(dataClass.code)) }}</strong>
-          <span class="q-caption">{{ i18n.t(dataClass.requiresEncryption ? 'piiClassification.encrypted' : 'piiClassification.plain') }}</span>
-          <span class="q-caption muted">{{ i18n.t(dataClass.mayLeaveTheDatabase ? 'piiClassification.mayLeave' : 'piiClassification.staysIn') }}</span>
+          <span class="q-caption">{{
+            i18n.t(
+              dataClass.requiresEncryption
+                ? 'piiClassification.encrypted'
+                : 'piiClassification.plain'
+            )
+          }}</span>
+          <span class="q-caption muted">{{
+            i18n.t(
+              dataClass.mayLeaveTheDatabase
+                ? 'piiClassification.mayLeave'
+                : 'piiClassification.staysIn'
+            )
+          }}</span>
         </div>
       }
     </div>
@@ -46,15 +62,28 @@
   <section class="block">
     <h2 class="q-subhead">{{ i18n.t('piiClassification.erasure') }}</h2>
     <p class="q-body-sm q-tnum counts">
-      {{ i18n.t('piiClassification.erasureCounts', { pending: d.erasure.pending, completed: d.erasure.completed, cancelled: d.erasure.cancelled }) }}
+      {{
+        i18n.t('piiClassification.erasureCounts', {
+          pending: d.erasure.pending,
+          completed: d.erasure.completed,
+          cancelled: d.erasure.cancelled,
+        })
+      }}
     </p>
     @if (d.erasure.waiting.length > 0) {
       <ul class="waiting">
         @for (request of d.erasure.waiting; track request.requestId) {
           <li class="q-body-sm" [attr.data-erasure]="request.requestId">
-            <a [routerLink]="['/tenants', request.tenantId]">{{ directory.nameOf(request.tenantId) }}</a>
-            <span class="q-caption muted">{{ i18n.t(viaKey(request.requestedVia)) }} · {{ i18n.day(asDate(request.requestedAt)) }}</span>
-            <span class="q-caption q-tnum" [class.late]="request.daysWaiting >= 30">{{ i18n.t('piiClassification.daysWaiting', { days: request.daysWaiting }) }}</span>
+            <a [routerLink]="['/tenants', request.tenantId]">{{
+              directory.nameOf(request.tenantId)
+            }}</a>
+            <span class="q-caption muted"
+              >{{ i18n.t(viaKey(request.requestedVia)) }} ·
+              {{ i18n.day(asDate(request.requestedAt)) }}</span
+            >
+            <span class="q-caption q-tnum" [class.late]="request.daysWaiting >= 30">{{
+              i18n.t('piiClassification.daysWaiting', { days: request.daysWaiting })
+            }}</span>
           </li>
         }
       </ul>
@@ -79,14 +108,19 @@
   </section>
 
   <section class="block">
-    <h2 class="q-subhead">{{ i18n.t('piiClassification.columns', { count: d.encryptedColumns.length }) }}</h2>
+    <h2 class="q-subhead">
+      {{ i18n.t('piiClassification.columns', { count: d.encryptedColumns.length }) }}
+    </h2>
     <div class="tables">
       @for (group of tables(); track group[0]) {
         <div class="tableGroup">
           <span class="q-caption q-tnum">{{ group[0] }}</span>
           <span class="q-caption muted q-tnum">
             @for (column of group[1]; track column.column; let last = $last) {
-              {{ column.column }}@if (!last) {, }
+              {{ column.column }}
+              @if (!last) {
+                ,
+              }
             }
           </span>
         </div>

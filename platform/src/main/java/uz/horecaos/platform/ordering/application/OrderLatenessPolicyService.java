@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.api.LatenessPolicyPort;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
@@ -40,13 +41,22 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
  *       otherwise. The key's registered default is the same five minutes, so
  *       registering it changed nothing, and a resolved default is never treated
  *       as something a tenant chose;
- *   <li>grace after the promise and the no-promise fallback are the
- *       document's, per mode;
+ *   <li>each mode's no-promise fallback is likewise <em>its own</em> when the document
+ *       sets one, and otherwise {@link OrderingConfigurationKeys#LATE_ORDER_THRESHOLD_MINUTES}
+ *       -- card 2's «Заказ без обещанного времени опаздывает через» -- provided a value was
+ *       <em>set</em> somewhere in the chain, and the platform's forty-five minutes otherwise
+ *       (ADR 0150). The key's registered default is the same forty-five, so the reader
+ *       changes nothing for a tenant that never set it;
+ *   <li>grace after the promise is the document's, per mode;
  *   <li>the late colour rides along as-is when it is exactly {@code #rrggbb},
  *       and is dropped otherwise -- it is served to a style binding, so nothing
  *       else is allowed through even if a bad value reached the table some other
  *       way.
  * </ul>
+ *
+ * <p>Acceptance never starts or shortens a lateness clock (ADR 0150, ADR 0036): a promised order is
+ * late once {@code promised_at + lateAfter} has passed, an unpromised one once {@code created_at +
+ * noPromiseFallback} has, and nothing here reads {@code accepted_at}.
  *
  * <p>ADR 0107's reporting SLA buckets ({@code sla_bucket_set.v1}) are platform
  * fixed and are not read from here; nothing in this service touches them.
@@ -54,7 +64,13 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
  * {@link OrderLatenessPolicy#platformDefault()} applies everywhere.
  */
 @Service
-public class OrderLatenessPolicyService {
+public class OrderLatenessPolicyService implements LatenessPolicyPort {
+
+    /**
+     * The most the setting accepts (the order-policy card's own ceiling, ten hours); a larger stored
+     * number can only be a row written around the write rule and is ignored.
+     */
+    private static final int MAXIMUM_THRESHOLD_MINUTES = 600;
 
     private static final Pattern HEX_COLOUR = Pattern.compile("^#[0-9a-fA-F]{6}$");
 
@@ -71,6 +87,26 @@ public class OrderLatenessPolicyService {
         return resolveAt(ResourceScope.location(tenantId, brandId, locationId));
     }
 
+    /** {@inheritDoc} The same resolution, in the shape other modules may name (ADR 0151). */
+    @Override
+    public LatenessPolicyView policyAt(UUID tenantId, UUID brandId, UUID locationId) {
+        Effective effective = resolve(tenantId, brandId, locationId);
+        OrderLatenessPolicy policy = effective.policy();
+        return new LatenessPolicyView(
+                thresholdsOf(policy.delivery()),
+                thresholdsOf(policy.pickup()),
+                thresholdsOf(policy.dineIn()),
+                effective.isPlatformDefault(),
+                effective.policyId(),
+                effective.policyVersion(),
+                effective.lateColour());
+    }
+
+    private static Thresholds thresholdsOf(OrderLatenessPolicy.LatenessThresholds thresholds) {
+        return new Thresholds(
+                thresholds.atRiskBeforeSeconds(), thresholds.lateAfterSeconds(), thresholds.noPromiseFallbackSeconds());
+    }
+
     /**
      * The same resolution at whatever scope a caller already has — mirroring
      * {@code OrderAcceptancePolicyService.resolveAt}'s own reason: a tenant or
@@ -78,9 +114,10 @@ public class OrderLatenessPolicyService {
      */
     public Effective resolveAt(ResourceScope scope) {
         Authored authored = authoredAt(scope);
-        AtRiskDefault fallback = atRiskDefaultAt(scope);
+        AtRiskDefault atRisk = atRiskDefaultAt(scope);
+        NoPromiseDefault noPromise = noPromiseDefaultAt(scope);
         return new Effective(
-                authored.document().effective(fallback.seconds()),
+                authored.document().effective(atRisk.seconds(), noPromise.seconds()),
                 authored.policyId(),
                 authored.policyVersion(),
                 tenantLateColour(scope));
@@ -129,6 +166,25 @@ public class OrderLatenessPolicyService {
         return new AtRiskDefault(Math.multiplyExact(minutes, 60), AtRiskDefault.Source.SCALAR);
     }
 
+    /**
+     * The no-promise fallback a mode without one of its own gets at this scope (ADR 0150): the
+     * tenant's {@code ordering.late_order_threshold_minutes} when one was set somewhere in the chain
+     * (the narrowest scope winning), the platform's forty-five minutes when not. A resolved registry
+     * default is never read as something a tenant chose, and an unusable value -- under a minute, or
+     * over the setting's ten hours -- is ignored rather than taking the boards down.
+     */
+    public NoPromiseDefault noPromiseDefaultAt(ResourceScope scope) {
+        Resolved<Integer> threshold =
+                configuration.resolve(OrderingConfigurationKeys.LATE_ORDER_THRESHOLD_MINUTES, scope);
+        Integer minutes = threshold.value();
+        if (threshold.cameFromDefault() || minutes == null || minutes < 1 || minutes > MAXIMUM_THRESHOLD_MINUTES) {
+            return new NoPromiseDefault(
+                    OrderLatenessPolicy.platformDefault().delivery().noPromiseFallbackSeconds(),
+                    NoPromiseDefault.Source.PLATFORM_DEFAULT);
+        }
+        return new NoPromiseDefault(minutes * 60, NoPromiseDefault.Source.SCALAR);
+    }
+
     private @Nullable String tenantLateColour(ResourceScope scope) {
         String colour = configuration.value(OrderingConfigurationKeys.LATE_COLOUR, scope);
         return colour != null && HEX_COLOUR.matcher(colour).matches()
@@ -155,6 +211,17 @@ public class OrderLatenessPolicyService {
             /** {@code ordering.at_risk_before_minutes} was set somewhere in the chain. */
             SCALAR,
             /** Nothing was set: the platform's own five minutes. */
+            PLATFORM_DEFAULT
+        }
+    }
+
+    /** The fallback a mode with none of its own takes, and where that number came from. */
+    public record NoPromiseDefault(int seconds, Source source) {
+
+        public enum Source {
+            /** {@code ordering.late_order_threshold_minutes} was set somewhere in the chain. */
+            SCALAR,
+            /** Nothing was set: the platform's own forty-five minutes. */
             PLATFORM_DEFAULT
         }
     }

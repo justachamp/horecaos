@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { ConfigurationApi } from '../configuration-api';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -30,7 +31,6 @@ import { TemplateEditor } from './template-editor';
 
 type NotificationsTab = 'templates' | 'routing';
 type DrawerMode = 'versions' | 'editor' | null;
-type LocaleTag = 'ru' | 'uz-Latn' | 'en';
 
 const NOTIFICATION_CLASSES: readonly string[] = [
   'TRANSACTIONAL_REQUIRED',
@@ -74,6 +74,7 @@ export class NotificationsPage {
   private readonly configApi = inject(ConfigurationApi);
   protected readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly saved = inject(SettingsSaved);
 
   protected readonly activeTab = signal<NotificationsTab>('templates');
@@ -124,12 +125,15 @@ export class NotificationsPage {
   protected readonly activateError = signal<string | null>(null);
 
   protected readonly testSendTarget = signal<VersionGroup | null>(null);
-  protected readonly testSendLocale = signal<LocaleTag>('ru');
+  protected readonly testSendLocale = signal<string>(this.registry.fallback());
   protected readonly testSendDestination = signal('');
   protected readonly testSendSubmitting = signal(false);
   protected readonly testSendError = signal<string | null>(null);
   protected readonly testSendResult = signal<TestSendResult | null>(null);
-  protected readonly localeTags: readonly LocaleTag[] = ['ru', 'uz-Latn', 'en'];
+  /** The languages the platform sends in (the registry's messages tier), for the version table and the test-send picker. */
+  protected readonly localeTags = computed<readonly string[]>(() =>
+    this.registry.active('MESSAGES'),
+  );
 
   // ------------------------------------------------------------- Tab 2 routing
 
@@ -340,7 +344,7 @@ export class NotificationsPage {
 
   protected openTestSend(group: VersionGroup): void {
     this.testSendTarget.set(group);
-    this.testSendLocale.set('ru');
+    this.testSendLocale.set(this.registry.fallback());
     this.testSendDestination.set('');
     this.testSendError.set(null);
     this.testSendResult.set(null);
@@ -430,7 +434,7 @@ export class NotificationsPage {
     return worst;
   }
 
-  protected localeStatus(group: VersionGroup, tag: LocaleTag): string | null {
+  protected localeStatus(group: VersionGroup, tag: string): string | null {
     return group.locales.find((row) => row.locale === tag)?.status ?? null;
   }
 

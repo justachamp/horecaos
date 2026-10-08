@@ -34,9 +34,28 @@
         </label>
       }
 
-      <p class="q-caption geography__map-deferred" data-testid="geography-map-deferred">
-        {{ 'reports.geography.mapDeferred' | t }}
-      </p>
+      <!-- 7.10: order density over the delivery zones -->
+      <section data-testid="geography-density-section">
+        <h2 class="q-subhead">{{ 'reports.geography.section.density' | t }}</h2>
+        <p class="q-body-sm geography__intro">{{ 'reports.geography.density.intro' | t }}</p>
+        @if (selectedScope(); as scope) {
+          <q-zone-density
+            [scope]="scope"
+            [from]="densityFrom"
+            [to]="densityTo"
+            [center]="mapCentre()"
+          />
+        }
+      </section>
+
+      <!-- 7.10a: today's orders as pins (an audited reveal, opened on request) -->
+      <section data-testid="geography-pins-section">
+        <h2 class="q-subhead">{{ 'reports.geography.section.pins' | t }}</h2>
+        <p class="q-body-sm geography__intro">{{ 'reports.geography.pins.intro' | t }}</p>
+        @if (selectedScope(); as scope) {
+          <q-order-points-map [scope]="scope" [purpose]="pinsPurpose" [center]="mapCentre()" />
+        }
+      </section>
 
       <!-- 7.10b: delivery-time and distance histograms -->
       <section data-testid="geography-histogram-section">

@@ -125,7 +125,7 @@ export const reportsEn = {
   'reports.overview.tile.averageCheck': 'Average check',
   'reports.overview.tile.cancelled': 'Cancelled',
   'reports.overview.tile.cancelled.subtitle': 'share of terminal orders: {share}',
-  'reports.overview.tile.late': 'Late',
+  'reports.overview.tile.late': 'Late after the promise',
   'reports.overview.tile.late.subtitle': 'median {minutes}',
   'reports.overview.tile.distance': 'Delivery distance',
   'reports.overview.tile.deltaSuffix': 'vs. same period a week back',
@@ -147,6 +147,12 @@ export const reportsEn = {
   'reports.overview.mix.byRevenue': 'By revenue',
   'reports.overview.mix.fulfilment': 'Fulfilment type',
   'reports.overview.mix.payment': 'Payment',
+  'reports.paymentMix.provisional':
+    'Provisional: finance has not signed the definition of this figure yet.',
+  'reports.paymentMix.openQuestion':
+    'Counted at the amount recorded as tendered. What a card or wallet provider remits after its own commission is not netted out here.',
+  'reports.paymentMix.notCutBy':
+    'This split is not cut by channel or fulfilment type; it follows the period, branch, legal entity and payment method filters.',
   'reports.overview.funnel.title': 'Outcome',
   'reports.overview.funnel.completed': 'Completed',
   'reports.overview.funnel.notCompleted': 'Not completed',
@@ -179,13 +185,14 @@ export const reportsEn = {
   'reports.orders.tab.commercial': 'Orders',
   'reports.orders.tab.daily': 'Daily',
   'reports.orders.tab.summary': 'Summary',
-  'reports.orders.tab.late': 'Late',
+  'reports.orders.tab.late': 'Late after the promise',
   'reports.orders.boundedNote':
     'Showing the worst rows up to this view’s limit — not a complete list for a very wide range.',
   'reports.orders.commercial.piiNote':
     'Customer, operator and courier come from a separate, audited read (order.read) — reporting itself keeps no personal data at all (ADR 0029). The phone is masked; exporting this data is an audited PII egress.',
   'reports.orders.late.empty': 'No late orders in the selected period',
-  'reports.orders.late.summary': '{count} late orders · median {median} · worst {worst}',
+  'reports.orders.late.summary':
+    '{count} orders handed over after the promise · median {median} · worst {worst}',
 
   'reports.orders.column.orderId': 'Order',
   'reports.orders.column.date': 'Date',
@@ -287,6 +294,7 @@ export const reportsEn = {
   'reports.branches.channels.empty': 'No orders in this range.',
   'reports.branches.payments.title': 'Payment methods',
   'reports.branches.payments.column.method': 'Method',
+  'reports.branches.payments.column.legalEntity': 'Legal entity',
   'reports.branches.payments.column.count': 'Tenders',
   'reports.branches.payments.column.amount': 'Amount',
   'reports.branches.payments.empty': 'No tenders in this range.',
@@ -566,10 +574,9 @@ export const reportsEn = {
 
   // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
   'reports.geography.title': 'Geography',
-  'reports.geography.intro': 'Delivery-time and distance histograms, and a day/hour heat grid.',
+  'reports.geography.intro':
+    'Delivery-time and distance histograms, a day/hour heat grid, and where deliveries land against the delivery zones.',
   'reports.geography.loading': 'Loading…',
-  'reports.geography.mapDeferred':
-    "Density heatmap and today's orders as pins are deferred pending a map provider (see X.4).",
   'reports.geography.branch.label': 'Branch',
   'reports.geography.section.histograms': 'Delivery-time and distance histograms',
   'reports.geography.histogram.duration.title': 'Handover time',
@@ -593,4 +600,28 @@ export const reportsEn = {
   'reports.products.combos.column.sold': 'Sold',
   'reports.products.combos.note':
     'Completed orders only. A dish sold on its own is not a combo — see Sales.',
+  'reports.geography.section.density': 'Where deliveries land, by zone',
+  'reports.geography.density.intro':
+    'Each delivery zone is shaded by how many deliveries its tariff priced over the last 30 days, busiest zone darkest. The deliveries no drawn zone covered are their own row: that number is the sign of a badly cut zone or a missing catchment.',
+  'reports.geography.density.mapLabel': 'Delivery zones shaded by deliveries',
+  'reports.geography.density.areaLabel': '{zone}: {count} deliveries',
+  'reports.geography.density.scale':
+    'A darker zone took more deliveries; a faint one took few or none.',
+  'reports.geography.density.zonesNotReadable':
+    'Your role may read reports but not delivery zones, so the counts below have no zone names and there is no map.',
+  'reports.geography.density.column.zone': 'Zone',
+  'reports.geography.density.column.deliveries': 'Deliveries',
+  'reports.geography.density.column.share': 'Share',
+  'reports.geography.density.column.fees': 'Delivery fees',
+  'reports.geography.density.outside': 'Outside every drawn zone',
+  'reports.geography.density.zoneUnknown': 'A zone',
+  'reports.geography.density.outsideNote':
+    "{count} deliveries were priced by the branch's own tariff because no drawn zone covered their address. If that is more than you expect, a zone is cut badly or a catchment is missing.",
+  'reports.geography.density.empty':
+    'No deliveries were priced in this range, and the brand has no live delivery zones.',
+  'reports.geography.density.basis':
+    "Deliveries whose fee a tariff resolved, over closed business days from {from} to {to}, at this branch. Today is not in it, and a delivery priced outside the tariff model (a manual fee, an aggregator's own price) is not either.",
+  'reports.geography.section.pins': "Today's orders as pins",
+  'reports.geography.pins.intro':
+    "Where this branch's delivery orders of the day are going, one pin per order, to see clusters and outliers. This opens doorsteps, so it is recorded and held by dispatchers and branch managers; it is not part of the report above.",
 } as const;

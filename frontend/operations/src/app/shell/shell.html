@@ -159,7 +159,7 @@
             [value]="locale()"
             (change)="onLocaleChange($any($event.target).value)"
           >
-            @for (option of locales; track option) {
+            @for (option of locales(); track option) {
               <option [value]="option">{{ option }}</option>
             }
           </select>

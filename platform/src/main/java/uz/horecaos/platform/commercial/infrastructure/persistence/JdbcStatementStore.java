@@ -85,6 +85,47 @@ public class JdbcStatementStore {
         return number;
     }
 
+    /**
+     * Takes a share lock on the statement row, held to the end of the transaction, and says whether
+     * the row exists. A send takes it before reading the statement, so a void that has changed the
+     * row but not yet committed makes the send wait and then read the statement as it became, and a
+     * void that arrives later waits for the send to commit and then sees its attempt.
+     *
+     * <p>The foreign key from {@code statement_einvoices} takes only a key-share lock, which a
+     * void's non-key {@code UPDATE} does not conflict with, and {@code V0516}'s trigger sees
+     * committed rows only: without this lock a send and a void that overlap both commit.
+     */
+    public boolean lockShared(UUID tenantId, UUID id) {
+        return jdbc.sql("""
+                        SELECT 1 FROM commercial.statements
+                         WHERE tenant_id = :tenantId AND id = :id
+                           FOR SHARE
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /**
+     * The void's side of {@link #lockShared}: waits for a send in flight to commit, and holds off a
+     * new one until the void does, so the check for a live e-invoice that follows sees every attempt
+     * that was started.
+     */
+    public boolean lockForChange(UUID tenantId, UUID id) {
+        return jdbc.sql("""
+                        SELECT 1 FROM commercial.statements
+                         WHERE tenant_id = :tenantId AND id = :id
+                           FOR NO KEY UPDATE
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
     /** ISSUED to VOID; false when it was already void. */
     public boolean voidStatement(UUID tenantId, UUID id, String voidedBy, String reason, Instant now) {
         return jdbc.sql("""
@@ -99,6 +140,26 @@ public class JdbcStatementStore {
                         .param("now", utc(now))
                         .update()
                 == 1;
+    }
+
+    /**
+     * Whether an e-invoicing operator holds, or may hold, an invoice made from this
+     * statement (ADR 0096). Such a statement is not voided from underneath its invoice:
+     * the invoice is cancelled at the operator first. {@code V0516}'s trigger refuses the
+     * same thing at the database; this is the question asked first so the answer can say why.
+     */
+    public boolean hasLiveEInvoice(UUID tenantId, UUID id) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM commercial.statement_einvoices
+                             WHERE tenant_id = :tenantId AND statement_id = :id
+                               AND delivery IN ('PENDING', 'SUBMITTED', 'UNCERTAIN')
+                               AND (operator_state IS NULL OR operator_state NOT IN ('REFUSED', 'CANCELLED')))
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .query(Boolean.class)
+                .single());
     }
 
     /** Every statement the tenant has been issued, newest month first, without lines. */

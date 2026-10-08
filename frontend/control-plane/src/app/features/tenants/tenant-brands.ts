@@ -124,7 +124,9 @@ export class TenantBrands {
     try {
       const locations = await this.tenantsApi.getLocations(this.tenantId, brandId);
       this.rows.update((rows) =>
-        rows.map((row) => (row.brand.id === brandId ? { ...row, locations, locationsLoaded: true } : row)),
+        rows.map((row) =>
+          row.brand.id === brandId ? { ...row, locations, locationsLoaded: true } : row,
+        ),
       );
     } catch {
       this.rows.update((rows) =>
@@ -371,7 +373,12 @@ export class TenantBrands {
     if (latitude !== '') {
       const lat = Number(latitude);
       const lng = Number(longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        Math.abs(lat) > 90 ||
+        Math.abs(lng) > 180
+      ) {
         return this.i18n.t('tenantBrands.place.rangeError');
       }
     }
@@ -458,7 +465,10 @@ export class TenantBrands {
       this.rows.update((rows) =>
         rows.map((row) =>
           row.brand.id === location.brandId
-            ? { ...row, locations: row.locations.filter((candidate) => candidate.id !== location.id) }
+            ? {
+                ...row,
+                locations: row.locations.filter((candidate) => candidate.id !== location.id),
+              }
             : row,
         ),
       );
@@ -476,7 +486,11 @@ export class TenantBrands {
    */
   private describeDeleteRefusal(error: ApiError): string {
     const reason = error.problem['reason'];
-    if (error.code !== 'RESOURCE_CONFLICT' || typeof reason !== 'string' || !(reason in DELETE_REASON_MESSAGES)) {
+    if (
+      error.code !== 'RESOURCE_CONFLICT' ||
+      typeof reason !== 'string' ||
+      !(reason in DELETE_REASON_MESSAGES)
+    ) {
       return this.i18n.describe(error);
     }
     const sentence = this.i18n.t(DELETE_REASON_MESSAGES[reason as DeleteReason]);
@@ -492,7 +506,9 @@ export class TenantBrands {
         row.brand.id === brandId
           ? {
               ...row,
-              locations: row.locations.map((location) => (location.id === locationId ? replacement : location)),
+              locations: row.locations.map((location) =>
+                location.id === locationId ? replacement : location,
+              ),
             }
           : row,
       ),

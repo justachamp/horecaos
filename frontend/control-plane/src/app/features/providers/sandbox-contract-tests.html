@@ -39,15 +39,30 @@
       <tbody>
         @for (installation of sandboxInstallations(); track installation.id) {
           <tr>
-            <td class="q-body-sm"><a [routerLink]="['/tenants', installation.tenantId]">{{ installation.tenantDisplayName }}</a></td>
-            <td class="q-body-sm">{{ installation.providerType }} · {{ installation.displayName }}</td>
+            <td class="q-body-sm">
+              <a [routerLink]="['/tenants', installation.tenantId]">{{
+                installation.tenantDisplayName
+              }}</a>
+            </td>
+            <td class="q-body-sm">
+              {{ installation.providerType }} · {{ installation.displayName }}
+            </td>
             <td class="q-body-sm q-tnum">{{ installation.environmentCode }}</td>
             <td class="q-body-sm">
               {{ connection(installation) }}
             </td>
             <td class="q-body-sm">
-              <button type="button" class="check" [disabled]="checking() !== null" (click)="check(installation)">
-                {{ checking() === installation.id ? i18n.t('installationsExplorer.check.working') : i18n.t('installationsExplorer.check.action') }}
+              <button
+                type="button"
+                class="check"
+                [disabled]="checking() !== null"
+                (click)="check(installation)"
+              >
+                {{
+                  checking() === installation.id
+                    ? i18n.t('installationsExplorer.check.working')
+                    : i18n.t('installationsExplorer.check.action')
+                }}
               </button>
             </td>
           </tr>

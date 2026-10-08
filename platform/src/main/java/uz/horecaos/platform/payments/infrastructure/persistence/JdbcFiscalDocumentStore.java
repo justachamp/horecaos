@@ -90,6 +90,32 @@ public class JdbcFiscalDocumentStore {
                 .optional();
     }
 
+    /**
+     * Documents that reached {@code ISSUED} in {@code [from, to)}, oldest first (ADR 0154's reconciling
+     * sweep). Answers the instant it was issued alongside, which a {@link FiscalDocument} does not carry.
+     */
+    public List<IssuedRow> listIssuedBetween(UUID tenantId, Instant from, Instant to, int limit) {
+        return jdbc.sql("""
+                SELECT id, order_id, issued_at
+                  FROM payments.fiscal_documents
+                 WHERE tenant_id = :tenantId AND status = 'ISSUED' AND issued_at IS NOT NULL
+                   AND issued_at >= :from AND issued_at < :to
+                 ORDER BY issued_at, id
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .param("limit", limit)
+                .query((row, number) -> new IssuedRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        Objects.requireNonNull(instant(row, "issued_at"), "filtered for non-null above")))
+                .list();
+    }
+
+    public record IssuedRow(UUID documentId, UUID orderId, Instant issuedAt) {}
+
     /** Every document for an order, oldest first. Plural by design. */
     public List<FiscalDocument> listForOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql(SELECT + """

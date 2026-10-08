@@ -10,6 +10,7 @@
     </button>
     @if (campaign(); as c) {
       <h2 class="q-subhead">{{ c.name }}</h2>
+      <span class="status-badge" data-testid="campaign-kind">{{ kindLabelKey(c.kind) | t }}</span>
       <span class="status-badge">{{ statusLabelKey(c.status) | t }}</span>
     }
   </header>
@@ -76,15 +77,18 @@
         }
       </dl>
 
-      @if (!c.isWired && (c.status === 'APPROVED' || c.status === 'SCHEDULED')) {
-        <div class="error-band" role="alert" data-testid="campaign-unwired-warning">
-          <span class="q-body-sm">
-            {{
-              'marketing.campaign.unwired.warning'
-                | t: { channel: (channelLabelKey(c.channel) | t) }
-            }}
-          </span>
-        </div>
+      @if (unwiredSentence(); as sentence) {
+        @if (canStillLaunch()) {
+          <div class="error-band" role="alert" data-testid="campaign-unwired-warning">
+            <span class="q-body-sm">
+              {{
+                'marketing.campaign.unwired.warning'
+                  | t: { channel: (channelLabelKey(c.channel) | t) }
+              }}
+              {{ sentence.key | t: sentence.values }}
+            </span>
+          </div>
+        }
       }
 
       @if (c.status === 'PAUSED') {
@@ -154,12 +158,12 @@
             }
           }
           @case ('APPROVED') {
-            <button type="button" [disabled]="actionSubmitting()" (click)="launch()">
+            <button type="button" [disabled]="actionSubmitting() || !c.isWired" (click)="launch()">
               {{ 'marketing.campaign.action.launch' | t }}
             </button>
           }
           @case ('SCHEDULED') {
-            <button type="button" [disabled]="actionSubmitting()" (click)="launch()">
+            <button type="button" [disabled]="actionSubmitting() || !c.isWired" (click)="launch()">
               {{ 'marketing.campaign.action.launch' | t }}
             </button>
           }
@@ -190,6 +194,16 @@
           }
         }
       </section>
+
+      @if (c.kind === 'SCENARIO') {
+        <q-scenario-panel
+          [campaignId]="c.campaignId"
+          [status]="c.status"
+          [timezone]="c.timezone"
+          (editRequested)="onScenarioEdit()"
+          (revised)="onScenarioRevised($event)"
+        />
+      }
 
       <section class="stats" data-testid="campaign-stats">
         <h3 class="q-caption">{{ 'marketing.campaign.stats.title' | t }}</h3>
@@ -259,22 +273,42 @@
             <thead>
               <tr>
                 <th>{{ 'marketing.campaign.recipients.column.status' | t }}</th>
+                @if (hasDeliveryEvidence()) {
+                  <th>{{ 'marketing.campaign.recipients.column.delivery' | t }}</th>
+                }
                 <th>{{ 'marketing.campaign.recipients.column.reason' | t }}</th>
               </tr>
             </thead>
             <tbody>
               @for (recipient of recipients(); track recipient.customerAccountId) {
-                <tr>
+                <tr data-testid="recipient-row">
                   <td>{{ recipient.terminalStatus ?? recipient.status }}</td>
+                  @if (hasDeliveryEvidence()) {
+                    <td>
+                      @if (recipient.deliveryState; as state) {
+                        {{ deliveryText(state) }}
+                        @if (recipient.segmentsBilled; as segments) {
+                          <div class="q-caption">
+                            {{ 'marketing.campaign.recipients.segments' | t: { count: segments } }}
+                          </div>
+                        }
+                      } @else {
+                        —
+                      }
+                    </td>
+                  }
                   <td>
-                    {{
-                      recipient.refusalReason ? (refusalLabelKey(recipient.refusalReason) | t) : '—'
-                    }}
+                    {{ recipient.refusalReason ? refusalText(recipient.refusalReason) : '—' }}
                   </td>
                 </tr>
               }
             </tbody>
           </table>
+          @if (hasDeliveryEvidence()) {
+            <p class="q-caption recipients__hint" data-testid="recipient-delivery-hint">
+              {{ 'marketing.campaign.recipients.deliveryHint' | t }}
+            </p>
+          }
         }
       </section>
     </div>

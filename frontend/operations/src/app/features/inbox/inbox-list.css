@@ -173,6 +173,12 @@
 /* The state badge and its «needs reply» caption are `q-status-pill` now
  * (ADR 0101) — one object with an overlay, not a badge plus a caption. */
 
+.inbox-list__assistant-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--q-ink-subtle);
+}
+
 .inbox-list__empty-row td {
   padding: 0;
 }

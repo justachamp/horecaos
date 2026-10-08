@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+
+import { DocumentDirection } from './core/i18n/document-direction';
 
 /**
  * The application root, which holds nothing.
@@ -14,4 +16,7 @@ import { RouterOutlet } from '@angular/router';
   imports: [RouterOutlet],
   template: '<router-outlet />',
 })
-export class App {}
+export class App {
+  // Constructed here so `<html dir>` follows the active language from the first frame (ADR 0149).
+  protected readonly direction = inject(DocumentDirection);
+}

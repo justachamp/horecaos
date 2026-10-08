@@ -15,6 +15,8 @@ import { OwnProfile } from '../core/auth/own-profile';
 import { ScopeGrant } from '../core/auth/session-context';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
+import { seedPlatformLocalesForTesting } from '../core/i18n/platform-locales';
+import { REGISTRY_FIXTURE } from '../../testing/platform-locales.fixture';
 import { RealtimeClient } from '../core/realtime/realtime-client';
 import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
 import { Toasts } from '../shared/ui/toast';
@@ -729,5 +731,65 @@ describe('Shell: the location a screen rebuilt by a brand pick reads', () => {
     await pickEvos();
 
     expect(probeLocation.options()).toEqual([]);
+  });
+});
+
+/**
+ * The language switcher offers a language when this build has its catalogue **and** the registry has
+ * it live in the staff-UI tier (ADR 0149): a language the platform declares but has not made live is
+ * never offered, whatever the build holds, and a language the registry takes out of the tier goes from
+ * the list without a change to the console.
+ */
+describe('Shell language switcher', () => {
+  async function open(): Promise<ComponentFixture<Shell>> {
+    await TestBed.configureTestingModule({
+      imports: [Shell],
+      providers: [
+        provideRouter([]),
+        { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnProfile, useValue: new FakeOwnProfile() },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(Shell);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  const offered = (fixture: ComponentFixture<Shell>): string[] =>
+    Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '.locale__select option',
+      ) as NodeListOf<HTMLOptionElement>,
+    ).map((option) => option.value);
+
+  afterEach(() => seedPlatformLocalesForTesting(REGISTRY_FIXTURE));
+
+  it('offers the languages the build has a catalogue for and the registry has live', async () => {
+    expect(offered(await open())).toEqual(['ru', 'uz-Latn', 'en']);
+  });
+
+  it('stops offering a language the registry takes out of the staff-UI tier', async () => {
+    seedPlatformLocalesForTesting({
+      ...REGISTRY_FIXTURE,
+      locales: REGISTRY_FIXTURE.locales.map((entry) =>
+        entry.tag === 'en' ? { ...entry, tiers: ['CONTENT' as const, 'MESSAGES' as const] } : entry,
+      ),
+    });
+
+    expect(offered(await open())).toEqual(['ru', 'uz-Latn']);
+  });
+
+  it('does not offer a language that is live in the registry but has no catalogue in this build', async () => {
+    seedPlatformLocalesForTesting({
+      ...REGISTRY_FIXTURE,
+      locales: REGISTRY_FIXTURE.locales.map((entry) =>
+        entry.tag === 'kk' ? { ...entry, tiers: ['STAFF_UI' as const] } : entry,
+      ),
+    });
+
+    expect(offered(await open())).toEqual(['ru', 'uz-Latn', 'en']);
   });
 });

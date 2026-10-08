@@ -245,7 +245,7 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.weigh.result.unchanged': 'Yozildi: {weight}. Buyurtma summasi oʻzgarmadi.',
   'orders.weigh.result.same': 'Allaqachon yozilgan: {weight}. Hech narsa oʻzgarmadi.',
   'orders.weigh.error.paymentTaken':
-    'Ogʻirlikni yozib boʻlmaydi: buyurtma allaqachon onlayn toʻlangan, bu ogʻirlik esa uning summasini oʻzgartirgan boʻlardi. Farqni qoʻshimcha undirish yoki qaytarish hozircha mavjud emas.',
+    'Ogʻirlikni yozib boʻlmaydi: buyurtma allaqachon onlayn toʻlangan, bu ogʻirlik esa uning summasini oʻzgartirgan boʻlardi. Ogʻirlik boʻyicha sotiladigan pozitsiyalarni onlayn toʻlab boʻlmaydi: bu hal qilingan, kechiktirilmagan. Menejerdan buyurtmani bekor qilib, pulni qaytarishni soʻrang.',
   'orders.weigh.error.notWeighable':
     'Buyurtma tarqatishdan chiqib ketgan: ogʻirlikni endi oʻzgartirib boʻlmaydi.',
   'orders.weigh.error.priceChanged':
@@ -684,7 +684,7 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.basket.remove': 'Olib tashlash',
   'orders.newOrder.basket.weighed': '≈ {weight}, aniq ogʻirlik topshirishda',
   'orders.newOrder.order.totalProvisional':
-    'Summada ogʻirlik boʻyicha sotiladigan pozitsiyalar bor: bu taxminiy summa, aniq summa topshirishda tortilgach maʻlum boʻladi',
+    'Summada ogʻirlik boʻyicha sotiladigan pozitsiyalar bor: bu taxminiy summa, aniq summa topshirishda tortilgach maʻlum boʻladi, shuning uchun buyurtma topshirishda toʻlanadi. Ogʻirlik boʻyicha sotiladigan pozitsiyalar uchun onlayn toʻlov mavjud emas',
   'orders.newOrder.basket.notePlaceholder': 'Oshxona uchun izoh',
   'orders.newOrder.basket.unavailable': 'Endi mavjud emas — davom etish uchun olib tashlang',
   'orders.newOrder.order.title': 'Buyurtma',

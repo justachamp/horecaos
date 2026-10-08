@@ -6,6 +6,7 @@ import { Versioned } from '../../core/api/aggregate-version';
 import { command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import {
+  AssistantTurnResponse,
   ConversationDetailResponse,
   ConversationMessageResponse,
   ConversationResponse,
@@ -63,7 +64,22 @@ export class InboxApi {
     );
   }
 
-  /** `Взять на себя` — FLOW_ACTIVE -> HANDED_TO_OPERATOR, assigned to the acting operator. */
+  /**
+   * `Почему такой ответ` — how one assistant turn ended and which facts it stood on (ADR 0069).
+   * Needs `assistant.read`, which the inbox's own capability does not imply: a 403 here means
+   * "your role cannot see this", not a broken screen.
+   */
+  assistantTurn(
+    scope: LocationScope,
+    turnId: string,
+  ): Observable<Versioned<AssistantTurnResponse>> {
+    return this.api.get<AssistantTurnResponse>(operationsPaths.assistantTurn(scope, turnId));
+  }
+
+  /**
+   * `Взять на себя` — FLOW_ACTIVE -> HANDED_TO_OPERATOR, assigned to the acting operator. Also an
+   * IDLE conversation the assistant has been answering (ADR 0069): the same action takes it from either.
+   */
   takeover(
     scope: LocationScope,
     conversationId: string,

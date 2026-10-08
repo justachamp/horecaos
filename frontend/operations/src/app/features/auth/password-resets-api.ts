@@ -24,7 +24,8 @@ export interface ResetInspection {
   readonly console: 'CONTROL_PLANE' | 'OPERATIONS' | (string & {});
   readonly maskedLogin: string | null;
   readonly expiresAt: string;
-  readonly locale: 'uz' | 'ru' | 'en' | (string & {});
+  /** The registry's tag the reset email was written in (ADR 0149). */
+  readonly locale: string;
 }
 
 /**

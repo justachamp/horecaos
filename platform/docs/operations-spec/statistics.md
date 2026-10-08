@@ -68,7 +68,7 @@ One sticky bar, **two rows with deliberately different visual weight**
 | Канал | Multiselect, grouped | `tenant.sales_channels.display_name`, grouped by `system_type` | Group headers `<option disabled>` as separators (Togora §2b). Archived channels appear only if the period contains orders on them. |
 | Тип получения | Segmented | `ordering.orders.fulfillment_mode` | `Все · Доставка · Самовывоз · В зале`. |
 | Юрлицо | Dropdown | ADR 0038 legal-entity assignment; `fact_order.legal_entity_id` | **Rendered only when the tenant has more than one.** On money views it is not optional: with two entities and "Все" selected the view renders per-entity sub-totals and no combined figure. |
-| Тип оплаты | Multiselect | `fact_order_tender.payment_method_code` — *not built* | Renders **locked** with a lock glyph and the tooltip "Появится вместе с платежами (ADR 0013/0046)". Locked, not hidden: a manager who cannot find the payment filter assumes it exists somewhere else. |
+| Тип оплаты | Multiselect | `fact_order_tender.payment_method_code` — **built** (V0304, ADR 0115) | A working filter, read from the tenant's own payment-method registry. It narrows what the tender fact can narrow — the payment-mix card and the branch report's payment table — and nothing else: `fact_order` carries no payment method (ADR 0046), so the order-grain reports are not cut by it. (It was rendered locked, with the tooltip "Появится вместе с платежами (ADR 0013/0046)", until P39.) |
 
 **Counts live inside the controls** where cardinality allows, computed *before*
 the filter is applied so they do not collapse as the selection narrows
@@ -235,8 +235,14 @@ two-hour order moves a mean and misrepresents the shift.
   *revenue*. Bars, not Delever's pie: five-plus channels in a pie is unreadable
   and pies cannot be compared week to week.
 - **Тип получения** — a single stacked bar, delivery / pickup / dine-in.
-- **Оплата** — rendered as a locked placeholder card naming ADR 0013/0046
-  rather than omitted, for the reason in §1.1.
+- **Оплата** — takings by payment method, `payment_mix.amount.v1` over
+  `reporting.fact_order_tender` (ADR 0115): a donut folded across the branches in
+  range but never across legal entities, narrowed by the branch, legal-entity and
+  payment-method filters. It is **not** cut by channel or fulfilment type — the tender
+  fact has neither column — and says so when one of those filters is set. Beneath it:
+  the *provisional* line while finance has not signed the metric, and the registry's
+  open question (counted at the amount recorded as tendered, not netted of the
+  provider's commission), shown only while the registry still carries it.
 
 **Band D — the funnel and the branch table.**
 - **Воронка по финальному статусу**: `RECEIVED → CONFIRMED → PREPARING → READY
@@ -501,8 +507,14 @@ refuses the matrix: the wave that built them (T06) chose flat rows and recorded 
 grid as deferred. The branch × channel × measure pivot, with its measure selector
 (`Кол-во · Сумма · Средний чек`) and its split selector, is «Сводка 2» on 7.2 (§2.2)
 and is built (gap-map row `7.2c`), so the matrix exists one tab away and the pure
-functions behind it are the reuse point if the owner wants it embedded here. Until
-that call the flat list is the specified shape.
+functions behind it are the reuse point if the owner ever wants it embedded here.
+**Decided 2026-10-07:** the platform owner confirmed the flat lists as the specified
+shape in the acceptance sweep of that date, so this is no longer a position awaiting a
+ruling. When one branch trades under more than one legal entity, Table D gives the
+taxpayer a column of its own (ADR 0115 never sums two entities' takings into one
+figure) and carries beneath it the note the overview's payment card carries: the
+figure is provisional until finance signs `payment_mix.amount.v1`, and it is counted
+at the amount recorded as tendered, never netted of a provider's commission.
 
 ---
 
@@ -511,24 +523,26 @@ that call the flat list is the specified shape.
 **For:** who delivers fast, who delivers far, and whether the third-party
 delivery invoice is correct.
 
-**Still entirely unbuilt as a report, though the reasoning has changed.**
-`fulfillment.courier_shifts`, `courier_assignment_earnings` and
-`courier_ledger_entries` all exist (V0040) — the courier console reads them
-directly (`operations-spec/couriers.md` §6.2). What blocks this screen
-specifically: nothing in production calls `CourierAccrualService.recordDelivery`,
-so an in-house delivery accrues no earning outside a test, and
-`reporting.fact_delivery` — the grain this report needs — has no migration at
-all. Renders the unbuilt state (§1.3) naming ADR 0042/0043 until both are
-true. Specified now so it is not designed in a hurry later.
+**Built (T11, ADR 0125).** `CourierAccrualService.recordDelivery` has its
+production caller, `DeliveryAccrualOrderCompletionTrigger`: when an order
+completes, the delivery is accrued and its shipment closed. The accrual is dated
+and judged on what the courier app captured — the courier's own «delivered» tap
+as the delivery, the «picked up» tap as the kitchen handover that can excuse a
+late delivery — and falls back to the completion's instant, with the handover
+left unknown, when the app captured nothing. The day close projects
+`reporting.fact_delivery` (V0337; carrying its brand since V0510) and the
+`COURIER` scope of `agg_sla_bucket_day`. The tabs below read those; the
+external-delivery tab reads its own closed facts (V0411, V0412), not
+`fact_delivery`. Still unknown on every accrual, by design until a position
+check is recorded: `geoUnverified` is always true.
 
 **Layout:** three tabs — `Эффективность` · `По времени` · `Внешняя доставка`.
 
 **Tab «Эффективность»** — one row per courier: `Имя` · `Тип курьера` ·
 `Кол-во заказов` · `Сумма всех заказов` · `Мин. / Ср. / Макс. расстояние` ·
 `Общий пробег, км` · `Ср. время доставки` · `Макс. время доставки` ·
-`Вовремя %`. Source `fulfillment.courier_assignment_earnings` — **built**
-(V0040), but production-empty — plus `reporting.fact_delivery`, which has no
-migration at all — *not built, ADR 0043*.
+`Вовремя %`. Source `reporting.fact_delivery` (V0337, ADR 0125) — **built**,
+written by the day close from `fulfillment.courier_assignment_earnings`.
 Sort: `Вовремя %` ascending. **The worst performer is the reason the screen
 exists**; sorting by order count puts the busiest courier on top, which nobody
 needed to look up.
@@ -544,7 +558,8 @@ Columns: `Служба` · `ID заказа` · `Внешний ID` · `Сумм
 provider) · `Разница` · `Статус сверки`.
 `Разница` = `delivery_cost_variance.v1` = `provider_billed_som −
 fee_charged_som`. `Статус сверки` ∈ `PENDING · MATCHED · VARIANCE · UNBILLED`
-from `reporting.fact_delivery.reconciliation_status`.
+from `reporting.fact_external_delivery_cost` (V0412), a snapshot as of the
+business day's close.
 **`UNBILLED` rows are excluded from the variance total and counted separately**,
 per ADR 0043 — an unbilled order reading as a zero-variance match is exactly the
 bug this metric exists to prevent, and Delever's version has no status column at
@@ -882,7 +897,7 @@ HorecaOS is PostgreSQL-only where Delever runs a columnar store. ADR 0043 was
 **Partial** — §7 has the full accounting. That still leaves the same question
 concrete, one grain narrower: what can be served from `ordering.*` directly at
 pilot scale (one location), and what genuinely still needs a fact table that
-does not exist (courier delivery, tender, behavioural, promotion), now that
+does not exist (behavioural; the courier delivery, tender and promotion facts are built), now that
 the star schema and the close job that do exist are no longer the open
 question.
 
@@ -911,16 +926,13 @@ if run live against OLTP tables indexed for point writes:
 
 - 7.2 «Сводка 2» (branch × channel × measure pivot).
 - 7.3 both tables — **built**, and no longer a query-cost question:
-  `agg_branch_day` and `agg_sla_bucket_day` (`LOCATION` scope) are
-  pre-computed once per business day by `DayAggregator`, not joined live from
-  `order_state_history`. What is still missing is the `COURIER` scope the
-  table already permits, which needs ADR 0042's earnings to actually accrue in
-  production first.
-- 7.4 all three tabs — `fulfillment.courier_assignment_earnings` exists
-  (V0040) but accrues nothing in production
-  (`CourierAccrualService.recordDelivery` has no caller outside a test), and
-  `reporting.fact_delivery` has no migration at all, so there is still
-  nothing to read.
+  `agg_branch_day` and `agg_sla_bucket_day` (`LOCATION` and, since T11, `COURIER`
+  scope) are pre-computed once per business day by `DayAggregator`, not joined
+  live from `order_state_history`.
+- 7.4 all three tabs — **built** on closed facts: `reporting.fact_delivery`
+  (V0337) and the two external-delivery facts (V0411, V0412), written by the
+  day close. `CourierAccrualService.recordDelivery` has its production caller
+  (ADR 0125), so the earnings behind them accrue from real deliveries.
 - 7.6 cohorts, LTV, new-vs-returning, repeat distribution — every one of these
   needs `is_first_order` precomputed; deriving it live is a full-history scan
   per customer per query.
@@ -931,10 +943,8 @@ if run live against OLTP tables indexed for point writes:
 - Any range longer than a quarter, for anything.
 
 **Blocked on data that does not exist at all, not on the query engine:**
-7.6 Band D (funnel — needs `analytics.events`, still not built), payment mix
-(ADR 0013/0046, still not built), courier delivery facts reaching a report
-(ADR 0042's own tables are built; nothing accrues a delivery in production and
-`reporting.fact_delivery` has no migration), kitchen timings reaching a report
+7.6 Band D (funnel — needs `analytics.events`, still not built), kitchen timings
+reaching a report
 (`kitchen.tickets` is built — V0030 — but the close job reads order
 timestamps, not the ticket), cancellation cost reaching a report
 (`ordering.order_outcomes` is built — V0029 — but `fact_order.stock_disposition`
@@ -947,9 +957,9 @@ not done. The metric registry, the typed query API, `fact_order`,
 `fact_order_line` and the close job, reconciled against `ordering`, are built
 and already serving the cheap reports (`GET /reporting/metrics`, `/queries`,
 `/sla-buckets`, `/preparation-time`, `/orders`, `/order-outcomes`,
-`/variant-sales`, `/demand-history`). What remains of the second list —
-courier delivery, tender, behavioural and promotion facts — waits on their
-owning ADRs. Exports remain last, with capabilities, quotas and audit still to
+`/variant-sales`, `/demand-history`). Of the second list, the courier delivery
+(ADR 0125), tender (ADR 0115) and promotion (ADR 0140) facts are built; the
+behavioural fact still waits on its owning ADR. Exports remain last, with capabilities, quotas and audit still to
 build before the first file is produced.
 
 Two operational guards are not optional given one cluster serves both
@@ -1077,16 +1087,16 @@ provisional (§1.2).
 
 | Missing | Precisely what | Owning ADR |
 |---|---|---|
-| The remaining star schema | `reporting.dim_*` (no dimension tables exist at all — every query joins the fact's own denormalised columns instead), `fact_order_tender`, `fact_delivery`, `fact_promotion_redemption`, `fact_behaviour`, `classification_run`/`_result`, `forecast_run`, `fact_forecast`, `report_exports`. (`fact_order`, `fact_order_line`, `fact_refund`, `agg_branch_day`, `agg_sla_bucket_day`, `metric_definitions` and `business_day_policies` are **built** — V0031.) | **0043** |
+| The remaining star schema | `reporting.dim_*` (no dimension tables exist at all — every query joins the fact's own denormalised columns instead), `fact_behaviour`, `classification_run`/`_result`, `forecast_run`, `fact_forecast`, `report_exports`. (`fact_order`, `fact_order_line`, `fact_refund`, `agg_branch_day`, `agg_sla_bucket_day`, `metric_definitions` and `business_day_policies` are **built** — V0031 — and so are `fact_order_tender` (V0304, ADR 0115), `fact_delivery` (V0337, ADR 0125) and `fact_promotion_redemption` (V0460, ADR 0140).) | **0043** |
 | `business_date` on an order | Still **only** on `ordering.order_number_counters.business_date` (V0022 line 376), as a counter key — `ordering.orders` itself has no business-date column. **Built** as a stored, versioned fact column: `reporting.fact_order.business_date` (V0031), stamped with `boundary_version` at close by `DayCloseService`/`DayAggregator` against `reporting.business_day_policies`. Anything reading `ordering.orders` directly, rather than the closed fact, still recomputes it per query. | **0043** (`reporting.business_day_start` via 0030) |
 | The metric registry and typed query API | **Built**: `GET /reporting/metrics`, `GET /reporting/queries` (typed, with provenance and the ADR 0038/boundary-regime refusals), plus `/sla-buckets`, `/preparation-time`, `/orders`, `/order-outcomes`, `/variant-sales` and `/demand-history` (`ReportQueryService`, `ReportingController`). Still missing: a `GET /reporting/reports/{id}` saved-report lookup and `POST /reporting/exports` — §1.5's export mechanism. | **0043** |
 | Capabilities | `reporting.read` — **built**, gates every `GET .../reporting/*` endpoint above, at `TENANT` scope rather than `LOCATION` — and `metric.manage` — **built**, backs `MetricSigningService`/`MetricSignatureController`. `report.export`, `customer.pii.export` and `forecast.manage` are still not in the 0025 registry. | **0043** + 0025 |
-| **Payment method on an order** | `ordering.orders` has `payment_status_projection` and **no payment method column at all**. `tenant.channel_payment_methods.payment_method_code` is configuration, not a record of what was paid. Every payment-mix chart and cash-collection split in this spec is unservable. | **0013** + **0046** (`fact_order_tender`) |
+| **Payment method on an order** | `ordering.orders` has `payment_status_projection` and **no payment method column at all**, and still does not need one: what was paid is `payments.tenders` (ADR 0046), and the close job projects it into `reporting.fact_order_tender` (V0304) — **built** (ADR 0115). The payment mix (overview card, branch report Table D) and the payment-method filter read that fact. A provider's commission is not netted (the metric's open question) and finance has not signed `payment_mix.amount.v1`, so the figure is marked provisional. | **0013** + **0046** + **0115** |
 | Cancellation semantics reaching a report | `ordering.order_outcome_reasons` and `ordering.order_outcomes` are **built** (V0029) — `stock_disposition ∈ {RELEASE, RETURN_TO_STOCK, WRITE_OFF, NO_EFFECT}`, `liability_party ∈ {TENANT, CUSTOMER, COURIER_PARTNER, PLATFORM}`, written by `OrderOutcomeService` on every cancellation and completion. `reporting.fact_order` carries columns for both (V0031), but the close job (`JdbcReportingStore.insertOrderFact`) never populates them — every fact row has them `NULL`, which is not the same as `NO_EFFECT`. Until that copy is wired up, a report still reads only `order_state_history.reason_code varchar(64)`. | **0039** built; **0043** open |
 | Operator identity reaching a report | `ordering.orders.created_by_actor_type/id` and `accepted_by_actor_type/id` are **built** (V0029), written once by `JdbcOrderStore` and never overwritten. `reporting.fact_order` has no operator column at all — the close job has nothing to copy it into — so 7.5 still cannot join a closed fact to a staff dimension. `order_state_history.actor_id varchar(255)` remains a string, not a principal, for anything reading the live order. | **0043** (0039's half is done) |
 | Kitchen timings reaching a report | `kitchen.tickets.started_at / ready_at / target_ready_at` and `kitchen.ticket_events` are **built** (V0030) — written and read by `KitchenTicketService` and `KitchenBoardController` for the kitchen board itself. The close job never reads them: `reporting.fact_order.seconds_to_ready` is `elapsed(confirmedAt, readyAt)` off the order's own timestamps, i.e. `PREPARING→READY` from `order_state_history`, not a kitchen fire-to-pass time, and must be labelled as one. | **0043** (0041's tables are done) |
-| Courier and delivery data reaching a report | `fulfillment.courier_shifts`, `courier_assignment_earnings` (`distance_meters`, `on_time_outcome`, `promised_delivery_end`, `grace_seconds`, `on_time_policy_version`) and `courier_ledger_entries` are **built** (V0040). 7.4 is still entirely blocked: `CourierAccrualService.recordDelivery` has no production caller, so an in-house delivery accrues no earning outside a test, and `reporting.fact_delivery` — plus the `COURIER` scope of `agg_sla_bucket_day` — has no producer. | **0043** (0042's tables are built, nothing populates them in production) |
-| External-delivery reconciliation | `fact_delivery.provider_billed_som`, `variance_som`, `reconciliation_status` — `fact_delivery` has no migration at all | **0042** + 0043 |
+| Courier and delivery data reaching a report | `fulfillment.courier_shifts`, `courier_assignment_earnings` (`distance_meters`, `on_time_outcome`, `promised_delivery_end`, `grace_seconds`, `on_time_policy_version`) and `courier_ledger_entries` are **built** (V0040), and since T11 something populates them: `DeliveryAccrualOrderCompletionTrigger` accrues every completed internal delivery (ADR 0125), `reporting.fact_delivery` (V0337, with `brand_id` since V0510) and the `COURIER` scope of `agg_sla_bucket_day` are written by the day close. | **0043** + **0125** |
+| External-delivery reconciliation | **Built** as its own closed fact, `reporting.fact_external_delivery_cost` (V0412): billed amount, variance and match status as of the business day's close | **0042** + 0043 |
 | Aggregator commission | `fact_order.aggregator_commission_som` — column **built** (V0031), never written. **Renders `—`, never `0`** | **0040** |
 | Behavioural telemetry | `analytics.events` topic (`session_started`, `customer_registered`, `cart_item_added`, `checkout_started`, `order_placed`), keyed by session, subject = ADR 0029 keyed hash. **Cannot be backfilled.** | **0043** + 0032 |
 | Refunds | `reporting.fact_refund` is **built** (V0031) — one row per refund transaction, filed under the refund's own business date, not the two columns on `fact_order` this ADR originally sketched (which cannot separate an order refunded twice on two different days). Its source, `payments.payment_transactions` refund rows, is what no code writes yet, so the table stays empty. | **0013** |

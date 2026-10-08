@@ -172,5 +172,33 @@ public final class CustomerConfigurationKeys {
                     + "when the tenant has published a customer.pii.export approval policy (ADR 0027).")
             .build();
 
+    /** The code both declarations share (ADR 0111). */
+    public static final String LEAD_CALLBACK_REMINDER_MINUTES_CODE = "customer.lead.callback_reminder_minutes";
+
+    /**
+     * How soon before its time a {@code CALLBACK_SCHEDULED} lead surfaces on the call centre's
+     * queue again if nobody has converted or declined it (ADR 0111 Configuration keys).
+     *
+     * <p>A scheduled callback is not on the "needs attention" view while it is a long way off; it
+     * joins it this many minutes before it is due, and stays on it once overdue, so that a callback
+     * somebody forgot cannot sink out of sight. Sixty by default: an hour's notice is enough to
+     * brief whoever is on shift. Tenant-wide, because the queue is a call-centre concern with no
+     * branch of its own, and not tenant-visible: a number nobody has yet had cause to ask a tenant
+     * owner to choose. <strong>Declared twice</strong>, like the others here; {@code
+     * CustomerConfigurationKeysTests} keeps the two identical.
+     *
+     * <p>There is deliberately no {@code customer.card.view_audit_enabled} beside it: card-view
+     * auditing ships unconditional until counsel answers whether a plain view must be recorded
+     * (ADR 0111 Decision §7), and a switch shipped now would presuppose the answer.
+     */
+    public static final ConfigurationKey<Integer> LEAD_CALLBACK_REMINDER_MINUTES = ConfigurationKey.of(
+                    LEAD_CALLBACK_REMINDER_MINUTES_CODE, Integer.class)
+            .defaultValue(60)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Minutes before its time a scheduled lead callback joins the call centre's "
+                    + "needs-attention view again (ADR 0111).")
+            .build();
+
     private CustomerConfigurationKeys() {}
 }

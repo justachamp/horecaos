@@ -1,0 +1,137 @@
+:host {
+  display: block;
+}
+
+.offers__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.offers__intro {
+  margin: 0;
+  color: var(--q-ink-muted);
+  max-width: 70ch;
+}
+
+.offers__create,
+.offers__actions button,
+.offers__btn {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.offers__create,
+.offers__btn--primary {
+  flex-shrink: 0;
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.offers__btn:disabled,
+.offers__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.offers__skeleton {
+  height: 120px;
+  background: var(--q-surface-1);
+}
+
+.offers__band {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.offers__group {
+  margin-bottom: 24px;
+}
+
+.offers__group h3 {
+  margin: 0 0 8px;
+}
+
+.offers__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.offers__table th {
+  text-align: start;
+  padding: 6px 10px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.offers__table td {
+  padding: 6px 10px;
+  font-size: var(--q-type-body-sm);
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.offers__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.offers__badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-caption);
+}
+
+.offers__badge[data-status='PUBLISHED'] {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.offers__note {
+  margin: 4px 0 8px;
+  color: var(--q-ink-muted);
+}
+
+.offers__error {
+  color: var(--q-error-text);
+}
+
+.offers__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+}
+
+.offers__fieldset select,
+.offers__fieldset input[type='text'],
+.q-field input,
+.q-field select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+  font-family: inherit;
+}
+
+.offers__inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--q-type-body-sm);
+}

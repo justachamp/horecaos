@@ -28,9 +28,15 @@
     <header class="panelHead">
       <h2 class="q-subhead">{{ i18n.t('cutoverChecklist.scopes.title') }}</h2>
       <p class="q-caption tally">
-        <span class="pill pill-go">{{ counts().go }} {{ i18n.t('cutoverChecklist.readiness.go') }}</span>
-        <span class="pill pill-pending">{{ counts().pending }} {{ i18n.t('cutoverChecklist.readiness.pending') }}</span>
-        <span class="pill pill-blocked">{{ counts().blocked }} {{ i18n.t('cutoverChecklist.readiness.blocked') }}</span>
+        <span class="pill pill-go"
+          >{{ counts().go }} {{ i18n.t('cutoverChecklist.readiness.go') }}</span
+        >
+        <span class="pill pill-pending"
+          >{{ counts().pending }} {{ i18n.t('cutoverChecklist.readiness.pending') }}</span
+        >
+        <span class="pill pill-blocked"
+          >{{ counts().blocked }} {{ i18n.t('cutoverChecklist.readiness.blocked') }}</span
+        >
       </p>
     </header>
     @if (scopes().length === 0) {
@@ -54,17 +60,35 @@
                 <td class="q-body-sm">{{ i18n.t(capabilityKey(scope.capability)) }}</td>
                 <td class="q-body-sm">{{ i18n.t(stateKey(scope.state)) }}</td>
                 <td class="q-body-sm">
-                  <span class="pill" [class]="'pill pill-' + checklistState(scope)">{{ i18n.t(readinessKey(scope)) }}</span>
+                  <span class="pill" [class]="'pill pill-' + checklistState(scope)">{{
+                    i18n.t(readinessKey(scope))
+                  }}</span>
                 </td>
                 <td class="q-body-sm actions">
                   @if (canDecide(scope)) {
-                    <button type="button" class="secondary decideToggle" (click)="open(scope, 'decide')">
-                      {{ openScope() === scope.id && mode() === 'decide' ? i18n.t('common.cancel') : i18n.t('cutoverChecklist.decide') }}
+                    <button
+                      type="button"
+                      class="secondary decideToggle"
+                      (click)="open(scope, 'decide')"
+                    >
+                      {{
+                        openScope() === scope.id && mode() === 'decide'
+                          ? i18n.t('common.cancel')
+                          : i18n.t('cutoverChecklist.decide')
+                      }}
                     </button>
                   }
                   @if (canRollBack(scope)) {
-                    <button type="button" class="secondary rollbackToggle" (click)="open(scope, 'rollback')">
-                      {{ openScope() === scope.id && mode() === 'rollback' ? i18n.t('common.cancel') : i18n.t('cutoverChecklist.rollback') }}
+                    <button
+                      type="button"
+                      class="secondary rollbackToggle"
+                      (click)="open(scope, 'rollback')"
+                    >
+                      {{
+                        openScope() === scope.id && mode() === 'rollback'
+                          ? i18n.t('common.cancel')
+                          : i18n.t('cutoverChecklist.rollback')
+                      }}
                     </button>
                   }
                 </td>
@@ -73,7 +97,9 @@
                 <tr class="decisionRow">
                   <td colspan="5">
                     @if (mode() === 'rollback') {
-                      <p class="q-body-sm warning">{{ i18n.t('cutoverChecklist.rollbackWarning') }}</p>
+                      <p class="q-body-sm warning">
+                        {{ i18n.t('cutoverChecklist.rollbackWarning') }}
+                      </p>
                       <div class="inlineForm">
                         <input
                           class="q-body-sm"
@@ -82,7 +108,12 @@
                           [value]="reason()"
                           (input)="reason.set($any($event.target).value)"
                         />
-                        <button type="button" class="rollbackConfirm" [disabled]="busy() || reason().trim().length === 0" (click)="rollBack(scope)">
+                        <button
+                          type="button"
+                          class="rollbackConfirm"
+                          [disabled]="busy() || reason().trim().length === 0"
+                          (click)="rollBack(scope)"
+                        >
                           {{ i18n.t('cutoverChecklist.rollbackConfirm') }}
                         </button>
                       </div>
@@ -90,18 +121,35 @@
                       <div class="decision">
                         <p class="q-caption muted">{{ i18n.t('cutoverChecklist.decideLead') }}</p>
                         <label class="field">
-                          <span class="q-caption">{{ i18n.t('cutoverChecklist.requestedBy') }}</span>
+                          <span class="q-caption">{{
+                            i18n.t('cutoverChecklist.requestedBy')
+                          }}</span>
                           @if (approvers().length > 0) {
-                            <select class="q-body-sm" name="requestedBy" (change)="requestedBy.set($any($event.target).value)">
-                              <option value="" [selected]="requestedBy() === ''">{{ i18n.t('common.chooseColleague') }}</option>
+                            <select
+                              class="q-body-sm"
+                              name="requestedBy"
+                              (change)="requestedBy.set($any($event.target).value)"
+                            >
+                              <option value="" [selected]="requestedBy() === ''">
+                                {{ i18n.t('common.chooseColleague') }}
+                              </option>
                               @for (subject of approvers(); track subject) {
-                                <option [value]="subject" [selected]="subject === requestedBy()">{{ subject }}</option>
+                                <option [value]="subject" [selected]="subject === requestedBy()">
+                                  {{ subject }}
+                                </option>
                               }
                             </select>
                           } @else {
-                            <input class="q-body-sm" name="requestedBy" [value]="requestedBy()" (input)="requestedBy.set($any($event.target).value)" />
+                            <input
+                              class="q-body-sm"
+                              name="requestedBy"
+                              [value]="requestedBy()"
+                              (input)="requestedBy.set($any($event.target).value)"
+                            />
                           }
-                          <span class="q-caption muted">{{ i18n.t('cutoverChecklist.requestedByHint') }}</span>
+                          <span class="q-caption muted">{{
+                            i18n.t('cutoverChecklist.requestedByHint')
+                          }}</span>
                         </label>
 
                         <div class="evidence">
@@ -120,12 +168,27 @@
                                 [attr.name]="'evidenceValue-' + index"
                                 [placeholder]="i18n.t('cutoverChecklist.evidenceValue')"
                                 [value]="line.value"
-                                (input)="updateEvidence(index, { value: $any($event.target).value })"
+                                (input)="
+                                  updateEvidence(index, { value: $any($event.target).value })
+                                "
                               />
-                              <button type="button" class="secondary" [attr.aria-label]="i18n.t('cutoverChecklist.removeEvidence')" (click)="removeEvidence(index)">×</button>
+                              <button
+                                type="button"
+                                class="secondary"
+                                [attr.aria-label]="i18n.t('cutoverChecklist.removeEvidence')"
+                                (click)="removeEvidence(index)"
+                              >
+                                ×
+                              </button>
                             </div>
                           }
-                          <button type="button" class="secondary addEvidence" (click)="addEvidence()">{{ i18n.t('cutoverChecklist.addEvidence') }}</button>
+                          <button
+                            type="button"
+                            class="secondary addEvidence"
+                            (click)="addEvidence()"
+                          >
+                            {{ i18n.t('cutoverChecklist.addEvidence') }}
+                          </button>
                         </div>
 
                         <input
@@ -136,10 +199,20 @@
                           (input)="reason.set($any($event.target).value)"
                         />
                         <div class="inlineForm">
-                          <button type="button" class="approve" [disabled]="!canSign()" (click)="decide(scope, 'approve')">
+                          <button
+                            type="button"
+                            class="approve"
+                            [disabled]="!canSign()"
+                            (click)="decide(scope, 'approve')"
+                          >
                             {{ i18n.t('cutoverChecklist.approve') }}
                           </button>
-                          <button type="button" class="secondary refuse" [disabled]="!canSign()" (click)="decide(scope, 'refuse')">
+                          <button
+                            type="button"
+                            class="secondary refuse"
+                            [disabled]="!canSign()"
+                            (click)="decide(scope, 'refuse')"
+                          >
                             {{ i18n.t('cutoverChecklist.refuse') }}
                           </button>
                         </div>

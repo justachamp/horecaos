@@ -1,0 +1,8 @@
+# The routing dataset as an image (ADR 0147, decision 5): files only, no engine.
+#
+# `deploy/compose.production.yml`'s `osrm-dataset` job copies /dataset into the volume the
+# engine reads and exits. busybox because that job needs `sh`, `cp` and `ls` and nothing
+# else, and a dataset image that carried the engine too would have two things to pin
+# instead of one.
+FROM busybox:1.37.0
+COPY dataset/ /dataset/

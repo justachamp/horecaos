@@ -388,7 +388,7 @@ export const deliveryEn = {
   'delivery.tariffs.detail.accrual': 'Accrual',
   'delivery.tariffs.detail.rounding': 'Rounding',
   'delivery.tariffs.detail.radiusFallback':
-    'Road mode: when the routing provider does not answer, the fee is priced from the straight line multiplied by {factor} and the resolution is stamped RADIUS_FALLBACK.',
+    'Road mode is falling back to the straight line: fees are priced from it multiplied by {factor}, and each resolution is stamped RADIUS_FALLBACK until routing answers again.',
   'delivery.tariffs.detail.timeRulesHead': 'Peak windows',
   'delivery.tariffs.detail.discountsHead': 'Discounts',
   'delivery.tariffs.band.set': 'Band set',
@@ -405,8 +405,27 @@ export const deliveryEn = {
   'delivery.tariffs.draft.roadFactor': 'Detour factor (basis points, 10000 = 1.0)',
   'delivery.tariffs.draft.roadNeedsRouting':
     'Road mode needs a routing installation. Activation will refuse this version until one is set.',
-  'delivery.tariffs.draft.roadFallbackNote':
-    'If the routing provider does not answer, the fee is priced from the straight line multiplied by the detour factor and the resolution says RADIUS_FALLBACK.',
+  'delivery.tariffs.detail.basis': 'Distance measured by',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE': 'The straight line from the branch',
+  'delivery.tariffs.detail.basis.ROAD': 'Road distance, from the platform routing engine',
+  'delivery.tariffs.detail.basis.STRAIGHT_LINE_FALLBACK':
+    'The straight line times the detour factor (routing is not answering)',
+  'delivery.tariffs.detail.dataset': 'Routing dataset',
+  'delivery.tariffs.detail.basisEvidence.FEES':
+    'Read from the fees this version priced in the last {hours} h: {road} by road, {fallback} by straight line.',
+  'delivery.tariffs.detail.basisEvidence.CONFIGURATION':
+    'Expected from configuration: this version has priced no fee in the last {hours} h.',
+  'delivery.tariffs.draft.usePlatformRouting':
+    "Use platform routing (recommended): the platform's own routing engine measures the road, with no credentials to set up",
+  'delivery.tariffs.draft.basis.STRAIGHT_LINE': 'Distance is the straight line from the branch.',
+  'delivery.tariffs.draft.basis.ROAD_ON':
+    'Distance will be measured by road with the platform routing engine, dataset {dataset}.',
+  'delivery.tariffs.draft.basis.ROAD_OFF':
+    'The platform routing engine is not switched on yet. Until it is, fees are priced from the straight line multiplied by {factor}, and each resolution says RADIUS_FALLBACK.',
+  'delivery.tariffs.draft.basis.ROAD_UNKNOWN':
+    'Distance will be measured by road with the platform routing engine. If it does not answer, the fee is priced from the straight line multiplied by the detour factor and says RADIUS_FALLBACK.',
+  'delivery.tariffs.draft.basis.ROAD_NAMED_INSTALLATION':
+    'Distance will be measured by the routing installation you named. If it does not answer, the fee is priced from the straight line multiplied by the detour factor and says RADIUS_FALLBACK.',
   'delivery.tariffs.draft.maxFee': 'Maximum fee (minor units, optional)',
   'delivery.tariffs.draft.roundingStep': 'Rounding step (minor units, optional)',
   'delivery.tariffs.draft.accrual': 'Per-km accrual',
@@ -733,4 +752,80 @@ export const deliveryEn = {
     'On: a courier cannot mark a cash order delivered until they have entered the cash they collected and it matches what is due. Orders already paid online are not affected.',
   'delivery.policy.consequence.gpsVerificationEnabled':
     'On: taking an offer is refused when the courier is farther from the branch than the accept radius; arriving, collecting and handing over are refused when they are farther from the branch or the customer’s door than the step radius. Off: positions are not checked, and not even read.',
+  'delivery.zones.draft.shape': 'Shape',
+  'delivery.zones.draft.shape.CIRCLE': 'A circle around a branch',
+  'delivery.zones.draft.shape.POLYGON': 'Draw on the map',
+  'delivery.zones.draft.polygonHint':
+    "Draw the zone's outline corner by corner. Saving only drafts a new version: nothing governs a delivery fee until the version has been looked at on the map and activated.",
+  'delivery.zones.draft.polygonEmpty': 'Draw at least three corners to save the outline.',
+  'delivery.zones.draft.fromVersion':
+    'Starting from the outline of version {version}. Saving drafts a new version; version {version} stays as it is.',
+  'delivery.zones.draft.polygonRegionBox':
+    "The box drawn on the map is the region's: a corner outside it cannot be activated.",
+  'delivery.zones.version.showOnMap': 'Show on map',
+  'delivery.zones.version.editOutline': 'Edit outline',
+  'delivery.zones.map.notEditable':
+    'This version has holes or several parts, which the outline editor would flatten. Draw a new outline instead.',
+  'delivery.zones.map.outlineFailed': 'The outline of this version could not be read.',
+  'delivery.zones.review.title': 'Check zone {code}, version {version}, on the map',
+  'delivery.zones.review.mapLabel': 'Outline of zone {code}',
+  'delivery.zones.review.loading': 'Reading the outline…',
+  'delivery.zones.review.loadFailed':
+    'The outline could not be read, so this version cannot be reviewed now. Close and try again.',
+  'delivery.zones.review.verdict.INSIDE': 'The outline sits inside its region.',
+  'delivery.zones.review.verdict.OUTSIDE':
+    'The outline is not inside its region. Activation will be refused; check where it is on the map.',
+  'delivery.zones.review.verdict.LIKELY_SWAPPED':
+    'The outline is outside its region, but would be inside it with latitude and longitude swapped. It was probably written the wrong way round; do not activate it.',
+  'delivery.zones.review.verdict.NO_REGION':
+    'No region is set for this zone, so there is nothing to check the outline against except your own eyes.',
+  'delivery.zones.review.tariff': 'Tariff: {tariff}',
+  'delivery.zones.review.noTariff':
+    "No tariff is bound to this zone: it falls through to the branch's tariff.",
+  'delivery.zones.review.simplified':
+    'This shape has holes or several parts. The map draws only the outer outline of each part.',
+  'delivery.zones.review.corners': '{count} corners',
+  'delivery.zones.review.moreCorners': '…and {count} more corners.',
+  'delivery.zones.review.confirm.map':
+    'I looked at the outline on the map and it is where this zone should be.',
+  'delivery.zones.review.confirm.noMap':
+    'There is no map here. I checked the corner coordinates against the source and they are where this zone should be.',
+  'delivery.zones.review.activate': 'Activate version {version}',
+  'delivery.zones.review.close': 'Close',
+  'delivery.zoneImport.column.map': 'On the map',
+  'delivery.zoneImport.preview.show': 'Show',
+  'delivery.zoneImport.preview.unreadable': 'Not polygon GeoJSON: cannot be drawn',
+  'delivery.zoneImport.preview.title': 'Row {ref}, on the map beside its source',
+  'delivery.zoneImport.preview.mapLabel': 'Row {ref} outline',
+  'delivery.zoneImport.preview.sourceHeading': 'The corners, as written in the file and as read',
+  'delivery.zoneImport.preview.inFile': 'In the file [longitude, latitude]',
+  'delivery.zoneImport.preview.readAs': 'Read as latitude, longitude',
+  'delivery.zoneImport.preview.close': 'Close the preview',
+  'delivery.zoneImport.review.action': 'Review and activate',
+  'delivery.zoneImport.live': 'Live',
+  'delivery.zoneImport.activatedToast': 'Zone {code}, version {version}, is live.',
+  'delivery.liveMap.mapLabel': 'Map of couriers on duty',
+  'delivery.liveMap.map.pinLabel': '{courier}: {orders} active orders',
+  'delivery.liveMap.map.hint':
+    'Each pin is a courier whose last position is recent and precise enough to draw; the outlines are the live delivery zones. Couriers on duty without a pin are listed below with the reason, never placed on a guess.',
+  'delivery.orderPoints.show': "Show today's delivery orders on the map",
+  'delivery.orderPoints.refresh': 'Open them again',
+  'delivery.orderPoints.openOnly': 'Only orders still in progress',
+  'delivery.orderPoints.audit':
+    "Opening the day's delivery points is recorded: the platform keeps who opened them, when, and why. The map shows an order number and a point, never a name, a phone or an address. Nothing is opened until you press the button, and it is not refreshed on its own.",
+  'delivery.orderPoints.loading': "Opening the day's delivery points…",
+  'delivery.orderPoints.denied':
+    "You may not open the day's delivery points. That is held by dispatchers and branch managers.",
+  'delivery.orderPoints.summary': '{shown} of {total} delivery orders are on the map',
+  'delivery.orderPoints.withoutPoint':
+    '{count} delivery orders today have no point to show (the address could not be opened).',
+  'delivery.orderPoints.truncated':
+    'The day has more delivery orders than the map opens at once; these are the newest.',
+  'delivery.orderPoints.mapLabel': "Map of today's delivery orders",
+  'delivery.orderPoints.pinLabel': 'Order {number}: {status}',
+  'delivery.orderPoints.legend.courier': 'courier',
+  'delivery.orderPoints.legend.order': 'order in progress',
+  'delivery.orderPoints.legend.closed': 'order finished or cancelled',
+  'delivery.dispatch.map.show': 'Map',
+  'delivery.dispatch.map.hide': 'Hide the map',
 } as const;

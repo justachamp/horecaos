@@ -9,6 +9,7 @@ import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
+import { addressEditorFakes } from '../../customers/address-editor-fakes.testing';
 import { CustomersApi, RevealedCustomerAddress } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { ReservationsApi } from '../reservations-api';
@@ -260,6 +261,7 @@ describe('NewOrderPage', () => {
     ordersPageAtLocation: ReturnType<typeof vi.fn>;
     revealAddresses: ReturnType<typeof vi.fn>;
     addAddress: ReturnType<typeof vi.fn>;
+    updateAddress: ReturnType<typeof vi.fn>;
     reorderPlan: ReturnType<typeof vi.fn>;
     /** Row 5.2d: the reorder deep link's own bootstrap read — no default resolution, only the tests that set query params call it. */
     profile: ReturnType<typeof vi.fn>;
@@ -270,6 +272,8 @@ describe('NewOrderPage', () => {
     open: ReturnType<typeof vi.fn>;
   };
   let reservationsApi: { availability: ReturnType<typeof vi.fn> };
+  /** Row 1.3b: the address editor's map, lookup and regions, which draw nothing and record everything. */
+  let addressFakes: ReturnType<typeof addressEditorFakes>;
   let router: Router;
   let toastShow: ReturnType<typeof vi.fn>;
 
@@ -322,6 +326,7 @@ describe('NewOrderPage', () => {
       ordersPageAtLocation: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       revealAddresses: vi.fn().mockResolvedValue([]),
       addAddress: vi.fn().mockResolvedValue({ id: 'addr-new' }),
+      updateAddress: vi.fn().mockResolvedValue(undefined),
       reorderPlan: vi.fn().mockResolvedValue(null),
       profile: vi.fn().mockRejectedValue(new Error('no reorder deep link in this test')),
       ...customersOverrides,
@@ -332,10 +337,12 @@ describe('NewOrderPage', () => {
       open: vi.fn(),
     };
     reservationsApi = { availability: vi.fn().mockResolvedValue([]) };
+    addressFakes = addressEditorFakes();
     await TestBed.configureTestingModule({
       imports: [NewOrderPage],
       providers: [
         provideRouter([]),
+        ...addressFakes.providers,
         { provide: TableSessionsApi, useValue: sessionsApi },
         { provide: ReservationsApi, useValue: reservationsApi },
         {
@@ -650,6 +657,149 @@ describe('NewOrderPage', () => {
     expect(request.destination.customerAddressId).toBe('addr-9');
   });
 
+  // --------------------------------------- row 1.3b (ADR 0145): a map and a search in the pane
+
+  async function openDeliveryPane(
+    addresses: readonly RevealedCustomerAddress[],
+    customers: Partial<typeof customersApi> = {},
+  ): Promise<HTMLElement> {
+    await render({}, { revealAddresses: vi.fn().mockResolvedValue(addresses), ...customers });
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const byTestId = (host: HTMLElement, id: string): HTMLElement | null =>
+    host.querySelector(`[data-testid="${id}"]`);
+
+  function typeInto(host: HTMLElement, id: string, value: string): void {
+    const field = byTestId(host, id) as HTMLInputElement;
+    field.value = value;
+    field.dispatchEvent(new Event('input'));
+  }
+
+  async function fillAndSave(host: HTMLElement, saveId: string): Promise<void> {
+    fixture.detectChanges();
+    (byTestId(host, saveId) as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('adds an address with the pin the operator placed, saved as their own, and selects it', async () => {
+    const host = await openDeliveryPane([]);
+    (byTestId(host, 'new-order-address-add') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    typeInto(host, 'q-address-street', 'Bunyodkor 12');
+    typeInto(host, 'address-editor-city', 'Tashkent');
+    typeInto(host, 'address-editor-district', 'Chilanzar');
+    typeInto(host, 'q-address-entrance', '2');
+    typeInto(host, 'q-address-flat', '41');
+    typeInto(host, 'q-map-pin-latitude', '41.3');
+    typeInto(host, 'q-map-pin-longitude', '69.2');
+    await fillAndSave(host, 'new-order-address-save');
+
+    expect(customersApi.addAddress).toHaveBeenCalledTimes(1);
+    const [scope, accountId, request] = customersApi.addAddress.mock.calls[0];
+    expect(scope).toEqual(SCOPE);
+    expect(accountId).toBe('acct-1');
+    expect(request.latitude).toBe(41.3);
+    expect(request.longitude).toBe(69.2);
+    expect(request.coordinateSource).toBe('OPERATOR_PIN');
+    expect(request.fields).toEqual(
+      expect.objectContaining({
+        line1: 'Bunyodkor 12',
+        city: 'Tashkent',
+        district: 'Chilanzar',
+        entrance: '2',
+        apartment: '41',
+      }),
+    );
+    expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-new');
+    expect(fixture.componentInstance['addingAddress']()).toBe(false);
+  });
+
+  it('cannot save an address missing what the platform requires', async () => {
+    const host = await openDeliveryPane([]);
+    (byTestId(host, 'new-order-address-add') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    typeInto(host, 'q-address-street', 'Bunyodkor 12');
+    fixture.detectChanges();
+
+    const save = byTestId(host, 'new-order-address-save') as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    save.click();
+    await flushMicrotasks();
+
+    expect(customersApi.addAddress).not.toHaveBeenCalled();
+  });
+
+  it('shows where a located address is on a map that cannot be edited, and offers to correct it', async () => {
+    const host = await openDeliveryPane([
+      address({ latitude: 41.31, longitude: 69.28, coordinateSource: 'OPERATOR_PIN' }),
+    ]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(addressFakes.map.map.livePins).toHaveLength(1);
+    expect(addressFakes.map.map.livePins[0].position).toEqual({
+      latitude: 41.31,
+      longitude: 69.28,
+    });
+    expect(addressFakes.map.map.livePins[0].draggable).toBe(false);
+    expect(byTestId(host, 'new-order-address-edit-pin')?.textContent).toContain('move the pin');
+  });
+
+  it('places the pin of a saved address that has none, in place, at the version it was read at', async () => {
+    const host = await openDeliveryPane([address({ id: 'addr-7', version: 5 })]);
+    expect(byTestId(host, 'new-order-address-unlocated')).not.toBeNull();
+    expect(byTestId(host, 'new-order-address-edit-pin')?.textContent).toContain('Place the pin');
+
+    (byTestId(host, 'new-order-address-edit-pin') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    typeInto(host, 'q-map-pin-latitude', '41.3');
+    typeInto(host, 'q-map-pin-longitude', '69.2');
+    await fillAndSave(host, 'new-order-address-edit-save');
+
+    expect(customersApi.updateAddress).toHaveBeenCalledTimes(1);
+    const [scope, accountId, addressId, request, version] =
+      customersApi.updateAddress.mock.calls[0];
+    expect(scope).toEqual(SCOPE);
+    expect(accountId).toBe('acct-1');
+    expect(addressId).toBe('addr-7');
+    expect(version).toBe(5);
+    expect(request.latitude).toBe(41.3);
+    expect(request.coordinateSource).toBe('OPERATOR_PIN');
+    expect(request.fields.line1).toBe('Amir Temur 1');
+    expect(fixture.componentInstance['editingAddressId']()).toBeNull();
+    expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-7');
+  });
+
+  it('shows the refusal, and keeps the editor open, when another operator changed the address first', async () => {
+    const host = await openDeliveryPane([address({ id: 'addr-7', version: 5 })]);
+    customersApi.updateAddress.mockRejectedValue(
+      new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null),
+    );
+    (byTestId(host, 'new-order-address-edit-pin') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    typeInto(host, 'q-map-pin-latitude', '41.3');
+    typeInto(host, 'q-map-pin-longitude', '69.2');
+    await fillAndSave(host, 'new-order-address-edit-save');
+
+    expect(byTestId(host, 'new-order-address-edit')).not.toBeNull();
+    expect(host.querySelector('.new-order__error')).not.toBeNull();
+  });
+
   it('a delivery order with no address selected cannot be submitted', async () => {
     const placeOrder = vi.fn();
     await render({ placeOrder }, { revealAddresses: vi.fn().mockResolvedValue([]) });
@@ -667,38 +817,47 @@ describe('NewOrderPage', () => {
 
   it('the inline add form saves LANDMARK_ONLY when a landmark is given, and NOT_GEOCODED otherwise', async () => {
     const addAddress = vi.fn().mockResolvedValue({ id: 'addr-new' });
-    await render({}, { revealAddresses: vi.fn().mockResolvedValue([]), addAddress });
+    const host = await openDeliveryPane([], { addAddress });
 
-    fixture.componentInstance['selectCandidate'](candidate());
-    fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+    (byTestId(host, 'new-order-address-add') as HTMLButtonElement).click();
+    fixture.detectChanges();
     await flushMicrotasks();
-    fixture.componentInstance['startAddingAddress']();
-    fixture.componentInstance['setAddressField']('line1', 'Amir Temur 5');
-    fixture.componentInstance['setAddressField']('city', 'Tashkent');
-    fixture.componentInstance['setAddressField']('district', 'Mirzo Ulugbek');
-    fixture.componentInstance['setAddressField']('landmark', 'Рядом с аптекой');
-
-    await fixture.componentInstance['saveNewAddress']();
+    fixture.detectChanges();
+    typeInto(host, 'q-address-street', 'Amir Temur 5');
+    typeInto(host, 'address-editor-city', 'Tashkent');
+    typeInto(host, 'address-editor-district', 'Mirzo Ulugbek');
+    typeInto(host, 'q-address-landmark', 'Рядом с аптекой');
+    await fillAndSave(host, 'new-order-address-save');
 
     expect(addAddress).toHaveBeenCalledWith(
       SCOPE,
       'acct-1',
-      expect.objectContaining({ coordinateSource: 'LANDMARK_ONLY' }),
+      expect.objectContaining({
+        coordinateSource: 'LANDMARK_ONLY',
+        latitude: null,
+        longitude: null,
+      }),
     );
     expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-new');
 
     addAddress.mockClear();
-    fixture.componentInstance['startAddingAddress']();
-    fixture.componentInstance['setAddressField']('line1', 'Amir Temur 6');
-    fixture.componentInstance['setAddressField']('city', 'Tashkent');
-    fixture.componentInstance['setAddressField']('district', 'Mirzo Ulugbek');
-
-    await fixture.componentInstance['saveNewAddress']();
+    (byTestId(host, 'new-order-address-add') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    typeInto(host, 'q-address-street', 'Amir Temur 6');
+    typeInto(host, 'address-editor-city', 'Tashkent');
+    typeInto(host, 'address-editor-district', 'Mirzo Ulugbek');
+    await fillAndSave(host, 'new-order-address-save');
 
     expect(addAddress).toHaveBeenCalledWith(
       SCOPE,
       'acct-1',
-      expect.objectContaining({ coordinateSource: 'NOT_GEOCODED' }),
+      expect.objectContaining({
+        coordinateSource: 'NOT_GEOCODED',
+        latitude: null,
+        longitude: null,
+      }),
     );
   });
 

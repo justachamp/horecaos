@@ -317,6 +317,29 @@ class ProviderInstallationControllerTests {
                 .isEqualTo("{\"serviceId\": \"service-9\", \"merchantId\": \"merchant-1\"}");
     }
 
+    /** ADR 0147: platform routing is chosen on a ROAD tariff, never installed by hand. */
+    @Test
+    void installRefusesARoutingInstallationAndCreatesNothing() {
+        var refused = org.assertj.core.api.Assertions.catchThrowable(() -> controller.install(
+                TENANT,
+                new ProviderInstallationController.InstallRequest(
+                        uz.horecaos.platform.integration.api.provider.ProviderCategory.ROUTING,
+                        "OSRM",
+                        "osrm_internal",
+                        "Routing by hand",
+                        null,
+                        "platform-routing")));
+
+        assertThat(refused)
+                .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class)
+                .hasMessageContaining("use platform routing");
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.installations WHERE tenant_id = :tenantId")
+                        .param("tenantId", TENANT)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     private void environment(String code, String category, String providerType) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments

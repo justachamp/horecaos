@@ -35,6 +35,15 @@ describe('InboxApi', () => {
     request.flush({ conversation: {}, messages: [] });
   });
 
+  it('reads one assistant turn at the brand-scoped assistant path, never under the conversation', () => {
+    api.assistantTurn(SCOPE, 'turn/1').subscribe();
+    const request = http.expectOne(
+      `${environment.apiBaseUrl}/api/v1/operations/tenants/t1/brands/b1/assistant/turns/turn%2F1`,
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({});
+  });
+
   it('sends a reply with the body and an Idempotency-Key, but no If-Match', () => {
     api.reply(SCOPE, 'conv-1', 'On it!').subscribe();
     const request = http.expectOne(`${BASE}/conv-1/replies`);

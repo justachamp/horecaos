@@ -111,7 +111,11 @@ export class TenantDetail {
       this.tenant.set(updated);
       this.changing.set(null);
       this.statusDone.set(
-        this.i18n.t(change === 'suspend' ? 'tenantDetail.status.suspended' : 'tenantDetail.status.reactivated'),
+        this.i18n.t(
+          change === 'suspend'
+            ? 'tenantDetail.status.suspended'
+            : 'tenantDetail.status.reactivated',
+        ),
       );
     } catch (error) {
       this.statusError.set(this.i18n.describe(error as ApiError));

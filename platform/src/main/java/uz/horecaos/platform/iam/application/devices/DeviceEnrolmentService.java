@@ -241,7 +241,16 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This enrolment code has expired");
         }
 
-        DevicePrincipalClass deviceClass = DevicePrincipalClass.valueOf(pending.requestedClass());
+        DevicePrincipalClass requestedClass = DevicePrincipalClass.valueOf(pending.requestedClass());
+        DevicePrincipalClass deviceClass = command.approvedClass();
+        if (!requestedClass.mayBeApprovedAs(deviceClass)) {
+            // ADR 0151: an approval narrows and never widens. Refused before anything is provisioned,
+            // so a refusal leaves no Keycloak client, no grant and no device row, and the request stays
+            // pending for the approver to approve as the class it asked for.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A device that asked to be %s cannot be approved as %s".formatted(requestedClass, deviceClass));
+        }
 
         DeviceClientProvisioner.ProvisionedClient client = provisioner.create(command.displayName());
 
@@ -250,7 +259,8 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
                         client.serviceAccountSubject(),
                         command.roleCode(),
                         command.scope(),
-                        "ADR 0079 kitchen device enrolment, approved by " + approverSubject,
+                        "ADR 0079/0151 kitchen device enrolment as %s, approved by %s"
+                                .formatted(deviceClass, approverSubject),
                         null),
                 SYSTEM_ACTOR);
 
@@ -310,6 +320,7 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
                 brandId,
                 locationId,
                 deviceClass,
+                requestedClass,
                 command.displayName(),
                 "ACTIVE",
                 approverSubject,
@@ -354,19 +365,53 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
         return true;
     }
 
+    /** The columns of a {@link DevicePrincipalView}, the class it asked for read off the request that enrolled it. */
+    private static final String VIEW_COLUMNS = """
+            SELECT d.id, d.tenant_id, d.brand_id, d.location_id, d.device_class,
+                   COALESCE(r.requested_class, d.device_class) AS requested_class,
+                   d.display_name, d.status, d.enrolled_by, d.enrolled_at,
+                   d.revoked_by, d.revoked_at, d.revoked_reason
+              FROM iam.device_principals d
+              LEFT JOIN iam.device_enrolment_requests r
+                     ON r.tenant_id = d.tenant_id AND r.device_principal_id = d.id
+            """;
+
     @Override
     public List<DevicePrincipalView> list(UUID tenantId, UUID locationId) {
-        return jdbc.sql("""
-                SELECT id, tenant_id, brand_id, location_id, device_class, display_name, status,
-                       enrolled_by, enrolled_at, revoked_by, revoked_at, revoked_reason
-                  FROM iam.device_principals
-                 WHERE tenant_id = :tenantId AND location_id = :locationId
-                 ORDER BY enrolled_at DESC
+        return jdbc.sql(VIEW_COLUMNS + """
+                 WHERE d.tenant_id = :tenantId AND d.location_id = :locationId
+                 ORDER BY d.enrolled_at DESC
                 """)
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .query(DeviceEnrolmentService::toView)
                 .list();
+    }
+
+    @Override
+    public Optional<PendingEnrolmentView> pendingEnrolment(String userCode) {
+        return jdbc.sql("""
+                SELECT requested_class, requested_label, expires_at
+                  FROM iam.device_enrolment_requests
+                 WHERE user_code = :userCode AND status = 'PENDING' AND expires_at > :now
+                """)
+                .param("userCode", userCode)
+                .param("now", at(clock.instant()))
+                .query((rs, n) -> new PendingEnrolmentView(
+                        DevicePrincipalClass.valueOf(rs.getString("requested_class")),
+                        rs.getString("requested_label"),
+                        rs.getObject("expires_at", OffsetDateTime.class).toInstant()))
+                .optional();
+    }
+
+    @Override
+    public Optional<DevicePrincipalView> activeDeviceOf(String principalSubject) {
+        return jdbc.sql(VIEW_COLUMNS + """
+                 WHERE d.principal_subject = :subject AND d.status = 'ACTIVE'
+                """)
+                .param("subject", principalSubject)
+                .query(DeviceEnrolmentService::toView)
+                .optional();
     }
 
     private DeviceRow requireDevice(UUID devicePrincipalId) {
@@ -405,6 +450,7 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
                 rs.getObject("brand_id", UUID.class),
                 rs.getObject("location_id", UUID.class),
                 DevicePrincipalClass.valueOf(rs.getString("device_class")),
+                DevicePrincipalClass.valueOf(rs.getString("requested_class")),
                 rs.getString("display_name"),
                 rs.getString("status"),
                 rs.getString("enrolled_by"),

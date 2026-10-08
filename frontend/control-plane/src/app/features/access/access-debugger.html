@@ -4,23 +4,49 @@
 <form class="pickerForm" (submit)="debug($event)">
   <label class="field">
     <span class="q-caption">{{ i18n.t('accessDebugger.subject') }}</span>
-    <input class="q-body-sm" type="text" [value]="subject()" (input)="subject.set($any($event.target).value)" required />
+    <input
+      class="q-body-sm"
+      type="text"
+      [value]="subject()"
+      (input)="subject.set($any($event.target).value)"
+      required
+    />
   </label>
   <label class="field">
     <span class="q-caption">{{ i18n.t('accessDebugger.tenantId') }}</span>
-    <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+    <input
+      class="q-body-sm"
+      type="text"
+      [value]="tenantId()"
+      (input)="tenantId.set($any($event.target).value)"
+    />
   </label>
   <label class="field">
     <span class="q-caption">{{ i18n.t('accessDebugger.brandId') }}</span>
-    <input class="q-body-sm" type="text" [value]="brandId()" (input)="brandId.set($any($event.target).value)" />
+    <input
+      class="q-body-sm"
+      type="text"
+      [value]="brandId()"
+      (input)="brandId.set($any($event.target).value)"
+    />
   </label>
   <label class="field">
     <span class="q-caption">{{ i18n.t('accessDebugger.locationId') }}</span>
-    <input class="q-body-sm" type="text" [value]="locationId()" (input)="locationId.set($any($event.target).value)" />
+    <input
+      class="q-body-sm"
+      type="text"
+      [value]="locationId()"
+      (input)="locationId.set($any($event.target).value)"
+    />
   </label>
   <label class="field">
     <span class="q-caption">{{ i18n.t('accessDebugger.capability') }}</span>
-    <input class="q-body-sm" type="text" [value]="capability()" (input)="capability.set($any($event.target).value)" />
+    <input
+      class="q-body-sm"
+      type="text"
+      [value]="capability()"
+      (input)="capability.set($any($event.target).value)"
+    />
   </label>
   <button type="submit" class="primary" [disabled]="!canSubmit()">
     {{ loading() ? i18n.t('accessDebugger.checking') : i18n.t('accessDebugger.check') }}
@@ -35,8 +61,16 @@
   @if (response.requestedCapability !== null) {
     <section class="panel">
       <h2 class="q-subhead">{{ i18n.t('accessDebugger.answer.title') }}</h2>
-      <p class="q-body answer" [class.granted]="response.granted === true" [class.denied]="response.granted === false">
-        {{ response.granted ? i18n.t('accessDebugger.answer.yes') : i18n.t('accessDebugger.answer.no') }}
+      <p
+        class="q-body answer"
+        [class.granted]="response.granted === true"
+        [class.denied]="response.granted === false"
+      >
+        {{
+          response.granted
+            ? i18n.t('accessDebugger.answer.yes')
+            : i18n.t('accessDebugger.answer.no')
+        }}
       </p>
     </section>
   }
@@ -55,7 +89,10 @@
           </tr>
         </thead>
         <tbody>
-          @for (grant of response.view.scopes; track grant.roleCode + grant.scope.type + (grant.scope.tenantId ?? '')) {
+          @for (
+            grant of response.view.scopes;
+            track grant.roleCode + grant.scope.type + (grant.scope.tenantId ?? '')
+          ) {
             <tr>
               <td class="q-body-sm">
                 {{ grant.scope.type }}

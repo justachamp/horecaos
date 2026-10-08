@@ -79,6 +79,7 @@ class OrderLatenessPolicyEditorHttpTests {
     private static final String EDITOR = "/api/v1/operations/tenants/" + TENANT + "/order-lateness-policy";
     private static final String CONFIG = "/api/v1/operations/tenants/" + TENANT + "/configuration";
     private static final String AT_RISK = "ordering.at_risk_before_minutes";
+    private static final String LATE_THRESHOLD = "ordering.late_order_threshold_minutes";
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -153,6 +154,7 @@ class OrderLatenessPolicyEditorHttpTests {
                 ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION))) {
             policyCache.evict("ordering.lateness", scope);
             configurationCache.evict(AT_RISK, scope);
+            configurationCache.evict(LATE_THRESHOLD, scope);
         }
     }
 
@@ -182,9 +184,16 @@ class OrderLatenessPolicyEditorHttpTests {
                 assertThat(editor.get(mode).get("effectiveAtRiskBeforeSeconds").asInt())
                         .isEqualTo(300);
                 assertThat(editor.get(mode).get("lateAfterSeconds").asInt()).isZero();
-                assertThat(editor.get(mode).get("noPromiseFallbackSeconds").asInt())
+                assertThat(editor.get(mode).get("noPromiseFallbackSeconds").isNull())
+                        .as(mode + " owns no fallback either")
+                        .isTrue();
+                assertThat(editor.get(mode)
+                                .get("effectiveNoPromiseFallbackSeconds")
+                                .asInt())
                         .isEqualTo(2700);
             }
+            assertThat(editor.get("noPromiseDefault").get("seconds").asInt()).isEqualTo(2700);
+            assertThat(editor.get("noPromiseDefault").get("source").asText()).isEqualTo("PLATFORM_DEFAULT");
         }
     }
 
@@ -334,6 +343,81 @@ class OrderLatenessPolicyEditorHttpTests {
         assertThat(editor.get("delivery").get("effectiveAtRiskBeforeSeconds").asInt())
                 .isEqualTo(720);
         assertThat(editor.get("pickup").get("atRiskBeforeSeconds").asInt()).isEqualTo(180);
+    }
+
+    // ------------------------ ADR 0150: the no-promise fallback is optional like the at-risk window
+
+    @Test
+    @DisplayName("a mode with a blank fallback takes the tenant's late-order threshold, and says where it came from")
+    void aBlankFallbackTakesTheLateOrderThreshold() throws Exception {
+        setLateOrderThreshold(20);
+        publish(
+                "TENANT",
+                null,
+                null,
+                mode(null, 0, null),
+                mode(null, 0, 1800),
+                mode(null, 0, null),
+                null,
+                "pickup keeps its own");
+
+        JsonNode board = boardPolicy(LOCATION);
+        assertThat(board.get("delivery").get("noPromiseFallbackSeconds").asInt())
+                .as("delivery owns no fallback: the threshold's twenty minutes")
+                .isEqualTo(1200);
+        assertThat(board.get("pickup").get("noPromiseFallbackSeconds").asInt())
+                .as("pickup's own thirty minutes beat the threshold")
+                .isEqualTo(1800);
+        assertThat(board.get("dineIn").get("noPromiseFallbackSeconds").asInt()).isEqualTo(1200);
+
+        JsonNode editor = read("scopeType=TENANT");
+        assertThat(editor.get("noPromiseDefault").get("source").asText()).isEqualTo("SCALAR");
+        assertThat(editor.get("noPromiseDefault").get("seconds").asInt()).isEqualTo(1200);
+        assertThat(editor.get("delivery").get("noPromiseFallbackSeconds").isNull())
+                .as("the editor tells 'none of its own' from a number")
+                .isTrue();
+        assertThat(editor.get("delivery")
+                        .get("effectiveNoPromiseFallbackSeconds")
+                        .asInt())
+                .isEqualTo(1200);
+        assertThat(editor.get("pickup").get("noPromiseFallbackSeconds").asInt()).isEqualTo(1800);
+        assertThat(editor.get("pickup").get("effectiveNoPromiseFallbackSeconds").asInt())
+                .isEqualTo(1800);
+    }
+
+    @Test
+    @DisplayName("with nothing set the blank fallback is the platform's forty-five minutes")
+    void aBlankFallbackWithNoThresholdIsTheFortyFive() throws Exception {
+        publish("TENANT", null, null, mode(null, 0, null), mode(null, 0, null), mode(null, 0, null), null, "blank");
+
+        assertThat(boardPolicy(LOCATION)
+                        .get("delivery")
+                        .get("noPromiseFallbackSeconds")
+                        .asInt())
+                .isEqualTo(2700);
+        JsonNode editor = read("scopeType=TENANT");
+        assertThat(editor.get("noPromiseDefault").get("source").asText()).isEqualTo("PLATFORM_DEFAULT");
+        assertThat(editor.get("noPromiseDefault").get("seconds").asInt()).isEqualTo(2700);
+    }
+
+    @Test
+    @DisplayName("the audit fact tells a blank fallback from a number")
+    void theAuditFactDistinguishesABlankFallback() throws Exception {
+        publish("TENANT", null, null, mode(null, 0, 1800), mode(null, 0, 1800), mode(null, 0, 1800), null, "first");
+        publish("TENANT", null, null, mode(null, 0, null), mode(null, 0, 1800), mode(null, 0, 1800), 1, "second");
+
+        List<String> facts = jdbc.sql("""
+                        SELECT change_document::text FROM audit.audit_events
+                        WHERE action_code = 'ordering.lateness-policy.authored'
+                        ORDER BY occurred_at
+                        """).query(String.class).list();
+        assertThat(facts).hasSize(2);
+        JsonNode second = JSON.readTree(facts.get(1));
+        assertThat(second.get("delivery.noPromiseFallbackSeconds").get("before").asInt())
+                .isEqualTo(1800);
+        assertThat(second.get("delivery.noPromiseFallbackSeconds").get("after").isNull())
+                .as("a blank is a null, not a zero and not the default's number")
+                .isTrue();
     }
 
     @Test
@@ -818,7 +902,8 @@ class OrderLatenessPolicyEditorHttpTests {
         return !node.has(field) || node.get(field).isNull();
     }
 
-    private static String mode(@Nullable Integer atRiskSeconds, int lateAfterSeconds, int fallbackSeconds) {
+    private static String mode(
+            @Nullable Integer atRiskSeconds, int lateAfterSeconds, @Nullable Integer fallbackSeconds) {
         return "{\"atRiskBeforeSeconds\":" + atRiskSeconds + ",\"lateAfterSeconds\":" + lateAfterSeconds
                 + ",\"noPromiseFallbackSeconds\":" + fallbackSeconds + "}";
     }
@@ -901,7 +986,15 @@ class OrderLatenessPolicyEditorHttpTests {
     }
 
     private void setScalarMinutes(int minutes) throws Exception {
-        MvcResult result = mvc.perform(post(CONFIG + "/keys/" + AT_RISK + "/values")
+        setTenantScalar(AT_RISK, minutes);
+    }
+
+    private void setLateOrderThreshold(int minutes) throws Exception {
+        setTenantScalar(LATE_THRESHOLD, minutes);
+    }
+
+    private void setTenantScalar(String code, int minutes) throws Exception {
+        MvcResult result = mvc.perform(post(CONFIG + "/keys/" + code + "/values")
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "scalar-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)

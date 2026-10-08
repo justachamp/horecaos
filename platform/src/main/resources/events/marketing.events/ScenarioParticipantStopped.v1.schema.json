@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/marketing.events/ScenarioParticipantStopped.v1.schema.json",
+  "title": "ScenarioParticipantStopped v1 payload",
+  "description": "A guest's run through a scenario ended (ADR 0112): completed, or stopped by a condition, by consent withdrawn or by a suppression. Ids and the outcome code only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["campaignId", "brandId", "customerAccountId", "outcome"],
+  "properties": {
+    "campaignId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "customerAccountId": { "type": "string", "format": "uuid" },
+    "outcome": {
+      "type": "string",
+      "enum": ["COMPLETED", "STOPPED_BY_CONDITION", "STOPPED_BY_CONSENT_WITHDRAWN", "STOPPED_BY_SUPPRESSION"]
+    }
+  }
+}

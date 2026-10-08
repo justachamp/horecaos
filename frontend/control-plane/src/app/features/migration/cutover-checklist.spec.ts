@@ -9,7 +9,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { CutoverChecklist } from './cutover-checklist';
 import { MigrationApi, RunView, ScopeView } from './migration-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const scope = (id: string, state: string, nextStates: string[]): ScopeView => ({
   id,
@@ -54,7 +57,9 @@ class FakeMigrationApi {
     items: [{ id: 'program-1', name: 'Delever cutover', status: 'ACTIVE' }],
     nextCursor: null,
   });
-  readonly listScopes = vi.fn().mockResolvedValue({ items: [READY, OWNED, BLOCKED, BACKFILLING], nextCursor: null });
+  readonly listScopes = vi
+    .fn()
+    .mockResolvedValue({ items: [READY, OWNED, BLOCKED, BACKFILLING], nextCursor: null });
   readonly listRuns = vi.fn().mockResolvedValue({ items: [RECONCILED], nextCursor: null });
   readonly decideCutover = vi.fn().mockResolvedValue(undefined);
   readonly rollBackScope = vi.fn().mockResolvedValue(undefined);
@@ -73,8 +78,14 @@ describe('CutoverChecklist', () => {
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: MigrationApi, useValue: api },
         { provide: Colleagues, useValue: { others: vi.fn().mockResolvedValue([]) } },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(CutoverChecklist);
@@ -127,7 +138,11 @@ describe('CutoverChecklist', () => {
 
     expect(api.decideCutover).toHaveBeenCalledWith(READY, 'approve', {
       requestedBy: 'ops-lead',
-      evidence: { reconciliationRunId: 'recon-7', sourceWatermark: 'legacy:9000', checksum: 'b'.repeat(64) },
+      evidence: {
+        reconciliationRunId: 'recon-7',
+        sourceWatermark: 'legacy:9000',
+        checksum: 'b'.repeat(64),
+      },
       reason: 'reconciliation clean, window agreed with the owner',
     });
   });
@@ -142,7 +157,11 @@ describe('CutoverChecklist', () => {
     el<HTMLButtonElement>('button.refuse').click();
     await settle();
 
-    expect(api.decideCutover).toHaveBeenCalledWith(READY, 'refuse', expect.objectContaining({ requestedBy: 'ops-lead' }));
+    expect(api.decideCutover).toHaveBeenCalledWith(
+      READY,
+      'refuse',
+      expect.objectContaining({ requestedBy: 'ops-lead' }),
+    );
     expect(fixture.nativeElement.textContent).toContain('отклонено');
   });
 

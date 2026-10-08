@@ -25,13 +25,17 @@ import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { DeniedState } from '../../../shared/ui/denied-state';
 import { MoneyInput } from '../../../shared/ui/money-input';
+import { MapPin } from '../../../shared/ui/map/map-pin';
 import { Toasts } from '../../../shared/ui/toast';
+import {
+  CustomerAddressDraft,
+  CustomerAddressEditor,
+} from '../../customers/customer-address-editor';
 import {
   CreateCustomerDialog,
   CreateCustomerSubmission,
 } from '../../customers/create-customer-dialog';
 import {
-  CustomerAddressFields,
   CustomerCoordinateSource,
   CustomerOrderSummary,
   CustomersApi,
@@ -93,45 +97,6 @@ function nextLineKey(): string {
   return `line-${lineKeySequence}-${Date.now()}`;
 }
 
-/**
- * The inline «+ новый адрес» form's own draft shape (row 1.3b) — every
- * field a plain string, the same reason `customer-detail-pane.ts`'s own
- * `AddressFormState` is: coercing an empty required field to `null` mid-edit
- * would fight `CustomerAddressFields`'s own type. Not imported from that
- * file: it is private there, and duplicating four fields locally is cheaper
- * than exporting another component's internal draft shape.
- */
-interface AddressDraft {
-  readonly line1: string;
-  readonly city: string;
-  readonly district: string;
-  readonly entrance: string;
-  readonly floor: string;
-  readonly apartment: string;
-  readonly landmark: string;
-}
-
-const EMPTY_ADDRESS_DRAFT: AddressDraft = {
-  line1: '',
-  city: '',
-  district: '',
-  entrance: '',
-  floor: '',
-  apartment: '',
-  landmark: '',
-};
-
-/**
- * `NOT_GEOCODED` when the operator gave no landmark, `LANDMARK_ONLY`
- * otherwise — the two coordinate-free sources this screen can honestly
- * claim, since the pin and the geocoder are deferred behind `X.4` (row
- * 1.3b). Never `GEOCODER`/`*_PIN`/`LEGACY_UNSOURCED`: those claim a point
- * this form has no way to attach.
- */
-function coordinateSourceFor(draft: AddressDraft): CustomerCoordinateSource {
-  return draft.landmark.trim() === '' ? 'NOT_GEOCODED' : 'LANDMARK_ONLY';
-}
-
 /** The identical keys `customer-detail-pane.ts`'s own `COORDINATE_SOURCE_LABEL_KEYS` already registers. */
 const COORDINATE_SOURCE_LABEL_KEYS: Record<CustomerCoordinateSource, MessageKey> = {
   NOT_GEOCODED: 'customers.address.coordinateSource.NOT_GEOCODED',
@@ -141,18 +106,6 @@ const COORDINATE_SOURCE_LABEL_KEYS: Record<CustomerCoordinateSource, MessageKey>
   OPERATOR_PIN: 'customers.address.coordinateSource.OPERATOR_PIN',
   LEGACY_UNSOURCED: 'customers.address.coordinateSource.LEGACY_UNSOURCED',
 };
-
-function toAddressFields(draft: AddressDraft): CustomerAddressFields {
-  return {
-    line1: draft.line1.trim(),
-    city: draft.city.trim(),
-    district: draft.district.trim(),
-    entrance: draft.entrance.trim() || null,
-    floor: draft.floor.trim() || null,
-    apartment: draft.apartment.trim() || null,
-    landmark: draft.landmark.trim() || null,
-  };
-}
 
 interface PendingModifierSelection {
   readonly product: MenuProduct;
@@ -225,11 +178,19 @@ interface PendingComboSelection {
  * delivery fee itself (`NewOrderApi.deliveryFeeQuote`, the same unauthenticated
  * preview the storefront's own cart already calls) whenever the chosen address
  * carries a real coordinate — most operator-entered addresses do not yet (row
- * 1.3b's pin is deferred behind X.4), so the preview honestly reads "—" for
- * those rather than a guessed number.
+ * 1.3b's pin is placed from this screen since ADR 0145), so an address with no
+ * point still reads "—" rather than a guessed number.
  *
- * <p>**Still not built, honestly.** No map pin, no address suggest, no
- * out-of-brand branch resolution (this screen stays scoped to
+ * <p>**The address pane has a map and a search (row 1.3b, ADR 0145).** The «+ новый адрес» form is
+ * the shared `q-customer-address-editor`: type-ahead from the platform's own geocoder, a pin the
+ * operator looks at and confirms (or moves, or types the coordinates of), and the structured
+ * дом/подъезд/этаж/квартира/ориентир fields a courier needs. A saved address shows where it is,
+ * and one with no pin (or the wrong one) can be edited in place: placing the pin is what lets the
+ * delivery be priced and routed. A geocoder's answer is a suggestion; only a pin a person confirmed
+ * is saved, as `OPERATOR_PIN`, and an address saved with no pin says so honestly
+ * (`NOT_GEOCODED`/`LANDMARK_ONLY`) and is refused for delivery until it has one.
+ *
+ * <p>**Still not built, honestly.** No out-of-brand branch resolution (this screen stays scoped to
  * `CurrentLocation`; "Филиал" shows the current branch with a static «по
  * зоне» caption on a delivery order rather than a real cross-branch
  * resolver). No lead-time limit, repricing checkpoint or payment-authorization
@@ -289,6 +250,8 @@ interface PendingComboSelection {
     NewOrderBasket,
     NewOrderHeader,
     NewOrderMenuGrid,
+    CustomerAddressEditor,
+    MapPin,
   ],
   templateUrl: './new-order-page.html',
   styleUrl: './new-order-page.css',
@@ -828,8 +791,21 @@ export class NewOrderPage implements OnInit {
   protected readonly addingAddress = signal(false);
   protected readonly addressSaving = signal(false);
   protected readonly addressError = signal<string | null>(null);
-  protected readonly addressLabel = signal('');
-  protected readonly addressDraft = signal<AddressDraft>(EMPTY_ADDRESS_DRAFT);
+  /** What the address editor holds (map, suggest, structured fields); `null` until it has said anything. */
+  protected readonly addressDraft = signal<CustomerAddressDraft | null>(null);
+  /** The saved address being corrected in place (placing or moving its pin), or `null`. */
+  protected readonly editingAddressId = signal<string | null>(null);
+
+  /** The branch's scope as a signal, for the address editor: it selects the lookup path the operator's grant covers. */
+  protected readonly editorScope = computed(() => this.location.scope());
+
+  /** The saved point of the selected address, for the read-only map beside it; `null` when it has none. */
+  protected readonly selectedAddressPoint = computed(() => {
+    const address = this.selectedAddress();
+    return address !== null && address.latitude !== null && address.longitude !== null
+      ? { latitude: address.latitude, longitude: address.longitude }
+      : null;
+  });
 
   protected readonly selectedAddress = computed(
     () => this.addresses().find((address) => address.id === this.selectedAddressId()) ?? null,
@@ -837,8 +813,8 @@ export class NewOrderPage implements OnInit {
 
   /**
    * Whether the currently chosen address has no pin — `setDestination`
-   * refuses `DESTINATION_NOT_LOCATED` for exactly this case (the pin, the
-   * suggest and the geocoder are deferred behind `X.4`), so this is shown as
+   * refuses `DESTINATION_NOT_LOCATED` for exactly this case (the operator
+   * can place the pin from this pane since ADR 0145), so this is shown as
    * an upfront, non-blocking notice rather than letting the operator fill
    * the whole basket before finding out at submit time.
    */
@@ -925,54 +901,116 @@ export class NewOrderPage implements OnInit {
   protected selectAddress(addressId: string): void {
     this.selectedAddressId.set(addressId);
     this.addingAddress.set(false);
+    this.editingAddressId.set(null);
   }
 
   protected startAddingAddress(): void {
     this.addingAddress.set(true);
-    this.addressLabel.set('');
-    this.addressDraft.set(EMPTY_ADDRESS_DRAFT);
+    this.editingAddressId.set(null);
+    this.addressDraft.set(null);
     this.addressError.set(null);
+  }
+
+  /** Opens the selected saved address in the editor, to place its pin or move it (row 1.3b / 5.2c). */
+  protected startEditingSelectedAddress(): void {
+    if (this.selectedAddressId() === null) {
+      return;
+    }
+    this.addingAddress.set(false);
+    this.addressDraft.set(null);
+    this.addressError.set(null);
+    this.editingAddressId.set(this.selectedAddressId());
   }
 
   protected cancelAddingAddress(): void {
     this.addingAddress.set(false);
+    this.editingAddressId.set(null);
   }
 
-  protected setAddressField(field: keyof AddressDraft, value: string): void {
-    this.addressDraft.update((current) => ({ ...current, [field]: value }));
+  protected onAddressDraft(draft: CustomerAddressDraft): void {
+    this.addressDraft.set(draft);
+  }
+
+  protected canSaveAddress(): boolean {
+    return !this.addressSaving() && (this.addressDraft()?.valid ?? false);
   }
 
   /**
-   * Saves with `coordinateSource: NOT_GEOCODED` or `LANDMARK_ONLY` — never a
-   * pin, which this screen has no way to place (row 1.3b, deferred `X.4`).
+   * Saves what the editor holds: a pin the operator confirmed (`OPERATOR_PIN`, with its coordinates)
+   * or, honestly, no pin (`NOT_GEOCODED`, or `LANDMARK_ONLY` when a landmark is all there is) — the
+   * editor keeps the source and the point consistent, which the server insists on. A geocoder's
+   * answer is never saved as such (ADR 0145 decision 5).
    */
   protected async saveNewAddress(): Promise<void> {
     const selected = this.selectedCustomer();
     const scope = this.location.scope();
-    if (!selected || !scope || this.addressSaving()) {
+    const draft = this.addressDraft();
+    if (!selected || !scope || !draft || !this.canSaveAddress()) {
       return;
     }
     this.addressSaving.set(true);
     this.addressError.set(null);
     try {
-      const draft = this.addressDraft();
       const { id } = await this.customersApi.addAddress(scope, selected.accountId, {
-        label: this.addressLabel().trim(),
-        fields: toAddressFields(draft),
-        coordinateSource: coordinateSourceFor(draft),
+        label: draft.label,
+        fields: draft.fields,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        coordinateSource: draft.coordinateSource,
       });
       await this.loadAddresses();
       this.selectedAddressId.set(id);
       this.addingAddress.set(false);
     } catch (error) {
-      this.addressError.set(
-        error instanceof ApiError
-          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
-          : this.i18n.t('error.unknown.noReference'),
-      );
+      this.addressError.set(this.describeAddressFailure(error));
     } finally {
       this.addressSaving.set(false);
     }
+  }
+
+  /**
+   * Saves the corrected address at the version it was read at (ADR 0031): another operator's edit in
+   * between is a refusal to read, not an overwrite. Keeps the delivery instructions the address already
+   * had, which this editor does not show.
+   */
+  protected async saveEditedAddress(original: RevealedCustomerAddress): Promise<void> {
+    const selected = this.selectedCustomer();
+    const scope = this.location.scope();
+    const draft = this.addressDraft();
+    if (!selected || !scope || !draft || !this.canSaveAddress()) {
+      return;
+    }
+    this.addressSaving.set(true);
+    this.addressError.set(null);
+    try {
+      await this.customersApi.updateAddress(
+        scope,
+        selected.accountId,
+        original.id,
+        {
+          label: draft.label,
+          fields: draft.fields,
+          deliveryInstructions: original.deliveryInstructions,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          coordinateSource: draft.coordinateSource,
+        },
+        original.version,
+      );
+      await this.loadAddresses();
+      this.selectedAddressId.set(original.id);
+      this.editingAddressId.set(null);
+    } catch (error) {
+      this.addressError.set(this.describeAddressFailure(error));
+    } finally {
+      this.addressSaving.set(false);
+    }
+  }
+
+  private describeAddressFailure(error: unknown): string {
+    return error instanceof ApiError
+      ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+      : this.i18n.t('error.unknown.noReference');
   }
 
   protected coordinateSourceLabel(source: CustomerCoordinateSource): string {

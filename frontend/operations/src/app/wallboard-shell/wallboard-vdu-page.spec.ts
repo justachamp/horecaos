@@ -6,7 +6,7 @@ import { LocationScope } from '../core/api/operations-paths';
 import { CurrentLocation } from '../core/auth/current-location';
 import { I18n } from '../core/i18n/i18n';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
-import { LatenessPolicyApi } from '../core/lateness-policy-api';
+import type { LatenessPolicyResponse } from '../core/lateness-policy-api';
 import { RealtimeClient, RealtimeFrame } from '../core/realtime/realtime-client';
 import {
   KitchenApi,
@@ -47,6 +47,17 @@ function station(overrides: Partial<StationResponse> = {}): StationResponse {
   };
 }
 
+/** A policy as the projection carries it (`VduBoardResponse.lateness`, ADR 0151). */
+function onTheWire(policy: LatenessPolicy): LatenessPolicyResponse {
+  return {
+    delivery: policy.delivery,
+    pickup: policy.pickup,
+    dineIn: policy.dineIn,
+    isPlatformDefault: false,
+    lateColour: policy.lateColour ?? null,
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -62,8 +73,8 @@ describe('WallboardVduPage', () => {
       readonly denied?: boolean;
       readonly stations?: readonly StationResponse[];
       readonly vduSpy?: ReturnType<typeof vi.fn>;
+      /** The policy the projection carries; absent leaves the board as given (no `lateness` member). */
       readonly policy?: LatenessPolicy;
-      readonly read?: ReturnType<typeof vi.fn>;
     } = {},
   ): { frameListeners: Array<(frame: RealtimeFrame) => void>; vduSpy: ReturnType<typeof vi.fn> } {
     const frameListeners: Array<(frame: RealtimeFrame) => void> = [];
@@ -71,7 +82,13 @@ describe('WallboardVduPage', () => {
       frameListeners.push(listener);
       return () => undefined;
     });
-    const vduSpy = overrides.vduSpy ?? vi.fn().mockResolvedValue(vdu);
+    const vduSpy =
+      overrides.vduSpy ??
+      vi
+        .fn()
+        .mockResolvedValue(
+          overrides.policy ? { ...vdu, lateness: onTheWire(overrides.policy) } : vdu,
+        );
 
     TestBed.configureTestingModule({
       imports: [WallboardVduPage],
@@ -89,17 +106,6 @@ describe('WallboardVduPage', () => {
           useValue: {
             vdu: vduSpy,
             stations: vi.fn().mockResolvedValue(overrides.stations ?? []),
-          },
-        },
-        {
-          provide: LatenessPolicyApi,
-          useValue: {
-            resolve: vi
-              .fn()
-              .mockResolvedValue(overrides.policy ?? PLATFORM_DEFAULT_LATENESS_POLICY),
-            read:
-              overrides.read ??
-              vi.fn().mockResolvedValue(overrides.policy ?? PLATFORM_DEFAULT_LATENESS_POLICY),
           },
         },
         { provide: RealtimeClient, useValue: { onFrame, state: signal('open') } },
@@ -358,33 +364,18 @@ describe('WallboardVduPage', () => {
       };
     }
 
-    it('re-reads the policy on the poll: a grace published later stops the breach', async () => {
+    it('takes the policy from the projection itself: a grace published later stops the breach on the next poll', async () => {
       vi.useFakeTimers();
       try {
-        const read = vi
+        const board = overdueBoard();
+        const vduSpy = vi
           .fn()
-          .mockResolvedValueOnce(PLATFORM_DEFAULT_LATENESS_POLICY)
-          .mockResolvedValue(GRACE_ONE_HOUR);
-        setUp(overdueBoard(), { read });
-        fixture.detectChanges();
-        await vi.advanceTimersByTimeAsync(0);
-        fixture.detectChanges();
-        expect(isDanger()).toBe(true);
-
-        await vi.advanceTimersByTimeAsync(70_000);
-        fixture.detectChanges();
-
-        expect(isDanger()).toBe(false);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('does not take a failed first read for the loaded policy: the next poll asks again', async () => {
-      vi.useFakeTimers();
-      try {
-        const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_ONE_HOUR);
-        setUp(overdueBoard(), { read });
+          .mockResolvedValueOnce({
+            ...board,
+            lateness: onTheWire(PLATFORM_DEFAULT_LATENESS_POLICY),
+          })
+          .mockResolvedValue({ ...board, lateness: onTheWire(GRACE_ONE_HOUR) });
+        setUp(board, { vduSpy });
         fixture.detectChanges();
         await vi.advanceTimersByTimeAsync(0);
         fixture.detectChanges();
@@ -398,5 +389,51 @@ describe('WallboardVduPage', () => {
         vi.useRealTimers();
       }
     });
+
+    it('makes no read of its own for the policy: one request a poll, the projection', async () => {
+      const { vduSpy } = setUp(overdueBoard(), { policy: GRACE_ONE_HOUR });
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(vduSpy).toHaveBeenCalledTimes(1);
+      expect(isDanger(), 'the one response carried the policy that applies').toBe(false);
+    });
+
+    it('keeps the last policy it read when a later response carries none, never a blank board', async () => {
+      vi.useFakeTimers();
+      try {
+        const board = overdueBoard();
+        const vduSpy = vi
+          .fn()
+          .mockResolvedValueOnce({ ...board, lateness: onTheWire(GRACE_ONE_HOUR) })
+          .mockResolvedValue(board);
+        setUp(board, { vduSpy });
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(isDanger()).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(11_000);
+        fixture.detectChanges();
+
+        expect(isDanger(), 'the grace read earlier still applies').toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it('says on screen that it is a manager’s preview, not a wall', async () => {
+    setUp({ tickets: [] });
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="wallboard-vdu-preview-note"]',
+      )?.textContent,
+    ).toContain('preview');
   });
 });

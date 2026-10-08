@@ -27,6 +27,7 @@ import {
   DragDropAssignOutcome,
   DragDropAssignRejection,
 } from '../../shared/ui/drag-drop-assign/drag-drop-assign-types';
+import { MapMarker } from '../../shared/ui/map/map-canvas';
 import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill, StatusTone } from '../../shared/ui/status-pill';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
@@ -37,6 +38,7 @@ import {
 import { describeApiError } from '../orders/order-errors';
 import { pruneSelection, toggleOne } from '../orders/order-queue-selection';
 import { OrderSummaryResponse } from '../orders/order-summary';
+import { CourierPin, CourierPositionsApi } from './courier-positions-api';
 import {
   DispatchApi,
   ExceptionResponse,
@@ -44,6 +46,8 @@ import {
   ExternalQuoteResponse,
   PlanQueueResponse,
 } from './dispatch-api';
+import { FALLBACK_MAP_CENTRE, MapRegionService } from './map-region';
+import { OrderPointsMap } from './order-points-map';
 
 /**
  * `ShipmentStatus`'s own six values (gap map rows 1.2e/1.2f/1.2g/2.1c) —
@@ -68,6 +72,9 @@ const SHIPMENT_CANCEL_REASON = 'OPERATIONS_DISPATCH_SHIPMENT_CANCEL';
 const EXTERNAL_BOOKING_ACCEPT_REASON = 'OPERATIONS_DISPATCH_EXTERNAL_BOOKING_ACCEPT';
 const EXTERNAL_BOOKING_ABANDON_REASON = 'OPERATIONS_DISPATCH_EXTERNAL_BOOKING_ABANDON';
 const BULK_ASSIGN_REASON = 'OPERATIONS_DISPATCH_BULK_ASSIGN';
+
+/** What the platform's audit records as the reason the day's doorsteps were opened from this screen (row 3.1, ADR 0145). */
+const ORDER_POINTS_PURPOSE = 'Operations console: dispatch board map pane (row 3.1)';
 
 /** One selected plan's own outcome from a bulk-assign submission (gap map row 3.1) — the same "per-item outcome" shape the orders bulk panel renders. */
 export interface BulkAssignOutcome {
@@ -139,11 +146,15 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
  * outcomes render the same shape the orders bulk panel uses: applied vs.
  * refused, with the server's own reason.
  *
- * **Still reduced relative to the spec, deliberately.** No live map (`X.4`),
- * no customer name or non-PII destination label on a card —
- * `PlanQueueResponse` carries neither today (see `dispatch-api.ts`'s own
- * doc); a masked zone/street projection needs a new server-side field this
- * wave did not build (see the gap map's own row `3.1` audit note).
+ * **The map pane (ADR 0145, row `3.1`: "a map of points and routes").** A toggle in the toolbar opens a
+ * map under it with the couriers' live positions (the same read the live map makes, refreshed with
+ * the board) and, when the dispatcher asks, today's delivery orders as pins
+ * (`q-order-points-map`). The orders are an explicit, audited reveal under its own capability,
+ * stating this screen as its purpose, and are never read on the board's refresh: the board polls
+ * every ten seconds, and a doorstep read that often would bury the audit trail it exists to keep.
+ * The board's cards still carry the non-PII destination label and nothing that names a customer.
+ * **Routes are not drawn**: a route needs a road network, which is ADR 0147's, and a straight line
+ * from a courier to a door is a claim about the road that nobody here can make.
  *
  * **The ADR 0045 accelerator (row 3.1, this wave).** This board used to be
  * the one live surface still standing on a bare 10-second poll after the
@@ -172,6 +183,7 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
     ExternalCourierDialog,
     ConnectionStateBanner,
     StaleIndicator,
+    OrderPointsMap,
   ],
   templateUrl: './dispatch-board-page.html',
   styleUrl: './dispatch-board-page.css',
@@ -181,6 +193,8 @@ export class DispatchBoardPage implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly dispatch = inject(DispatchApi);
   private readonly couriersApi = inject(CouriersApi);
+  private readonly positions = inject(CourierPositionsApi);
+  private readonly regions = inject(MapRegionService);
   private readonly location = inject(CurrentLocation);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
@@ -199,6 +213,27 @@ export class DispatchBoardPage implements OnInit {
   protected readonly fleet = signal<readonly RosterEntryResponse[]>([]);
   protected readonly exceptionsByPlanId = signal<ReadonlyMap<string, readonly ExceptionResponse[]>>(
     new Map(),
+  );
+
+  // ------------------------------------------------------- the map pane (row 3.1)
+  protected readonly ordersPurpose = ORDER_POINTS_PURPOSE;
+  protected readonly mapOpen = signal(false);
+  protected readonly mapScope = computed(() => this.location.scope());
+  private readonly courierPins = signal<readonly CourierPin[]>([]);
+
+  /** A courier's pin says who by the reference the roster shows, never by name. */
+  protected readonly courierMarkers = computed<readonly MapMarker[]>(() =>
+    this.courierPins().map((pin) => ({
+      id: `courier:${pin.courierId}`,
+      position: { latitude: pin.latitude, longitude: pin.longitude },
+      label:
+        this.fleet().find((courier) => courier.courierId === pin.courierId)?.displayReference ??
+        pin.courierId,
+      tone: 'courier' as const,
+    })),
+  );
+  protected readonly mapCentre = computed(
+    () => this.regions.primary()?.centre ?? FALLBACK_MAP_CENTRE,
   );
 
   protected readonly busyPlanIds = signal<ReadonlySet<string>>(new Set());
@@ -449,6 +484,9 @@ export class DispatchBoardPage implements OnInit {
       this.denied.set(false);
       this.lastError.set(null);
       this.lastUpdatedAt.set(new Date());
+      if (this.mapOpen()) {
+        void this.loadPositions();
+      }
     } catch (error) {
       if (!(error instanceof ApiError)) {
         // An unexpected, non-API error is a real defect regardless of
@@ -496,6 +534,32 @@ export class DispatchBoardPage implements OnInit {
 
   protected manualRefresh(): void {
     void this.refresh();
+  }
+
+  protected toggleMap(): void {
+    const open = !this.mapOpen();
+    this.mapOpen.set(open);
+    if (open) {
+      void this.regions.ensureLoaded();
+      void this.loadPositions();
+    }
+  }
+
+  /**
+   * The couriers' positions, refreshed with the board while the pane is open. Best effort: a
+   * caller who may not read positions still has the orders and the board, and no pin is drawn
+   * for a courier whose position cannot be read.
+   */
+  private async loadPositions(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.courierPins.set((await this.positions.fleet(scope)).pins ?? []);
+    } catch {
+      this.courierPins.set([]);
+    }
   }
 
   protected formatUpdatedAt(): string | null {

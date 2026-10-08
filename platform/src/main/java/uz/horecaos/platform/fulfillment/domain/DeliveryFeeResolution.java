@@ -43,6 +43,8 @@ public record DeliveryFeeResolution(
         @Nullable DistanceMode distanceMode,
         @Nullable DistanceSource distanceSource,
         @Nullable String routingProvider,
+        @Nullable Integer routingSeconds,
+        @Nullable String routingDatasetVersion,
         @Nullable Long providerQuoteMinor,
         @Nullable Long computedFeeMinor,
         @Nullable Long finalFeeMinor,
@@ -62,6 +64,9 @@ public record DeliveryFeeResolution(
      * different stories about one order.
      */
     public static final int RESOLUTION_VERSION = 2;
+
+    // routingSeconds and routingDatasetVersion are non-null exactly when distanceSource is ROAD
+    // (ADR 0147). A fallback and a radius fee name no dataset, because none measured them.
 
     public DeliveryFeeResolution {
         losingZoneIds = losingZoneIds == null ? List.of() : List.copyOf(losingZoneIds);
@@ -86,6 +91,7 @@ public record DeliveryFeeResolution(
                 distanceMeters,
                 distanceMode == null ? null : distanceMode.name(),
                 distanceSource == null ? null : distanceSource.name(),
+                routingDatasetVersion,
                 losingZoneIds);
     }
 }

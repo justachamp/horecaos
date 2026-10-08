@@ -4,7 +4,8 @@ import { MessageKey } from '../../../core/i18n/messages.en';
  * The closed set of `action_code` values this platform's personal-data
  * reveal and export call sites actually write today — grepped against
  * `CustomerProfileService`, `CustomerBlacklistService`,
- * `CustomerListQueryService`, `AudienceService` and `OrderQueryService`, not
+ * `CustomerListQueryService`, `AudienceService`, `OrderQueryService` and
+ * `OrderMapPointService`, not
  * guessed from naming. A code not in this map is not shown on the egress
  * log at all (see `data-privacy-page.ts`'s own doc for why filtering
  * narrower than the raw audit search is the honest choice here), so this
@@ -21,6 +22,7 @@ const PII_ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'order.line_note.revealed': 'settings.dataPrivacy.egress.action.lineNoteRevealed',
   'order.customer_phone.revealed': 'settings.dataPrivacy.egress.action.orderPhoneRevealed',
   'order.customer_address.revealed': 'settings.dataPrivacy.egress.action.orderAddressRevealed',
+  'order.map_points.revealed': 'settings.dataPrivacy.egress.action.orderMapPointsRevealed',
 };
 
 /** The known personal-data action codes, for filtering a broader audit search down to this log. */

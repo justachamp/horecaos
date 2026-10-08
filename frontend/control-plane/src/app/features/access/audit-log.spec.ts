@@ -8,13 +8,28 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { AccessApi, AuditEventDetail, AuditEventView } from './access-api';
 import { AuditLog } from './audit-log';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 function event(id: string, actionCode: string): AuditEventView {
   return {
-    id, recordedAt: '2026-09-10T10:00:00Z', tenantId: 'tenant-1', auditClass: 'BUSINESS', actionCode,
-    actorType: 'USER', actorSubject: 'staff-a', actorDisplay: null, scopeType: 'TENANT', scopeId: 'tenant-1',
-    targetType: 'Brand', targetId: 'brand-1', outcome: 'SUCCEEDED', reason: null, capabilityUsed: null,
+    id,
+    recordedAt: '2026-09-10T10:00:00Z',
+    tenantId: 'tenant-1',
+    auditClass: 'BUSINESS',
+    actionCode,
+    actorType: 'USER',
+    actorSubject: 'staff-a',
+    actorDisplay: null,
+    scopeType: 'TENANT',
+    scopeId: 'tenant-1',
+    targetType: 'Brand',
+    targetId: 'brand-1',
+    outcome: 'SUCCEEDED',
+    reason: null,
+    capabilityUsed: null,
   };
 }
 
@@ -29,7 +44,10 @@ describe('AuditLog', () => {
 
   async function create(): Promise<void> {
     api = new FakeAccessApi();
-    api.auditEvents.mockResolvedValue({ items: [event('ev-1', 'brand.revised')], nextCursor: 'next-1' });
+    api.auditEvents.mockResolvedValue({
+      items: [event('ev-1', 'brand.revised')],
+      nextCursor: 'next-1',
+    });
     localStorage.clear();
     sessionStorage.clear();
     await TestBed.configureTestingModule({
@@ -37,8 +55,14 @@ describe('AuditLog', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: AccessApi, useValue: api },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(AuditLog);
@@ -56,10 +80,17 @@ describe('AuditLog', () => {
     await create();
     api.auditEvent.mockResolvedValue({
       ...event('ev-1', 'brand.revised'),
-      onBehalfOfSubject: null, targetVersion: 3, evidenceReference: null, approvalRequestId: null,
-      correlationId: 'corr-7', occurredAt: '2026-09-10T10:00:00Z',
+      onBehalfOfSubject: null,
+      targetVersion: 3,
+      evidenceReference: null,
+      approvalRequestId: null,
+      correlationId: 'corr-7',
+      occurredAt: '2026-09-10T10:00:00Z',
       reason: 'Control-plane brand correction',
-      changeDocument: { before: { displayName: 'Oshxona' }, after: { displayName: 'Oshxona No.1' } },
+      changeDocument: {
+        before: { displayName: 'Oshxona' },
+        after: { displayName: 'Oshxona No.1' },
+      },
     });
 
     (fixture.nativeElement.querySelector('.rowButton') as HTMLButtonElement).click();
@@ -76,21 +107,37 @@ describe('AuditLog', () => {
     await create();
     expect(api.auditEvents).toHaveBeenCalledWith('tenant-1', { actionCode: '', outcome: '' });
 
-    const action = fixture.nativeElement.querySelector('input[name="actionCode"]') as HTMLInputElement;
+    const action = fixture.nativeElement.querySelector(
+      'input[name="actionCode"]',
+    ) as HTMLInputElement;
     action.value = 'tenant.suspended';
     action.dispatchEvent(new Event('input'));
-    const outcome = fixture.nativeElement.querySelector('select[name="outcome"]') as HTMLSelectElement;
+    const outcome = fixture.nativeElement.querySelector(
+      'select[name="outcome"]',
+    ) as HTMLSelectElement;
     outcome.value = 'REJECTED';
     outcome.dispatchEvent(new Event('change'));
     await settle();
-    (fixture.nativeElement.querySelector('.filters') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
+    (fixture.nativeElement.querySelector('.filters') as HTMLFormElement).dispatchEvent(
+      new Event('submit', { cancelable: true }),
+    );
     await settle();
-    expect(api.auditEvents).toHaveBeenLastCalledWith('tenant-1', { actionCode: 'tenant.suspended', outcome: 'REJECTED' });
+    expect(api.auditEvents).toHaveBeenLastCalledWith('tenant-1', {
+      actionCode: 'tenant.suspended',
+      outcome: 'REJECTED',
+    });
 
-    api.auditEvents.mockResolvedValue({ items: [event('ev-2', 'tenant.suspended')], nextCursor: null });
+    api.auditEvents.mockResolvedValue({
+      items: [event('ev-2', 'tenant.suspended')],
+      nextCursor: null,
+    });
     (fixture.nativeElement.querySelector('.more') as HTMLButtonElement).click();
     await settle();
-    expect(api.auditEvents).toHaveBeenLastCalledWith('tenant-1', { actionCode: 'tenant.suspended', outcome: 'REJECTED' }, 'next-1');
+    expect(api.auditEvents).toHaveBeenLastCalledWith(
+      'tenant-1',
+      { actionCode: 'tenant.suspended', outcome: 'REJECTED' },
+      'next-1',
+    );
     expect(fixture.nativeElement.querySelector('.more')).toBeNull();
   });
 });

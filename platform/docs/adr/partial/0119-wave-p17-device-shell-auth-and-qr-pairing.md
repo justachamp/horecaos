@@ -8,8 +8,12 @@
   ISO/IEC 18004 byte-mode encoder) are built and wired into the `/device`
   shell and the Kitchen → Devices pairing screen
   (`features/kitchen/devices-page.ts`), plus the payments `qrPayload` field
-  (`features/finance/payments/payments-page.ts`). Not built: a backend
-  device-scope-discovery ("whoami") endpoint (see Open inputs), QR versions
+  (`features/finance/payments/payments-page.ts`). Since ADR 0151
+  (2026-10-07) the device-scope-discovery input is answered for kitchen devices:
+  `GET /api/v1/devices/me` tells an enrolled device its tenant, brand, branch, zone and
+  (for a wall) station, the shell reads it instead of being typed once, and the typed
+  setup is kept only as the fallback; the input stays open for any other device class.
+  Not built: QR versions
   beyond 5 / multi-block Reed–Solomon interleaving, and device secret
   rotation (ADR 0079's own open item, unchanged by this record). The QR
   encoder has not been verified against a physical scanner in this

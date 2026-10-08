@@ -139,3 +139,85 @@ describe('DeviceBoardApi — the device-token auth path', () => {
     expect(token).not.toBe('staff-access-token-XYZ');
   });
 });
+
+/**
+ * ADR 0151: a wall display holds one capability, so the two reads it makes are the whole of what it may
+ * ask: its own record, and the projection. Both go with the device's bearer and nothing else, and
+ * neither names a station: the server holds it.
+ */
+describe('DeviceBoardApi — the wall display’s two reads', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      'horecaos.kds.credential',
+      JSON.stringify({
+        tokenEndpoint: 'https://auth.example.uz/realms/horecaos/protocol/openid-connect/token',
+        clientId: 'kds-device-abc',
+        clientSecret: 'device-secret',
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('asks who it is at /api/v1/devices/me with the device bearer, and parses the record', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'device-access-token', expires_in: 300 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          deviceId: 'd1',
+          deviceClass: 'KITCHEN_VDU',
+          displayName: 'Grill TV',
+          tenantId: 't1',
+          brandId: 'b1',
+          locationId: 'l1',
+          locationName: 'Chilanzar',
+          timezone: 'Asia/Tashkent',
+          station: null,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const profile = await TestBed.inject(DeviceBoardApi).me();
+
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toContain('/api/v1/devices/me');
+    expect((init.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer device-access-token',
+    );
+    expect(init.method).toBe('GET');
+    expect(profile.deviceClass).toBe('KITCHEN_VDU');
+    expect(profile.timezone).toBe('Asia/Tashkent');
+  });
+
+  it('refuses an answer that is not the record rather than starting a device from it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ access_token: 't', expires_in: 300 }))
+        .mockResolvedValueOnce(jsonResponse({ nonsense: true })),
+    );
+
+    await expect(TestBed.inject(DeviceBoardApi).me()).rejects.toThrow(/not understood/);
+  });
+
+  it('reads the projection without naming a station: a wall’s station is the server’s to apply', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 't', expires_in: 300 }))
+      .mockResolvedValueOnce(jsonResponse({ tickets: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await TestBed.inject(DeviceBoardApi).vdu(SCOPE);
+
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toContain('/tenants/t1/brands/b1/locations/l1/kitchen/vdu');
+    expect(String(url)).not.toContain('station=');
+    expect(init.method).toBe('GET');
+  });
+});

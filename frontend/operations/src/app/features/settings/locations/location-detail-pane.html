@@ -99,6 +99,26 @@
           <dt class="q-caption">{{ 'settings.locations.field.landmark' | t }}</dt>
           <dd class="q-body">{{ location.landmark ?? '—' }}</dd>
         </div>
+        @if (!editingPlace()) {
+          <div class="field field--pin">
+            <dt class="q-caption">{{ 'settings.locations.pin.title' | t }}</dt>
+            <dd class="q-body">
+              @if (savedPoint(); as point) {
+                <q-map-pin
+                  [position]="point"
+                  [center]="point"
+                  [region]="pinRegion()"
+                  [editable]="false"
+                  [label]="location.displayName"
+                />
+              } @else {
+                <span class="q-caption" data-testid="location-no-pin">
+                  {{ 'settings.locations.pin.none' | t }}
+                </span>
+              }
+            </dd>
+          </div>
+        }
         <div class="field">
           <dt class="q-caption">{{ 'settings.locations.field.sortOrder' | t }}</dt>
           <dd class="q-body">{{ location.sortOrder }}</dd>
@@ -232,6 +252,19 @@
             [value]="draftLandmark()"
             (input)="draftLandmark.set($any($event.target).value)"
             [disabled]="placeSaving()"
+          />
+
+          <h3 class="q-subhead">{{ 'settings.locations.pin.title' | t }}</h3>
+          <p class="q-caption" data-testid="location-pin-hint">
+            {{ 'settings.locations.pin.hint' | t }}
+          </p>
+          <q-map-pin
+            [position]="draftPoint()"
+            [center]="pinCentre()"
+            [region]="pinRegion()"
+            [removable]="false"
+            [label]="location.displayName"
+            (positionChange)="onPinMoved($event)"
           />
 
           <h3 class="q-subhead">{{ 'settings.locations.venue.title' | t }}</h3>

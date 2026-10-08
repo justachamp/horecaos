@@ -79,6 +79,7 @@
                   min="1"
                   max="1440"
                   step="1"
+                  [placeholder]="defaultFallbackMinutes()"
                   [value]="draft()[mode].fallbackMinutes"
                   [attr.aria-invalid]="errors()[mode].fallbackMinutes"
                   (input)="setDraft(mode, 'fallbackMinutes', $any($event.target).value)"
@@ -91,6 +92,12 @@
           {{
             'settings.latenessPolicy.blankMeansDefault'
               | t: { minutes: defaultAtRiskMinutes(), source: (defaultSourceKey() | t) }
+          }}
+        </p>
+        <p class="q-caption hint">
+          {{
+            'settings.latenessPolicy.blankFallbackMeansDefault'
+              | t: { minutes: defaultFallbackMinutes(), source: (fallbackDefaultSourceKey() | t) }
           }}
         </p>
 

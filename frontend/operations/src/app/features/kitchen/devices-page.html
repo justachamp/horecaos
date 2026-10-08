@@ -24,10 +24,44 @@
             type="text"
             autocomplete="off"
             [value]="formUserCode()"
-            (input)="formUserCode.set($any($event.target).value)"
+            (input)="onUserCodeInput($any($event.target).value)"
+            (blur)="lookupClaim()"
             data-testid="devices-form-usercode"
           />
         </label>
+
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="formUserCode().trim().length === 0 || formSubmitting()"
+          (click)="lookupClaim()"
+          data-testid="devices-form-lookup"
+        >
+          {{ 'kitchen.devices.approve.lookup' | t }}
+        </button>
+
+        @if (claim(); as claimed) {
+          <p class="q-body-sm devices__claim" data-testid="devices-form-claim">
+            {{ 'kitchen.devices.approve.claim' | t: { class: classLabel(claimed.requestedClass) } }}
+          </p>
+          <label class="devices__field">
+            <span class="q-caption">{{ 'kitchen.devices.approve.classLabel' | t }}</span>
+            <select
+              [value]="formClass() ?? claimed.requestedClass"
+              (change)="formClass.set($any($event.target).value)"
+              data-testid="devices-form-class"
+            >
+              @for (option of approvableClasses(); track option) {
+                <option [value]="option">{{ classLabel(option) }}</option>
+              }
+            </select>
+          </label>
+          <p class="q-caption devices__hint">{{ 'kitchen.devices.approve.narrowOnly' | t }}</p>
+        } @else if (claimNotFound()) {
+          <p class="q-caption devices__error" data-testid="devices-form-notfound">
+            {{ 'kitchen.devices.approve.notFound' | t }}
+          </p>
+        }
 
         <label class="devices__field">
           <span class="q-caption">{{ 'kitchen.devices.approve.displayName' | t }}</span>
@@ -73,6 +107,9 @@
           <thead>
             <tr>
               <th>{{ 'kitchen.devices.column.displayName' | t }}</th>
+              <th>{{ 'kitchen.devices.column.class' | t }}</th>
+              <th>{{ 'kitchen.devices.column.station' | t }}</th>
+              <th>{{ 'kitchen.devices.column.lastSeen' | t }}</th>
               <th>{{ 'kitchen.devices.column.enrolledBy' | t }}</th>
               <th>{{ 'kitchen.devices.column.enrolledAt' | t }}</th>
               <th></th>
@@ -80,8 +117,60 @@
           </thead>
           <tbody>
             @for (device of activeDevices(); track device.deviceId) {
-              <tr>
+              <tr [attr.data-testid]="'devices-row-' + device.deviceId">
                 <td>{{ device.displayName }}</td>
+                <td>
+                  <span [attr.data-testid]="'devices-class-' + device.deviceId">{{
+                    classLabel(device.deviceClass)
+                  }}</span>
+                  @if (requestedAs(device); as asked) {
+                    <span class="q-caption devices__hint" data-testid="devices-requested-as">{{
+                      asked
+                    }}</span>
+                  }
+                </td>
+                <td>
+                  @if (device.display; as display) {
+                    <select
+                      [value]="stationDraftOf(device)"
+                      (change)="setStationDraft(device.deviceId, $any($event.target).value)"
+                      [attr.data-testid]="'devices-station-' + device.deviceId"
+                    >
+                      <option value="">{{ 'kitchen.devices.station.all' | t }}</option>
+                      @for (station of stations(); track station.stationId) {
+                        <option [value]="station.stationId">{{ stationName(station) }}</option>
+                      }
+                    </select>
+                    @if (stationChanged(device)) {
+                      <button
+                        type="button"
+                        class="secondary"
+                        [disabled]="stationSavingId() === device.deviceId"
+                        (click)="saveStation(device)"
+                        [attr.data-testid]="'devices-station-save-' + device.deviceId"
+                      >
+                        {{
+                          stationSavingId() === device.deviceId
+                            ? ('kitchen.devices.station.saving' | t)
+                            : ('kitchen.devices.station.save' | t)
+                        }}
+                      </button>
+                    }
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>
+                  @if (device.display; as display) {
+                    <span
+                      [class.devices__notseen]="display.notSeen"
+                      [attr.data-testid]="'devices-lastseen-' + device.deviceId"
+                      >{{ lastSeenLabel(device) }}</span
+                    >
+                  } @else {
+                    —
+                  }
+                </td>
                 <td>{{ device.enrolledBy }}</td>
                 <td class="q-tnum">{{ formattedInstant(device.enrolledAt) }}</td>
                 <td>
@@ -131,6 +220,11 @@
             }
           </tbody>
         </table>
+        @if (stationError()) {
+          <p class="q-caption devices__error" role="alert" data-testid="devices-station-error">
+            {{ stationError() }}
+          </p>
+        }
       }
     </section>
 
@@ -141,6 +235,7 @@
           <thead>
             <tr>
               <th>{{ 'kitchen.devices.column.displayName' | t }}</th>
+              <th>{{ 'kitchen.devices.column.class' | t }}</th>
               <th>{{ 'kitchen.devices.column.revokedBy' | t }}</th>
               <th>{{ 'kitchen.devices.column.revokedAt' | t }}</th>
               <th>{{ 'kitchen.devices.column.revokedReason' | t }}</th>
@@ -150,6 +245,7 @@
             @for (device of revokedDevices(); track device.deviceId) {
               <tr>
                 <td>{{ device.displayName }}</td>
+                <td>{{ classLabel(device.deviceClass) }}</td>
                 <td>{{ device.revokedBy }}</td>
                 <td class="q-tnum">
                   {{ device.revokedAt ? formattedInstant(device.revokedAt) : '—' }}

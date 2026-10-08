@@ -56,7 +56,9 @@ class TenantOwnerLinkOrInviteTests {
         assertThat(memberships.getFirst().existingSubjectId())
                 .as("a blank subject is no subject")
                 .isNull();
-        assertThat(invitedLocales).containsExactly("uz");
+        assertThat(invitedLocales)
+                .as("uz-latn, in any casing, is the registry's uz-Latn; the invitation is queued under the tag")
+                .containsExactly("uz-Latn");
         assertThat(result.result()).containsEntry("invitation", OwnerInvitations.QUEUED);
         assertThat(sealed).doesNotContain("owner@example.uz");
     }

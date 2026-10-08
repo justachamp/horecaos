@@ -18,14 +18,31 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { describeApiError } from '../orders/order-errors';
 import { InboxApi } from './inbox-api';
-import { ConversationMessageResponse, ConversationResponse } from './inbox-conversation';
-import { channelLabel, stateLabel } from './inbox-labels';
+import {
+  AssistantTurnResponse,
+  ConversationMessageResponse,
+  ConversationResponse,
+} from './inbox-conversation';
+import {
+  assistantFactLabel,
+  assistantOutcomeLabel,
+  assistantReasonLabel,
+  channelLabel,
+  stateLabel,
+} from './inbox-labels';
 
 /** Same cadence as `InboxList` and the order board: a live poll while the tab is visible. */
 const POLL_INTERVAL_MS = 10_000;
 
 /** See `order-queue.ts`'s identical constant for why this is a fixed zone, not the browser's. */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
+
+/** What one assistant message's "why this answer" disclosure is showing. */
+export type TurnView =
+  | { readonly status: 'loading' }
+  | { readonly status: 'denied' }
+  | { readonly status: 'error' }
+  | { readonly status: 'ready'; readonly turn: AssistantTurnResponse };
 
 /**
  * The inbox detail — a sibling of `OrderDetailPane`, docked beside `InboxList`
@@ -37,6 +54,15 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * (`IDLE`, `CLOSED`) shows only "close" when not already closed — there is
  * nothing else an operator can do to a conversation the engine or nobody is
  * currently driving.
+ *
+ * **The assistant (ADR 0069).** An `IDLE` conversation the assistant has been
+ * answering is the one exception: the server marks it `assistantActive`, the
+ * header says so, the assistant's own messages are drawn as their own author, and
+ * "take over from the assistant" is offered — the same takeover call, which the
+ * server accepts for exactly that case. Each assistant message can say why it
+ * answered as it did (`assistantTurn`): how the turn ended and which facts it stood
+ * on. That read needs `assistant.read`, which an inbox operator may not hold, so a
+ * refusal is shown as a refusal and is not an error.
  */
 @Component({
   selector: 'q-inbox-detail-pane',
@@ -64,6 +90,9 @@ export class InboxDetailPane {
   protected readonly notice = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly replyDraft = signal('');
+
+  /** The assistant turns whose disclosure is open, by turn id, and what each is showing. */
+  protected readonly openTurns = signal<ReadonlyMap<string, TurnView>>(new Map());
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -159,6 +188,8 @@ export class InboxDetailPane {
         return 'inbox.message.author.customer';
       case 'OPERATOR':
         return 'inbox.message.author.operator';
+      case 'ASSISTANT':
+        return 'inbox.message.author.assistant';
       default:
         return 'inbox.message.author.flow';
     }
@@ -167,7 +198,15 @@ export class InboxDetailPane {
   // ------------------------------------------------------------ actions
 
   protected canTakeOver(): boolean {
-    return this.conversation()?.state === 'FLOW_ACTIVE';
+    const detail = this.conversation();
+    return detail?.state === 'FLOW_ACTIVE' || detail?.assistantActive === true;
+  }
+
+  /** The same button, said plainly when it is the assistant a person is taking over from. */
+  protected takeoverLabelKey(): MessageKey {
+    return this.conversation()?.assistantActive
+      ? 'inbox.action.takeoverFromAssistant'
+      : 'inbox.action.takeover';
   }
 
   protected canReply(): boolean {
@@ -180,6 +219,66 @@ export class InboxDetailPane {
 
   protected canClose(): boolean {
     return this.conversation()?.state !== 'CLOSED';
+  }
+
+  // ------------------------------------------------- why did it say that
+
+  protected turnViewOf(message: ConversationMessageResponse): TurnView | null {
+    const turnId = message.assistantTurnId;
+    return turnId ? (this.openTurns().get(turnId) ?? null) : null;
+  }
+
+  /** Opens or closes one assistant message's disclosure; the turn is read the first time it opens. */
+  protected async toggleWhy(message: ConversationMessageResponse): Promise<void> {
+    const turnId = message.assistantTurnId;
+    if (!turnId) {
+      return;
+    }
+    if (this.openTurns().has(turnId)) {
+      this.openTurns.update((current) => {
+        const next = new Map(current);
+        next.delete(turnId);
+        return next;
+      });
+      return;
+    }
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.setTurnView(turnId, { status: 'loading' });
+    try {
+      const result = await firstValueFrom(this.api.assistantTurn(scope, turnId));
+      this.setTurnView(turnId, { status: 'ready', turn: result.value });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.setTurnView(turnId, { status: error.status === 403 ? 'denied' : 'error' });
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  private setTurnView(turnId: string, view: TurnView): void {
+    // A disclosure closed while its read was in flight stays closed.
+    this.openTurns.update((current) => {
+      if (view.status !== 'loading' && !current.has(turnId)) {
+        return current;
+      }
+      return new Map(current).set(turnId, view);
+    });
+  }
+
+  protected outcomeLabel(outcome: string): string {
+    return assistantOutcomeLabel(outcome, (key) => this.i18n.t(key));
+  }
+
+  protected reasonLabel(reason: string): string {
+    return assistantReasonLabel(reason, (key) => this.i18n.t(key));
+  }
+
+  protected factLabel(kind: string): string {
+    return assistantFactLabel(kind, (key) => this.i18n.t(key));
   }
 
   protected updateReplyDraft(value: string): void {

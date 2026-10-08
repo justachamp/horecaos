@@ -51,6 +51,8 @@ function row(overrides: Partial<ConversationSummaryResponse> = {}): Conversation
     customerAccountId: null,
     state: 'FLOW_ACTIVE',
     needsReply: false,
+    assistantActive: false,
+    assistantInvolved: false,
     lastActivityAt: '2026-09-01T09:00:00Z',
     ...overrides,
   };
@@ -95,6 +97,65 @@ describe('InboxList: rendering', () => {
     );
     expect(conversationRow?.className).toContain('conversation-row--attention');
     expect(conversationRow?.textContent).toContain('needs reply');
+  });
+
+  it('marks a conversation the assistant is answering, in the state pill, without changing the state word', async () => {
+    configure(
+      listResponse([row({ state: 'IDLE', assistantActive: true, assistantInvolved: true })]),
+    );
+    const harness = await RouterTestingHarness.create('/inbox');
+    await flushMicrotasks();
+
+    const conversationRow = harness.routeNativeElement!.querySelector(
+      '[data-testid="conversation-row"]',
+    );
+    expect(conversationRow?.textContent).toContain('Idle');
+    expect(conversationRow?.textContent).toContain('Assistant answering');
+    expect(conversationRow?.className).not.toContain('conversation-row--attention');
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="conversation-assistant-note"]'),
+    ).toBeNull();
+  });
+
+  it('lets «needs reply» outrank «assistant answering» when both are true', async () => {
+    configure(
+      listResponse([
+        row({
+          state: 'FLOW_ACTIVE',
+          needsReply: true,
+          assistantActive: true,
+          assistantInvolved: true,
+        }),
+      ]),
+    );
+    const harness = await RouterTestingHarness.create('/inbox');
+    await flushMicrotasks();
+
+    const text = harness.routeNativeElement!.querySelector(
+      '[data-testid="conversation-row"]',
+    )?.textContent;
+    expect(text).toContain('needs reply');
+    expect(text).not.toContain('Assistant answering');
+  });
+
+  it('notes that the assistant answered earlier once a person holds the conversation', async () => {
+    configure(
+      listResponse([
+        row({
+          state: 'HANDED_TO_OPERATOR',
+          needsReply: true,
+          assistantActive: false,
+          assistantInvolved: true,
+        }),
+      ]),
+    );
+    const harness = await RouterTestingHarness.create('/inbox');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="conversation-assistant-note"]')
+        ?.textContent,
+    ).toContain('Assistant answered earlier');
   });
 
   it('shows a linked-customer indicator without ever showing PII', async () => {

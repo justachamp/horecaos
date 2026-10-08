@@ -123,6 +123,39 @@ public class CamelNotificationTransport implements NotificationTransport {
         return translate(outcome);
     }
 
+    /**
+     * ADR 0146 {@code resolve}: the key-only overload above, with what a gateway
+     * that holds no key needs — its own message id, or the destination and the
+     * hash of what we sent.
+     */
+    @Override
+    public DispatchOutcome reconcile(ReconcileRequest request) {
+        ProviderOutcome outcome = send(
+                NotificationRouteBuilder.STATUS_ENDPOINT,
+                NotificationSendOperation.resolve(
+                        request.tenantId(),
+                        request.brandId(),
+                        request.locationId(),
+                        request.channel(),
+                        new ResolveRequest(
+                                request.providerIdempotencyKey(),
+                                request.externalMessageId(),
+                                request.destination(),
+                                request.renderedContentHash(),
+                                request.requestedAt())));
+
+        if (outcome.status() == ProviderOutcome.Status.REJECTED && isNotFound(outcome)) {
+            return DispatchOutcome.retryable(
+                    "PROVIDER_HAS_NO_RECORD", "The provider has no record of this request", null);
+        }
+        return translate(outcome);
+    }
+
+    @Override
+    public Readiness readiness(UUID tenantId, UUID brandId, String channel, String purpose) {
+        return gateway.readiness(tenantId, brandId, channel, purpose);
+    }
+
     @Override
     public boolean supports(String channel) {
         return gateway.supports(channel);
@@ -151,7 +184,7 @@ public class CamelNotificationTransport implements NotificationTransport {
     }
 
     private static boolean isNotFound(ProviderOutcome outcome) {
-        return SmsGatewayAdapter.NO_RECORD.equals(outcome.errorCode());
+        return NotificationChannelAdapter.NO_RECORD.equals(outcome.errorCode());
     }
 
     /**
@@ -167,7 +200,13 @@ public class CamelNotificationTransport implements NotificationTransport {
                 switch (outcome.status()) {
                     case SUCCESS ->
                         DispatchOutcome.accepted(
-                                outcome.externalReference(), text(outcome.normalized(), "providerStatus"));
+                                        outcome.externalReference(),
+                                        text(outcome.normalized(), NotificationChannelAdapter.PROVIDER_STATUS_KEY))
+                                .understood(
+                                        text(outcome.normalized(), NotificationChannelAdapter.NORMALIZED_STATUS_KEY),
+                                        integer(outcome.normalized(), NotificationChannelAdapter.SEGMENTS_KEY),
+                                        Boolean.parseBoolean(text(
+                                                outcome.normalized(), NotificationChannelAdapter.HARD_BOUNCE_KEY)));
                     case REJECTED -> DispatchOutcome.rejected(outcome.errorCode(), outcome.detail());
                     case RETRYABLE ->
                         DispatchOutcome.retryable(
@@ -187,5 +226,17 @@ public class CamelNotificationTransport implements NotificationTransport {
     private static @Nullable String text(Map<String, Object> normalized, String key) {
         Object value = normalized.get(key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    private static @Nullable Integer integer(Map<String, Object> normalized, String key) {
+        String value = text(normalized, key);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 }

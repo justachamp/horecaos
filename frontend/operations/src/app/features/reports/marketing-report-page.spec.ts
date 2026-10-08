@@ -81,9 +81,13 @@ const CAMPAIGN: CampaignView = {
   scheduledAt: null,
   haltedReason: null,
   isWired: true,
+  notWiredReason: null,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
   version: 1,
+  kind: 'BROADCAST',
+  controlGroupPercent: null,
+  supersedesCampaignId: null,
 };
 
 const COUNTS: RecipientCountsView = {

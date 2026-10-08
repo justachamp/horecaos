@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * One typed condition from the closed catalogue (ADR 0044).
@@ -14,7 +16,7 @@ import org.jspecify.annotations.Nullable;
  * so the refusal belongs at the moment somebody saves the audience, where a
  * marketer is present to read it.
  *
- * <p>The locale set is checked against the three languages HorecaOS sends in.
+ * <p>The locale set is checked against the languages HorecaOS sends in (the registry's messages tier).
  * Accepting an unknown tag would produce an audience that silently matches
  * nobody, which is the failure mode that looks like a working feature.
  */
@@ -28,7 +30,6 @@ public record AudiencePredicate(
         @Nullable List<String> textValues,
         @Nullable UUID audienceId) {
 
-    private static final List<String> SUPPORTED_LOCALES = List.of("ru", "uz-Latn", "en");
     private static final int MAX_TEXT_VALUES = 64;
 
     public AudiencePredicate {
@@ -72,9 +73,13 @@ public record AudiencePredicate(
                 if (textValues.size() > MAX_TEXT_VALUES) {
                     throw new IllegalArgumentException("%s accepts at most %d values".formatted(type, MAX_TEXT_VALUES));
                 }
-                if (type == PredicateType.PREFERRED_LOCALE && !SUPPORTED_LOCALES.containsAll(textValues)) {
-                    throw new IllegalArgumentException(
-                            "Locales must be among %s, not %s".formatted(SUPPORTED_LOCALES, textValues));
+                // A customer's language is a message language (ADR 0149): the registry's messages tier
+                // is the set a customer can be addressed in, so a language declared but not live
+                // (kk, ka) is refused the same way an unknown tag is.
+                if (type == PredicateType.PREFERRED_LOCALE
+                        && !PlatformLocales.activeTags(Tier.MESSAGES).containsAll(textValues)) {
+                    throw new IllegalArgumentException("Locales must be among %s, not %s"
+                            .formatted(PlatformLocales.activeTags(Tier.MESSAGES), textValues));
                 }
             }
             case AUDIENCE -> {

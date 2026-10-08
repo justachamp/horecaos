@@ -11,7 +11,9 @@
 @if (session.has('COMMERCIAL_PLAN_MANAGE')) {
   <div class="toolbar">
     <button type="button" class="registerToggle" (click)="openRegister()">
-      {{ registering() ? i18n.t('planCatalog.register.cancel') : i18n.t('planCatalog.register.open') }}
+      {{
+        registering() ? i18n.t('planCatalog.register.cancel') : i18n.t('planCatalog.register.open')
+      }}
     </button>
   </div>
   @if (registering()) {
@@ -30,7 +32,12 @@
       </label>
       <label class="field">
         <span class="q-caption">{{ i18n.t('planCatalog.register.name') }}</span>
-        <input class="q-body-sm" name="planName" [value]="newName()" (input)="newName.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="planName"
+          [value]="newName()"
+          (input)="newName.set($any($event.target).value)"
+        />
       </label>
       <label class="field">
         <span class="q-caption">{{ i18n.t('common.reason') }}</span>
@@ -41,7 +48,9 @@
           (input)="newReason.set($any($event.target).value)"
         />
       </label>
-      <button type="submit" [disabled]="!canRegister()">{{ i18n.t('planCatalog.register.submit') }}</button>
+      <button type="submit" [disabled]="!canRegister()">
+        {{ i18n.t('planCatalog.register.submit') }}
+      </button>
     </form>
   }
 }
@@ -59,7 +68,9 @@
         <h2 class="q-subhead">
           {{ plan.name }} <span class="muted q-tnum">{{ plan.code }}</span>
         </h2>
-        <span class="chip q-caption" [class.live]="plan.status === 'ACTIVE'">{{ i18n.t(statusKey(plan.status)) }}</span>
+        <span class="chip q-caption" [class.live]="plan.status === 'ACTIVE'">{{
+          i18n.t(statusKey(plan.status))
+        }}</span>
       </header>
 
       @if (plan.versions.length === 0) {
@@ -85,7 +96,9 @@
                   <td class="q-body-sm q-tnum">{{ i18n.money(version.price) }}</td>
                   <td class="q-body-sm">{{ i18n.t(billingKey(version.billingPeriod)) }}</td>
                   <td class="q-body-sm">
-                    <span class="chip q-caption" [class.live]="version.status === 'ACTIVE'">{{ i18n.t(statusKey(version.status)) }}</span>
+                    <span class="chip q-caption" [class.live]="version.status === 'ACTIVE'">{{
+                      i18n.t(statusKey(version.status))
+                    }}</span>
                   </td>
                   <td class="q-body-sm">{{ who(version.createdBy) }}</td>
                   <td class="q-body-sm">
@@ -97,10 +110,18 @@
                   </td>
                   <td class="q-body-sm actions">
                     <button type="button" (click)="toggle(version.planVersionId)">
-                      {{ expanded() === version.planVersionId ? i18n.t('planCatalog.hideEntitlements') : i18n.t('planCatalog.showEntitlements') }}
+                      {{
+                        expanded() === version.planVersionId
+                          ? i18n.t('planCatalog.hideEntitlements')
+                          : i18n.t('planCatalog.showEntitlements')
+                      }}
                     </button>
                     @if (version.status === 'DRAFT' && session.has('COMMERCIAL_PLAN_ACTIVATE')) {
-                      <button type="button" class="activateToggle" (click)="openActivation(version)">
+                      <button
+                        type="button"
+                        class="activateToggle"
+                        (click)="openActivation(version)"
+                      >
                         {{ i18n.t('planCatalog.activate.open') }}
                       </button>
                     }
@@ -110,7 +131,9 @@
                   <tr>
                     <td class="q-body-sm" colspan="7">
                       @if (version.termsReference; as terms) {
-                        <p class="q-caption muted">{{ i18n.t('planCatalog.terms') }}: {{ terms }}</p>
+                        <p class="q-caption muted">
+                          {{ i18n.t('planCatalog.terms') }}: {{ terms }}
+                        </p>
                       }
                       @if (termsLine(version); as line) {
                         <p class="q-caption termsLine">{{ line }}</p>
@@ -124,7 +147,9 @@
                               <th class="q-caption">{{ i18n.t('entitlements.column.key') }}</th>
                               <th class="q-caption">{{ i18n.t('entitlements.column.limit') }}</th>
                               <th class="q-caption">{{ i18n.t('entitlements.column.mode') }}</th>
-                              <th class="q-caption">{{ i18n.t('planCatalog.column.resetPeriod') }}</th>
+                              <th class="q-caption">
+                                {{ i18n.t('planCatalog.column.resetPeriod') }}
+                              </th>
                               <th class="q-caption">{{ i18n.t('planCatalog.column.overage') }}</th>
                             </tr>
                           </thead>
@@ -133,9 +158,15 @@
                               <tr>
                                 <td class="q-body-sm q-tnum">{{ line.entitlementKey }}</td>
                                 <td class="q-body-sm q-tnum">{{ value(line) }}</td>
-                                <td class="q-body-sm">{{ i18n.t(modeKey(line.enforcementMode)) }}</td>
+                                <td class="q-body-sm">
+                                  {{ i18n.t(modeKey(line.enforcementMode)) }}
+                                </td>
                                 <td class="q-body-sm">{{ i18n.t(resetKey(line.resetPeriod)) }}</td>
-                                <td class="q-body-sm q-tnum">{{ line.overageUnitPrice ? i18n.money(line.overageUnitPrice) : '—' }}</td>
+                                <td class="q-body-sm q-tnum">
+                                  {{
+                                    line.overageUnitPrice ? i18n.money(line.overageUnitPrice) : '—'
+                                  }}
+                                </td>
                               </tr>
                             }
                           </tbody>
@@ -148,9 +179,13 @@
                   <tr class="activation">
                     <td class="q-body-sm" colspan="7">
                       @if (draftedByMe(version)) {
-                        <p class="q-body-sm notice">{{ i18n.t('planCatalog.activate.ownDraft') }}</p>
+                        <p class="q-body-sm notice">
+                          {{ i18n.t('planCatalog.activate.ownDraft') }}
+                        </p>
                       } @else {
-                        <p class="q-body-sm warning">{{ i18n.t('planCatalog.activate.warning') }}</p>
+                        <p class="q-body-sm warning">
+                          {{ i18n.t('planCatalog.activate.warning') }}
+                        </p>
                         <div class="inlineForm">
                           <input
                             class="q-body-sm"
@@ -165,7 +200,11 @@
                             [disabled]="busy() || activationReason().trim().length === 0"
                             (click)="activate(plan, version)"
                           >
-                            {{ i18n.t('planCatalog.activate.confirm', { version: version.versionNumber }) }}
+                            {{
+                              i18n.t('planCatalog.activate.confirm', {
+                                version: version.versionNumber,
+                              })
+                            }}
                           </button>
                         </div>
                       }
@@ -180,7 +219,11 @@
 
       @if (session.has('COMMERCIAL_PLAN_MANAGE')) {
         <button type="button" class="draftToggle" (click)="openDraft(plan)">
-          {{ draftFor() === plan.planId ? i18n.t('planCatalog.draft.cancel') : i18n.t('planCatalog.draft.open') }}
+          {{
+            draftFor() === plan.planId
+              ? i18n.t('planCatalog.draft.cancel')
+              : i18n.t('planCatalog.draft.open')
+          }}
         </button>
         @if (draftFor() === plan.planId) {
           @if (keysError(); as message) {
@@ -188,7 +231,13 @@
           } @else {
             <form class="draftForm" (submit)="draft(plan, $event)">
               <p class="q-caption muted">
-                {{ plan.versions.length > 0 ? i18n.t('planCatalog.draft.prefilled', { version: plan.versions[0].versionNumber }) : i18n.t('planCatalog.draft.first') }}
+                {{
+                  plan.versions.length > 0
+                    ? i18n.t('planCatalog.draft.prefilled', {
+                        version: plan.versions[0].versionNumber,
+                      })
+                    : i18n.t('planCatalog.draft.first')
+                }}
               </p>
               <div class="terms">
                 <label class="field">
@@ -203,7 +252,12 @@
                 </label>
                 <label class="field">
                   <span class="q-caption">{{ i18n.t('planCatalog.draft.currency') }}</span>
-                  <select class="q-body-sm" name="currency" [value]="currency()" (change)="currency.set($any($event.target).value)">
+                  <select
+                    class="q-body-sm"
+                    name="currency"
+                    [value]="currency()"
+                    (change)="currency.set($any($event.target).value)"
+                  >
                     @for (code of currencies; track code) {
                       <option [value]="code" [selected]="code === currency()">{{ code }}</option>
                     }
@@ -218,7 +272,9 @@
                     (change)="billingPeriod.set($any($event.target).value)"
                   >
                     @for (period of billingPeriods; track period) {
-                      <option [value]="period" [selected]="period === billingPeriod()">{{ i18n.t(billingKey(period)) }}</option>
+                      <option [value]="period" [selected]="period === billingPeriod()">
+                        {{ i18n.t(billingKey(period)) }}
+                      </option>
                     }
                   </select>
                 </label>
@@ -235,26 +291,56 @@
               <div class="terms sells">
                 <label class="field">
                   <span class="q-caption">{{ i18n.t('planCatalog.draft.trialDays') }}</span>
-                  <input class="q-body-sm q-tnum" name="trialDays" inputmode="numeric" [value]="trialDays()" (input)="trialDays.set($any($event.target).value)" />
+                  <input
+                    class="q-body-sm q-tnum"
+                    name="trialDays"
+                    inputmode="numeric"
+                    [value]="trialDays()"
+                    (input)="trialDays.set($any($event.target).value)"
+                  />
                 </label>
                 <label class="field">
                   <span class="q-caption">{{ i18n.t('planCatalog.draft.deposit') }}</span>
-                  <input class="q-body-sm q-tnum" name="deposit" inputmode="decimal" [value]="deposit()" (input)="deposit.set($any($event.target).value)" />
+                  <input
+                    class="q-body-sm q-tnum"
+                    name="deposit"
+                    inputmode="decimal"
+                    [value]="deposit()"
+                    (input)="deposit.set($any($event.target).value)"
+                  />
                 </label>
                 <label class="field">
-                  <span class="q-caption">{{ i18n.t('planCatalog.draft.discount', { months: 6 }) }}</span>
-                  <input class="q-body-sm q-tnum" name="discount6" inputmode="decimal" [value]="discount6()" (input)="discount6.set($any($event.target).value)" />
+                  <span class="q-caption">{{
+                    i18n.t('planCatalog.draft.discount', { months: 6 })
+                  }}</span>
+                  <input
+                    class="q-body-sm q-tnum"
+                    name="discount6"
+                    inputmode="decimal"
+                    [value]="discount6()"
+                    (input)="discount6.set($any($event.target).value)"
+                  />
                 </label>
                 <label class="field">
-                  <span class="q-caption">{{ i18n.t('planCatalog.draft.discount', { months: 12 }) }}</span>
-                  <input class="q-body-sm q-tnum" name="discount12" inputmode="decimal" [value]="discount12()" (input)="discount12.set($any($event.target).value)" />
+                  <span class="q-caption">{{
+                    i18n.t('planCatalog.draft.discount', { months: 12 })
+                  }}</span>
+                  <input
+                    class="q-body-sm q-tnum"
+                    name="discount12"
+                    inputmode="decimal"
+                    [value]="discount12()"
+                    (input)="discount12.set($any($event.target).value)"
+                  />
                 </label>
               </div>
               @if (price().trim().length > 0 && priceMinor() === null) {
                 <p class="q-caption error">{{ i18n.t('planCatalog.draft.priceInvalid') }}</p>
               }
               @if (termsRequest() === null) {
-                <p class="q-caption error termsInvalid">{{ i18n.t('planCatalog.draft.termsInvalid') }}</p>
+                <p class="q-caption error termsInvalid">
+                  {{ i18n.t('planCatalog.draft.termsInvalid') }}
+                </p>
               }
 
               <div class="scroll">
@@ -281,7 +367,11 @@
                         </td>
                         <td class="q-body-sm q-tnum">
                           {{ line.key.code }}
-                          <span class="q-caption muted">{{ line.key.counted ? line.key.unit + ' · ' + i18n.t(resetKey(line.key.resetPeriod)) : i18n.t('planCatalog.draft.feature') }}</span>
+                          <span class="q-caption muted">{{
+                            line.key.counted
+                              ? line.key.unit + ' · ' + i18n.t(resetKey(line.key.resetPeriod))
+                              : i18n.t('planCatalog.draft.feature')
+                          }}</span>
                         </td>
                         <td>
                           @if (line.key.counted) {
@@ -298,10 +388,16 @@
                               class="q-body-sm"
                               [attr.name]="'enabled-' + line.key.code"
                               [disabled]="!line.included"
-                              (change)="updateLine(index, { enabled: $any($event.target).value === 'on' })"
+                              (change)="
+                                updateLine(index, { enabled: $any($event.target).value === 'on' })
+                              "
                             >
-                              <option value="on" [selected]="line.enabled">{{ i18n.t('commerce.on') }}</option>
-                              <option value="off" [selected]="!line.enabled">{{ i18n.t('commerce.off') }}</option>
+                              <option value="on" [selected]="line.enabled">
+                                {{ i18n.t('commerce.on') }}
+                              </option>
+                              <option value="off" [selected]="!line.enabled">
+                                {{ i18n.t('commerce.off') }}
+                              </option>
                             </select>
                           }
                         </td>
@@ -313,7 +409,9 @@
                             (change)="updateLine(index, { mode: $any($event.target).value })"
                           >
                             @for (mode of modes; track mode) {
-                              <option [value]="mode" [selected]="mode === line.mode">{{ i18n.t(modeKey(mode)) }}</option>
+                              <option [value]="mode" [selected]="mode === line.mode">
+                                {{ i18n.t(modeKey(mode)) }}
+                              </option>
                             }
                           </select>
                         </td>
@@ -345,7 +443,9 @@
                   [value]="draftReason()"
                   (input)="draftReason.set($any($event.target).value)"
                 />
-                <button type="submit" [disabled]="!canDraft()">{{ i18n.t('planCatalog.draft.submit') }}</button>
+                <button type="submit" [disabled]="!canDraft()">
+                  {{ i18n.t('planCatalog.draft.submit') }}
+                </button>
               </div>
             </form>
           }

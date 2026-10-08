@@ -33,7 +33,11 @@ const session = (overrides: Partial<SupportSessionView>): SupportSessionView => 
 
 describe('TenantImpersonation', () => {
   let fixture: ComponentFixture<TenantImpersonation>;
-  let api: { open: ReturnType<typeof vi.fn>; list: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+  let api: {
+    open: ReturnType<typeof vi.fn>;
+    list: ReturnType<typeof vi.fn>;
+    end: ReturnType<typeof vi.fn>;
+  };
 
   async function create(existing: SupportSessionView[]): Promise<void> {
     api = {
@@ -47,9 +51,18 @@ describe('TenantImpersonation', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: SupportSessionsApi, useValue: api },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(TenantImpersonation);
@@ -72,7 +85,7 @@ describe('TenantImpersonation', () => {
 
     const submit = el<HTMLButtonElement>('.openForm button[type="submit"]');
     expect(submit.disabled).toBe(true);
-    (el<HTMLInputElement>('input[name="access"][value="ASSIST"]')).click();
+    el<HTMLInputElement>('input[name="access"][value="ASSIST"]').click();
     const minutes = el<HTMLSelectElement>('select[name="minutes"]');
     minutes.value = '30';
     minutes.dispatchEvent(new Event('change'));
@@ -111,11 +124,20 @@ describe('TenantImpersonation', () => {
 
   it('keeps the tenant’s record of every visit, saying how each one ended', async () => {
     await create([
-      session({ id: 's-2', principalSubject: 'colleague', open: false, endedAt: '2026-09-10T10:30:00Z', endedBy: 'owner-1', endReason: 'We fixed it ourselves' }),
+      session({
+        id: 's-2',
+        principalSubject: 'colleague',
+        open: false,
+        endedAt: '2026-09-10T10:30:00Z',
+        endedBy: 'owner-1',
+        endReason: 'We fixed it ourselves',
+      }),
       session({ id: 's-3', principalSubject: 'colleague', open: false }),
     ]);
 
-    const rows = Array.from(fixture.nativeElement.querySelectorAll('.history tbody tr')) as HTMLElement[];
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('.history tbody tr'),
+    ) as HTMLElement[];
     expect(rows[0].textContent).toContain('owner-1');
     expect(rows[0].textContent).toContain('We fixed it ourselves');
     expect(rows[1].textContent).toContain(ru['support.state.lapsed'].split(' ')[0]);

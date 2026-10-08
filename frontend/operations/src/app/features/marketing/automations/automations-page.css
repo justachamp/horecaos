@@ -176,3 +176,23 @@
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
 }
+
+.automations__hint {
+  margin: 0 0 12px;
+  color: var(--q-ink-muted);
+}
+
+.automations__hint--warn {
+  margin: 4px 0 0;
+  color: var(--q-warning-text);
+}
+
+.automations__code {
+  margin-left: 6px;
+  color: var(--q-ink-subtle);
+}
+
+.automations__detail {
+  margin-top: 2px;
+  color: var(--q-ink-muted);
+}

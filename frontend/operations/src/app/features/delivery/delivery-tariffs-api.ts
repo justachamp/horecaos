@@ -69,9 +69,46 @@ export interface ActiveVersionResponse {
   readonly discounts: readonly DiscountView[];
 }
 
+/**
+ * What a version's distance is measured by (ADR 0147). Mirrors
+ * `DeliveryTariffController.RoutingView`.
+ *
+ * `basis` is `STRAIGHT_LINE` for a `RADIUS` tariff, `ROAD` for one the routing engine is
+ * measuring, and `STRAIGHT_LINE_FALLBACK` for a `ROAD` tariff that is pricing from the
+ * straight line times `roadFactorBasisPoints` because routing is not answering.
+ * `basisEvidence` says whether that was read off recent fees (`FEES`) or inferred from
+ * configuration because the version has priced none in the window (`CONFIGURATION`) —
+ * the screen words the two differently, so an inference is never shown as an observation.
+ * Nothing here is a probe of the engine.
+ */
+export interface RoutingView {
+  readonly basis: 'STRAIGHT_LINE' | 'ROAD' | 'STRAIGHT_LINE_FALLBACK';
+  readonly basisEvidence: 'FEES' | 'CONFIGURATION';
+  readonly roadFactorBasisPoints: number;
+  readonly engineEnabled: boolean;
+  readonly installationStatus?: string | null;
+  /** `osrm` for the platform's own engine; null when the version names no installation. */
+  readonly provider?: string | null;
+  readonly engineDatasetVersion?: string | null;
+  readonly lastDatasetVersion?: string | null;
+  readonly roadFees: number;
+  readonly fallbackFees: number;
+  readonly windowHours: number;
+  readonly lastDistanceSource?: string | null;
+  readonly lastResolvedAt?: string | null;
+}
+
+/** Mirrors `DeliveryTariffController.RoutingEngineResponse`. */
+export interface RoutingEngineResponse {
+  readonly engineEnabled: boolean;
+  readonly datasetVersion?: string | null;
+}
+
 export interface TariffDetailResponse {
   readonly tariff: TariffSummaryResponse;
   readonly activeVersion?: ActiveVersionResponse | null;
+  /** Absent from a server that predates ADR 0147; the screen then claims nothing about routing. */
+  readonly routing?: RoutingView | null;
 }
 
 export interface CreateTariffRequest {
@@ -155,6 +192,12 @@ export interface DraftTariffVersionRequest {
   readonly distanceMode: 'RADIUS' | 'ROAD';
   readonly roadFactorBasisPoints: number;
   readonly routingProviderInstallationId?: string | null;
+  /**
+   * "Use platform routing" (ADR 0147): bind a `ROAD` draft to the tenant's own platform
+   * routing installation, which the server creates in the same action. Mutually exclusive
+   * with `routingProviderInstallationId`, and refused for a `RADIUS` draft.
+   */
+  readonly usePlatformRouting?: boolean | null;
   readonly maxDistanceMeters: number;
   readonly minFeeMinor: number;
   readonly maxFeeMinor?: number | null;
@@ -194,6 +237,14 @@ export class DeliveryTariffsApi {
     return result.value;
   }
 
+  /** Whether the platform's routing engine is on and which dataset it holds. Configuration, not a probe. */
+  async routingEngine(scope: BrandScope): Promise<RoutingEngineResponse> {
+    const result = await firstValueFrom(
+      this.api.get<RoutingEngineResponse>(deliveryTariffPaths.routingEngine(scope)),
+    );
+    return result.value;
+  }
+
   async create(scope: BrandScope, request: CreateTariffRequest): Promise<TariffView> {
     return firstValueFrom(
       this.api.post<CreateTariffRequest, TariffView>(
@@ -211,6 +262,7 @@ export class DeliveryTariffsApi {
     const body: DraftTariffVersionRequest = {
       ...request,
       routingProviderInstallationId: request.routingProviderInstallationId ?? null,
+      usePlatformRouting: request.usePlatformRouting ?? null,
       maxFeeMinor: request.maxFeeMinor ?? null,
       distanceAccrual: request.distanceAccrual ?? null,
       feeRoundingStepMinor: request.feeRoundingStepMinor ?? null,

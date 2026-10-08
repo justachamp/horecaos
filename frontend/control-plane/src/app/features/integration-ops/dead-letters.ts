@@ -84,7 +84,9 @@ export class DeadLetters {
         this.api.outboxFailures('DEAD_LETTER', 100, tenant),
         this.api.inboxFailuresAcrossConsumers('DEAD_LETTER', 100, tenant),
       ]);
-      this.outbox.set(outbox.items.map((failure) => ({ queue: 'outbox', consumerName: null, failure })));
+      this.outbox.set(
+        outbox.items.map((failure) => ({ queue: 'outbox', consumerName: null, failure })),
+      );
       this.inbox.set(
         inbox.items.map((failure: InboxFailureSummary) => ({
           queue: 'inbox',
@@ -99,10 +101,25 @@ export class DeadLetters {
     }
   }
 
-  protected sections(): readonly { queue: Queue; title: MessageKey; empty: MessageKey; rows: readonly Row[] }[] {
+  protected sections(): readonly {
+    queue: Queue;
+    title: MessageKey;
+    empty: MessageKey;
+    rows: readonly Row[];
+  }[] {
     return [
-      { queue: 'outbox', title: 'deadLetters.outbox.title', empty: 'deadLetters.outbox.empty', rows: this.outbox() },
-      { queue: 'inbox', title: 'deadLetters.inbox.title', empty: 'deadLetters.inbox.empty', rows: this.inbox() },
+      {
+        queue: 'outbox',
+        title: 'deadLetters.outbox.title',
+        empty: 'deadLetters.outbox.empty',
+        rows: this.outbox(),
+      },
+      {
+        queue: 'inbox',
+        title: 'deadLetters.inbox.title',
+        empty: 'deadLetters.inbox.empty',
+        rows: this.inbox(),
+      },
     ];
   }
 
@@ -148,9 +165,12 @@ export class DeadLetters {
   }
 
   protected canAct(): boolean {
-    const needsEvidence = this.mode() === 'resolve' && this.category() === 'UNCERTAIN_EXTERNAL_OUTCOME';
+    const needsEvidence =
+      this.mode() === 'resolve' && this.category() === 'UNCERTAIN_EXTERNAL_OUTCOME';
     return (
-      !this.acting() && this.reason().trim().length > 0 && (!needsEvidence || this.evidence().trim().length > 0)
+      !this.acting() &&
+      this.reason().trim().length > 0 &&
+      (!needsEvidence || this.evidence().trim().length > 0)
     );
   }
 
@@ -175,14 +195,24 @@ export class DeadLetters {
             : await this.api.retryInbox(row.consumerName!, row.failure.id, reason)
           : row.queue === 'outbox'
             ? await this.api.resolveOutbox(row.failure.id, this.category(), reason, evidence)
-            : await this.api.resolveInbox(row.consumerName!, row.failure.id, this.category(), reason, evidence);
+            : await this.api.resolveInbox(
+                row.consumerName!,
+                row.failure.id,
+                this.category(),
+                reason,
+                evidence,
+              );
       if (result.changed) {
         const key = this.key(row);
         const list = row.queue === 'outbox' ? this.outbox : this.inbox;
         list.update((rows) => rows.filter((candidate) => this.key(candidate) !== key));
         this.openKey.set(null);
         this.actionMessage.set(
-          this.i18n.t(this.mode() === 'retry' ? 'deadLetters.retry.succeeded' : 'deadLetters.resolve.succeeded'),
+          this.i18n.t(
+            this.mode() === 'retry'
+              ? 'deadLetters.retry.succeeded'
+              : 'deadLetters.resolve.succeeded',
+          ),
         );
       } else {
         this.actionMessage.set(this.i18n.t('deadLetters.retry.noChange'));

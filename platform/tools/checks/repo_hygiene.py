@@ -522,7 +522,8 @@ def check_deploy_copies_match() -> None:
                         + "; ".join(sorted(f"{p} {list(c)}" for p, c in grants[rendered] ^ grants[literal])))
     door = {f"horecaos/data/production/{category}/*" for category in (
         "provider_pos", "provider_payment", "provider_delivery",
-        "provider_notification", "provider_voice", "provider_marketplace")}
+        "provider_notification", "provider_voice", "provider_marketplace",
+        "provider_storefront_app")}
     for path in sorted(door):
         caps = {c for p, c in grants[rendered] if p == path}
         if not any({"create", "update", "read"} <= set(c) for c in caps):

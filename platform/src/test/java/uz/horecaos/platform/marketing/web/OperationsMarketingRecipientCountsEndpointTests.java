@@ -33,6 +33,7 @@ import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.integration.web.sms.SmsReceiptFixture;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -91,6 +92,9 @@ class OperationsMarketingRecipientCountsEndpointTests {
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("TRUNCATE TABLE marketing.campaign_recipients, marketing.campaign_batches, "
                         + "marketing.campaigns, marketing.audience_snapshots, marketing.audiences CASCADE")
+                .update();
+        jdbc.sql("TRUNCATE TABLE notifications.delivery_status_events, notifications.delivery_attempts, "
+                        + "notifications.notifications CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -161,6 +165,100 @@ class OperationsMarketingRecipientCountsEndpointTests {
                 .contains("\"CONSENT_WITHHELD\":1");
     }
 
+    /**
+     * ADR 0146 Decision 5: a recipient shows what a gateway has actually said about
+     * its message. "Handed to the operator" is the honest word for an accepted message
+     * nothing has reported on, and it moves only when a receipt (or the sweeper) moves
+     * the attempt it is read from.
+     */
+    @Test
+    void recipientsShowWhatTheGatewayReportedAndBilled() throws Exception {
+        UUID campaignId = insertCampaign(BRAND);
+        UUID account = seedCustomer();
+        SmsReceiptFixture fixture = new SmsReceiptFixture(jdbc);
+        UUID attemptId = fixture.acceptedAttempt(
+                TENANT, BRAND, UUID.randomUUID(), "SMSGW_VAS", "vas-901", account, java.time.Instant.now());
+        UUID notificationId = jdbc.sql("SELECT notification_id FROM notifications.delivery_attempts WHERE id = :id")
+                .param("id", attemptId)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("UPDATE notifications.delivery_attempts SET provider_segments = 2 WHERE id = :id")
+                .param("id", attemptId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO marketing.campaign_recipients (
+                    campaign_id, tenant_id, customer_account_id, sequence, status,
+                    notification_id, created_at, updated_at)
+                VALUES (:campaignId, :tenantId, :accountId, 0, 'QUEUED', :notificationId, now(), now())
+                """)
+                .param("campaignId", campaignId)
+                .param("tenantId", TENANT)
+                .param("accountId", account)
+                .param("notificationId", notificationId)
+                .update();
+
+        assertThat(recipientsOf(campaignId))
+                .contains("\"deliveryState\":\"HANDED_TO_OPERATOR\"")
+                .contains("\"segmentsBilled\":2")
+                .contains("\"receiptState\":null");
+
+        jdbc.sql("UPDATE notifications.delivery_attempts SET receipt_state = 'NO_RECEIPT' WHERE id = :id")
+                .param("id", attemptId)
+                .update();
+        assertThat(recipientsOf(campaignId))
+                .contains("\"deliveryState\":\"NO_RECEIPT\"")
+                .contains("\"receiptState\":\"NO_RECEIPT\"");
+
+        jdbc.sql("UPDATE notifications.delivery_attempts SET receipt_state = NULL, status = 'DELIVERED', "
+                        + "acknowledged_at = now() WHERE id = :id")
+                .param("id", attemptId)
+                .update();
+        assertThat(recipientsOf(campaignId)).contains("\"deliveryState\":\"DELIVERED\"");
+
+        jdbc.sql("UPDATE notifications.delivery_attempts SET status = 'FAILED', acknowledged_at = NULL, "
+                        + "failure_code = 'RECEIVER_UNREACHABLE' WHERE id = :id")
+                .param("id", attemptId)
+                .update();
+        assertThat(recipientsOf(campaignId)).contains("\"deliveryState\":\"FAILED\"");
+    }
+
+    /**
+     * ADR 0146 Decision 8: "wired" is a fact about this brand's account, not about the
+     * build. A brand with no SMS binding is not wired for SMS in a build that has an SMS
+     * adapter, and the console is told why in a stable code.
+     */
+    @Test
+    void channelsAreWiredPerBrandWithAReason() throws Exception {
+        MvcResult result = mvc.perform(get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/marketing/channels")
+                        .with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        var channels = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readTree(result.getResponse().getContentAsString());
+        java.util.Map<String, tools.jackson.databind.JsonNode> byName = new java.util.LinkedHashMap<>();
+        channels.forEach(node -> byName.put(node.get("channel").asString(), node));
+
+        assertThat(java.util.Objects.requireNonNull(byName.get("SMS"))
+                        .get("isWired")
+                        .asBoolean())
+                .isFalse();
+        assertThat(java.util.Objects.requireNonNull(byName.get("SMS"))
+                        .get("notWiredReason")
+                        .asString())
+                .isEqualTo("NO_PROVIDER_BINDING");
+        assertThat(java.util.Objects.requireNonNull(byName.get("EMAIL"))
+                        .get("notWiredReason")
+                        .asString())
+                .isEqualTo("NO_DELIVERY_ADAPTER");
+        assertThat(java.util.Objects.requireNonNull(byName.get("MESSAGING_APP"))
+                        .get("isWired")
+                        .asBoolean())
+                .as("Telegram's link is the customer's own, so it is wired for every brand as before")
+                .isTrue();
+    }
+
     @Test
     void recipientCountsRefusesACampaignFromAnotherBrand() throws Exception {
         UUID campaignId = insertCampaign(OTHER_BRAND);
@@ -173,6 +271,15 @@ class OperationsMarketingRecipientCountsEndpointTests {
     }
 
     // ------------------------------------------------------------------ fixtures
+
+    private String recipientsOf(UUID campaignId) throws Exception {
+        MvcResult result = mvc.perform(get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/marketing/campaigns/"
+                                + campaignId + "/recipients")
+                        .with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        return result.getResponse().getContentAsString();
+    }
 
     private static String countsPath(UUID brandId, UUID campaignId) {
         return "/api/v1/tenants/" + TENANT + "/brands/" + brandId + "/marketing/campaigns/" + campaignId

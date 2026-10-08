@@ -24,6 +24,8 @@ import {
 } from '../../../core/format/regional-format';
 import { RegionalFormatSync } from '../../../core/format/regional-format-sync';
 import { I18n } from '../../../core/i18n/i18n';
+import { localeDisplayName } from '../../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { LocationsApi } from '../locations/locations-api';
 import { MediaUploader, mediaUploaderRejectionMessageKey } from '../../../shared/ui/media-uploader';
@@ -37,16 +39,13 @@ import {
   UpdateBrandProfileRequest,
 } from './brand-profile-api';
 
-/** One row of the supported-language editor, over the fixed set the console can author content in today. */
+/** One row of the supported-language editor, over the languages the registry has live in the content tier. */
 interface LocaleDraft {
   readonly locale: BrandLocaleCode;
   included: boolean;
   description: string;
   isDefault: boolean;
 }
-
-/** `uz.horecaos.platform.tenancy.domain.BrandProfile.KNOWN_LOCALES`, mirrored. */
-const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
 
 /** The phone patterns the format picker offers ahead of a custom one; `#` is one digit. */
 const PHONE_PATTERN_PRESETS: readonly string[] = [
@@ -94,9 +93,10 @@ function isValidPhonePattern(pattern: string): boolean {
  * mark and a wide banner are different shapes, but `q-media-uploader`'s own
  * ratio picker is how a banner reaches `3:1` without a second component).
  *
- * The language editor is a fixed three-row grid over `KNOWN_LOCALES` rather
- * than a free-text list: the console has an editor for exactly ru/uz-Latn/en
- * today, so offering a fourth would record a choice nothing can render.
+ * The language editor is a grid with one row per language the registry has live in its content
+ * tier (ADR 0149), rather than a free-text list: offering a language nothing can render would
+ * record a choice nothing can honour, and which languages those are is the registry's to say, not
+ * this screen's. A declared language that is not live has no row.
  *
  * **Formats (row `10.12`).** A third, separate write: where the currency unit
  * sits on a total, how thousands are grouped and how a phone number is
@@ -130,7 +130,10 @@ export class BrandProfilePage {
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
-  protected readonly knownLocales = KNOWN_LOCALES;
+  private readonly registry = inject(PlatformLocales);
+
+  /** The languages a brand may choose among: the registry's content tier, in its fallback order. */
+  protected readonly knownLocales = computed(() => this.registry.active('CONTENT'));
   protected readonly moneySymbolPlacements = MONEY_SYMBOL_PLACEMENTS;
   protected readonly moneyGroupings = MONEY_GROUPINGS;
   protected readonly phonePatternPresets = PHONE_PATTERN_PRESETS;
@@ -207,14 +210,7 @@ export class BrandProfilePage {
   }
 
   protected localeLabel(locale: BrandLocaleCode): string {
-    switch (locale) {
-      case 'ru':
-        return this.i18n.t('settings.brandProfile.locale.ru');
-      case 'uz-Latn':
-        return this.i18n.t('settings.brandProfile.locale.uzLatn');
-      case 'en':
-        return this.i18n.t('settings.brandProfile.locale.en');
-    }
+    return localeDisplayName(this.i18n, locale, this.registry);
   }
 
   protected statusLabel(status: BrandView['status']): string {
@@ -278,7 +274,7 @@ export class BrandProfilePage {
     this.draftLogoAssetId.set(current?.logoAssetId ?? '');
     this.draftBannerAssetId.set(current?.bannerAssetId ?? '');
     this.draftLocales.set(
-      KNOWN_LOCALES.map((locale) => {
+      this.knownLocales().map((locale) => {
         const existing = current?.locales.find((entry) => entry.locale === locale);
         return {
           locale,

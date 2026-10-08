@@ -11,20 +11,30 @@ import org.jspecify.annotations.Nullable;
  * produces one of these, and it is the audited read.
  *
  * @param direction {@code INBOUND} (the customer), {@code OUTBOUND} (the flow
- *                  engine), or {@code OPERATOR} (a staff reply)
+ *                  engine), {@code OPERATOR} (a staff reply), or {@code
+ *                  ASSISTANT} (the grounded assistant, ADR 0069)
  * @param actorPrincipalId the replying operator's subject, set only when
  *                         {@code direction} is {@code OPERATOR}
+ * @param assistantTurnId the assistant turn that produced this message, set
+ *                        only when {@code direction} is {@code ASSISTANT}
  */
 public record ConversationMessageView(
         UUID id,
         String direction,
         @Nullable String blockId,
         @Nullable String actorPrincipalId,
+        @Nullable UUID assistantTurnId,
         String body,
         Instant occurredAt) {
 
     static ConversationMessageView of(ConversationMessageStore.Row row) {
         return new ConversationMessageView(
-                row.id(), row.direction().name(), row.blockId(), row.actorPrincipalId(), row.body(), row.occurredAt());
+                row.id(),
+                row.direction().name(),
+                row.blockId(),
+                row.actorPrincipalId(),
+                row.assistantTurnId(),
+                row.body(),
+                row.occurredAt());
     }
 }

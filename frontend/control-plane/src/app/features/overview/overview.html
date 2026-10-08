@@ -3,13 +3,17 @@
     <h1 class="q-title">{{ i18n.t('overview.title') }}</h1>
     <p class="q-body-sm lead">{{ i18n.t('overview.lead') }}</p>
   </div>
-  <button type="button" class="refresh q-body-sm" [disabled]="loading()" (click)="load()">{{ i18n.t('overview.refresh') }}</button>
+  <button type="button" class="refresh q-body-sm" [disabled]="loading()" (click)="load()">
+    {{ i18n.t('overview.refresh') }}
+  </button>
 </header>
 
 @if (loadError(); as message) {
   <p class="q-body-sm state error">{{ message }}</p>
 } @else if (health(); as h) {
-  <p class="q-caption muted measured">{{ i18n.t('overview.measuredAt', { time: i18n.dateTime(asDate(h.measuredAt)) }) }}</p>
+  <p class="q-caption muted measured">
+    {{ i18n.t('overview.measuredAt', { time: i18n.dateTime(asDate(h.measuredAt)) }) }}
+  </p>
   <div class="tiles">
     <section class="tile">
       <h2 class="q-caption label">{{ i18n.t('overview.tenants.title') }}</h2>
@@ -25,7 +29,10 @@
       <h2 class="q-caption label">{{ i18n.t('overview.orders.title') }}</h2>
       <p class="q-display value q-tnum">{{ h.orders.lastHour }}</p>
       <p class="q-caption sub">{{ i18n.t('overview.orders.lastHour') }}</p>
-      <p class="q-caption sub">{{ h.orders.lastDay }} {{ i18n.t('overview.orders.lastDay') }} &middot; {{ ordersLive() }} {{ i18n.t('overview.orders.live') }}</p>
+      <p class="q-caption sub">
+        {{ h.orders.lastDay }} {{ i18n.t('overview.orders.lastDay') }} &middot; {{ ordersLive() }}
+        {{ i18n.t('overview.orders.live') }}
+      </p>
       @if (ordersLive() > 0) {
         <p class="q-caption sub" [class.alert]="stale(h.orders.oldestLiveAgeSeconds)">
           {{ i18n.t('overview.orders.oldest', { wait: wait(h.orders.oldestLiveAgeSeconds) }) }}
@@ -37,9 +44,15 @@
       <h2 class="q-caption label">{{ i18n.t('overview.receipts.title') }}</h2>
       <p class="q-display value q-tnum">{{ h.receipts.blocked }}</p>
       <p class="q-caption sub">{{ i18n.t('overview.receipts.blocked') }}</p>
-      <p class="q-caption sub">{{ i18n.t('overview.receipts.lastDay', { issued: receiptsIssued(), total: receiptsDay() }) }}</p>
+      <p class="q-caption sub">
+        {{
+          i18n.t('overview.receipts.lastDay', { issued: receiptsIssued(), total: receiptsDay() })
+        }}
+      </p>
       @if (h.receipts.blocked > 0) {
-        <a class="q-caption" routerLink="/compliance/fiscalization">{{ i18n.t('overview.receipts.open') }}</a>
+        <a class="q-caption" routerLink="/compliance/fiscalization">{{
+          i18n.t('overview.receipts.open')
+        }}</a>
       }
     </section>
 
@@ -48,12 +61,16 @@
       <p class="q-display value q-tnum">{{ wait(oldestQueueWait()) }}</p>
       <p class="q-caption sub">{{ i18n.t('overview.queues.oldest') }}</p>
       <p class="q-caption sub">
-        {{ outboxWaiting() }} {{ i18n.t('overview.queues.outbox') }} &middot; {{ inboxWaiting() }} {{ i18n.t('overview.queues.inbox') }}
+        {{ outboxWaiting() }} {{ i18n.t('overview.queues.outbox') }} &middot; {{ inboxWaiting() }}
+        {{ i18n.t('overview.queues.inbox') }}
       </p>
       <p class="q-caption sub">
-        {{ h.queues.outboxDeadLetters + h.queues.inboxDeadLetters }} {{ i18n.t('overview.queues.deadLetters') }}
+        {{ h.queues.outboxDeadLetters + h.queues.inboxDeadLetters }}
+        {{ i18n.t('overview.queues.deadLetters') }}
       </p>
-      <a class="q-caption" routerLink="/integration-ops/message-flow">{{ i18n.t('overview.queues.open') }}</a>
+      <a class="q-caption" routerLink="/integration-ops/message-flow">{{
+        i18n.t('overview.queues.open')
+      }}</a>
     </section>
   </div>
 

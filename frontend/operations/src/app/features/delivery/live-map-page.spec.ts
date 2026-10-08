@@ -1,13 +1,17 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { MapUnavailableError } from '../../shared/ui/map/map-provider';
+import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import { Toasts } from '../../shared/ui/toast';
 import { CourierPositionsApi, FleetResponse, TrackRevealResponse } from './courier-positions-api';
+import { DeliveryZonesApi, ZoneOutlineResponse } from './delivery-zones-api';
 import { LiveMapPage } from './live-map-page';
+import { MapRegionService } from './map-region';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -16,21 +20,65 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+const ZONE_OUTLINE: ZoneOutlineResponse = {
+  zoneId: 'zone-1',
+  code: 'CENTRE',
+  role: 'DELIVERY',
+  version: 1,
+  status: 'ACTIVE',
+  shapeKind: 'POLYGON',
+  polygons: [
+    {
+      ring: [
+        { latitude: 41.3, longitude: 69.2 },
+        { latitude: 41.3, longitude: 69.3 },
+        { latitude: 41.4, longitude: 69.25 },
+      ],
+      holes: [],
+    },
+  ],
+};
+
+function pinOf(courierId: string, latitude: number, longitude: number) {
+  return {
+    courierId,
+    latitude,
+    longitude,
+    accuracyMeters: 10,
+    activeAssignmentCount: 2,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
 describe('LiveMapPage', () => {
   let fixture: ComponentFixture<LiveMapPage>;
+  let mapProvider: NullMapProvider;
+  let activeOutlines: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    activeOutlines = vi.fn().mockResolvedValue([]);
+  });
 
   async function render(
     fleet: FleetResponse,
     overrides: {
+      provider?: NullMapProvider;
       options?: readonly LocationOption[];
       selectLocation?: (locationId: string) => void;
       revealTrack?: (...args: unknown[]) => Promise<TrackRevealResponse>;
       fleetFn?: () => Promise<FleetResponse>;
     } = {},
   ): Promise<HTMLElement> {
+    mapProvider = overrides.provider ?? new NullMapProvider();
     await TestBed.configureTestingModule({
       imports: [LiveMapPage],
       providers: [
+        provideNullMapProvider(mapProvider),
+        { provide: DeliveryZonesApi, useValue: { activeOutlines } },
+        {
+          provide: MapRegionService,
+          useValue: { ensureLoaded: () => Promise.resolve(), primary: () => null },
+        },
         {
           provide: CurrentLocation,
           useValue: {
@@ -268,5 +316,113 @@ describe('LiveMapPage', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="live-map-denied"]'),
     ).not.toBeNull();
+  });
+
+  // ------------------------------------------------ ADR 0145, row 3.2: on a map
+
+  it('puts every drawable courier on the map as a pin of their own, and the others only in the list', async () => {
+    const host = await render({
+      pins: [pinOf('courier-1', 41.31, 69.28), pinOf('courier-2', 41.33, 69.22)],
+      withoutPin: [
+        {
+          courierId: 'courier-3',
+          activeAssignmentCount: 1,
+          lastFixAt: new Date().toISOString(),
+          reason: 'ACCURACY_BELOW_MAP_FLOOR',
+        },
+      ],
+    });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="live-map-canvas"]')).not.toBeNull();
+    expect(mapProvider.map.livePins.map((pin) => pin.position)).toEqual([
+      { latitude: 41.31, longitude: 69.28 },
+      { latitude: 41.33, longitude: 69.22 },
+    ]);
+    expect(mapProvider.map.livePins.every((pin) => !pin.draggable)).toBe(true);
+    expect(mapProvider.map.livePins[0].label).toContain('courier-1');
+    expect(mapProvider.map.livePins[0].label).toContain('2');
+    expect(host.querySelectorAll('[data-testid="live-map-coarse"]')).toHaveLength(1);
+    expect(mapProvider.map.livePins.some((pin) => pin.label?.includes('courier-3'))).toBe(false);
+  });
+
+  it('moves a courier’s pin on the next refresh instead of drawing a second one', async () => {
+    let fleet: FleetResponse = { pins: [pinOf('courier-1', 41.31, 69.28)], withoutPin: [] };
+    const host = await render(fleet, { fleetFn: () => Promise.resolve(fleet) });
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const pin = mapProvider.map.livePins[0];
+
+    fleet = { pins: [pinOf('courier-1', 41.32, 69.3)], withoutPin: [] };
+    (host.querySelector('[data-testid="live-map-refresh"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(mapProvider.map.livePins).toEqual([pin]);
+    expect(pin.position).toEqual({ latitude: 41.32, longitude: 69.3 });
+  });
+
+  it('does not re-fit the map on every ten-second refresh, which would fight a dispatcher who has panned', async () => {
+    let fleet: FleetResponse = {
+      pins: [pinOf('courier-1', 41.31, 69.28), pinOf('courier-2', 41.33, 69.22)],
+      withoutPin: [],
+    };
+    const host = await render(fleet, { fleetFn: () => Promise.resolve(fleet) });
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const fits = mapProvider.map.fitted.length;
+    expect(fits).toBe(1);
+
+    fleet = {
+      pins: [pinOf('courier-1', 41.4, 69.4), pinOf('courier-2', 41.2, 69.1)],
+      withoutPin: [],
+    };
+    (host.querySelector('[data-testid="live-map-refresh"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(mapProvider.map.fitted).toHaveLength(fits);
+  });
+
+  it('draws the brand’s live zones under the couriers, as outlines nobody can edit', async () => {
+    activeOutlines = vi.fn().mockResolvedValue([ZONE_OUTLINE]);
+    await render({ pins: [pinOf('courier-1', 41.31, 69.28)], withoutPin: [] });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(activeOutlines).toHaveBeenCalled();
+    expect(mapProvider.map.livePolygons).toHaveLength(1);
+    expect(mapProvider.map.livePolygons[0].editable).toBe(false);
+    expect(mapProvider.map.livePolygons[0].label).toBe('CENTRE');
+  });
+
+  it('still shows the couriers when the caller may not read zones', async () => {
+    activeOutlines = vi.fn().mockRejectedValue(new Error('403'));
+    const host = await render({ pins: [pinOf('courier-1', 41.31, 69.28)], withoutPin: [] });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(mapProvider.map.livePins).toHaveLength(1);
+    expect(mapProvider.map.livePolygons).toHaveLength(0);
+    expect(host.querySelectorAll('[data-testid="live-map-pin"]')).toHaveLength(1);
+  });
+
+  it('keeps the table, and says why there is no map, when no provider is set up', async () => {
+    const provider = new NullMapProvider();
+    provider.loadError = new MapUnavailableError('NOT_CONFIGURED');
+
+    const host = await render(
+      { pins: [pinOf('courier-1', 41.31, 69.28)], withoutPin: [] },
+      { provider },
+    );
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('No map provider is set up');
+    expect(host.querySelectorAll('[data-testid="live-map-pin"]')).toHaveLength(1);
+    expect(host.textContent).toContain('courier-1');
   });
 });

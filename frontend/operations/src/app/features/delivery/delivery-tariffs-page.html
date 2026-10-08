@@ -151,16 +151,50 @@
                         </span>
                       </div>
 
-                      @if (fallsBackToRadius(active)) {
-                        <p
-                          class="tariff-detail__fallback q-body-sm"
-                          data-testid="tariff-radius-fallback"
-                        >
-                          {{
-                            'delivery.tariffs.detail.radiusFallback'
-                              | t: { factor: active.roadFactorBasisPoints / 10000 }
-                          }}
-                        </p>
+                      @if (routingOf(detail); as routing) {
+                        <div class="tariff-detail__routing" data-testid="tariff-routing">
+                          <span class="q-caption" data-testid="tariff-basis">
+                            {{ 'delivery.tariffs.detail.basis' | t }}:
+                            {{ basisKey(routing.basis) | t }}
+                          </span>
+                          @if (routing.basis === 'ROAD') {
+                            <span class="q-caption" data-testid="tariff-dataset">
+                              {{ 'delivery.tariffs.detail.dataset' | t }}:
+                              {{ datasetOf(routing) ?? '—' }}
+                            </span>
+                          }
+                          @if (routing.basis !== 'STRAIGHT_LINE') {
+                            <span class="q-caption" data-testid="tariff-basis-evidence">
+                              @if (routing.basisEvidence === 'FEES') {
+                                {{
+                                  'delivery.tariffs.detail.basisEvidence.FEES'
+                                    | t
+                                      : {
+                                          hours: routing.windowHours,
+                                          road: routing.roadFees,
+                                          fallback: routing.fallbackFees,
+                                        }
+                                }}
+                              } @else {
+                                {{
+                                  'delivery.tariffs.detail.basisEvidence.CONFIGURATION'
+                                    | t: { hours: routing.windowHours }
+                                }}
+                              }
+                            </span>
+                          }
+                        </div>
+                        @if (isFallingBack(routing)) {
+                          <p
+                            class="tariff-detail__fallback q-body-sm"
+                            data-testid="tariff-radius-fallback"
+                          >
+                            {{
+                              'delivery.tariffs.detail.radiusFallback'
+                                | t: { factor: routing.roadFactorBasisPoints / 10000 }
+                            }}
+                          </p>
+                        }
                       }
 
                       <table class="tariff-bands">
@@ -352,15 +386,26 @@
         </div>
 
         @if (draftDistanceMode() === 'ROAD') {
-          <label class="q-field">
-            <span class="q-caption">{{ 'delivery.tariffs.draft.routingInstallation' | t }}</span>
+          <label class="q-field q-field--checkbox">
             <input
-              type="text"
-              data-testid="tariff-routing-installation"
-              [value]="draftRoutingInstallationId()"
-              (input)="draftRoutingInstallationId.set($any($event.target).value)"
+              type="checkbox"
+              data-testid="tariff-use-platform-routing"
+              [checked]="draftUsePlatformRouting()"
+              (change)="draftUsePlatformRouting.set($any($event.target).checked)"
             />
+            <span class="q-caption">{{ 'delivery.tariffs.draft.usePlatformRouting' | t }}</span>
           </label>
+          @if (!draftUsePlatformRouting()) {
+            <label class="q-field">
+              <span class="q-caption">{{ 'delivery.tariffs.draft.routingInstallation' | t }}</span>
+              <input
+                type="text"
+                data-testid="tariff-routing-installation"
+                [value]="draftRoutingInstallationId()"
+                (input)="draftRoutingInstallationId.set($any($event.target).value)"
+              />
+            </label>
+          }
           <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.roadFactor' | t }}</span>
             <input
@@ -373,12 +418,33 @@
             <p class="dialog__warning q-body-sm" data-testid="tariff-road-warning">
               {{ 'delivery.tariffs.draft.roadNeedsRouting' | t }}
             </p>
-          } @else {
-            <p class="q-caption" data-testid="tariff-road-fallback-note">
-              {{ 'delivery.tariffs.draft.roadFallbackNote' | t }}
-            </p>
           }
         }
+        <p class="q-caption" data-testid="tariff-draft-basis">
+          @switch (draftBasis()) {
+            @case ('STRAIGHT_LINE') {
+              {{ 'delivery.tariffs.draft.basis.STRAIGHT_LINE' | t }}
+            }
+            @case ('ROAD_ON') {
+              {{
+                'delivery.tariffs.draft.basis.ROAD_ON'
+                  | t: { dataset: engine()?.datasetVersion ?? '—' }
+              }}
+            }
+            @case ('ROAD_OFF') {
+              {{
+                'delivery.tariffs.draft.basis.ROAD_OFF'
+                  | t: { factor: draftRoadFactorBasisPoints() / 10000 }
+              }}
+            }
+            @case ('ROAD_UNKNOWN') {
+              {{ 'delivery.tariffs.draft.basis.ROAD_UNKNOWN' | t }}
+            }
+            @case ('ROAD_NAMED_INSTALLATION') {
+              {{ 'delivery.tariffs.draft.basis.ROAD_NAMED_INSTALLATION' | t }}
+            }
+          }
+        </p>
 
         <div class="field-row">
           <label class="q-field">

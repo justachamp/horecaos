@@ -12,7 +12,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Input contract | `NotificationSendOperation` v1 (in-process command record) |
 | Output contract | `ProviderOutcome` v1 |
 | Source | `direct:notification.send`; status queries enter at `direct:notification.status` |
-| Destination | A messaging gateway over HTTPS, selected by the ADR 0026 binding that holds the channel's capability: `SEND_SMS`, or `SEND_TELEGRAM` (ADR 0058 — the Bot API, resolved by exact binding id rather than by "primary for scope", because several chats legitimately subscribe to the same event) |
+| Destination | A messaging gateway over HTTPS, selected by the ADR 0026 binding that holds the channel's capability — and, since ADR 0146, by the binding's **provider type**: adapters are registered by `(channel, providerType)`, so `SMSGW_VAS` (`VasSmsGatewayAdapter`, the production SMS adapter, which also carries sign-in codes on the same binding) and any later gateway coexist, and a binding whose provider type no adapter speaks is `PROVIDER_ADAPTER_MISMATCH`. `GENERIC_SMS` is a test-scope controlled fake only. The capabilities: `SEND_SMS`, or `SEND_TELEGRAM` (ADR 0058 — the Bot API, resolved by exact binding id rather than by "primary for scope", because several chats legitimately subscribe to the same event) |
 | Service identity | Per-installation gateway credential, ADR 0026 |
 | Secret reference type | `horecaos:{env}:provider_notification:{owner}:{id}` (ADR 0028) |
 | Connect timeout | 5s |
@@ -36,6 +36,18 @@ what happens next from its own durable counter.
 
 The status query is the exception, and safely so: it has no side effect, so
 repeating it cannot text anybody.
+
+## The status query is `resolve` (ADR 0146)
+
+A gateway that holds our idempotency key is asked by it. One that does not — VAS —
+is asked with what the platform has: the provider's own message id when the send's
+answer gave one, otherwise the destination (resolved for that call only, its reveal
+recorded under ADR 0029) and the SHA-256 of the text, for a search by number and day.
+Three answers: *sent* (a success carrying the message's own state, which may be a
+failure), *not sent* (the gateway's "no record" code — the only answer that licenses
+another send, and one a gateway that cannot be sure must never give), and *unknown*
+(uncertain, and a first-class answer). Nothing here ever sends, and an unknown
+message costs one fresh customer message at most, never a duplicate.
 
 ## Outcome policy
 

@@ -2,6 +2,8 @@ package uz.horecaos.platform.tenancy.domain;
 
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * One locale's own localized content for a branch (row 10.2b): the name and
@@ -17,7 +19,7 @@ import org.jspecify.annotations.Nullable;
  * from its operational one (a mall unit's own naming for the same branch, for
  * example).
  *
- * <p>Locale codes are drawn from {@link BrandProfile#KNOWN_LOCALES}, the same
+ * <p>Locale codes are drawn from {@link PlatformLocales#activeTags} of the content tier (ADR 0149), the same
  * closed set a brand's own storefront locales are drawn from — there is no
  * separate registry for a branch to support a language its brand does not.
  */
@@ -28,9 +30,9 @@ public record LocationLocale(
 
     public LocationLocale {
         Objects.requireNonNull(locale, "Locale code is required");
-        if (!BrandProfile.KNOWN_LOCALES.contains(locale)) {
+        if (!PlatformLocales.activeTags(Tier.CONTENT).contains(locale)) {
             throw new IllegalArgumentException(
-                    "Unsupported locale '" + locale + "'; must be one of " + BrandProfile.KNOWN_LOCALES);
+                    "Unsupported locale '" + locale + "'; must be one of " + PlatformLocales.activeTags(Tier.CONTENT));
         }
         displayName = displayName == null || displayName.isBlank() ? null : displayName.strip();
         description = description == null || description.isBlank() ? null : description.strip();

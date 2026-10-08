@@ -165,6 +165,14 @@ services:
         # checkout on the "environment"/OpenBao default path signs in nobody.
         bao kv put horecaos/local/identity_admin/keycloak/staff-login-secret \
           value=development-only-not-a-secret-staff-login
+        # ADR 0148: horecaos-staff-password-check, the password-only client asked first on
+        # every staff sign-in, and the key that seals an authenticator secret in progress.
+        # The first must equal what infra/keycloak/create-staff-password-check-client.sh pins
+        # in Keycloak (make up runs it); the second exists nowhere but here and the platform.
+        bao kv put horecaos/local/identity_admin/keycloak/staff-password-check-secret \
+          value=development-only-not-a-secret-staff-password-check
+        bao kv put horecaos/local/data_encryption/platform/mfa-enrolment-sealing-key \
+          value=horecaos-local-mfa-sealing-key-not-for-use
         # These two close a gap docs/development.md's own documented dev loop
         # falls into: running `make run` with HORECAOS_SECRETS_PROVIDER=openbao
         # (.env.example's own recommended way to exercise the OpenBao path

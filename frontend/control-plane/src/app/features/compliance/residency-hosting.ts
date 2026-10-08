@@ -96,7 +96,11 @@ export class ResidencyHosting {
     this.actionError.set(null);
     this.actionMessage.set(null);
     try {
-      const outcome = await this.api.changeCountry(tenant.tenantId, this.country(), this.reason().trim());
+      const outcome = await this.api.changeCountry(
+        tenant.tenantId,
+        this.country(),
+        this.reason().trim(),
+      );
       const parameters = { tenant: tenant.displayName, country: this.marketName(this.country()) };
       this.actionMessage.set(
         outcome.status === 'CHANGED'

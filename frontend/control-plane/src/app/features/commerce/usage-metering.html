@@ -27,11 +27,14 @@
         <p class="q-body-sm state ok rebuildResult">{{ i18n.t('usageMetering.rebuild.clean') }}</p>
       } @else {
         <div class="rebuildResult warning">
-          <p class="q-body-sm">{{ i18n.t('usageMetering.rebuild.diverged', { count: found.length }) }}</p>
+          <p class="q-body-sm">
+            {{ i18n.t('usageMetering.rebuild.diverged', { count: found.length }) }}
+          </p>
           <ul>
             @for (item of found; track item.entitlementKey + item.periodKey) {
               <li class="q-body-sm q-tnum">
-                {{ item.entitlementKey }} · {{ item.periodKey }}: {{ item.stored ?? '—' }} → {{ item.recomputed }}
+                {{ item.entitlementKey }} · {{ item.periodKey }}: {{ item.stored ?? '—' }} →
+                {{ item.recomputed }}
               </li>
             }
           </ul>
@@ -68,7 +71,11 @@
               @if (session.has('COMMERCIAL_USAGE_ADJUST')) {
                 <td class="q-body-sm">
                   <button type="button" class="secondary" (click)="openAdjust(period)">
-                    {{ adjusting() === key(period) ? i18n.t('common.cancel') : i18n.t('usageMetering.adjust.open') }}
+                    {{
+                      adjusting() === key(period)
+                        ? i18n.t('common.cancel')
+                        : i18n.t('usageMetering.adjust.open')
+                    }}
                   </button>
                 </td>
               }
@@ -91,16 +98,31 @@
                         />
                       </label>
                       <label class="field">
-                        <span class="q-caption">{{ i18n.t('entitlements.override.approvedBy') }}</span>
+                        <span class="q-caption">{{
+                          i18n.t('entitlements.override.approvedBy')
+                        }}</span>
                         @if (approvers().length > 0) {
-                          <select class="q-body-sm" name="approvedBy" (change)="approvedBy.set($any($event.target).value)">
-                            <option value="" [selected]="approvedBy() === ''">{{ i18n.t('common.chooseColleague') }}</option>
+                          <select
+                            class="q-body-sm"
+                            name="approvedBy"
+                            (change)="approvedBy.set($any($event.target).value)"
+                          >
+                            <option value="" [selected]="approvedBy() === ''">
+                              {{ i18n.t('common.chooseColleague') }}
+                            </option>
                             @for (subject of approvers(); track subject) {
-                              <option [value]="subject" [selected]="subject === approvedBy()">{{ subject }}</option>
+                              <option [value]="subject" [selected]="subject === approvedBy()">
+                                {{ subject }}
+                              </option>
                             }
                           </select>
                         } @else {
-                          <input class="q-body-sm" name="approvedBy" [value]="approvedBy()" (input)="approvedBy.set($any($event.target).value)" />
+                          <input
+                            class="q-body-sm"
+                            name="approvedBy"
+                            [value]="approvedBy()"
+                            (input)="approvedBy.set($any($event.target).value)"
+                          />
                         }
                       </label>
                       <label class="field">
@@ -121,7 +143,9 @@
                         [value]="reason()"
                         (input)="reason.set($any($event.target).value)"
                       />
-                      <button type="submit" [disabled]="!canAdjust()">{{ i18n.t('usageMetering.adjust.submit') }}</button>
+                      <button type="submit" [disabled]="!canAdjust()">
+                        {{ i18n.t('usageMetering.adjust.submit') }}
+                      </button>
                     </div>
                   </form>
                 </td>

@@ -222,4 +222,66 @@ export const financePaths = {
   commercialArrears(tenantId: string): string {
     return `/api/v1/tenants/${enc(tenantId)}/commercial/arrears`;
   },
+
+  // ---------------------------------------------------------- 8.6 Prepaid wallet (ADR 0095)
+
+  /**
+   * `CommercialOperationsWalletController` — the merchant's own wallet: both
+   * balances, the card on file, the credit about to lapse. Every route under it
+   * is tenant-scoped and held by the owner and finance bundles only.
+   */
+  commercialWallet(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/wallet`;
+  },
+
+  commercialWalletLedger(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/ledger`;
+  },
+
+  /** Each issued statement's paid and due amounts, derived from the ledger. */
+  commercialWalletStatements(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/statements`;
+  },
+
+  /** Where to send a bank transfer: the details every invoice carries now. */
+  commercialWalletPaymentDetails(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/payment-details`;
+  },
+
+  /** GET: recent card top-ups. POST: top the wallet up from the card on file. */
+  commercialWalletTopUps(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/top-ups`;
+  },
+
+  /** GET: the tenant's prepayment invoices. POST: ask for one. */
+  commercialWalletInvoices(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/invoices`;
+  },
+
+  commercialWalletInvoiceExport(tenantId: string, invoiceId: string): string {
+    return `${financePaths.commercialWalletInvoices(tenantId)}/${enc(invoiceId)}/export`;
+  },
+
+  commercialWalletInvoiceCancel(tenantId: string, invoiceId: string): string {
+    return `${financePaths.commercialWalletInvoices(tenantId)}/${enc(invoiceId)}/cancel`;
+  },
+
+  /** POST: opens a session with the card provider; the browser then shows the provider's own form. */
+  commercialWalletCardEnrolments(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/card/enrolments`;
+  },
+
+  /** POST: the token the provider's form returned, and the code the cardholder's bank texted. */
+  commercialWalletCardConfirmations(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/card/confirmations`;
+  },
+
+  commercialWalletCardRemoval(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/card/removal`;
+  },
+
+  /** POST: INVOICE, WALLET or CARD — how HorecaOS collects what the wallet does not cover. */
+  commercialWalletPaymentMethod(tenantId: string): string {
+    return `${financePaths.commercialWallet(tenantId)}/payment-method`;
+  },
 } as const;

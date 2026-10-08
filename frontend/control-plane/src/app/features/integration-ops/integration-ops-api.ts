@@ -90,7 +90,11 @@ export class IntegrationOpsApi {
     );
   }
 
-  async inboxFailures(consumerName: string, status = 'DEAD_LETTER', limit = 50): Promise<Page<FailureSummary>> {
+  async inboxFailures(
+    consumerName: string,
+    status = 'DEAD_LETTER',
+    limit = 50,
+  ): Promise<Page<FailureSummary>> {
     return firstValueFrom(
       this.api.getPage<FailureSummary>(
         `/api/v1/control-plane/integration/failures/inbox/${consumerName}`,
@@ -116,16 +120,24 @@ export class IntegrationOpsApi {
   }
 
   async outboxFailure(eventId: string): Promise<FailureDetail> {
-    return firstValueFrom(this.api.get<FailureDetail>(`/api/v1/control-plane/integration/failures/outbox/${eventId}`));
+    return firstValueFrom(
+      this.api.get<FailureDetail>(`/api/v1/control-plane/integration/failures/outbox/${eventId}`),
+    );
   }
 
   async inboxFailure(consumerName: string, eventId: string): Promise<FailureDetail> {
     return firstValueFrom(
-      this.api.get<FailureDetail>(`/api/v1/control-plane/integration/failures/inbox/${consumerName}/${eventId}`),
+      this.api.get<FailureDetail>(
+        `/api/v1/control-plane/integration/failures/inbox/${consumerName}/${eventId}`,
+      ),
     );
   }
 
-  async retryInbox(consumerName: string, eventId: string, reason: string): Promise<{ changed: boolean; outcome: string }> {
+  async retryInbox(
+    consumerName: string,
+    eventId: string,
+    reason: string,
+  ): Promise<{ changed: boolean; outcome: string }> {
     return firstValueFrom(
       this.api.post<{ changed: boolean; outcome: string }>(
         `/api/v1/control-plane/integration/failures/inbox/${consumerName}/${eventId}/retry`,
@@ -149,7 +161,10 @@ export class IntegrationOpsApi {
     );
   }
 
-  async retryOutbox(eventId: string, reason: string): Promise<{ changed: boolean; outcome: string }> {
+  async retryOutbox(
+    eventId: string,
+    reason: string,
+  ): Promise<{ changed: boolean; outcome: string }> {
     return firstValueFrom(
       this.api.post<{ changed: boolean; outcome: string }>(
         `/api/v1/control-plane/integration/failures/outbox/${eventId}/retry`,
@@ -173,7 +188,10 @@ export class IntegrationOpsApi {
   }
 
   /** Payment providers' calls, newest first. */
-  async webhooks(provider: string | null, invalidSignatureOnly: boolean): Promise<WebhookDelivery[]> {
+  async webhooks(
+    provider: string | null,
+    invalidSignatureOnly: boolean,
+  ): Promise<WebhookDelivery[]> {
     return firstValueFrom(
       this.api.get<WebhookDelivery[]>('/api/v1/control-plane/webhooks', {
         query: { provider: provider ?? undefined, invalidSignatureOnly, limit: 200 },
@@ -183,6 +201,8 @@ export class IntegrationOpsApi {
 
   /** Every failure category, its rules and its live counts. */
   async failureTaxonomy(): Promise<FailureCategoryView[]> {
-    return firstValueFrom(this.api.get<FailureCategoryView[]>('/api/v1/control-plane/failure-taxonomy'));
+    return firstValueFrom(
+      this.api.get<FailureCategoryView[]>('/api/v1/control-plane/failure-taxonomy'),
+    );
   }
 }

@@ -1,0 +1,120 @@
+<section class="panel" data-testid="wallet-invoices-panel">
+  <h2 class="q-subhead">{{ 'finance.wallet.invoices.title' | t }}</h2>
+  <p class="q-body-sm panel-lead">{{ 'finance.wallet.invoices.lead' | t }}</p>
+
+  @if (loadError(); as message) {
+    <div class="band band--error" role="alert">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+  @if (actionError(); as message) {
+    <div class="band band--error" role="alert" data-testid="wallet-invoices-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+
+  <table class="table" data-testid="wallet-invoices-table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'finance.wallet.invoices.number' | t }}</th>
+        <th class="q-caption">{{ 'finance.wallet.column.status' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.amount' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.paid' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.due' | t }}</th>
+        <th class="q-caption">{{ 'finance.wallet.invoices.validUntil' | t }}</th>
+        <th class="q-caption"></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (invoice of invoices(); track invoice.invoiceId) {
+        <tr [attr.data-invoice]="invoice.number">
+          <td class="q-body-sm q-mono">
+            <button
+              type="button"
+              class="link"
+              (click)="toggle(invoice)"
+              data-testid="wallet-invoice-toggle"
+            >
+              {{ invoice.number }}
+            </button>
+          </td>
+          <td class="q-body-sm">
+            <span class="status-badge" [class]="statusClass(invoice.status)">{{
+              statusLabel(invoice.status)
+            }}</span>
+          </td>
+          <td class="q-body-sm q-tnum num">{{ money(invoice.amount) }}</td>
+          <td class="q-body-sm q-tnum num">{{ money(invoice.paid) }}</td>
+          <td class="q-body-sm q-tnum num">{{ money(invoice.due) }}</td>
+          <td class="q-body-sm q-tnum">{{ date(invoice.validUntil) }}</td>
+          <td class="q-body-sm actions">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="downloading() !== null"
+              (click)="download(invoice)"
+              data-testid="wallet-invoice-download"
+            >
+              {{ 'finance.wallet.invoices.download' | t }}
+            </button>
+            @if (canWithdraw(invoice)) {
+              <button
+                type="button"
+                class="secondary"
+                (click)="askWithdraw(invoice)"
+                data-testid="wallet-invoice-cancel"
+              >
+                {{ 'finance.wallet.invoices.cancel' | t }}
+              </button>
+            }
+          </td>
+        </tr>
+        @if (open() === invoice.invoiceId) {
+          <tr class="invoice-details">
+            <td colspan="7">
+              <p class="q-body-sm">
+                {{ 'finance.wallet.invoices.purpose' | t }}:
+                <strong class="q-mono">{{ invoice.paymentPurpose }}</strong>
+              </p>
+              <dl class="details">
+                <dt class="q-caption">{{ 'finance.wallet.details.beneficiary' | t }}</dt>
+                <dd class="q-body-sm">{{ invoice.paymentDetails.beneficiary }}</dd>
+                <dt class="q-caption">{{ 'finance.wallet.details.bankName' | t }}</dt>
+                <dd class="q-body-sm">{{ invoice.paymentDetails.bankName }}</dd>
+                <dt class="q-caption">{{ 'finance.wallet.details.account' | t }}</dt>
+                <dd class="q-body-sm q-mono">{{ invoice.paymentDetails.account }}</dd>
+                <dt class="q-caption">{{ 'finance.wallet.details.mfo' | t }}</dt>
+                <dd class="q-body-sm q-mono">{{ invoice.paymentDetails.mfo }}</dd>
+                <dt class="q-caption">{{ 'finance.wallet.details.taxId' | t }}</dt>
+                <dd class="q-body-sm q-mono">{{ invoice.paymentDetails.taxId }}</dd>
+              </dl>
+              <p class="q-caption muted">
+                {{ 'finance.wallet.invoices.frozen' | t: { date: date(invoice.issuedAt) } }}
+              </p>
+            </td>
+          </tr>
+        }
+      } @empty {
+        @if (loaded()) {
+          <tr>
+            <td class="q-body-sm empty" colspan="7">{{ 'finance.wallet.invoices.empty' | t }}</td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+  <p class="q-caption muted">{{ 'finance.wallet.beforeTax' | t }}</p>
+
+  @if (cancelTarget(); as invoice) {
+    <q-confirm-dialog
+      [title]="'finance.wallet.invoices.cancel.title' | t"
+      [body]="withdrawBody(invoice)"
+      [confirmLabel]="'finance.wallet.invoices.cancel.confirm' | t"
+      [cancelLabel]="'finance.wallet.invoices.cancel.keep' | t"
+      tone="destructive"
+      [busy]="cancelling()"
+      (confirm)="withdraw()"
+      (cancel)="dismissWithdraw()"
+    />
+  }
+</section>

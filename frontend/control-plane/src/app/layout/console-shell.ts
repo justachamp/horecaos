@@ -5,6 +5,7 @@ import { AuthService } from '../core/auth/auth.service';
 import { SessionContextService } from '../core/auth/session-context.service';
 import { I18nService, LOCALES, Locale } from '../core/i18n/i18n.service';
 import { MessageKey } from '../core/i18n/messages.en';
+import { PlatformLocales } from '../core/i18n/platform-locales';
 import { ROUTED_SECTIONS, Section } from './sections';
 
 /** One rail row: the section, and the group heading to print above it, if any. */
@@ -35,7 +36,16 @@ export class ConsoleShell {
 
   private readonly session = inject(SessionContextService);
 
-  protected readonly locales = LOCALES;
+  private readonly registry = inject(PlatformLocales);
+
+  /**
+   * The languages the switcher offers: those this build has a catalogue for **and** the registry has
+   * live in the staff-UI tier (ADR 0149); before the registry has been read, every catalogue.
+   */
+  protected readonly locales = computed<readonly Locale[]>(() => {
+    const live = this.registry.active('STAFF_UI');
+    return live.length === 0 ? LOCALES : LOCALES.filter((locale) => live.includes(locale));
+  });
 
   /**
    * The rail, filtered to what this principal may reach, with a group heading

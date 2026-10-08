@@ -22,7 +22,12 @@
     <form class="grid registerForm" (submit)="register($event)">
       <label class="field">
         <span class="q-caption">{{ i18n.t('migrationRuns.program.name') }}</span>
-        <input class="q-body-sm" name="programName" [value]="name()" (input)="name.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="programName"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+        />
       </label>
       <label class="field">
         <span class="q-caption">{{ i18n.t('migrationRuns.program.source') }}</span>
@@ -55,10 +60,17 @@
       </label>
       <label class="field wide">
         <span class="q-caption">{{ i18n.t('common.reason') }}</span>
-        <input class="q-body-sm" name="programReason" [value]="reason()" (input)="reason.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="programReason"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+        />
       </label>
       <div class="actions">
-        <button type="submit" [disabled]="!canRegister()">{{ i18n.t('migrationRuns.program.submit') }}</button>
+        <button type="submit" [disabled]="!canRegister()">
+          {{ i18n.t('migrationRuns.program.submit') }}
+        </button>
       </div>
     </form>
   }
@@ -82,13 +94,23 @@
         </thead>
         <tbody>
           @for (p of programs(); track p.id) {
-            <tr class="selectable" [class.selected]="p.id === programId()" (click)="chooseProgram(p.id)">
+            <tr
+              class="selectable"
+              [class.selected]="p.id === programId()"
+              (click)="chooseProgram(p.id)"
+            >
               <td class="q-body-sm">
-                <button type="button" class="link" [attr.aria-pressed]="p.id === programId()">{{ p.name }}</button>
+                <button type="button" class="link" [attr.aria-pressed]="p.id === programId()">
+                  {{ p.name }}
+                </button>
               </td>
               <td class="q-body-sm muted">{{ p.sourceEnvironment }} → {{ p.targetEnvironment }}</td>
               <td class="q-body-sm q-tnum">{{ p.policyVersion }}</td>
-              <td class="q-body-sm"><span class="chip q-caption" [attr.data-status]="p.status">{{ i18n.t(programStatusKey(p.status)) }}</span></td>
+              <td class="q-body-sm">
+                <span class="chip q-caption" [attr.data-status]="p.status">{{
+                  i18n.t(programStatusKey(p.status))
+                }}</span>
+              </td>
             </tr>
           }
         </tbody>
@@ -102,10 +124,18 @@
     <section class="panel programMoves">
       <h2 class="q-subhead">{{ p.name }}</h2>
       <form class="inlineForm" (submit)="$event.preventDefault(); moveProgram(p)">
-        <select class="q-body-sm" name="programMove" (change)="programMove.set($any($event.target).value || null)">
-          <option value="" [selected]="programMove() === null">{{ i18n.t('migrationRuns.program.chooseMove') }}</option>
+        <select
+          class="q-body-sm"
+          name="programMove"
+          (change)="programMove.set($any($event.target).value || null)"
+        >
+          <option value="" [selected]="programMove() === null">
+            {{ i18n.t('migrationRuns.program.chooseMove') }}
+          </option>
           @for (status of programMoves(p); track status) {
-            <option [value]="status" [selected]="status === programMove()">{{ i18n.t(programStatusKey(status)) }}</option>
+            <option [value]="status" [selected]="status === programMove()">
+              {{ i18n.t(programStatusKey(status)) }}
+            </option>
           }
         </select>
         <input
@@ -115,7 +145,10 @@
           [value]="programReason()"
           (input)="programReason.set($any($event.target).value)"
         />
-        <button type="submit" [disabled]="busy() || programMove() === null || programReason().trim().length === 0">
+        <button
+          type="submit"
+          [disabled]="busy() || programMove() === null || programReason().trim().length === 0"
+        >
           {{ i18n.t('migrationRuns.program.move') }}
         </button>
       </form>
@@ -142,10 +175,17 @@
         </div>
         <label class="field">
           <span class="q-caption">{{ i18n.t('migrationRuns.scope.brand') }}</span>
-          <select class="q-body-sm" name="scopeBrand" [disabled]="brands().length === 0" (change)="chooseScopeBrand($any($event.target).value)">
+          <select
+            class="q-body-sm"
+            name="scopeBrand"
+            [disabled]="brands().length === 0"
+            (change)="chooseScopeBrand($any($event.target).value)"
+          >
             <option value="">{{ i18n.t('migrationRuns.scope.wholeTenant') }}</option>
             @for (brand of brands(); track brand.id) {
-              <option [value]="brand.id" [selected]="brand.id === scopeBrandId()">{{ brand.displayName }}</option>
+              <option [value]="brand.id" [selected]="brand.id === scopeBrandId()">
+                {{ brand.displayName }}
+              </option>
             }
           </select>
         </label>
@@ -159,15 +199,23 @@
           >
             <option value="">{{ i18n.t('migrationRuns.scope.wholeBrand') }}</option>
             @for (location of locations(); track location.id) {
-              <option [value]="location.id" [selected]="location.id === scopeLocationId()">{{ location.displayName }}</option>
+              <option [value]="location.id" [selected]="location.id === scopeLocationId()">
+                {{ location.displayName }}
+              </option>
             }
           </select>
         </label>
         <label class="field">
           <span class="q-caption">{{ i18n.t('migrationRuns.column.capability') }}</span>
-          <select class="q-body-sm" name="scopeCapability" (change)="scopeCapability.set($any($event.target).value)">
+          <select
+            class="q-body-sm"
+            name="scopeCapability"
+            (change)="scopeCapability.set($any($event.target).value)"
+          >
             @for (capability of capabilities; track capability) {
-              <option [value]="capability" [selected]="capability === scopeCapability()">{{ i18n.t(capabilityKey(capability)) }}</option>
+              <option [value]="capability" [selected]="capability === scopeCapability()">
+                {{ i18n.t(capabilityKey(capability)) }}
+              </option>
             }
           </select>
         </label>
@@ -193,10 +241,17 @@
         </label>
         <label class="field wide">
           <span class="q-caption">{{ i18n.t('common.reason') }}</span>
-          <input class="q-body-sm" name="scopeReason" [value]="scopeReason()" (input)="scopeReason.set($any($event.target).value)" />
+          <input
+            class="q-body-sm"
+            name="scopeReason"
+            [value]="scopeReason()"
+            (input)="scopeReason.set($any($event.target).value)"
+          />
         </label>
         <div class="actions">
-          <button type="submit" [disabled]="!canOpenScope()">{{ i18n.t('migrationRuns.scope.open') }}</button>
+          <button type="submit" [disabled]="!canOpenScope()">
+            {{ i18n.t('migrationRuns.scope.open') }}
+          </button>
         </div>
       </form>
     }
@@ -217,14 +272,24 @@
           </thead>
           <tbody>
             @for (s of scopes(); track s.id) {
-              <tr class="selectable" [class.selected]="s.id === scopeId()" (click)="selectScope(s.id)">
+              <tr
+                class="selectable"
+                [class.selected]="s.id === scopeId()"
+                (click)="selectScope(s.id)"
+              >
                 <td class="q-body-sm">
-                  <button type="button" class="link" [attr.aria-expanded]="s.id === scopeId()">{{ directory.nameOf(s.tenantId) }}</button>
+                  <button type="button" class="link" [attr.aria-expanded]="s.id === scopeId()">
+                    {{ directory.nameOf(s.tenantId) }}
+                  </button>
                 </td>
                 <td class="q-body-sm muted">{{ placeOf(s) }}</td>
                 <td class="q-body-sm">{{ i18n.t(capabilityKey(s.capability)) }}</td>
                 <td class="q-body-sm muted">{{ s.sourceOwner }} → {{ s.targetOwner }}</td>
-                <td class="q-body-sm"><span class="chip q-caption" [attr.data-state]="s.state">{{ i18n.t(stateKey(s.state)) }}</span></td>
+                <td class="q-body-sm">
+                  <span class="chip q-caption" [attr.data-state]="s.state">{{
+                    i18n.t(stateKey(s.state))
+                  }}</span>
+                </td>
               </tr>
             }
           </tbody>
@@ -240,7 +305,12 @@
       </h2>
       <dl class="facts">
         <dt class="q-caption">{{ i18n.t('migrationRuns.column.state') }}</dt>
-        <dd class="q-body-sm">{{ i18n.t(stateKey(s.state)) }} · {{ i18n.t('migrationRuns.scope.since', { when: i18n.dateTime(asDate(s.stateEnteredAt)) }) }}</dd>
+        <dd class="q-body-sm">
+          {{ i18n.t(stateKey(s.state)) }} ·
+          {{
+            i18n.t('migrationRuns.scope.since', { when: i18n.dateTime(asDate(s.stateEnteredAt)) })
+          }}
+        </dd>
         <dt class="q-caption">{{ i18n.t('migrationRuns.scope.writes') }}</dt>
         <dd class="q-body-sm q-tnum">{{ s.writeMode }}</dd>
         <dt class="q-caption">{{ i18n.t('migrationRuns.scope.reads') }}</dt>
@@ -257,15 +327,29 @@
               [value]="moveReason()"
               (input)="moveReason.set($any($event.target).value)"
             />
-            <button type="submit" class="resume" [disabled]="busy() || moveReason().trim().length === 0">{{ i18n.t('migrationRuns.move.resume') }}</button>
+            <button
+              type="submit"
+              class="resume"
+              [disabled]="busy() || moveReason().trim().length === 0"
+            >
+              {{ i18n.t('migrationRuns.move.resume') }}
+            </button>
           </form>
         }
       } @else if (moves(s).length > 0) {
         <form class="inlineForm moveForm" (submit)="move(s, $event)">
-          <select class="q-body-sm" name="moveTarget" (change)="moveTarget.set($any($event.target).value)">
-            <option value="" [selected]="moveTarget() === ''">{{ i18n.t('migrationRuns.move.choose') }}</option>
+          <select
+            class="q-body-sm"
+            name="moveTarget"
+            (change)="moveTarget.set($any($event.target).value)"
+          >
+            <option value="" [selected]="moveTarget() === ''">
+              {{ i18n.t('migrationRuns.move.choose') }}
+            </option>
             @for (target of moves(s); track target) {
-              <option [value]="target" [selected]="target === moveTarget()">{{ i18n.t(stateKey(target)) }}</option>
+              <option [value]="target" [selected]="target === moveTarget()">
+                {{ i18n.t(stateKey(target)) }}
+              </option>
             }
           </select>
           <input
@@ -275,7 +359,10 @@
             [value]="moveReason()"
             (input)="moveReason.set($any($event.target).value)"
           />
-          <button type="submit" [disabled]="busy() || moveTarget() === '' || moveReason().trim().length === 0">
+          <button
+            type="submit"
+            [disabled]="busy() || moveTarget() === '' || moveReason().trim().length === 0"
+          >
             {{ i18n.t('migrationRuns.move.submit') }}
           </button>
         </form>
@@ -285,7 +372,9 @@
       }
       @if (awaitsCutover(s)) {
         <p class="q-body-sm">
-          <a [routerLink]="['/migration/cutover-checklist']">{{ i18n.t('migrationRuns.move.toCutover') }}</a>
+          <a [routerLink]="['/migration/cutover-checklist']">{{
+            i18n.t('migrationRuns.move.toCutover')
+          }}</a>
         </p>
       }
 
@@ -309,16 +398,35 @@
             <tbody>
               @for (run of runs(); track run.id) {
                 <tr>
-                  <td class="q-body-sm">{{ i18n.t(runTypeKey(run.runType)) }} <span class="muted q-tnum">v{{ run.transformationVersion }}</span></td>
-                  <td class="q-body-sm"><span class="chip q-caption" [attr.data-run]="run.status">{{ i18n.t(runStatusKey(run.status)) }}</span></td>
+                  <td class="q-body-sm">
+                    {{ i18n.t(runTypeKey(run.runType)) }}
+                    <span class="muted q-tnum">v{{ run.transformationVersion }}</span>
+                  </td>
+                  <td class="q-body-sm">
+                    <span class="chip q-caption" [attr.data-run]="run.status">{{
+                      i18n.t(runStatusKey(run.status))
+                    }}</span>
+                  </td>
                   <td class="q-body-sm q-tnum num">{{ run.counters.scanned }}</td>
-                  <td class="q-body-sm q-tnum num">{{ run.counters.created + run.counters.updated }}</td>
+                  <td class="q-body-sm q-tnum num">
+                    {{ run.counters.created + run.counters.updated }}
+                  </td>
                   <td class="q-body-sm q-tnum num">{{ run.counters.quarantined }}</td>
-                  <td class="q-body-sm">{{ i18n.dateTime(asDate(run.startedAt)) }} · {{ run.startedBy }}</td>
+                  <td class="q-body-sm">
+                    {{ i18n.dateTime(asDate(run.startedAt)) }} · {{ run.startedBy }}
+                  </td>
                   <td class="q-body-sm">
                     @if (run.status === 'RUNNING' && session.has('MIGRATION_RUN_EXECUTE')) {
-                      <button type="button" class="secondary finishToggle" (click)="openFinish(run)">
-                        {{ finishing() === run.id ? i18n.t('common.cancel') : i18n.t('migrationRuns.run.finish') }}
+                      <button
+                        type="button"
+                        class="secondary finishToggle"
+                        (click)="openFinish(run)"
+                      >
+                        {{
+                          finishing() === run.id
+                            ? i18n.t('common.cancel')
+                            : i18n.t('migrationRuns.run.finish')
+                        }}
                       </button>
                     }
                   </td>
@@ -327,9 +435,15 @@
                   <tr>
                     <td colspan="7">
                       <form class="inlineForm finishForm" (submit)="finish(s, run, $event)">
-                        <select class="q-body-sm" name="finishStatus" (change)="finishStatus.set($any($event.target).value)">
+                        <select
+                          class="q-body-sm"
+                          name="finishStatus"
+                          (change)="finishStatus.set($any($event.target).value)"
+                        >
                           @for (status of finishStatuses; track status) {
-                            <option [value]="status" [selected]="status === finishStatus()">{{ i18n.t(runStatusKey(status)) }}</option>
+                            <option [value]="status" [selected]="status === finishStatus()">
+                              {{ i18n.t(runStatusKey(status)) }}
+                            </option>
                           }
                         </select>
                         @if (finishStatus() === 'COMPLETED') {
@@ -348,7 +462,9 @@
                           [value]="finishReason()"
                           (input)="finishReason.set($any($event.target).value)"
                         />
-                        <button type="submit" [disabled]="!canFinish()">{{ i18n.t('migrationRuns.run.finishSubmit') }}</button>
+                        <button type="submit" [disabled]="!canFinish()">
+                          {{ i18n.t('migrationRuns.run.finishSubmit') }}
+                        </button>
                       </form>
                       <p class="q-caption muted">{{ i18n.t('migrationRuns.run.finishHint') }}</p>
                     </td>
@@ -364,9 +480,15 @@
         <form class="grid startRunForm" (submit)="startRun(s, $event)">
           <label class="field">
             <span class="q-caption">{{ i18n.t('migrationRuns.run.type') }}</span>
-            <select class="q-body-sm" name="runType" (change)="runType.set($any($event.target).value)">
+            <select
+              class="q-body-sm"
+              name="runType"
+              (change)="runType.set($any($event.target).value)"
+            >
               @for (type of runTypes; track type) {
-                <option [value]="type" [selected]="type === runType()">{{ i18n.t(runTypeKey(type)) }}</option>
+                <option [value]="type" [selected]="type === runType()">
+                  {{ i18n.t(runTypeKey(type)) }}
+                </option>
               }
             </select>
           </label>
@@ -382,14 +504,26 @@
           </label>
           <label class="field">
             <span class="q-caption">{{ i18n.t('migrationRuns.run.startedBy') }}</span>
-            <input class="q-body-sm" name="startedBy" [value]="startedBy()" (input)="startedBy.set($any($event.target).value)" />
+            <input
+              class="q-body-sm"
+              name="startedBy"
+              [value]="startedBy()"
+              (input)="startedBy.set($any($event.target).value)"
+            />
           </label>
           <label class="field wide">
             <span class="q-caption">{{ i18n.t('common.reason') }}</span>
-            <input class="q-body-sm" name="runReason" [value]="runReason()" (input)="runReason.set($any($event.target).value)" />
+            <input
+              class="q-body-sm"
+              name="runReason"
+              [value]="runReason()"
+              (input)="runReason.set($any($event.target).value)"
+            />
           </label>
           <div class="actions">
-            <button type="submit" [disabled]="!canStartRun()">{{ i18n.t('migrationRuns.run.start') }}</button>
+            <button type="submit" [disabled]="!canStartRun()">
+              {{ i18n.t('migrationRuns.run.start') }}
+            </button>
           </div>
         </form>
       }
@@ -415,11 +549,21 @@
                   <td class="q-body-sm">{{ item.entityType }}</td>
                   <td class="q-body-sm q-tnum">{{ item.legacyId }}</td>
                   <td class="q-body-sm q-tnum">{{ item.reasonCode }}</td>
-                  <td class="q-body-sm q-tnum muted">{{ item.sanitizedEvidenceReference ?? '—' }}</td>
+                  <td class="q-body-sm q-tnum muted">
+                    {{ item.sanitizedEvidenceReference ?? '—' }}
+                  </td>
                   <td class="q-body-sm">
                     @if (session.has('MIGRATION_QUARANTINE_RESOLVE')) {
-                      <button type="button" class="secondary settleToggle" (click)="openSettle(item)">
-                        {{ settling() === item.id ? i18n.t('common.cancel') : i18n.t('migrationRuns.quarantine.settle') }}
+                      <button
+                        type="button"
+                        class="secondary settleToggle"
+                        (click)="openSettle(item)"
+                      >
+                        {{
+                          settling() === item.id
+                            ? i18n.t('common.cancel')
+                            : i18n.t('migrationRuns.quarantine.settle')
+                        }}
                       </button>
                     }
                   </td>
@@ -427,10 +571,19 @@
                 @if (settling() === item.id) {
                   <tr>
                     <td colspan="5">
-                      <form class="inlineForm settleForm" (submit)="$event.preventDefault(); settle(s, item)">
-                        <select class="q-body-sm" name="resolutionCode" (change)="resolutionCode.set($any($event.target).value)">
+                      <form
+                        class="inlineForm settleForm"
+                        (submit)="$event.preventDefault(); settle(s, item)"
+                      >
+                        <select
+                          class="q-body-sm"
+                          name="resolutionCode"
+                          (change)="resolutionCode.set($any($event.target).value)"
+                        >
                           @for (code of resolutionCodes; track code) {
-                            <option [value]="code" [selected]="code === resolutionCode()">{{ i18n.t(resolutionKey(code)) }}</option>
+                            <option [value]="code" [selected]="code === resolutionCode()">
+                              {{ i18n.t(resolutionKey(code)) }}
+                            </option>
                           }
                         </select>
                         <input
@@ -440,7 +593,10 @@
                           [value]="settleReason()"
                           (input)="settleReason.set($any($event.target).value)"
                         />
-                        <button type="submit" [disabled]="busy() || settleReason().trim().length === 0">
+                        <button
+                          type="submit"
+                          [disabled]="busy() || settleReason().trim().length === 0"
+                        >
                           {{ i18n.t('migrationRuns.quarantine.settleSubmit') }}
                         </button>
                       </form>

@@ -39,8 +39,8 @@ public final class PlatformDefaultTerms {
     /**
      * The default text for one locale, with {@code brandName} interpolated.
      *
-     * @param locale one of {@link TermsLocale#tags()}; anything else falls
-     *               back to {@link TermsLocale#EN}, the same "never blank"
+     * @param locale one of the registry's content tier ({@code PlatformLocales.activeTags(CONTENT)}); anything else falls
+     *               back to English, the same "never blank"
      *               posture {@code TermsAcceptanceService} applies elsewhere
      * @param brandName never blank in practice — the storefront's own
      *                  {@code AppConfig.brand.displayName} soft-defaults to
@@ -292,6 +292,5 @@ public final class PlatformDefaultTerms {
             mumkin.
             """;
 
-    private static final Map<String, String> TEMPLATES = Map.of(
-            TermsLocale.EN.tag(), EN_TEXT, TermsLocale.RU.tag(), RU_TEXT, TermsLocale.UZ_LATN.tag(), UZ_LATN_TEXT);
+    private static final Map<String, String> TEMPLATES = Map.of("en", EN_TEXT, "ru", RU_TEXT, "uz-Latn", UZ_LATN_TEXT);
 }

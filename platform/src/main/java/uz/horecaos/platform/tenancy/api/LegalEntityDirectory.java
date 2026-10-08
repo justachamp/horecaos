@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.api;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -88,6 +89,22 @@ public interface LegalEntityDirectory {
      */
     default Optional<LegalEntitySummary> summary(UUID tenantId, UUID legalEntityId) {
         return Optional.empty();
+    }
+
+    /**
+     * Every company of this tenant that may currently be named in a document, by
+     * code (ADR 0096): the candidates for the buyer on an invoice HorecaOS sends
+     * the tenant.
+     *
+     * <p>Only active entities: a suspended or archived company is not somebody to
+     * invoice. Empty when the tenant has none registered -- which the caller must
+     * say, not paper over by inventing a buyer from {@code tenant.tenants.legal_name}.
+     *
+     * <p>Defaulted to empty, like {@link #summary}, so the test doubles of this
+     * interface built for {@link #sellerFor} need grow no implementation.
+     */
+    default List<LegalParty> activeParties(UUID tenantId) {
+        return List.of();
     }
 
     /**

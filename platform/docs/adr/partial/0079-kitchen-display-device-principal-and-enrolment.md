@@ -19,10 +19,13 @@
   (`frontend/operations/src/app/features/kitchen/devices-page.ts`) is the
   console screen that approves the pairing code it shows — this record's own
   prose used to claim the client existed when only the endpoints did; it
-  does not any more. Not built: any device class other than the one kitchen
-  display this ADR names (`KITCHEN_KDS`) — a VDU or an expo screen
-  under ADR 0041's own rollout step 4 would reuse this primitive with its own
-  role bundle, not reopen this one; per-action attribution below the device
+  does not any more. **A second class now exists** (ADR 0151, 2026-10-07):
+  `KITCHEN_VDU`, a read-only wall display holding `kitchen.display.read` through
+  `PlatformRole.KITCHEN_VDU_DEVICE`, which reused this primitive with its own role
+  bundle exactly as this record said it would, without reopening it (V0501 restates
+  both class CHECKs; an approval may narrow what a device asked for, never widen it).
+  Not built: an expo screen (a handover names the person who made it, and a device
+  cannot be that actor); per-action attribution below the device
   (badge or PIN); and automatic secret rotation on a timer (rotation today is
   manual, through revoke-and-re-enrol). See
   [Implementation checklist](#implementation-checklist).

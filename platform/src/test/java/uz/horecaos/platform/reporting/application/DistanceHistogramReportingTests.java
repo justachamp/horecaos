@@ -189,12 +189,12 @@ class DistanceHistogramReportingTests {
         jdbc.sql("""
                         INSERT INTO reporting.fact_delivery (
                             tenant_id, courier_assignment_earning_id, business_date, boundary_version,
-                            metric_calculation_version, courier_id, location_id, shipment_id,
+                            metric_calculation_version, courier_id, location_id, brand_id, shipment_id,
                             assignment_attempt_id, distance_meters, distance_source, on_time_outcome,
                             accepted_at, delivered_at, transit_seconds)
                         VALUES (
                             :tenantId, :earningId, :businessDate, 1,
-                            1, :courierId, :locationId, :shipmentId,
+                            1, :courierId, :locationId, :brandId, :shipmentId,
                             :assignmentAttemptId, :distanceMeters, 'ROUTING', 'ON_TIME',
                             :acceptedAt, :deliveredAt, :transitSeconds)
                         """)
@@ -203,6 +203,7 @@ class DistanceHistogramReportingTests {
                 .param("businessDate", DAY)
                 .param("courierId", UUID.randomUUID())
                 .param("locationId", locationId)
+                .param("brandId", UUID.randomUUID())
                 .param("shipmentId", UUID.randomUUID())
                 .param("assignmentAttemptId", UUID.randomUUID())
                 .param("distanceMeters", distanceMeters)

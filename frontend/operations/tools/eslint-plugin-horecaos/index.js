@@ -3,5 +3,6 @@
 module.exports = {
   rules: {
     'no-raw-px-font-size': require('./rules/no-raw-px-font-size'),
+    'no-physical-direction': require('./rules/no-physical-direction'),
   },
 };

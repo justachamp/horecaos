@@ -41,6 +41,8 @@ Loud inside the window, in the morning digest outside it.
 | Data volume above 85% | [disk-filling.md](disk-filling.md) |
 | TLS certificate expiring within 7 days | [deploy.md](deploy.md), certificates |
 | An onboarding run has not moved for an hour | [onboarding-run-stalled.md](onboarding-run-stalled.md) |
+| ROAD delivery fees falling back to the straight line for more than 5% of quotes (ADR 0147) | [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md), "When it goes wrong" |
+| The routing dataset is more than 60 days old (ADR 0147) | [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md), "The monthly refresh" |
 
 ## Not an alert, on purpose
 

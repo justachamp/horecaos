@@ -33,7 +33,9 @@ export class WebhookDeliveries {
   protected readonly loading = signal(true);
   protected readonly loadError = signal<string | null>(null);
   protected readonly deliveries = signal<readonly WebhookDelivery[]>([]);
-  protected readonly invalidCount = computed(() => this.deliveries().filter((d) => !d.signatureValid).length);
+  protected readonly invalidCount = computed(
+    () => this.deliveries().filter((d) => !d.signatureValid).length,
+  );
 
   constructor() {
     void this.load();

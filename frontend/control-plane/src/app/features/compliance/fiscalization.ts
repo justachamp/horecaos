@@ -72,11 +72,19 @@ export class Fiscalization {
     try {
       if (tenantId.length === 0) {
         const rows = await this.api.blockedAcrossTenants();
-        this.worklist.set(rows.map((row) => ({ tenantId: row.tenantId, tenantName: row.tenantName, document: row.document })));
+        this.worklist.set(
+          rows.map((row) => ({
+            tenantId: row.tenantId,
+            tenantName: row.tenantName,
+            document: row.document,
+          })),
+        );
         this.warning.set(null);
       } else {
         const result = await this.api.blocked(tenantId);
-        this.worklist.set(result.documents.map((document) => ({ tenantId, tenantName: null, document })));
+        this.worklist.set(
+          result.documents.map((document) => ({ tenantId, tenantName: null, document })),
+        );
         this.warning.set(result.warning);
       }
     } catch (error) {
@@ -120,9 +128,7 @@ export class Fiscalization {
         failed += 1;
       }
     }
-    this.actionMessage.set(
-      this.i18n.t('fiscalization.retry.result', { succeeded, failed }),
-    );
+    this.actionMessage.set(this.i18n.t('fiscalization.retry.result', { succeeded, failed }));
     this.retrying.set(false);
     await this.load();
   }

@@ -68,6 +68,55 @@ public class JdbcStorefrontLocationProfileStore {
                 .optional();
     }
 
+    /**
+     * Every published branch of one brand, by name (ADR 0069): the same columns
+     * and the same activity gates as {@link #find}, for a question about the
+     * brand rather than about one branch.
+     */
+    public java.util.List<BranchRow> listActiveForBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT l.id,
+                       l.display_name,
+                       l.address_line,
+                       l.district,
+                       l.city,
+                       l.landmark,
+                       l.contact_phone,
+                       l.latitude,
+                       l.longitude,
+                       l.timezone
+                FROM tenant.locations l
+                JOIN tenant.brands b
+                  ON b.tenant_id = l.tenant_id AND b.id = l.brand_id
+                JOIN tenant.tenants t
+                  ON t.id = l.tenant_id
+                WHERE l.tenant_id = :tenantId
+                  AND l.brand_id = :brandId
+                  AND t.status = 'ACTIVE'
+                  AND b.status = 'ACTIVE'
+                  AND l.status = 'ACTIVE'
+                ORDER BY l.display_name, l.id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new BranchRow(
+                        row.getObject("id", UUID.class),
+                        new LocationProfileRow(
+                                row.getString("display_name"),
+                                row.getString("address_line"),
+                                row.getString("district"),
+                                row.getString("city"),
+                                row.getString("landmark"),
+                                row.getString("contact_phone"),
+                                (Double) row.getObject("latitude"),
+                                (Double) row.getObject("longitude")),
+                        row.getString("timezone")))
+                .list();
+    }
+
+    /** One branch of a listing: its id, its publishable identity, and the zone its hours are read in. */
+    public record BranchRow(UUID locationId, LocationProfileRow profile, String timezone) {}
+
     /** One branch's publishable identity. Every field but the name may be unset. */
     public record LocationProfileRow(
             String displayName,

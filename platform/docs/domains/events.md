@@ -48,6 +48,8 @@ changing retention is an approved operational migration with a rollback plan.
 | `voice.events` | 3 | 1 | `PT168H` | `delete` |
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
+| `marketing.events` | 3 | 1 | `PT168H` | `delete` |
+| `customers.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
@@ -337,6 +339,31 @@ is not itself a payload field: every event in one call's lifecycle keys the
 same way so a call's own events cannot overtake each other, even though each
 is a distinct `callEventId` row in `voice.call_events`.
 
+## `customers.events`
+
+- Producing module: `customers`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `leadId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `LeadRegistered` | 1 | `leadId` | [`LeadRegistered.v1`](../../src/main/resources/events/customers.events/LeadRegistered.v1.schema.json) | `leadId`, `tenantId`, `brandId`, `source` |
+| `LeadStatusChanged` | 1 | `leadId` | [`LeadStatusChanged.v1`](../../src/main/resources/events/customers.events/LeadStatusChanged.v1.schema.json) | `leadId`, `fromStatus`, `toStatus` |
+| `LeadAssignedToLocation` | 1 | `leadId` | [`LeadAssignedToLocation.v1`](../../src/main/resources/events/customers.events/LeadAssignedToLocation.v1.schema.json) | `leadId`, `locationId` |
+| `LeadConverted` | 1 | `leadId` | [`LeadConverted.v1`](../../src/main/resources/events/customers.events/LeadConverted.v1.schema.json) | `leadId`, `orderId?`, `reservationId?` |
+
+ADR 0111. A lead is a guest who has phoned in, asked for a callback or enquired about
+catering and is not yet an account with an order behind them. These four facts are written
+through the outbox in the same transaction as the row they describe, with no consumer required
+by the record that introduced them: they exist so a future marketing trigger or reporting fact
+can subscribe through ADR 0005's inbox without `customers` knowing who is listening. Every
+payload is identifiers and stable codes -- never a phone number, a name or a note, which stay
+envelope-encrypted in `customer.leads` (ADR 0029). A reschedule of a pending callback keeps its
+status and is not published; a conversion publishes `LeadStatusChanged` and `LeadConverted`
+both. The contact journal (`customer.contact_attempts`) is not an event stream: it is append-only
+by grant and read through the customer card.
+
 ## `inventory.events`
 
 - Producing module: `inventory`
@@ -441,6 +468,32 @@ high-volume per-request facts whose payload shape and retention deserve their
 own decision rather than riding along with a once-a-day control-plane
 activation — the same restraint `inventory.events` states for its own six
 unpublished siblings.
+
+## `marketing.events`
+
+- Producing module: `marketing`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `campaignId` for a scenario's facts, `offerId` for an offer's
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `ScenarioStepDecided` | 1 | `campaignId` | [`ScenarioStepDecided.v1`](../../src/main/resources/events/marketing.events/ScenarioStepDecided.v1.schema.json) | `campaignId`, `brandId`, `customerAccountId`, `stepSequence`, `decision`, `refusalReason` |
+| `ScenarioParticipantStopped` | 1 | `campaignId` | [`ScenarioParticipantStopped.v1`](../../src/main/resources/events/marketing.events/ScenarioParticipantStopped.v1.schema.json) | `campaignId`, `brandId`, `customerAccountId`, `outcome` |
+| `OfferPublished` | 1 | `offerId` | [`OfferPublished.v1`](../../src/main/resources/events/marketing.events/OfferPublished.v1.schema.json) | `offerId`, `brandId`, `version` |
+
+ADR 0112's per-guest scenario engine. A decision, a guest's run ending and an offer
+being published are each appended in the same `BEFORE_COMMIT` transaction as the row
+that records them (`MarketingOutboxEventListener`), so neither commits without the
+other. `customerAccountId` is the pseudonymous account id every marketing table already
+holds; a reason is a code from a closed set and never its sentence, and nothing carries a
+phone number, an address or a rendered message (ADR 0029). A consumer that needs the
+sentence reads the decision through the authorized scenario API.
+
+ADR 0112 also names `EnqueueCallTaskCommand`, addressed to `customers` for ADR 0111's
+call-centre lead queue. It is not catalogued: no such queue exists to consume it, so a
+`CALL_CENTRE` scenario step is refused at authoring (`CHANNEL_NOT_WIRED`) rather than a
+command being published that nothing reads.
 
 ## `pos.commands`
 

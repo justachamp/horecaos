@@ -172,6 +172,62 @@
   background: var(--q-info-tint);
 }
 
+.pane__message--assistant {
+  align-self: flex-start;
+  background: var(--q-surface-1);
+  border-left: 3px solid var(--q-primary);
+}
+
+.pane__assistant-banner {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+  border-radius: var(--q-radius);
+}
+
+.pane__assistant-involved {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.pane__why-toggle {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--q-ink-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pane__why {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+}
+
+.pane__why p {
+  margin: 0;
+}
+
+.pane__why-heading {
+  margin-top: 6px;
+  color: var(--q-ink-subtle);
+}
+
+.pane__why-facts {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+
+.pane__why-cited,
+.pane__why-reason {
+  color: var(--q-ink-muted);
+}
+
 .pane__message-meta {
   display: flex;
   justify-content: space-between;

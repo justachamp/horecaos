@@ -323,6 +323,122 @@ class OrderLatenessPolicyServiceTests {
         assertThat(atSibling.pickup().atRiskBeforeSeconds()).isEqualTo(420);
     }
 
+    // ---------------------- ADR 0150: the scalar is the default for the no-promise part
+
+    private static final String LATE_THRESHOLD = "ordering.late_order_threshold_minutes";
+
+    @Test
+    void withTheLateOrderThresholdUnsetAnUnpromisedOrderIsLateAtFortyFiveMinutesFromCreation() {
+        // Pinned first: this is what every tenant that never touched the setting has today, and what the
+        // reader must not move.
+        OrderLatenessPolicy resolved = service.resolve(TENANT, BRAND, LOCATION).policy();
+
+        for (var mode : uz.horecaos.platform.tenancy.api.FulfillmentMode.values()) {
+            assertThat(resolved.forMode(mode).noPromiseFallbackSeconds())
+                    .as(mode.name())
+                    .isEqualTo(2700);
+        }
+    }
+
+    @Test
+    void aTenantWideLateOrderThresholdIsTheNoPromiseFallbackOfEveryModeAndNothingElse() {
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of(LATE_THRESHOLD, 20))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        for (var mode : uz.horecaos.platform.tenancy.api.FulfillmentMode.values()) {
+            assertThat(resolved.forMode(mode).noPromiseFallbackSeconds())
+                    .as("%s: 20 minutes from creation".formatted(mode))
+                    .isEqualTo(1200);
+            assertThat(resolved.forMode(mode).lateAfterSeconds())
+                    .as("a promised order's grace is the document's, not the scalar's")
+                    .isZero();
+            assertThat(resolved.forMode(mode).atRiskBeforeSeconds()).isEqualTo(300);
+        }
+    }
+
+    @Test
+    void aModesOwnFallbackWinsOverTheScalarAndABlankOneTakesIt() {
+        activate("TENANT", null, null, """
+                {"delivery":{"atRiskBeforeSeconds":null,"lateAfterSeconds":60,"noPromiseFallbackSeconds":3600},
+                 "pickup":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0,"noPromiseFallbackSeconds":null},
+                 "dineIn":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0}}""");
+
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of(LATE_THRESHOLD, 20))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        assertThat(resolved.delivery().noPromiseFallbackSeconds())
+                .as("the document's own number for the mode wins")
+                .isEqualTo(3600);
+        assertThat(resolved.pickup().noPromiseFallbackSeconds())
+                .as("a blank in the document means none of its own: the scalar applies")
+                .isEqualTo(1200);
+        assertThat(resolved.dineIn().noPromiseFallbackSeconds())
+                .as("a document that leaves the field out reads the same as a blank")
+                .isEqualTo(1200);
+    }
+
+    @Test
+    void aDocumentWrittenBeforeTheFallbackWasOptionalStillOwnsItsNumbers() {
+        activate("TENANT", null, null, thresholdsSet(300, 0, 1800));
+
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of(LATE_THRESHOLD, 20))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        assertThat(resolved.delivery().noPromiseFallbackSeconds())
+                .as("a stored value is a value of its own, whatever the scalar says")
+                .isEqualTo(1800);
+    }
+
+    @Test
+    void theNoPromiseDefaultIsTheScalarOnlyWhenOneWasSetAndThePlatformsFortyFiveOtherwise() {
+        ResourceScope scope = ResourceScope.location(TENANT, BRAND, LOCATION);
+
+        OrderLatenessPolicyService.NoPromiseDefault unset = service.noPromiseDefaultAt(scope);
+        assertThat(unset.seconds()).isEqualTo(2700);
+        assertThat(unset.source()).isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.PLATFORM_DEFAULT);
+
+        OrderLatenessPolicyService.NoPromiseDefault set =
+                serviceWith(java.util.Map.of(LATE_THRESHOLD, 20)).noPromiseDefaultAt(scope);
+        assertThat(set.seconds()).isEqualTo(1200);
+        assertThat(set.source()).isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.SCALAR);
+
+        OrderLatenessPolicyService.NoPromiseDefault chosenAsTheDefault =
+                serviceWith(java.util.Map.of(LATE_THRESHOLD, 45)).noPromiseDefaultAt(scope);
+        assertThat(chosenAsTheDefault.seconds()).isEqualTo(2700);
+        assertThat(chosenAsTheDefault.source())
+                .as("a tenant that typed 45 chose it; only an unset key is the platform's own answer")
+                .isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.SCALAR);
+    }
+
+    @Test
+    void anUnusableStoredLateOrderThresholdIsIgnoredRatherThanTakingTheBoardDown() {
+        // Refused at write time (1 to 600), so only a row written around the rule can be here; the
+        // thresholds record would throw on a negative number and the board read would 500 for everyone.
+        for (int unusable : new int[] {0, -5, 601, 1441, Integer.MAX_VALUE}) {
+            OrderLatenessPolicyService unusableValue = serviceWith(java.util.Map.of(LATE_THRESHOLD, unusable));
+            assertThat(unusableValue.resolve(TENANT, BRAND, LOCATION).policy())
+                    .as("value %d", unusable)
+                    .isEqualTo(OrderLatenessPolicy.platformDefault());
+            assertThat(unusableValue
+                            .noPromiseDefaultAt(ResourceScope.location(TENANT, BRAND, LOCATION))
+                            .source())
+                    .isEqualTo(OrderLatenessPolicyService.NoPromiseDefault.Source.PLATFORM_DEFAULT);
+        }
+    }
+
+    @Test
+    void theKeyDefaultIsThePlatformDefaultsOwnNoPromiseFallback() {
+        assertThat(java.util.Objects.requireNonNull(
+                                uz.horecaos.platform.ordering.api.OrderingConfigurationKeys.LATE_ORDER_THRESHOLD_MINUTES
+                                        .defaultValue())
+                        * 60)
+                .as("registering the reader must change nothing for a tenant that has not set the key")
+                .isEqualTo(OrderLatenessPolicy.platformDefault().delivery().noPromiseFallbackSeconds());
+    }
+
     private String thresholdsSet(int atRiskBefore, int lateAfter, int noPromiseFallback) {
         String single = "{\"atRiskBeforeSeconds\":%d,\"lateAfterSeconds\":%d,\"noPromiseFallbackSeconds\":%d}"
                 .formatted(atRiskBefore, lateAfter, noPromiseFallback);

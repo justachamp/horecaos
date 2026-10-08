@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -26,6 +27,7 @@ import uz.horecaos.platform.ordering.domain.OutcomeSystemCategory;
 import uz.horecaos.platform.ordering.domain.StockDisposition;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore.ReasonRow;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
@@ -56,11 +58,19 @@ public class OrderOutcomeReasonService {
     private final JdbcOutcomeReasonStore reasons;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final BrandLocaleLookup brandLocales;
 
     public OrderOutcomeReasonService(JdbcOutcomeReasonStore reasons, AuditRecorder audit, Clock clock) {
+        this(reasons, audit, clock, BrandLocaleLookup.platformFallback());
+    }
+
+    @Autowired
+    public OrderOutcomeReasonService(
+            JdbcOutcomeReasonStore reasons, AuditRecorder audit, Clock clock, BrandLocaleLookup brandLocales) {
         this.reasons = reasons;
         this.audit = audit;
         this.clock = clock;
+        this.brandLocales = brandLocales;
     }
 
     /**
@@ -80,12 +90,9 @@ public class OrderOutcomeReasonService {
         }
     }
 
-    /** The locales every reason must be written in before it can be used. */
-    public static final Set<String> REQUIRED_LOCALES = Set.of("ru", "uz-Latn", "en");
-
     @Transactional
     public UUID create(UUID tenantId, Authorship by, CreateReason command) {
-        validate(command);
+        validate(tenantId, command);
 
         UUID reasonId = UUID.randomUUID();
         Instant now = clock.instant();
@@ -143,7 +150,7 @@ public class OrderOutcomeReasonService {
             // would move historical rows between two funnels.
             throw new IllegalArgumentException("A reason's kind is fixed at creation; archive it and author a new one");
         }
-        validate(command);
+        validate(tenantId, command);
 
         // validate() above already refused a CANCELLATION reason with any of the
         // three null, or a COMPLETION reason with modes absent; NullAway cannot
@@ -405,7 +412,7 @@ public class OrderOutcomeReasonService {
         return value == null ? null : value.name();
     }
 
-    private void validate(CreateReason command) {
+    private void validate(UUID tenantId, CreateReason command) {
         if (command.internalName() == null || command.internalName().isBlank()) {
             throw new IllegalArgumentException("A reason needs an internal name");
         }
@@ -416,10 +423,16 @@ public class OrderOutcomeReasonService {
         // The two texts are genuinely different statements. Publishing the
         // internal name to a customer is what the split prevents, and it can only
         // prevent it if the customer wording actually exists.
+        // A reason belongs to the tenant, so "every language" is the union of what its brands serve
+        // (ADR 0149, Decision 4), not every language the platform has: a tenant that serves ru and
+        // uz-Latn is not asked for Georgian. A tenant with no configured brand set owes the platform's
+        // content tier, which is the three languages it always owed.
         Set<String> provided = command.customerTexts().keySet();
-        if (!provided.containsAll(REQUIRED_LOCALES)) {
-            throw new IllegalArgumentException("A reason needs customer wording in ru, uz-Latn and en; missing "
-                    + REQUIRED_LOCALES.stream()
+        List<String> required = brandLocales.tenantLocaleSet(tenantId).locales();
+        if (!provided.containsAll(required)) {
+            throw new IllegalArgumentException("A reason needs customer wording in "
+                    + String.join(", ", required) + "; missing "
+                    + required.stream()
                             .filter(locale -> !provided.contains(locale))
                             .collect(Collectors.joining(", ")));
         }

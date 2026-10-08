@@ -245,7 +245,11 @@ class StaffMemberEndpointTests {
 
         assertThat(edited.getResponse().getStatus()).isEqualTo(200);
         assertThat(edited.getResponse().getContentAsString(UTF_8))
-                .contains("Tursunova-Karimova", "+998910001122", "\"uiLocale\":\"uz\"");
+                .contains("Tursunova-Karimova", "+998910001122")
+                .as("saved with a bare uz, which clients that predate the registry still send, "
+                        + "and read back as the tag: the alias is never stored (ADR 0149)")
+                .contains("\"uiLocale\":\"uz-Latn\"")
+                .doesNotContain("\"uiLocale\":\"uz\"");
         assertThat(versionOf(edited)).isEqualTo(version + 1);
 
         // The same cook cannot read the lists or another member through any route.

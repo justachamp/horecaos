@@ -1,4 +1,5 @@
 import { MessageKey } from '../../core/i18n/messages.en';
+import type { LocaleTier } from '../../core/i18n/platform-locales';
 
 /**
  * The closed predicate catalogue an audience may be built from (ADR 0044,
@@ -20,6 +21,12 @@ export interface PredicateTypeDescriptor {
   readonly valueKind: PredicateValueKind;
   /** Fixed choices for a TEXT_SET predicate, or null when any short string is accepted. */
   readonly fixedValues: readonly string[] | null;
+  /**
+   * When the fixed choices are the platform's languages: the registry tier they are read from
+   * (ADR 0149). The catalogue does not carry a list of languages of its own, because which ones
+   * exist is the registry's to say; {@link fixedValues} is then null and the screen asks the registry.
+   */
+  readonly fixedValuesFromTier?: LocaleTier;
 }
 
 export const PREDICATE_TYPES: readonly PredicateTypeDescriptor[] = [
@@ -75,7 +82,9 @@ export const PREDICATE_TYPES: readonly PredicateTypeDescriptor[] = [
     type: 'PREFERRED_LOCALE',
     labelKey: 'marketing.predicate.type.PREFERRED_LOCALE',
     valueKind: 'TEXT_SET',
-    fixedValues: ['ru', 'uz-Latn', 'en'],
+    fixedValues: null,
+    // A customer's language is one the platform can message them in (the server checks the same tier).
+    fixedValuesFromTier: 'MESSAGES',
   },
   {
     type: 'AUDIENCE_MEMBERSHIP',

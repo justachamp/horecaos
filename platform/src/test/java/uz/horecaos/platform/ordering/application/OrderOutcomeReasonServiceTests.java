@@ -1,20 +1,32 @@
 package uz.horecaos.platform.ordering.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService.StaleReasonException;
+import uz.horecaos.platform.ordering.domain.CustomerRefund;
+import uz.horecaos.platform.ordering.domain.LiabilityParty;
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
+import uz.horecaos.platform.ordering.domain.OutcomeSystemCategory;
+import uz.horecaos.platform.ordering.domain.StockDisposition;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore.ReasonRow;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 
 /**
  * Batch 10 finding: {@code reorder}'s optimistic-concurrency check compared
@@ -64,6 +76,88 @@ class OrderOutcomeReasonServiceTests {
                 .as("the list changed underneath the caller (B moved from v1 to v2) even though the "
                         + "list-wide max stayed 5 -- the reorder's own doc promises this is refused")
                 .isInstanceOf(StaleReasonException.class);
+    }
+
+    @Test
+    @DisplayName("a tenant whose brands serve ru and uz-Latn writes a reason in those two, and is not asked for en")
+    void aTwoLanguageTenantOwesTwoTexts() {
+        JdbcOutcomeReasonStore store = mock(JdbcOutcomeReasonStore.class);
+        OrderOutcomeReasonService service = serviceFor(store, twoLanguageTenant());
+
+        UUID created = service.create(TENANT, by(), cancellation(Map.of("ru", "Отменён", "uz-Latn", "Bekor qilindi")));
+
+        assertThat(created).isNotNull();
+        verify(store).replaceTexts(created, Map.of("ru", "Отменён", "uz-Latn", "Bekor qilindi"));
+    }
+
+    @Test
+    @DisplayName("the same two texts are refused for a tenant that serves three, and the missing language is named")
+    void aThreeLanguageTenantStillOwesAllThree() {
+        JdbcOutcomeReasonStore store = mock(JdbcOutcomeReasonStore.class);
+        OrderOutcomeReasonService unconfigured = new OrderOutcomeReasonService(
+                store, fact -> {}, Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> unconfigured.create(
+                        TENANT, by(), cancellation(Map.of("ru", "Отменён", "uz-Latn", "Bekor qilindi"))))
+                .as("a tenant that has configured nothing owes the platform's content tier, as before")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A reason needs customer wording in ru, uz-Latn, en; missing en");
+        verify(store, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("a tenant that serves en but not ru is refused without en and is not asked for ru")
+    void theUnionDecidesNotThePlatformTriple() {
+        JdbcOutcomeReasonStore store = mock(JdbcOutcomeReasonStore.class);
+        BrandLocaleLookup lookup = lookupWith(
+                TenantLocaleSet.union(List.of(new TenantLocaleSet.BrandChoice(List.of("uz-Latn", "en"), "uz-Latn"))));
+        OrderOutcomeReasonService service = serviceFor(store, lookup);
+
+        assertThatThrownBy(() -> service.create(TENANT, by(), cancellation(Map.of("uz-Latn", "Bekor qilindi"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageEndingWith("missing en");
+        assertThat(service.create(TENANT, by(), cancellation(Map.of("uz-Latn", "Bekor qilindi", "en", "Cancelled"))))
+                .isNotNull();
+    }
+
+    private static OrderOutcomeReasonService serviceFor(JdbcOutcomeReasonStore store, BrandLocaleLookup lookup) {
+        return new OrderOutcomeReasonService(
+                store, fact -> {}, Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC), lookup);
+    }
+
+    private static BrandLocaleLookup twoLanguageTenant() {
+        return lookupWith(
+                TenantLocaleSet.union(List.of(new TenantLocaleSet.BrandChoice(List.of("ru", "uz-Latn"), "ru"))));
+    }
+
+    private static BrandLocaleLookup lookupWith(TenantLocaleSet set) {
+        return new BrandLocaleLookup() {
+            @Override
+            public Optional<String> brandDefaultLocale(UUID tenantId, UUID brandId) {
+                return Optional.of(set.defaultLocale());
+            }
+
+            @Override
+            public TenantLocaleSet tenantLocaleSet(UUID tenantId) {
+                return set;
+            }
+        };
+    }
+
+    private static OrderOutcomeReasonService.Authorship by() {
+        return OrderOutcomeReasonService.Authorship.of(uz.horecaos.platform.audit.api.ActorRef.user("tester", null));
+    }
+
+    private static OrderOutcomeReasonService.CreateReason cancellation(Map<String, String> texts) {
+        return new OrderOutcomeReasonService.CreateReason(
+                OutcomeReasonKind.CANCELLATION,
+                OutcomeSystemCategory.CUSTOMER_CANCELLED,
+                "Customer cancelled",
+                StockDisposition.RELEASE,
+                LiabilityParty.CUSTOMER,
+                CustomerRefund.FULL,
+                null,
+                texts);
     }
 
     private static ReasonRow row(UUID id, OutcomeReasonKind kind, int version) {

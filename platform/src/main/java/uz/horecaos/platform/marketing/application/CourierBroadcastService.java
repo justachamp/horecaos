@@ -17,6 +17,7 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
+import uz.horecaos.platform.marketing.api.CourierContactSource;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCourierBroadcastStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCourierBroadcastStore.CourierBroadcastRow;
 import uz.horecaos.platform.web.api.ApiException;
@@ -37,15 +38,24 @@ public class CourierBroadcastService {
     /** The one channel V0307's own CHECK allows today. */
     private static final String CHANNEL = "SMS";
 
+    /** The stable code for a broadcast nobody can be addressed for (see {@link CourierContactSource}). */
+    public static final String COURIERS_NOT_ADDRESSABLE = "COURIER_CONTACTS_NOT_WIRED";
+
     private final JdbcCourierBroadcastStore store;
     private final CampaignMessagePort messages;
+    private final CourierContactSource couriers;
     private final AuditRecorder audit;
     private final Clock clock;
 
     public CourierBroadcastService(
-            JdbcCourierBroadcastStore store, CampaignMessagePort messages, AuditRecorder audit, Clock clock) {
+            JdbcCourierBroadcastStore store,
+            CampaignMessagePort messages,
+            CourierContactSource couriers,
+            AuditRecorder audit,
+            Clock clock) {
         this.store = store;
         this.messages = messages;
+        this.couriers = couriers;
         this.audit = audit;
         this.clock = clock;
     }
@@ -106,8 +116,16 @@ public class CourierBroadcastService {
         Instant now = clock.instant();
         int recipientCount = store.countTarget(tenantId, broadcast.targetKind(), broadcast.targetGroupId());
 
-        if (!messages.isWired(CHANNEL)) {
-            String reason = "No ADR 0020 delivery path is wired for SMS yet";
+        // Both halves of "can this reach a courier" and the first one the same
+        // answer a campaign reads (ADR 0146 Decision 8): is there a gateway
+        // account for this brand, and has it been cleared to carry courier
+        // traffic. The second is the one nothing can satisfy yet — there is no
+        // number to send a courier's message to — and it refuses just as visibly.
+        CampaignMessagePort.Wiring wiring =
+                messages.wiring(tenantId, broadcast.brandId(), CHANNEL, CampaignMessagePort.PURPOSE_COURIER);
+        String refusal = !wiring.isWired() ? wiring.reason() : couriers.isWired() ? null : COURIERS_NOT_ADDRESSABLE;
+        if (refusal != null) {
+            String reason = "No SMS delivery path can reach couriers for this brand (%s)".formatted(refusal);
             store.recordFailed(tenantId, broadcastId, reason, now);
             audit.record(AuditFact.of("MARKETING_COURIER_BROADCAST_SEND_FAILED", AuditClass.BUSINESS)
                     .by(ActorRef.user(actorId.toString(), null))

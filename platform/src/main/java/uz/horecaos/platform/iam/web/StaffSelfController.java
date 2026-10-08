@@ -185,7 +185,7 @@ public class StaffSelfController {
             @NotBlank @Size(max = 100) String firstName,
             @Size(max = 100) @Nullable String lastName,
             @Size(max = 40) @Nullable String phone,
-            @Size(max = 8) @Nullable String uiLocale,
+            @Size(max = 16) @Nullable String uiLocale,
             @Nullable List<@Size(max = 8) String> spokenLanguages,
             @Nullable Boolean removePhoto) {
 

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/marketing.events/ScenarioStepDecided.v1.schema.json",
+  "title": "ScenarioStepDecided v1 payload",
+  "description": "A scenario's action selection made a choice for one guest at one step (ADR 0112): the step was sent, or it was blocked for a stated reason. Ids, the step number, the decision and a reason code from a closed set. Never a contact value, a rendered message, or the reason's sentence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["campaignId", "brandId", "customerAccountId", "stepSequence", "decision"],
+  "properties": {
+    "campaignId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "customerAccountId": { "type": "string", "format": "uuid" },
+    "stepSequence": { "type": "integer", "minimum": 1 },
+    "decision": { "type": "string", "enum": ["SENT", "BLOCKED"] },
+    "refusalReason": {
+      "type": ["string", "null"],
+      "enum": [
+        "ACCOUNT_NOT_ACTIVE",
+        "CONSENT_WITHHELD",
+        "SUPPRESSED",
+        "FREQUENCY_CAP_REACHED",
+        "NO_VERIFIED_ENDPOINT",
+        "CAMPAIGN_HALTED",
+        "SCENARIO_CONFLICT",
+        "SCENARIO_PRIORITY_LOST",
+        "SCENARIO_STOPPED",
+        null
+      ]
+    }
+  }
+}

@@ -2,17 +2,19 @@ package uz.horecaos.platform.commercial.infrastructure;
 
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Component;
 import uz.horecaos.platform.commercial.application.CardCharger;
 
 /**
- * The only {@link CardCharger} wired today (ADR 0095 item 8): HorecaOS has
- * no Click or Payme merchant account of its own yet, so every charge
- * attempt answers {@link CardCharger.Outcome.NotConfigured}. A tenant on
- * {@code CARD} is then collected exactly like {@code INVOICE} — the
- * remainder stays due until a real adapter replaces this one.
+ * What a charger says when no merchant account is connected (ADR 0095 item 8):
+ * every charge attempt answers {@link CardCharger.Outcome.NotConfigured}. A
+ * tenant on {@code CARD} is then collected exactly like {@code INVOICE} — the
+ * remainder stays due.
+ *
+ * <p>No longer a Spring bean: {@code PlatformCardGateway} is the one charger the
+ * application sees, and it answers exactly this when no platform card
+ * installation is active. This class stays as the reference for that answer and
+ * as the charger the wallet's own unit tests build by hand.
  */
-@Component
 public class NotConfiguredCardCharger implements CardCharger {
 
     @Override

@@ -1,6 +1,6 @@
-import { signal } from '@angular/core';
+import { Provider, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
@@ -9,7 +9,9 @@ import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
-import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing-api';
+import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '../marketing-api';
+import { OffersApi } from '../offers/offers-api';
+import { ScenariosApi } from '../scenarios/scenarios-api';
 import { CampaignDetailPane } from './campaign-detail-pane';
 
 const SCOPE: BrandScope = { tenantId: 'tenant-1', brandId: 'brand-1' };
@@ -47,9 +49,13 @@ function campaign(overrides: Partial<CampaignView> = {}): CampaignView {
     scheduledAt: null,
     haltedReason: null,
     isWired: true,
+    notWiredReason: null,
     createdAt: '2026-09-01T08:00:00Z',
     updatedAt: '2026-09-01T08:00:00Z',
     version: 1,
+    kind: 'BROADCAST',
+    controlGroupPercent: null,
+    supersedesCampaignId: null,
     ...overrides,
   };
 }
@@ -76,10 +82,12 @@ describe('CampaignDetailPane', () => {
       total: 0,
       refusedByReason: {},
     },
+    options: { recipients?: readonly RecipientView[]; providers?: readonly Provider[] } = {},
   ): Promise<void> {
     api = {
       getCampaign: vi.fn().mockResolvedValue(campaignView),
-      recipients: vi.fn().mockResolvedValue([]),
+      recipients: vi.fn().mockResolvedValue(options.recipients ?? []),
+      listChannels: vi.fn().mockResolvedValue([]),
       recipientCounts: vi.fn().mockResolvedValue(counts),
       estimate: vi.fn(),
       submit: vi.fn(),
@@ -104,6 +112,7 @@ describe('CampaignDetailPane', () => {
           },
         },
         { provide: Auth, useValue: { subject: signal(subject) } },
+        ...(options.providers ?? []),
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -218,6 +227,260 @@ describe('CampaignDetailPane', () => {
     const host = fixture.nativeElement as HTMLElement;
 
     expect(host.querySelector('[data-testid="campaign-unwired-warning"]')).not.toBeNull();
+  });
+
+  // ----------------------------------------- ADR 0146: the SMS gate, in words, before launch
+
+  describe('a channel that cannot deliver, honestly', () => {
+    const launchButton = (host: HTMLElement) =>
+      Array.from(host.querySelectorAll('button')).find((b) =>
+        b.textContent?.trim().toLowerCase().includes('launch'),
+      ) as HTMLButtonElement;
+
+    it('says why an approved SMS campaign cannot be launched: the account is not cleared to carry marketing', async () => {
+      await render(
+        OTHER_ID,
+        campaign({
+          status: 'APPROVED',
+          channel: 'SMS',
+          isWired: false,
+          notWiredReason: 'SMS_PURPOSE_NOT_PERMITTED',
+        }),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      const warning = host.querySelector('[data-testid="campaign-unwired-warning"]')!;
+      expect(warning.textContent).toContain('not cleared to carry marketing messages');
+    });
+
+    it('does not offer a launch it already knows will be refused', async () => {
+      await render(
+        OTHER_ID,
+        campaign({
+          status: 'APPROVED',
+          isWired: false,
+          notWiredReason: 'SMS_PURPOSE_NOT_PERMITTED',
+        }),
+      );
+
+      expect(launchButton(fixture.nativeElement as HTMLElement).disabled).toBe(true);
+    });
+
+    it('still offers launch where the channel can deliver', async () => {
+      await render(OTHER_ID, campaign({ status: 'APPROVED', channel: 'MESSAGING_APP' }));
+
+      expect(launchButton(fixture.nativeElement as HTMLElement).disabled).toBe(false);
+    });
+
+    it('warns an author before the second signature is spent, while the campaign is still a draft', async () => {
+      await render(
+        AUTHOR_ID,
+        campaign({
+          status: 'DRAFT',
+          createdBy: AUTHOR_ID,
+          isWired: false,
+          notWiredReason: 'NO_DELIVERY_ADAPTER',
+          channel: 'EMAIL',
+        }),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('[data-testid="campaign-unwired-warning"]')!.textContent).toContain(
+        'mail service sends staff invitations',
+      );
+    });
+
+    it('turns the server’s own refusal into the same sentence when the wiring changed after the page was read', async () => {
+      await render(OTHER_ID, campaign({ status: 'APPROVED', channel: 'SMS' }));
+      api['launch'] = vi.fn().mockRejectedValue(
+        new ApiError(
+          ApiErrorCode.UNPROCESSABLE_STATE,
+          422,
+          {
+            status: 422,
+            detail:
+              'No ADR 0020 delivery path is wired for SMS for this brand (SMS_PURPOSE_NOT_PERMITTED); this campaign cannot be launched',
+          } as never,
+          null,
+        ),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      launchButton(host).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.textContent).toContain('not cleared to carry marketing messages');
+    });
+  });
+
+  // ---------------------------------------------------------- ADR 0146: delivery evidence
+
+  describe('what the delivery path knows about each message', () => {
+    function recipient(overrides: Partial<RecipientView> = {}): RecipientView {
+      return {
+        customerAccountId: 'acct-1',
+        status: 'QUEUED',
+        notificationId: 'n-1',
+        refusalReason: null,
+        deferredUntil: null,
+        terminalStatus: null,
+        deliveryState: null,
+        receiptState: null,
+        segmentsBilled: null,
+        ...overrides,
+      };
+    }
+
+    it('says "handed to the operator" for a message the gateway accepted and reported nothing on: neither delivered nor failed', async () => {
+      await render(OTHER_ID, campaign({ status: 'SENT' }), undefined, {
+        recipients: [recipient({ deliveryState: 'HANDED_TO_OPERATOR', segmentsBilled: 2 })],
+      });
+      const host = fixture.nativeElement as HTMLElement;
+
+      const row = host.querySelector('[data-testid="recipient-row"]')!;
+      expect(row.textContent).toContain('Handed to the operator');
+      expect(row.textContent).not.toContain('Delivered');
+      expect(row.textContent).toContain('2 segment(s) billed');
+    });
+
+    it('says delivered only when the gateway said so, and failed when it said that', async () => {
+      await render(OTHER_ID, campaign({ status: 'SENT' }), undefined, {
+        recipients: [
+          recipient({ customerAccountId: 'a', deliveryState: 'DELIVERED' }),
+          recipient({ customerAccountId: 'b', deliveryState: 'FAILED' }),
+          recipient({ customerAccountId: 'c', deliveryState: 'NO_RECEIPT' }),
+        ],
+      });
+      const rows = [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="recipient-row"]'),
+      ].map((r) => r.textContent);
+
+      expect(rows[0]).toContain('Delivered');
+      expect(rows[1]).toContain('Failed');
+      expect(rows[2]).toContain('No receipt came back');
+    });
+
+    it('calls it evidence, not a promise', async () => {
+      await render(OTHER_ID, campaign({ status: 'SENT' }), undefined, {
+        recipients: [recipient({ deliveryState: 'DELIVERED' })],
+      });
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="recipient-delivery-hint"]',
+        )!.textContent,
+      ).toContain('not a promise');
+    });
+
+    it('keeps showing what a refused recipient was refused for, in words', async () => {
+      await render(OTHER_ID, campaign({ status: 'SENT' }), undefined, {
+        recipients: [recipient({ status: 'REFUSED', refusalReason: 'SUPPRESSED' })],
+      });
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="recipient-row"]')!
+          .textContent,
+      ).toContain('Suppressed');
+    });
+  });
+
+  // ------------------------------------------------------------ ADR 0112: a scenario
+
+  describe('a scenario campaign', () => {
+    const scenarioView = {
+      campaign: {
+        campaignId: 'campaign-1',
+        name: 'Win back',
+        status: 'DRAFT',
+        consentPurpose: 'MARKETING_PROMOTIONS',
+        controlGroupPercent: null,
+        supersedesCampaignId: null,
+        createdAt: '2026-09-01T08:00:00Z',
+      },
+      steps: [],
+      participants: {},
+      decisions: {},
+    };
+    const scenarioProviders = (): Provider[] => [
+      {
+        provide: ScenariosApi,
+        useValue: {
+          get: vi.fn().mockResolvedValue(scenarioView),
+          decisions: vi.fn().mockResolvedValue([]),
+          results: vi.fn(),
+          revise: vi.fn(),
+        },
+      },
+      { provide: OffersApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+    ];
+
+    it('shows its steps and decisions beside the lifecycle every campaign has', async () => {
+      await render(
+        AUTHOR_ID,
+        campaign({ kind: 'SCENARIO', status: 'DRAFT', createdBy: AUTHOR_ID }),
+        undefined,
+        {
+          providers: scenarioProviders(),
+        },
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('q-scenario-panel')).not.toBeNull();
+      expect(host.querySelector('[data-testid="campaign-kind"]')!.textContent).toContain(
+        'Scenario',
+      );
+      // The lifecycle is the one a broadcast has: estimate first.
+      expect(
+        Array.from(host.querySelectorAll('button')).some((b) =>
+          b.textContent?.toLowerCase().includes('estimate'),
+        ),
+      ).toBe(true);
+    });
+
+    it('shows no scenario panel for a broadcast', async () => {
+      await render(AUTHOR_ID, campaign({ kind: 'BROADCAST', createdBy: AUTHOR_ID }));
+
+      expect((fixture.nativeElement as HTMLElement).querySelector('q-scenario-panel')).toBeNull();
+    });
+
+    it('opens the editor on this draft from the panel’s "edit steps"', async () => {
+      await render(
+        AUTHOR_ID,
+        campaign({ kind: 'SCENARIO', status: 'DRAFT', createdBy: AUTHOR_ID }),
+        undefined,
+        {
+          providers: scenarioProviders(),
+        },
+      );
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="scenario-edit"]')!
+        .click();
+
+      expect(navigate).toHaveBeenCalledWith(['/marketing/campaigns'], {
+        queryParams: { scenario: 'campaign-1' },
+      });
+    });
+
+    it('moves to a newly drafted version of the scenario', async () => {
+      await render(
+        AUTHOR_ID,
+        campaign({ kind: 'SCENARIO', status: 'SENDING', createdBy: AUTHOR_ID }),
+        undefined,
+        {
+          providers: scenarioProviders(),
+        },
+      );
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      (
+        fixture.componentInstance as unknown as { onScenarioRevised(id: string): void }
+      ).onScenarioRevised('v2');
+
+      expect(navigate).toHaveBeenCalledWith(['/marketing/campaigns', 'v2']);
+    });
   });
 
   it('T18: renders scheduledAt as a fact when a campaign is armed for later', async () => {

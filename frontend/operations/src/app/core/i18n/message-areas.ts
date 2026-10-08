@@ -40,6 +40,7 @@ export const MESSAGE_AREAS = [
   'couriers',
   'device',
   'wallboard',
+  'map',
 ] as const;
 
 export type MessageArea = (typeof MESSAGE_AREAS)[number];
@@ -68,6 +69,7 @@ const AREA_BY_NAMESPACE: Readonly<Record<string, MessageArea>> = {
   invite: 'auth',
   forgotPassword: 'auth',
   resetPassword: 'auth',
+  mfa: 'auth',
 
   today: 'today',
   myWork: 'today',
@@ -118,6 +120,8 @@ const AREA_BY_PREFIX: Readonly<Record<string, MessageArea>> = {
   'orders.severity': 'core',
   'orders.status': 'core',
   'orders.table': 'core',
+  // The map and address components (ADR 0145): used only by lazy routes, so not core.
+  'ui.map': 'map',
 };
 
 /** The area a key is stored in, or `undefined` for a key whose namespace nobody has assigned. */

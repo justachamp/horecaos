@@ -104,6 +104,7 @@ class OperationsDeliveryTariffControllerEndpointTests {
                         + "fulfillment.delivery_tariff_time_rules, fulfillment.delivery_tariff_discounts, "
                         + "fulfillment.delivery_tariff_versions, fulfillment.delivery_tariffs CASCADE")
                 .update();
+        jdbc.sql("TRUNCATE TABLE integration.installations CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         roleRegistry.synchronize();
 
@@ -135,6 +136,47 @@ class OperationsDeliveryTariffControllerEndpointTests {
                 .containsEntry("delivery.tariff.registered", 1L)
                 .containsEntry("delivery.tariff.version.drafted", 1L)
                 .containsEntry("delivery.tariff.version.activated", 1L);
+    }
+
+    @Test
+    void aRoadTariffOnAnApplicationWithTheEngineOffSaysItIsFallingBack() throws Exception {
+        // The default: no `routing` profile, HORECAOS_ROUTING_OSRM_ENABLED unset. A tenant
+        // can still draw a ROAD tariff with "use platform routing" and activate it, and the
+        // screen's read says, from configuration, what that will do until the engine is on.
+        UUID tariffId = registerTariff(OWNER);
+        MvcResult drafted = mvc.perform(post(tariffsPath(TENANT) + "/" + tariffId + "/versions")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "draft-road-off")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currency":"UZS","feeSource":"TARIFF","distanceMode":"ROAD",
+                                 "roadFactorBasisPoints":13000,"routingProviderInstallationId":null,
+                                 "usePlatformRouting":true,
+                                 "maxDistanceMeters":5000,"minFeeMinor":0,"maxFeeMinor":null,
+                                 "distanceAccrual":"STARTED_KILOMETRE","feeRoundingStepMinor":null,
+                                 "feeRoundingRule":null,
+                                 "bands":[{"bandSet":null,"fromMeters":0,"toMeters":5000,"baseMinor":10000,"perKmMinor":0}],
+                                 "timeRules":[],"discounts":[]}
+                                """))
+                .andReturn();
+        assertThat(drafted.getResponse().getStatus()).isEqualTo(200);
+        mvc.perform(post(tariffsPath(TENANT) + "/" + tariffId + "/versions/1/activate")
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "activate-road-off"));
+
+        MvcResult detail = mvc.perform(get(tariffsPath(TENANT) + "/" + tariffId).with(tokenFor(OWNER)))
+                .andReturn();
+        String body = detail.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"basis\":\"STRAIGHT_LINE_FALLBACK\"")
+                .contains("\"basisEvidence\":\"CONFIGURATION\"")
+                .contains("\"engineEnabled\":false")
+                .contains("\"installationStatus\":\"ACTIVE\"");
+
+        MvcResult engine = mvc.perform(
+                        get(tariffsPath(TENANT) + "/routing-engine").with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(engine.getResponse().getContentAsString()).contains("\"engineEnabled\":false");
     }
 
     @Test

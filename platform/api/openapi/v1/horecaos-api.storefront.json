@@ -226,6 +226,39 @@
         },
         "type" : "object"
       },
+      "Banner" : {
+        "properties" : {
+          "imageReference" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "offerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "presentedOfferId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CallbackRequestResponse" : {
+        "properties" : {
+          "leadId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "leadId" ],
+        "type" : "object"
+      },
       "CartLineResponse" : {
         "properties" : {
           "comboPicks" : {
@@ -516,6 +549,25 @@
           }
         },
         "required" : [ "channel", "fulfillmentMode", "locationId" ],
+        "type" : "object"
+      },
+      "CustomerCallbackRequest" : {
+        "properties" : {
+          "forCompany" : {
+            "type" : "boolean"
+          },
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "phone" ],
         "type" : "object"
       },
       "CustomerSessionResponse" : {
@@ -1715,6 +1767,62 @@
         },
         "type" : "object"
       },
+      "PlatformLocaleEntryResponse" : {
+        "properties" : {
+          "catalogCode" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "face" : {
+            "type" : "string"
+          },
+          "fallbackRank" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "inputAliases" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "script" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "tiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformLocalesResponse" : {
+        "properties" : {
+          "fallback" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformLocaleEntryResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "PricedCartResponse" : {
         "properties" : {
           "appliedPromotions" : {
@@ -2536,13 +2644,31 @@
         "description" : "Keycloak access token issued for the horecaos-api audience",
         "scheme" : "bearer",
         "type" : "http"
+      },
+      "storefrontAppId" : {
+        "description" : "The registered app's id. An identifier, not a secret: it appears in a browser bundle by design. Sent alongside the customer's session, never instead of it.",
+        "in" : "header",
+        "name" : "X-Storefront-App-Id",
+        "type" : "apiKey"
+      },
+      "storefrontAppSecret" : {
+        "description" : "A confidential client's secret. Server-side only; a public client has none and must not send one.",
+        "in" : "header",
+        "name" : "X-Storefront-App-Secret",
+        "type" : "apiKey"
       }
     }
   },
   "info" : {
-    "description" : "Tenant-aware APIs for the HorecaOS SaaS commerce and delivery platform.",
+    "description" : "The HorecaOS storefront contract: the one API every storefront is built against, ours and a vendor's alike. The core does not change per storefront.\n\n## Which storefront is asking\n\nEvery request names the app that is asking, in addition to the customer's own session and never instead of it: the app says which storefront, the session says which customer. Send the app's id in `X-Storefront-App-Id`. Anonymous browsing stays anonymous for the customer, and requires an app identity all the same, so the platform can meter, rate-limit and revoke.\n\nRollout: the header is accepted and checked now, and a request without it still works while the platform counts how many arrive unattributed. It becomes required, with notice under the deprecation policy below, once that count has stayed at zero.\n\n## Public and confidential clients\n\nA **public client** is a browser-only storefront. It holds no secret, because a browser keeps none: it registers an app id and an origin allowlist, and the platform checks each request's `Origin` against that list. It is attributable and revocable. It is **not authenticated**, in the sense a browser cannot deliver, and nothing in this contract says otherwise.\n\nA **confidential client** is a server-backed storefront. It registers a secret, sent in `X-Storefront-App-Secret`, and gets what that earns: higher quotas and access to any endpoint judged unsafe for a public client. Never put that secret in a browser bundle; a bundled secret is not one.\n\nA tenant authorises an app for a brand and can revoke it. Revoking takes effect on the app's next request. A refused app is told which thing is wrong: `APP_UNREGISTERED`, `APP_SUSPENDED`, `APP_NOT_AUTHORISED`, `APP_REVOKED`, `APP_ORIGIN_MISMATCH`, `APP_SECRET_INVALID` or `APP_IDENTITY_REQUIRED`.\n\n## What is promised\n\nEach operation carries `x-horecaos-surface`. **`published`** operations are the guaranteed public surface: a published path is never removed within v1, and change is additive only. **`internal`** operations are channel-specific (the Telegram and dine-in QR routes) and may change without notice; do not build on them.\n\n## Deprecation policy\n\nA breaking change to a published path is a new major version served alongside the old one. The old version keeps working for at least **12 months** from the day the replacement is announced; an operation scheduled for removal is marked `deprecated` in this document from that day. Nothing in the published surface is removed inside `v1`.\n",
     "title" : "HorecaOS Platform API",
-    "version" : "v1"
+    "version" : "v1",
+    "x-horecaos-contract" : {
+      "appIdHeader" : "X-Storefront-App-Id",
+      "appSecretHeader" : "X-Storefront-App-Secret",
+      "deprecationWindowMonths" : 12,
+      "publishedPathsNeverRemovedWithin" : "v1"
+    }
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2571,7 +2697,8 @@
           }
         },
         "summary" : "The tenant and channel this hostname answers on",
-        "tags" : [ "Storefront channel hostname lookup" ]
+        "tags" : [ "Storefront channel hostname lookup" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/dine-in/qr/token-exchanges" : {
@@ -2601,7 +2728,8 @@
           }
         },
         "summary" : "Exchange a scanned table code for a guest token",
-        "tags" : [ "QR dine-in" ]
+        "tags" : [ "QR dine-in" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/dine-in/sessions" : {
@@ -2639,7 +2767,8 @@
           }
         },
         "summary" : "Seat yourself at a free table",
-        "tags" : [ "QR dine-in" ]
+        "tags" : [ "QR dine-in" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/dine-in/sessions/{sessionId}" : {
@@ -2675,7 +2804,8 @@
           }
         },
         "summary" : "The running bill at the guest's own table",
-        "tags" : [ "QR dine-in" ]
+        "tags" : [ "QR dine-in" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests" : {
@@ -2711,7 +2841,8 @@
           }
         },
         "summary" : "Ask for the bill",
-        "tags" : [ "QR dine-in" ]
+        "tags" : [ "QR dine-in" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds" : {
@@ -2757,7 +2888,29 @@
           }
         },
         "summary" : "Attach a just-placed order to the table's bill",
-        "tags" : [ "QR dine-in" ]
+        "tags" : [ "QR dine-in" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/locales" : {
+      "get" : {
+        "description" : "The same answer as the operations surface, readable before an account exists, for the storefronts' and the mobile app's own clients.",
+        "operationId" : "storefront",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformLocalesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform's languages (storefront)",
+        "tags" : [ "Locales" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}" : {
@@ -2794,7 +2947,8 @@
           }
         },
         "summary" : "One points balance",
-        "tags" : [ "Loyalty" ]
+        "tags" : [ "Loyalty" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries" : {
@@ -2834,7 +2988,8 @@
           }
         },
         "summary" : "The movements behind a balance",
-        "tags" : [ "Loyalty" ]
+        "tags" : [ "Loyalty" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/pickup-locations" : {
@@ -2864,7 +3019,8 @@
           }
         },
         "summary" : "Find the nearest pickup locations with a published storefront menu",
-        "tags" : [ "Storefront pickup locations" ]
+        "tags" : [ "Storefront pickup locations" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/analytics" : {
@@ -2901,7 +3057,8 @@
           }
         },
         "summary" : "This brand's analytics installs, for client-side injection",
-        "tags" : [ "Storefront analytics" ]
+        "tags" : [ "Storefront analytics" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts" : {
@@ -2948,7 +3105,8 @@
           }
         },
         "summary" : "Open a cart at one location",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}" : {
@@ -2993,7 +3151,8 @@
           }
         },
         "summary" : "Read a cart",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination" : {
@@ -3038,7 +3197,8 @@
           }
         },
         "summary" : "Which saved address this cart is going to",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       },
       "put" : {
         "description" : "Names one of the caller's own saved addresses, never an address typed into this request: ADR 0015 owns what an address is, including whether it has a coordinate and why. The chosen address is copied on to the cart, so editing or archiving it afterwards cannot change where an order in flight goes. Clears any attached quote, because ADR 0037 prices delivery from the destination and a basket priced to one door is not priced to another.",
@@ -3091,7 +3251,8 @@
           }
         },
         "summary" : "Say where a delivery cart is going",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}" : {
@@ -3142,7 +3303,8 @@
           }
         },
         "summary" : "Remove a line",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       },
       "put" : {
         "description" : "Clears any attached quote in the same statement that bumps the cart version. A cart holding a price for contents it no longer has is the shortest path to charging for a basket nobody agreed to.",
@@ -3202,7 +3364,8 @@
           }
         },
         "summary" : "Add or change a line",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/location" : {
@@ -3257,7 +3420,8 @@
           }
         },
         "summary" : "Rebuild this cart at another location",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method" : {
@@ -3312,7 +3476,8 @@
           }
         },
         "summary" : "Select how the cart will be paid",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-methods" : {
@@ -3357,7 +3522,8 @@
           }
         },
         "summary" : "What this cart may be paid with",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/pricing" : {
@@ -3402,7 +3568,8 @@
           }
         },
         "summary" : "Price the cart and bind the quote to it",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code" : {
@@ -3447,7 +3614,8 @@
           }
         },
         "summary" : "Remove the cart's applied promo code",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       },
       "post" : {
         "description" : "ADR 0072. Checked read-only against live coupon state before it is stored — active, in its window, and not exhausted — and checked again, independently, on every subsequent price. A cart already carrying a code has it replaced rather than refused: this platform supports at most one applied code per cart. Clears any attached quote, because a code changes what the total will be.",
@@ -3500,7 +3668,8 @@
           }
         },
         "summary" : "Apply a promo code to the cart",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
@@ -3553,7 +3722,8 @@
           }
         },
         "summary" : "Bind a dine-in cart to the table the guest scanned",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts" : {
@@ -3615,7 +3785,8 @@
           }
         },
         "summary" : "Turn a priced cart into an order",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations" : {
@@ -3662,7 +3833,8 @@
           }
         },
         "summary" : "Turn a verified number and a token into a customer account",
-        "tags" : [ "Customer identity" ]
+        "tags" : [ "Customer identity" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions" : {
@@ -3709,7 +3881,8 @@
           }
         },
         "summary" : "Turn a proven number into a session",
-        "tags" : [ "Customer identity" ]
+        "tags" : [ "Customer identity" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current" : {
@@ -3739,7 +3912,8 @@
           }
         },
         "summary" : "Sign out",
-        "tags" : [ "Customer identity" ]
+        "tags" : [ "Customer identity" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges" : {
@@ -3786,7 +3960,8 @@
           }
         },
         "summary" : "Ask for a one-time code",
-        "tags" : [ "Customer identity" ]
+        "tags" : [ "Customer identity" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts" : {
@@ -3841,7 +4016,8 @@
           }
         },
         "summary" : "Submit a code",
-        "tags" : [ "Customer identity" ]
+        "tags" : [ "Customer identity" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee" : {
@@ -3896,7 +4072,8 @@
           }
         },
         "summary" : "Resolve the delivery fee for one point",
-        "tags" : [ "Delivery fee" ]
+        "tags" : [ "Delivery fee" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes" : {
@@ -3948,7 +4125,8 @@
           }
         },
         "summary" : "Which fulfilment modes a channel sells at a location, and which are usable now",
-        "tags" : [ "Serviceability" ]
+        "tags" : [ "Serviceability" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu" : {
@@ -4008,7 +4186,8 @@
           }
         },
         "summary" : "The live menu for one location",
-        "tags" : [ "Storefront catalog" ]
+        "tags" : [ "Storefront catalog" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/profile" : {
@@ -4053,7 +4232,8 @@
           }
         },
         "summary" : "A branch's own published display name and address",
-        "tags" : [ "Storefront location profile" ]
+        "tags" : [ "Storefront location profile" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability" : {
@@ -4121,7 +4301,8 @@
           }
         },
         "summary" : "Resolve serviceability for a channel and fulfilment mode",
-        "tags" : [ "Serviceability" ]
+        "tags" : [ "Serviceability" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me" : {
@@ -4158,7 +4339,8 @@
           }
         },
         "summary" : "The caller's own account and profile",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       },
       "patch" : {
         "description" : "The three fields a customer owns. Status, identity partition, merge target and policy version are not among them: each decides something about the account, and none is the account holder's to set. Under TENANT_SHARED the change is visible at every brand of the tenant, which is what profileScope says.",
@@ -4203,7 +4385,8 @@
           }
         },
         "summary" : "Change the caller's own display name, language, or timezone",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses" : {
@@ -4243,7 +4426,8 @@
           }
         },
         "summary" : "The caller's own saved addresses",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       },
       "post" : {
         "description" : "The coordinate source is required and must agree with the coordinates: an address awaiting geocoding and one that legitimately has no point — a mahalla house given by its ориентир — are different states, and only one is worth retrying. A customer may claim CUSTOMER_PIN, NOT_GEOCODED or LANDMARK_ONLY; the operator and geocoder sources are not theirs to assert.",
@@ -4288,7 +4472,8 @@
           }
         },
         "summary" : "Save a new address",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}" : {
@@ -4326,7 +4511,8 @@
           }
         },
         "summary" : "Remove one of the caller's own addresses",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       },
       "get" : {
         "description" : "Not found for an address that is somebody else's, is archived, or never existed. The three are one answer, because telling them apart is how an address id becomes probeable.",
@@ -4369,7 +4555,8 @@
           }
         },
         "summary" : "One of the caller's own saved addresses",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       },
       "put" : {
         "description" : "The whole address, never a field of it: the lines live inside one encrypted document, and the coordinate and its source have to move together. Requires If-Match, so a second tab loses loudly.",
@@ -4422,7 +4609,56 @@
           }
         },
         "summary" : "Replace one of the caller's own addresses",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests" : {
+      "post" : {
+        "description" : "Creates one lead in the call centre's queue, linked to the caller's own account. 202: what was created is a work item for a person, not a call. The number to ring is in the body. A guest asking on behalf of a company says so with forCompany=true, which files it as a catering enquiry.",
+        "operationId" : "request",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CustomerCallbackRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CallbackRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask the restaurant to call me back",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request" : {
@@ -4459,7 +4695,8 @@
           }
         },
         "summary" : "The caller's own current erasure request, if any",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       },
       "post" : {
         "description" : "Records the request; it does not erase anything by itself (ADR 0029, ADR 0044). Execution is a separate, staff-performed act, because a real erasure has to be checked against things this endpoint does not decide on its own — an open dispute, a pending delivery, a legal hold. Idempotent: calling this again while a request is already outstanding, or after one already completed, returns that request rather than raising a duplicate.",
@@ -4494,7 +4731,8 @@
           }
         },
         "summary" : "Ask to be forgotten",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request/cancel" : {
@@ -4531,7 +4769,8 @@
           }
         },
         "summary" : "Withdraw the caller's own PENDING erasure request",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites" : {
@@ -4568,7 +4807,8 @@
           }
         },
         "summary" : "The products this customer marked",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}" : {
@@ -4606,7 +4846,8 @@
           }
         },
         "summary" : "Unmark a product",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       },
       "put" : {
         "description" : "Idempotent: marking twice is one fact, so a double tap or a retried request is a no-op rather than an error. A product that is not this brand's is refused -- a stale menu in a customer's hand is an ordinary way to reach that.",
@@ -4642,7 +4883,8 @@
           }
         },
         "summary" : "Mark a product",
-        "tags" : [ "Customer self-service" ]
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders" : {
@@ -4697,7 +4939,8 @@
           }
         },
         "summary" : "The caller's own orders at this brand, newest first",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}" : {
@@ -4742,7 +4985,8 @@
           }
         },
         "summary" : "Read one of the caller's own orders",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations" : {
@@ -4797,7 +5041,8 @@
           }
         },
         "summary" : "Cancel an order before it is confirmed",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions" : {
@@ -4860,7 +5105,8 @@
           }
         },
         "summary" : "Open a payment attempt and get its checkout surface",
-        "tags" : [ "Storefront payments" ]
+        "tags" : [ "Storefront payments" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder" : {
@@ -4905,7 +5151,8 @@
           }
         },
         "summary" : "Whether this order can be ordered again, and with what",
-        "tags" : [ "Storefront ordering" ]
+        "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review" : {
@@ -4960,7 +5207,95 @@
           }
         },
         "summary" : "Rate a completed order, once",
-        "tags" : [ "Reviews" ]
+        "tags" : [ "Reviews" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers" : {
+      "get" : {
+        "description" : "Counts each returned banner against today's cap. A banner the customer closed, one past the daily cap, and one whose offer has left its validity window are not returned.",
+        "operationId" : "poll_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "surface",
+          "required" : false,
+          "schema" : {
+            "default" : "STOREFRONT",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/Banner"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The banners to show this customer now",
+        "tags" : [ "Presented offers" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals" : {
+      "post" : {
+        "operationId" : "dismiss",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "presentedOfferId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "The customer closed a banner; it is not shown again",
+        "tags" : [ "Presented offers" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
@@ -4997,7 +5332,8 @@
           }
         },
         "summary" : "The caller's own referral code, and their own redemption if they used one",
-        "tags" : [ "Referrals" ]
+        "tags" : [ "Referrals" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions" : {
@@ -5044,7 +5380,8 @@
           }
         },
         "summary" : "Redeem a friend's referral code",
-        "tags" : [ "Referrals" ]
+        "tags" : [ "Referrals" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews" : {
@@ -5097,7 +5434,8 @@
           }
         },
         "summary" : "The caller's own reviews at this brand, newest first",
-        "tags" : [ "Reviews" ]
+        "tags" : [ "Reviews" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq" : {
@@ -5145,7 +5483,8 @@
           }
         },
         "summary" : "The brand's published FAQ",
-        "tags" : [ "Storefront support" ]
+        "tags" : [ "Storefront support" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links" : {
@@ -5185,7 +5524,8 @@
           }
         },
         "summary" : "Where a customer can reach this brand",
-        "tags" : [ "Storefront support" ]
+        "tags" : [ "Storefront support" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link" : {
@@ -5215,7 +5555,8 @@
           }
         },
         "summary" : "Unlink the customer's Telegram chat",
-        "tags" : [ "Customer Telegram linking" ]
+        "tags" : [ "Customer Telegram linking" ],
+        "x-horecaos-surface" : "internal"
       },
       "get" : {
         "operationId" : "status",
@@ -5249,7 +5590,8 @@
           }
         },
         "summary" : "Whether this account currently has a linked Telegram chat",
-        "tags" : [ "Customer Telegram linking" ]
+        "tags" : [ "Customer Telegram linking" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link-codes" : {
@@ -5286,7 +5628,8 @@
           }
         },
         "summary" : "Mint a Telegram deep-link code",
-        "tags" : [ "Customer Telegram linking" ]
+        "tags" : [ "Customer Telegram linking" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-link" : {
@@ -5333,7 +5676,8 @@
           }
         },
         "summary" : "Link via a verified Telegram Mini App session",
-        "tags" : [ "Customer Telegram linking" ]
+        "tags" : [ "Customer Telegram linking" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes" : {
@@ -5370,7 +5714,8 @@
           }
         },
         "summary" : "Mint a Telegram sign-in code",
-        "tags" : [ "Telegram sign-in" ]
+        "tags" : [ "Telegram sign-in" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes/{code}" : {
@@ -5414,7 +5759,8 @@
           }
         },
         "summary" : "Poll a Telegram sign-in code",
-        "tags" : [ "Telegram sign-in" ]
+        "tags" : [ "Telegram sign-in" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms" : {
@@ -5465,7 +5811,8 @@
           }
         },
         "summary" : "The document in force right now, in the requested language",
-        "tags" : [ "Storefront terms of service" ]
+        "tags" : [ "Storefront terms of service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/accept" : {
@@ -5512,7 +5859,8 @@
           }
         },
         "summary" : "Record that the signed-in customer accepts the document currently in force",
-        "tags" : [ "Storefront terms of service" ]
+        "tags" : [ "Storefront terms of service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/acceptance-status" : {
@@ -5563,7 +5911,8 @@
           }
         },
         "summary" : "Whether the signed-in customer has accepted the version currently in force",
-        "tags" : [ "Storefront terms of service" ]
+        "tags" : [ "Storefront terms of service" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/pages/{slug}" : {
@@ -5613,7 +5962,8 @@
           }
         },
         "summary" : "One static page, in the requested language",
-        "tags" : [ "Storefront channel presentation" ]
+        "tags" : [ "Storefront channel presentation" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/presentation" : {
@@ -5649,7 +5999,8 @@
           }
         },
         "summary" : "This channel's SEO title/description and OG image",
-        "tags" : [ "Storefront channel presentation" ]
+        "tags" : [ "Storefront channel presentation" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability" : {
@@ -5701,7 +6052,8 @@
           }
         },
         "summary" : "Whether a variant is orderable here, and its remaining quantity if tracked",
-        "tags" : [ "Storefront inventory" ]
+        "tags" : [ "Storefront inventory" ],
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
@@ -5731,7 +6083,8 @@
           }
         },
         "summary" : "Redirect to a published image",
-        "tags" : [ "Storefront media" ]
+        "tags" : [ "Storefront media" ],
+        "x-horecaos-surface" : "published"
       }
     }
   },
@@ -5776,8 +6129,14 @@
     "description" : "A branch's own published name and address",
     "name" : "Storefront location profile"
   }, {
+    "description" : "The languages the platform knows and where each is live (ADR 0149)",
+    "name" : "Locales"
+  }, {
     "description" : "Row 10.5: a channel's public SEO facts and static pages",
     "name" : "Storefront channel presentation"
+  }, {
+    "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
+    "name" : "Presented offers"
   }, {
     "description" : "A customer's own referral code, and redeeming a friend's",
     "name" : "Referrals"

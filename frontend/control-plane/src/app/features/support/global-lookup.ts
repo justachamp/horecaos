@@ -57,7 +57,10 @@ export class GlobalLookup {
   protected readonly phoneReason = signal('');
   protected readonly phoneBusy = signal(false);
   protected readonly phoneError = signal<string | null>(null);
-  protected readonly phoneResult = signal<{ tenantsSearched: number; matches: readonly CustomerMatch[] } | null>(null);
+  protected readonly phoneResult = signal<{
+    tenantsSearched: number;
+    matches: readonly CustomerMatch[];
+  } | null>(null);
 
   constructor() {
     if (this.query().trim().length > 0) {
@@ -81,10 +84,13 @@ export class GlobalLookup {
     try {
       this.phoneResult.set(
         await firstValueFrom(
-          this.api.post<{ tenantsSearched: number; matches: CustomerMatch[] }>('/api/v1/control-plane/customer-lookups', {
-            phone,
-            reason,
-          }),
+          this.api.post<{ tenantsSearched: number; matches: CustomerMatch[] }>(
+            '/api/v1/control-plane/customer-lookups',
+            {
+              phone,
+              reason,
+            },
+          ),
         ),
       );
     } catch (thrown) {
@@ -112,7 +118,9 @@ export class GlobalLookup {
     try {
       this.hits.set(
         await firstValueFrom(
-          this.api.get<LookupHit[]>('/api/v1/control-plane/lookup', { query: { q: this.query().trim() } }),
+          this.api.get<LookupHit[]>('/api/v1/control-plane/lookup', {
+            query: { q: this.query().trim() },
+          }),
         ),
       );
     } catch (thrown) {

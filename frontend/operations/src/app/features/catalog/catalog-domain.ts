@@ -11,23 +11,25 @@
  * (`platform/src/main/java/uz/horecaos/platform/{catalog,pricing}/web/*.java`).
  */
 
-import { Locale } from '../../core/i18n/i18n';
+import type { PlatformLocales } from '../../core/i18n/platform-locales';
 
 /**
- * The console's {@link Locale} (`ru`/`uz-Latn`/`en`, ADR 0035, BCP 47 with a
- * script subtag) is not the catalog locale convention on the wire — `catalog.
- * translations.locale` is free text and `CatalogSnapshotLoader`'s own default
- * is `uz`, not `uz-Latn` (see its `@Value("${horecaos.catalog.default-locale:uz}")`).
- * Every call that sends a locale to a catalog endpoint goes through this, so
- * the two vocabularies cannot drift apart at a call site.
+ * A platform locale tag (`ru`/`uz-Latn`/`en`, ADR 0035, BCP 47 with a script subtag) is not the
+ * catalog locale convention on the wire — `catalog.translations.locale` is free text and
+ * `CatalogSnapshotLoader`'s own default is `uz`, not `uz-Latn` (see its
+ * `@Value("${horecaos.catalog.default-locale:uz}")`), because published menus are hashed over their
+ * keys and cannot be rewritten (ADR 0149, Decision 3). The mapping is the registry's: the entry's
+ * `catalogCode`, the one named place a bare `uz` is still the stored spelling. This is the console's
+ * call on it, so the two vocabularies cannot drift apart at a call site and no screen carries a
+ * conversion of its own.
  */
-export function toCatalogLocale(locale: Locale): string {
-  return locale === 'uz-Latn' ? 'uz' : locale;
+export function toCatalogLocale(locale: string, registry: PlatformLocales): string {
+  return registry.catalogCode(locale);
 }
 
-/** The inverse of {@link toCatalogLocale}: the console {@link Locale} tag a catalog locale is (`uz` is `uz-Latn`), for naming it to an operator. */
-export function fromCatalogLocale(catalogLocale: string): string {
-  return catalogLocale === 'uz' ? 'uz-Latn' : catalogLocale;
+/** The inverse of {@link toCatalogLocale}: the platform tag a catalog locale is (`uz` is `uz-Latn`), for naming it to an operator. */
+export function fromCatalogLocale(catalogLocale: string, registry: PlatformLocales): string {
+  return registry.tagOfCatalogCode(catalogLocale);
 }
 
 /**
@@ -50,8 +52,12 @@ export const SERVER_CATALOG_DEFAULT_LOCALE = 'uz';
  * written there would appear to do nothing. So the answer depends on
  * whether the brand has configured its set at all.
  */
-export function listResolutionLocale(isConfigured: boolean, defaultLocale: Locale): string {
-  return isConfigured ? toCatalogLocale(defaultLocale) : SERVER_CATALOG_DEFAULT_LOCALE;
+export function listResolutionLocale(
+  isConfigured: boolean,
+  defaultLocale: string,
+  registry: PlatformLocales,
+): string {
+  return isConfigured ? toCatalogLocale(defaultLocale, registry) : SERVER_CATALOG_DEFAULT_LOCALE;
 }
 
 // ------------------------------------------------------------ shared

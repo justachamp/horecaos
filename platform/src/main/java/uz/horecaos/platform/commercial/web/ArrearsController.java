@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -13,9 +14,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.commercial.application.ArrearsService;
+import uz.horecaos.platform.commercial.application.CardChargingAvailability;
+import uz.horecaos.platform.commercial.application.PlatformBillingSettingsService;
+import uz.horecaos.platform.commercial.application.WalletService;
 import uz.horecaos.platform.commercial.domain.Statement;
 import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcArrearsStore.ArrearRow;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcWalletStore.OpenDue;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
@@ -42,10 +47,21 @@ public class ArrearsController {
             SubscriptionStatus.TERMINATED);
 
     private final ArrearsService arrears;
+    private final WalletService wallet;
+    private final CardChargingAvailability cardCharging;
+    private final PlatformBillingSettingsService billingSettings;
     private final Clock clock;
 
-    public ArrearsController(ArrearsService arrears, Clock clock) {
+    public ArrearsController(
+            ArrearsService arrears,
+            WalletService wallet,
+            CardChargingAvailability cardCharging,
+            PlatformBillingSettingsService billingSettings,
+            Clock clock) {
         this.arrears = arrears;
+        this.wallet = wallet;
+        this.cardCharging = cardCharging;
+        this.billingSettings = billingSettings;
         this.clock = clock;
     }
 
@@ -54,15 +70,24 @@ public class ArrearsController {
     @Operation(
             summary = "Tenants in arrears, longest first",
             description = "Past-due and suspended subscriptions with how long each has been there and "
-                    + "the last statement issued, beside what each stage restricts. Moving a tenant "
-                    + "between stages is the subscription transition, with its reason.")
+                    + "the last statement issued, beside what each stage restricts. owed is what the tenant "
+                    + "still owes on issued statements, and depositDue the activation deposit it owes beside "
+                    + "them, which is on no statement; paidInFull is true when it owes neither. For a PAST_DUE "
+                    + "tenant, whose stage is about money by definition, that is the cue to restore it. For a "
+                    + "SUSPENDED one it is a fact and not a cue: the suspension's reason is free text, so the "
+                    + "platform cannot tell whether paying addressed it — nothing moves a subscription by "
+                    + "itself (ADR 0089), so moving a tenant between stages stays the subscription transition, "
+                    + "with its reason.")
     public ResponseEntity<ArrearsBoardView> board() {
         Instant now = clock.instant();
         ArrearsService.Board board = arrears.board();
+        Map<UUID, OpenDue> owed = wallet.openDueByTenant(
+                board.rows().stream().map(ArrearRow::tenantId).distinct().toList());
         return ResponseEntity.ok(new ArrearsBoardView(
                 STAGES.stream().map(StageView::of).toList(),
                 board.rows().stream()
-                        .map(row -> ArrearView.of(row, board.latestStatements().get(row.tenantId()), now))
+                        .map(row -> ArrearView.of(
+                                row, board.latestStatements().get(row.tenantId()), owed.get(row.tenantId()), now))
                         .toList()));
     }
 
@@ -73,18 +98,29 @@ public class ArrearsController {
             description = "Where the subscription is right now, how long it has been there, and what "
                     + "that stage restricts — the tenant-reachable, single-row mirror of the platform "
                     + "board above (ADR 0127). A tenant in good standing gets ACTIVE with nothing "
-                    + "restricted, not a 404: this is a state read, not an arrears-only one.")
+                    + "restricted, not a 404: this is a state read, not an arrears-only one. owed is what "
+                    + "the tenant still owes on issued statements (null when nothing), and waysToPay says "
+                    + "which of paying by card or by bank transfer is available now, so the banner can "
+                    + "offer a way out instead of only describing the restriction.")
     public ResponseEntity<TenantArrearsView> tenantArrears(@PathVariable UUID tenantId) {
         Instant now = clock.instant();
         ArrearsService.TenantArrears found = arrears.forTenant(tenantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no subscription"));
-        return ResponseEntity.ok(TenantArrearsView.of(found, now));
+        OpenDue owed = wallet.openDueByTenant(List.of(tenantId)).get(tenantId);
+        return ResponseEntity.ok(TenantArrearsView.of(
+                found,
+                owed,
+                new WaysToPayView(
+                        wallet.cardOnFile(tenantId).isPresent(),
+                        cardCharging.available(),
+                        billingSettings.current().configured()),
+                now));
     }
 
     /** The board: the stages, then the tenants in them. */
     public record ArrearsBoardView(List<StageView> stages, List<ArrearView> subscriptions) {}
 
-    /** This tenant's own row: its stage, how long it has been there, and what that stage restricts. */
+    /** This tenant's own row: its stage, how long it has been there, what that stage restricts, and what is owed. */
     public record TenantArrearsView(
             String status,
             boolean planEntitlementsApply,
@@ -93,9 +129,12 @@ public class ArrearsController {
             String since,
             long daysInStatus,
             @Nullable String suspensionReason,
-            @Nullable LatestStatementView latestStatement) {
+            @Nullable LatestStatementView latestStatement,
+            @Nullable OwedView owed,
+            WaysToPayView waysToPay) {
 
-        static TenantArrearsView of(ArrearsService.TenantArrears found, Instant now) {
+        static TenantArrearsView of(
+                ArrearsService.TenantArrears found, @Nullable OpenDue owed, WaysToPayView waysToPay, Instant now) {
             ArrearRow row = found.row();
             Statement latest = found.latestStatement();
             return new TenantArrearsView(
@@ -106,9 +145,22 @@ public class ArrearsController {
                     row.since().toString(),
                     Math.max(0, Duration.between(row.since(), now).toDays()),
                     row.suspensionReason(),
-                    latest == null ? null : LatestStatementView.of(latest));
+                    latest == null ? null : LatestStatementView.of(latest),
+                    OwedView.of(owed),
+                    waysToPay);
         }
     }
+
+    /** What the tenant still owes on issued statements, and on how many. */
+    public record OwedView(ApiMoney due, int openStatements) {
+
+        static @Nullable OwedView of(@Nullable OpenDue owed) {
+            return owed == null ? null : new OwedView(ApiMoney.of(owed.dueMinor(), owed.currency()), owed.statements());
+        }
+    }
+
+    /** Which ways of paying exist for this tenant right now. */
+    public record WaysToPayView(boolean cardOnFile, boolean cardPaymentsAvailable, boolean bankTransferAvailable) {}
 
     /** What one stage does to a tenant. */
     public record StageView(
@@ -136,9 +188,14 @@ public class ArrearsController {
             long version,
             List<String> allowedNext,
             @Nullable String suspensionReason,
-            @Nullable LatestStatementView latestStatement) {
+            @Nullable LatestStatementView latestStatement,
+            @Nullable OwedView owed,
+            @Nullable ApiMoney depositDue,
+            boolean paidInFull) {
 
-        static ArrearView of(ArrearRow row, @Nullable Statement latest, Instant now) {
+        static ArrearView of(ArrearRow row, @Nullable Statement latest, @Nullable OpenDue owed, Instant now) {
+            ApiMoney depositDue =
+                    row.depositDueMinor() > 0 ? ApiMoney.of(row.depositDueMinor(), row.planCurrency()) : null;
             return new ArrearView(
                     row.tenantId(),
                     row.tenantName(),
@@ -151,7 +208,10 @@ public class ArrearsController {
                     row.version(),
                     row.status().allowedNext().stream().map(Enum::name).sorted().toList(),
                     row.suspensionReason(),
-                    latest == null ? null : LatestStatementView.of(latest));
+                    latest == null ? null : LatestStatementView.of(latest),
+                    OwedView.of(owed),
+                    depositDue,
+                    owed == null && depositDue == null);
         }
     }
 

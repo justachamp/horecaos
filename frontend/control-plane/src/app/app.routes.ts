@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { authGuard, requiresCapability } from './core/auth/guards';
+import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { ConsoleShell } from './layout/console-shell';
 import { Overview } from './features/overview/overview';
 
@@ -27,6 +28,15 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
+    // ADR 0148: a platform account the platform requires a second factor of, and that holds
+    // none, lands here from a refused sign-in. Outside the guard for the reason /login is: the
+    // platform revoked the session it had just issued, so there is none to guard on. What opens
+    // the page is the enrolment ticket held in memory (MfaTicket); without one it says so.
+    path: 'enrol-second-factor',
+    loadComponent: () =>
+      import('./features/auth/enrol-second-factor-page').then((m) => m.EnrolSecondFactorPage),
+  },
+  {
     // ADR 0098: asking for a password reset, and the page the emailed link
     // lands on. Both outside the shell and outside `authGuard`, for the reason
     // `/login` is: somebody who cannot sign in has no session to present, and
@@ -43,7 +53,8 @@ export const routes: Routes = [
   {
     path: '',
     component: ConsoleShell,
-    canActivate: [authGuard],
+    // The registry is read before anything beneath the shell draws (ADR 0149).
+    canActivate: [authGuard, platformLocalesGuard],
     children: [
       { path: '', component: Overview },
 
@@ -150,6 +161,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/providers/sandbox-contract-tests').then((m) => m.SandboxContractTests),
       },
+      {
+        // ADR 0070: the registry of storefront apps and each one's conformance status.
+        path: 'providers/storefront-apps',
+        canActivate: [requiresCapability('STOREFRONT_APP_REGISTRY_MANAGE')],
+        loadComponent: () =>
+          import('./features/storefront-apps/storefront-apps').then((m) => m.StorefrontApps),
+      },
 
       // IA §4 Integration operations
       {
@@ -207,9 +225,22 @@ export const routes: Routes = [
           import('./features/commerce/invoices-wallet').then((m) => m.InvoicesWallet),
       },
       {
+        // HorecaOS's own bank details and card merchant account (ADR 0095): not per tenant, so not on
+        // Invoices & wallet, whose every control starts from a tenant.
+        path: 'commerce/billing-setup',
+        canActivate: [requiresCapability('COMMERCIAL_WALLET_READ')],
+        loadComponent: () =>
+          import('./features/commerce/billing-setup').then((m) => m.BillingSetup),
+      },
+      {
         path: 'commerce/dunning',
         canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
         loadComponent: () => import('./features/commerce/dunning').then((m) => m.Dunning),
+      },
+      {
+        path: 'commerce/einvoicing',
+        canActivate: [requiresCapability('COMMERCIAL_USAGE_READ')],
+        loadComponent: () => import('./features/commerce/e-invoicing').then((m) => m.EInvoicing),
       },
 
       // IA §6 Compliance & fiscal

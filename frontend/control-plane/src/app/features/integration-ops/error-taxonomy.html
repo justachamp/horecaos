@@ -16,7 +16,9 @@
         <p class="q-body-sm">{{ i18n.t(key(category.code, 'meaning')) }}</p>
         <p class="q-body-sm action">{{ i18n.t(key(category.code, 'action')) }}</p>
         <p class="q-caption tags">
-          <span class="tag">{{ i18n.t(category.retryableByTimer ? 'errorTaxonomy.retried' : 'errorTaxonomy.notRetried') }}</span>
+          <span class="tag">{{
+            i18n.t(category.retryableByTimer ? 'errorTaxonomy.retried' : 'errorTaxonomy.notRetried')
+          }}</span>
           @if (category.requiresReconciliation) {
             <span class="tag warn">{{ i18n.t('errorTaxonomy.reconcileFirst') }}</span>
           }
@@ -27,7 +29,10 @@
         <p class="q-caption counts q-tnum">
           {{ i18n.t('errorTaxonomy.counts', { dead: dead(category), waiting: waiting(category) }) }}
           @if (dead(category) > 0) {
-            · <a routerLink="/integration-ops/dead-letters">{{ i18n.t('errorTaxonomy.openDeadLetters') }}</a>
+            ·
+            <a routerLink="/integration-ops/dead-letters">{{
+              i18n.t('errorTaxonomy.openDeadLetters')
+            }}</a>
           }
         </p>
       </section>

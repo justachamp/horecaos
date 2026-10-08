@@ -7,8 +7,12 @@
  * ConversationInboxController` (ADR 0059 stage 2).
  */
 
-/** One of the three directions a message can carry (`ConversationMessageStore.Direction`). */
-export type ConversationMessageDirection = 'INBOUND' | 'OUTBOUND' | 'OPERATOR';
+/**
+ * One of the four directions a message can carry (`ConversationMessageStore.Direction`).
+ * `ASSISTANT` is the grounded assistant's own voice (ADR 0069): a third author beside the flow
+ * engine (`OUTBOUND`) and staff (`OPERATOR`).
+ */
+export type ConversationMessageDirection = 'INBOUND' | 'OUTBOUND' | 'OPERATOR' | 'ASSISTANT';
 
 /** One of the four states a conversation can be in (`ConversationState`). */
 export type ConversationStateValue = 'IDLE' | 'FLOW_ACTIVE' | 'HANDED_TO_OPERATOR' | 'CLOSED';
@@ -24,6 +28,13 @@ export interface ConversationSummaryResponse {
   readonly customerAccountId?: string | null;
   readonly state: ConversationStateValue;
   readonly needsReply: boolean;
+  /**
+   * The assistant (ADR 0069) has answered in this conversation and nobody has taken it over:
+   * it is the one answering the customer's next message. Decided by the server.
+   */
+  readonly assistantActive: boolean;
+  /** The assistant has taken at least one turn here, whoever holds the conversation now. */
+  readonly assistantInvolved: boolean;
   /** RFC 3339, UTC. */
   readonly lastActivityAt: string;
 }
@@ -42,6 +53,10 @@ export interface ConversationResponse {
   readonly state: ConversationStateValue;
   /** The operator who currently holds this conversation, or null. */
   readonly assignedTo?: string | null;
+  /** See {@link ConversationSummaryResponse.assistantActive}. */
+  readonly assistantActive: boolean;
+  /** See {@link ConversationSummaryResponse.assistantInvolved}. */
+  readonly assistantInvolved: boolean;
   readonly updatedAt: string;
   readonly version: number;
 }
@@ -53,6 +68,8 @@ export interface ConversationMessageResponse {
   readonly blockId?: string | null;
   /** The replying operator's subject — set only when `direction` is `OPERATOR`. */
   readonly actorPrincipalId?: string | null;
+  /** The `assistant.turns` row that produced this message — set only when `direction` is `ASSISTANT`. */
+  readonly assistantTurnId?: string | null;
   readonly body: string;
   readonly occurredAt: string;
 }
@@ -66,4 +83,36 @@ export interface ConversationDetailResponse {
 /** `SendReplyRequest` — `POST .../replies`. */
 export interface SendReplyRequest {
   readonly body: string;
+}
+
+/** One fact an assistant turn retrieved — its kind, and whether the reply cited it. */
+export interface AssistantTurnFact {
+  readonly id: string;
+  /** `PRICE`, `AVAILABILITY`, `BRANCH`, `HOURS`, `COVERAGE`, `ORDER` or `KNOWLEDGE`. */
+  readonly kind: string;
+  readonly cited: boolean;
+}
+
+/** A tenant knowledge entry version a turn stood on. */
+export interface AssistantTurnKnowledgeVersion {
+  readonly entryId: string;
+  readonly version: number;
+}
+
+/**
+ * `AssistantTurnController.TurnResponse` — `GET .../assistant/turns/{turnId}`. How a turn ended and
+ * what it stood on; never any words (those stay in the conversation).
+ */
+export interface AssistantTurnResponse {
+  readonly turnId: string;
+  readonly occurredAt: string;
+  readonly locale: string;
+  readonly questionKinds: readonly string[];
+  /** `ANSWERED`, `REFUSED`, `ESCALATED` or `DECLINED`. */
+  readonly outcome: string;
+  readonly refusalReason?: string | null;
+  readonly modelId?: string | null;
+  readonly servedFromCache: boolean;
+  readonly facts: readonly AssistantTurnFact[];
+  readonly knowledgeVersions: readonly AssistantTurnKnowledgeVersion[];
 }

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.marketing.api;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.UUID;
@@ -64,23 +65,81 @@ public interface CampaignMessagePort {
     Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel);
 
     /**
-     * Whether a real delivery path is present for {@code channel}.
+     * Whether a message for {@code purpose} can leave on {@code channel} for this
+     * brand, and if not, the stable reason (ADR 0146 Decision 8).
      *
      * <p>Read before a send starts rather than discovered halfway through it. A
      * campaign that expands forty thousand recipients against an unwired port has
      * spent an approval and produced nothing.
      *
-     * <p>Per channel rather than a single flag: {@code notifications} implements
-     * this port for TELEGRAM only (ADR 0059 stage 4) and ADR 0044's own rollout
-     * takes SMS and push later, against a different adapter or a different
-     * release of this one. A blanket "is anything wired" would let an SMS
-     * campaign expand the moment Telegram alone is wired, spending an approval
-     * on a channel that still has no adapter.
+     * <p><strong>Scoped, because "wired" has to mean "this brand has a working
+     * account", not "this build has an adapter".</strong> A brand with no SMS
+     * binding is not wired for SMS in a build that has an SMS adapter, and a brand
+     * whose gateway account has not been cleared for marketing is not wired for a
+     * campaign on it, whatever else that account carries. Telegram is wired for
+     * every brand as before, because its binding is the customer's own link and not
+     * the brand's account.
      *
      * @param channel one of {@link uz.horecaos.platform.marketing.domain.MarketingChannel}'s
      *                names, exactly as {@link #templateBodies} already takes it
+     * @param purpose {@link #PURPOSE_MARKETING} for a campaign or an automation,
+     *                {@link #PURPOSE_COURIER} for a dispatcher's broadcast
      */
-    boolean isWired(String channel);
+    Wiring wiring(UUID tenantId, UUID brandId, String channel, String purpose);
+
+    /** A campaign or an automation: the purpose that needs a marketing consent decision. */
+    String PURPOSE_MARKETING = "MARKETING";
+
+    /** A dispatcher's operational broadcast to couriers, never a customer campaign. */
+    String PURPOSE_COURIER = "COURIER";
+
+    /** {@link #wiring} for the marketing purpose, as a flag. */
+    default boolean isWired(UUID tenantId, UUID brandId, String channel) {
+        return wiring(tenantId, brandId, channel, PURPOSE_MARKETING).isWired();
+    }
+
+    /**
+     * What the delivery path knows about messages it was asked to send, keyed by
+     * the notification id {@link #enqueue} returned (ADR 0146): the delivery state
+     * a campaign's recipient list shows, the receipt state, and the segments the
+     * gateway billed. Marketing reads it and holds none of it, so a delivery fact
+     * is never copied into a second table that could drift from the first.
+     *
+     * <p>Defaulted empty for a port with no delivery evidence to offer.
+     */
+    default Map<UUID, DeliveryEvidence> deliveryEvidence(UUID tenantId, Collection<UUID> notificationIds) {
+        return Map.of();
+    }
+
+    /**
+     * @param state one of {@code PENDING}, {@code HANDED_TO_OPERATOR},
+     *              {@code DELIVERED}, {@code FAILED}, {@code NO_RECEIPT} or
+     *              {@code REJECTED}. {@code HANDED_TO_OPERATOR} is the honest word
+     *              for a message a gateway accepted and nothing has reported on:
+     *              it is neither "delivered" nor a failure
+     * @param receiptState {@code NO_RECEIPT} or null
+     * @param segmentsBilled null when the provider did not say
+     */
+    record DeliveryEvidence(
+            String state,
+            @Nullable String receiptState,
+            @Nullable Integer segmentsBilled) {}
+
+    /**
+     * @param reason a stable code when not wired (for example
+     *               {@code SMS_PURPOSE_NOT_PERMITTED}, {@code NO_PROVIDER_BINDING},
+     *               {@code SMS_ACCOUNT_MISCONFIGURED}, {@code NO_ADAPTER}), null when wired
+     */
+    record Wiring(boolean isWired, @Nullable String reason) {
+
+        public static Wiring yes() {
+            return new Wiring(true, null);
+        }
+
+        public static Wiring no(String reason) {
+            return new Wiring(false, reason);
+        }
+    }
 
     /**
      * The messages-per-second ceiling the delivery worker paces this channel's

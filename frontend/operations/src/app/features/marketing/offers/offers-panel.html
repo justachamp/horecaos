@@ -1,0 +1,373 @@
+<div class="offers">
+  <header class="offers__head">
+    <p class="q-body-sm offers__intro">{{ 'marketing.offers.intro' | t }}</p>
+    @if (!loading() && !denied()) {
+      <button
+        type="button"
+        class="offers__create"
+        data-testid="offers-create"
+        (click)="openCreate()"
+      >
+        {{ 'marketing.offers.create' | t }}
+      </button>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="offers__skeleton" [attr.aria-label]="'marketing.campaigns.loading' | t"></div>
+  } @else if (denied()) {
+    <p class="q-body-sm" data-testid="offers-denied">{{ 'marketing.offers.denied' | t }}</p>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="offers__band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="offers__band" role="alert" data-testid="offers-action-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @for (group of groups(); track group.lineageId) {
+      <section class="offers__group" data-testid="offer-group">
+        <h3 class="q-emphasis">{{ group.name }}</h3>
+        <table class="offers__table">
+          <thead>
+            <tr>
+              <th>{{ 'marketing.offers.column.version' | t }}</th>
+              <th>{{ 'marketing.offers.column.status' | t }}</th>
+              <th>{{ 'marketing.offers.column.reference' | t }}</th>
+              <th>{{ 'marketing.offers.column.window' | t }}</th>
+              <th>{{ 'marketing.offers.column.channels' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (offer of group.versions; track offer.offerId) {
+              <tr data-testid="offer-row">
+                <td class="q-tnum">v{{ offer.versionNumber }}</td>
+                <td>
+                  <span class="offers__badge" [attr.data-status]="offer.status">{{
+                    statusLabelKey(offer.status) | t
+                  }}</span>
+                </td>
+                <td>{{ referenceText(offer) }}</td>
+                <td>{{ window(offer) }}</td>
+                <td>
+                  @for (channel of offer.allowedChannels; track channel; let last = $last) {
+                    {{ channelLabel(channel) }}{{ last ? '' : ', ' }}
+                  }
+                </td>
+                <td class="offers__actions">
+                  @switch (offer.status) {
+                    @case ('DRAFT') {
+                      <button type="button" data-testid="offer-edit" (click)="openEdit(offer)">
+                        {{ 'marketing.offers.action.edit' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="offer-publish"
+                        [disabled]="acting()"
+                        (click)="askPublish(offer)"
+                      >
+                        {{ 'marketing.offers.action.publish' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="offer-retire"
+                        [disabled]="acting()"
+                        (click)="askRetire(offer)"
+                      >
+                        {{ 'marketing.offers.action.retire' | t }}
+                      </button>
+                    }
+                    @case ('PUBLISHED') {
+                      <button
+                        type="button"
+                        data-testid="offer-new-version"
+                        (click)="openNewVersion(offer)"
+                      >
+                        {{ 'marketing.offers.action.newVersion' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="offer-retire"
+                        [disabled]="acting()"
+                        (click)="askRetire(offer)"
+                      >
+                        {{ 'marketing.offers.action.retire' | t }}
+                      </button>
+                    }
+                    @default {
+                      <button
+                        type="button"
+                        data-testid="offer-new-version"
+                        (click)="openNewVersion(offer)"
+                      >
+                        {{ 'marketing.offers.action.newVersion' | t }}
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    } @empty {
+      <p class="q-body-sm" data-testid="offers-empty">{{ 'marketing.offers.empty' | t }}</p>
+    }
+  }
+</div>
+
+@if (formMode(); as mode) {
+  <q-drawer
+    [title]="
+      (mode === 'create'
+        ? 'marketing.offers.form.title.create'
+        : mode === 'edit'
+          ? 'marketing.offers.form.title.edit'
+          : 'marketing.offers.form.title.version'
+      ) | t
+    "
+    [dismissible]="!formSubmitting()"
+    (dismiss)="closeForm()"
+  >
+    <p class="q-caption offers__note">{{ 'marketing.offers.form.noBenefit' | t }}</p>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.form.name' | t }}</span>
+      <input
+        type="text"
+        maxlength="120"
+        data-testid="offer-form-name"
+        [value]="formName()"
+        (input)="formName.set($any($event.target).value)"
+      />
+    </label>
+
+    <fieldset class="offers__fieldset">
+      <legend class="q-caption">{{ 'marketing.offers.form.reference' | t }}</legend>
+      <label class="offers__inline">
+        <input
+          type="radio"
+          name="offer-reference-kind"
+          data-testid="offer-form-kind-promotion"
+          [checked]="formReferenceKind() === 'PROMOTION'"
+          (change)="onReferenceKindChange('PROMOTION')"
+        />
+        {{ 'marketing.offer.reference.promotion' | t }}
+      </label>
+      <label class="offers__inline">
+        <input
+          type="radio"
+          name="offer-reference-kind"
+          data-testid="offer-form-kind-rule"
+          [checked]="formReferenceKind() === 'ACCRUAL_RULE'"
+          (change)="onReferenceKindChange('ACCRUAL_RULE')"
+        />
+        {{ 'marketing.offer.reference.accrualRule' | t }}
+      </label>
+      @if (referenceChoices(); as choices) {
+        <select
+          data-testid="offer-form-reference"
+          [value]="formReferenceId()"
+          (change)="formReferenceId.set($any($event.target).value)"
+        >
+          <option value="" [selected]="formReferenceId() === ''">—</option>
+          @for (choice of choices; track choice.id) {
+            <option [value]="choice.id" [selected]="choice.id === formReferenceId()">
+              {{ choice.label }}
+            </option>
+          }
+        </select>
+        @if (choices.length === 0) {
+          <p class="q-caption offers__note">
+            {{
+              (formReferenceKind() === 'PROMOTION'
+                ? 'marketing.offers.form.noPromotions'
+                : 'marketing.offers.form.noAccrualRules'
+              ) | t
+            }}
+          </p>
+        }
+      } @else {
+        <input
+          type="text"
+          data-testid="offer-form-reference-id"
+          [value]="formReferenceId()"
+          (input)="formReferenceId.set($any($event.target).value)"
+        />
+        <p class="q-caption offers__note">{{ 'marketing.offers.form.referenceManual' | t }}</p>
+      }
+    </fieldset>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.form.validFrom' | t: { zone } }}</span>
+      <input
+        type="datetime-local"
+        data-testid="offer-form-valid-from"
+        [value]="formValidFrom()"
+        (input)="formValidFrom.set($any($event.target).value)"
+      />
+    </label>
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.form.validUntil' | t: { zone } }}</span>
+      <input
+        type="datetime-local"
+        data-testid="offer-form-valid-until"
+        [value]="formValidUntil()"
+        (input)="formValidUntil.set($any($event.target).value)"
+      />
+    </label>
+
+    <fieldset class="offers__fieldset">
+      <legend class="q-caption">{{ 'marketing.offers.form.channels' | t }}</legend>
+      @for (channel of offerChannels; track channel) {
+        <label class="offers__inline">
+          <input
+            type="checkbox"
+            [attr.data-testid]="'offer-form-channel-' + channel"
+            [checked]="formChannels().includes(channel)"
+            (change)="toggleChannel(channel, $any($event.target).checked)"
+          />
+          {{ channelLabel(channel) }}
+        </label>
+      }
+    </fieldset>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.form.template' | t }}</span>
+      @if (marketingTemplates().length > 0) {
+        <select
+          data-testid="offer-form-template"
+          [value]="formTemplateKey()"
+          (change)="formTemplateKey.set($any($event.target).value)"
+        >
+          <option value="" [selected]="formTemplateKey() === ''">—</option>
+          @for (template of marketingTemplates(); track template.templateKey) {
+            <option
+              [value]="template.templateKey"
+              [selected]="template.templateKey === formTemplateKey()"
+            >
+              {{ template.templateKey }}
+            </option>
+          }
+        </select>
+      } @else {
+        <input
+          type="text"
+          maxlength="64"
+          data-testid="offer-form-template-key"
+          [value]="formTemplateKey()"
+          (input)="formTemplateKey.set($any($event.target).value)"
+        />
+        <p class="q-caption offers__note">
+          {{ 'marketing.campaigns.create.template.manualHint' | t }}
+        </p>
+      }
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.form.audience' | t }}</span>
+      <select
+        data-testid="offer-form-audience"
+        [value]="formAudienceId()"
+        (change)="formAudienceId.set($any($event.target).value)"
+      >
+        <option value="" [selected]="formAudienceId() === ''">
+          {{ 'marketing.offers.form.audience.any' | t }}
+        </option>
+        @for (audience of audiences(); track audience.audienceId) {
+          <option
+            [value]="audience.audienceId"
+            [selected]="audience.audienceId === formAudienceId()"
+          >
+            {{ audience.name }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.form.banner' | t }}</span>
+      <input
+        type="text"
+        maxlength="255"
+        data-testid="offer-form-banner"
+        [value]="formBanner()"
+        (input)="formBanner.set($any($event.target).value)"
+      />
+    </label>
+
+    @if (formError(); as error) {
+      <p class="q-body-sm offers__error" role="alert" data-testid="offer-form-error">
+        {{ error }}
+      </p>
+    } @else if (formProblem(); as problem) {
+      <p class="q-caption offers__note" data-testid="offer-form-problem">{{ problem | t }}</p>
+    }
+
+    <ng-container qDrawerActions>
+      <button type="button" class="offers__btn" [disabled]="formSubmitting()" (click)="closeForm()">
+        {{ 'marketing.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="offers__btn offers__btn--primary"
+        data-testid="offer-form-submit"
+        [disabled]="formSubmitting() || formProblem() !== null"
+        (click)="submitForm()"
+      >
+        {{ 'marketing.offers.form.submit' | t }}
+      </button>
+    </ng-container>
+  </q-drawer>
+}
+
+@if (publishing(); as offer) {
+  <q-confirm-dialog
+    [title]="'marketing.offers.publish.title' | t: { name: offer.displayName }"
+    [body]="'marketing.offers.publish.body' | t"
+    [confirmLabel]="'marketing.offers.action.publish' | t"
+    [cancelLabel]="'marketing.dialog.cancel' | t"
+    [busy]="acting()"
+    (confirm)="confirmPublish()"
+    (cancel)="publishing.set(null)"
+  />
+}
+
+@if (retiring(); as offer) {
+  <q-modal
+    [title]="'marketing.offers.retire.title' | t: { name: offer.displayName }"
+    [dismissible]="!acting()"
+    (dismiss)="retiring.set(null)"
+  >
+    <p class="q-body-sm">{{ 'marketing.offers.retire.body' | t }}</p>
+    <label class="q-field">
+      <span class="q-caption">{{ 'marketing.offers.retire.reason' | t }}</span>
+      <input
+        type="text"
+        maxlength="500"
+        data-testid="offer-retire-reason"
+        [value]="retireReason()"
+        (input)="retireReason.set($any($event.target).value)"
+      />
+    </label>
+    <ng-container qModalActions>
+      <button type="button" class="offers__btn" [disabled]="acting()" (click)="retiring.set(null)">
+        {{ 'marketing.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="offers__btn offers__btn--primary"
+        data-testid="offer-retire-confirm"
+        [disabled]="acting() || retireReason().trim() === ''"
+        (click)="confirmRetire()"
+      >
+        {{ 'marketing.offers.action.retire' | t }}
+      </button>
+    </ng-container>
+  </q-modal>
+}

@@ -1,0 +1,157 @@
+<section class="panel" data-testid="wallet-topup-panel">
+  <h2 class="q-subhead">{{ 'finance.wallet.topUp.title' | t }}</h2>
+  <p class="q-body-sm panel-lead">{{ 'finance.wallet.topUp.lead' | t }}</p>
+
+  <h3 class="q-caption section-caption">{{ 'finance.wallet.topUp.byCard' | t }}</h3>
+  <form
+    class="form"
+    (submit)="$event.preventDefault(); topUpByCard()"
+    data-testid="wallet-card-topup-form"
+  >
+    <label class="field q-caption">
+      {{ 'finance.wallet.topUp.amount' | t: { currency: currency() } }}
+      <input
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
+        name="cardAmount"
+        [disabled]="cardBlocked() !== null"
+        [value]="cardAmountText()"
+        (input)="cardAmountText.set($any($event.target).value)"
+        data-testid="wallet-card-topup-amount"
+      />
+    </label>
+    <button
+      type="submit"
+      class="primary"
+      [disabled]="!canTopUp()"
+      data-testid="wallet-card-topup-submit"
+    >
+      {{ 'finance.wallet.topUp.submitCard' | t }}
+    </button>
+  </form>
+  @if (cardBlocked(); as reason) {
+    <p class="q-caption muted" data-testid="wallet-card-topup-blocked">
+      {{ reason | t: { currency: currency() } }}
+    </p>
+  }
+  @if (cardError(); as message) {
+    <div class="band band--error" role="alert" data-testid="wallet-card-topup-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+  @if (cardResult(); as result) {
+    <div
+      class="band"
+      [class.band--warn]="!resultIsGood(result)"
+      role="status"
+      data-testid="wallet-card-topup-result"
+      [attr.data-outcome]="result.outcome"
+    >
+      <span class="q-body-sm">{{ resultText(result) }}</span>
+    </div>
+  }
+
+  <h3 class="q-caption section-caption">{{ 'finance.wallet.transfer.title' | t }}</h3>
+  <p class="q-body-sm muted">{{ 'finance.wallet.transfer.lead' | t }}</p>
+  @if (wallet().bankTransferAvailable) {
+    @if (paymentDetails(); as details) {
+      <dl class="details" data-testid="wallet-bank-details">
+        <dt class="q-caption">{{ 'finance.wallet.details.beneficiary' | t }}</dt>
+        <dd class="q-body-sm">{{ details.beneficiary }}</dd>
+        <dt class="q-caption">{{ 'finance.wallet.details.bankName' | t }}</dt>
+        <dd class="q-body-sm">{{ details.bankName }}</dd>
+        <dt class="q-caption">{{ 'finance.wallet.details.account' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ details.account }}</dd>
+        <dt class="q-caption">{{ 'finance.wallet.details.mfo' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ details.mfo }}</dd>
+        <dt class="q-caption">{{ 'finance.wallet.details.taxId' | t }}</dt>
+        <dd class="q-body-sm q-mono">{{ details.taxId }}</dd>
+      </dl>
+    } @else {
+      <p class="q-caption muted" data-testid="wallet-bank-details-unread">
+        {{ 'finance.wallet.transfer.detailsUnread' | t }}
+      </p>
+    }
+  } @else {
+    <div class="band band--warn" data-testid="wallet-bank-not-available">
+      <span class="q-body-sm">{{ 'finance.wallet.transfer.notAvailable' | t }}</span>
+    </div>
+  }
+  <form
+    class="form"
+    (submit)="$event.preventDefault(); requestInvoice()"
+    data-testid="wallet-invoice-form"
+  >
+    <label class="field q-caption">
+      {{ 'finance.wallet.topUp.amount' | t: { currency: currency() } }}
+      <input
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
+        name="invoiceAmount"
+        [disabled]="!wallet().bankTransferAvailable"
+        [value]="invoiceAmountText()"
+        (input)="invoiceAmountText.set($any($event.target).value)"
+        data-testid="wallet-invoice-amount"
+      />
+    </label>
+    <button
+      type="submit"
+      class="secondary"
+      [disabled]="!canRequestInvoice()"
+      data-testid="wallet-invoice-submit"
+    >
+      {{ 'finance.wallet.transfer.submit' | t }}
+    </button>
+  </form>
+  @if (invoiceError(); as message) {
+    <div class="band band--error" role="alert" data-testid="wallet-invoice-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+  @if (issued(); as invoice) {
+    <div class="band" role="status" data-testid="wallet-invoice-issued">
+      <span class="q-body-sm">{{ issuedText(invoice) }}</span>
+    </div>
+  }
+  <p class="q-caption muted">{{ 'finance.wallet.beforeTax' | t }}</p>
+
+  <h3 class="q-caption section-caption">{{ 'finance.wallet.topUp.history' | t }}</h3>
+  @if (historyError(); as message) {
+    <div class="band band--error" role="alert">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+  <table class="table" data-testid="wallet-topups-table">
+    <thead>
+      <tr>
+        <th class="q-caption">{{ 'finance.wallet.column.when' | t }}</th>
+        <th class="q-caption num">{{ 'finance.wallet.column.amount' | t }}</th>
+        <th class="q-caption">{{ 'finance.wallet.column.result' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (topUp of topUps(); track topUp.topUpId) {
+        <tr>
+          <td class="q-body-sm q-tnum">{{ time(topUp.requestedAt) }}</td>
+          <td class="q-body-sm q-tnum num">{{ money(topUp.amount) }}</td>
+          <td class="q-body-sm">
+            <span class="status-badge" [class]="outcomeClass(topUp.outcome)">{{
+              outcomeLabel(topUp.outcome)
+            }}</span>
+            @if (reasonText(topUp); as note) {
+              <div class="q-caption muted">{{ note }}</div>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td class="q-body-sm empty" colspan="3">
+            {{ 'finance.wallet.topUp.history.empty' | t }}
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

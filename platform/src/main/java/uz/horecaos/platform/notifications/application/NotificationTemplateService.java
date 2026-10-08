@@ -2,14 +2,15 @@ package uz.horecaos.platform.notifications.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -29,8 +30,10 @@ import uz.horecaos.platform.notifications.domain.TemplateRenderer;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.TemplateRow;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 
 /**
  * Authoring, approving, and resolving template wording (ADR 0020).
@@ -38,7 +41,8 @@ import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
  * <p>The rule this service exists to enforce is that a missing translation fails
  * while somebody is writing copy, not at 22:00 when a customer is waiting for a
  * confirmation. A version is a set of rows — one per locale — and
- * {@link #activate} refuses unless all three of ru, uz-Latn, and en are present.
+ * {@link #activate} refuses unless every locale the template's brand serves is present
+ * ({@link #requiredLocales}, ADR 0149: it used to be every locale the platform has).
  * The check cannot be a database constraint because it is a statement about a set
  * of rows and a CHECK sees one at a time.
  *
@@ -64,18 +68,57 @@ public class NotificationTemplateService {
     private final Clock clock;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
+    private final BrandLocaleLookup brandLocales;
 
+    /** A service with no tenancy to ask: every brand counts the platform's content tier (tests, tools). */
     public NotificationTemplateService(
             JdbcTemplateStore templates,
             ObjectMapper objectMapper,
             Clock clock,
             AuditRecorder audit,
             CurrentActor currentActor) {
+        this(templates, objectMapper, clock, audit, currentActor, BrandLocaleLookup.platformFallback());
+    }
+
+    @Autowired
+    public NotificationTemplateService(
+            JdbcTemplateStore templates,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            BrandLocaleLookup brandLocales) {
         this.templates = templates;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.audit = audit;
         this.currentActor = currentActor;
+        this.brandLocales = brandLocales;
+    }
+
+    /**
+     * The languages a version of this template must be written in before it can be saved or
+     * activated (ADR 0020, as ADR 0149 changed what it counts): <em>the languages the template's
+     * brand serves</em>, not every language the platform has.
+     *
+     * <p>The rule exists to keep a customer from getting nothing, and a brand-scoped rule prevents
+     * that just as well without making a Tashkent restaurant author Georgian. A brand that has
+     * configured no set counts the platform's content tier, exactly as the editors already read it;
+     * a tenant-wide template (no brand of its own) serves every brand, so it counts the union of
+     * the tenant's. Only languages the platform can <em>send</em> in count: a language a brand may
+     * hold in its content but that is not live in the messages tier cannot be authored here, so it
+     * cannot be required. A brand serving none of the live ones owes the fallback, never nothing.
+     */
+    public List<MessageLocale> requiredLocales(UUID tenantId, @Nullable UUID brandId) {
+        TenantLocaleSet served = brandId == null
+                ? brandLocales.tenantLocaleSet(tenantId)
+                : brandLocales.brandLocaleSet(tenantId, brandId);
+        List<MessageLocale> required = served.locales().stream()
+                .map(MessageLocale::parse)
+                .flatMap(Optional::stream)
+                .distinct()
+                .toList();
+        return required.isEmpty() ? List.of(MessageLocale.FALLBACK) : required;
     }
 
     /**
@@ -197,12 +240,13 @@ public class NotificationTemplateService {
         boolean awaitsGateway =
                 NotificationChannel.SMS.name().equals(owned.channel()) && templates.smsWordingAwaitsGateway(tenantId);
 
-        List<MessageLocale> missing = MessageLocale.required().stream()
+        List<MessageLocale> required = requiredLocales(tenantId, owned.brandId());
+        List<MessageLocale> missing = required.stream()
                 .filter(locale -> !wordings.containsKey(locale))
                 .toList();
         if (!missing.isEmpty()) {
             throw new IncompleteTranslationException(
-                    "A version needs every locale before it can be saved; missing " + missing);
+                    "A version needs every locale this brand serves before it can be saved; missing " + missing);
         }
 
         Set<String> declared = variablesSchema.keySet();
@@ -210,10 +254,12 @@ public class NotificationTemplateService {
         Instant now = clock.instant();
         String schemaJson = objectMapper.writeValueAsString(variablesSchema);
 
-        for (MessageLocale locale : MessageLocale.required()) {
-            // Never null: the completeness check above already refused to reach
-            // here unless every required locale is a key of this map.
-            Wording wording = Objects.requireNonNull(wordings.get(locale));
+        // Every wording the author sent is kept, the required ones and any extra the platform can send
+        // in: a version authored in four languages for a brand that serves two is a draft that is
+        // ready the day the brand adds a third, not a rejected one.
+        for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
+            MessageLocale locale = entry.getKey();
+            Wording wording = entry.getValue();
             // Both halves are checked, because a subject is as capable of naming
             // a variable that does not exist as a body is.
             TemplateRenderer.validate(wording.subject(), declared);
@@ -239,9 +285,10 @@ public class NotificationTemplateService {
         added.put("versionNumber", versionNumber);
         // Not «awaiting…»: ChangeDocuments redacts any key containing «tin».
         added.put("gatewayReviewRequired", awaitsGateway);
-        for (MessageLocale locale : MessageLocale.required()) {
-            Wording wording = Objects.requireNonNull(wordings.get(locale));
-            added.put("characters." + locale.tag(), wording.body().length());
+        for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
+            added.put(
+                    "characters." + entry.getKey().tag(),
+                    entry.getValue().body().length());
         }
         // The version is new: there was no draft of this number to diff against.
         recordAudit(
@@ -270,9 +317,13 @@ public class NotificationTemplateService {
         TemplateRow template = requireOwnedByBrand(tenantId, brandId, templateId);
 
         List<VersionRow> versions = templates.versions(tenantId, templateId, versionNumber);
-        List<MessageLocale> present =
-                versions.stream().map(row -> MessageLocale.of(row.locale())).toList();
-        List<MessageLocale> missing = MessageLocale.required().stream()
+        // A row in a language the platform no longer sends in (a deactivated one) neither satisfies
+        // nor blocks the rule: it is parsed away, not thrown on.
+        List<MessageLocale> present = versions.stream()
+                .map(row -> MessageLocale.parse(row.locale()))
+                .flatMap(Optional::stream)
+                .toList();
+        List<MessageLocale> missing = requiredLocales(tenantId, template.brandId()).stream()
                 .filter(locale -> !present.contains(locale))
                 .toList();
 
@@ -282,14 +333,13 @@ public class NotificationTemplateService {
         }
 
         int activated = templates.activateVersion(tenantId, templateId, versionNumber, approvedBy, clock.instant());
-        if (activated != MessageLocale.required().size()) {
+        if (activated != versions.size()) {
             // Some locale of this version was not a draft, which means another
             // operator activated or superseded it between the read above and this
             // update. Refusing is right: half of a version being live is worse
             // than the activation not happening.
             throw new IllegalStateException("Version %d was changed by someone else; %d of %d locales activated"
-                    .formatted(
-                            versionNumber, activated, MessageLocale.required().size()));
+                    .formatted(versionNumber, activated, versions.size()));
         }
         if (!templates.markTemplateActive(tenantId, templateId, versionNumber, template.version(), clock.instant())) {
             throw new IllegalStateException("The template was changed by someone else");
@@ -373,6 +423,47 @@ public class NotificationTemplateService {
      */
     @Transactional(readOnly = true)
     public Resolution resolve(
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            NotificationChannel channel,
+            MessageLocale locale,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource) {
+
+        // ADR 0149, Decision 4: a customer whose language the brand does not serve is written to in
+        // the brand's default, and where that wording is missing too, in the registry's fallback. The
+        // brand-scoped "required" rule is checked when a version is activated; this is its send-time
+        // partner, which is what lets a brand add a language after a template went live without that
+        // template going silent for the customers who read it.
+        TenantLocaleSet served = brandLocales.brandLocaleSet(tenantId, brandId);
+        List<String> chain = new ArrayList<>();
+        chain.add(served.locales().contains(locale.tag()) ? locale.tag() : served.defaultLocale());
+        chain.add(served.defaultLocale());
+        chain.add(MessageLocale.FALLBACK.tag());
+
+        Resolution last = Resolution.noTemplate();
+        for (String tag : chain.stream().distinct().toList()) {
+            Optional<MessageLocale> candidate = MessageLocale.parse(tag);
+            if (candidate.isEmpty()) {
+                continue;
+            }
+            last = resolveExact(
+                    tenantId, brandId, templateKey, channel, candidate.get(), fulfillmentMode, channelSource);
+            if (last.isFound() || last.outcome() == Resolution.Outcome.NO_ACTIVE_TEMPLATE) {
+                return last;
+            }
+        }
+        return last;
+    }
+
+    /**
+     * The wording in exactly this language, with no fallback: found, or why it is not. What a caller
+     * that wants to know which languages a template <em>has</em> asks (the campaign composer's
+     * per-language bodies), as against {@link #resolve}, which finds a customer something to read.
+     */
+    @Transactional(readOnly = true)
+    public Resolution resolveExact(
             UUID tenantId,
             UUID brandId,
             String templateKey,

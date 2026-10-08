@@ -5,7 +5,8 @@ import { ApiClient } from '../api/api-client';
 import { ApiError } from '../api/problem-details';
 import { StaffMember, hasName } from '../api/staff-member';
 import { staffPaths } from '../api/staff-paths';
-import { I18n, hasStoredLocale } from '../i18n/i18n';
+import { I18n, hasStoredLocale, isLocale } from '../i18n/i18n';
+import { PlatformLocales } from '../i18n/platform-locales';
 import { Auth } from './auth';
 import { CurrentTenant } from './current-tenant';
 
@@ -41,6 +42,7 @@ export class OwnProfile {
   private readonly tenant = inject(CurrentTenant);
   private readonly auth = inject(Auth);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   private readonly held = signal<{
     readonly subject: string;
@@ -87,10 +89,13 @@ export class OwnProfile {
     if (hasStoredLocale()) {
       return;
     }
-    if (member.uiLocale === 'ru' || member.uiLocale === 'en') {
-      this.i18n.setLocale(member.uiLocale);
-    } else if (member.uiLocale === 'uz') {
-      this.i18n.setLocale('uz-Latn');
+    if (member.uiLocale === null) {
+      return;
+    }
+    // The record holds the registry's tag; a bare `uz` from an older record is read as `uz-Latn`.
+    const tag = this.registry.canonical(member.uiLocale);
+    if (isLocale(tag)) {
+      this.i18n.setLocale(tag);
     }
   }
 

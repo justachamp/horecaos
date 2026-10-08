@@ -98,3 +98,19 @@ if (BANS_RAW_PX) {
     assert.equal(await eslint.isPathIgnored(join(appDir, 'src/design-system/tokens.css')), true);
   });
 }
+
+// ADR 0149, Decision 6: the logical-properties ratchet is the control plane's too (the operations
+// console runs it through its own `.eslintrc.json`, and proves it with its plugin's tests). The
+// storefronts are Tailwind apps whose layout is utilities, so for them it is NOT a finding.
+const DIRECTION_RULE = 'horecaos/no-physical-direction';
+
+if (BANS_RAW_PX) {
+  test('a physical margin in a new stylesheet is a finding, a logical one is not', async () => {
+    assert.ok((await verdict('.a {\n  margin-left: 4px;\n}\n', 'src/probe.css')).includes(DIRECTION_RULE));
+    assert.deepEqual(await verdict('.a {\n  margin-inline-start: 4px;\n}\n', 'src/probe.css'), []);
+  });
+} else {
+  test('a physical margin is not a finding in an app whose layout is not hand-written CSS', async () => {
+    assert.equal((await verdict('.a {\n  margin-left: 4px;\n}\n', 'src/probe.css')).includes(DIRECTION_RULE), false);
+  });
+}

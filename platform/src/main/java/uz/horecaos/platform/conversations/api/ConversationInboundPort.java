@@ -25,6 +25,26 @@ public interface ConversationInboundPort {
     boolean hasActiveFlow(UUID tenantId, UUID brandId);
 
     /**
+     * Whether ordinary private free text is worth routing to {@link #handleText}
+     * for this brand: an active flow exists, or a {@link ConversationParticipant}
+     * (ADR 0069) is willing to take the turn. Defaulted to {@link #hasActiveFlow}
+     * so every implementation and test double that predates participants keeps
+     * its behaviour.
+     */
+    default boolean acceptsFreeText(UUID tenantId, UUID brandId) {
+        return hasActiveFlow(tenantId, brandId);
+    }
+
+    /**
+     * A position the customer shared in a private chat (ADR 0069: delivery
+     * coverage is a question about a point, and a typed street name is not one).
+     * Recorded into the conversation's history as a stray inbound message and
+     * offered to a {@link ConversationParticipant}; never advances a flow.
+     * Defaulted to nothing so existing implementations are untouched.
+     */
+    default void handleSharedLocation(ConversationChannelRef channel, double latitude, double longitude) {}
+
+    /**
      * A bare {@code /start}: begins the brand's active flow for this channel
      * identity if no run is already active for it. A repeat bare {@code
      * /start} mid-run is a no-op — it does not restart the flow underneath an

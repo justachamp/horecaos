@@ -86,7 +86,9 @@
               (change)="onTriggerTypeChange($any($event.target).value)"
             >
               @for (kind of triggerKinds; track kind) {
-                <option [value]="kind">{{ triggerLabelKey(kind) | t }}</option>
+                <option [value]="kind" [selected]="kind === formTriggerType()">
+                  {{ triggerLabelKey(kind) | t }}
+                </option>
               }
             </select>
           </label>
@@ -98,10 +100,27 @@
               [value]="formChannel()"
               (change)="formChannel.set($any($event.target).value)"
             >
-              @for (channel of channels; track channel) {
-                <option [value]="channel">{{ channelLabelKey(channel) | t }}</option>
+              @for (option of channelOptions(); track option.channel) {
+                <option
+                  [value]="option.channel"
+                  [selected]="option.channel === formChannel()"
+                  [disabled]="!option.wired"
+                >
+                  {{ channelLabelKey(option.channel) | t }}
+                  @if (!option.wired) {
+                    {{ 'marketing.wiring.notConnectedSuffix' | t }}
+                  }
+                </option>
               }
             </select>
+            @if (formChannelUnwired(); as unwired) {
+              <p
+                class="q-caption automations__hint automations__hint--warn"
+                data-testid="automation-form-channel-unwired"
+              >
+                {{ unwired.key | t: unwired.values }}
+              </p>
+            }
           </label>
 
           <label class="field">
@@ -115,16 +134,22 @@
             />
           </label>
 
-          <label class="field">
-            <span class="q-caption">{{ 'marketing.automations.form.cooldownDays' | t }}</span>
-            <input
-              type="number"
-              min="1"
-              data-testid="automation-form-cooldown"
-              [value]="formCooldownDays()"
-              (input)="formCooldownDays.set($any($event.target).valueAsNumber)"
-            />
-          </label>
+          @if (formIsApology()) {
+            <p class="q-caption automations__hint" data-testid="automation-form-apology-note">
+              {{ 'marketing.automations.form.apologyNote' | t }}
+            </p>
+          } @else {
+            <label class="field">
+              <span class="q-caption">{{ 'marketing.automations.form.cooldownDays' | t }}</span>
+              <input
+                type="number"
+                min="1"
+                data-testid="automation-form-cooldown"
+                [value]="formCooldownDays()"
+                (input)="formCooldownDays.set($any($event.target).valueAsNumber)"
+              />
+            </label>
+          }
 
           <label class="field">
             <span class="q-caption">{{ 'marketing.automations.form.consentPurpose' | t }}</span>
@@ -198,7 +223,22 @@
                 @for (run of runs(); track run.id) {
                   <tr data-testid="automation-run-row">
                     <td>{{ runStatusLabelKey(run.status) | t }}</td>
-                    <td>{{ run.refusalReason ?? run.cancelledReason ?? '—' }}</td>
+                    <td>
+                      @if (run.refusalReason; as reason) {
+                        {{ refusalLabel(reason) }}
+                        <span class="q-caption automations__code">{{ reason }}</span>
+                      } @else if (!runDetail(run)) {
+                        —
+                      }
+                      @if (runDetail(run); as detail) {
+                        <div
+                          class="q-caption automations__detail"
+                          data-testid="automation-run-detail"
+                        >
+                          {{ detail }}
+                        </div>
+                      }
+                    </td>
                     <td class="q-tnum">{{ formatMoment(run.firedAt) }}</td>
                   </tr>
                 }

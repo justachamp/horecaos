@@ -229,6 +229,29 @@ public class JdbcEngagementStore {
     }
 
     /**
+     * {@link #sendsWithin} for one channel (ADR 0112): what a contact-policy override
+     * counts, since an override is per channel and the platform cap is across all of them.
+     */
+    public int sendsWithinOnChannel(UUID tenantId, UUID brandId, UUID accountId, String channel, Instant since) {
+        return jdbc.sql("""
+                SELECT COUNT(*)
+                  FROM marketing.marketing_sends
+                 WHERE tenant_id = :tenantId
+                   AND brand_id = :brandId
+                   AND customer_account_id = :accountId
+                   AND channel = :channel
+                   AND sent_at >= :since
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("accountId", accountId)
+                .param("channel", channel)
+                .param("since", utc(since))
+                .query(Integer.class)
+                .single();
+    }
+
+    /**
      * Writes the ledger row for one message.
      *
      * <p>{@code ON CONFLICT DO NOTHING} on {@code (source_id, customer_account_id)}.

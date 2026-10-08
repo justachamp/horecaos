@@ -39,3 +39,55 @@ export function channelLabel(channel: string, translate: (key: MessageKey) => st
   const key = CHANNEL_LABEL_KEYS[channel];
   return key ? translate(key) : channel;
 }
+
+const ASSISTANT_OUTCOME_KEYS: Readonly<Record<string, MessageKey>> = {
+  ANSWERED: 'inbox.assistant.outcome.ANSWERED',
+  REFUSED: 'inbox.assistant.outcome.REFUSED',
+  ESCALATED: 'inbox.assistant.outcome.ESCALATED',
+  DECLINED: 'inbox.assistant.outcome.DECLINED',
+};
+
+const ASSISTANT_REASON_KEYS: Readonly<Record<string, MessageKey>> = {
+  NO_GROUNDING: 'inbox.assistant.reason.NO_GROUNDING',
+  UNGROUNDED_REPLY: 'inbox.assistant.reason.UNGROUNDED_REPLY',
+  MODEL_REFUSED: 'inbox.assistant.reason.MODEL_REFUSED',
+  PROVIDER_UNAVAILABLE: 'inbox.assistant.reason.PROVIDER_UNAVAILABLE',
+  SPEND_CEILING: 'inbox.assistant.reason.SPEND_CEILING',
+  TURN_CAP: 'inbox.assistant.reason.TURN_CAP',
+  ENTITLEMENT_LIMIT: 'inbox.assistant.reason.ENTITLEMENT_LIMIT',
+  RATE_LIMITED: 'inbox.assistant.reason.RATE_LIMITED',
+};
+
+const ASSISTANT_FACT_KEYS: Readonly<Record<string, MessageKey>> = {
+  PRICE: 'inbox.assistant.fact.PRICE',
+  AVAILABILITY: 'inbox.assistant.fact.AVAILABILITY',
+  BRANCH: 'inbox.assistant.fact.BRANCH',
+  HOURS: 'inbox.assistant.fact.HOURS',
+  COVERAGE: 'inbox.assistant.fact.COVERAGE',
+  ORDER: 'inbox.assistant.fact.ORDER',
+  KNOWLEDGE: 'inbox.assistant.fact.KNOWLEDGE',
+};
+
+/** The words for how an assistant turn ended; an outcome this client has not learned renders as its wire value. */
+export function assistantOutcomeLabel(
+  outcome: string,
+  translate: (key: MessageKey) => string,
+): string {
+  const key = ASSISTANT_OUTCOME_KEYS[outcome];
+  return key ? translate(key) : outcome;
+}
+
+/** The words for why a turn was refused; same forward-compatibility rule as {@link stateLabel}. */
+export function assistantReasonLabel(
+  reason: string,
+  translate: (key: MessageKey) => string,
+): string {
+  const key = ASSISTANT_REASON_KEYS[reason];
+  return key ? translate(key) : reason;
+}
+
+/** The words for a kind of retrieved fact; same forward-compatibility rule as {@link stateLabel}. */
+export function assistantFactLabel(kind: string, translate: (key: MessageKey) => string): string {
+  const key = ASSISTANT_FACT_KEYS[kind];
+  return key ? translate(key) : kind;
+}

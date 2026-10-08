@@ -159,28 +159,43 @@
         <thead>
           <tr>
             <th class="q-caption">{{ 'reports.branches.column.name' | t }}</th>
+            @if (paymentSplitNamesEntities()) {
+              <th class="q-caption">{{ 'reports.branches.payments.column.legalEntity' | t }}</th>
+            }
             <th class="q-caption">{{ 'reports.branches.payments.column.method' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.payments.column.count' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.payments.column.amount' | t }}</th>
           </tr>
         </thead>
         <tbody>
-          @for (row of paymentSplitRows(); track row.locationId + '|' + row.paymentMethodCode) {
+          @for (
+            row of paymentSplitRows();
+            track row.locationId + '|' + row.legalEntityId + '|' + row.paymentMethodCode
+          ) {
             <tr>
               <td class="q-body-sm">{{ row.locationName }}</td>
+              @if (paymentSplitNamesEntities()) {
+                <td class="q-body-sm" data-testid="payment-split-entity">
+                  {{ row.legalEntityName ?? '—' }}
+                </td>
+              }
               <td class="q-body-sm">{{ row.paymentMethodName }}</td>
               <td class="q-body-sm q-tnum num">{{ formatCountValue(row.tenderCount) }}</td>
               <td class="q-body-sm q-tnum num">{{ formatMoneyValue(row.amountSom) }}</td>
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm muted" colspan="4">
+              <td class="q-body-sm muted" [attr.colspan]="paymentSplitNamesEntities() ? 5 : 4">
                 {{ 'reports.branches.payments.empty' | t }}
               </td>
             </tr>
           }
         </tbody>
       </table>
+      <q-payment-mix-note
+        [provisional]="paymentMixProvisional()"
+        [openQuestion]="paymentMixOpenQuestion()"
+      />
     }
   }
 </div>

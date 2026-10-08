@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { ScopeGrant } from '../../core/auth/session-context';
-import { brandScope, canGrantAt, covers, locationScope, tenantScope } from './scope-coverage';
+import {
+  brandScope,
+  canGrantAt,
+  canonicalCapability,
+  covers,
+  locationScope,
+  tenantScope,
+} from './scope-coverage';
 
 const TENANT = 'tenant-1';
 const BRAND = 'brand-1';
@@ -89,5 +96,34 @@ describe('canGrantAt', () => {
 
   it('an empty capability requirement is always satisfied', () => {
     expect(canGrantAt([], tenantScope(TENANT), [])).toBe(true);
+  });
+
+  it('matches a job catalogue written as codes against a session written as enum names', () => {
+    // The wire: GET /session/context carries ORDER_CANCEL, the role catalogue carries order.cancel.
+    // Every other spec here uses codes on both sides, which is how the picker went empty unnoticed.
+    const scopes: readonly ScopeGrant[] = [
+      {
+        scope: { type: 'LOCATION', tenantId: TENANT, brandId: BRAND, locationId: LOCATION },
+        roleCode: 'location-manager',
+        capabilities: ['ORDER_CANCEL', 'IAM_GRANT_MANAGE'],
+      },
+    ];
+
+    expect(canGrantAt(scopes, locationScope(TENANT, BRAND, LOCATION), ['order.cancel'])).toBe(true);
+    expect(canGrantAt(scopes, locationScope(TENANT, BRAND, LOCATION), ['iam.grant.manage'])).toBe(
+      true,
+    );
+    expect(canGrantAt(scopes, locationScope(TENANT, BRAND, LOCATION), ['order.approve'])).toBe(
+      false,
+    );
+  });
+
+  it('folds every separator the server uses to one spelling', () => {
+    expect(canonicalCapability('kitchen.ticket.release-override')).toBe(
+      'KITCHEN_TICKET_RELEASE_OVERRIDE',
+    );
+    expect(canonicalCapability('KITCHEN_TICKET_RELEASE_OVERRIDE')).toBe(
+      'KITCHEN_TICKET_RELEASE_OVERRIDE',
+    );
   });
 });

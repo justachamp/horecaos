@@ -25,6 +25,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.LocalizedLabels;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -118,8 +119,9 @@ public class ServiceZoneService {
             @Nullable String nameEn,
             Map<String, String> names) {
         Map<String, String> supplied = suppliedNames(nameRu, nameUz, nameEn, names);
-        String defaultLocale =
-                brandLocales.brandDefaultLocale(tenantId, brandId).orElse("ru");
+        String defaultLocale = brandLocales
+                .brandDefaultLocale(tenantId, brandId)
+                .orElse(PlatformLocales.fallback().tag());
         String defaultName = supplied.get(defaultLocale);
         if (defaultName == null) {
             throw new ApiException(
@@ -526,6 +528,95 @@ public class ServiceZoneService {
         }
         return store.listVersions(tenantId, zoneId);
     }
+
+    /**
+     * One version's outline as drawn, for the map (row {@code 3.6}, ADR 0145).
+     *
+     * <p>Read-only and brand-scoped: the same zone-belongs-to-this-brand check {@link
+     * #listVersions} makes, so another brand's or tenant's zone id answers not-found rather than
+     * a polygon. Any status is readable, because the activation review exists to look at a
+     * {@code DRAFT} before it governs anything.
+     */
+    @Transactional(readOnly = true)
+    public ZoneOutline versionOutline(UUID tenantId, UUID brandId, UUID zoneId, int version) {
+        return store.outline(tenantId, brandId, zoneId, version)
+                .map(this::outlineOf)
+                .orElseThrow(
+                        () -> new DeliveryResourceNotFoundException("No version " + version + " of zone " + zoneId));
+    }
+
+    /** The live version of every zone this brand has, each as its outline (rows {@code 3.2}, {@code 7.10}). */
+    @Transactional(readOnly = true)
+    public List<ZoneOutline> activeOutlines(UUID tenantId, UUID brandId) {
+        return store.activeOutlines(tenantId, brandId).stream()
+                .map(this::outlineOf)
+                .toList();
+    }
+
+    /**
+     * PostGIS writes {@code [longitude, latitude]}; this is the one place that order is read, and
+     * what leaves it has names. The closing repeat of each ring's first corner is dropped, so the
+     * console's editors, which keep an outline open, never hold a duplicate corner that would
+     * trip their own "two neighbours the same" check.
+     */
+    private ZoneOutline outlineOf(JdbcServiceZoneStore.OutlineRow row) {
+        var root = objectMapper.readTree(row.geoJson());
+        String type = root.path("type").asString("");
+        var coordinates = root.path("coordinates");
+        List<OutlinePolygon> polygons = new ArrayList<>();
+        if ("MultiPolygon".equals(type)) {
+            for (var polygon : coordinates) {
+                polygons.add(polygonOf(polygon));
+            }
+        } else if ("Polygon".equals(type)) {
+            polygons.add(polygonOf(coordinates));
+        } else {
+            throw new IllegalStateException("Zone " + row.zoneId() + " version " + row.version()
+                    + " holds geometry of an unexpected type; expected a polygon");
+        }
+        return new ZoneOutline(
+                row.zoneId(), row.code(), row.role(), row.version(), row.status(), row.shapeKind(), polygons);
+    }
+
+    private static OutlinePolygon polygonOf(tools.jackson.databind.JsonNode rings) {
+        List<List<OutlinePoint>> all = new ArrayList<>();
+        for (var ring : rings) {
+            all.add(openRingOf(ring));
+        }
+        if (all.isEmpty()) {
+            throw new IllegalStateException("A stored polygon has no outer ring");
+        }
+        return new OutlinePolygon(all.get(0), all.subList(1, all.size()));
+    }
+
+    private static List<OutlinePoint> openRingOf(tools.jackson.databind.JsonNode ring) {
+        List<OutlinePoint> points = new ArrayList<>();
+        for (var position : ring) {
+            // GeoJSON position: [longitude, latitude]. Named here and nowhere downstream.
+            points.add(
+                    new OutlinePoint(position.get(1).asDouble(), position.get(0).asDouble()));
+        }
+        if (points.size() > 1 && points.get(0).equals(points.get(points.size() - 1))) {
+            points.remove(points.size() - 1);
+        }
+        return List.copyOf(points);
+    }
+
+    /** A point on an outline, with its axes named. */
+    public record OutlinePoint(double latitude, double longitude) {}
+
+    /** One polygon: its outer ring, then any holes, each open (the first corner not repeated). */
+    public record OutlinePolygon(List<OutlinePoint> ring, List<List<OutlinePoint>> holes) {}
+
+    /** A zone version's stored geometry, as named coordinates. */
+    public record ZoneOutline(
+            UUID zoneId,
+            String code,
+            ZoneRole role,
+            int version,
+            String status,
+            @Nullable String shapeKind,
+            List<OutlinePolygon> polygons) {}
 
     /** Every zone this brand has registered (operations §3.6 Delivery zones). */
     @Transactional(readOnly = true)

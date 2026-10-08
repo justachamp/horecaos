@@ -72,7 +72,10 @@ export class AuditLog {
     this.loadError.set(null);
     this.searched.set(true);
     try {
-      const page = await this.api.auditEvents(tenantId, { actionCode: this.actionCode().trim(), outcome: this.outcome() });
+      const page = await this.api.auditEvents(tenantId, {
+        actionCode: this.actionCode().trim(),
+        outcome: this.outcome(),
+      });
       this.events.set(page.items);
       this.nextCursor.set(page.nextCursor);
       this.openId.set(null);

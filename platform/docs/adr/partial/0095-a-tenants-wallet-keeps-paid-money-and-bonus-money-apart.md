@@ -1,7 +1,7 @@
 # ADR 0095: A tenant's wallet keeps paid money and bonus money apart
 
 - Decision status: Accepted
-- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request, V0214's card charge attempts — each pinned to the card token it was minted under — and V0222's one-`PENDING`-attempt-per-statement index; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, `WalletBonusExpirySweeper`, a `PENDING` card charge attempt retried under its own key and card token and never credited twice, and a card swapped while an attempt sits PENDING settling that attempt `SUPERSEDED` and minting a fresh one under the new card rather than ever retrying the old key under it; a superseded attempt's own charge, if it later reports success, is never dropped either — its row moves `SUPERSEDED` → `SUCCEEDED` (never re-minted, never re-asked), the money is routed through the same clamp-before-append and surplus-refused path an ordinary success takes, and an unambiguous `commercial.wallet.card_charge_after_supersede` fact names both attempts and the provider's reference for finance to reconcile by hand, while the symmetric late failure of a superseded attempt writes nothing, exactly as a duplicate report of any other resolved outcome does; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; fifty-six cases in `WalletTests` and five racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. The card charging adapter is absent until a merchant agreement exists — `CardCharger`'s only implementation answers "not configured" to a charge and "not succeeded" to a status check, so a CARD tenant's remainder stays due exactly as an INVOICE one does
+- Implementation status: Partial — V0211's `commercial.wallet_entries` (append-only, UPDATE and DELETE refused by trigger and by GRANT, four eyes on the row, money in unique on the normalised reference, a deposit naming the subscription it cleared), `commercial.tenant_billing`, `subscriptions.deposit_due_minor` and the four seeded PLATFORM approval policies, V0212's subject on a platform approval request, V0214's card charge attempts — each pinned to the card token it was minted under — and V0222's one-`PENDING`-attempt-per-statement index; `WalletService` with settlement at issue, oldest-open-statement settlement for money arriving later, maker-checker corrections, bonus grants, refunds and deposit reversals raised at PLATFORM scope, the reversal a voided statement writes, `WalletBonusExpirySweeper`, a `PENDING` card charge attempt retried under its own key and card token and never credited twice, and a card swapped while an attempt sits PENDING settling that attempt `SUPERSEDED` and minting a fresh one under the new card rather than ever retrying the old key under it; a superseded attempt's own charge, if it later reports success, is never dropped either — its row moves `SUPERSEDED` → `SUCCEEDED` (never re-minted, never re-asked), the money is routed through the same clamp-before-append and surplus-refused path an ordinary success takes, and an unambiguous `commercial.wallet.card_charge_after_supersede` fact names both attempts and the provider's reference for finance to reconcile by hand, while the symmetric late failure of a superseded attempt writes nothing, exactly as a duplicate report of any other resolved outcome does; `JdbcWalletStore`, `CommercialWalletController`, and the statement's deposit line removed in favour of the wallet; fifty-six cases in `WalletTests` and five racing ones in `WalletConcurrencyTests` against the migrated schema, with the platform queue's action coverage asserted against the seeded policies; the control plane's Invoices & wallet screen shows both balances, the spendable bonus, the ledger with load-more, live grants, each statement's paid and due, and proposes every manual change, and its approvals queue names the tenant and the amount on every platform row. V0504's platform bank-details setting (a placeholder until a second person approves real details, which `ck_platform_billing_four_eyes` makes a row that carries two names) and `commercial.platform_card_installations` (HorecaOS's own card merchant account in the shape of an ADR 0026 installation), V0505's card on file beside the tenant's billing row (last four, brand and expiry, never the reference) and `commercial.card_top_ups`, V0506's frozen `commercial.prepayment_invoices` with the ledger entry that pays one naming it; `CardEnrolment` and `CardProviderAdapter` behind `PlatformCardGateway` (the one `CardCharger` the application sees), `FakeCardProvider` as the only adapter (it keeps a real provider's contract and cannot be activated outside a local or test run), `CardOnFileService` (a tenant binds its own card through the provider's form, replaces or removes it, chooses INVOICE, WALLET or CARD), `CardTopUpService` (a tenant tops the wallet up by card, between two committed transactions, an answer lost after the money moved recorded and never charged twice), `PrepaymentInvoiceService`, `PlatformBillingSettingsService`, `PlatformCardInstallationService`, `WalletCardSettlementSweeper` (resolves unanswered charges and retries declined cards on a holdback), the `commercial.arrears.paid_in_full` fact a payment that clears a past-due tenant writes without moving its subscription, and the tenant's own `/api/v1/tenants/{tenantId}/commercial/wallet` routes; `CardRecurringTokenFlowTests`, `CardTopUpTests`, `PrepaymentInvoiceFlowTests`, `WalletCardSettlementSweeperTests`, `ArrearsPaymentConsequenceTests`, `WalletLedgerInvariantTests` and `CommercialWalletSelfServiceEndpointTests` against the migrated schema. Not built: HorecaOS's own Click or Payme merchant account, and so the adapter that speaks to one — `PlatformCardGateway` answers "not configured" until an installation of a real provider type is activated, and a CARD tenant is then collected exactly like an INVOICE one; the owner completes that connection when the account exists
 - Date proposed: 2026-09-11
 - Date decided: 2026-10-07
 - Deciders: the platform owner decided on 2026-09-11 that tenants pay by invoice and bank transfer, from a prepaid wallet or by card; that bonus money HorecaOS grants is kept apart from money a tenant paid, is spent first and lapses on a date set per grant; that paid money never lapses and is refunded when a tenant leaves; that every manual change needs a proposer and a different approver; and that the activation deposit is credited to the first statement. The structure below was proposed by Claude on those answers; Ayubkhon Abbosov (platform owner) decides
@@ -616,6 +616,33 @@ them. Rolling back leaves the ledger in place and unread.
       symmetric late failure of a superseded attempt writes nothing. A
       per-tenant advisory lock around the whole settlement pass, which would
       close the race at its source instead, is deferred (see Open inputs)
+- [x] A tenant keeps its own card on file through the provider's hosted form
+      (the card number never reaches HorecaOS), replaces and removes it, and
+      chooses how it is collected; a card is bound to the merchant account that
+      minted it (V0505, wave 19)
+- [x] A tenant tops its wallet up by card: attempt committed first, provider
+      asked with nothing held, answer lost after the money moved recorded on the
+      next pass without a second charge, one unresolved top-up per tenant
+- [x] Invoices for prepaid money, frozen at issue with the bank details of that
+      moment, paid by a transfer that names them (V0506)
+- [x] The bank details an invoice shows are a platform setting that starts as a
+      placeholder and changes only through an approved platform request (V0504)
+- [x] HorecaOS's own card account as an installation the owner completes later,
+      with a fake behind it that is never used outside a local or test run
+- [x] The settlement pass runs without anybody triggering it: unanswered charges
+      resolved, declined cards retried on a holdback and given up on after three
+- [x] A payment that clears a past-due tenant is said so (activity log and
+      dunning board) and moves nothing: ADR 0089 (wave 19)
+- [x] The tenant sees the credit about to lapse (`lapsingGrants`)
+- [x] The merchant's own wallet screen: both balances, the credit about to lapse, top-up by card or by
+      invoice, the card put on file through the provider's form, how the remainder is collected, the
+      invoices and what each statement has been paid (operations, Finance → Wallet; wave 19 step 2)
+- [x] The arrears banner says what is owed and which ways of paying exist, and links to the wallet
+- [x] The control plane shows a tenant's prepayment invoices and card top-ups, takes a transfer against
+      the invoice it pays, proposes the bank details for a second person's approval and manages the card
+      merchant account (Invoices & wallet, Billing setup)
+- [ ] A real card provider adapter and the activated installation behind it
+      (waits for the merchant account; finance, operations)
 
 ## Exit criteria
 
@@ -628,3 +655,89 @@ approves it.
 
 - ADR 0088, ADR 0093, ADR 0027
 - CLAUDE.md, on a stored balance beside its entries
+
+## Status notes
+
+### 2026-10-07 — wave 19: the card flow, prepayment invoices and the settlement pass
+
+The Decision above is unchanged. This note records what was built to finish the Partial record, and
+the choices that follow from decisions already made rather than from a new one.
+
+- **The two open inputs, closed on their proposed defaults.** The bank details an invoice shows are a
+  platform setting with a placeholder; and HorecaOS's own Click or Payme account does not exist, so the
+  card adapter is built against a fake behind an installation the owner completes later. Neither waits on
+  the owner: what waits is the account itself and the adapter that speaks to it.
+- **Bank details are two people's.** Replacing the placeholder is proposed by one person and approved by a
+  different one through the approval model, at `PLATFORM` scope like every other decision HorecaOS takes
+  about money (`commercial.billing.bank-details`, seeded by V0504). The checker is shown the whole
+  proposal, because the account number is what is being signed; only the maker's reason is withheld
+  (ADR 0029). The database refuses real details without two names. An invoice is refused until they are
+  set, so a tenant is never handed a document that tells it to pay a sentence. This extends decision 4's
+  reasoning to a change it did not list; it adds no new kind of control.
+- **The platform installation.** ADR 0026 installations are tenant-owned and a synthetic platform tenant
+  was refused on purpose (`notifications.api.ControlPlaneAlertPort`), and `integration` depends on
+  `commercial`, not the reverse, so HorecaOS's own account lives in `commercial.platform_card_installations`
+  with the same rules: an environment only from the approved catalogue, a credential only as a
+  `provider_payment` secret reference, at most one ACTIVE, and an adapter wired into the build. A
+  generalisation to every platform-owned provider account (ADR 0096's e-invoicing operators need the same)
+  is its own decision and is not made here.
+- **A card token is only meaningful to the account that minted it.** A reference a tenant bound is stored
+  as `<installation id>:<provider token>`; the gateway refuses one minted under another account by name
+  (`CARD_BOUND_UNDER_ANOTHER_MERCHANT_ACCOUNT`) instead of letting the new account decline a token it has
+  never seen as if the cardholder were at fault. A staff-typed reference has no prefix and is passed
+  through, as before.
+- **A card on file is no longer tied to CARD.** `ck_tenant_billing_card_token` is dropped: a WALLET tenant
+  needs a card to top up with without agreeing to be charged for every statement. What decides whether a
+  statement's remainder is charged is still `payment_method = 'CARD'`, and choosing it is the tenant's own
+  recorded consent (`commercial.card.manage`). Staff switching to another method no longer takes a tenant's
+  own card off file.
+- **Top-up and statement attempts are separate tables.** `commercial.card_top_ups` has the same contract as
+  `commercial.card_charge_attempts` (id is the idempotency key, committed before the provider is asked,
+  pinned to its card) but a top-up has no statement and credits the whole amount, where a statement
+  attempt clamps to what is still owed. Keeping them apart left the heavily tested statement path
+  untouched.
+- **What an invoice has been paid is the ledger's word.** A transfer that names an invoice carries
+  `wallet_entries.prepayment_invoice_id` (V0506; only a `TOP_UP` may); the invoice's paid, part-paid,
+  expired and cancelled states are read, never stored. It is a request for payment and not a tax invoice:
+  every figure is before tax (decision 7).
+- **Paying does not restore.** ADR 0089 says nothing moves a subscription by itself, and this wave holds to
+  it: a payment that leaves a PAST_DUE or SUSPENDED tenant owing nothing writes one
+  `commercial.arrears.paid_in_full` fact and the board and the tenant's own arrears read (ADR 0127) carry
+  what is owed and `paidInFull`, so the person who restores it is told. Automatic restoration would be a
+  decision of its own.
+- **Defaults finance may tune** (properties under `horecaos.commercial.wallet`): a prepayment invoice is
+  valid 14 days with at most 10 open at once; a declined card is retried after 24 hours and given up on
+  after 3 declines since it last worked; an unanswered top-up is resolved after 2 minutes; the credit-expiry
+  warning looks 14 days ahead. None is in a record; each is the least surprising value.
+
+### 2026-10-07 — wave 19, step 2: the console
+
+The Decision above is unchanged. This note records the screens, and what they deliberately do not do.
+
+- **Operations, Finance → Wallet** (`frontend/operations/src/app/features/finance/wallet/`): a tab beside
+  Subscription, because the subscription page is what the plan and its modules cost and this is what has
+  been paid and how to pay more. It shows the paid and the spendable bonus balance (the ledger sum beside
+  it only while the two differ), the credit about to lapse, what is owed, and the card top-up and the
+  invoice request. The Subscription tab carries the wallet at a glance and the same lapsing warning, and
+  its arrears banner now says what is owed and which ways of paying exist.
+- **Not connected is said, not hidden.** `cardPaymentsAvailable` and `bankTransferAvailable` come from the
+  server; while either is false the matching entry points are disabled with the reason beside them, and
+  nothing is offered that would only be refused. The day an account or bank details exist the screen needs
+  no change. No provider is named on the screen: the IA names Click and Atmos and this record Click or
+  Payme, and which one the owner connects is not decided.
+- **The card number never reaches the console.** "Add a card" opens a session; the cardholder types the
+  card into the provider's own form, and the console forwards two things only: what that form hands back
+  and the code the bank texts. Today those are typed in, because no real adapter exists to say how a form
+  hands a token to a browser (a page message, a redirect); wiring that handoff belongs with the adapter.
+  The built-in test provider says so on the screen and names its test values.
+- **A retry never charges twice.** A top-up, an invoice request and a card confirmation hold their
+  `Idempotency-Key` until the server has answered; the same click after a lost answer replays.
+- **Choosing CARD is a consent**, worded as one, and asked for before anything is sent (decision 3).
+- **Paying is a signal, not a switch** (ADR 0089): the arrears banner never offers to restore the
+  subscription, and the control plane's dunning board shows `paidInFull` as a cue beside the stage's own
+  moves.
+- **The control plane** lists invoices and card top-ups on Invoices & wallet and takes a transfer against
+  the invoice it pays. HorecaOS's own bank details and card merchant account are not per tenant, so they
+  have a screen of their own (Billing setup); a proposal of bank details stays filled after it is made
+  so that the identical second submission, after a different person approves it, is one click. Staff no
+  longer type a card token: the tenant puts its own card on file.

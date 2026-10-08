@@ -140,3 +140,50 @@
   height: 120px;
   background: var(--q-surface-1);
 }
+
+.zone-import__verdict {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: var(--q-type-caption);
+}
+
+.zone-import__verdict[data-verdict='OUTSIDE'],
+.zone-import__verdict[data-verdict='LIKELY_SWAPPED'] {
+  color: var(--q-error-text);
+}
+
+.zone-import__preview {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.zone-import__preview-body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 16px;
+  margin: 8px 0;
+}
+
+.zone-import__corners {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.zone-import__corners th,
+.zone-import__corners td {
+  padding: 2px 8px;
+  text-align: left;
+  font-size: var(--q-type-caption);
+}
+
+.zone-import__review-modal {
+  width: min(880px, 96vw);
+}
+
+@media (max-width: 720px) {
+  .zone-import__preview-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -104,6 +104,12 @@ class IdempotentResponseClassificationTests {
             // A grant id, and whether a revocation changed anything.
             "GrantController#grant",
             "GrantController#revoke",
+            // ADR 0103: the same two answers from the routes a branch or brand manager's own
+            // grant covers -- a grant id, and whether a revocation changed anything.
+            "ScopedGrantController#grantAtLocation",
+            "ScopedGrantController#revokeAtLocation",
+            "ScopedGrantController#grantInBrand",
+            "ScopedGrantController#revokeInBrand",
             // Audience export: customer account identifiers and no attribute of
             // them. ADR 0032's rule exactly -- an id travels, the person does not.
             "OperationsMarketingController#export",
@@ -208,6 +214,10 @@ class IdempotentResponseClassificationTests {
             if (ResponseBodyProtection.classify(handler).isEmpty()) {
                 continue;
             }
+            if (handler.getAnnotation(OneTimeResponse.class) != null) {
+                // Kept nowhere at all, so there is nothing to encrypt; reviewed one by one below.
+                continue;
+            }
             if (!pathOf(handler).contains("{tenantId}")) {
                 keyless.add(nameOf(handler));
             }
@@ -217,6 +227,37 @@ class IdempotentResponseClassificationTests {
                 .as("an endpoint answering with personal data must sit under {tenantId}, "
                         + "or there is no per-tenant key to protect its stored response with")
                 .isEmpty();
+    }
+
+    /**
+     * The handlers allowed to answer with a secret shown once and keep no copy (ADR 0070).
+     *
+     * <p>{@link OneTimeResponse} exempts a classified response from the rule above, so it is a way
+     * round that rule and is held to a list a person edits: each is a platform-scoped call that
+     * mints a credential, and neither can be encrypted under a tenant because it has none.
+     */
+    private static final Set<String> REVIEWED_ONE_TIME = Set.of(
+            "StorefrontAppRegistryController#registerStorefrontApp",
+            "StorefrontAppRegistryController#rotateStorefrontAppSecret");
+
+    @Test
+    @DisplayName("a response kept nowhere is a reviewed exception, one handler at a time")
+    void oneTimeResponsesAreReviewedOneByOne() {
+        Set<String> declared = new LinkedHashSet<>();
+        for (Method handler : idempotentHandlers()) {
+            if (handler.getAnnotation(OneTimeResponse.class) != null) {
+                declared.add(nameOf(handler));
+                assertThat(ResponseBodyProtection.classify(handler))
+                        .as("%s is marked one-time but its response carries nothing classified", nameOf(handler))
+                        .isPresent();
+            }
+        }
+
+        assertThat(declared).as("""
+                        OneTimeResponse keeps a classified response from being stored at all, which
+                        exempts it from being encrypted under a tenant. It is a way round the rule
+                        above and so is a reviewed list: add the handler here, with the reason it
+                        mints a credential, or take the annotation off.""").isEqualTo(REVIEWED_ONE_TIME);
     }
 
     @Test

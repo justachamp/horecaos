@@ -9,16 +9,34 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { InstallationsExplorer } from './installations-explorer';
 import { BindingView, PlatformInstallationView, ProvidersApi } from './providers-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const POS: PlatformInstallationView = {
-  id: 'inst-1', tenantId: 'tenant-1', tenantSlug: 'oshxona', tenantDisplayName: 'Oshxona', category: 'POS',
-  providerType: 'clopos', environmentCode: 'clopos-prod', displayName: 'Clopos', status: 'ACTIVE',
-  secretReference: 'horecaos:production:provider_pos:tenant:clopos', lastConnectionStatus: null, adapterVersion: '1', lastSecretRotatedAt: null,
+  id: 'inst-1',
+  tenantId: 'tenant-1',
+  tenantSlug: 'oshxona',
+  tenantDisplayName: 'Oshxona',
+  category: 'POS',
+  providerType: 'clopos',
+  environmentCode: 'clopos-prod',
+  displayName: 'Clopos',
+  status: 'ACTIVE',
+  secretReference: 'horecaos:production:provider_pos:tenant:clopos',
+  lastConnectionStatus: null,
+  adapterVersion: '1',
+  lastSecretRotatedAt: null,
 };
 const ACTIVE_BINDING: BindingView = {
-  id: 'bind-1', brandId: 'brand-1', locationId: 'loc-1', status: 'ACTIVE', priority: 100,
-  effectiveFrom: '2026-09-01T00:00:00Z', effectiveUntil: null,
+  id: 'bind-1',
+  brandId: 'brand-1',
+  locationId: 'loc-1',
+  status: 'ACTIVE',
+  priority: 100,
+  effectiveFrom: '2026-09-01T00:00:00Z',
+  effectiveUntil: null,
 };
 
 class FakeProvidersApi {
@@ -27,17 +45,33 @@ class FakeProvidersApi {
   readonly suspendBinding = vi.fn().mockResolvedValue({ changed: true });
   readonly activateBinding = vi.fn();
   readonly checkConnection = vi.fn();
-  readonly capabilityMatrix = vi.fn().mockResolvedValue([
-    { providerType: 'clopos', declaredCapabilities: ['ORDER_EXPORT', 'MENU_IMPORT'] },
-  ]);
+  readonly capabilityMatrix = vi
+    .fn()
+    .mockResolvedValue([
+      { providerType: 'clopos', declaredCapabilities: ['ORDER_EXPORT', 'MENU_IMPORT'] },
+    ]);
   readonly cloposSettings = vi.fn().mockResolvedValue({ requireClerkApproval: true });
   readonly setCloposSettings = vi.fn().mockResolvedValue(undefined);
   readonly environments = vi.fn().mockResolvedValue([
-    { code: 'clopos-open-api-v2', category: 'POS', providerType: 'clopos', production: true, notes: null },
-    { code: 'geo-test', category: 'GEOCODING', providerType: 'yandex', production: false, notes: null },
+    {
+      code: 'clopos-open-api-v2',
+      category: 'POS',
+      providerType: 'clopos',
+      production: true,
+      notes: null,
+    },
+    {
+      code: 'geo-test',
+      category: 'GEOCODING',
+      providerType: 'yandex',
+      production: false,
+      notes: null,
+    },
   ]);
   readonly listProviders = vi.fn().mockResolvedValue([]);
-  readonly writeCredential = vi.fn().mockResolvedValue('horecaos:production:provider_pos:tenant-1:ref-9');
+  readonly writeCredential = vi
+    .fn()
+    .mockResolvedValue('horecaos:production:provider_pos:tenant-1:ref-9');
   readonly install = vi.fn().mockResolvedValue({ installationId: 'inst-2', status: 'DRAFT' });
   readonly bind = vi.fn().mockResolvedValue({ bindingId: 'bind-2' });
   readonly rotateCredential = vi.fn().mockResolvedValue(undefined);
@@ -56,7 +90,10 @@ describe('InstallationsExplorer', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: ProvidersApi, useValue: api },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
         {
           provide: TenantsApi,
           useValue: {
@@ -65,7 +102,9 @@ describe('InstallationsExplorer', () => {
               nextCursor: null,
             }),
             getBrands: vi.fn().mockResolvedValue([{ id: 'brand-1', displayName: 'Oshxona Brand' }]),
-            getLocations: vi.fn().mockResolvedValue([{ id: 'loc-1', brandId: 'brand-1', displayName: 'Chilonzor' }]),
+            getLocations: vi
+              .fn()
+              .mockResolvedValue([{ id: 'loc-1', brandId: 'brand-1', displayName: 'Chilonzor' }]),
           },
         },
       ],
@@ -82,9 +121,9 @@ describe('InstallationsExplorer', () => {
   }
 
   function button(label: string): HTMLButtonElement {
-    return (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]).find(
-      (b) => b.textContent?.trim() === label,
-    )!;
+    return (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim() === label)!;
   }
 
   it('shows where an installation is used, by place name, and suspends a binding only with a reason', async () => {
@@ -93,20 +132,31 @@ describe('InstallationsExplorer', () => {
     await settle();
 
     expect(api.bindings).toHaveBeenCalledWith('tenant-1', 'inst-1');
-    expect(fixture.nativeElement.querySelector('.bindings').textContent).toContain('Oshxona Brand › Chilonzor');
+    expect(fixture.nativeElement.querySelector('.bindings').textContent).toContain(
+      'Oshxona Brand › Chilonzor',
+    );
 
     button(ru['installationsExplorer.bindings.suspend']).click();
     await settle();
     expect(button(ru['installationsExplorer.bindings.confirm']).disabled).toBe(true);
-    const reason = fixture.nativeElement.querySelector('input[name="bindingReason"]') as HTMLInputElement;
+    const reason = fixture.nativeElement.querySelector(
+      'input[name="bindingReason"]',
+    ) as HTMLInputElement;
     reason.value = 'Clopos outage, back to paper';
     reason.dispatchEvent(new Event('input'));
     await settle();
     button(ru['installationsExplorer.bindings.confirm']).click();
     await settle();
 
-    expect(api.suspendBinding).toHaveBeenCalledWith('tenant-1', 'inst-1', 'bind-1', 'Clopos outage, back to paper');
-    expect(fixture.nativeElement.textContent).toContain(ru['installationsExplorer.bindings.changed']);
+    expect(api.suspendBinding).toHaveBeenCalledWith(
+      'tenant-1',
+      'inst-1',
+      'bind-1',
+      'Clopos outage, back to paper',
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      ru['installationsExplorer.bindings.changed'],
+    );
   });
 
   it('checks a connection and shows what it found', async () => {
@@ -118,7 +168,10 @@ describe('InstallationsExplorer', () => {
     button(ru['installationsExplorer.check.action']).click();
     await settle();
 
-    expect(api.checkConnection).toHaveBeenCalledWith('tenant-1', expect.objectContaining({ id: 'inst-1', category: 'POS' }));
+    expect(api.checkConnection).toHaveBeenCalledWith(
+      'tenant-1',
+      expect.objectContaining({ id: 'inst-1', category: 'POS' }),
+    );
     expect(fixture.nativeElement.textContent).toContain('SUCCEEDED');
   });
 
@@ -138,11 +191,20 @@ describe('InstallationsExplorer', () => {
     await set('select[name="environment"]', 'clopos-open-api-v2', 'change');
     await set('input[name="displayName"]', 'Clopos, Chilonzor');
     await set('input[name="credential"]', 'integrator-secret');
-    expect((fixture.nativeElement.querySelector('input[name="credential"]') as HTMLInputElement).type).toBe('password');
-    (fixture.nativeElement.querySelector('.installForm button[type="submit"]') as HTMLButtonElement).click();
+    expect(
+      (fixture.nativeElement.querySelector('input[name="credential"]') as HTMLInputElement).type,
+    ).toBe('password');
+    (
+      fixture.nativeElement.querySelector('.installForm button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle();
 
-    expect(api.writeCredential).toHaveBeenCalledWith('tenant-1', 'POS', 'clopos', 'integrator-secret');
+    expect(api.writeCredential).toHaveBeenCalledWith(
+      'tenant-1',
+      'POS',
+      'clopos',
+      'integrator-secret',
+    );
     expect(api.install).toHaveBeenCalledWith('tenant-1', {
       category: 'POS',
       providerType: 'clopos',
@@ -170,7 +232,9 @@ describe('InstallationsExplorer', () => {
 
     await set('select[name="bindBrand"]', 'brand-1', 'change');
     await set('select[name="bindLocation"]', 'loc-1', 'change');
-    const exportBox = fixture.nativeElement.querySelector('input[name="capability-ORDER_EXPORT"]') as HTMLInputElement;
+    const exportBox = fixture.nativeElement.querySelector(
+      'input[name="capability-ORDER_EXPORT"]',
+    ) as HTMLInputElement;
     exportBox.checked = true;
     exportBox.dispatchEvent(new Event('change'));
     await settle();
@@ -193,7 +257,9 @@ describe('InstallationsExplorer', () => {
       'new-integrator-secret',
       'the old key leaked in a screenshot',
     );
-    expect((fixture.nativeElement.querySelector('input[name="rotateValue"]') as HTMLInputElement).value).toBe('');
+    expect(
+      (fixture.nativeElement.querySelector('input[name="rotateValue"]') as HTMLInputElement).value,
+    ).toBe('');
   });
 
   it('turns off the clerk’s acceptance for a Clopos installation', async () => {
@@ -201,7 +267,9 @@ describe('InstallationsExplorer', () => {
     button(ru['installationsExplorer.manage']).click();
     await settle();
 
-    const box = fixture.nativeElement.querySelector('input[name="clerkApproval"]') as HTMLInputElement;
+    const box = fixture.nativeElement.querySelector(
+      'input[name="clerkApproval"]',
+    ) as HTMLInputElement;
     expect(box.checked).toBe(true);
     box.checked = false;
     box.dispatchEvent(new Event('change'));

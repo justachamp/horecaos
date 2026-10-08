@@ -97,12 +97,26 @@ public final class EventCatalog {
     public static final String INTEGRATION_EVENTS_TOPIC = KafkaTopicCatalog.INTEGRATION_EVENTS;
 
     /**
+     * ADR 0111 lead facts. Its own topic: a consumer of "a catering enquiry arrived" should not
+     * read ordering's volume to find it, and the producer is the customers module.
+     */
+    public static final String CUSTOMERS_EVENTS_TOPIC = KafkaTopicCatalog.CUSTOMERS_EVENTS;
+
+    /**
      * ADR 0018 pricing facts. Its own topic rather than a share of {@code
      * tenancy.events}: nothing that reads price-book activations should have to
      * filter out tenant and brand creations to get them, and the two have
      * nothing in common to retain or partition alike.
      */
     public static final String PRICING_EVENTS_TOPIC = KafkaTopicCatalog.PRICING_EVENTS;
+
+    /**
+     * ADR 0112 marketing facts. Its own topic rather than a share of {@code
+     * pricing.events} or {@code tenancy.events}: a scenario produces a record per
+     * guest per step, which has nothing in common with a handful of control-plane
+     * activations. Nothing on it carries a contact value or a rendered message.
+     */
+    public static final String MARKETING_EVENTS_TOPIC = KafkaTopicCatalog.MARKETING_EVENTS;
 
     /**
      * ADR 0012's durable scheduler. A command, not a fact: {@code PosSyncRequested}
@@ -536,6 +550,50 @@ public final class EventCatalog {
                             + "Symmetric — active carries the direction — and identifiers and "
                             + "stable codes only, never a product name or free text."),
             new EventContract(
+                    "LeadRegistered",
+                    1,
+                    "customers",
+                    CUSTOMERS_EVENTS_TOPIC,
+                    "leadId",
+                    "events/customers.events/LeadRegistered.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A lead (a guest who is not yet an account with an order) was created (ADR 0111). "
+                            + "Its source and brand, and nothing about the guest -- never a phone number, "
+                            + "a name or a note."),
+            new EventContract(
+                    "LeadStatusChanged",
+                    1,
+                    "customers",
+                    CUSTOMERS_EVENTS_TOPIC,
+                    "leadId",
+                    "events/customers.events/LeadStatusChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A lead moved from one status to another (ADR 0111): NEW, CONTACTED, "
+                            + "CALLBACK_SCHEDULED, CONVERTED, DECLINED, LOST. Two status codes."),
+            new EventContract(
+                    "LeadAssignedToLocation",
+                    1,
+                    "customers",
+                    CUSTOMERS_EVENTS_TOPIC,
+                    "leadId",
+                    "events/customers.events/LeadAssignedToLocation.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A lead was handed to a branch (ADR 0111): a field, not a workflow. The branch's id."),
+            new EventContract(
+                    "LeadConverted",
+                    1,
+                    "customers",
+                    CUSTOMERS_EVENTS_TOPIC,
+                    "leadId",
+                    "events/customers.events/LeadConverted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A lead became the order or the reservation it was for (ADR 0111): exactly one of the "
+                            + "two ids."),
+            new EventContract(
                     "MarketplaceAvailabilityPushed",
                     1,
                     "integration",
@@ -597,6 +655,42 @@ public final class EventCatalog {
                     "A promotion was taken out of front of customers (ADR 0140). New orders stop "
                             + "receiving it; an order that already holds it keeps it under its "
                             + "recorded definition version."),
+            new EventContract(
+                    "ScenarioStepDecided",
+                    1,
+                    "marketing",
+                    MARKETING_EVENTS_TOPIC,
+                    "campaignId",
+                    "events/marketing.events/ScenarioStepDecided.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A scenario's action selection made a choice for one guest at one step "
+                            + "(ADR 0112): the step was sent, or it was blocked for a stated reason. "
+                            + "Ids, the step number, the decision and a reason code from a closed set -- "
+                            + "never a contact value, a rendered message or the reason's sentence."),
+            new EventContract(
+                    "ScenarioParticipantStopped",
+                    1,
+                    "marketing",
+                    MARKETING_EVENTS_TOPIC,
+                    "campaignId",
+                    "events/marketing.events/ScenarioParticipantStopped.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A guest's run through a scenario ended (ADR 0112): completed, or stopped by a "
+                            + "condition, by consent withdrawn or by a suppression. Ids and the outcome code."),
+            new EventContract(
+                    "OfferPublished",
+                    1,
+                    "marketing",
+                    MARKETING_EVENTS_TOPIC,
+                    "offerId",
+                    "events/marketing.events/OfferPublished.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An offer version was put in front of campaigns (ADR 0112). The offer, its brand "
+                            + "and its version number; never the promotion or rule it references, which a "
+                            + "consumer reads through the authorized offers API."),
             // ADR 0012's durable scheduler command. The claim that decided this
             // command should exist happened in PostgreSQL, under FOR UPDATE SKIP
             // LOCKED, in the same transaction that advanced the schedule's

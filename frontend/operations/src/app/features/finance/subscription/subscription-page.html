@@ -47,15 +47,24 @@
       }
 
       @if (arrears(); as a) {
-        @if (a.additionsBlocked || !a.planEntitlementsApply) {
-          <div class="restriction-banner" role="alert">
+        @if (bannerVisible()) {
+          <div
+            class="restriction-banner"
+            [class.restriction-banner--soft]="!restricted(a)"
+            [attr.role]="restricted(a) ? 'alert' : 'status'"
+            data-testid="subscription-standing"
+          >
             <div class="plan-card__row">
               <span class="q-subhead">{{ 'finance.subscription.arrears.title' | t }}</span>
               <span class="status-badge">{{ arrearsStatusLabel(a.status) }}</span>
             </div>
-            <p class="q-body-sm">
-              {{ 'finance.subscription.arrears.restricted' | t }}
-            </p>
+            @if (restricted(a)) {
+              <p class="q-body-sm">
+                {{ 'finance.subscription.arrears.restricted' | t }}
+              </p>
+            } @else if (a.status === 'PAST_DUE') {
+              <p class="q-body-sm">{{ 'finance.subscription.arrears.pastDue' | t }}</p>
+            }
             <p class="q-caption muted">
               {{ 'finance.subscription.arrears.since' | t }}: {{ a.since }} ·
               {{ 'finance.subscription.arrears.days' | t: { days: a.daysInStatus } }}
@@ -66,8 +75,65 @@
                 {{ money(latest.total) }} ({{ latest.number }})
               </p>
             }
+            @if (a.owed; as owed) {
+              <p class="q-body-sm owed" data-testid="subscription-owed">
+                {{
+                  'finance.subscription.arrears.owed'
+                    | t: { amount: money(owed.due), count: owed.openStatements }
+                }}
+              </p>
+              @for (way of waysToPay(a); track way) {
+                <p class="q-body-sm" data-testid="subscription-way-to-pay">{{ way | t }}</p>
+              }
+            }
+            <p class="q-body-sm">
+              <a
+                class="wallet-link"
+                routerLink="/finance/wallet"
+                data-testid="subscription-open-wallet"
+                >{{ 'finance.subscription.arrears.openWallet' | t }}</a
+              >
+            </p>
           </div>
         }
+      }
+
+      @if (walletSummary(); as w) {
+        <div class="wallet-summary" data-testid="subscription-wallet">
+          <div class="plan-card__row">
+            <span class="q-subhead">{{ 'finance.subscription.wallet.title' | t }}</span>
+            <a
+              class="wallet-link"
+              routerLink="/finance/wallet"
+              data-testid="subscription-wallet-link"
+              >{{ 'finance.subscription.wallet.open' | t }}</a
+            >
+          </div>
+          <p class="q-body-sm q-tnum" data-testid="subscription-wallet-balances">
+            {{
+              'finance.subscription.wallet.balances'
+                | t
+                  : {
+                      paid: walletFigure(w.paidBalance),
+                      bonus: walletFigure(w.bonusSpendableBalance),
+                    }
+            }}
+          </p>
+          @if (w.lapsingGrants.length > 0) {
+            <div class="lapsing" data-testid="subscription-wallet-lapsing">
+              <strong class="q-body-sm">{{ 'finance.wallet.notice.lapsing' | t }}</strong>
+              @for (grant of w.lapsingGrants; track grant.grantId) {
+                <p class="q-body-sm q-tnum">
+                  {{
+                    'finance.wallet.notice.lapsing.line'
+                      | t
+                        : { amount: walletFigure(grant.remaining), date: lapsesOn(grant.expiresAt) }
+                  }}
+                </p>
+              }
+            </div>
+          }
+        </div>
       }
 
       @if (entitlements(); as e) {
@@ -144,6 +210,8 @@
             <th class="q-caption">{{ 'finance.subscription.statements.number' | t }}</th>
             <th class="q-caption">{{ 'finance.subscription.statements.period' | t }}</th>
             <th class="q-caption num">{{ 'finance.subscription.statements.total' | t }}</th>
+            <th class="q-caption num">{{ 'finance.subscription.statements.paid' | t }}</th>
+            <th class="q-caption num">{{ 'finance.subscription.statements.due' | t }}</th>
             <th class="q-caption">{{ 'finance.subscription.statements.status' | t }}</th>
             <th class="q-caption"></th>
           </tr>
@@ -162,6 +230,12 @@
               </td>
               <td class="q-body-sm">{{ statement.periodKey }}</td>
               <td class="q-body-sm q-tnum num">{{ money(statement.total) }}</td>
+              <td class="q-body-sm q-tnum num" data-testid="statement-paid">
+                {{ paidOf(statement) }}
+              </td>
+              <td class="q-body-sm q-tnum num" data-testid="statement-due">
+                {{ dueOf(statement) }}
+              </td>
               <td class="q-body-sm">
                 <span class="status-badge">{{ statementStatusLabel(statement.status) }}</span>
                 @if (statement.issuedAt) {
@@ -187,7 +261,7 @@
             @if (openStatement(); as detail) {
               @if (detail.statementId === statement.statementId) {
                 <tr class="statement-lines">
-                  <td colspan="5">
+                  <td colspan="7">
                     <table class="inner-table">
                       <thead>
                         <tr>
@@ -230,7 +304,7 @@
             }
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="5">
+              <td class="q-body-sm empty" colspan="7">
                 {{ 'finance.subscription.statements.empty' | t }}
               </td>
             </tr>

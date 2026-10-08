@@ -17,7 +17,10 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
+import { WiringSentence, wiringCodeIn, wiringSentence } from '../channel-wiring';
 import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '../marketing-api';
+import { explainRefusal } from '../refusal-explainer';
+import { ScenarioPanel } from '../scenarios/scenario-panel';
 
 /**
  * One campaign's full lifecycle (ADR 0044, §6.4 Campaigns) — the dock
@@ -41,6 +44,20 @@ import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '
  *   `campaign.blockedCount` — and a resume's response reports exactly how
  *   many messages `CAMPAIGN_NOT_SENDING` will not retry, shown inline rather
  *   than discarded.
+ * - **A channel that cannot deliver says why, before the second signature is
+ *   spent.** SMS in particular names its gate: a gateway account is not cleared to
+ *   carry marketing until the platform owner says so in writing, and the console
+ *   would rather say that on a draft than let a launch fail on an approved
+ *   campaign. A launch it already knows will be refused is not offered. Email and
+ *   push say they have no delivery path at all.
+ * - **Delivery is evidence, not a promise** (ADR 0146). A recipient's row says what
+ *   the gateway has reported: delivered, failed, rejected, or "handed to the
+ *   operator", which is what a message the gateway accepted and said nothing more
+ *   about deserves, neither delivered nor failed.
+ * - **A scenario is a campaign with a second shape** (ADR 0112): the same
+ *   estimate, four-eyes approval and launch as above, and beneath them its steps,
+ *   where its guests are, what it decided and why, and whether it worked
+ *   ({@link ScenarioPanel}).
  * - **An entitlement refusal names the entitlement.** Launching a TELEGRAM
  *   (`MESSAGING_APP`) campaign against a tenant without
  *   `telegram.broadcasts.enabled` comes back `ENTITLEMENT_REQUIRED` carrying
@@ -50,7 +67,7 @@ import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '
  */
 @Component({
   selector: 'q-campaign-detail-pane',
-  imports: [TPipe],
+  imports: [TPipe, ScenarioPanel],
   templateUrl: './campaign-detail-pane.html',
   styleUrl: './campaign-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -111,6 +128,23 @@ export class CampaignDetailPane implements OnInit {
     },
   );
 
+  /** Why this campaign's channel cannot deliver for this brand today, in words; null when it can. */
+  protected readonly unwiredSentence = computed<WiringSentence | null>(() => {
+    const c = this.campaign();
+    return c !== null && !c.isWired ? wiringSentence(c.channel, c.notWiredReason) : null;
+  });
+
+  /** The states before launch in which it is worth saying so: after them there is nothing left to launch. */
+  protected readonly canStillLaunch = computed(() => {
+    const status = this.campaign()?.status;
+    return (
+      status === 'DRAFT' ||
+      status === 'IN_REVIEW' ||
+      status === 'APPROVED' ||
+      status === 'SCHEDULED'
+    );
+  });
+
   /** True when the signed-in operator authored this campaign — the maker/checker split. */
   protected readonly isAuthor = computed(() => {
     const c = this.campaign();
@@ -151,6 +185,18 @@ export class CampaignDetailPane implements OnInit {
     void this.router.navigate(['/marketing/campaigns']);
   }
 
+  /** The scenario editor is the campaigns page's: this draft opens in it, steps first. */
+  protected onScenarioEdit(): void {
+    void this.router.navigate(['/marketing/campaigns'], {
+      queryParams: { scenario: this.campaignId() },
+    });
+  }
+
+  /** A new version is a campaign of its own, drafted, and needs its own estimate and approval. */
+  protected onScenarioRevised(campaignId: string): void {
+    void this.router.navigate(['/marketing/campaigns', campaignId]);
+  }
+
   /**
    * A campaign's cost figures, written the way the brand writes money (Settings 10.12). A campaign
    * that carries no currency (a channel with no marginal cost) only ever priced in UZS.
@@ -179,6 +225,26 @@ export class CampaignDetailPane implements OnInit {
   protected refusalLabelKey(reason: string): MessageKey {
     return `marketing.refusal.${reason}` as MessageKey;
   }
+
+  /** A refusal reason in words; one a newer server added is shown as written. */
+  protected refusalText(reason: string): string {
+    const explanation = explainRefusal(reason);
+    return explanation ? this.i18n.t(explanation.labelKey) : reason;
+  }
+
+  protected kindLabelKey(kind: string): MessageKey {
+    return `marketing.campaigns.kind.${kind}` as MessageKey;
+  }
+
+  /** What the delivery path has reported about one message, in words. */
+  protected deliveryText(state: string): string {
+    const key = DELIVERY_KEYS[state];
+    return key ? this.i18n.t(key) : state;
+  }
+
+  protected readonly hasDeliveryEvidence = computed(() =>
+    this.recipients().some((recipient) => recipient.deliveryState !== null),
+  );
 
   protected reasonPromptTitleKey(kind: 'approve' | 'halt' | 'resume'): MessageKey {
     return `marketing.campaign.reasonPrompt.title.${kind}` as MessageKey;
@@ -315,6 +381,13 @@ export class CampaignDetailPane implements OnInit {
    * entitlement reason.
    */
   private describeLaunchError(error: unknown): string {
+    // The wiring may have changed since the page was read; the refusal then says why in the
+    // server's English, with the reason's code in it, and the console says it in words.
+    const code = error instanceof ApiError ? wiringCodeIn(error.problem?.detail) : null;
+    if (code !== null && this.campaign()) {
+      const sentence = wiringSentence(this.campaign()!.channel, code);
+      return this.i18n.t(sentence.key, sentence.values);
+    }
     if (error instanceof ApiError && error.code === ApiErrorCode.ENTITLEMENT_REQUIRED) {
       const key = error.problem?.['entitlementKey'];
       if (key === 'telegram.broadcasts.enabled') {
@@ -395,3 +468,13 @@ function downloadAccountIdCsv(accountIds: readonly string[], filename: string): 
     URL.revokeObjectURL(url);
   }
 }
+
+/** What a gateway's evidence says about one message (ADR 0146 Decision 5), each a literal key. */
+const DELIVERY_KEYS: Readonly<Record<string, MessageKey>> = {
+  DELIVERED: 'marketing.delivery.DELIVERED',
+  FAILED: 'marketing.delivery.FAILED',
+  REJECTED: 'marketing.delivery.REJECTED',
+  NO_RECEIPT: 'marketing.delivery.NO_RECEIPT',
+  HANDED_TO_OPERATOR: 'marketing.delivery.HANDED_TO_OPERATOR',
+  PENDING: 'marketing.delivery.PENDING',
+};

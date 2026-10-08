@@ -288,27 +288,24 @@ describe('TenantDirectory', () => {
       '\u0412\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430 \u043d\u0435\u0442',
       ONBOARDING,
     ],
-  ])(
-    'says what the server said about an owner in state %s',
-    async (state, marker, text, href) => {
-      api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
-      api.ownerStates.mockResolvedValue([{ tenantId: 'tenant-a', state }]);
+  ])('says what the server said about an owner in state %s', async (state, marker, text, href) => {
+    api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
+    api.ownerStates.mockResolvedValue([{ tenantId: 'tenant-a', state }]);
 
-      fixture = TestBed.createComponent(TenantDirectory);
-      fixture.detectChanges();
-      await fixture.whenStable();
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
+    fixture = TestBed.createComponent(TenantDirectory);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
 
-      const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
-      expect(owner.dataset['owner']).toBe(marker);
-      expect(owner.textContent?.trim()).toBe(text);
-      // `?? null` and not the bare optional chain: with no anchor the chain is
-      // `undefined`, and `expect(undefined).toBe(null)` fails the two rows that
-      // are correct exactly because they have no link.
-      expect(owner.querySelector('a')?.getAttribute('href') ?? null).toBe(href);
-    },
-  );
+    const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
+    expect(owner.dataset['owner']).toBe(marker);
+    expect(owner.textContent?.trim()).toBe(text);
+    // `?? null` and not the bare optional chain: with no anchor the chain is
+    // `undefined`, and `expect(undefined).toBe(null)` fails the two rows that
+    // are correct exactly because they have no link.
+    expect(owner.querySelector('a')?.getAttribute('href') ?? null).toBe(href);
+  });
 
   it('leaves a dash for a tenant the projection does not mention', async () => {
     api.listTenants.mockResolvedValue({ items: [TENANT_A], nextCursor: null });
@@ -323,7 +320,10 @@ describe('TenantDirectory', () => {
     const owner = fixture.nativeElement.querySelector('tbody tr .owner') as HTMLElement;
     expect(owner.dataset['owner']).toBeUndefined();
     expect(owner.textContent?.trim()).toBe('\u2014');
-    expect(owner.querySelector('a'), 'a dash is not a link to a screen this caller may not read').toBeNull();
+    expect(
+      owner.querySelector('a'),
+      'a dash is not a link to a screen this caller may not read',
+    ).toBeNull();
   });
 
   /**

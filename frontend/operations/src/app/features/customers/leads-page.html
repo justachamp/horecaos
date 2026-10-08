@@ -1,0 +1,256 @@
+<div class="leads" [class.leads--docked]="selected() !== null">
+  <div class="list">
+    <div class="header">
+      <div>
+        <h1 class="q-title">{{ 'customers.leads.title' | t }}</h1>
+        <p class="q-body-sm subtitle">
+          {{
+            brandReach()
+              ? ('customers.leads.subtitle' | t)
+              : ('customers.leads.subtitle.branch' | t)
+          }}
+        </p>
+      </div>
+      @if (access()?.canManage && brandReach()) {
+        <button type="button" class="primary" (click)="openRegister()" data-testid="leads-register">
+          {{ 'customers.leads.register' | t }}
+        </button>
+      }
+    </div>
+
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'customers.leads.loading' | t }}</p>
+      }
+      @case ('denied') {
+        <p class="q-body-sm denied" data-testid="leads-denied">
+          {{ 'customers.leads.denied' | t }}
+        </p>
+      }
+      @case ('error') {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ errorText() }}</span>
+          <button type="button" class="secondary" (click)="retry()">
+            {{ 'reports.error.retry' | t }}
+          </button>
+        </div>
+      }
+      @case ('ready') {
+        @if (registering()) {
+          <form
+            class="register"
+            (submit)="$event.preventDefault(); submitRegister()"
+            data-testid="leads-register-form"
+          >
+            <h2 class="q-subtitle">{{ 'customers.leads.register.title' | t }}</h2>
+            <p class="q-body-sm subtitle">{{ 'customers.leads.register.lead' | t }}</p>
+            @if (registerError(); as message) {
+              <p class="q-body-sm error" role="alert">{{ message }}</p>
+            }
+            <label class="field">
+              <span class="q-caption">{{ 'customers.leads.register.source' | t }}</span>
+              <select
+                [value]="newSource()"
+                (change)="onNewSource($any($event.target).value)"
+                data-testid="register-source"
+              >
+                @for (source of registrableSources; track source) {
+                  <option [value]="source">{{ sourceLabel(source) }}</option>
+                }
+              </select>
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'customers.leads.register.phone' | t }}</span>
+              <input
+                type="tel"
+                autocomplete="off"
+                [value]="newPhone()"
+                (input)="newPhone.set($any($event.target).value)"
+                data-testid="register-phone"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'customers.leads.register.name' | t }}</span>
+              <input
+                type="text"
+                autocomplete="off"
+                [value]="newName()"
+                (input)="newName.set($any($event.target).value)"
+                data-testid="register-name"
+              />
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'customers.leads.register.notes' | t }}</span>
+              <textarea
+                rows="3"
+                [value]="newNotes()"
+                (input)="newNotes.set($any($event.target).value)"
+                data-testid="register-notes"
+              ></textarea>
+            </label>
+            <label class="field">
+              <span class="q-caption">{{ 'customers.leads.register.branch' | t }}</span>
+              <select
+                [value]="newBranch()"
+                (change)="newBranch.set($any($event.target).value)"
+                data-testid="register-branch"
+              >
+                <option value="">—</option>
+                @for (location of locations(); track location.id) {
+                  <option [value]="location.id">{{ location.displayName }}</option>
+                }
+              </select>
+            </label>
+            <p class="q-caption subtitle">{{ 'customers.leads.register.privacy' | t }}</p>
+            <div class="buttons">
+              <button
+                type="submit"
+                class="primary"
+                [disabled]="registerBusy() || newPhone().trim() === ''"
+                data-testid="register-submit"
+              >
+                {{ 'customers.leads.register.submit' | t }}
+              </button>
+              <button type="button" class="link" (click)="cancelRegister()">
+                {{ 'customers.leads.register.cancel' | t }}
+              </button>
+            </div>
+          </form>
+        }
+
+        <div class="filters">
+          <div class="views">
+            <button
+              type="button"
+              class="pill"
+              [class.pill--on]="view() === 'attention'"
+              (click)="setView('attention')"
+              data-testid="leads-view-attention"
+            >
+              {{ 'customers.leads.view.attention' | t }}
+            </button>
+            <button
+              type="button"
+              class="pill"
+              [class.pill--on]="view() === 'all'"
+              (click)="setView('all')"
+              data-testid="leads-view-all"
+            >
+              {{ 'customers.leads.view.all' | t }}
+            </button>
+          </div>
+          <select
+            [value]="statusFilter()"
+            (change)="onStatusChange($any($event.target).value)"
+            data-testid="leads-status-filter"
+          >
+            <option value="">{{ 'customers.leads.filter.allStatuses' | t }}</option>
+            @for (status of statuses; track status) {
+              <option [value]="status">{{ statusLabel(status) }}</option>
+            }
+          </select>
+          <select
+            [value]="sourceFilter()"
+            (change)="onSourceChange($any($event.target).value)"
+            data-testid="leads-source-filter"
+          >
+            <option value="">{{ 'customers.leads.filter.allSources' | t }}</option>
+            @for (source of sources; track source) {
+              <option [value]="source">{{ sourceLabel(source) }}</option>
+            }
+          </select>
+          @if (brandReach()) {
+            <select
+              [value]="branchFilter()"
+              (change)="onBranchChange($any($event.target).value)"
+              data-testid="leads-branch-filter"
+            >
+              <option value="">{{ 'customers.leads.filter.allBranches' | t }}</option>
+              <option value="unassigned">{{ 'customers.leads.filter.unassigned' | t }}</option>
+              @for (location of locations(); track location.id) {
+                <option [value]="location.id">{{ location.displayName }}</option>
+              }
+            </select>
+          }
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'customers.leads.column.created' | t }}</th>
+              <th class="q-caption">{{ 'customers.leads.column.phone' | t }}</th>
+              <th class="q-caption">{{ 'customers.leads.column.source' | t }}</th>
+              <th class="q-caption">{{ 'customers.leads.column.status' | t }}</th>
+              @if (brandReach()) {
+                <th class="q-caption">{{ 'customers.leads.column.branch' | t }}</th>
+              }
+              <th class="q-caption">{{ 'customers.leads.column.callback' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (lead of leads(); track lead.id) {
+              <tr
+                class="row"
+                [class.row--on]="lead.id === selectedId()"
+                (click)="select(lead)"
+                data-testid="lead-row"
+              >
+                <td class="q-body-sm q-tnum">{{ formatWhen(lead.createdAt) }}</td>
+                <td class="q-body-sm q-tnum">{{ lead.phoneMasked }}</td>
+                <td class="q-body-sm">{{ sourceLabel(lead.source) }}</td>
+                <td class="q-body-sm">
+                  <span class="q-status-badge">{{ statusLabel(lead.status) }}</span>
+                </td>
+                @if (brandReach()) {
+                  <td class="q-body-sm">{{ branchLabel(lead) }}</td>
+                }
+                <td class="q-body-sm q-tnum">
+                  {{ lead.callbackDueAt ? formatWhen(lead.callbackDueAt) : '—' }}
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td
+                  class="q-body-sm empty"
+                  [attr.colspan]="brandReach() ? 6 : 5"
+                  data-testid="leads-empty"
+                >
+                  {{
+                    view() === 'attention'
+                      ? ('customers.leads.emptyAttention' | t)
+                      : ('customers.leads.empty' | t)
+                  }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (hasMore()) {
+          <button
+            type="button"
+            class="secondary more"
+            [disabled]="loadingMore()"
+            (click)="loadMore()"
+            data-testid="leads-more"
+          >
+            {{ 'customers.leads.loadMore' | t }}
+          </button>
+        }
+      }
+    }
+  </div>
+
+  @if (selected(); as lead) {
+    @if (access(); as granted) {
+      <q-lead-detail-panel
+        class="side"
+        [lead]="lead"
+        [access]="granted"
+        [locations]="locations()"
+        (changed)="onChanged($event)"
+        (closed)="closePanel()"
+      />
+    }
+  }
+</div>

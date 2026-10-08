@@ -1,4 +1,6 @@
 import { LOCALES, preloadAllAreas } from '../app/core/i18n/i18n';
+import { seedPlatformLocalesForTesting } from '../app/core/i18n/platform-locales';
+import { REGISTRY_FIXTURE } from './platform-locales.fixture';
 
 /**
  * Global Vitest setup (wired in `angular.json`'s `test` target via
@@ -24,3 +26,10 @@ import { LOCALES, preloadAllAreas } from '../app/core/i18n/i18n';
  * shows up when an area truly isn't warm yet.
  */
 await Promise.all(LOCALES.map((locale) => preloadAllAreas(locale)));
+
+/**
+ * Every spec starts with the registry already read (ADR 0149), as the shell guarantees for anything
+ * beneath it: the editors read the languages a brand may choose, a template needs and the catalog
+ * stores synchronously. `platform-locales.spec.ts` clears the seed to test the unread state.
+ */
+seedPlatformLocalesForTesting(REGISTRY_FIXTURE);

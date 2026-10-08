@@ -79,6 +79,11 @@ class ConversationRepository {
         return jdbc.sql("""
                 SELECT c.id, c.channel, c.customer_account_id, c.state, c.updated_at,
                        lm.direction AS last_message_direction,
+                       EXISTS (
+                           SELECT 1 FROM conversations.conversation_messages a
+                           WHERE a.tenant_id = c.tenant_id AND a.conversation_id = c.id
+                             AND a.direction = 'ASSISTANT'
+                       ) AS assistant_took_part,
                        GREATEST(c.updated_at, COALESCE(lm.occurred_at, c.updated_at)) AS last_activity_at
                 FROM conversations.conversations c
                 LEFT JOIN LATERAL (
@@ -291,6 +296,7 @@ class ConversationRepository {
                 row.getObject("customer_account_id", UUID.class),
                 ConversationState.valueOf(row.getString("state")),
                 lastMessageDirection == null ? null : Direction.valueOf(lastMessageDirection),
+                row.getBoolean("assistant_took_part"),
                 java.util.Objects.requireNonNull(row.getTimestamp("last_activity_at"))
                         .toInstant());
     }
@@ -322,6 +328,7 @@ class ConversationRepository {
             @Nullable UUID customerAccountId,
             ConversationState state,
             @Nullable Direction lastMessageDirection,
+            boolean assistantTookPart,
             Instant lastActivityAt) {
 
         /**

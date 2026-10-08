@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { asDate } from '../../core/api/dates';
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
 import {
   InvitationLocale,
@@ -49,11 +50,18 @@ const FILTERS: readonly OwnerInvitationFilter[] = [
 })
 export class OwnerInvitations {
   protected readonly i18n = inject(I18nService);
+  private readonly registry = inject(PlatformLocales);
   protected readonly asDate = asDate;
   private readonly tenantsApi = inject(TenantsApi);
 
   protected readonly filters = FILTERS;
-  protected readonly invitationLocales: readonly InvitationLocale[] = ['uz', 'ru', 'en'];
+  /** The languages the platform writes an invitation in: the registry's messages tier, not a list kept here. */
+  protected readonly invitationLocales = computed(() => this.registry.active('MESSAGES'));
+
+  /** A language's name as the registry gives it, in the console's own language. */
+  protected localeName(tag: string): string {
+    return this.registry.nameOf(tag, this.i18n.locale());
+  }
 
   protected readonly filter = signal<OwnerInvitationFilter>('OUTSTANDING');
   protected readonly loading = signal(true);

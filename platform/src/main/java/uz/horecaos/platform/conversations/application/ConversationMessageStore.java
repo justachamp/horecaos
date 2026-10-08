@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -42,7 +43,9 @@ class ConversationMessageStore {
     enum Direction {
         INBOUND,
         OUTBOUND,
-        OPERATOR
+        OPERATOR,
+        /** ADR 0069: a message the grounded assistant wrote -- a third author beside the engine and staff. */
+        ASSISTANT
     }
 
     private final JdbcClient jdbc;
@@ -68,7 +71,22 @@ class ConversationMessageStore {
             throw new IllegalArgumentException(
                     "An OPERATOR message needs an acting principal — use recordOperatorReply");
         }
-        return insert(tenantId, conversationId, direction, blockId, null, body);
+        if (direction == Direction.ASSISTANT) {
+            throw new IllegalArgumentException(
+                    "An ASSISTANT message needs the turn that produced it — use recordAssistantReply");
+        }
+        return insert(tenantId, conversationId, direction, blockId, null, null, body);
+    }
+
+    /**
+     * Records what the grounded assistant said (ADR 0069), with the id of the
+     * {@code assistant.turns} row that produced it. The id is stored in the
+     * clear beside the message and is not personal data: it names a ledger row
+     * that holds no message text, so "why did it say that" is answered from the
+     * turn and never by decrypting anything.
+     */
+    Row recordAssistantReply(UUID tenantId, UUID conversationId, UUID assistantTurnId, String body) {
+        return insert(tenantId, conversationId, Direction.ASSISTANT, null, null, assistantTurnId, body);
     }
 
     /**
@@ -79,7 +97,7 @@ class ConversationMessageStore {
      *         caller never needs to re-read and re-decrypt what it just sent
      */
     Row recordOperatorReply(UUID tenantId, UUID conversationId, String actorPrincipalId, String body) {
-        return insert(tenantId, conversationId, Direction.OPERATOR, null, actorPrincipalId, body);
+        return insert(tenantId, conversationId, Direction.OPERATOR, null, actorPrincipalId, null, body);
     }
 
     private Row insert(
@@ -88,8 +106,12 @@ class ConversationMessageStore {
             Direction direction,
             @Nullable String blockId,
             @Nullable String actorPrincipalId,
+            @Nullable UUID assistantTurnId,
             String body) {
-        UUID id = UUID.randomUUID();
+        // ADR 0076: a new row's id is time-ordered, and within one replica strictly increasing, so two
+        // messages written in the same millisecond -- a customer's and the assistant's answer to it --
+        // keep the order they were written in when history sorts by (occurred_at, id).
+        UUID id = Ids.newId();
         String protectedBody = protection
                 .protect(tenantId, DataClass.PERSONAL, new RecordRef(TABLE, BODY_COLUMN, id), body)
                 .serialize();
@@ -97,9 +119,9 @@ class ConversationMessageStore {
         jdbc.sql("""
                 INSERT INTO conversations.conversation_messages (
                     id, tenant_id, conversation_id, direction, block_id, actor_principal_id,
-                    body_protected, occurred_at)
+                    assistant_turn_id, body_protected, occurred_at)
                 VALUES (:id, :tenantId, :conversationId, :direction, :blockId, :actorPrincipalId,
-                    :body, :now)
+                    :assistantTurnId, :body, :now)
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
@@ -107,10 +129,11 @@ class ConversationMessageStore {
                 .param("direction", direction.name())
                 .param("blockId", blockId)
                 .param("actorPrincipalId", actorPrincipalId)
+                .param("assistantTurnId", assistantTurnId)
                 .param("body", protectedBody)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
-        return new Row(id, direction, blockId, actorPrincipalId, body, now);
+        return new Row(id, direction, blockId, actorPrincipalId, assistantTurnId, body, now);
     }
 
     /**
@@ -122,15 +145,60 @@ class ConversationMessageStore {
      */
     List<Row> history(UUID tenantId, UUID conversationId) {
         return jdbc.sql("""
-                SELECT id, direction, block_id, actor_principal_id, body_protected, occurred_at
+                SELECT id, direction, block_id, actor_principal_id, assistant_turn_id, body_protected, occurred_at
                 FROM conversations.conversation_messages
                 WHERE tenant_id = :tenantId AND conversation_id = :conversationId
                 ORDER BY occurred_at, id
                 """)
                 .param("tenantId", tenantId)
                 .param("conversationId", conversationId)
-                .query((row, number) -> mapRow(row, tenantId, protection))
+                .query((row, number) -> mapRow(row, tenantId, protection, "conversations.inbox.history"))
                 .list();
+    }
+
+    /**
+     * Whether the grounded assistant has ever spoken in this conversation (ADR 0069). Reads the
+     * clear {@code direction} column only; nothing is decrypted, so the inbox's header can say
+     * who is answering without opening the thread.
+     */
+    boolean assistantHasSpokenIn(UUID tenantId, UUID conversationId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM conversations.conversation_messages
+                    WHERE tenant_id = :tenantId AND conversation_id = :conversationId AND direction = 'ASSISTANT')
+                """)
+                .param("tenantId", tenantId)
+                .param("conversationId", conversationId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
+     * The newest {@code limit} messages of a conversation, decrypted, oldest
+     * first -- the context a {@link uz.horecaos.platform.conversations.api.ConversationParticipant}
+     * is given (ADR 0069), as opposed to {@link #history}'s whole thread for an
+     * operator's screen.
+     *
+     * <p>Revealed under its own purpose string, so a reader of the ADR 0027 trail
+     * can tell the assistant reading a turn's context from an operator opening
+     * the thread.
+     */
+    List<Row> recent(UUID tenantId, UUID conversationId, int limit) {
+        List<Row> newestFirst = jdbc.sql("""
+                SELECT id, direction, block_id, actor_principal_id, assistant_turn_id, body_protected, occurred_at
+                FROM conversations.conversation_messages
+                WHERE tenant_id = :tenantId AND conversation_id = :conversationId
+                ORDER BY occurred_at DESC, id DESC
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("conversationId", conversationId)
+                .param("limit", limit)
+                .query((row, number) -> mapRow(row, tenantId, protection, "conversations.assistant.context"))
+                .list();
+        List<Row> oldestFirst = new java.util.ArrayList<>(newestFirst);
+        java.util.Collections.reverse(oldestFirst);
+        return oldestFirst;
     }
 
     /**
@@ -210,21 +278,19 @@ class ConversationMessageStore {
                 .update();
     }
 
-    private static Row mapRow(java.sql.ResultSet row, UUID tenantId, FieldProtection protection)
+    private static Row mapRow(java.sql.ResultSet row, UUID tenantId, FieldProtection protection, String purpose)
             throws java.sql.SQLException {
         UUID id = row.getObject("id", UUID.class);
         String bodyProtected = java.util.Objects.requireNonNull(row.getString("body_protected"));
         java.sql.Timestamp occurredAt = row.getTimestamp("occurred_at");
         String body = protection.reveal(
-                tenantId,
-                ProtectedValue.deserialize(bodyProtected),
-                new RecordRef(TABLE, BODY_COLUMN, id),
-                "conversations.inbox.history");
+                tenantId, ProtectedValue.deserialize(bodyProtected), new RecordRef(TABLE, BODY_COLUMN, id), purpose);
         return new Row(
                 id,
                 Direction.valueOf(row.getString("direction")),
                 row.getString("block_id"),
                 row.getString("actor_principal_id"),
+                row.getObject("assistant_turn_id", UUID.class),
                 body,
                 java.util.Objects.requireNonNull(occurredAt).toInstant());
     }
@@ -235,6 +301,7 @@ class ConversationMessageStore {
             Direction direction,
             @Nullable String blockId,
             @Nullable String actorPrincipalId,
+            @Nullable UUID assistantTurnId,
             String body,
             Instant occurredAt) {}
 }

@@ -11,10 +11,6 @@
 /** `iam.staff_members.employment_status`. `PENDING` is invited and not yet accepted; `ENDED` carries an end date. */
 export type EmploymentStatus = 'PENDING' | 'ACTIVE' | 'ON_LEAVE' | 'ENDED';
 
-/** The three languages a person's interface and speech are recorded in; `uz` here, `uz-Latn` in the console's own locale tag. */
-export const STAFF_LANGUAGES = ['ru', 'uz', 'en'] as const;
-export type StaffLanguage = (typeof STAFF_LANGUAGES)[number];
-
 /**
  * @property displayName the name the tenant shows -- "First Last", or the
  *   non-personal {@link displayReference} when the record holds no name.

@@ -31,7 +31,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>Test sources only, so no scripted answer can reach production.
  */
-final class RecordingSmsGateway implements AutoCloseable {
+public final class RecordingSmsGateway implements AutoCloseable {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
@@ -40,12 +40,13 @@ final class RecordingSmsGateway implements AutoCloseable {
     private final List<Call> calls = new CopyOnWriteArrayList<>();
     private final Map<String, Deque<Reply>> replies = new LinkedHashMap<>();
     private final Map<String, Long> stalls = new LinkedHashMap<>();
+    private final java.util.Set<String> drops = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private RecordingSmsGateway(HttpServer server) {
         this.server = server;
     }
 
-    static RecordingSmsGateway start() throws IOException {
+    public static RecordingSmsGateway start() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
         // A pool rather than the default serial dispatcher. The stall tests hold
         // one handler open past the caller's deadline on purpose, and on the
@@ -59,11 +60,11 @@ final class RecordingSmsGateway implements AutoCloseable {
     }
 
     /** Scripts one answer. Queued, so a path can answer differently on a second call. */
-    RecordingSmsGateway reply(String path, String json) {
+    public RecordingSmsGateway reply(String path, String json) {
         return reply(path, 200, json);
     }
 
-    RecordingSmsGateway reply(String path, int status, String json) {
+    public RecordingSmsGateway reply(String path, int status, String json) {
         replies.computeIfAbsent(path, key -> new ArrayDeque<>()).add(new Reply(status, json));
         return this;
     }
@@ -74,24 +75,48 @@ final class RecordingSmsGateway implements AutoCloseable {
      * <p>The only way to produce the case this adapter exists for: the gateway has
      * the message and may already have sent it, and we will never learn which.
      */
-    RecordingSmsGateway stallAfterReceiving(String path, long millis) {
+    public RecordingSmsGateway stallAfterReceiving(String path, long millis) {
         stalls.put(path, millis);
         return this;
     }
 
-    String baseUrl() {
+    /**
+     * Takes the request and closes the connection without a word.
+     *
+     * <p>The cheap way to produce the dangerous case: the gateway has the message
+     * and the caller learns nothing, with no deadline to wait out. Reversible, so a
+     * test can heal the gateway and watch the reconciliation find what it already
+     * holds.
+     */
+    public RecordingSmsGateway dropConnectionAfterReceiving(String path) {
+        drops.add(path);
+        return this;
+    }
+
+    public RecordingSmsGateway stopDropping(String path) {
+        drops.remove(path);
+        return this;
+    }
+
+    /** Forgets every scripted answer for a path, so the next one starts fresh. */
+    public RecordingSmsGateway clearReplies(String path) {
+        replies.remove(path);
+        return this;
+    }
+
+    public String baseUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
-    List<Call> calls() {
+    public List<Call> calls() {
         return List.copyOf(calls);
     }
 
-    long callsTo(String path) {
+    public long callsTo(String path) {
         return calls.stream().filter(call -> call.path().equals(path)).count();
     }
 
-    Call callTo(String path) {
+    public Call callTo(String path) {
         return calls.stream()
                 .filter(call -> call.path().equals(path))
                 .findFirst()
@@ -112,6 +137,11 @@ final class RecordingSmsGateway implements AutoCloseable {
         byte[] raw = exchange.getRequestBody().readAllBytes();
         Map<String, Object> body = raw.length == 0 ? Map.of() : JSON.readValue(raw, MAP);
         calls.add(new Call(exchange.getRequestMethod(), path, body));
+
+        if (drops.contains(path)) {
+            exchange.close();
+            return;
+        }
 
         Long stall = stalls.get(path);
         if (stall != null) {
@@ -135,7 +165,7 @@ final class RecordingSmsGateway implements AutoCloseable {
         }
     }
 
-    record Call(String method, String path, Map<String, Object> body) {}
+    public record Call(String method, String path, Map<String, Object> body) {}
 
     private record Reply(int status, String json) {}
 }

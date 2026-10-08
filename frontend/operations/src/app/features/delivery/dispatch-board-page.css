@@ -23,7 +23,8 @@
   color: var(--q-ink-subtle);
 }
 
-.dispatch__refresh {
+.dispatch__refresh,
+.dispatch__map-toggle {
   padding: 6px 14px;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);
@@ -172,4 +173,8 @@
 .dispatch-card__cancel-shipment {
   color: var(--q-error-text);
   border-color: var(--q-error-text);
+}
+
+.dispatch__map {
+  margin-bottom: 12px;
 }

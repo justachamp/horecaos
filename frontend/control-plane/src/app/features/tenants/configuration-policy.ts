@@ -221,7 +221,9 @@ export class ConfigurationPolicy {
   protected readonly saveSuccess = signal(false);
 
   /** The version the write form has to send: what was last read at exactly this key and scope. */
-  private readonly expectedVersion = computed(() => this.resolution()?.currentVersionAtScope ?? null);
+  private readonly expectedVersion = computed(
+    () => this.resolution()?.currentVersionAtScope ?? null,
+  );
 
   protected readonly valueValid = computed(() => {
     if (this.explicitNull()) {

@@ -1,0 +1,76 @@
+<div class="address-editor" data-testid="customer-address-editor">
+  <label class="address-editor__field">
+    <span class="q-caption">{{ 'customers.address.label' | t }}</span>
+    <input
+      type="text"
+      class="q-body"
+      [value]="label()"
+      (input)="label.set($any($event.target).value)"
+      data-testid="address-editor-label"
+    />
+  </label>
+
+  <q-address-picker
+    [scope]="scope()"
+    [locationId]="scope().locationId"
+    [regionId]="region()?.regionId ?? null"
+    [region]="region()?.bounds ?? null"
+    [center]="center()"
+    [initial]="pickerInitial()"
+    (pickedChange)="onPicked($event)"
+  />
+
+  <div class="address-editor__row">
+    <label class="address-editor__field">
+      <span class="q-caption">{{ 'customers.address.city' | t }}</span>
+      <input
+        type="text"
+        class="q-body"
+        [value]="city()"
+        (input)="setCity($any($event.target).value)"
+        data-testid="address-editor-city"
+      />
+    </label>
+    <label class="address-editor__field">
+      <span class="q-caption">{{ 'customers.address.district' | t }}</span>
+      <input
+        type="text"
+        class="q-body"
+        [value]="district()"
+        (input)="setDistrict($any($event.target).value)"
+        data-testid="address-editor-district"
+      />
+    </label>
+  </div>
+
+  @if (extended()) {
+    <div class="address-editor__row">
+      <label class="address-editor__field">
+        <span class="q-caption">{{ 'customers.address.line2' | t }}</span>
+        <input
+          type="text"
+          class="q-body"
+          [value]="line2()"
+          (input)="line2.set($any($event.target).value)"
+          data-testid="address-editor-line2"
+        />
+      </label>
+      <label class="address-editor__field">
+        <span class="q-caption">{{ 'customers.address.postalCode' | t }}</span>
+        <input
+          type="text"
+          class="q-body"
+          [value]="postalCode()"
+          (input)="postalCode.set($any($event.target).value)"
+          data-testid="address-editor-postal-code"
+        />
+      </label>
+    </div>
+  }
+
+  @if (!draft().valid) {
+    <p class="q-caption" data-testid="address-editor-incomplete">
+      {{ 'customers.address.incomplete' | t }}
+    </p>
+  }
+</div>

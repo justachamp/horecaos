@@ -26,7 +26,12 @@ public final class LocalizedLabels {
     public static final String UZ_LATN = "uz-Latn";
     public static final String EN = "en";
 
-    /** The platform triple, in canonical order — the locales that have a column. */
+    /**
+     * The three languages the legacy {@code label_ru}, {@code label_uz} and {@code label_en}
+     * <em>columns</em> exist for, in canonical order. This is a fact about those tables' schema, not
+     * a statement of which languages the platform has: that is {@link PlatformLocales}, and every
+     * other language lives in the translations tables (ADR 0149).
+     */
     public static final List<String> PLATFORM_TRIPLE = List.of(RU, UZ_LATN, EN);
 
     /** The same shape as the {@code ck_*_translation_locale} constraints: a well-formed BCP 47 tag. */
@@ -92,12 +97,9 @@ public final class LocalizedLabels {
      * the columns and the {@code ck_*_translation_locale} constraints are not.
      */
     public static String canonical(String locale) {
-        for (String triple : PLATFORM_TRIPLE) {
-            if (triple.equalsIgnoreCase(locale)) {
-                return triple;
-            }
-        }
-        return locale;
+        // The registry knows every declared language, not only the three that have a column, so a
+        // case variant of a language activated later is written under its own tag too (ADR 0149).
+        return PlatformLocales.byTag(locale).map(PlatformLocale::tag).orElse(locale);
     }
 
     private static void putIfPresent(Map<String, String> labels, String locale, @Nullable String label) {

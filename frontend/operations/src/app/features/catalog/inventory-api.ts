@@ -5,6 +5,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { IntentCommandRegistry, command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { toCatalogLocale } from './catalog-domain';
 
 /**
@@ -117,6 +118,7 @@ export interface AvailabilityDecision {
 export class InventoryApi {
   private readonly api = inject(ApiClient);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   /**
    * One `Idempotency-Key` per operator intent (ADR 0031) for the two
@@ -241,7 +243,7 @@ export class InventoryApi {
   unlistedOfferings(scope: LocationScope): Observable<UnlistedOfferingsReport> {
     return this.api
       .get<UnlistedOfferingsReport>(operationsPaths.inventoryUnlistedOfferings(scope), {
-        params: { locale: toCatalogLocale(this.i18n.locale()) },
+        params: { locale: toCatalogLocale(this.i18n.locale(), this.registry) },
       })
       .pipe(map((result) => result.value));
   }

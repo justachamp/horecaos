@@ -1,0 +1,67 @@
+name: Routing dataset
+
+# ADR 0147, decision 5: the road-distance engine's map is built off the host and shipped
+# pinned. The Uzbekistan extract is preprocessed (OSRM, MLD, car profile) and published
+# as an image tagged with the extract's date, deployed by tag exactly as the application
+# is; the tag is the `datasetVersion` recorded on every fee the engine measures.
+#
+# Monthly, because OpenStreetMap moves and ADR 0147's alert fires when the deployed
+# dataset is older than 60 days. Nothing here deploys anything: publishing an image is not
+# switching it on, and the host takes a new tag only when an operator sets
+# HORECAOS_ROUTING_DATASET_TAG (platform/docs/runbooks/load-uzbekistan-routing-dataset.md).
+#
+# This workflow has not been run from this repository. The first run is a manual
+# `workflow_dispatch`, read by a person, before the schedule is trusted.
+on:
+  schedule:
+    - cron: "0 4 1 * *" # the first of the month, 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Dataset tag (defaults to the extract's own date, for example 2026-10-01)"
+        required: false
+        type: string
+
+jobs:
+  publish-dataset:
+    name: Build and publish the routing dataset
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Same registry rule as ci.yml's publish-images: ghcr.io unless the repository
+      # variable names another, which then needs its own login step here.
+      HORECAOS_REGISTRY: ${{ vars.HORECAOS_REGISTRY || format('ghcr.io/{0}', github.repository) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        if: startsWith(env.HORECAOS_REGISTRY, 'ghcr.io')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Accuracy-gate unit tests
+        # The gate is a verdict on a map, so the tool that gives it is proved able to say no.
+        working-directory: platform/tools/routing
+        run: python3 -m unittest test_accuracy_gate
+
+      - name: Build, gate and publish
+        # The reference sample (coordinates only, 100 trips of 1 to 10 km: ADR 0147's
+        # accuracy gate) is the owner's to curate and is not in the repository yet. Until
+        # it is, the dataset is published WITHOUT having been gated, and this step says so
+        # loudly; once deploy/routing/reference-sample.csv exists the gate runs before the
+        # push and a map that fails it is never published.
+        run: |
+          args=(--push)
+          if [ -n "${{ inputs.tag }}" ]; then args+=(--tag "${{ inputs.tag }}"); fi
+          if [ -f deploy/routing/reference-sample.csv ]; then
+            args+=(--gate deploy/routing/reference-sample.csv)
+          else
+            echo "::warning::deploy/routing/reference-sample.csv does not exist, so this dataset is published without the accuracy gate having run (ADR 0147 decision 7)."
+          fi
+          deploy/routing/build-dataset.sh "${args[@]}"

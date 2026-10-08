@@ -1,0 +1,63 @@
+.details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.details dt {
+  color: var(--q-ink-subtle);
+}
+
+.details dd {
+  margin: 0;
+}
+
+/* A placeholder is shown as one: struck back, so nobody copies it as an account. */
+.isPlaceholder dd {
+  color: var(--q-ink-subtle);
+  font-style: italic;
+}
+
+.setupForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 8px;
+}
+
+.setupForm p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.setupForm .field {
+  min-width: 220px;
+}
+
+.approvalsNote {
+  margin: 0;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.confirm input {
+  min-width: 260px;
+}
+
+.num {
+  text-align: end;
+}
+
+.rowActions {
+  text-align: end;
+  white-space: nowrap;
+}

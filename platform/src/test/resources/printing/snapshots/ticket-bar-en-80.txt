@@ -1,0 +1,14 @@
+ |     A-014      | [x3 B]
+ |                 KITCHEN · Bar                  | [B]
+ |Type                                      Pickup|
+ |Channel                                 TELEGRAM|
+ |Table                                    Table 7|
+ |Released                                   12:02|
+ |Ready by                                   12:25| [B]
+ |================================================
+ |1× Cola (0.5 L)                                 |
+ |1× Combo No.1                                   | [B]
+ |  1× Fanta                                      |
+ |================================================
+ |[GAP 1]
+ |[CUT]

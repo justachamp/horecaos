@@ -1046,6 +1046,53 @@ public class JdbcOrderStore {
     }
 
     /**
+     * The delivery orders a branch took in a window, with the ciphertext of where each is going
+     * (row {@code 7.10a}, ADR 0145).
+     *
+     * <p>Nothing here decrypts: the address comes back exactly as stored, and the one caller that
+     * may open it ({@link uz.horecaos.platform.ordering.application.OrderMapPointService}) writes
+     * its audit fact before it does. {@code LEFT JOIN} on the snapshot, so a delivery order whose
+     * snapshot was anonymized (no address left to open) is still counted as an order with no
+     * point, not silently absent. Newest first, one more than {@code limit} may be asked for so
+     * the caller can say a list was cut rather than let a short list pass for a complete one.
+     */
+    public List<DeliveryAddressCandidate> deliveryAddressCandidates(
+            UUID tenantId, UUID brandId, UUID locationId, Instant from, Instant to, int limit) {
+        return jdbc.sql("""
+                SELECT o.id, o.public_order_number, o.status, o.created_at, s.address_encrypted
+                  FROM ordering.orders o
+             LEFT JOIN ordering.order_customer_snapshots s
+                    ON s.tenant_id = o.tenant_id AND s.order_id = o.id
+                 WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId AND o.location_id = :locationId
+                   AND o.fulfillment_mode = 'DELIVERY'
+                   AND o.created_at >= :from AND o.created_at < :to
+                 ORDER BY o.created_at DESC, o.id DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("from", from.atOffset(java.time.ZoneOffset.UTC))
+                .param("to", to.atOffset(java.time.ZoneOffset.UTC))
+                .param("limit", limit)
+                .query((row, number) -> new DeliveryAddressCandidate(
+                        row.getObject("id", UUID.class),
+                        row.getString("public_order_number"),
+                        OrderStatus.valueOf(row.getString("status")),
+                        row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        row.getString("address_encrypted")))
+                .list();
+    }
+
+    /** One delivery order and its stored (still encrypted) destination -- see {@link #deliveryAddressCandidates}. */
+    public record DeliveryAddressCandidate(
+            UUID orderId,
+            String publicOrderNumber,
+            OrderStatus status,
+            Instant createdAt,
+            @Nullable String addressEncrypted) {}
+
+    /**
      * The board's tab badges, one aggregate (orders.md §2.3).
      *
      * <p>Scoped identically to {@link #listForLocation} and computed in one pass

@@ -306,7 +306,7 @@ public class JdbcSettlementStore {
             return new ApiException(ErrorCode.VALIDATION_FAILED, "That installation does not belong to this tenant");
         }
         if (message.contains("ck_payment_method_translation_locale")) {
-            return new ApiException(ErrorCode.VALIDATION_FAILED, "That locale is not one of ru, uz-Latn or en");
+            return new ApiException(ErrorCode.VALIDATION_FAILED, "That locale is not a well-formed language tag");
         }
         if (message.contains("ck_payment_method_translation_present")) {
             return new ApiException(ErrorCode.VALIDATION_FAILED, "A localized name cannot be blank");

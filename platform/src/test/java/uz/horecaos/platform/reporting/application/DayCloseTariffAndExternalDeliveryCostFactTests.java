@@ -673,9 +673,10 @@ class DayCloseTariffAndExternalDeliveryCostFactTests {
                 INSERT INTO fulfillment.delivery_fee_resolutions (id, tenant_id, quote_id, location_id,
                     resolution_version, outcome, zone_id, zone_version, tariff_id, tariff_version,
                     band_sequence, distance_meters, distance_mode, distance_source, currency,
-                    computed_fee_minor, final_fee_minor, created_at)
+                    computed_fee_minor, final_fee_minor, created_at, routing_seconds, routing_dataset_version)
                 SELECT :id, :tenantId, o.pricing_quote_id, :locationId, 1, 'RESOLVED', :zoneId, 1,
-                       :tariffId, :tariffVersion, 1, 3500, 'ROAD', 'ROAD', 'UZS', :feeMinor, :feeMinor, :createdAt
+                       :tariffId, :tariffVersion, 1, 3500, 'ROAD', 'ROAD', 'UZS', :feeMinor, :feeMinor, :createdAt,
+                       600, '2026-10-01'
                   FROM ordering.orders o
                  WHERE o.id = :orderId
                 """)

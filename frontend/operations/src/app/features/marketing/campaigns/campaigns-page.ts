@@ -3,18 +3,25 @@ import {
   Component,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError } from '../../../core/api/problem-details';
 import { formatMoneyRange } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
+import { WiringSentence, wiringSentence } from '../channel-wiring';
+import { ContactPolicyPanel } from '../contact-policy/contact-policy-panel';
+import { OffersPanel } from '../offers/offers-panel';
+import { ScenarioEditor } from '../scenarios/scenario-editor';
 import {
   AudienceDetail,
   AudiencePredicate,
@@ -48,7 +55,18 @@ const SUPPRESSION_REASONS: readonly string[] = [
   'OPERATOR_BLOCK',
 ];
 
-type CampaignsPageView = 'campaigns' | 'audiences' | 'suppressions' | 'courierBroadcasts';
+type CampaignsPageView =
+  'campaigns' | 'audiences' | 'suppressions' | 'offers' | 'contactPolicy' | 'courierBroadcasts';
+
+/** The tabs an address may name with `?view=`: every one of them, so another screen can link to one. */
+const VIEWS: readonly CampaignsPageView[] = [
+  'campaigns',
+  'audiences',
+  'suppressions',
+  'offers',
+  'contactPolicy',
+  'courierBroadcasts',
+];
 
 /** One predicate row being authored — the form's own shape, converted to the wire shape on submit. */
 interface PredicateDraft {
@@ -81,14 +99,32 @@ function newPredicateDraft(): PredicateDraft {
  * bullet), the campaign lifecycle, and suppression management (this row's
  * "consent and suppression enforced in audience selection" bullet).
  *
- * Three sub-views toggled in-page rather than three more routes, because none
- * of Audiences or Suppressions is its own IA row — both are folded into 6.4 —
- * and a deep link into one row's lifecycle is the one case that earns a real
- * route: see `campaign-detail-pane.ts`.
+ * Sub-views toggled in-page rather than more routes, because none of Audiences,
+ * Suppressions, Offers or Contact policy is its own IA row — all are folded into
+ * 6.4 — and a deep link into one row's lifecycle is the one case that earns a
+ * real route: see `campaign-detail-pane.ts`. The address still names a tab
+ * (`?view=offers`) so another screen can link to one.
+ *
+ * **Scenarios (ADR 0112) are campaigns with a second shape**, so they are listed
+ * here beside broadcasts, share this list's estimate, approval and launch, and
+ * are authored in {@link ScenarioEditor}, which takes the page's main area while
+ * it is open (`?scenario=new`, or `?scenario=<id>` to edit a draft's steps): a
+ * scenario has too many fields for a dialog, and the list behind it is not what
+ * an author is looking at. Offers (versioned references to a promotion or an
+ * accrual rule) and the contact policy (the platform's bounds and a brand's
+ * tighter rules, with why a guest is blocked) are tabs, because a scenario step
+ * selects from the first and is governed by the second.
+ *
+ * **A channel that cannot deliver says why.** The create form lists every
+ * channel and marks the ones this brand cannot deliver on as not connected, with
+ * the reason in words: SMS in particular names its gate (a gateway account is
+ * not cleared to carry marketing until the platform owner says so in writing),
+ * and email and push say they have no delivery at all. It opens on a channel
+ * that can deliver, not on SMS by habit.
  */
 @Component({
   selector: 'q-campaigns-page',
-  imports: [TPipe, RouterOutlet],
+  imports: [TPipe, RouterOutlet, ScenarioEditor, OffersPanel, ContactPolicyPanel],
   templateUrl: './campaigns-page.html',
   styleUrl: './campaigns-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -97,7 +133,15 @@ export class CampaignsPage implements OnInit {
   private readonly api = inject(MarketingApi);
   private readonly brand = inject(CurrentBrand);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
+
+  /** The address's own query: which tab, and whether a scenario is open in the editor. */
+  private readonly query = toSignal(this.route.queryParamMap);
+
+  /** The scenario editor, when it is open: a new scenario (null) or the draft whose steps are edited. */
+  protected readonly scenarioEditing = signal<{ readonly campaignId: string | null } | null>(null);
 
   /** Whether the detail route (`:campaignId`) is currently activated — same pattern `OrdersPage` uses for its own dock. */
   protected readonly docked = signal(false);
@@ -177,6 +221,12 @@ export class CampaignsPage implements OnInit {
   /** Whether the channel currently picked can actually deliver — T18's own read-model fix. */
   protected readonly channelIsWired = computed(() => this.selectedChannel()?.isWired ?? true);
 
+  /** Why the channel currently picked cannot deliver, in words; null when it can. */
+  protected readonly selectedChannelSentence = computed<WiringSentence | null>(() => {
+    const view = this.selectedChannel();
+    return view && !view.isWired ? wiringSentence(view.channel, view.notWiredReason) : null;
+  });
+
   /** MARKETING-class templates for the channel selected, so a campaign's consent purpose comes from the template it will actually use. */
   protected readonly templatesForChannel = computed(() =>
     this.templates().filter(
@@ -215,6 +265,27 @@ export class CampaignsPage implements OnInit {
   protected readonly audienceDetailEditing = signal(false);
   protected readonly audienceDetailPredicates = signal<PredicateDraft[]>([]);
   protected readonly audienceDetailSaving = signal(false);
+
+  constructor() {
+    // The address decides which tab and whether the scenario editor is open, so a link from
+    // another screen (the campaign pane's "edit steps", a "see the contact policy" link) lands
+    // where it means to. Clicks set the same state first and the address follows, so the two
+    // never disagree for long.
+    effect(() => {
+      const params = this.query();
+      if (!params) {
+        return;
+      }
+      const view = params.get('view');
+      if (view !== null && (VIEWS as readonly string[]).includes(view)) {
+        this.view.set(view as CampaignsPageView);
+      }
+      const scenario = params.get('scenario');
+      this.scenarioEditing.set(
+        scenario === null ? null : { campaignId: scenario === 'new' ? null : scenario },
+      );
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -354,6 +425,36 @@ export class CampaignsPage implements OnInit {
     return `marketing.channel.${channel}` as MessageKey;
   }
 
+  protected kindLabelKey(kind: string): MessageKey {
+    return `marketing.campaigns.kind.${kind}` as MessageKey;
+  }
+
+  // ------------------------------------------------------------ scenario editor
+
+  protected openNewScenario(): void {
+    this.scenarioEditing.set({ campaignId: null });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { scenario: 'new' },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected closeScenarioEditor(): void {
+    this.scenarioEditing.set(null);
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { scenario: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /** A saved draft is a campaign like any other: it goes to the pane that estimates and approves it. */
+  protected onScenarioSaved(campaignId: string): void {
+    this.scenarioEditing.set(null);
+    void this.router.navigate(['/marketing/campaigns', campaignId]);
+  }
+
   /** A campaign's cost estimate, low to high, written the way the brand writes money (Settings 10.12). */
   protected costRange(campaign: CampaignView, lowMinor: number, highMinor: number): string {
     return formatMoneyRange(lowMinor, highMinor, campaign.currency ?? 'UZS', this.i18n.locale());
@@ -398,7 +499,9 @@ export class CampaignsPage implements OnInit {
   protected openCreateCampaign(): void {
     this.newCampaignName.set('');
     this.newCampaignAudienceId.set(this.audiences()[0]?.audienceId ?? '');
-    this.newCampaignChannel.set('SMS');
+    // The first channel that can deliver, not SMS by habit: SMS may be the one this brand's
+    // account is not cleared to carry marketing on.
+    this.newCampaignChannel.set(this.channels().find((view) => view.isWired)?.channel ?? 'SMS');
     this.newCampaignTemplateKey.set('');
     this.newCampaignRecipientCap.set(1000);
     this.newCampaignCostCeilingMinor.set(null);
@@ -528,7 +631,11 @@ export class CampaignsPage implements OnInit {
   }
 
   protected fixedValuesOfRow(row: PredicateDraft): readonly string[] | null {
-    return descriptorFor(row.type).fixedValues;
+    const descriptor = descriptorFor(row.type);
+    // The platform's languages come from the registry, not from this catalogue (ADR 0149).
+    return descriptor.fixedValuesFromTier
+      ? this.registry.active(descriptor.fixedValuesFromTier)
+      : descriptor.fixedValues;
   }
 
   protected canCreateAudience(): boolean {

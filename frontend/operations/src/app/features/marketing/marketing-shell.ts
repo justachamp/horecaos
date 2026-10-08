@@ -45,8 +45,11 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * 6.5 Automations (gap-map row 6.5, batch 11 w8-marketing-automations): a
  * fifth real tab. `AutomationRuleController` over `marketing.automation_rules`/
  * `automation_runs` (V0414/V0415) authors and arms unattended BIRTHDAY,
- * INACTIVITY and CART_ABANDONMENT triggers — see `AutomationsPage`'s own
- * doc for why only three of ADR 0044's named kinds. The other two tabs
+ * INACTIVITY, CART_ABANDONMENT, CASHBACK_CHANGE and, since ADR 0112,
+ * LATE_ORDER_APOLOGY triggers — see `AutomationsPage`'s own doc for what an
+ * apology is and is not. 6.4 Campaigns also carries ADR 0112's scenario editor,
+ * versioned offers and contact policy as tabs and a full-width editor inside
+ * its own page (`CampaignsPage`), not as routes of their own. The other two tabs
  * route to the shared `NotBuiltPage`, each naming its own IA subsection —
  * 6.7/6.8's merchandising slots have neither schema nor service. Each is a
  * subsystem in its own right, not a small gap a couple of reserved

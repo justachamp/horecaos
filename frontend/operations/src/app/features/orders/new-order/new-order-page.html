@@ -297,6 +297,67 @@
                     </p>
                   }
 
+                  @if (selectedAddress(); as chosen) {
+                    @if (editingAddressId() === chosen.id) {
+                      <div class="new-order__address-form" data-testid="new-order-address-edit">
+                        @if (editorScope(); as scope) {
+                          <q-customer-address-editor
+                            [scope]="scope"
+                            [initial]="chosen"
+                            (draftChange)="onAddressDraft($event)"
+                          />
+                        }
+                        @if (addressError(); as message) {
+                          <p class="q-caption new-order__error">{{ message }}</p>
+                        }
+                        <div class="new-order__form-actions">
+                          <button
+                            type="button"
+                            class="q-caption new-order__link"
+                            [disabled]="addressSaving()"
+                            (click)="cancelAddingAddress()"
+                          >
+                            {{ 'customers.cancel' | t }}
+                          </button>
+                          <button
+                            type="button"
+                            class="new-order__create-button q-caption"
+                            [disabled]="!canSaveAddress()"
+                            (click)="saveEditedAddress(chosen)"
+                            data-testid="new-order-address-edit-save"
+                          >
+                            {{
+                              addressSaving() ? ('customers.saving' | t) : ('customers.save' | t)
+                            }}
+                          </button>
+                        </div>
+                      </div>
+                    } @else if (!addingAddress()) {
+                      @if (selectedAddressPoint(); as point) {
+                        <q-map-pin
+                          [position]="point"
+                          [center]="point"
+                          [zoom]="15"
+                          [editable]="false"
+                          [label]="chosen.label"
+                        />
+                      }
+                      <button
+                        type="button"
+                        class="q-caption new-order__link"
+                        (click)="startEditingSelectedAddress()"
+                        data-testid="new-order-address-edit-pin"
+                      >
+                        {{
+                          (selectedAddressPoint()
+                            ? 'customers.address.pin.edit'
+                            : 'customers.address.pin.place'
+                          ) | t
+                        }}
+                      </button>
+                    }
+                  }
+
                   @if (!addingAddress()) {
                     <button
                       type="button"
@@ -308,80 +369,12 @@
                     </button>
                   } @else {
                     <div class="new-order__address-form">
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.label' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressLabel()"
-                          (input)="addressLabel.set($any($event.target).value)"
+                      @if (editorScope(); as scope) {
+                        <q-customer-address-editor
+                          [scope]="scope"
+                          (draftChange)="onAddressDraft($event)"
                         />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.line1' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().line1"
-                          (input)="setAddressField('line1', $any($event.target).value)"
-                          data-testid="new-order-address-line1"
-                        />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.city' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().city"
-                          (input)="setAddressField('city', $any($event.target).value)"
-                        />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.district' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().district"
-                          (input)="setAddressField('district', $any($event.target).value)"
-                        />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.entrance' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().entrance"
-                          (input)="setAddressField('entrance', $any($event.target).value)"
-                        />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.floor' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().floor"
-                          (input)="setAddressField('floor', $any($event.target).value)"
-                        />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.apartment' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().apartment"
-                          (input)="setAddressField('apartment', $any($event.target).value)"
-                        />
-                      </label>
-                      <label class="new-order__field">
-                        <span class="q-caption">{{ 'customers.address.landmark' | t }}</span>
-                        <input
-                          type="text"
-                          class="new-order__input q-body-sm"
-                          [value]="addressDraft().landmark"
-                          (input)="setAddressField('landmark', $any($event.target).value)"
-                          data-testid="new-order-address-landmark"
-                        />
-                      </label>
+                      }
                       @if (addressError(); as message) {
                         <p class="q-caption new-order__error">{{ message }}</p>
                       }
@@ -397,7 +390,7 @@
                         <button
                           type="button"
                           class="new-order__create-button q-caption"
-                          [disabled]="addressSaving()"
+                          [disabled]="!canSaveAddress()"
                           (click)="saveNewAddress()"
                           data-testid="new-order-address-save"
                         >

@@ -95,11 +95,27 @@ export function effectiveCapabilitiesAt(
   for (const grant of scopes) {
     if (covers(grant.scope, target)) {
       for (const capability of grant.capabilities ?? []) {
-        held.add(capability);
+        held.add(canonicalCapability(capability));
       }
     }
   }
   return held;
+}
+
+/**
+ * One spelling for a capability, whichever of the server's two it arrived in.
+ *
+ * `GET /api/v1/session/context` writes a capability as its enum name
+ * (`ORDER_APPROVE`), while the job catalogue (`TenantRoleCatalog.RoleDescriptor`)
+ * writes the same capability as its code (`order.approve`). Compared as they
+ * arrive the two never match, which left the job picker empty for everyone —
+ * the specs here all used codes on both sides and so never saw it. The server
+ * guarantees the two are the same words (a test over every capability asserts
+ * `name == code.toUpperCase()` with separators as underscores), so folding both
+ * to the name loses nothing.
+ */
+export function canonicalCapability(capability: string): string {
+  return capability.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
 }
 
 /**
@@ -116,7 +132,7 @@ export function canGrantAt(
 ): boolean {
   const held = effectiveCapabilitiesAt(scopes, target);
   for (const capability of requiredCapabilities) {
-    if (!held.has(capability)) {
+    if (!held.has(canonicalCapability(capability))) {
       return false;
     }
   }

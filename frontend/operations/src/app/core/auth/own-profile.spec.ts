@@ -7,7 +7,9 @@ import { ApiClient } from '../api/api-client';
 import { ApiError, ApiErrorCode } from '../api/problem-details';
 import { StaffMember } from '../api/staff-member';
 import { staffMemberDetail } from '../../features/staff/staff-member.testing';
+import { REGISTRY_FIXTURE } from '../../../testing/platform-locales.fixture';
 import { I18n, STORAGE_KEY } from '../i18n/i18n';
+import { seedPlatformLocalesForTesting } from '../i18n/platform-locales';
 import { Auth } from './auth';
 import { CurrentTenant } from './current-tenant';
 import { OwnProfile } from './own-profile';
@@ -146,6 +148,32 @@ describe('OwnProfile', () => {
     await TestBed.inject(OwnProfile).ensureLoaded();
 
     expect(setLocale).toHaveBeenCalledWith('uz-Latn');
+  });
+
+  it('adopts the tag the platform now answers with, which is what the catalogues are keyed by', async () => {
+    reply(staffMemberDetail({ uiLocale: 'uz-Latn' }));
+
+    await TestBed.inject(OwnProfile).ensureLoaded();
+
+    expect(setLocale).toHaveBeenCalledWith('uz-Latn');
+  });
+
+  it('leaves the language alone when the registry offers one this build has no catalogue for', async () => {
+    seedPlatformLocalesForTesting({
+      ...REGISTRY_FIXTURE,
+      locales: REGISTRY_FIXTURE.locales.map((entry) =>
+        entry.tag === 'kk' ? { ...entry, tiers: ['STAFF_UI' as const] } : entry,
+      ),
+    });
+    try {
+      reply(staffMemberDetail({ uiLocale: 'kk' }));
+
+      await TestBed.inject(OwnProfile).ensureLoaded();
+
+      expect(setLocale).not.toHaveBeenCalled();
+    } finally {
+      seedPlatformLocalesForTesting(REGISTRY_FIXTURE);
+    }
   });
 
   it('does not override a language already chosen on this browser', async () => {

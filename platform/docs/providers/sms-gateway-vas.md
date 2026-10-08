@@ -148,6 +148,43 @@ absence of a receipt is not evidence of failure. And the callback carries
 credential pair; the example shows `key` empty, so what actually arrives must be
 confirmed against a real callback before the endpoint trusts either field.
 
+**The endpoint is built and switched off** (ADR 0146 Decision 4). It is
+`POST /providers/sms/{installationId}/receipts`, and for this provider type it
+answers 404 until a deployment names `SMSGW_VAS` in
+`horecaos.sms.receipts.enabled-provider-types`, which waits for **one real callback
+to be captured against a controlled account** and transcribed here. The normaliser
+(`VasSmsGatewayAdapter#normalise`) is written against the example above and is
+unverified against a real body. Once enabled, what authenticates a request is the
+edge, not the request: the provider's published source addresses are the only thing
+`deploy/infra/caddy/Caddyfile` lets through (`HORECAOS_SMS_RECEIPT_ALLOWED_IPS`,
+fail-closed), and what limits a forgery that got through is the attempt match — the
+id must name an attempt made under *this* installation, a receipt can only advance
+it, an unknown id creates nothing, and only a matched blacklist receipt can raise a
+suppression. Nothing in the callback body is stored: `key` is a credential field,
+empty or not.
+
+### Receipt codes, as the platform reads them
+
+| VAS code | Meaning | `normalized_status` | Terminal |
+|---|---|---|---|
+| 0 | Created | `ACCEPTED` | no |
+| 1 | Sending | `DISPATCHED` | no |
+| 3 | Sent (handed to the operator) | `DISPATCHED` | no |
+| 4 | Delivered | `DELIVERED` | yes |
+| 2 | Fail | `FAILED` | yes |
+| 5 | Rejected | `FAILED` | yes |
+| 7 | InBlackList | `FAILED`, plus an ADR 0044 `HARD_BOUNCE` suppression for that customer's SMS | yes |
+| 6 | Unknown | `UNKNOWN` | yes, unresolved — a later definite answer still advances it |
+| anything else | not in the document | *read as nothing*; counted `unreadable` | — |
+
+`provider_status` keeps the provider's own `description` (truncated to 64) or, when
+it sends none, our name for the state. `NO_RECEIPT` is not a provider status: it is
+derived on the attempt (`receipt_state`) by a sweeper, only for a provider type
+whose receipt endpoint is enabled, after `horecaos.sms.receipts.no-receipt-window`
+(default `PT24H`), and a late receipt clears it. For this provider type, until the
+endpoint is enabled, no attempt is ever marked: a recipient shows "handed to the
+operator" however old the message is.
+
 ## Status and error codes
 
 | Code | Meaning |
@@ -192,6 +229,40 @@ confirmed against a real callback before the endpoint trusts either field.
   idempotency key, so a blind retry sends a second message. Resolve with
   `/search` on the destination number for the day, exactly as the Click adapter
   resolves an uncertain payment with a status query rather than resending.
+
+## One adapter, every SMS purpose (ADR 0146)
+
+`VasSmsGatewayAdapter` is the platform's one adapter for this gateway and serves
+every purpose over the same HTTP client, code table and credential handling: a
+customer's sign-in code (through `SmsGateway`, the verification entry point) and a
+transactional notification (through `NotificationGateway`, registered by
+`(channel, providerType)`). **One `SMSGW_VAS` binding serves both**; a second
+account is not needed for order confirmations. What the account may carry is a
+per-installation fact:
+
+| Purpose | Default on this gateway | Where it comes from |
+|---|---|---|
+| `VERIFICATION`, `TRANSACTIONAL` | carried | the owner's default (ADR 0146 open input 1) |
+| `MARKETING`, `COURIER` | **refused**, `SMS_PURPOSE_NOT_PERMITTED` | until the owner answers in writing which accounts may carry them |
+
+The written answer is `permittedPurposes` in the installation's
+`non_sensitive_config` (a comma-separated list, e.g.
+`"TRANSACTIONAL,MARKETING"`); a word the platform does not know is ignored rather
+than read as a permission. The refusal happens before any request and before the
+credential is read, for a message (the dispatch's class decides its purpose) and for
+a campaign (the scoped `isWired` says the same thing before approval is spent).
+
+The `NotificationChannelAdapter` contract each gateway is reviewed against has six
+obligations, and this is how this one meets them:
+
+| Obligation | Here |
+|---|---|
+| `send` | `POST /send`; the segments the provider billed (`parts`) are stored on the attempt and compared with the platform's `SmsSegments` estimate (`horecaos.sms.segments.mismatch`) |
+| `resolve` | `POST /search` by destination and day, matched on the provider's own message id when the send's answer gave one, otherwise on the SHA-256 of the text (all the platform keeps of it). Found is a fact about that message, including a failed or blacklisted one; **not found is unknown, never "not sent"** |
+| `receipt` | `normalise`, above |
+| `segments` | `parts` on the `/send` answer |
+| `account` | `describeAccount`: `login` and `sender` present, without calling out |
+| `taxonomy` | the two tables in this file: the error codes below, and the receipt codes above. A code in neither is `UNCERTAIN`, never `SUCCESS` |
 
 ## What the document does not say
 

@@ -11,8 +11,10 @@ import { firstValueFrom } from 'rxjs';
 import { firstPage } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
-import { I18n, Locale } from '../../core/i18n/i18n';
+import { I18n } from '../../core/i18n/i18n';
+import { localeDisplayName } from '../../core/i18n/locale-labels';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { EmptyState } from '../../shared/ui/empty-state';
@@ -37,7 +39,7 @@ import { MediaApi } from './media-api';
 
 /** One locale row of the content editor's per-locale grid (row 10.12). */
 interface LocaleContentDraft {
-  readonly locale: Locale;
+  readonly locale: string;
   name: string;
   description: string;
 }
@@ -111,6 +113,7 @@ export class CategoriesPage implements OnInit {
   private readonly mediaApi = inject(MediaApi);
   private readonly brand = inject(CurrentBrand);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly localeSet = inject(LocaleSet);
 
   protected readonly firstLoadComplete = signal(false);
@@ -143,7 +146,11 @@ export class CategoriesPage implements OnInit {
    * default).
    */
   protected readonly listLocale = computed<string>(() =>
-    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+    listResolutionLocale(
+      this.localeSet.isConfigured(),
+      this.localeSet.defaultLocale(),
+      this.registry,
+    ),
   );
 
   /**
@@ -152,7 +159,7 @@ export class CategoriesPage implements OnInit {
    * among them — it is the brand's own default, or (unconfigured) `uz` inside
    * the triple — so, unlike the batch-13 grid, nothing is forced in.
    */
-  protected readonly knownLocales = computed<readonly Locale[]>(() => this.localeSet.locales());
+  protected readonly knownLocales = computed<readonly string[]>(() => this.localeSet.locales());
   protected readonly localeContentDraft = signal<readonly LocaleContentDraft[]>([]);
   protected readonly savingContent = signal(false);
   protected readonly contentError = signal<string | null>(null);
@@ -252,20 +259,20 @@ export class CategoriesPage implements OnInit {
   private loadLocaleContentDraft(category: CategorySummary | null): void {
     this.localeContentDraft.set(
       this.knownLocales().map((locale) => {
-        const existing = category?.translations[toCatalogLocale(locale)];
+        const existing = category?.translations[toCatalogLocale(locale, this.registry)];
         return { locale, name: existing?.name ?? '', description: existing?.description ?? '' };
       }),
     );
     this.contentError.set(null);
   }
 
-  protected setLocaleName(locale: Locale, name: string): void {
+  protected setLocaleName(locale: string, name: string): void {
     this.localeContentDraft.update((rows) =>
       rows.map((row) => (row.locale === locale ? { ...row, name } : row)),
     );
   }
 
-  protected setLocaleDescription(locale: Locale, description: string): void {
+  protected setLocaleDescription(locale: string, description: string): void {
     this.localeContentDraft.update((rows) =>
       rows.map((row) => (row.locale === locale ? { ...row, description } : row)),
     );
@@ -276,19 +283,12 @@ export class CategoriesPage implements OnInit {
    * category's name in ({@link listLocale}) — the grid's visible marker, so an
    * operator can see which tab a rename/list label comes from.
    */
-  protected isDefaultLocale(locale: Locale): boolean {
-    return toCatalogLocale(locale) === this.listLocale();
+  protected isDefaultLocale(locale: string): boolean {
+    return toCatalogLocale(locale, this.registry) === this.listLocale();
   }
 
-  protected localeLabel(locale: Locale): string {
-    switch (locale) {
-      case 'ru':
-        return this.i18n.t('settings.brandProfile.locale.ru');
-      case 'uz-Latn':
-        return this.i18n.t('settings.brandProfile.locale.uzLatn');
-      case 'en':
-        return this.i18n.t('settings.brandProfile.locale.en');
-    }
+  protected localeLabel(locale: string): string {
+    return localeDisplayName(this.i18n, locale, this.registry);
   }
 
   /**
@@ -314,7 +314,7 @@ export class CategoriesPage implements OnInit {
           this.api.setTranslation(scope, {
             entityType: 'CATEGORY',
             entityId: category.categoryId,
-            locale: toCatalogLocale(row.locale),
+            locale: toCatalogLocale(row.locale, this.registry),
             name: row.name.trim(),
             description: row.description.trim() || null,
           }),

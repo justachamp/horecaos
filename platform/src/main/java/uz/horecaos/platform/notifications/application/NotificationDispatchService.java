@@ -1,5 +1,7 @@
 package uz.horecaos.platform.notifications.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,18 +12,23 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
+import uz.horecaos.platform.marketing.api.DeliverabilityFeedbackPort;
+import uz.horecaos.platform.marketing.api.SmsSegments;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
+import uz.horecaos.platform.notifications.api.NotificationTransport.ReconcileRequest;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationStatus;
 import uz.horecaos.platform.notifications.domain.TemplateRenderer;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcDeliveryReceiptStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.AttemptRow;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NotificationRow;
@@ -64,17 +71,51 @@ public class NotificationDispatchService {
     private final RecipientContactDirectory contacts;
     private final NotificationTransport transport;
     private final CampaignBlockRateMonitor campaignBlockRate;
+    private final DeliverabilityFeedbackPort deliverability;
+    private final MeterRegistry meters;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final int maximumAttempts;
     private final Duration retryBackoff;
 
+    /**
+     * The shape every caller used before ADR 0146: no deliverability feedback and a
+     * private meter registry, so a suite that does not exercise either still reads
+     * the same.
+     */
     public NotificationDispatchService(
             JdbcNotificationStore notifications,
             JdbcTemplateStore templates,
             RecipientContactDirectory contacts,
             NotificationTransport transport,
             CampaignBlockRateMonitor campaignBlockRate,
+            ObjectMapper objectMapper,
+            Clock clock,
+            int maximumAttempts,
+            Duration retryBackoff) {
+        this(
+                notifications,
+                templates,
+                contacts,
+                transport,
+                campaignBlockRate,
+                (tenantId, brandId, accountId, channel, correlationId) -> false,
+                new SimpleMeterRegistry(),
+                objectMapper,
+                clock,
+                maximumAttempts,
+                retryBackoff);
+    }
+
+    @Autowired
+    public NotificationDispatchService(
+            JdbcNotificationStore notifications,
+            JdbcTemplateStore templates,
+            RecipientContactDirectory contacts,
+            NotificationTransport transport,
+            CampaignBlockRateMonitor campaignBlockRate,
+            DeliverabilityFeedbackPort deliverability,
+            MeterRegistry meters,
             ObjectMapper objectMapper,
             Clock clock,
             @Value("${horecaos.notifications.max-attempts:8}") int maximumAttempts,
@@ -84,6 +125,8 @@ public class NotificationDispatchService {
         this.contacts = contacts;
         this.transport = transport;
         this.campaignBlockRate = campaignBlockRate;
+        this.deliverability = deliverability;
+        this.meters = meters;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.maximumAttempts = maximumAttempts;
@@ -187,9 +230,11 @@ public class NotificationDispatchService {
                 org.slf4j.MDC.get("correlationId"),
                 row.subjectType(),
                 row.subjectId(),
-                row.templateKey()));
+                row.templateKey(),
+                purposeOf(row)));
 
         record(row, attempt, outcome, clock.instant());
+        compareSegments(row, outcome, rendered.body());
     }
 
     /**
@@ -205,8 +250,23 @@ public class NotificationDispatchService {
         // middle of establishing the fate of.
         notifications.markReconciling(row.tenantId(), row.id(), row.claimToken(), now);
 
-        DispatchOutcome outcome = transport.reconcile(
-                row.tenantId(), row.brandId(), row.locationId(), row.channel(), attempt.providerIdempotencyKey());
+        // ADR 0146 Decision 2: ask by the provider's own id when the send's answer
+        // gave one, and otherwise by destination and the hash of what was sent. The
+        // destination is resolved for this call only and its reveal is recorded
+        // (ADR 0029), which is why it is not looked up when an id already names the
+        // message, and not at all for a channel whose recipient is not a number.
+        String destination =
+                attempt.externalMessageId() == null && "SMS".equals(row.channel()) ? resolveRecipientValue(row) : null;
+        DispatchOutcome outcome = transport.reconcile(new ReconcileRequest(
+                row.tenantId(),
+                row.brandId(),
+                row.locationId(),
+                row.channel(),
+                attempt.providerIdempotencyKey(),
+                attempt.externalMessageId(),
+                destination,
+                row.renderedContentHash(),
+                attempt.requestedAt()));
         Instant answeredAt = clock.instant();
 
         switch (outcome.status()) {
@@ -236,6 +296,37 @@ public class NotificationDispatchService {
         }
     }
 
+    /**
+     * ADR 0146 Decision 5's one pull: asks the gateway what it holds for an attempt
+     * it reported as {@code UNKNOWN}, and answers with what it said.
+     *
+     * <p>Every pull decrypts a number (ADR 0029, a recorded purpose), which is why
+     * this runs only for attempts the provider itself called unresolved and never as
+     * a standing "chase every delivery" workload. It sends nothing and changes
+     * nothing here: the caller applies the answer through the receipt rules, so a
+     * pulled state can only advance an attempt exactly as a callback can.
+     */
+    public Optional<DispatchOutcome> pullState(JdbcDeliveryReceiptStore.UnknownStateAttempt attempt) {
+        Optional<NotificationRow> row = notifications.find(attempt.tenantId(), attempt.notificationId());
+        if (row.isEmpty() || attempt.brandId() == null) {
+            return Optional.empty();
+        }
+        // A gateway that can only be searched by number needs it even when an id
+        // already names the message, so it is resolved here for this call only.
+        String destination = resolveRecipientValue(row.get());
+        DispatchOutcome outcome = transport.reconcile(new ReconcileRequest(
+                attempt.tenantId(),
+                attempt.brandId(),
+                attempt.locationId(),
+                attempt.channel(),
+                attempt.providerIdempotencyKey(),
+                attempt.externalMessageId(),
+                destination,
+                attempt.renderedContentHash(),
+                attempt.requestedAt()));
+        return Optional.of(outcome);
+    }
+
     private void record(NotificationRow row, AttemptRow attempt, DispatchOutcome outcome, Instant now) {
         switch (outcome.status()) {
             case ACCEPTED -> {
@@ -243,38 +334,74 @@ public class NotificationDispatchService {
                 // was. A gateway that says "queued" has not told us the handset saw
                 // anything, and ADR 0020 forbids HorecaOS promising more than it was
                 // given — so only a confirmed delivery gets an acknowledgement time.
-                String normalized = normalize(outcome.providerStatus());
+                //
+                // The adapter's own reading of its provider's word wins when it has
+                // one (ADR 0146 Decision 2, receipt): a gateway that says "Fail" or
+                // "InBlackList" has said the message will not arrive, which is a
+                // fact about that message and not a licence to send another.
+                String normalized = outcome.normalizedStatus() != null
+                        ? outcome.normalizedStatus()
+                        : normalize(outcome.providerStatus());
                 boolean confirmed = "DELIVERED".equals(normalized) || "READ".equals(normalized);
+                boolean failed = "FAILED".equals(normalized);
 
                 notifications.settleAttempt(
                         row.tenantId(),
                         attempt.id(),
-                        confirmed ? "DELIVERED" : "ACCEPTED",
+                        confirmed ? "DELIVERED" : failed ? "FAILED" : "ACCEPTED",
                         outcome.externalMessageId(),
-                        null,
+                        failed
+                                ? (outcome.hardBounce()
+                                        ? DeliveryReceiptService.FAILURE_UNREACHABLE
+                                        : DeliveryReceiptService.FAILURE_REPORTED)
+                                : null,
                         outcome.providerBindingId(),
                         outcome.providerType(),
                         confirmed ? now : null,
+                        outcome.providerSegments(),
                         now);
                 notifications.recordStatusEvent(
                         row.tenantId(),
                         attempt.id(),
-                        providerEventId(attempt, outcome),
+                        providerEventId(attempt, outcome, normalized),
                         normalized,
                         outcome.providerStatus(),
                         now,
                         now);
-                // The message is terminal either way. Which promise was actually
-                // made is on the status event, verbatim, because that is the
-                // distinction a support conversation turns on.
-                notifications.settle(
-                        row.tenantId(),
-                        row.id(),
-                        row.claimToken(),
-                        NotificationStatus.DELIVERED.name(),
-                        now,
-                        null,
-                        now);
+                if (failed) {
+                    // Terminal and not retried: the provider took the message and
+                    // says it will not arrive. A blacklisted receiver is also a
+                    // deliverability fact (ADR 0146 Decision 6), written through
+                    // the one narrow path that raises it.
+                    notifications.settle(
+                            row.tenantId(),
+                            row.id(),
+                            row.claimToken(),
+                            NotificationStatus.FAILED_TERMINAL.name(),
+                            now,
+                            DeliveryReceiptService.FAILURE_REPORTED,
+                            now);
+                    if (outcome.hardBounce() && row.recipientAccountId() != null && row.brandId() != null) {
+                        deliverability.recordHardBounce(
+                                row.tenantId(),
+                                row.brandId(),
+                                row.recipientAccountId(),
+                                row.channel(),
+                                attempt.id().toString());
+                    }
+                } else {
+                    // The message is terminal either way. Which promise was actually
+                    // made is on the status event, verbatim, because that is the
+                    // distinction a support conversation turns on.
+                    notifications.settle(
+                            row.tenantId(),
+                            row.id(),
+                            row.claimToken(),
+                            NotificationStatus.DELIVERED.name(),
+                            now,
+                            null,
+                            now);
+                }
             }
             case REJECTED -> {
                 notifications.settleAttempt(
@@ -474,11 +601,43 @@ public class NotificationDispatchService {
      * synchronous answer deduplicates on the unique index instead of appending a
      * second identical row every time a reconcile runs.
      */
-    private static String providerEventId(AttemptRow attempt, DispatchOutcome outcome) {
+    private static String providerEventId(AttemptRow attempt, DispatchOutcome outcome, String normalized) {
         String provided = outcome.externalMessageId();
-        return provided != null
-                ? provided + ":" + normalize(outcome.providerStatus())
-                : attempt.id() + ":" + normalize(outcome.providerStatus());
+        return provided != null ? provided + ":" + normalized : attempt.id() + ":" + normalized;
+    }
+
+    /** ADR 0146 Decision 1: what a message is for decides whether the gateway account may carry it. */
+    private static String purposeOf(NotificationRow row) {
+        return "MARKETING".equals(row.notificationClass())
+                ? NotificationDispatch.PURPOSE_MARKETING
+                : NotificationDispatch.PURPOSE_TRANSACTIONAL;
+    }
+
+    /**
+     * ADR 0146 Decision 7: the segments the provider says it billed, against the
+     * platform's estimate of the same text.
+     *
+     * <p>A mismatch is a metric and nothing else. The estimator is what a tenant's
+     * campaign ceiling is enforced against, so a gateway that bills differently from
+     * it is a finding worth seeing, and not a reason to refuse or to resend. Bounded
+     * tags: the provider type and which way the estimate was wrong, never a count.
+     */
+    private void compareSegments(NotificationRow row, DispatchOutcome outcome, String body) {
+        Integer billed = outcome.providerSegments();
+        if (billed == null || !"SMS".equals(row.channel())) {
+            return;
+        }
+        int estimated = SmsSegments.segmentsFor(body);
+        if (estimated == billed) {
+            return;
+        }
+        meters.counter(
+                        "horecaos.sms.segments.mismatch",
+                        "provider",
+                        outcome.providerType() == null ? "unknown" : outcome.providerType(),
+                        "estimate",
+                        estimated < billed ? "under" : "over")
+                .increment();
     }
 
     /**

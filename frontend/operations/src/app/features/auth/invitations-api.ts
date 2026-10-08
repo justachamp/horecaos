@@ -18,7 +18,8 @@ export interface InvitationInspection {
   readonly emailMasked: string | null;
   readonly jobName: string | null;
   readonly expiresAt: string;
-  readonly locale: 'uz' | 'ru' | 'en' | (string & {});
+  /** The registry's tag the invitation is written in (ADR 0149); a bare `uz` from an older platform is read as `uz-Latn` by {@link isLocale}'s caller. */
+  readonly locale: string;
 }
 
 /** `OwnerInvitationService.Accepted`: the name the owner now signs in with. */

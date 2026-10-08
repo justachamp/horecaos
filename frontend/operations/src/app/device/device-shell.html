@@ -5,7 +5,7 @@
     </div>
   }
 
-  @if (!isSetUp()) {
+  @if (manualSetup()) {
     <section class="device-shell__panel" data-testid="device-setup-panel">
       <h1 class="device-shell__title">{{ 'device.setup.title' | t }}</h1>
       <p class="device-shell__hint">{{ 'device.setup.hint' | t }}</p>
@@ -55,13 +55,30 @@
 
       @switch (enrolmentPhase()) {
         @case ('idle') {
+          <p class="device-shell__hint">{{ 'device.enrol.kindTitle' | t }}</p>
           <button
             type="button"
             class="device-shell__button"
-            (click)="beginEnrolment()"
+            (click)="beginEnrolment('KITCHEN_KDS')"
             data-testid="device-enrol-begin"
           >
             {{ 'device.enrol.begin' | t }}
+          </button>
+          <button
+            type="button"
+            class="device-shell__button"
+            (click)="beginEnrolment('KITCHEN_VDU')"
+            data-testid="device-enrol-begin-wall"
+          >
+            {{ 'device.enrol.beginWall' | t }}
+          </button>
+          <button
+            type="button"
+            class="device-shell__link"
+            (click)="showManualSetup()"
+            data-testid="device-enrol-manual"
+          >
+            {{ 'device.enrol.manual' | t }}
           </button>
         }
         @case ('beginning') {
@@ -122,6 +139,43 @@
         }
       }
     </section>
+  } @else if (profilePhase() === 'loading') {
+    <section class="device-shell__panel" data-testid="device-profile-loading">
+      <p class="device-shell__hint">{{ 'device.profile.loading' | t }}</p>
+    </section>
+  } @else if (profilePhase() === 'failed') {
+    <section class="device-shell__panel" data-testid="device-profile-failed">
+      <p class="device-shell__error">{{ 'device.profile.failed' | t }}</p>
+      <button
+        type="button"
+        class="device-shell__button"
+        (click)="retryProfile()"
+        data-testid="device-profile-retry"
+      >
+        {{ 'device.enrol.retry' | t }}
+      </button>
+      <button
+        type="button"
+        class="device-shell__link"
+        (click)="showManualSetup()"
+        data-testid="device-enrol-manual"
+      >
+        {{ 'device.enrol.manual' | t }}
+      </button>
+    </section>
+  } @else if (isWall()) {
+    <section class="device-shell__wall" data-testid="device-wall">
+      <q-vdu-wall
+        [tickets]="wallTickets()"
+        [policy]="wallPolicy()"
+        [timeZone]="wallTimeZone()"
+        [phase]="wallPhase()"
+        [freshness]="wallFreshness()"
+        [freshnessLabel]="wallFreshnessLabel()"
+        [now]="now()"
+        [stationLabel]="wallStationLabel()"
+      />
+    </section>
   } @else {
     <section class="device-shell__board" data-testid="device-board">
       @if (!ticketsLoaded()) {
@@ -177,12 +231,14 @@
     </section>
   }
 
-  <button
-    type="button"
-    class="device-shell__reset"
-    (click)="resetDevice()"
-    data-testid="device-reset"
-  >
-    {{ 'device.resetDevice' | t }}
-  </button>
+  @if (!isWall()) {
+    <button
+      type="button"
+      class="device-shell__reset"
+      (click)="resetDevice()"
+      data-testid="device-reset"
+    >
+      {{ 'device.resetDevice' | t }}
+    </button>
+  }
 </div>

@@ -7,7 +7,12 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { settingsPaths } from '../../../core/api/settings-paths';
 import type { MoneyGrouping, MoneySymbolPlacement } from '../../../core/format/regional-format';
 
-export type BrandLocaleCode = 'ru' | 'uz-Latn' | 'en';
+/**
+ * A BCP 47 tag of a language a brand's content can be in (ADR 0149): any language the registry has
+ * live in its content tier, not a closed union. The staff console's own `Locale` is the languages
+ * this *build* has catalogues for; a brand may author in more than that.
+ */
+export type BrandLocaleCode = string;
 
 /** Mirrors uz.horecaos.platform.tenancy.application.TenantControlPlaneService.BrandLocaleView. */
 export interface BrandLocaleView {

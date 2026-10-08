@@ -1,11 +1,11 @@
 package uz.horecaos.platform.tenancy.application.onboarding;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
-import uz.horecaos.platform.tenancy.application.invitations.OwnerInvitationService;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The names of the onboarding inputs the start endpoint writes and the owner
@@ -58,15 +58,12 @@ public final class OnboardingInputs {
         return new RecordRef("tenant.onboarding_steps", "input_snapshot.ownerEmailProtected", tenantId);
     }
 
-    /** uz, ru or en; anything else, or nothing, is Russian. */
+    /**
+     * The language the owner's invitation is written in: the registry's tag for what was asked for
+     * (a bare {@code uz} reads as {@code uz-Latn}, ADR 0149), and the fallback language for anything
+     * the messages tier does not speak or nothing at all.
+     */
     public static String locale(@Nullable String requested) {
-        if (requested == null) {
-            return "ru";
-        }
-        String language = requested.strip().toLowerCase(Locale.ROOT);
-        if (language.startsWith("uz")) {
-            return "uz";
-        }
-        return OwnerInvitationService.LOCALES.contains(language) ? language : "ru";
+        return PlatformLocales.resolve(requested, Tier.MESSAGES);
     }
 }

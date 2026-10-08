@@ -1,6 +1,8 @@
 package uz.horecaos.platform.tenancy.application.invitations;
 
 import java.util.Map;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The eight tenant-visible {@code PlatformRole} codes, in the words a
@@ -41,8 +43,8 @@ final class StaffRoleNames {
         if (names == null) {
             return roleCode;
         }
-        return switch (locale) {
-            case "uz" -> names.uz();
+        return switch (PlatformLocales.resolve(locale, Tier.MESSAGES)) {
+            case "uz-Latn" -> names.uz();
             case "en" -> names.en();
             default -> names.ru();
         };

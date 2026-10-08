@@ -40,6 +40,7 @@ import uz.horecaos.platform.iam.api.mail.StaffEmail;
 import uz.horecaos.platform.iam.api.mail.StaffEmailSender;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.application.PlatformLocaleVocabulary;
 import uz.horecaos.platform.web.api.ApiException;
 
 /**
@@ -103,9 +104,17 @@ class PasswordResetFlowTests {
         facts = Collections.synchronizedList(new ArrayList<>());
         store = new JdbcPasswordResetStore(jdbc);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
-        resets = new PasswordResetService(store, accounts, facts::add, transactions, clock);
+        resets = new PasswordResetService(
+                store, accounts, facts::add, transactions, clock, new PlatformLocaleVocabulary());
         relay = new PasswordResetRelay(
-                store, accounts, mailer, facts::add, clock, "https://ops.test/", "https://cp.test");
+                store,
+                accounts,
+                mailer,
+                facts::add,
+                clock,
+                new PlatformLocaleVocabulary(),
+                "https://ops.test/",
+                "https://cp.test");
 
         accounts.put(SUBJECT, "dilnoza.karimova@example.uz", "dilnoza");
     }
@@ -137,7 +146,9 @@ class PasswordResetFlowTests {
         var inspection = resets.inspect(token);
         assertThat(inspection.console()).isEqualTo("OPERATIONS");
         assertThat(inspection.maskedLogin()).isEqualTo("d***a@example.uz");
-        assertThat(inspection.locale()).isEqualTo("uz");
+        assertThat(inspection.locale())
+                .as("asked for in a bare uz, stored and read back as the tag (ADR 0149)")
+                .isEqualTo("uz-Latn");
         assertThat(store.forSubject(SUBJECT).orElseThrow().openedAt()).isNotNull();
 
         assertThat(resets.accept(token, "a-long-enough-passphrase", "corr"))

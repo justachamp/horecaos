@@ -106,10 +106,53 @@ export interface DraftCircleVersionRequest {
   readonly minBasketMinor?: number | null;
 }
 
+/**
+ * A polygon drawn on the map, drafted as a new version (row `3.6`, ADR 0145). The same terms as
+ * {@link DraftCircleVersionRequest}; the shape is a ring of corners instead of a branch and a
+ * radius, and it goes out as GeoJSON because that is what `ServiceZoneService.draftPolygonVersion`
+ * takes, `[longitude, latitude]` and all (see `zone-geometry.ts`, which is the one place that
+ * order is written).
+ */
+export interface DraftPolygonVersionRequest {
+  /** The outline as GeoJSON — build it with `toGeoJsonPolygon`, never by hand. */
+  readonly geoJson: string;
+  readonly regionId?: string | null;
+  readonly priority: number;
+  readonly currency: string;
+  readonly deliveryTariffId?: string | null;
+  readonly freeDeliveryFromMinor?: number | null;
+  readonly minBasketMinor?: number | null;
+}
+
 export interface VersionView {
   readonly zoneId: string;
   readonly version: number;
   readonly status: string;
+}
+
+/** A point on a stored outline: named axes, never an array pair. */
+export interface OutlinePointResponse {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+/** One polygon of a stored outline: the outer ring, then any holes; every ring open. */
+export interface OutlinePolygonResponse {
+  readonly ring: readonly OutlinePointResponse[];
+  readonly holes: readonly (readonly OutlinePointResponse[])[];
+}
+
+/** Mirrors `OperationsServiceZoneController.ZoneOutlineResponse` (rows `3.2`, `3.6`, `3.6c`, `7.10`). */
+export interface ZoneOutlineResponse {
+  readonly zoneId: string;
+  readonly code: string;
+  readonly role: string;
+  readonly version: number;
+  /** `DRAFT` | `ACTIVE` | `RETIRED` | `DISCARDED`. */
+  readonly status: string;
+  /** `CIRCLE` | `POLYGON`: how it was authored. */
+  readonly shapeKind?: string | null;
+  readonly polygons: readonly OutlinePolygonResponse[];
 }
 
 /**
@@ -240,6 +283,47 @@ export class DeliveryZonesApi {
     );
   }
 
+  /** Drafts a hand-drawn polygon as a new version, and stops there, exactly like a circle. */
+  async draftPolygonVersion(
+    scope: BrandScope,
+    zoneId: string,
+    request: DraftPolygonVersionRequest,
+  ): Promise<VersionView> {
+    const body: DraftPolygonVersionWireRequest = {
+      geoJson: request.geoJson,
+      regionId: request.regionId ?? null,
+      priority: request.priority,
+      currency: request.currency,
+      deliveryTariffId: request.deliveryTariffId ?? null,
+      freeDeliveryFromMinor: request.freeDeliveryFromMinor ?? null,
+      minBasketMinor: request.minBasketMinor ?? null,
+    };
+    return firstValueFrom(
+      this.api.post<DraftPolygonVersionWireRequest, VersionView>(
+        deliveryZonePaths.zoneVersions(scope, zoneId),
+        command(body),
+      ),
+    );
+  }
+
+  /** One version's stored outline, in any status — what an activation review and the polygon editor open. */
+  async outline(scope: BrandScope, zoneId: string, version: number): Promise<ZoneOutlineResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ZoneOutlineResponse>(
+        deliveryZonePaths.zoneVersionOutline(scope, zoneId, version),
+      ),
+    );
+    return result.value;
+  }
+
+  /** The live outline of every zone this brand has: the geometry behind the courier map and the density view. */
+  async activeOutlines(scope: BrandScope): Promise<readonly ZoneOutlineResponse[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ZoneOutlineResponse[]>(deliveryZonePaths.zoneOutlines(scope)),
+    );
+    return result.value ?? [];
+  }
+
   async activate(scope: BrandScope, zoneId: string, version: number): Promise<VersionView> {
     return firstValueFrom(
       this.api.post<Record<string, never>, VersionView>(
@@ -297,6 +381,17 @@ export class DeliveryZonesApi {
       ),
     );
   }
+}
+
+/** The wire shape `OperationsServiceZoneController.DraftVersionRequest` expects for a polygon draft. */
+interface DraftPolygonVersionWireRequest {
+  readonly geoJson: string;
+  readonly regionId: string | null;
+  readonly priority: number;
+  readonly currency: string;
+  readonly deliveryTariffId: string | null;
+  readonly freeDeliveryFromMinor: number | null;
+  readonly minBasketMinor: number | null;
 }
 
 /** The wire shape `OperationsServiceZoneController.DraftVersionRequest` expects for a circle draft. */

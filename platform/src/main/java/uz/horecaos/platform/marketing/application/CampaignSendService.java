@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignSto
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.BatchClaim;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore.CampaignRow;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * Turning a snapshot into ADR 0020 intents, one bounded batch at a time
@@ -60,9 +62,11 @@ public class CampaignSendService {
     private final MarketingEligibility eligibility;
     private final CampaignCostEstimator estimator;
     private final CampaignMessagePort messages;
+    private final @Nullable ScenarioEnrolmentService scenarioEnrolment;
     private final Clock clock;
     private final int batchSize;
 
+    /** The shape every caller used before ADR 0112: no scenario enrolment, so a scenario cannot expand. */
     public CampaignSendService(
             JdbcCampaignStore campaigns,
             JdbcAudienceStore audiences,
@@ -71,6 +75,20 @@ public class CampaignSendService {
             CampaignCostEstimator estimator,
             CampaignMessagePort messages,
             Clock clock,
+            int batchSize) {
+        this(campaigns, audiences, engagement, eligibility, estimator, messages, null, clock, batchSize);
+    }
+
+    @Autowired
+    public CampaignSendService(
+            JdbcCampaignStore campaigns,
+            JdbcAudienceStore audiences,
+            JdbcEngagementStore engagement,
+            MarketingEligibility eligibility,
+            CampaignCostEstimator estimator,
+            CampaignMessagePort messages,
+            @Nullable ScenarioEnrolmentService scenarioEnrolment,
+            Clock clock,
             @Value("${horecaos.marketing.batch-size:200}") int batchSize) {
         this.campaigns = campaigns;
         this.audiences = audiences;
@@ -78,6 +96,7 @@ public class CampaignSendService {
         this.eligibility = eligibility;
         this.estimator = estimator;
         this.messages = messages;
+        this.scenarioEnrolment = scenarioEnrolment;
         this.clock = clock;
         this.batchSize = batchSize;
     }
@@ -102,14 +121,23 @@ public class CampaignSendService {
 
         Instant now = clock.instant();
         MarketingChannel channel = MarketingChannel.valueOf(campaign.channel());
-        if (!messages.isWired(channel.name())) {
+        CampaignMessagePort.Wiring wiring =
+                messages.wiring(tenantId, campaign.brandId(), channel.name(), CampaignMessagePort.PURPOSE_MARKETING);
+        if (!wiring.isWired()) {
             // Read before anything is claimed. A campaign that expands forty
             // thousand recipients against an unwired delivery path has spent an
             // approval and produced nothing.
             throw new IllegalStateException(
-                    "No ADR 0020 delivery path is wired for %s; a campaign cannot expand into one".formatted(channel));
+                    "No ADR 0020 delivery path is wired for %s for this brand (%s); a campaign cannot expand into one"
+                            .formatted(channel, wiring.reason()));
         }
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, campaign.brandId());
+
+        if (campaign.isScenario()) {
+            // ADR 0112: a scenario's guests become state rows with a wait to their first
+            // step; no message is created here, and none can be until a step is due.
+            return expandScenario(campaign, now);
+        }
 
         UUID cursor = campaigns.lastRecipientAccountId(tenantId, campaignId).orElse(null);
         List<SnapshotMemberRow> members =
@@ -259,6 +287,26 @@ public class CampaignSendService {
         return new BatchOutcome(sequence, members.size(), queued, refused, spent, false, false, quiet, null);
     }
 
+    private BatchOutcome expandScenario(CampaignRow campaign, Instant now) {
+        if (scenarioEnrolment == null) {
+            throw new IllegalStateException(
+                    "This wiring has no scenario enrolment, so scenario %s cannot expand".formatted(campaign.id()));
+        }
+        ScenarioEnrolmentService.Enrolment enrolment = scenarioEnrolment.enrolNextBatch(campaign, batchSize, now);
+        if (enrolment.haltedAtCap()) {
+            return BatchOutcome.haltedAtCeiling(enrolment.batchSequence());
+        }
+        if (enrolment.exhausted()) {
+            // Everybody is in. The scenario is finished when its last guest is, which is
+            // the runner's to say; until then it stays SENDING and this call is a cheap no-op.
+            return enrolment.activeParticipantsRemain()
+                    ? new BatchOutcome(-1, 0, 0, 0, 0, false, false, false, null)
+                    : complete(campaign.tenantId(), campaign, now);
+        }
+        return new BatchOutcome(
+                enrolment.batchSequence(), enrolment.claimed(), enrolment.entered(), 0, 0, false, false, false, null);
+    }
+
     private BatchOutcome complete(UUID tenantId, CampaignRow campaign, Instant now) {
         Map<String, Integer> counts = campaigns.recipientCounts(tenantId, campaign.id());
         int refused = counts.getOrDefault("REFUSED", 0);
@@ -277,7 +325,7 @@ public class CampaignSendService {
         // approver saw was computed from these, and pricing the send from a
         // different set would make the two disagree for no reason a marketer could
         // discover.
-        return member.localeAtEvaluation() == null ? "ru" : member.localeAtEvaluation();
+        return member.localeAtEvaluation() == null ? PlatformLocales.fallback().tag() : member.localeAtEvaluation();
     }
 
     /**

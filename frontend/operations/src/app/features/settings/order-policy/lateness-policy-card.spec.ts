@@ -12,10 +12,11 @@ const LOCATION_ID = 'location-1';
 
 /** Nothing authored anywhere: no mode owns a window, the platform's five minutes is the default. */
 const PLATFORM_DEFAULT: LatenessEditorView = {
-  delivery: mode(null, 300, 0, 2700),
-  pickup: mode(null, 300, 0, 2700),
-  dineIn: mode(null, 300, 0, 2700),
+  delivery: mode(null, 300, 0, null, 2700),
+  pickup: mode(null, 300, 0, null, 2700),
+  dineIn: mode(null, 300, 0, null, 2700),
   atRiskDefault: { seconds: 300, source: 'PLATFORM_DEFAULT' },
+  noPromiseDefault: { seconds: 2700, source: 'PLATFORM_DEFAULT' },
   isPlatformDefault: true,
   winningScope: null,
   policyId: null,
@@ -34,6 +35,7 @@ const INHERITED_FROM_TENANT: LatenessEditorView = {
   pickup: mode(120, 120, 0, 1800),
   dineIn: mode(null, 720, 30, 1200),
   atRiskDefault: { seconds: 720, source: 'SCALAR' },
+  noPromiseDefault: { seconds: 1500, source: 'SCALAR' },
   isPlatformDefault: false,
   winningScope: 'TENANT',
   policyId: 'policy-tenant',
@@ -44,6 +46,12 @@ const INHERITED_FROM_TENANT: LatenessEditorView = {
     { scopeType: 'TENANT', outcome: 'VALUE' },
     { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
   ],
+};
+
+/** As the tenant's document, but pickup says nothing about its fallback: the scalar's 25 minutes applies. */
+const BLANK_FALLBACK_FROM_TENANT: LatenessEditorView = {
+  ...INHERITED_FROM_TENANT,
+  pickup: mode(120, 120, 0, null, 1500),
 };
 
 /** The brand's own document, version 2. */
@@ -64,13 +72,15 @@ function mode(
   atRiskBeforeSeconds: number | null,
   effectiveAtRiskBeforeSeconds: number,
   lateAfterSeconds: number,
-  noPromiseFallbackSeconds: number,
+  noPromiseFallbackSeconds: number | null,
+  effectiveNoPromiseFallbackSeconds: number | null = noPromiseFallbackSeconds,
 ) {
   return {
     atRiskBeforeSeconds,
     effectiveAtRiskBeforeSeconds,
     lateAfterSeconds,
     noPromiseFallbackSeconds,
+    effectiveNoPromiseFallbackSeconds: effectiveNoPromiseFallbackSeconds ?? 2700,
   };
 }
 
@@ -586,6 +596,78 @@ describe('LatenessPolicyCard', () => {
       type(id, before);
       expect(publish().disabled, `${id} restored`).toBe(false);
     }
+  });
+
+  // ------------------------------------------------ ADR 0150: the blank fallback
+
+  it('marks a mode that owns no fallback as taking the default, showing the number it actually uses', async () => {
+    await render(BLANK_FALLBACK_FROM_TENANT);
+
+    // Pickup owns none: the scalar's 25 minutes (1500 s) with the default marker; delivery keeps its own.
+    expect(el().textContent).toContain('no promise: late after 25 min (default)');
+    expect(el().textContent).toContain('no promise: late after 60 min');
+  });
+
+  it('shows the platform default fallback with its marker when nothing was ever authored', async () => {
+    await render(PLATFORM_DEFAULT);
+
+    expect(el().textContent).toContain('no promise: late after 45 min (default)');
+  });
+
+  it('opens a blank fallback as blank, with the default it stands for as the placeholder, and says where it comes from', async () => {
+    await render(BLANK_FALLBACK_FROM_TENANT);
+    await openForm();
+
+    expect(input('lateness-pickup-fallbackMinutes').value).toBe('');
+    expect(input('lateness-pickup-fallbackMinutes').placeholder).toBe('25');
+    expect(input('lateness-delivery-fallbackMinutes').value).toBe('60');
+    expect(el().textContent).toContain(
+      'Leave “No promise: late after” empty to use the default: 25 min',
+    );
+    expect(el().textContent).toContain(
+      'the “An order with no promised time is late after” value above',
+    );
+  });
+
+  it('names the platform’s forty-five minutes when the late-order threshold was never set', async () => {
+    await render(PLATFORM_DEFAULT);
+    button('Override here').click();
+    fixture.detectChanges();
+
+    expect(input('lateness-delivery-fallbackMinutes').placeholder).toBe('45');
+    expect(el().textContent).toContain(
+      'Leave “No promise: late after” empty to use the default: 45 min (the platform default)',
+    );
+  });
+
+  it('publishes a blank fallback as null, not as zero and not as the default’s number', async () => {
+    await render(BLANK_FALLBACK_FROM_TENANT);
+    await openForm();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 1, policyVersion: 1 });
+
+    type('lateness-delivery-fallbackMinutes', '');
+    type('lateness-reason', 'let the threshold decide');
+    button('Publish').click();
+    await flush();
+
+    const sent = api.publish.mock.calls[0][1];
+    expect(sent.delivery.noPromiseFallbackSeconds).toBeNull();
+    expect(sent.pickup.noPromiseFallbackSeconds).toBeNull();
+    expect(sent.dineIn.noPromiseFallbackSeconds).toBe(1200);
+  });
+
+  it('refuses a fallback that is not a whole number of minutes between one and a day, and accepts a blank', async () => {
+    await render(BLANK_FALLBACK_FROM_TENANT);
+    await openForm();
+    type('lateness-reason', 'because');
+
+    for (const bad of ['0', '20.5', '1441', '-3']) {
+      type('lateness-pickup-fallbackMinutes', bad);
+      expect(button('Publish').disabled, bad).toBe(true);
+      expect(input('lateness-pickup-fallbackMinutes').getAttribute('aria-invalid')).toBe('true');
+    }
+    type('lateness-pickup-fallbackMinutes', '');
+    expect(button('Publish').disabled, 'blank').toBe(false);
   });
 
   it('accepts zero minutes as a window and zero seconds of grace', async () => {

@@ -1,0 +1,123 @@
+<section class="section" id="second-factor" data-testid="my-profile-mfa">
+  <h2 class="q-emphasis">{{ 'staff.myProfile.mfa.title' | t }}</h2>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'staff.myProfile.mfa.loading' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error" role="alert">{{ 'staff.myProfile.mfa.loadFailed' | t }}</p>
+    }
+    @default {
+      @if (mfa(); as current) {
+        <p class="q-body-sm" data-testid="mfa-status">
+          {{ (current.enrolled ? 'staff.myProfile.mfa.on' : 'staff.myProfile.mfa.off') | t }}
+          @if (current.requirement === 'REQUIRED') {
+            {{ 'staff.myProfile.mfa.required' | t }}
+          } @else if (current.requirement === 'OFFERED' && !current.enrolled) {
+            {{ 'staff.myProfile.mfa.offered' | t }}
+          }
+        </p>
+
+        @if (notice(); as message) {
+          <p class="q-body-sm notice" role="status" data-testid="mfa-notice">{{ message }}</p>
+        }
+
+        @if (current.authenticators.length > 0) {
+          <ul class="devices" data-testid="mfa-devices">
+            @for (device of current.authenticators; track device.id) {
+              <li class="device">
+                <div class="device__line">
+                  <span class="q-body">{{
+                    device.label ?? ('staff.myProfile.mfa.unnamed' | t)
+                  }}</span>
+                  @if (addedOn(device); as added) {
+                    <span class="q-caption device__date">{{ added }}</span>
+                  }
+                  @if (current.authenticators.length > 1) {
+                    <button
+                      type="button"
+                      class="text-button"
+                      (click)="startRemoving(device)"
+                      data-testid="mfa-remove"
+                    >
+                      {{ 'staff.myProfile.mfa.remove' | t }}
+                    </button>
+                  }
+                </div>
+
+                @if (removing() === device.id) {
+                  <div class="remove" data-testid="mfa-remove-form">
+                    <p class="q-body-sm">{{ 'staff.myProfile.mfa.removeBody' | t }}</p>
+                    <label class="q-caption field-label" for="mfa-remove-password">{{
+                      'staff.myProfile.mfa.removePassword' | t
+                    }}</label>
+                    <input
+                      id="mfa-remove-password"
+                      class="q-body field"
+                      type="password"
+                      autocomplete="current-password"
+                      [value]="removePassword()"
+                      (input)="onRemovePassword($event)"
+                      [disabled]="removeBusy()"
+                    />
+                    <q-otp-input
+                      class="otp"
+                      [value]="removeCode()"
+                      [disabled]="removeBusy()"
+                      [ariaLabel]="'staff.myProfile.mfa.removeGroup' | t"
+                      [cellLabelPrefix]="'staff.myProfile.mfa.removeDigit' | t"
+                      (valueChange)="onRemoveCode($event)"
+                    />
+                    @if (removeError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    }
+                    <div class="actions">
+                      <button
+                        type="button"
+                        class="primary-button"
+                        (click)="confirmRemoving()"
+                        [disabled]="
+                          removeBusy() || removeCode().length !== 6 || removePassword() === ''
+                        "
+                        data-testid="mfa-remove-confirm"
+                      >
+                        {{ 'staff.myProfile.mfa.removeConfirm' | t }}
+                      </button>
+                      <button type="button" class="text-button" (click)="cancelRemoving()">
+                        {{ 'staff.myProfile.mfa.removeCancel' | t }}
+                      </button>
+                    </div>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+          @if (current.authenticators.length === 1) {
+            <p class="q-caption hint">{{ 'staff.myProfile.mfa.onlyOne' | t }}</p>
+          }
+        }
+
+        @if (enrolling()) {
+          <q-mfa-enrolment [required]="false" (completed)="onEnrolled()" />
+          <button type="button" class="text-button" (click)="stopEnrolling()">
+            {{ 'staff.myProfile.mfa.cancelSetup' | t }}
+          </button>
+        } @else if (current.authenticators.length < current.maximum) {
+          <button
+            type="button"
+            class="primary-button"
+            (click)="startEnrolling()"
+            data-testid="mfa-enrol"
+          >
+            {{ (current.enrolled ? 'staff.myProfile.mfa.add' : 'staff.myProfile.mfa.enable') | t }}
+          </button>
+        }
+
+        @if (current.enrolled) {
+          <p class="q-caption hint">{{ 'staff.myProfile.mfa.lostPhone' | t }}</p>
+        }
+      }
+    }
+  }
+</section>

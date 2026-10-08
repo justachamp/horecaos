@@ -8,11 +8,20 @@ import { ru } from '../../core/i18n/messages.ru';
 import { ResidencyApi } from '../compliance/residency-api';
 import { BusinessTypes } from './business-types';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const tenant = (id: string, businessType: string) => ({
-  tenantId: id, slug: id, displayName: id.toUpperCase(), status: 'ACTIVE', countryCode: 'UZ', businessType,
-  defaultCurrency: 'UZS', defaultTimezone: 'Asia/Tashkent',
+  tenantId: id,
+  slug: id,
+  displayName: id.toUpperCase(),
+  status: 'ACTIVE',
+  countryCode: 'UZ',
+  businessType,
+  defaultCurrency: 'UZS',
+  defaultTimezone: 'Asia/Tashkent',
 });
 
 describe('BusinessTypes', () => {
@@ -31,14 +40,31 @@ describe('BusinessTypes', () => {
           provide: ResidencyApi,
           useValue: {
             businessTypes: vi.fn().mockResolvedValue([
-              { code: 'RESTAURANT', handovers: ['DELIVERY', 'PICKUP', 'DINE_IN'], kitchenDisplay: true, tenants: 1 },
-              { code: 'PHARMACY', handovers: ['DELIVERY', 'PICKUP'], kitchenDisplay: false, tenants: 1 },
+              {
+                code: 'RESTAURANT',
+                handovers: ['DELIVERY', 'PICKUP', 'DINE_IN'],
+                kitchenDisplay: true,
+                tenants: 1,
+              },
+              {
+                code: 'PHARMACY',
+                handovers: ['DELIVERY', 'PICKUP'],
+                kitchenDisplay: false,
+                tenants: 1,
+              },
             ]),
-            residency: vi.fn().mockResolvedValue({ hostingCountry: 'UZ', markets: [], tenants: [tenant('a', 'RESTAURANT'), tenant('b', 'PHARMACY')] }),
+            residency: vi.fn().mockResolvedValue({
+              hostingCountry: 'UZ',
+              markets: [],
+              tenants: [tenant('a', 'RESTAURANT'), tenant('b', 'PHARMACY')],
+            }),
             setBusinessType,
           },
         },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(BusinessTypes);

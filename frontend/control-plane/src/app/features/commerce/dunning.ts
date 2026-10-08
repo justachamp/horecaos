@@ -69,7 +69,9 @@ export class Dunning {
 
   /** The moves worth offering from arrears: back to active, onward to suspended, or to the end. */
   protected moves(arrear: ArrearView): readonly string[] {
-    return arrear.allowedNext.filter((status) => ['ACTIVE', 'SUSPENDED', 'TERMINATED'].includes(status));
+    return arrear.allowedNext.filter((status) =>
+      ['ACTIVE', 'SUSPENDED', 'TERMINATED'].includes(status),
+    );
   }
 
   protected open(arrear: ArrearView, to: string): void {
@@ -109,7 +111,10 @@ export class Dunning {
       });
       this.moving.set(null);
       this.actionMessage.set(
-        this.i18n.t('dunning.moved', { tenant: arrear.tenantName, status: this.i18n.t(this.statusKey(move.to)) }),
+        this.i18n.t('dunning.moved', {
+          tenant: arrear.tenantName,
+          status: this.i18n.t(this.statusKey(move.to)),
+        }),
       );
       await this.load();
     } catch (error) {

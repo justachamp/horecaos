@@ -7,6 +7,7 @@ import {
   toZonedDatetimeLocal,
 } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
@@ -84,6 +85,7 @@ const FALLBACK_ZONE = 'Asia/Tashkent';
 export class DispatchSimulator {
   private readonly api = inject(DispatchRulesApi);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   readonly tenantId = input.required<string>();
   /** The branch the order is for: which partners are bound, whose clock, whose timings. */
@@ -131,11 +133,15 @@ export class DispatchSimulator {
   );
 
   protected zoneLabel(zone: DispatchOptions['zones'][number]): string {
-    return localisedName(this.i18n.locale(), {
-      displayNameRu: zone.nameRu,
-      displayNameUz: zone.nameUz,
-      displayNameEn: zone.nameEn,
-    });
+    return localisedName(
+      this.i18n.locale(),
+      {
+        displayNameRu: zone.nameRu,
+        displayNameUz: zone.nameUz,
+        displayNameEn: zone.nameEn,
+      },
+      this.registry.fallbackOrder(),
+    );
   }
 
   /** An order's number and state, and the branch it was for when that is not the operator's own. */

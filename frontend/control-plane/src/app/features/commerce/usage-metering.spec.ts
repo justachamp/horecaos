@@ -10,7 +10,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { CommerceApi, UsageDivergence, UsagePeriodView } from './commerce-api';
 import { UsageMetering } from './usage-metering';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const PERIOD: UsagePeriodView = {
   entitlementKey: 'orders.monthly.included',
@@ -42,8 +45,14 @@ describe('UsageMetering', () => {
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: CommerceApi, useValue: api },
         { provide: Colleagues, useValue: { others: vi.fn().mockResolvedValue(['approver-b']) } },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
@@ -86,7 +95,12 @@ describe('UsageMetering', () => {
   it('names each period whose total disagreed, with what it was and what it is now', async () => {
     await create();
     api.rebuildUsage.mockResolvedValue([
-      { entitlementKey: 'orders.monthly.included', periodKey: '2026-09', stored: 119, recomputed: 117 },
+      {
+        entitlementKey: 'orders.monthly.included',
+        periodKey: '2026-09',
+        stored: 119,
+        recomputed: 117,
+      },
     ]);
 
     el<HTMLButtonElement>('.rebuild').click();

@@ -196,3 +196,27 @@ groups:
         annotations:
           summary: an onboarding run has not moved for {{ $value }}s
           runbook: docs/runbooks/onboarding-run-stalled.md
+
+  # ADR 0148: not a row of ADR 0023's table -- the one alert the staff second factor
+  # adds, in the same file so that there is one place the rules live.
+  - name: adr-0148-staff-mfa
+    rules:
+      - alert: HorecaosStaffMfaCodeBudgetExhausted
+        # The platform's own limit on one-time-code attempts per account (five, refilling
+        # five an hour) is the ONLY brute-force control the second factor has: Keycloak's
+        # lockout is cleared by the password-only probe every sign-in needs. A rise here
+        # means somebody who holds a password has spent an account's whole budget
+        # guessing codes, or the owner of a new phone is fumbling one. Labels are the two
+        # bounded sets of MfaMetrics; no account, tenant or address is ever a label, so
+        # the alert says THAT it happened and the audit trail says to whom.
+        #
+        # increase() is right here: the counter is monotonic. Three exhausted attempts in
+        # five minutes is a person at a login screen pressing the button; the owner's
+        # own typos stop at the sixth attempt.
+        expr: sum(increase(horecaos_auth_staff_mfa_total{step="budget",outcome="exhausted"}[5m])) >= 3
+        for: 0m
+        labels:
+          tier: trading
+        annotations:
+          summary: "{{ $value }} staff sign-ins were refused by the code budget in the last 5 minutes"
+          runbook: docs/runbooks/staff-second-factor.md

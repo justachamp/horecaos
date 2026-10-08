@@ -10,7 +10,7 @@ import {
 
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { CAPABILITY_SENTENCES, sentenceLocale } from './capability-sentences';
+import { CAPABILITY_SENTENCES } from './capability-sentences';
 import { GrantRequest, RoleDescriptor, ScopeDirectory, ScopeType } from './staff-api';
 import { Scope, canGrantAt, tenantScope, brandScope, locationScope } from './scope-coverage';
 import { ScopeGrant } from '../../core/auth/session-context';
@@ -105,7 +105,7 @@ export class StaffJobDialog {
     if (!role) {
       return [];
     }
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     return [...role.capabilities]
       .map((code) => CAPABILITY_SENTENCES[code]?.[locale] ?? code)
       .sort();
@@ -135,7 +135,7 @@ export class StaffJobDialog {
         }
       }
     }
-    const locale = sentenceLocale(this.i18n.locale());
+    const locale = this.i18n.locale();
     return Array.from(others)
       .sort()
       .slice(0, 5)

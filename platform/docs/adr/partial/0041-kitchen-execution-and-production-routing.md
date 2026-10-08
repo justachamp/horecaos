@@ -53,9 +53,11 @@
   `kitchen.devices` row this ADR proposed; see that record for why the
   identity lives in `iam` and the reasoning in "Decisions taken here that
   the ADR left open" below for what that changes about this section's own
-  physical model. Still not built: station-filtered device reads and the
-  VDU projection — a device today sees its whole branch's board, not one
-  station's — and expo and handover, so nothing yet proposes the pickup
+  physical model. Since ADR 0151 (2026-10-07) the VDU projection and a
+  station held server-side per wall display exist for a `KITCHEN_VDU` device
+  (it sees one station's lines, whatever its URL says); still not built: a
+  station-filtered read for a touch KDS, which sees its whole branch's board,
+  and expo and handover, so nothing yet proposes the pickup
   `COMPLETED` that the port and the adapter both support — branch
   suspension, the ADR 0017 modifier-option stock and expiring stops, the
   external event contracts, and — a genuine product-policy gap, not a schema
@@ -492,8 +494,10 @@ evidence for whatever went wrong.
       2026-09-09. A `KITCHEN_KDS` device enrols through a pairing code,
       reads its whole branch's board, marks its own lines started and
       ready, and is revoked in one action.
-- [ ] Station-filtered device reads, the VDU projection, and expo handover.
-      **Not done** — rollout step 4.
+- [~] Station-filtered device reads, the VDU projection, and expo handover.
+      **Partly done** — rollout step 4: the VDU projection (row 2.4) and a
+      server-held station for a `KITCHEN_VDU` wall display are built (ADR 0151);
+      a touch KDS still reads its whole branch, and expo handover is not built.
 - [x] Concurrency, replay, routing, capability-shape and isolation tests, in
       `src/test/java/uz/horecaos/platform/kitchen/KitchenExecutionTests.java`.
 

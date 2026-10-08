@@ -42,8 +42,8 @@
   [ADR 0079](../partial/0079-kitchen-display-device-principal-and-enrolment.md),
   [ADR 0119](../partial/0119-wave-p17-device-shell-auth-and-qr-pairing.md),
   [ADR 0139](../partial/0139-staff-identity-the-staff-person-record.md),
-  [ADR 0148](../not-started/0148-staff-multi-factor-authentication.md),
-  [ADR 0151](../not-started/0151-a-wall-display-device-class.md)
+  [ADR 0148](../partial/0148-staff-multi-factor-authentication.md),
+  [ADR 0151](../built/0151-a-wall-display-device-class.md)
 - Supersedes / Superseded by: Supersedes ADR 0079's Alternatives row on per-action attribution
   («a badge tap or a short PIN before every mutating action», whose stated revisit trigger was a
   dispute or finding that «which device» is insufficient evidence and a judgement that the cost is

@@ -12,7 +12,6 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -38,6 +37,8 @@ import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.Member
 import uz.horecaos.platform.iam.api.staff.StaffMemberRegistry;
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.PlatformMailer;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStaffInvitationStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStaffInvitationStore.Row;
 import uz.horecaos.platform.web.api.ApiException;
@@ -75,8 +76,6 @@ public class StaffInvitationService {
 
     /** How long an emailed or copied link works -- the same window ADR 0097 chose. */
     public static final Duration LINK_LIFETIME = Duration.ofHours(72);
-
-    public static final Set<String> LOCALES = Set.of("uz", "ru", "en");
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -214,7 +213,7 @@ public class StaffInvitationService {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(LINK_LIFETIME);
         UUID invitationId = Ids.newId();
-        String language = LOCALES.contains(command.locale()) ? command.locale() : "ru";
+        String language = PlatformLocales.resolve(command.locale(), Tier.MESSAGES);
         boolean emailGiven = command.email() != null;
 
         try {

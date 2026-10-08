@@ -15,6 +15,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { CatalogApi } from './catalog-api';
@@ -71,6 +72,7 @@ export class PriceBookMatrixPage implements OnInit {
   private readonly catalogApi = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly localeSet = inject(LocaleSet);
 
   /**
@@ -81,7 +83,11 @@ export class PriceBookMatrixPage implements OnInit {
    * to two operators of one brand.
    */
   private readonly listLocale = computed<string>(() =>
-    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+    listResolutionLocale(
+      this.localeSet.isConfigured(),
+      this.localeSet.defaultLocale(),
+      this.registry,
+    ),
   );
 
   protected readonly loading = signal(true);

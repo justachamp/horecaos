@@ -13,7 +13,7 @@ import java.util.UUID;
  * rewriting them under an acceptance already on record would make that
  * acceptance evidence of nothing.
  *
- * @param contentsByLocale keyed by {@link TermsLocale#tag()}; a tenant may
+ * @param contentsByLocale keyed by {@code PlatformLocale#tag()}; a tenant may
  *                          publish fewer than all three, and a locale absent
  *                          here falls back to the platform default for that
  *                          language, not to another language this map does

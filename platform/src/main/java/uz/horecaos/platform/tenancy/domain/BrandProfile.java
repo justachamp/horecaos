@@ -6,6 +6,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * A brand's customer-facing profile: how it presents itself everywhere a
@@ -56,16 +58,6 @@ public record BrandProfile(
     /** No leading {@code @}; Telegram's own handle rules (5-32 chars, letters/digits/underscore, starts with a letter). */
     private static final Pattern TELEGRAM_HANDLE = Pattern.compile("^[A-Za-z][A-Za-z0-9_]{4,31}$");
 
-    /**
-     * The closed set of storefront locales this console can author content in
-     * today — the same triple {@code marketing.AudiencePredicate
-     * .SUPPORTED_LOCALES} already hard-codes. A brand's own set is a subset of
-     * this, never wider than it: the console has no editor for a fourth
-     * language yet, so accepting one here would record a choice nothing can
-     * render.
-     */
-    public static final List<String> KNOWN_LOCALES = List.of("ru", "uz-Latn", "en");
-
     public BrandProfile {
         Objects.requireNonNull(locales, "Brand locales is required (empty, not null, when unconfigured)");
         locales = List.copyOf(locales);
@@ -84,10 +76,12 @@ public record BrandProfile(
         if (codes.size() != Set.copyOf(codes).size()) {
             throw new IllegalArgumentException("A brand cannot list the same locale twice");
         }
+        // The closed set a brand may choose from is the registry's content tier (ADR 0149): a language
+        // that is declared but not live cannot be chosen, because nothing could render the choice.
         for (String code : codes) {
-            if (!KNOWN_LOCALES.contains(code)) {
-                throw new IllegalArgumentException(
-                        "Unsupported locale '" + code + "'; must be one of " + KNOWN_LOCALES);
+            if (!PlatformLocales.activeTags(Tier.CONTENT).contains(code)) {
+                throw new IllegalArgumentException("Unsupported locale '" + code + "'; must be one of "
+                        + PlatformLocales.activeTags(Tier.CONTENT));
             }
         }
         long defaultCount = locales.stream().filter(BrandLocale::isDefault).count();

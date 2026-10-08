@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.iam.api.LocaleVocabulary;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityAudit;
@@ -65,6 +66,7 @@ public class PasswordResetRelay {
     private final StaffSecurityAudit audit;
     private final Clock clock;
     private final Map<StaffConsole, String> origins;
+    private final LocaleVocabulary locales;
 
     public PasswordResetRelay(
             JdbcPasswordResetStore store,
@@ -72,8 +74,10 @@ public class PasswordResetRelay {
             StaffEmailSender mailer,
             StaffSecurityAudit audit,
             Clock clock,
+            LocaleVocabulary locales,
             @Value("${horecaos.frontends.operations-origin:http://localhost:4200}") String operationsOrigin,
             @Value("${horecaos.frontends.control-plane-origin:http://localhost:4300}") String controlPlaneOrigin) {
+        this.locales = locales;
         this.store = store;
         this.accounts = accounts;
         this.mailer = mailer;
@@ -155,7 +159,7 @@ public class PasswordResetRelay {
         String origin = java.util.Objects.requireNonNull(origins.get(console), "every console has an origin");
         Delivery delivery = mailer.send(PasswordResetEmail.render(
                 email,
-                row.locale(),
+                locales.message(row.locale()),
                 origin + "/reset-password#token=" + token,
                 PasswordResetService.LINK_LIFETIME.toMinutes()));
 

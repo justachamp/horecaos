@@ -49,6 +49,13 @@ class GrantManagementServiceTests {
     private static final UUID BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121202");
     private static final UUID OTHER_BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121203");
     private static final UUID LOCATION = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121204");
+
+    /** A second branch of {@link #BRAND}: Chilonzor's neighbour, whose team Chilonzor's manager must never see. */
+    private static final UUID SIBLING_LOCATION = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121205");
+
+    /** A branch of {@link #OTHER_BRAND}, which a manager of {@link #BRAND} must never be able to name. */
+    private static final UUID OTHER_BRAND_LOCATION = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121206");
+
     private static final String OWNER = "owner-1";
 
     /**
@@ -690,6 +697,334 @@ class GrantManagementServiceTests {
                 .isFalse();
     }
 
+    // ======================================================================
+    // ADR 0103 -- a branch manager's own scope reaches iam.grant.manage
+    // ======================================================================
+
+    private static ResourceScope chilonzor() {
+        return ResourceScope.location(TENANT, BRAND, LOCATION);
+    }
+
+    @Test
+    void aLocationManagerGivesLocationStaffAtHerOwnBranchAndTheAuditNamesHer() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "new-cook", "location-staff", chilonzor(), "Hired this morning", null),
+                "chilonzor-manager");
+
+        assertThat(grantId).isNotNull();
+        assertThat(authorization.has("new-cook", Capability.KITCHEN_TICKET_ADVANCE, chilonzor()))
+                .as("the line cook she hired can work the board at her branch")
+                .isTrue();
+        assertThat(authorization.has(
+                        "new-cook",
+                        Capability.KITCHEN_TICKET_ADVANCE,
+                        ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION)))
+                .as("and nowhere else")
+                .isFalse();
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM audit.audit_events
+                 WHERE action_code = 'iam.grant.granted' AND audit_class = 'SECURITY'
+                   AND actor_subject = 'chilonzor-manager'
+                """).query(Long.class).single()).isEqualTo(1L);
+    }
+
+    @Test
+    void aLocationManagerCannotGiveAJobAtASiblingBranch() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "new-cook",
+                                "location-staff",
+                                ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION),
+                                "reaching sideways",
+                                null),
+                        "chilonzor-manager"))
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+    }
+
+    @Test
+    void aLocationManagerCannotGiveAJobAboveHerBranchOrOneWhoseCapabilitiesSheLacks() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+
+        for (String company : List.of("tenant-owner", "tenant-admin", "tenant-finance", "brand-manager")) {
+            assertThatThrownBy(() -> service.grant(
+                            new GrantManagementService.GrantCommand(
+                                    "accomplice", company, chilonzor(), "escalation attempt", null),
+                            "chilonzor-manager"))
+                    .as("%s at her own branch: a job she does not hold in full is not hers to give", company)
+                    .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+        }
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "accomplice", "location-staff", ResourceScope.tenant(TENANT), "company-wide", null),
+                        "chilonzor-manager"))
+                .as("her grant stops at the branch, so the whole company is out of reach whatever the job")
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+    }
+
+    /**
+     * The narrowing {@code requireWithinABranchGranter} adds beyond the subset
+     * rule, in the one shape a platform job cannot reach it: a role this tenant
+     * defined itself whose every capability the manager holds. The owner may give
+     * it (existing behaviour); a manager whose reach stops at a branch may not,
+     * because a tenant-defined role has no level and so no proof that it stays
+     * inside the branch.
+     */
+    @Test
+    void aBranchGranterCannotConferATenantDefinedRoleEvenWhenSheHoldsEverythingInIt() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone", OWN_ROLE_CODE, chilonzor(), "a custom job", null),
+                        "chilonzor-manager"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY));
+
+        assertThat(service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone", OWN_ROLE_CODE, chilonzor(), "the owner may", null),
+                        OWNER))
+                .as("the owner is exempt: this changes nothing for a tenant-wide granter")
+                .isNotNull();
+    }
+
+    @Test
+    void aBrandManagerCannotNameAnotherBrandsLocationEvenThoughHerBrandCoversTheLevel() {
+        insertGrant("brand-a-manager", PlatformRole.BRAND_MANAGER, "BRAND", BRAND);
+
+        // ResourceScope.covers is a statement about levels: brand(BRAND) is in the
+        // chain of location(BRAND, anything), so the capability check passes for a
+        // location that is really another brand's. The hierarchy check is what stops it.
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone",
+                                "brand-manager",
+                                ResourceScope.location(TENANT, BRAND, OTHER_BRAND_LOCATION),
+                                "naming a branch that is not hers",
+                                null),
+                        "brand-a-manager"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.grants WHERE principal_subject = 'someone'")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was written")
+                .isZero();
+    }
+
+    @Test
+    void aBrandManagerGivesOnlyTheJobsHerBundleHoldsInFull() {
+        insertGrant("brand-a-manager", PlatformRole.BRAND_MANAGER, "BRAND", BRAND);
+
+        assertThat(service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "second-brand-manager",
+                                "brand-manager",
+                                ResourceScope.brand(TENANT, BRAND),
+                                "a deputy",
+                                null),
+                        "brand-a-manager"))
+                .isNotNull();
+
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "a-cook", "location-staff", chilonzor(), "needs order.approve she lacks", null),
+                        "brand-a-manager"))
+                .as(
+                        "ADR 0103's default is the existing subset rule: a brand manager holds no order.approve, so she cannot give it")
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+    }
+
+    @Test
+    void theTeamOfABranchIsThatBranchesGrantsAndNothingBroader() {
+        insertGrant("chilonzor-cook", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+        insertGrant("sibling-cook", PlatformRole.LOCATION_STAFF, "LOCATION", SIBLING_LOCATION);
+        insertGrant("brand-a-manager", PlatformRole.BRAND_MANAGER, "BRAND", BRAND);
+        insertGrant("finance-clerk", PlatformRole.TENANT_FINANCE, "TENANT", TENANT);
+
+        List<GrantManagementService.GrantView> team = service.listWithin(chilonzor(), false);
+
+        assertThat(team)
+                .extracting(GrantManagementService.GrantView::principalSubject)
+                .as("Chilonzor's own two, not the sibling's cook, not the brand manager, not finance, "
+                        + "and not the owner's tenant-wide grant")
+                .containsExactlyInAnyOrder("chilonzor-cook", "chilonzor-manager");
+    }
+
+    @Test
+    void theTeamOfABrandIsItsOwnGrantsAndEveryBranchOfIt() {
+        insertGrant("chilonzor-cook", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION);
+        insertGrant("sibling-cook", PlatformRole.LOCATION_STAFF, "LOCATION", SIBLING_LOCATION);
+        insertGrant("brand-a-manager", PlatformRole.BRAND_MANAGER, "BRAND", BRAND);
+        insertGrant("brand-b-manager", PlatformRole.BRAND_MANAGER, "BRAND", OTHER_BRAND);
+        insertGrant("other-brand-cook", PlatformRole.LOCATION_STAFF, "LOCATION", OTHER_BRAND_LOCATION);
+
+        assertThat(service.listWithin(ResourceScope.brand(TENANT, BRAND), false))
+                .extracting(GrantManagementService.GrantView::principalSubject)
+                .containsExactlyInAnyOrder("chilonzor-cook", "sibling-cook", "brand-a-manager");
+    }
+
+    @Test
+    void aTeamListHidesRevokedJobsUntilAskedToShowThem() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+        UUID cook = service.grant(
+                new GrantManagementService.GrantCommand("cook", "location-staff", chilonzor(), "hired", null),
+                "chilonzor-manager");
+        service.revokeWithin(chilonzor(), cook, "chilonzor-manager", "left");
+
+        assertThat(service.listWithin(chilonzor(), false))
+                .extracting(GrantManagementService.GrantView::principalSubject)
+                .doesNotContain("cook");
+        assertThat(service.listWithin(chilonzor(), true))
+                .extracting(GrantManagementService.GrantView::principalSubject)
+                .contains("cook");
+    }
+
+    @Test
+    void aLocationManagerTakesAJobAwayAtHerBranchAndItStopsWorkingAtOnce() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+        UUID cook = service.grant(
+                new GrantManagementService.GrantCommand("cook", "location-staff", chilonzor(), "hired", null),
+                "chilonzor-manager");
+
+        assertThat(service.revokeWithin(chilonzor(), cook, "chilonzor-manager", "left the branch"))
+                .isTrue();
+
+        assertThat(authorization.has("cook", Capability.ORDER_APPROVE, chilonzor()))
+                .isFalse();
+    }
+
+    @Test
+    void aLocationManagerCannotTakeAwayAJobOutsideHerBranchEvenWithItsGrantId() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+        UUID siblingCook =
+                grantAsOwner("sibling-cook", "location-staff", ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION));
+        insertGrant("brand-a-manager", PlatformRole.BRAND_MANAGER, "BRAND", BRAND);
+        UUID brandManager = grantIdOf("brand-a-manager");
+        UUID ownersOwn = jdbc.sql("SELECT id FROM iam.grants WHERE principal_subject = :owner")
+                .param("owner", OWNER)
+                .query(UUID.class)
+                .single();
+
+        for (UUID elsewhere : List.of(siblingCook, brandManager, ownersOwn)) {
+            assertThat(service.revokeWithin(chilonzor(), elsewhere, "chilonzor-manager", "not mine to revoke"))
+                    .as("a grant id from a ticket is not proof it is hers; the answer is the same as for no such grant")
+                    .isFalse();
+        }
+        assertThat(authorization.has(
+                        "sibling-cook",
+                        Capability.ORDER_APPROVE,
+                        ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION)))
+                .isTrue();
+        assertThat(authorization.has(OWNER, Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(TENANT)))
+                .as("the owner is still the owner")
+                .isTrue();
+    }
+
+    @Test
+    void aLocationManagerCannotTakeAwayAJobSheCouldNotHaveGivenHere() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+        // The owner placed a finance clerk at the branch: a job whose capabilities the
+        // branch manager does not hold, so one she has no standing to take away either.
+        insertGrant("finance-clerk", PlatformRole.TENANT_FINANCE, "LOCATION", LOCATION);
+        UUID clerk = grantIdOf("finance-clerk");
+
+        assertThatThrownBy(() -> service.revokeWithin(chilonzor(), clerk, "chilonzor-manager", "overreach"))
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+        assertThat(authorization.has("finance-clerk", Capability.REFUND_EXECUTE, chilonzor()))
+                .as("the clerk keeps the job")
+                .isTrue();
+    }
+
+    @Test
+    void theJobsOnOfferAreExactlyTheOnesTheGrantRouteWouldAccept() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+
+        List<GrantManagementService.GrantableRole> offered = service.grantableRoles(chilonzor(), "chilonzor-manager");
+
+        assertThat(offered)
+                .filteredOn(GrantManagementService.GrantableRole::grantable)
+                .extracting(GrantManagementService.GrantableRole::code)
+                .containsExactlyInAnyOrder("location-manager", "location-staff");
+        assertThat(offered)
+                .extracting(GrantManagementService.GrantableRole::code)
+                .as("every tenant-visible job is listed, so the picker can say why one is missing")
+                .contains("tenant-owner", "tenant-finance", "brand-manager", "courier-dispatcher", "support-agent");
+    }
+
+    /**
+     * The picker is the grant route's own refusal read back, so it must agree with
+     * the route for every job it lists -- for a branch manager and, unchanged, for
+     * the owner (who, notably, cannot give every job either: her bundle is not a
+     * superset of the administrator's). Written as the equivalence rather than as a
+     * list of expected codes, so a bundle change that moves one job in or out fails
+     * only if the picker and the route disagree.
+     */
+    @Test
+    void thePickerAndTheGrantRouteAgreeForEveryJobForTheOwnerAndTheBranchManager() {
+        insertGrant("chilonzor-manager", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
+
+        for (String granter : List.of(OWNER, "chilonzor-manager")) {
+            int attempt = 0;
+            for (GrantManagementService.GrantableRole offered : service.grantableRoles(chilonzor(), granter)) {
+                String candidate = "candidate-%s-%d".formatted(granter, attempt++);
+                boolean accepted;
+                try {
+                    service.grant(
+                            new GrantManagementService.GrantCommand(
+                                    candidate, offered.code(), chilonzor(), "equivalence check", null),
+                            granter);
+                    accepted = true;
+                } catch (AuthorizationService.AccessDeniedException refused) {
+                    accepted = false;
+                } catch (ApiException refused) {
+                    assertThat(refused.errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
+                    accepted = false;
+                }
+                assertThat(offered.grantable())
+                        .as("%s offered %s as grantable=%s", granter, offered.code(), offered.grantable())
+                        .isEqualTo(accepted);
+            }
+        }
+    }
+
+    @Test
+    void theNamesOfABranchesPlacesAreItsOwnAndItsBrandsOnly() {
+        GrantManagementService.PlaceDirectory places = service.placesWithin(chilonzor());
+
+        assertThat(places.brands())
+                .extracting(GrantManagementService.PlaceDirectory.BrandPlace::id)
+                .containsExactly(BRAND);
+        assertThat(places.locations())
+                .extracting(GrantManagementService.PlaceDirectory.LocationPlace::id)
+                .as("this branch, not its sibling and not another brand's")
+                .containsExactly(LOCATION);
+        assertThat(service.placesWithin(ResourceScope.brand(TENANT, BRAND)).locations())
+                .extracting(GrantManagementService.PlaceDirectory.LocationPlace::id)
+                .containsExactlyInAnyOrder(LOCATION, SIBLING_LOCATION);
+    }
+
+    private UUID grantIdOf(String subject) {
+        return jdbc.sql("SELECT id FROM iam.grants WHERE principal_subject = :subject AND status = 'ACTIVE'")
+                .param("subject", subject)
+                .query(UUID.class)
+                .single();
+    }
+
+    private UUID grantAsOwner(String subject, String roleCode, ResourceScope scope) {
+        return service.grant(
+                new GrantManagementService.GrantCommand(subject, roleCode, scope, "fixture grant", null), OWNER);
+    }
+
     private void insertPlatformGrant(String subject, PlatformRole role) {
         jdbc.sql("""
                 INSERT INTO iam.grants
@@ -747,6 +1082,24 @@ class GrantManagementServiceTests {
                 .param("id", LOCATION)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'LOC_S', 'loc-s', 'Sibling', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", SIBLING_LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations
+                    (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'LOC_O', 'loc-o', 'Other brand branch', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", OTHER_BRAND_LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", OTHER_BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO tenant.tenants

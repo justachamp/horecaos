@@ -34,11 +34,16 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService;
+import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService.WallCaller;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
+import uz.horecaos.platform.ordering.api.LatenessPolicyPort;
+import uz.horecaos.platform.ordering.api.LatenessPolicyPort.LatenessPolicyView;
+import uz.horecaos.platform.ordering.api.LatenessPolicyPort.Thresholds;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -71,18 +76,24 @@ public class KitchenBoardController {
     private final AuthorizationService authorization;
     private final CourierEtaPort courierEta;
     private final OrderTablesPort orderTables;
+    private final KitchenDeviceDisplayService displays;
+    private final LatenessPolicyPort latenessPolicies;
 
     public KitchenBoardController(
             KitchenTicketService tickets,
             CurrentActor currentActor,
             AuthorizationService authorization,
             CourierEtaPort courierEta,
-            OrderTablesPort orderTables) {
+            OrderTablesPort orderTables,
+            KitchenDeviceDisplayService displays,
+            LatenessPolicyPort latenessPolicies) {
         this.tickets = tickets;
         this.currentActor = currentActor;
         this.authorization = authorization;
         this.courierEta = courierEta;
         this.orderTables = orderTables;
+        this.displays = displays;
+        this.latenessPolicies = latenessPolicies;
     }
 
     @GetMapping("/tickets")
@@ -185,19 +196,44 @@ public class KitchenBoardController {
      * tickets to that station's own lines — "VDU is a projection with a
      * station filter", ADR 0041's own words. Omitting {@code station} answers
      * the whole branch, the same reduction the desk console's VDU page
-     * carried before this wave.
+     * carried before this wave. <strong>For a caller that is a wall display
+     * (ADR 0151) the station is the device's own configuration</strong>: the
+     * server applies the one Kitchen → Devices holds for it (the whole branch
+     * when none is set) and ignores the request's, because a wall that can be
+     * pointed at another station by editing a URL is a convenience, not a
+     * boundary. A person's request is honoured as it always was; this is not a
+     * boundary against the same branch's staff.
+     *
+     * <p><strong>The capability is {@code kitchen.display.read}</strong> (ADR
+     * 0151), held by every bundle that held {@code kitchen.ticket.read} and by
+     * a wall display alone, so the wall cannot call the touch board's read, a
+     * single ticket, or advance anything.
+     *
+     * <p><strong>The projection carries the lateness policy</strong> resolved
+     * at the location of the call, in the shape {@code GET
+     * .../orders/lateness-policy} serves. A wall display holds no {@code
+     * order.read} and cannot call that endpoint; without the policy it would
+     * colour a ticket "on time" that the manager's console shows late, and
+     * nothing on the screen would say why. The resolution is the cached one
+     * every board uses, and it is tenant configuration, not customer data.
      */
     @GetMapping("/vdu")
-    @RequiresCapability(value = Capability.KITCHEN_TICKET_READ, scope = ScopeType.LOCATION)
+    @RequiresCapability(value = Capability.KITCHEN_DISPLAY_READ, scope = ScopeType.LOCATION)
     @Operation(
             summary = "The VDU wall projection",
             description = "Fired tickets, no controls, no notes, no customer data -- only the fields "
-                    + "a wall needs. Pass station to narrow to one station's own lines.")
+                    + "a wall needs, and the lateness policy to colour them with. Pass station to narrow to "
+                    + "one station's own lines; for a wall display enrolled as KITCHEN_VDU the configured "
+                    + "station is applied instead and the parameter is ignored.")
     public ResponseEntity<VduBoardResponse> vdu(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @RequestParam(required = false) @Nullable UUID station) {
+
+        WallCaller wall = displays.wallCaller(currentActor.get().subject(), tenantId, locationId)
+                .orElse(null);
+        UUID effectiveStation = wall != null ? wall.stationId() : station;
 
         List<TicketRow> ticketRows =
                 tickets.board(tenantId, locationId, List.of("FIRED", "IN_PRODUCTION", "READY"), 200);
@@ -210,7 +246,7 @@ public class KitchenBoardController {
                 .map(ticket -> VduTicketResponse.of(
                         ticket,
                         tickets.items(tenantId, ticket.id()),
-                        station,
+                        effectiveStation,
                         externalReferences.get(ticket.orderId()),
                         courierEtaByOrder.get(ticket.orderId())))
                 // A ticket that touches no line at the requested station has
@@ -220,7 +256,13 @@ public class KitchenBoardController {
                 .flatMap(Optional::stream)
                 .toList();
 
-        return ResponseEntity.ok(new VduBoardResponse(board));
+        if (wall != null) {
+            displays.recordWallRead(wall, tenantId);
+        } else {
+            displays.recordStaffRead();
+        }
+        return ResponseEntity.ok(new VduBoardResponse(
+                board, VduLatenessPolicy.of(latenessPolicies.policyAt(tenantId, brandId, locationId))));
     }
 
     @GetMapping("/tickets/{ticketId}")
@@ -673,8 +715,50 @@ public class KitchenBoardController {
         }
     }
 
-    /** {@link #vdu}'s response. */
-    record VduBoardResponse(List<VduTicketResponse> tickets) {}
+    /**
+     * {@link #vdu}'s response.
+     *
+     * @param lateness the {@code ordering.lateness} policy resolved at the location of the call, so a
+     *                 wall display colours its tickets from the tenant's own thresholds without a read
+     *                 it has no capability for (ADR 0151)
+     */
+    record VduBoardResponse(List<VduTicketResponse> tickets, VduLatenessPolicy lateness) {}
+
+    /** One fulfilment mode's thresholds, in the shape {@code GET .../orders/lateness-policy} serves. */
+    record VduLatenessThresholds(int atRiskBeforeSeconds, int lateAfterSeconds, int noPromiseFallbackSeconds) {
+
+        static VduLatenessThresholds of(Thresholds thresholds) {
+            return new VduLatenessThresholds(
+                    thresholds.atRiskBeforeSeconds(),
+                    thresholds.lateAfterSeconds(),
+                    thresholds.noPromiseFallbackSeconds());
+        }
+    }
+
+    /**
+     * The lateness policy as {@code OrderLatenessPolicyController.LatenessPolicyResponse} serves it —
+     * the same field names, so the console reads both with one parser.
+     */
+    record VduLatenessPolicy(
+            VduLatenessThresholds delivery,
+            VduLatenessThresholds pickup,
+            VduLatenessThresholds dineIn,
+            boolean isPlatformDefault,
+            @Nullable UUID policyId,
+            int policyVersion,
+            @Nullable String lateColour) {
+
+        static VduLatenessPolicy of(LatenessPolicyView policy) {
+            return new VduLatenessPolicy(
+                    VduLatenessThresholds.of(policy.delivery()),
+                    VduLatenessThresholds.of(policy.pickup()),
+                    VduLatenessThresholds.of(policy.dineIn()),
+                    policy.isPlatformDefault(),
+                    policy.policyId(),
+                    policy.policyVersion(),
+                    policy.lateColour());
+        }
+    }
 
     /**
      * {@link #vdu}'s own narrow ticket shape -- see that method's own doc for

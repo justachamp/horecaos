@@ -1,0 +1,72 @@
+<section class="enrol" data-testid="mfa-enrolment">
+  <p class="q-body lead">
+    {{ (required() ? 'mfa.enrol.leadRequired' : 'mfa.enrol.lead') | t }}
+  </p>
+
+  @if (step() === 'password') {
+    <form (submit)="begin($event)" data-testid="mfa-password-step">
+      <p class="q-body-sm hint">{{ 'mfa.enrol.passwordStep' | t }}</p>
+      <label class="q-caption field-label" for="mfa-password">{{ 'mfa.enrol.password' | t }}</label>
+      <input
+        id="mfa-password"
+        class="q-body field"
+        type="password"
+        autocomplete="current-password"
+        [value]="password()"
+        (input)="onPassword($event)"
+        [disabled]="busy()"
+      />
+      @if (error(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+      <button type="submit" class="q-body submit" [disabled]="busy() || password().length === 0">
+        {{ 'mfa.enrol.continue' | t }}
+      </button>
+    </form>
+  } @else {
+    <div data-testid="mfa-scan-step">
+      <p class="q-body-sm hint">{{ 'mfa.enrol.scanStep' | t }}</p>
+      @if (enrolment(); as current) {
+        <div class="qr">
+          <q-qr-code [value]="current.otpauthUri" [size]="176" [label]="'mfa.enrol.qrLabel' | t" />
+        </div>
+        <p class="q-caption manual">{{ 'mfa.enrol.cantScan' | t }}</p>
+        <code class="q-mono secret" data-testid="mfa-secret">{{ spacedSecret() }}</code>
+      }
+
+      <label class="q-caption field-label" for="mfa-label">{{ 'mfa.enrol.label' | t }}</label>
+      <input
+        id="mfa-label"
+        class="q-body field"
+        type="text"
+        maxlength="64"
+        autocomplete="off"
+        [placeholder]="'mfa.enrol.labelPlaceholder' | t"
+        [value]="label()"
+        (input)="onLabel($event)"
+        [disabled]="busy()"
+      />
+
+      <q-otp-input
+        class="otp"
+        [value]="code()"
+        [disabled]="busy()"
+        [ariaLabel]="'mfa.enrol.group' | t"
+        [cellLabelPrefix]="'mfa.enrol.digit' | t"
+        (valueChange)="onCode($event)"
+        (complete)="confirm($event)"
+      />
+      @if (error(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+      <button
+        type="button"
+        class="q-body submit"
+        [disabled]="busy() || code().length !== 6"
+        (click)="confirm()"
+      >
+        {{ (busy() ? 'mfa.enrol.confirming' : 'mfa.enrol.confirm') | t }}
+      </button>
+    </div>
+  }
+</section>

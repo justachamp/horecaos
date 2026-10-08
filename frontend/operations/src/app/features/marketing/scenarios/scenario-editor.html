@@ -1,0 +1,433 @@
+<div class="editor" data-testid="scenario-editor">
+  <header class="editor__head">
+    <h2 class="q-subhead">
+      @if (isEdit()) {
+        {{ 'marketing.scenario.editor.title.edit' | t: { name: editingName() } }}
+      } @else {
+        {{ 'marketing.scenario.editor.title.create' | t }}
+      }
+    </h2>
+    <p class="q-body-sm editor__intro">{{ 'marketing.scenario.editor.intro' | t }}</p>
+  </header>
+
+  @if (loading()) {
+    <div class="editor__skeleton" [attr.aria-label]="'marketing.campaigns.loading' | t"></div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="editor__band editor__band--error" role="alert" data-testid="scenario-load-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (notDraft()) {
+      <div class="editor__band editor__band--error" role="alert" data-testid="scenario-not-draft">
+        <span class="q-body-sm">{{ 'marketing.scenario.editor.notDraft' | t }}</span>
+      </div>
+    }
+
+    @if (!isEdit()) {
+      <section class="editor__section">
+        <label class="q-field">
+          <span class="q-caption">{{ 'marketing.scenario.editor.name' | t }}</span>
+          <input
+            type="text"
+            maxlength="120"
+            data-testid="scenario-name"
+            [value]="name()"
+            (input)="name.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="q-field">
+          <span class="q-caption">{{ 'marketing.campaigns.create.audience' | t }}</span>
+          @if (audiences().length === 0) {
+            <span class="q-caption">{{ 'marketing.campaigns.create.audience.empty' | t }}</span>
+          } @else {
+            <select
+              data-testid="scenario-audience"
+              [value]="audienceId()"
+              (change)="audienceId.set($any($event.target).value)"
+            >
+              @for (audience of audiences(); track audience.audienceId) {
+                <option
+                  [value]="audience.audienceId"
+                  [selected]="audience.audienceId === audienceId()"
+                >
+                  {{ audience.name }}
+                </option>
+              }
+            </select>
+          }
+        </label>
+
+        <div class="editor__row">
+          <label class="q-field">
+            <span class="q-caption">{{ 'marketing.campaigns.create.recipientCap' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              data-testid="scenario-cap"
+              [value]="recipientCap()"
+              (input)="recipientCap.set($any($event.target).valueAsNumber)"
+            />
+          </label>
+          <label class="q-field">
+            <span class="q-caption">{{ 'marketing.campaigns.create.scheduledAt' | t }}</span>
+            <input
+              type="datetime-local"
+              data-testid="scenario-scheduled-at"
+              [value]="scheduledAt()"
+              (input)="scheduledAt.set($any($event.target).value)"
+            />
+          </label>
+        </div>
+
+        @if (needsCostCeiling()) {
+          <div class="editor__row">
+            <label class="q-field">
+              <span class="q-caption">{{ 'marketing.campaigns.create.costCeiling' | t }}</span>
+              <input
+                type="number"
+                min="0"
+                data-testid="scenario-ceiling"
+                [value]="costCeilingMinor() ?? ''"
+                (input)="onCostCeiling($any($event.target).value)"
+              />
+            </label>
+            <label class="q-field">
+              <span class="q-caption">{{ 'marketing.campaigns.create.currency' | t }}</span>
+              <input
+                type="text"
+                maxlength="3"
+                data-testid="scenario-currency"
+                [value]="currency()"
+                (input)="currency.set($any($event.target).value)"
+              />
+            </label>
+          </div>
+        }
+
+        <fieldset class="editor__control">
+          <label class="editor__check">
+            <input
+              type="checkbox"
+              data-testid="scenario-control-on"
+              [checked]="controlGroupOn()"
+              (change)="toggleControlGroup($any($event.target).checked)"
+            />
+            {{ 'marketing.scenario.editor.controlGroup' | t }}
+          </label>
+          @if (controlGroupOn()) {
+            <label class="q-field">
+              <span class="q-caption">{{
+                'marketing.scenario.editor.controlGroup.percent' | t
+              }}</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                data-testid="scenario-control-percent"
+                [value]="controlGroupPercent()"
+                (input)="controlGroupPercent.set($any($event.target).valueAsNumber)"
+              />
+            </label>
+            <p class="q-caption editor__note" data-testid="scenario-control-hint">
+              {{
+                'marketing.scenario.editor.controlGroup.hint'
+                  | t: { count: withheldAtCap(), cap: recipientCap() }
+              }}
+            </p>
+          } @else {
+            <p class="q-caption editor__note" data-testid="scenario-control-off">
+              {{ 'marketing.scenario.editor.controlGroup.off' | t }}
+            </p>
+          }
+        </fieldset>
+      </section>
+    }
+
+    <section class="editor__section">
+      <h3 class="q-emphasis">{{ 'marketing.scenario.editor.steps' | t }}</h3>
+      <p class="q-caption editor__note">
+        {{ 'marketing.scenario.editor.steps.hint' | t: { max: maxSteps, days: maxWaitDays } }}
+      </p>
+
+      <ol class="editor__steps">
+        @for (step of steps(); track step.uid; let index = $index) {
+          <li class="editor__step" data-testid="scenario-step">
+            <div class="editor__step-head">
+              <span class="q-emphasis">{{
+                'marketing.scenario.editor.step' | t: { number: index + 1 }
+              }}</span>
+              <span class="editor__step-actions">
+                <button
+                  type="button"
+                  data-testid="scenario-step-up"
+                  [disabled]="index === 0 || notDraft()"
+                  [attr.aria-label]="'marketing.scenario.editor.moveUp' | t"
+                  (click)="moveStep(index, -1)"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  data-testid="scenario-step-down"
+                  [disabled]="index === steps().length - 1 || notDraft()"
+                  [attr.aria-label]="'marketing.scenario.editor.moveDown' | t"
+                  (click)="moveStep(index, 1)"
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  data-testid="scenario-step-remove"
+                  [disabled]="notDraft()"
+                  [attr.aria-label]="'marketing.scenario.editor.remove' | t"
+                  (click)="removeStep(index)"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+
+            <label class="q-field">
+              <span class="q-caption">{{ 'marketing.campaigns.create.channel' | t }}</span>
+              <select
+                data-testid="scenario-step-channel"
+                [disabled]="notDraft()"
+                [value]="step.channel"
+                (change)="changeChannel(index, $any($event.target).value)"
+              >
+                @for (channel of stepChannels; track channel) {
+                  <option
+                    [value]="channel"
+                    [selected]="channel === step.channel"
+                    [disabled]="channelOptionDisabled(channel)"
+                  >
+                    {{ channelLabelKey(channel) | t }}
+                    @if (channelOptionDisabled(channel)) {
+                      {{ 'marketing.scenario.editor.callCentreSuffix' | t }}
+                    } @else if (isUnwired(channel)) {
+                      {{ 'marketing.wiring.notConnectedSuffix' | t }}
+                    }
+                  </option>
+                }
+              </select>
+              @if (isUnwired(step.channel)) {
+                <p
+                  class="q-caption editor__note editor__note--warn"
+                  data-testid="scenario-step-unwired"
+                >
+                  {{ wiringOf(step.channel).key | t: wiringOf(step.channel).values }}
+                </p>
+              }
+            </label>
+
+            <q-offer-picker
+              [offers]="offers()"
+              [channel]="step.channel"
+              [value]="step.offerId"
+              [required]="step.channel === 'IN_APP'"
+              (valueChange)="patchStep(index, { offerId: $event })"
+            />
+
+            @if (step.channel !== 'IN_APP') {
+              <label class="q-field">
+                <span class="q-caption">{{ 'marketing.campaigns.create.template' | t }}</span>
+                @if (templatesFor(step.channel).length > 0) {
+                  <select
+                    data-testid="scenario-step-template"
+                    [disabled]="notDraft()"
+                    [value]="step.templateKey"
+                    (change)="patchStep(index, { templateKey: $any($event.target).value })"
+                  >
+                    <option value="" [selected]="step.templateKey === ''">
+                      {{
+                        (offerTemplateOf(step)
+                          ? 'marketing.scenario.editor.offerTemplate'
+                          : 'marketing.scenario.editor.noTemplate'
+                        ) | t: { template: offerTemplateOf(step) ?? '' }
+                      }}
+                    </option>
+                    @for (template of templatesFor(step.channel); track template.templateKey) {
+                      <option
+                        [value]="template.templateKey"
+                        [selected]="template.templateKey === step.templateKey"
+                      >
+                        {{ template.templateKey }}
+                      </option>
+                    }
+                  </select>
+                } @else {
+                  <input
+                    type="text"
+                    maxlength="64"
+                    data-testid="scenario-step-template-key"
+                    [disabled]="notDraft()"
+                    [value]="step.templateKey"
+                    (input)="patchStep(index, { templateKey: $any($event.target).value })"
+                  />
+                  <span class="q-caption editor__note">{{
+                    'marketing.campaigns.create.template.manualHint' | t
+                  }}</span>
+                }
+              </label>
+            } @else {
+              <p class="q-caption editor__note">
+                {{ 'marketing.scenario.editor.inAppTemplate' | t }}
+              </p>
+            }
+
+            <div class="editor__row">
+              <label class="q-field">
+                <span class="q-caption">{{ 'marketing.scenario.editor.wait' | t }}</span>
+                <input
+                  type="number"
+                  min="0"
+                  data-testid="scenario-step-wait"
+                  [disabled]="notDraft()"
+                  [value]="step.waitValue"
+                  (input)="onWaitValue(index, $any($event.target).value)"
+                />
+              </label>
+              <label class="q-field">
+                <span class="q-caption">{{ 'marketing.scenario.editor.waitUnit' | t }}</span>
+                <select
+                  data-testid="scenario-step-unit"
+                  [disabled]="notDraft()"
+                  [value]="step.waitUnit"
+                  (change)="patchStep(index, { waitUnit: $any($event.target).value })"
+                >
+                  @for (unit of waitUnits; track unit) {
+                    <option [value]="unit" [selected]="unit === step.waitUnit">
+                      {{ unitKey(unit) | t }}
+                    </option>
+                  }
+                </select>
+              </label>
+            </div>
+            <p class="q-caption editor__note">
+              {{
+                (index === 0
+                  ? 'marketing.scenario.editor.wait.hintFirst'
+                  : 'marketing.scenario.editor.wait.hint'
+                ) | t
+              }}
+            </p>
+
+            <div class="editor__row">
+              <label class="q-field">
+                <span class="q-caption">{{ 'marketing.scenario.editor.continuation' | t }}</span>
+                <select
+                  data-testid="scenario-step-continuation"
+                  [disabled]="notDraft()"
+                  [value]="step.continuation"
+                  (change)="patchStep(index, { continuation: $any($event.target).value })"
+                >
+                  <option value="ALWAYS" [selected]="step.continuation === 'ALWAYS'">
+                    {{ conditionKey('ALWAYS') | t }}
+                  </option>
+                  <option
+                    value="NO_ORDER_SINCE_ENTRY"
+                    [selected]="step.continuation === 'NO_ORDER_SINCE_ENTRY'"
+                  >
+                    {{ conditionKey('NO_ORDER_SINCE_ENTRY') | t }}
+                  </option>
+                </select>
+              </label>
+              <label class="q-field">
+                <span class="q-caption">{{ 'marketing.scenario.editor.stop' | t }}</span>
+                <select
+                  data-testid="scenario-step-stop"
+                  [disabled]="notDraft()"
+                  [value]="step.stop"
+                  (change)="patchStep(index, { stop: $any($event.target).value })"
+                >
+                  <option value="NONE" [selected]="step.stop === 'NONE'">
+                    {{ conditionKey('NONE') | t }}
+                  </option>
+                  <option
+                    value="ORDER_PLACED_SINCE_ENTRY"
+                    [selected]="step.stop === 'ORDER_PLACED_SINCE_ENTRY'"
+                  >
+                    {{ conditionKey('ORDER_PLACED_SINCE_ENTRY') | t }}
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            @for (problem of problemsOf(index + 1); track problem.code) {
+              <p class="q-caption editor__problem" data-testid="scenario-step-problem">
+                {{ problemKey(problem) | t: { step: index + 1, days: maxWaitDays } }}
+              </p>
+            }
+          </li>
+        }
+      </ol>
+
+      <button
+        type="button"
+        class="editor__add"
+        data-testid="scenario-add-step"
+        [disabled]="steps().length >= maxSteps || notDraft()"
+        (click)="addStep()"
+      >
+        {{ 'marketing.scenario.editor.addStep' | t }}
+      </button>
+    </section>
+
+    @for (problem of wholeProblems(); track problem.code) {
+      <p class="q-caption editor__problem" data-testid="scenario-problem">
+        {{ problemKey(problem) | t: { max: maxSteps } }}
+      </p>
+    }
+
+    @if (unwired().length > 0) {
+      <div class="editor__band editor__band--warn" role="status" data-testid="scenario-unwired">
+        <p class="q-body-sm">{{ 'marketing.scenario.editor.unwired' | t }}</p>
+        <ul>
+          @for (item of unwired(); track item.step) {
+            <li class="q-caption">
+              {{ 'marketing.scenario.editor.unwired.step' | t: { number: item.step } }}
+              {{ channelLabelKey(item.channel) | t }}:
+              {{ item.sentence.key | t: item.sentence.values }}
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (!isEdit() && formProblem(); as problem) {
+      <p class="q-caption editor__problem" data-testid="scenario-form-problem">
+        {{ problem | t }}
+      </p>
+    }
+
+    @if (submitError(); as error) {
+      <div
+        class="editor__band editor__band--error"
+        role="alert"
+        data-testid="scenario-submit-error"
+      >
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <footer class="editor__actions">
+      <button type="button" data-testid="scenario-cancel" (click)="cancelled.emit()">
+        {{ 'marketing.dialog.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="editor__primary"
+        data-testid="scenario-save"
+        [disabled]="!canSave()"
+        (click)="save()"
+      >
+        {{
+          (isEdit() ? 'marketing.scenario.editor.saveSteps' : 'marketing.scenario.editor.save') | t
+        }}
+      </button>
+    </footer>
+  }
+</div>

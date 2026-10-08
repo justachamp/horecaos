@@ -374,11 +374,6 @@ jobs:
         app: [control-plane, operations, storefront, storefront-milliy]
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The changed-files format check below measures a change against its
-          # merge base, so it needs the history between the two. The repository
-          # is small.
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -417,40 +412,18 @@ jobs:
           npm run lint
           npm run lint:rules
 
-      - name: Format check (operations, storefront, storefront-milliy)
-        # The whole tree, so a file cannot slip through unchecked. This step used
-        # to run prettier only on the files a change touched (measured against a
-        # merge base, or against the tip a push replaced); a push whose run was
-        # cancelled by a later one, or whose previous tip was missing from the
-        # clone, was never checked for the files it brought. Each of these trees
-        # is prettier-clean (operations since it was reformatted in one commit,
-        # the two storefronts since their own "whole-tree prettier, no behaviour
-        # change" commits), so the plain script the apps already have does the
-        # job. To fix a failure: `npm run format` in the app. control-plane is not
-        # there yet: see the changed-files step below.
-        if: matrix.app != 'control-plane'
+      - name: Format check
+        # The whole tree of every app, so a file cannot slip through unchecked.
+        # This used to run prettier only on the files a change touched (measured
+        # against a merge base, or against the tip a push replaced); a push whose
+        # run was cancelled by a later one, or whose previous tip was missing from
+        # the clone, was never checked for the files it brought. control-plane was
+        # the last app on that ratchet; it was reformatted in one commit ("whole-tree
+        # prettier, no behaviour change", as operations and both storefronts were
+        # before it), so the plain script each app already has does the job. To fix
+        # a failure: `npm run format` in the app.
         working-directory: frontend/${{ matrix.app }}
         run: npm run format:check
-
-      - name: Format check on changed files (control-plane)
-        # NOT `npm run format:check`: control-plane's tree has on the order of a
-        # hundred files that predate its prettier config and were never formatted,
-        # so the whole-tree check is red on code nobody touched, and a blanket
-        # reformat while other branches are open would conflict with every one of
-        # them. Until it is reformatted in one commit (after which this step
-        # becomes `npm run format:check`, as the other three apps' did) the
-        # ratchet is: a file a change adds or edits must be prettier-clean.
-        #
-        # frontend/tools/format_changed.py lists the src/ files that differ from
-        # the merge base -- the pull request's base branch, or on a push the tip
-        # the push replaced -- and runs prettier --check on exactly those. Run the
-        # same command locally:
-        #   python3 frontend/tools/format_changed.py --app control-plane --base main
-        # and fix a failure with `npx prettier --write <the [warn] files>` in the app.
-        if: matrix.app == 'control-plane'
-        env:
-          FORMAT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-        run: python3 frontend/tools/format_changed.py --app ${{ matrix.app }} --base "$FORMAT_BASE"
 
       - name: Design tokens drift check (control-plane)
         # control-plane vendors frontend/design-tokens/tokens.css. Its ESLint config

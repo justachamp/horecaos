@@ -53,7 +53,10 @@ export class TenantImpersonation {
   /** The signed-in person's own open session here, if any. */
   protected readonly mine = computed(() => {
     const me = this.session.current()?.subject;
-    return this.sessions().find((candidate) => candidate.open && candidate.principalSubject === me) ?? null;
+    return (
+      this.sessions().find((candidate) => candidate.open && candidate.principalSubject === me) ??
+      null
+    );
   });
 
   constructor() {
@@ -121,7 +124,9 @@ export class TenantImpersonation {
   /** How a session finished, in words: still open, ended early by someone, or ran out. */
   protected outcome(session: SupportSessionView): string {
     if (session.open) {
-      return this.i18n.t('support.state.open', { time: this.i18n.dateTime(asDate(session.expiresAt)) });
+      return this.i18n.t('support.state.open', {
+        time: this.i18n.dateTime(asDate(session.expiresAt)),
+      });
     }
     if (session.endedAt !== null) {
       return this.i18n.t('support.state.ended', {
@@ -129,7 +134,9 @@ export class TenantImpersonation {
         who: this.who(session.endedBy ?? ''),
       });
     }
-    return this.i18n.t('support.state.lapsed', { time: this.i18n.dateTime(asDate(session.expiresAt)) });
+    return this.i18n.t('support.state.lapsed', {
+      time: this.i18n.dateTime(asDate(session.expiresAt)),
+    });
   }
 
   private async run(write: () => Promise<string>): Promise<void> {

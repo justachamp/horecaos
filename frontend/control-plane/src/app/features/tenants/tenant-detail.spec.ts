@@ -10,7 +10,10 @@ import { CommerceApi } from '../commerce/commerce-api';
 import { TenantDetail } from './tenant-detail';
 import { TenantView, TenantsApi } from './tenants-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 function tenant(status: TenantView['status']): TenantView {
   return {
@@ -46,9 +49,18 @@ describe('TenantDetail', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: TenantsApi, useValue: api },
-        { provide: CommerceApi, useValue: { getEntitlements: vi.fn().mockRejectedValue(new Error('none')) } },
-        { provide: SessionContextService, useValue: { has: (c: string) => platformAdmin && c === 'PLATFORM_ADMIN' } },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
+        {
+          provide: CommerceApi,
+          useValue: { getEntitlements: vi.fn().mockRejectedValue(new Error('none')) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: (c: string) => platformAdmin && c === 'PLATFORM_ADMIN' },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(TenantDetail);
@@ -63,9 +75,9 @@ describe('TenantDetail', () => {
   }
 
   function button(label: string): HTMLButtonElement | undefined {
-    return (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]).find(
-      (b) => b.textContent?.trim() === label,
-    );
+    return (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim() === label);
   }
 
   it('suspends a live tenant only with a reason, and then offers to reactivate it', async () => {
@@ -92,7 +104,9 @@ describe('TenantDetail', () => {
 
   it('keeps the tenant as it was when the server refuses, and says why', async () => {
     await createWith('SUSPENDED');
-    api.reactivateTenant.mockRejectedValue(new ApiError({ status: 409, code: 'RESOURCE_CONFLICT' }));
+    api.reactivateTenant.mockRejectedValue(
+      new ApiError({ status: 409, code: 'RESOURCE_CONFLICT' }),
+    );
 
     button(ru['tenantDetail.status.reactivate'])!.click();
     await settle();

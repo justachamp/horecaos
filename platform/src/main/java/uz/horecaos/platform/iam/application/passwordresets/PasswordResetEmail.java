@@ -23,7 +23,7 @@ final class PasswordResetEmail {
     private record Words(String subject, String greeting, String body, String action, String expiry, String ignore) {}
 
     private static final Map<String, Words> WORDS = Map.of(
-            "uz",
+            "uz-Latn",
             new Words(
                     "HorecaOS parolingizni tiklash",
                     "Assalomu alaykum!",
@@ -48,10 +48,15 @@ final class PasswordResetEmail {
                     "The link works for %d minutes, and only once.",
                     "If this was not you, ignore this email: your password does not change."));
 
+    /** The language a table without a wording falls back to: the registry's fallback, which is Russian. */
+    private static final String STAFF_DEFAULT = "ru";
+
     private PasswordResetEmail() {}
 
     static StaffEmail render(String to, String locale, String link, long minutes) {
-        Words words = Objects.requireNonNull(WORDS.getOrDefault(locale, WORDS.get("ru")));
+        // The caller passes the registry's tag (LocaleVocabulary#message). A language the platform sends in
+        // before this table has its wording reads in Russian, the staff default (ADR 0149).
+        Words words = Objects.requireNonNull(WORDS.getOrDefault(locale, WORDS.get(STAFF_DEFAULT)));
         String expiry = words.expiry().formatted(minutes);
         String text = String.join("\n\n", words.greeting(), words.body(), link, expiry, words.ignore(), "HorecaOS");
         String html = """

@@ -78,12 +78,19 @@ public class NotificationProcessor {
                         gateway.send(Objects.requireNonNull(
                                 operation.dispatch(), "A SEND operation requires a rendered dispatch"));
                     case QUERY_STATUS ->
-                        gateway.queryStatus(
-                                operation.tenantId(),
-                                operation.brandId(),
-                                operation.locationId(),
-                                operation.channel(),
-                                operation.providerIdempotencyKey());
+                        operation.resolveRequest() != null
+                                ? gateway.resolve(
+                                        operation.tenantId(),
+                                        operation.brandId(),
+                                        operation.locationId(),
+                                        operation.channel(),
+                                        operation.resolveRequest())
+                                : gateway.queryStatus(
+                                        operation.tenantId(),
+                                        operation.brandId(),
+                                        operation.locationId(),
+                                        operation.channel(),
+                                        operation.providerIdempotencyKey());
                 };
 
         count(operation, outcome);

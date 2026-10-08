@@ -16,8 +16,12 @@ interface LatenessThresholdsResponse {
   readonly noPromiseFallbackSeconds: number;
 }
 
-/** `OrderLatenessPolicyController.LatenessPolicyResponse`, verbatim. */
-interface LatenessPolicyResponse {
+/**
+ * `OrderLatenessPolicyController.LatenessPolicyResponse`, verbatim — and, field for field, the
+ * `lateness` member of `KitchenBoardController.VduBoardResponse` (ADR 0151), which carries the same
+ * resolved document to a wall display that cannot call the endpoint above.
+ */
+export interface LatenessPolicyResponse {
   readonly delivery: LatenessThresholdsResponse;
   readonly pickup: LatenessThresholdsResponse;
   readonly dineIn: LatenessThresholdsResponse;
@@ -54,7 +58,7 @@ export class LatenessPolicyApi {
       const result = await firstValueFrom(
         this.api.get<LatenessPolicyResponse>(operationsPaths.orderLatenessPolicy(scope)),
       );
-      return isLatenessPolicyResponse(result.value) ? toPolicy(result.value) : null;
+      return latenessPolicyFromWire(result.value);
     } catch {
       return null;
     }
@@ -64,6 +68,15 @@ export class LatenessPolicyApi {
   async resolve(scope: LocationScope): Promise<LatenessPolicy> {
     return (await this.read(scope)) ?? PLATFORM_DEFAULT_LATENESS_POLICY;
   }
+}
+
+/**
+ * A policy off the wire, or null when the body is not the document. The one parser both reads share:
+ * the endpoint a staff screen polls and the projection a wall display reads carry the same shape, and a
+ * body that is not it must not become a half-built policy on either.
+ */
+export function latenessPolicyFromWire(value: unknown): LatenessPolicy | null {
+  return isLatenessPolicyResponse(value) ? toPolicy(value) : null;
 }
 
 function isThresholds(value: unknown): value is LatenessThresholdsResponse {

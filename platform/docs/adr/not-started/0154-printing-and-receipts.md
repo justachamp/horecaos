@@ -54,7 +54,7 @@
   [ADR 0079](../partial/0079-kitchen-display-device-principal-and-enrolment.md),
   [ADR 0082](../built/0082-a-feature-flag-is-a-boolean-configuration-key.md),
   [ADR 0136](../partial/0136-composite-products-combo-groups-and-modifier-depth.md),
-  [ADR 0151](../not-started/0151-a-wall-display-device-class.md)
+  [ADR 0151](../built/0151-a-wall-display-device-class.md)
 - Supersedes / Superseded by: Supersedes the exit-criterion sentence of ADR 0041, «a branch runs
   a full service from screens with no paper tickets», only for a branch that has a printing
   route; nothing else in ADR 0041 changes. The building wave sets `Superseded by ADR 0154` on ADR

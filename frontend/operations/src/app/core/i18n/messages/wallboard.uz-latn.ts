@@ -38,6 +38,8 @@ export const wallboardUzLatn: AreaMessages<typeof wallboardEn> = {
   'wallboardVdu.denied': 'Ushbu filial oshxona taxtasiga ruxsat yoʻq',
   'wallboardVdu.loading': 'Tarqatish ekrani yuklanmoqda',
   'wallboardVdu.empty': 'Hozircha tayyorlanayotgan narsa yoʻq',
+  'wallboardVdu.previewNote':
+    'Menejer uchun devordagi ekranning oldindan koʻrinishi. Oshxonadagi televizor «Oshxona → Qurilmalar» orqali devordagi ekran sifatida ulanadi va tizimga kirgan xodim emas, oʻz ruxsati bilan ishlaydi.',
   'wallboardVdu.offline': 'Aloqa yoʻq — ekranda oxirgi koʻrilgan holat',
   'wallboardVdu.stationFilter.label': 'Stansiya',
   'wallboardVdu.stationFilter.all': 'Barcha stansiyalar',

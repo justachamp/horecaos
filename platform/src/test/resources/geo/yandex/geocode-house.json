@@ -1,0 +1,70 @@
+{
+  "response": {
+    "GeoObjectCollection": {
+      "metaDataProperty": {
+        "GeocoderResponseMetaData": {
+          "request": "Fixture ko'chasi 12",
+          "results": "5",
+          "found": "2"
+        }
+      },
+      "featureMember": [
+        {
+          "GeoObject": {
+            "metaDataProperty": {
+              "GeocoderMetaData": {
+                "kind": "house",
+                "text": "Узбекистан, Ташкент, Fixture ko'chasi, 12",
+                "precision": "exact",
+                "Address": {
+                  "country_code": "UZ",
+                  "formatted": "Узбекистан, Ташкент, Fixture ko'chasi, 12",
+                  "Components": [
+                    {"kind": "country", "name": "Узбекистан"},
+                    {"kind": "province", "name": "Ташкент"},
+                    {"kind": "locality", "name": "Ташкент"},
+                    {"kind": "district", "name": "Fixture tumani"},
+                    {"kind": "street", "name": "Fixture ko'chasi"},
+                    {"kind": "house", "name": "12"}
+                  ]
+                }
+              }
+            },
+            "name": "Fixture ko'chasi, 12",
+            "description": "Ташкент, Узбекистан",
+            "boundedBy": {
+              "Envelope": {
+                "lowerCorner": "69.279000 41.310500",
+                "upperCorner": "69.280400 41.311700"
+              }
+            },
+            "Point": {"pos": "69.279700 41.311100"}
+          }
+        },
+        {
+          "GeoObject": {
+            "metaDataProperty": {
+              "GeocoderMetaData": {
+                "kind": "street",
+                "text": "Узбекистан, Ташкент, Fixture ko'chasi",
+                "precision": "street",
+                "Address": {
+                  "country_code": "UZ",
+                  "formatted": "Узбекистан, Ташкент, Fixture ko'chasi",
+                  "Components": [
+                    {"kind": "country", "name": "Узбекистан"},
+                    {"kind": "locality", "name": "Ташкент"},
+                    {"kind": "street", "name": "Fixture ko'chasi"}
+                  ]
+                }
+              }
+            },
+            "name": "Fixture ko'chasi",
+            "description": "Ташкент, Узбекистан",
+            "Point": {"pos": "69.281000 41.312000"}
+          }
+        }
+      ]
+    }
+  }
+}

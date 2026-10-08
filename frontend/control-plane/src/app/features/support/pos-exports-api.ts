@@ -52,7 +52,10 @@ export class PosExportsApi {
   }
 
   /** Reads the POS for what happened; never re-sends the order. */
-  async discover(tenantId: string, exportId: string): Promise<{ status: string; errorCode: string; detail: string }> {
+  async discover(
+    tenantId: string,
+    exportId: string,
+  ): Promise<{ status: string; errorCode: string; detail: string }> {
     return firstValueFrom(
       this.api.post<{ status: string; errorCode: string; detail: string }>(
         `/api/v1/control-plane/tenants/${tenantId}/pos-exports/${exportId}/discovery`,

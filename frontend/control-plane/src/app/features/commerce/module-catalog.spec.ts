@@ -8,32 +8,68 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { CommerceApi, ModuleView, TenantModuleView } from './commerce-api';
 import { ModuleCatalog } from './module-catalog';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 function module(code: string, status: string, unit: string, createdBy = 'someone'): ModuleView {
   return {
-    moduleId: `m-${code}`, code, name: code.toUpperCase(), description: null, billingUnit: unit,
-    unitPrice: { amountMinor: 100_000, currency: 'UZS' }, featureKeys: [], status, createdBy,
-    approvedBy: status === 'DRAFT' ? null : 'approver', activatedAt: null, retiredAt: null,
+    moduleId: `m-${code}`,
+    code,
+    name: code.toUpperCase(),
+    description: null,
+    billingUnit: unit,
+    unitPrice: { amountMinor: 100_000, currency: 'UZS' },
+    featureKeys: [],
+    status,
+    createdBy,
+    approvedBy: status === 'DRAFT' ? null : 'approver',
+    activatedAt: null,
+    retiredAt: null,
   };
 }
 
 const HELD: TenantModuleView = {
-  tenantModuleId: 'tm-1', moduleId: 'm-kds', moduleCode: 'kds', moduleName: 'KDS', billingUnit: 'PER_LOCATION',
-  unitPrice: { amountMinor: 100_000, currency: 'UZS' }, quantity: null, startedAt: '2026-09-01T00:00:00Z',
-  startedBy: 'me', startReason: 'sold', endedAt: null, endedBy: null, endReason: null,
+  tenantModuleId: 'tm-1',
+  moduleId: 'm-kds',
+  moduleCode: 'kds',
+  moduleName: 'KDS',
+  billingUnit: 'PER_LOCATION',
+  unitPrice: { amountMinor: 100_000, currency: 'UZS' },
+  quantity: null,
+  startedAt: '2026-09-01T00:00:00Z',
+  startedBy: 'me',
+  startReason: 'sold',
+  endedAt: null,
+  endedBy: null,
+  endReason: null,
 };
 
 class FakeCommerceApi {
-  readonly listModules = vi.fn().mockResolvedValue([
-    module('kds', 'ACTIVE', 'PER_LOCATION'),
-    module('kiosk', 'ACTIVE', 'PER_UNIT'),
-    module('mine', 'DRAFT', 'PER_TENANT', 'me'),
-    module('theirs', 'DRAFT', 'ONE_OFF'),
-  ]);
+  readonly listModules = vi
+    .fn()
+    .mockResolvedValue([
+      module('kds', 'ACTIVE', 'PER_LOCATION'),
+      module('kiosk', 'ACTIVE', 'PER_UNIT'),
+      module('mine', 'DRAFT', 'PER_TENANT', 'me'),
+      module('theirs', 'DRAFT', 'ONE_OFF'),
+    ]);
   readonly entitlementKeys = vi.fn().mockResolvedValue([
-    { code: 'telegram.digests.enabled', counted: false, unit: 'feature', defaultMode: 'HARD', resetPeriod: 'NONE' },
-    { code: 'locations.max_count', counted: true, unit: 'location', defaultMode: 'SOFT', resetPeriod: 'NONE' },
+    {
+      code: 'telegram.digests.enabled',
+      counted: false,
+      unit: 'feature',
+      defaultMode: 'HARD',
+      resetPeriod: 'NONE',
+    },
+    {
+      code: 'locations.max_count',
+      counted: true,
+      unit: 'location',
+      defaultMode: 'SOFT',
+      resetPeriod: 'NONE',
+    },
   ]);
   readonly draftModule = vi.fn().mockResolvedValue({ moduleId: 'm-new' });
   readonly activateModule = vi.fn().mockResolvedValue(undefined);
@@ -57,8 +93,14 @@ describe('ModuleCatalog', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: CommerceApi, useValue: api },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ModuleCatalog);

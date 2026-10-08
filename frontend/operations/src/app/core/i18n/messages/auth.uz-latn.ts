@@ -86,4 +86,44 @@ export const authUzLatn: AreaMessages<typeof authEn> = {
   'resetPassword.policy.history': 'Yaqinda ishlatmagan parolni tanlang.',
   'resetPassword.policy.other': 'Bu parol qoidalarga mos emas. Boshqasini tanlang.',
   'resetPassword.failed': 'Parolni saqlab boʻlmadi. Birozdan keyin qayta urinib koʻring.',
+  'login.mfa.title': 'Kodni kiriting',
+  'login.mfa.lead': 'Autentifikator ilovasini oching va HorecaOS uchun olti xonali kodni kiriting.',
+  'login.mfa.group': 'Bir martalik kod',
+  'login.mfa.digit': 'Raqam',
+  'login.mfa.submit': 'Tasdiqlash',
+  'login.mfa.submitting': 'Tekshirilmoqda…',
+  'login.mfa.back': 'Boshqa hisob bilan kirish',
+  'login.mfa.invalid': 'Kod notoʻgʻri. Ilovadagi kodni tekshirib, qayta urinib koʻring.',
+  'login.mfa.rateLimited':
+    'Bu hisob uchun kod kiritish urinishlari juda koʻp. Taxminan {minutes} daqiqadan keyin qayta urinib koʻring.',
+  'login.mfa.expiredPassword':
+    'Parol qabul qilinmadi. Foydalanuvchi nomi va parolni qaytadan kiriting.',
+  'mfa.enrol.title': 'Ikki bosqichli kirishni sozlang',
+  'mfa.enrol.leadRequired':
+    'Hisobingiz uchun autentifikator ilovasidagi kod talab qilinadi. Davom etish uchun hozir sozlang.',
+  'mfa.enrol.lead': 'Hisobingizni autentifikator ilovasidagi kod bilan himoyalang.',
+  'mfa.enrol.passwordStep': 'Avval bu siz ekaningizni tasdiqlang.',
+  'mfa.enrol.password': 'Joriy parolingiz',
+  'mfa.enrol.continue': 'Davom etish',
+  'mfa.enrol.scanStep':
+    'Bu kodni autentifikator ilovasi bilan skanerlang va u koʻrsatgan birinchi kodni kiriting.',
+  'mfa.enrol.qrLabel': 'Autentifikator ilovasi uchun QR-kod',
+  'mfa.enrol.cantScan': 'Skanerlab boʻlmayaptimi? Ilovaga bu kalitni kiriting:',
+  'mfa.enrol.label': 'Qurilma nomi (ixtiyoriy)',
+  'mfa.enrol.labelPlaceholder': 'Mening telefonim',
+  'mfa.enrol.confirm': 'Tasdiqlash va yoqish',
+  'mfa.enrol.confirming': 'Tekshirilmoqda…',
+  'mfa.enrol.group': 'Ilovadagi birinchi kod',
+  'mfa.enrol.digit': 'Raqam',
+  'mfa.enrol.wrongPassword': 'Bu joriy parolingiz emas.',
+  'mfa.enrol.wrongCode':
+    'Kod mos kelmadi, shuning uchun hech narsa sozlanmadi. Ilovani tekshirib, qayta urinib koʻring.',
+  'mfa.enrol.expired': 'Sozlash muddati tugadi. Qaytadan boshlang.',
+  'mfa.enrol.full': 'Hisobda ikkitadan koʻp autentifikator boʻlmaydi. Avval bittasini oʻchiring.',
+  'mfa.enrol.rateLimited':
+    'Urinishlar juda koʻp. Taxminan {minutes} daqiqadan keyin qayta urinib koʻring.',
+  'mfa.enrol.failed':
+    'Ikki bosqichli kirishni sozlab boʻlmadi. Birozdan keyin qayta urinib koʻring.',
+  'mfa.enrol.noTicket': 'Ikki bosqichli kirishni sozlash uchun avval tizimga kiring.',
+  'mfa.enrol.toSignIn': 'Kirishga qaytish',
 };

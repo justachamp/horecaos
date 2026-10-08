@@ -245,7 +245,7 @@ export const ordersEn = {
   'orders.weigh.result.unchanged': 'Recorded {weight}. The order total did not change.',
   'orders.weigh.result.same': 'Already recorded: {weight}. Nothing changed.',
   'orders.weigh.error.paymentTaken':
-    'The weight cannot be recorded: the order is already paid online and this weight would change its total. Collecting the difference or refunding it is not available yet.',
+    'The weight cannot be recorded: the order is already paid online and this weight would change its total. Items sold by weight cannot be paid online: that is decided, not pending. Ask a manager to cancel and refund the order.',
   'orders.weigh.error.notWeighable':
     'The order has left the pass: its weight can no longer be changed.',
   'orders.weigh.error.priceChanged':
@@ -688,7 +688,7 @@ export const ordersEn = {
   'orders.newOrder.basket.remove': 'Remove',
   'orders.newOrder.basket.weighed': '≈ {weight}, weighed at handover',
   'orders.newOrder.order.totalProvisional':
-    'The total includes items sold by weight: it is an estimate until they are weighed at handover',
+    'The total includes items sold by weight: it is an estimate until they are weighed at handover, so the order is paid at handover. Online payment is not available for items sold by weight',
   'orders.newOrder.basket.notePlaceholder': 'Note for the kitchen',
   'orders.newOrder.basket.unavailable': 'No longer available — remove it to continue',
   'orders.newOrder.order.title': 'Order',

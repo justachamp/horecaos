@@ -19,11 +19,21 @@
     <p class="q-caption muted scopeNote">{{ i18n.t('fiscalization.allTenants') }}</p>
   }
   @if (worklist().length === 0) {
-    <p class="q-body-sm state">{{ i18n.t(allTenants() ? 'fiscalization.emptyEverywhere' : 'fiscalization.empty') }}</p>
+    <p class="q-body-sm state">
+      {{ i18n.t(allTenants() ? 'fiscalization.emptyEverywhere' : 'fiscalization.empty') }}
+    </p>
   } @else {
     <div class="toolbar">
-      <button type="button" [disabled]="selected().size === 0 || retrying()" (click)="retrySelected()">
-        {{ retrying() ? i18n.t('fiscalization.retry.submitting') : i18n.t('fiscalization.retry.selected', { count: selected().size }) }}
+      <button
+        type="button"
+        [disabled]="selected().size === 0 || retrying()"
+        (click)="retrySelected()"
+      >
+        {{
+          retrying()
+            ? i18n.t('fiscalization.retry.submitting')
+            : i18n.t('fiscalization.retry.selected', { count: selected().size })
+        }}
       </button>
     </div>
 
@@ -59,7 +69,9 @@
             <td class="q-body-sm">{{ document.documentType }}</td>
             <td class="q-body-sm">{{ document.reasonCode }}</td>
             <td class="q-body-sm q-tnum">{{ document.attemptCount }}</td>
-            <td class="q-body-sm">{{ document.blockedAt ? i18n.dateTime(asDate(document.blockedAt)) : '—' }}</td>
+            <td class="q-body-sm">
+              {{ document.blockedAt ? i18n.dateTime(asDate(document.blockedAt)) : '—' }}
+            </td>
           </tr>
         }
       </tbody>

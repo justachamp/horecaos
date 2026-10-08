@@ -8,6 +8,8 @@ import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format
 import { I18n } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { SessionCapabilities } from '../../../core/auth/session-capabilities';
+import { NullMapProvider, provideNullMapProvider } from '../../../shared/ui/map/null-map-provider';
+import { MapRegionService } from '../../delivery/map-region';
 import { StaffMembersApi } from '../../staff/staff-members-api';
 import { LocationContactsApi } from './location-contacts-api';
 import { LocationDetailPane } from './location-detail-pane';
@@ -79,6 +81,21 @@ const SUMMARY: ServiceSummaryResponse = {
   ],
 };
 
+/** The tenant's regions: Tashkent's box, which the pin is checked against. */
+class FakeMapRegions {
+  readonly primary = signal({
+    regionId: 'region-tashkent',
+    code: 'TASHKENT',
+    platform: true,
+    bounds: {
+      southWest: { latitude: 41.15, longitude: 69.04 },
+      northEast: { latitude: 41.47, longitude: 69.46 },
+    },
+    centre: { latitude: 41.3, longitude: 69.25 },
+  });
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
 class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(SCOPE);
   readonly denied = signal(false);
@@ -121,6 +138,7 @@ const SCHEDULES: readonly ScheduleSummaryView[] = [
 describe('LocationDetailPane', () => {
   let fixture: ComponentFixture<LocationDetailPane>;
   let localeSet: FakeLocaleSet;
+  let mapProvider: NullMapProvider;
   let contactsApi: { list: ReturnType<typeof vi.fn>; replace: ReturnType<typeof vi.fn> };
   let api: {
     profile: ReturnType<typeof vi.fn>;
@@ -151,6 +169,7 @@ describe('LocationDetailPane', () => {
       replacePreparationBands: vi.fn().mockResolvedValue(undefined),
     };
     localeSet = new FakeLocaleSet();
+    mapProvider = new NullMapProvider();
     contactsApi = {
       list: vi.fn().mockResolvedValue({ contacts: [], version: 3 }),
       replace: vi.fn(),
@@ -162,6 +181,8 @@ describe('LocationDetailPane', () => {
         { provide: LocationsApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
         { provide: LocaleSet, useValue: localeSet },
+        provideNullMapProvider(mapProvider),
+        { provide: MapRegionService, useValue: new FakeMapRegions() },
         // The contact persons are a component of their own (row 9.2b); this
         // spec is about the pane around them.
         { provide: LocationContactsApi, useValue: contactsApi },
@@ -896,5 +917,148 @@ describe('LocationDetailPane', () => {
 
     expect(api.changeServiceState).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  // ----------------------------------------------- row 10.2b / ADR 0145: the map pin
+
+  const edit = (): void => {
+    (fixture.nativeElement.querySelector('.primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+  };
+  const save = async (): Promise<void> => {
+    const button = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((candidate) => candidate.textContent?.includes('Save')) as HTMLButtonElement;
+    button.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  };
+  const mapsReady = async (): Promise<void> => {
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  };
+  const latestPlace = (): Record<string, unknown> =>
+    api.describePlace.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+
+  it('shows where the branch is on a map it cannot edit', async () => {
+    await mapsReady();
+
+    expect(mapProvider.maps).toHaveLength(1);
+    expect(mapProvider.map.livePins).toHaveLength(1);
+    expect(mapProvider.map.livePins[0].position).toEqual({ latitude: 41.3, longitude: 69.2 });
+    expect(mapProvider.map.livePins[0].draggable).toBe(false);
+    expect(fixture.nativeElement.querySelector('[data-testid="location-no-pin"]')).toBeNull();
+  });
+
+  it('says a branch with no point cannot be measured from, rather than drawing an empty map', async () => {
+    api.profile.mockResolvedValue({ ...LOCATION, latitude: null, longitude: null });
+    fixture = TestBed.createComponent(LocationDetailPane);
+    fixture.componentRef.setInput('locationId', 'location-1');
+    fixture.detectChanges();
+    await mapsReady();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="location-no-pin"]')).not.toBeNull();
+  });
+
+  it('moves the pin and sends the new point as the merchant’s own pin, both coordinates together', async () => {
+    edit();
+    await mapsReady();
+    const pin = mapProvider.map.livePins[0];
+    expect(pin.draggable).toBe(true);
+
+    pin.simulateDrag({ latitude: 41.315, longitude: 69.245 });
+    fixture.detectChanges();
+    await save();
+
+    expect(latestPlace()).toEqual(
+      expect.objectContaining({
+        latitude: 41.315,
+        longitude: 69.245,
+        coordinateSource: 'MERCHANT_PIN',
+      }),
+    );
+  });
+
+  it('stays silent about the point when an edit did not move it (the P32 guarantee, kept)', async () => {
+    edit();
+    await mapsReady();
+    const addressInput = fixture.nativeElement.querySelector('#place-address') as HTMLInputElement;
+    addressInput.value = 'New address';
+    addressInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    await save();
+
+    const body = latestPlace();
+    expect(body['addressLine']).toBe('New address');
+    expect(body).not.toHaveProperty('latitude');
+    expect(body).not.toHaveProperty('longitude');
+    expect(body).not.toHaveProperty('coordinateSource');
+  });
+
+  it('is silent again when the pin was moved and put back where it was', async () => {
+    edit();
+    await mapsReady();
+    const pin = mapProvider.map.livePins[0];
+    pin.simulateDrag({ latitude: 41.4, longitude: 69.3 });
+    fixture.detectChanges();
+    pin.simulateDrag({ latitude: 41.3, longitude: 69.2 });
+    fixture.detectChanges();
+
+    await save();
+
+    expect(latestPlace()).not.toHaveProperty('latitude');
+  });
+
+  it('offers no way to take the pin away, and typing the fields empty does not remove it', async () => {
+    edit();
+    await mapsReady();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="q-map-pin-remove"]')).toBeNull();
+    for (const id of ['q-map-pin-latitude', 'q-map-pin-longitude']) {
+      const input = fixture.nativeElement.querySelector(
+        `[data-testid="${id}"]`,
+      ) as HTMLInputElement;
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+    }
+    fixture.detectChanges();
+    await save();
+
+    expect(latestPlace()).not.toHaveProperty('latitude');
+    expect(latestPlace()).not.toHaveProperty('coordinateSource');
+  });
+
+  it('places a first point on a branch that has none, by typing the coordinates', async () => {
+    api.profile.mockResolvedValue({ ...LOCATION, latitude: null, longitude: null });
+    fixture = TestBed.createComponent(LocationDetailPane);
+    fixture.componentRef.setInput('locationId', 'location-1');
+    fixture.detectChanges();
+    await mapsReady();
+    edit();
+    await mapsReady();
+
+    for (const [id, value] of [
+      ['q-map-pin-latitude', '41.31'],
+      ['q-map-pin-longitude', '69.24'],
+    ]) {
+      const input = fixture.nativeElement.querySelector(
+        `[data-testid="${id}"]`,
+      ) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    }
+    fixture.detectChanges();
+    await save();
+
+    expect(latestPlace()).toEqual(
+      expect.objectContaining({
+        latitude: 41.31,
+        longitude: 69.24,
+        coordinateSource: 'MERCHANT_PIN',
+      }),
+    );
   });
 });

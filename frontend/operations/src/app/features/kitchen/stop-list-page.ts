@@ -17,6 +17,8 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
+import { toCatalogLocale } from '../catalog/catalog-domain';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { QCellDef, DataTable } from '../../shared/ui/data-table/data-table';
 import {
@@ -167,6 +169,7 @@ export class StopListPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly stopsApi = inject(StopsApi);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly columns = computed<readonly DataTableColumn[]>(() => {
     this.i18n.locale(); // re-translate on a locale switch — a plain field would not.
@@ -256,7 +259,7 @@ export class StopListPage implements OnInit {
           catalogPaths.variantsAtLocation(toBrandScope(scope), scope.locationId),
           state,
           {
-            locale: this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale(),
+            locale: toCatalogLocale(this.i18n.locale(), this.registry),
             search: search === '' ? undefined : search,
           },
         ),
@@ -299,7 +302,7 @@ export class StopListPage implements OnInit {
           catalogPaths.variantAvailabilityCounts(toBrandScope(scope), scope.locationId),
           {
             params: {
-              locale: this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale(),
+              locale: toCatalogLocale(this.i18n.locale(), this.registry),
               search: search === '' ? undefined : search,
             },
           },

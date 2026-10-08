@@ -1,0 +1,32 @@
+{
+  "response": {
+    "GeoObjectCollection": {
+      "metaDataProperty": {"GeocoderResponseMetaData": {"request": "69.279700,41.311100", "results": "1", "found": "1"}},
+      "featureMember": [
+        {
+          "GeoObject": {
+            "metaDataProperty": {
+              "GeocoderMetaData": {
+                "kind": "house",
+                "text": "Узбекистан, Ташкент, Fixture ko'chasi, 12",
+                "precision": "exact",
+                "Address": {
+                  "country_code": "UZ",
+                  "formatted": "Узбекистан, Ташкент, Fixture ko'chasi, 12",
+                  "Components": [
+                    {"kind": "country", "name": "Узбекистан"},
+                    {"kind": "locality", "name": "Ташкент"},
+                    {"kind": "street", "name": "Fixture ko'chasi"},
+                    {"kind": "house", "name": "12"}
+                  ]
+                }
+              }
+            },
+            "name": "Fixture ko'chasi, 12",
+            "Point": {"pos": "69.279700 41.311100"}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -7,17 +7,32 @@ import { ru } from '../../core/i18n/messages.ru';
 import { ErrorTaxonomy } from './error-taxonomy';
 import { FailureCategoryView, IntegrationOpsApi } from './integration-ops-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const CODES = [
-  'TRANSIENT_INFRASTRUCTURE', 'TRANSIENT_PROVIDER', 'CONTRACT_UNSUPPORTED', 'PAYLOAD_INVALID',
-  'DOMAIN_REJECTED', 'AUTHORIZATION_REJECTED', 'UNCERTAIN_EXTERNAL_OUTCOME', 'UNKNOWN',
+  'TRANSIENT_INFRASTRUCTURE',
+  'TRANSIENT_PROVIDER',
+  'CONTRACT_UNSUPPORTED',
+  'PAYLOAD_INVALID',
+  'DOMAIN_REJECTED',
+  'AUTHORIZATION_REJECTED',
+  'UNCERTAIN_EXTERNAL_OUTCOME',
+  'UNKNOWN',
 ] as const;
 
 function category(code: string, overrides: Partial<FailureCategoryView> = {}): FailureCategoryView {
   return {
-    code, retryableByTimer: code.startsWith('TRANSIENT'), requiresReconciliation: code === 'UNCERTAIN_EXTERNAL_OUTCOME',
-    securityRelevant: code === 'AUTHORIZATION_REJECTED', outboxDeadLettered: 0, outboxWaiting: 0, inboxDeadLettered: 0, inboxWaiting: 0,
+    code,
+    retryableByTimer: code.startsWith('TRANSIENT'),
+    requiresReconciliation: code === 'UNCERTAIN_EXTERNAL_OUTCOME',
+    securityRelevant: code === 'AUTHORIZATION_REJECTED',
+    outboxDeadLettered: 0,
+    outboxWaiting: 0,
+    inboxDeadLettered: 0,
+    inboxWaiting: 0,
     ...overrides,
   };
 }
@@ -33,7 +48,10 @@ describe('ErrorTaxonomy', () => {
       providers: [
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
-        { provide: IntegrationOpsApi, useValue: { failureTaxonomy: vi.fn().mockResolvedValue(categories) } },
+        {
+          provide: IntegrationOpsApi,
+          useValue: { failureTaxonomy: vi.fn().mockResolvedValue(categories) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ErrorTaxonomy);
@@ -70,9 +88,15 @@ describe('ErrorTaxonomy', () => {
   });
 
   it('marks the categories that need the provider checked first or are a security question', async () => {
-    await create([category('UNCERTAIN_EXTERNAL_OUTCOME'), category('AUTHORIZATION_REJECTED'), category('TRANSIENT_PROVIDER')]);
+    await create([
+      category('UNCERTAIN_EXTERNAL_OUTCOME'),
+      category('AUTHORIZATION_REJECTED'),
+      category('TRANSIENT_PROVIDER'),
+    ]);
 
-    expect(card('UNCERTAIN_EXTERNAL_OUTCOME').textContent).toContain(ru['errorTaxonomy.reconcileFirst']);
+    expect(card('UNCERTAIN_EXTERNAL_OUTCOME').textContent).toContain(
+      ru['errorTaxonomy.reconcileFirst'],
+    );
     expect(card('AUTHORIZATION_REJECTED').textContent).toContain(ru['errorTaxonomy.security']);
     expect(card('TRANSIENT_PROVIDER').textContent).toContain(ru['errorTaxonomy.retried']);
   });

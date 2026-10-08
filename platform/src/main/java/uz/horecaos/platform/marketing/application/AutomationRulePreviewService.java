@@ -17,6 +17,7 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationR
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
 import uz.horecaos.platform.ordering.api.AbandonedCartDirectory;
+import uz.horecaos.platform.ordering.api.LateOrderDirectory;
 
 /**
  * "Which customers would this rule match today" — gap-map row {@code X.25}'s
@@ -67,6 +68,7 @@ public class AutomationRulePreviewService {
     private final JdbcCustomerMetricStore metrics;
     private final JdbcEngagementStore engagement;
     private final AbandonedCartDirectory abandonedCarts;
+    private final LateOrderDirectory lateOrders;
     private final LoyaltyActivityDirectory loyaltyActivity;
     private final CustomerPhoneLookup customerLookup;
     private final Clock clock;
@@ -76,6 +78,7 @@ public class AutomationRulePreviewService {
             JdbcCustomerMetricStore metrics,
             JdbcEngagementStore engagement,
             AbandonedCartDirectory abandonedCarts,
+            LateOrderDirectory lateOrders,
             LoyaltyActivityDirectory loyaltyActivity,
             CustomerPhoneLookup customerLookup,
             Clock clock) {
@@ -83,6 +86,7 @@ public class AutomationRulePreviewService {
         this.metrics = metrics;
         this.engagement = engagement;
         this.abandonedCarts = abandonedCarts;
+        this.lateOrders = lateOrders;
         this.loyaltyActivity = loyaltyActivity;
         this.customerLookup = customerLookup;
         this.clock = clock;
@@ -98,6 +102,7 @@ public class AutomationRulePreviewService {
                     case BIRTHDAY -> birthdayCandidates(rule, now);
                     case INACTIVITY -> metrics.inactiveSince(tenantId, brandId, rule.configValue());
                     case CART_ABANDONMENT -> cartAbandonmentCandidates(rule, now);
+                    case LATE_ORDER_APOLOGY -> lateOrderCandidates(rule, now);
                     case CASHBACK_CHANGE ->
                         loyaltyActivity
                                 .recentChanges(
@@ -131,6 +136,22 @@ public class AutomationRulePreviewService {
                 .filter(cart -> cart.tenantId().equals(rule.tenantId())
                         && cart.brandId().equals(rule.brandId()))
                 .map(AbandonedCartDirectory.AbandonedCart::customerAccountId)
+                .toList();
+    }
+
+    /** The guests the next sweep would apologise to: late, settled, and with no ADR 0013 remedy recorded. */
+    private List<UUID> lateOrderCandidates(AutomationRuleRow rule, Instant now) {
+        return lateOrders
+                .completedLate(
+                        rule.tenantId(),
+                        rule.brandId(),
+                        rule.configValue(),
+                        now.minus(AutomationSweepService.APOLOGY_LOOKBACK),
+                        now.minus(AutomationSweepService.APOLOGY_SETTLE_DELAY),
+                        500)
+                .stream()
+                .filter(order -> !lateOrders.hasRemedy(order.tenantId(), order.orderId()))
+                .map(LateOrderDirectory.LateOrder::customerAccountId)
                 .toList();
     }
 

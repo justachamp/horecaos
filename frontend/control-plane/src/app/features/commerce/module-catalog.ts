@@ -8,7 +8,13 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
-import { BILLING_UNITS, CommerceApi, EntitlementKeyView, ModuleView, TenantModuleView } from './commerce-api';
+import {
+  BILLING_UNITS,
+  CommerceApi,
+  EntitlementKeyView,
+  ModuleView,
+  TenantModuleView,
+} from './commerce-api';
 
 const MODULE_CODE = /^[a-z][a-z0-9_-]{0,63}$/;
 
@@ -72,8 +78,12 @@ export class ModuleCatalog {
   protected readonly addQuantity = signal('');
   protected readonly addReason = signal('');
 
-  protected readonly onSale = computed(() => this.modules().filter((module) => module.status === 'ACTIVE'));
-  protected readonly chosenForAdd = computed(() => this.onSale().find((module) => module.moduleId === this.addModule()));
+  protected readonly onSale = computed(() =>
+    this.modules().filter((module) => module.status === 'ACTIVE'),
+  );
+  protected readonly chosenForAdd = computed(() =>
+    this.onSale().find((module) => module.moduleId === this.addModule()),
+  );
 
   constructor() {
     void this.load();
@@ -86,7 +96,10 @@ export class ModuleCatalog {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      const [modules, keys] = await Promise.all([this.api.listModules(), this.api.entitlementKeys()]);
+      const [modules, keys] = await Promise.all([
+        this.api.listModules(),
+        this.api.entitlementKeys(),
+      ]);
       this.modules.set(modules);
       this.features.set(keys.filter((key) => !key.counted));
     } catch (error) {
@@ -202,9 +215,12 @@ export class ModuleCatalog {
         await this.api.retireModule(module.moduleId, reason);
       }
       this.acting.set(null);
-      return this.i18n.t(action.mode === 'activate' ? 'moduleCatalog.activate.done' : 'moduleCatalog.retire.done', {
-        code: module.code,
-      });
+      return this.i18n.t(
+        action.mode === 'activate' ? 'moduleCatalog.activate.done' : 'moduleCatalog.retire.done',
+        {
+          code: module.code,
+        },
+      );
     });
   }
 
@@ -241,9 +257,15 @@ export class ModuleCatalog {
     if (!this.canAdd() || module === undefined) {
       return;
     }
-    const quantity = module.billingUnit === 'PER_UNIT' ? Number(this.addQuantity().trim()) : undefined;
+    const quantity =
+      module.billingUnit === 'PER_UNIT' ? Number(this.addQuantity().trim()) : undefined;
     await this.run(async () => {
-      await this.api.addTenantModule(this.tenantId(), module.moduleId, this.addReason().trim(), quantity);
+      await this.api.addTenantModule(
+        this.tenantId(),
+        module.moduleId,
+        this.addReason().trim(),
+        quantity,
+      );
       this.addModule.set('');
       this.addQuantity.set('');
       this.addReason.set('');

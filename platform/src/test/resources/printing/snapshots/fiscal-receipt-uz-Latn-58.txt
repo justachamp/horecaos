@@ -1,0 +1,24 @@
+ |           Chilonzor            | [B]
+ |    Bunyodkor 12, Chilonzor,    |
+ |            Tashkent            |
+ |       +998 71 200 00 00        |
+ |  FISKAL CHEK   | [x2 B]
+ |--------------------------------
+ |1× Order A-014           138 000|
+ |--------------------------------
+ |JAMI                138 000 soʻm| [B]
+F|================================
+F|Chek №                   1234567|
+F|Fiskal belgi        987654321098|
+F|Terminal          EP000000000000|
+F|Roʻyxatdan oʻtgan vaqt          |
+F|                08.10.2026 12:05|
+F|Sotuvchi              Sinov MCHJ|
+F|STIR                   123456789|
+F|  Chekni QR orqali tekshiring   |
+F|[QR 37x37 modules, 8 dots each]
+F|================================
+ |            Rahmat!             |
+ |          Kelib turing          |
+ |[GAP 1]
+ |[CUT]

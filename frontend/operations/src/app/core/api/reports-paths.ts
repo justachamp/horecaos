@@ -136,6 +136,14 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/distance-buckets`;
   },
 
+  /**
+   * Row 7.10 (ADR 0145): deliveries per delivery zone over a closed range -- the zone dimension and
+   * never a doorstep.
+   */
+  zoneDensity(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/zone-density`;
+  },
+
   /** Row 7.10b: the published bucket boundaries and version — mirrors `/sla-bucket-set`. */
   distanceBucketSet(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/distance-bucket-set`;

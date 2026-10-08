@@ -17,6 +17,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { AggregatorCardFrame } from '../../shared/ui/aggregator-card-frame';
 import { KioskFrame } from '../../shared/ui/kiosk-frame';
 import { PhoneFrame } from '../../shared/ui/phone-frame';
@@ -94,6 +95,7 @@ export class ChannelPreviewPage implements OnInit {
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -254,7 +256,7 @@ export class ChannelPreviewPage implements OnInit {
           catalogId,
           channelId,
           { locationId },
-          toCatalogLocale(this.i18n.locale()),
+          toCatalogLocale(this.i18n.locale(), this.registry),
           null,
           PAGE_SIZE,
         ),
@@ -287,7 +289,7 @@ export class ChannelPreviewPage implements OnInit {
           catalogId,
           channelId,
           { locationId },
-          toCatalogLocale(this.i18n.locale()),
+          toCatalogLocale(this.i18n.locale(), this.registry),
           cursor,
           PAGE_SIZE,
         ),

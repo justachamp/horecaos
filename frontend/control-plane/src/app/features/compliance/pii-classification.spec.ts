@@ -8,7 +8,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { DataProtection, DataProtectionApi } from './data-protection-api';
 import { PiiClassification } from './pii-classification';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const DATA: DataProtection = {
   classes: [
@@ -20,11 +23,25 @@ const DATA: DataProtection = {
     { schema: 'ordering', table: 'orders', column: 'customer_note_encrypted' },
   ],
   retention: [
-    { code: 'COURIER_TRACKS', keptFor: '30 days', enforcedBy: 'uz.horecaos.platform.telemetry.infrastructure.persistence.TrackRetentionSweeper' },
+    {
+      code: 'COURIER_TRACKS',
+      keptFor: '30 days',
+      enforcedBy: 'uz.horecaos.platform.telemetry.infrastructure.persistence.TrackRetentionSweeper',
+    },
   ],
   erasure: {
-    pending: 1, completed: 4, cancelled: 0,
-    waiting: [{ requestId: 'er-1', tenantId: 'tenant-1', requestedVia: 'STOREFRONT', requestedAt: '2026-08-01T00:00:00Z', daysWaiting: 41 }],
+    pending: 1,
+    completed: 4,
+    cancelled: 0,
+    waiting: [
+      {
+        requestId: 'er-1',
+        tenantId: 'tenant-1',
+        requestedVia: 'STOREFRONT',
+        requestedAt: '2026-08-01T00:00:00Z',
+        daysWaiting: 41,
+      },
+    ],
   },
   egressLast30Days: [{ actionCode: 'customer.contact.revealed', count: 7 }],
 };
@@ -42,7 +59,12 @@ describe('PiiClassification', () => {
         { provide: DataProtectionApi, useValue: { overview: vi.fn().mockResolvedValue(DATA) } },
         {
           provide: TenantsApi,
-          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [{ id: 'tenant-1', displayName: 'Non uyi', slug: 'non' }], nextCursor: null }) },
+          useValue: {
+            listTenants: vi.fn().mockResolvedValue({
+              items: [{ id: 'tenant-1', displayName: 'Non uyi', slug: 'non' }],
+              nextCursor: null,
+            }),
+          },
         },
       ],
     }).compileComponents();

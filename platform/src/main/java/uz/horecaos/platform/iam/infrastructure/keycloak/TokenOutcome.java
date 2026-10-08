@@ -1,7 +1,12 @@
 package uz.horecaos.platform.iam.infrastructure.keycloak;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * What {@link StaffDirectGrantClient} learned from one call to Keycloak's
@@ -9,6 +14,8 @@ import org.jspecify.annotations.Nullable;
  * exactly the two outcomes the ADR lets a caller tell apart.
  */
 public sealed interface TokenOutcome {
+
+    JsonMapper JSON = JsonMapper.builder().build();
 
     static TokenOutcome issued(Issued tokens) {
         return tokens;
@@ -57,6 +64,31 @@ public sealed interface TokenOutcome {
         public String toString() {
             return "TokenOutcome.Issued[accessTokenExpiresAt=%s, refreshTokenExpiresAt=%s]"
                     .formatted(accessTokenExpiresAt, refreshTokenExpiresAt);
+        }
+
+        /**
+         * Whether the access token Keycloak just issued carries this realm role (ADR 0148).
+         *
+         * <p>Read from the payload with no signature check, because the token came straight from
+         * Keycloak over the back channel a moment ago and nothing here trusts it for anything but
+         * this question: whether the bootstrap platform administrator, who may hold no grant row,
+         * is the account that just signed in. A token that cannot be read answers {@code false},
+         * which only ever means "ask the grant tables instead".
+         */
+        public boolean hasRealmRole(String role) {
+            String[] parts = accessToken.split("\\.");
+            if (parts.length < 2) {
+                return false;
+            }
+            try {
+                Map<?, ?> claims = JSON.readValue(
+                        new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8), Map.class);
+                return claims.get("realm_access") instanceof Map<?, ?> access
+                        && access.get("roles") instanceof Collection<?> roles
+                        && roles.contains(role);
+            } catch (RuntimeException unreadable) {
+                return false;
+            }
         }
     }
 

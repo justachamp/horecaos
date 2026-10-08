@@ -199,6 +199,7 @@ describe('BusinessOverviewPage', () => {
   async function render(
     configure?: (filters: ReportsFilterState) => void,
     lateCounts?: readonly [number, number],
+    overrides?: { readonly paymentMix?: PaymentMixResponse; readonly metrics?: readonly unknown[] },
   ): Promise<void> {
     TestBed.resetTestingModule();
     // ReportsFilterState (wave P27) reads its initial state from the URL on
@@ -206,7 +207,7 @@ describe('BusinessOverviewPage', () => {
     // window.location persists across tests in this file, so a prior test's
     // filters would otherwise leak into the next one's "fresh" instance.
     history.replaceState(null, '', '/statistics/overview');
-    paymentMixSpy = vi.fn().mockResolvedValue(paymentMixResponse());
+    paymentMixSpy = vi.fn().mockResolvedValue(overrides?.paymentMix ?? paymentMixResponse());
     await TestBed.configureTestingModule({
       imports: [BusinessOverviewPage],
       providers: [
@@ -234,7 +235,7 @@ describe('BusinessOverviewPage', () => {
               .fn()
               .mockResolvedValue({ rows: [], maybeMore: false, provenance: provenance() }),
             paymentMix: paymentMixSpy,
-            metrics: vi.fn().mockResolvedValue([]),
+            metrics: vi.fn().mockResolvedValue(overrides?.metrics ?? []),
             cancellationReasons: vi.fn().mockResolvedValue([]),
             fulfilmentTime: vi
               .fn()
@@ -387,6 +388,65 @@ describe('BusinessOverviewPage', () => {
 
     const params = paymentMixSpy.mock.calls[0]?.[1] as { paymentMethodCode?: unknown };
     expect(params.paymentMethodCode).toBeUndefined();
+  });
+
+  // ------------------------------------------------- ADR 0115: what the payment card says about itself
+
+  it('says the payment split is provisional while finance has not signed it, and what it leaves out', async () => {
+    await render(undefined, undefined, {
+      paymentMix: {
+        ...paymentMixResponse(),
+        provenance: { ...provenance(), provisionalMetrics: ['payment_mix.amount.v1'] },
+      },
+      metrics: [
+        { metricCode: 'payment_mix.amount.v1', openQuestion: 'net of provider commission?' },
+      ],
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="payment-mix-provisional"]')?.textContent).toContain(
+      'Provisional',
+    );
+    expect(host.querySelector('[data-testid="payment-mix-open-question"]')?.textContent).toContain(
+      'commission',
+    );
+    expect(host.querySelector('[data-testid="payment-mix-not-cut"]')).toBeNull();
+  });
+
+  it('says nothing about the payment split once finance has signed it and no question is open', async () => {
+    await render(undefined, undefined, {
+      metrics: [{ metricCode: 'payment_mix.amount.v1', openQuestion: null }],
+    });
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="payment-mix-note"]'),
+    ).toBeNull();
+  });
+
+  it('narrows the payment card by the legal-entity chip on the server, like every other money read', async () => {
+    await render((filters) => filters.setLegalEntityIds(['e1']));
+
+    expect(paymentMixSpy).toHaveBeenCalledWith(
+      SCOPE.tenantId,
+      expect.objectContaining({ legalEntityId: ['e1'] }),
+    );
+  });
+
+  it('says the payment split is not cut by channel when a channel filter narrows the cards beside it', async () => {
+    await render((filters) => filters.setChannelCodes(['TELEGRAM']));
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="payment-mix-not-cut"]')
+        ?.textContent,
+    ).toContain('not cut by channel or fulfilment type');
+  });
+
+  it('says it for a fulfilment-type filter too', async () => {
+    await render((filters) => filters.setFulfilmentType('DELIVERY'));
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="payment-mix-not-cut"]'),
+    ).not.toBeNull();
   });
 
   it('renders the daily revenue and orders trend as line charts over the per-day rows Band A already fetched', async () => {

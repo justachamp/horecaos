@@ -297,6 +297,31 @@ public class JdbcSubscriptionStore {
                 .optional();
     }
 
+    /**
+     * Where the tenant's live subscription stands in the arrears lifecycle (ADR 0089): its status, when that
+     * status began, and what activation deposit it still owes. Read together because "has this payment
+     * cleared what made the tenant late" is a question about all three at once.
+     */
+    public Optional<LiveStage> findLiveStage(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT id, status, status_changed_at, deposit_due_minor
+                          FROM commercial.subscriptions
+                         WHERE tenant_id = :tenantId AND status NOT IN ('TERMINATED', 'EXPIRED')
+                        """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> new LiveStage(
+                        Objects.requireNonNull(row.getObject("id", UUID.class)),
+                        SubscriptionStatus.valueOf(row.getString("status")),
+                        Objects.requireNonNull(row.getObject("status_changed_at", OffsetDateTime.class))
+                                .toInstant(),
+                        row.getLong("deposit_due_minor")))
+                .optional();
+    }
+
+    /** See {@link #findLiveStage}. */
+    public record LiveStage(
+            UUID subscriptionId, SubscriptionStatus status, Instant statusChangedAt, long depositDueMinor) {}
+
     public List<Subscription> history(UUID tenantId) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId ORDER BY created_at DESC")
                 .param("tenantId", tenantId)

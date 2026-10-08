@@ -149,6 +149,20 @@ class DayCloseDeliveryFactTests {
     }
 
     @Test
+    @DisplayName("ADR 0125: close stamps the brand the delivery was made for, read from the earning's shipment")
+    void closeStampsTheDeliverysBrand() {
+        close.close(TENANT, DAY);
+
+        assertThat(jdbc.sql("SELECT brand_id FROM reporting.fact_delivery WHERE tenant_id = :t AND business_date = :d")
+                        .param("t", TENANT)
+                        .param("d", DAY)
+                        .query(UUID.class)
+                        .list())
+                .as("the earning carries no brand; the shipment it names does, and so does the fact")
+                .containsExactly(BRAND);
+    }
+
+    @Test
     @DisplayName("close writes the COURIER scope of agg_sla_bucket_day, bucketed on transit seconds")
     void closeProducesCourierSlaBucket() {
         close.close(TENANT, DAY);
@@ -217,6 +231,12 @@ class DayCloseDeliveryFactTests {
         assertThat(tenantRows.getFirst().get("courier_id")).isEqualTo(courierId);
         assertThat(otherRows).hasSize(1);
         assertThat(otherRows.getFirst().get("courier_id")).isNotEqualTo(courierId);
+        assertThat(jdbc.sql("SELECT brand_id FROM reporting.fact_delivery WHERE tenant_id = :t")
+                        .param("t", otherTenant)
+                        .query(UUID.class)
+                        .single())
+                .as("the other tenant's delivery is stamped with the other tenant's own brand")
+                .isNotEqualTo(BRAND);
     }
 
     // --------------------------------------------------------------- fixture

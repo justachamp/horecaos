@@ -460,12 +460,34 @@ minute and a poll, without a reload; a read that fails is asked for again on the
 next poll, and never replaces a policy that was read earlier. A publication also
 drops the cached resolution of every brand and location beneath the scope it
 was published at, and the editor reads the document and its version from the
-table rather than the cache. `ordering.late_order_threshold_minutes`
-(card 2's «Заказ опаздывает с») is still stored and read by nothing: whether it
-means a grace after the promise or a limit from acceptance is an owner decision,
-and until that is made the line where late begins is this document's
-`late_after_seconds`. The field says so on the card («Пока не применяется»), in
-the viewer and in the editor.
+table rather than the cache.
+
+**One definition of late, and the second scalar (ADR 0150).** For a non-terminal order
+with a promise, late is `now > promised_at + late_after_seconds`; without one, late is
+`now > created_at + no_promise_fallback_seconds`. **Acceptance never starts, restarts or
+shortens a lateness clock** (ADR 0036: the promise starts at checkout, including for an
+order that sits in `AWAITING_APPROVAL`), so an order waiting for approval is late by the same
+rule as any other and a scheduled order accepted hours ahead is late against its slot, not
+against the day it was placed. `ordering.late_order_threshold_minutes` (card 2, «Заказ без
+обещанного времени опаздывает через») is the **tenant-wide default for the document's
+no-promise fallback** — the only part of the definition with no promise to measure
+from, and so the part every marketplace order and every native order no preparation band
+covered lives in. It follows the at-risk scalar's rule exactly: a mode's own fallback in
+the document wins; a blank in the document (the field is optional, as the at-risk window
+is) takes the scalar when one was *set* anywhere in the chain, the narrowest scope winning;
+otherwise the platform's 45 minutes (the key's registered default is the same 45, so a
+tenant that never set it sees nothing change, and a resolved default is never read as a
+choice). An unusable stored value (under one minute or over the setting's ten hours) is
+ignored rather than taking the boards down. The same resolved number reaches the board's
+«Только опаздывающие» filter, the order header's `GET .../{orderId}/lateness`, the
+kitchen queue, both VDUs and the wallboard, because they all read the one policy; a scalar
+write drops the cached resolution of every brand and location beneath the scope written.
+It does nothing for an order with a promise, and the card's label says so. Its two siblings,
+`ordering.average_order_minutes` and `ordering.maximum_order_minutes`, are not decided by
+ADR 0150 and stay inert; their fields say «Пока не применяется» until a record names a
+reader (the maximum would be a fourth severity this section does not have). The reporting
+metric `orders.late.v1` stays promise adherence at close, with no grace and no fallback, and
+the console words it «after the promise».
 
 **Inputs.** `now`, `status`, and a policy resolved through ADR 0030 at key
 `ordering.lateness`. The promise itself is **built**, just not from the table

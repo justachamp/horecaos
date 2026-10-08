@@ -47,9 +47,6 @@ export const marketingEn = {
   'marketing.campaigns.create.recipientCap': 'Recipient cap',
   'marketing.campaigns.create.costCeiling': 'Cost ceiling (minor units)',
   'marketing.campaigns.create.currency': 'Currency',
-  'marketing.campaigns.create.channel.unwiredSuffix': ' (not wired yet)',
-  'marketing.campaigns.create.channel.unwiredHint':
-    'No delivery path exists for this channel yet — a campaign cannot be launched against it.',
   'marketing.campaigns.create.scheduledAt': 'Scheduled send (optional)',
   'marketing.campaigns.create.scheduledAt.hint':
     'Leave blank to launch immediately, on an operator’s word.',
@@ -93,7 +90,7 @@ export const marketingEn = {
   'marketing.campaign.field.reserved': 'Reserved (cost · recipients)',
   'marketing.campaign.field.scheduledAt': 'Scheduled for',
   'marketing.campaign.unwired.warning':
-    'No delivery path is wired for {channel} yet. Launching this campaign will be refused until it is.',
+    'This campaign cannot be launched on {channel} for this brand yet.',
   'marketing.campaign.paused.blockedCount':
     'Paused by the block-rate guard: {count} recipient(s) have blocked this send so far.',
   'marketing.campaign.resume.suppressedCost':
@@ -523,7 +520,7 @@ export const marketingEn = {
   'marketing.automations.runs.column.firedAt': 'When',
   'marketing.automations.runStatus.FIRED': 'Fired',
   'marketing.automations.runStatus.REFUSED': 'Refused',
-  'marketing.automations.runStatus.CANCELLED': 'Cancelled (customer converted first)',
+  'marketing.automations.runStatus.CANCELLED': 'Cancelled',
   'marketing.automations.preview.open': 'Preview matches — {name}',
   'marketing.automations.preview.title': 'Who this rule would match today — {name}',
   'marketing.automations.preview.intro':
@@ -541,4 +538,378 @@ export const marketingEn = {
   'marketing.automations.condition.INACTIVITY': 'Days since the last order',
   'marketing.automations.condition.CART_ABANDONMENT': 'Hours since the cart was left',
   'marketing.automations.condition.CASHBACK_CHANGE': 'Size of the cashback change, minor units',
+
+  // channel wiring, refusal explanations and the fifth automation trigger (ADR 0112, ADR 0146)
+  'marketing.wiring.notConnectedSuffix': ' (not connected)',
+  'marketing.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'This brand’s SMS account is not cleared to carry marketing messages. Sign-in codes and order messages are unaffected. Until the platform owner confirms in writing which account may carry marketing and it is named on the connection, a marketing SMS cannot be launched.',
+  'marketing.wiring.NO_PROVIDER_BINDING':
+    'No provider is connected to this channel for this brand. Connect one in the brand’s integrations settings.',
+  'marketing.wiring.INSTALLATION_INACTIVE':
+    'The provider connection for this channel is switched off.',
+  'marketing.wiring.INSTALLATION_MISSING':
+    'The provider connection for this channel no longer exists.',
+  'marketing.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'The SMS account for this brand is missing part of its configuration.',
+  'marketing.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'The connected provider has no adapter for this channel in this release.',
+  'marketing.wiring.NO_ADAPTER': 'This release has no adapter for this channel.',
+  'marketing.wiring.NO_DELIVERY_ADAPTER': 'This channel has no delivery path in this release.',
+  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
+    'Email to guests is not connected. The platform’s mail service sends staff invitations and password resets only; sending email to a tenant’s own guests is a separate decision that has not been made.',
+  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
+    'Push is not connected: no push provider exists yet, so nothing can send a push notification to a guest.',
+  'marketing.wiring.UNKNOWN': 'This channel cannot deliver for this brand right now ({reason}).',
+  'marketing.refusal.SCENARIO_CONFLICT':
+    'Another live scenario gave this guest an offer a moment ago',
+  'marketing.refusal.SCENARIO_PRIORITY_LOST': 'A broadcast outranks this step for the same guest',
+  'marketing.refusal.SCENARIO_STOPPED': 'The scenario no longer applies to this guest',
+  'marketing.refusal.CHANNEL_NOT_WIRED': 'The channel had no delivery path when the rule fired',
+  'marketing.refusal.effect.ENDS': 'Ends this guest’s run',
+  'marketing.refusal.effect.HOLDS': 'Holds the step and asks again later; never dropped',
+  'marketing.refusal.effect.VARIES':
+    'Usually ends the run; the recorded sentence says when it asks again instead',
+  'marketing.refusal.effect.BROADCAST': 'Only a one-off broadcast meets this',
+  'marketing.refusal.meaning.CONSENT_WITHHELD':
+    'The guest has no positive consent for this kind of message on this channel. Absence of an answer is not consent.',
+  'marketing.refusal.remedy.CONSENT_WITHHELD':
+    'Nothing to do here: consent is read from the guest’s own choices and never re-decided by marketing.',
+  'marketing.refusal.meaning.SUPPRESSED':
+    'An active suppression covers this guest on this channel: an unsubscribe, a bounce, a complaint or an operator block. It outranks consent.',
+  'marketing.refusal.remedy.SUPPRESSED':
+    'If it was a mistake, lift it on the Suppressions tab, with a reason.',
+  'marketing.refusal.meaning.ACCOUNT_NOT_ACTIVE':
+    'The guest’s account is no longer active: closed, merged into another, or anonymised.',
+  'marketing.refusal.remedy.ACCOUNT_NOT_ACTIVE': 'Nothing to do: there is no one left to message.',
+  'marketing.refusal.meaning.FREQUENCY_CAP_REACHED':
+    'The guest has already had as many messages as the rules allow in the window. Either the platform’s cap across every channel, or this brand’s own contact policy for this channel and purpose, stopped it; the recorded sentence says which, and the numbers.',
+  'marketing.refusal.remedy.FREQUENCY_CAP_REACHED':
+    'Wait: the step is asked again at the next slot. The platform’s cap cannot be raised; a brand rule can be removed on the Contact policy tab.',
+  'marketing.refusal.meaning.NO_VERIFIED_ENDPOINT':
+    'The guest has no verified contact of the kind this channel needs: a confirmed phone for SMS, a linked chat for Telegram.',
+  'marketing.refusal.remedy.NO_VERIFIED_ENDPOINT':
+    'Nothing to do here; the step is asked again tomorrow in case the guest has verified a contact since.',
+  'marketing.refusal.meaning.SCENARIO_CONFLICT':
+    'Another live scenario handed this guest an offer within the last day, and a second offer on top would contradict it.',
+  'marketing.refusal.remedy.SCENARIO_CONFLICT':
+    'Nothing to do: the step is asked again in six hours.',
+  'marketing.refusal.meaning.SCENARIO_PRIORITY_LOST':
+    'A broadcast is also due for this guest on the same channel, and the tenant’s channel priority order ranks its purpose at or above this scenario’s.',
+  'marketing.refusal.remedy.SCENARIO_PRIORITY_LOST':
+    'Nothing to do: the step is asked again in fifteen minutes, once the broadcast has gone.',
+  'marketing.refusal.meaning.SCENARIO_STOPPED':
+    'The scenario no longer applies to this guest or can no longer go on: its offer expired or was retired, the channel can no longer deliver, the guest met a stop or continuation condition, or the cost ceiling would have been passed.',
+  'marketing.refusal.remedy.SCENARIO_STOPPED':
+    'Read the recorded sentence: it names the exact cause. If it is the offer, publish a new version and revise the scenario.',
+  'marketing.refusal.meaning.CAMPAIGN_HALTED':
+    'The campaign stopped before it reached this recipient.',
+  'marketing.refusal.remedy.CAMPAIGN_HALTED':
+    'Resume the campaign if it was paused; a halted one is not restarted.',
+  'marketing.automations.trigger.LATE_ORDER_APOLOGY': 'Late-order apology',
+  'marketing.automations.configLabel.LATE_ORDER_APOLOGY':
+    'Minutes late: an order that closed at least this long after its promised time',
+  'marketing.automations.condition.LATE_ORDER_APOLOGY':
+    'Minutes the order closed after it was promised',
+  'marketing.automations.form.apologyNote':
+    'An apology is words, never a benefit: a rule names a template and nothing else, so it cannot compensate. Support gets first refusal: an order counts only half an hour after it closed, and one with a recorded remedy (a refund or credit) is cancelled instead of being apologised to again. Once per order, under the same consent, caps and quiet hours as every other trigger.',
+  'marketing.automations.rule.description.LATE_ORDER_APOLOGY':
+    '{trigger} · {channel} · {configValue} min late or more · once per order',
+  'marketing.automations.preview.outcome.LATE_ORDER_APOLOGY':
+    'Sends “{template}” by {channel}, once per order, and not when a remedy is already recorded',
+
+  // offers, offer picker, contact policy (ADR 0112)
+  'marketing.channel.IN_APP': 'In-app banner',
+  'marketing.channel.CALL_CENTRE': 'Call centre',
+  'marketing.offerPicker.label': 'Offer',
+  'marketing.offerPicker.none': 'No offer',
+  'marketing.offerPicker.choose': 'Choose an offer',
+  'marketing.offerPicker.notInForceSuffix': ' — no longer in force',
+  'marketing.offerPicker.empty':
+    'No published offer is allowed in this channel. Offers are written and published on the Offers tab.',
+  'marketing.offerPicker.stale':
+    'The offer this step names is no longer in force. Choose another, or the scenario cannot be saved.',
+  'marketing.offerPicker.fact.reference': 'Points at',
+  'marketing.offerPicker.fact.window': 'Valid',
+  'marketing.offerPicker.fact.template': 'Template',
+  'marketing.offerPicker.window.open': 'from {from}',
+  'marketing.offerPicker.window.closed': '{from} to {until}',
+  'marketing.offer.reference.promotion': 'A pricing promotion',
+  'marketing.offer.reference.accrualRule': 'A loyalty accrual rule',
+  'marketing.offer.status.DRAFT': 'Draft',
+  'marketing.offer.status.PUBLISHED': 'Published',
+  'marketing.offer.status.SUPERSEDED': 'Superseded',
+  'marketing.offer.status.RETIRED': 'Retired',
+  'marketing.campaigns.tab.offers': 'Offers',
+  'marketing.campaigns.tab.contactPolicy': 'Contact policy',
+  'marketing.offers.intro':
+    'Versioned references to a promotion or a loyalty accrual rule that already exists. Scenarios choose from these. An offer never states what it is worth: pricing and loyalty decide that.',
+  'marketing.offers.create': 'New offer',
+  'marketing.offers.denied': 'No access to this brand’s offers',
+  'marketing.offers.empty':
+    'No offer drafted yet. An offer points at a promotion or an accrual rule that already exists, so write those first.',
+  'marketing.offers.column.version': 'Version',
+  'marketing.offers.column.status': 'Status',
+  'marketing.offers.column.reference': 'Points at',
+  'marketing.offers.column.window': 'Valid',
+  'marketing.offers.column.channels': 'Channels',
+  'marketing.offers.action.edit': 'Edit draft',
+  'marketing.offers.action.publish': 'Publish',
+  'marketing.offers.action.retire': 'Retire',
+  'marketing.offers.action.newVersion': 'New version',
+  'marketing.offers.accrualRuleLabel': 'Earn {rate}% back ({status})',
+  'marketing.offers.form.title.create': 'New offer',
+  'marketing.offers.form.title.edit': 'Edit draft offer',
+  'marketing.offers.form.title.version': 'New version of this offer',
+  'marketing.offers.form.noBenefit':
+    'An offer names what it points at, when it applies, where it may be shown and with which words. It has no field for a discount or a number of points: what a benefit is worth is decided by pricing and loyalty.',
+  'marketing.offers.form.name': 'Name a guest can be shown',
+  'marketing.offers.form.reference': 'Points at',
+  'marketing.offers.form.noPromotions':
+    'This brand has no promotion to point at. Write one on the Promotions tab first.',
+  'marketing.offers.form.noAccrualRules':
+    'This brand has no accrual rule to point at. Write one on the Loyalty tab first.',
+  'marketing.offers.form.referenceManual':
+    'The promotions and accrual rules could not be listed for you. Enter the id of the one this offer points at.',
+  'marketing.offers.form.validFrom': 'Valid from ({zone} time)',
+  'marketing.offers.form.validUntil': 'Valid until ({zone} time, optional)',
+  'marketing.offers.form.channels': 'May be shown in',
+  'marketing.offers.form.template': 'Template (the wording)',
+  'marketing.offers.form.audience': 'Audience',
+  'marketing.offers.form.audience.any': 'Everyone a scenario or campaign reaches',
+  'marketing.offers.form.banner': 'Banner image reference (optional)',
+  'marketing.offers.form.submit': 'Save draft',
+  'marketing.offers.problem.name': 'Give the offer a name a guest can be shown.',
+  'marketing.offers.problem.reference':
+    'Choose the promotion or accrual rule this offer points at.',
+  'marketing.offers.problem.validFrom': 'Say when the offer starts.',
+  'marketing.offers.problem.window': 'The offer’s window must end after it starts.',
+  'marketing.offers.problem.channels': 'Allow at least one channel.',
+  'marketing.offers.problem.template': 'Choose the template that carries the wording.',
+  'marketing.offers.publish.title': 'Publish “{name}”?',
+  'marketing.offers.publish.body':
+    'It goes into force and supersedes the version now in force. Scenarios that name the older version keep naming it.',
+  'marketing.offers.retire.title': 'Retire “{name}”',
+  'marketing.offers.retire.body':
+    'It stops being selectable, and every scenario that names it will stop offering it at the guest’s next step, with the reason recorded.',
+  'marketing.offers.retire.reason': 'Why is it being retired?',
+  'marketing.contactPolicy.intro':
+    'The platform sets how often and when a guest may be contacted. A brand may be stricter, never looser. When the policy stops a message, the decision log says which rule and why.',
+  'marketing.contactPolicy.create': 'New rule',
+  'marketing.contactPolicy.denied': 'No access to this brand’s contact policy',
+  'marketing.contactPolicy.bounds.title': 'The platform’s bounds',
+  'marketing.contactPolicy.bounds.hint':
+    'What a brand’s rule is measured against. A cap above its ceiling, or quiet hours that start later or end earlier, would loosen the platform’s and is refused.',
+  'marketing.contactPolicy.bounds.quiet': 'Quiet hours',
+  'marketing.contactPolicy.bounds.quietValue':
+    'no messages from {start} until {end} at the latest; a brand may start earlier and end later',
+  'marketing.contactPolicy.period.DAILY': 'Messages per day, at most',
+  'marketing.contactPolicy.period.WEEKLY': 'Messages per calendar week, at most',
+  'marketing.contactPolicy.period.ROLLING_7D': 'Messages in any 7 days, at most',
+  'marketing.contactPolicy.period.ROLLING_30D': 'Messages in any 30 days, at most',
+  'marketing.contactPolicy.overrides.title': 'This brand’s own rules',
+  'marketing.contactPolicy.overrides.empty':
+    'This brand has set nothing tighter than the platform’s bounds.',
+  'marketing.contactPolicy.column.channel': 'Channel',
+  'marketing.contactPolicy.column.purpose': 'Campaign purpose',
+  'marketing.contactPolicy.column.period': 'Period',
+  'marketing.contactPolicy.column.cap': 'Cap',
+  'marketing.contactPolicy.column.quiet': 'Quiet hours',
+  'marketing.contactPolicy.column.reason': 'Why',
+  'marketing.contactPolicy.action.replace': 'Change',
+  'marketing.contactPolicy.action.remove': 'Remove',
+  'marketing.contactPolicy.defaults.title': 'Settings scenarios read',
+  'marketing.contactPolicy.defaults.hint':
+    'Set through the configuration API, not here. They decide ties and defaults.',
+  'marketing.contactPolicy.defaults.priority':
+    'Which purpose goes first when a step and a broadcast are due together',
+  'marketing.contactPolicy.defaults.priorityNone': 'Not set: the step waits for the broadcast',
+  'marketing.contactPolicy.defaults.inAppCap':
+    'Times one in-app banner is shown to a guest per day',
+  'marketing.contactPolicy.defaults.controlGroup': 'Control group offered by default',
+  'marketing.contactPolicy.explainer.title': 'Why a guest is blocked',
+  'marketing.contactPolicy.explainer.hint':
+    'Every choice a scenario makes is written down, and every block carries one of these reasons. Which of them ends the guest’s run and which only holds the step is stated for each.',
+  'marketing.contactPolicy.explainer.governed': 'the brand’s contact policy can be behind this',
+  'marketing.contactPolicy.explainer.quiet':
+    'Quiet hours never refuse a message: one that falls due inside the closed window is held to the next open moment and sent then.',
+  'marketing.contactPolicy.form.title.create': 'New contact rule',
+  'marketing.contactPolicy.form.title.replace': 'Change this rule',
+  'marketing.contactPolicy.form.tightenOnly':
+    'A rule may make this brand quieter and never louder. The platform’s number is beside each field.',
+  'marketing.contactPolicy.form.cap': 'Cap for this period (platform ceiling {ceiling})',
+  'marketing.contactPolicy.form.quietStart': 'Quiet hours start (no later than the platform’s)',
+  'marketing.contactPolicy.form.quietEnd': 'Quiet hours end (no earlier than the platform’s)',
+  'marketing.contactPolicy.form.reason': 'Why this rule exists',
+  'marketing.contactPolicy.form.submit': 'Save rule',
+  'marketing.contactPolicy.problem.purpose': 'Name the campaign purpose the rule is for.',
+  'marketing.contactPolicy.problem.empty': 'A rule says something: a cap, a quiet window, or both.',
+  'marketing.contactPolicy.problem.quietPair': 'A quiet window has both a start and an end.',
+  'marketing.contactPolicy.problem.capNegative': 'A cap is a whole number, zero or more.',
+  'marketing.contactPolicy.problem.capLoosened':
+    'A cap may be tightened and never loosened: {cap} exceeds the platform’s {ceiling}.',
+  'marketing.contactPolicy.problem.quietStartLoosened':
+    'Quiet hours may be tightened and never loosened: a start of {start} is later than the platform’s {bound}.',
+  'marketing.contactPolicy.problem.quietEndLoosened':
+    'Quiet hours may be tightened and never loosened: an end of {end} is earlier than the platform’s {bound}.',
+  'marketing.contactPolicy.problem.reason':
+    'Say why the rule exists: somebody should be able to attribute it.',
+  'marketing.contactPolicy.remove.title': 'Remove this rule',
+  'marketing.contactPolicy.remove.body':
+    'The brand returns to the platform’s bound for {channel}, {period}.',
+  'marketing.contactPolicy.remove.reason': 'Why is it being removed?',
+
+  // scenario campaigns (ADR 0112) and delivery evidence (ADR 0146)
+  'marketing.campaigns.create.scenario': 'New scenario',
+  'marketing.campaigns.kind.BROADCAST': 'Broadcast',
+  'marketing.campaigns.kind.SCENARIO': 'Scenario',
+  'marketing.wiring.notConnected': 'Not connected:',
+  'marketing.scenario.editor.title.create': 'New scenario',
+  'marketing.scenario.editor.title.edit': 'Edit the steps of “{name}”',
+  'marketing.scenario.editor.intro':
+    'A scenario is a plan for each guest: steps, each with a wait before it, a channel, an offer and a template. Saving writes a draft and sends nothing. It is estimated, submitted and approved by somebody who is not its author, like any campaign, and only launching starts it. Once it leaves draft its steps are fixed: a change is a new version that needs its own approval.',
+  'marketing.scenario.editor.notDraft':
+    'This scenario is past draft, so its steps are fixed. A change is a new version that needs its own approval: open the scenario and draft one.',
+  'marketing.scenario.editor.name': 'Name',
+  'marketing.scenario.editor.steps': 'Steps',
+  'marketing.scenario.editor.steps.hint':
+    'Up to {max} steps. A wait is at most {days} days, counted from the guest entering (first step) or from the step before it being sent.',
+  'marketing.scenario.editor.step': 'Step {number}',
+  'marketing.scenario.editor.addStep': 'Add a step',
+  'marketing.scenario.editor.moveUp': 'Move this step up',
+  'marketing.scenario.editor.moveDown': 'Move this step down',
+  'marketing.scenario.editor.remove': 'Remove this step',
+  'marketing.scenario.editor.callCentreSuffix':
+    ' (needs the call-centre queue, which does not exist yet)',
+  'marketing.scenario.editor.wait': 'Wait before this step',
+  'marketing.scenario.editor.waitUnit': 'Unit',
+  'marketing.scenario.editor.wait.hintFirst':
+    'Counted from the moment the guest enters the scenario.',
+  'marketing.scenario.editor.wait.hint': 'Counted from the moment the step before is sent.',
+  'marketing.scenario.editor.continuation': 'Go on to this step',
+  'marketing.scenario.editor.stop': 'End the scenario for the guest',
+  'marketing.scenario.editor.offerTemplate': 'The offer’s template ({template})',
+  'marketing.scenario.editor.noTemplate': 'Choose a template',
+  'marketing.scenario.editor.inAppTemplate':
+    'An in-app banner shows its offer and uses the offer’s template.',
+  'marketing.scenario.editor.controlGroup':
+    'Withhold a control group, so the results can state a lift',
+  'marketing.scenario.editor.controlGroup.percent': 'Share of the audience withheld, %',
+  'marketing.scenario.editor.controlGroup.hint':
+    'Up to {count} of the {cap} guests would be withheld from every step, decided once at the start and never resampled. Withholding guests costs reach: on a small audience it may leave too few to measure anything.',
+  'marketing.scenario.editor.controlGroup.off':
+    'No control group: the scenario runs against its whole audience, and its results cannot state a lift because there is no baseline.',
+  'marketing.scenario.editor.unwired':
+    'This scenario cannot be launched until these are fixed. You can still save it as a draft.',
+  'marketing.scenario.editor.unwired.step': 'Step {number},',
+  'marketing.scenario.editor.save': 'Save draft',
+  'marketing.scenario.editor.saveSteps': 'Save steps',
+  'marketing.scenario.editor.problem.name': 'Give the scenario a name.',
+  'marketing.scenario.editor.problem.audience': 'Choose an audience.',
+  'marketing.scenario.editor.problem.cap': 'The recipient cap is a whole number, 1 or more.',
+  'marketing.scenario.editor.problem.ceiling':
+    'A scenario that sends on a channel billed per message needs a cost ceiling.',
+  'marketing.scenario.editor.problem.currency': 'The currency is a three-letter code.',
+  'marketing.scenario.editor.problem.controlGroup':
+    'The control group is a whole percentage from 0 to 100.',
+  'marketing.scenario.editor.problem.scheduledAt': 'The start time must be in the future.',
+  'marketing.scenario.problem.NO_STEPS': 'A scenario has at least one step.',
+  'marketing.scenario.problem.TOO_MANY_STEPS': 'A scenario has at most {max} steps.',
+  'marketing.scenario.problem.NO_MESSAGING_STEP':
+    'A scenario needs at least one step that sends a message: its cost ceiling, consent and estimate are those of a messaging channel, and an in-app banner alone has none.',
+  'marketing.scenario.problem.CALL_CENTRE_NOT_WIRED':
+    'Step {step} hands off to the call centre, whose lead queue does not exist yet.',
+  'marketing.scenario.problem.IN_APP_NEEDS_OFFER':
+    'Step {step} shows an in-app banner and names no offer to show.',
+  'marketing.scenario.problem.NEEDS_TEMPLATE':
+    'Step {step} needs a template, or an offer that names one.',
+  'marketing.scenario.problem.WAIT_INVALID': 'Step {step} needs a wait of zero or more.',
+  'marketing.scenario.problem.WAIT_TOO_LONG': 'Step {step} waits longer than {days} days.',
+  'marketing.scenario.problem.OFFER_NOT_IN_FORCE':
+    'Step {step} names an offer that is not in force: it is not published, or it is over, retired or replaced.',
+  'marketing.scenario.problem.OFFER_CHANNEL':
+    'Step {step} sends on a channel the offer is not allowed in.',
+  'marketing.scenario.condition.ALWAYS': 'Always',
+  'marketing.scenario.condition.NO_ORDER_SINCE_ENTRY':
+    'Only if the guest has not ordered since entering',
+  'marketing.scenario.condition.NONE': 'Never early',
+  'marketing.scenario.condition.ORDER_PLACED_SINCE_ENTRY': 'As soon as the guest orders',
+  'marketing.scenario.unit.MINUTES': 'minutes',
+  'marketing.scenario.unit.HOURS': 'hours',
+  'marketing.scenario.unit.DAYS': 'days',
+  'marketing.scenario.steps.title': 'Steps',
+  'marketing.scenario.steps.wait': 'Wait before it',
+  'marketing.scenario.wait.none': 'Straight away',
+  'marketing.scenario.wait.days': '{count} day(s)',
+  'marketing.scenario.wait.hours': '{count} hour(s)',
+  'marketing.scenario.wait.minutes': '{count} minute(s)',
+  'marketing.scenario.supersedes': 'Replaces the version {id}; launching this one halts that one.',
+  'marketing.scenario.guests.title': 'Where the guests are',
+  'marketing.scenario.guests.none':
+    'No guest has entered yet: guests are enrolled when the scenario starts.',
+  'marketing.scenario.control.some':
+    '{percent}% of the audience is withheld as a control group: fixed at the start, never resampled.',
+  'marketing.scenario.control.none':
+    'No control group: this scenario runs against its whole audience, so its results can state no lift.',
+  'marketing.scenario.participant.IN_PROGRESS': 'In progress',
+  'marketing.scenario.participant.CONTROL': 'In the control group',
+  'marketing.scenario.participant.COMPLETED': 'Completed',
+  'marketing.scenario.participant.STOPPED_BY_CONDITION': 'Stopped by a condition',
+  'marketing.scenario.participant.STOPPED_BY_CONSENT_WITHDRAWN': 'Stopped: consent withdrawn',
+  'marketing.scenario.participant.STOPPED_BY_SUPPRESSION': 'Stopped: suppressed',
+  'marketing.scenario.decisions.title': 'What it decided, and why',
+  'marketing.scenario.decision.SENT': 'Sent',
+  'marketing.scenario.decision.BLOCKED': 'Blocked',
+  'marketing.scenario.decisions.empty': 'Nothing decided yet.',
+  'marketing.scenario.decisions.column.when': 'When',
+  'marketing.scenario.decisions.column.step': 'Step',
+  'marketing.scenario.decisions.column.outcome': 'Outcome',
+  'marketing.scenario.decisions.column.guest': 'Guest',
+  'marketing.scenario.decisions.guest.label': 'Why did this guest not get a step? Guest account id',
+  'marketing.scenario.decisions.guest.lookup': 'Show this guest’s decisions',
+  'marketing.scenario.decisions.guest.clear': 'Show everyone',
+  'marketing.scenario.decisions.guest.hint':
+    'An account id is on the customer card. Nothing here shows a name, a phone number or an email.',
+  'marketing.scenario.decisions.guest.invalid':
+    'That is not an account id: it is 36 characters, letters and digits in groups of 8-4-4-4-12.',
+  'marketing.scenario.decisions.guest.empty':
+    'This scenario has decided nothing for that guest yet.',
+  'marketing.scenario.decisions.recorded': 'Recorded:',
+  'marketing.scenario.results.title': 'Did it work?',
+  'marketing.scenario.results.hint':
+    'The goal is the guest’s next order within the window. A contacted guest’s order counts for this scenario only if the attribution model credits it; control guests are counted as they are, because they were never contacted.',
+  'marketing.scenario.results.model': 'Attribution',
+  'marketing.scenario.results.model.FIRST_TOUCH':
+    'First touch: the first campaign to contact the guest',
+  'marketing.scenario.results.model.LAST_TOUCH':
+    'Last touch: the most recent campaign before the order',
+  'marketing.scenario.results.window': 'Window, days',
+  'marketing.scenario.results.window.invalid':
+    'The window is a whole number of days, from 1 to 90.',
+  'marketing.scenario.results.none': 'No guest has entered yet, so there is nothing to measure.',
+  'marketing.scenario.results.column.guests': 'Guests',
+  'marketing.scenario.results.column.ordered': 'Ordered',
+  'marketing.scenario.results.column.rate': 'Rate',
+  'marketing.scenario.results.treated': 'Contacted',
+  'marketing.scenario.results.control': 'Control group',
+  'marketing.scenario.results.lift': 'Lift: {points} percentage points over the control group.',
+  'marketing.scenario.results.noLift.noControl':
+    'No lift can be stated: this scenario ran without a control group, so there is no baseline to compare against.',
+  'marketing.scenario.results.noLift.empty':
+    'No lift can be stated yet: one of the two groups has no guests.',
+  'marketing.scenario.results.open':
+    '{count} guest(s) are still inside their window, so these figures will move.',
+  'marketing.scenario.action.edit': 'Edit steps',
+  'marketing.scenario.action.revise': 'Draft a new version',
+  'marketing.scenario.action.revise.hint':
+    'Steps are fixed once a scenario leaves draft. A new version is a draft with the same steps; it needs its own approval, and launching it halts this one.',
+  'marketing.campaign.recipients.column.delivery': 'Delivery',
+  'marketing.delivery.DELIVERED': 'Delivered',
+  'marketing.delivery.FAILED': 'Failed',
+  'marketing.delivery.REJECTED': 'Rejected by the gateway',
+  'marketing.delivery.NO_RECEIPT': 'No receipt came back',
+  'marketing.delivery.HANDED_TO_OPERATOR': 'Handed to the operator',
+  'marketing.delivery.PENDING': 'Not sent yet',
+  'marketing.campaign.recipients.deliveryHint':
+    'Delivery is evidence from the gateway, not a promise: “handed to the operator” means it was accepted and nothing more has been reported.',
+  'marketing.campaign.recipients.segments': '{count} segment(s) billed',
 } as const;

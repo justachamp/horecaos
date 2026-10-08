@@ -156,6 +156,12 @@
     <p class="q-caption not-built-note">{{ 'staff.myProfile.security.notBuilt' | t }}</p>
   </section>
 
+  <!--
+    ADR 0148: the second factor, built. Its own component because it shares the enrolment form
+    with the page a refused sign-in sends an account to.
+  -->
+  <q-my-profile-mfa-card />
+
   <section class="section">
     <h2 class="q-emphasis">{{ 'staff.myProfile.myJobs.title' | t }}</h2>
 

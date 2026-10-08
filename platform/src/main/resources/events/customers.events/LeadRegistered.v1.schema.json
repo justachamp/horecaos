@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/customers.events/LeadRegistered.v1.schema.json",
+  "title": "LeadRegistered v1 payload",
+  "description": "A lead was created (ADR 0111): a guest who has phoned in, asked for a callback or enquired about catering and is not yet an account with an order. Identifiers and a source code only: never a phone number, a name or a note (ADR 0029). A consumer resolves the lead through the authorized customers API with leadId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "leadId",
+    "tenantId",
+    "brandId",
+    "source"
+  ],
+  "properties": {
+    "leadId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "STOREFRONT",
+        "TELEGRAM_BOT",
+        "SITE",
+        "RESERVATION",
+        "CALLBACK_REQUEST",
+        "AGGREGATOR_FIRST_ORDER",
+        "B2B_CATERING_ENQUIRY",
+        "CAMPAIGN_SCENARIO"
+      ]
+    }
+  }
+}

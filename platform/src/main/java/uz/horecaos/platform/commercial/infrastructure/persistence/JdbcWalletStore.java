@@ -15,6 +15,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
+import uz.horecaos.platform.commercial.domain.CardOnFile;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
@@ -90,11 +91,38 @@ public class JdbcWalletStore {
     }
 
     /** Changes the payment method. Call only after {@link #lockBilling}, in the same transaction. */
+    /**
+     * Records how a tenant is collected. Since V0505 a card on file is not tied to the method: choosing
+     * a method other than CARD leaves the card where it is, and choosing CARD without naming a reference
+     * keeps the one on file. A reference that is new or different clears what was shown about the old
+     * card (last four, brand, expiry), because that describes a card that is no longer on file.
+     */
     public void setPaymentMethod(
             UUID tenantId, PaymentMethod method, @Nullable String cardTokenReference, String updatedBy, Instant now) {
         jdbc.sql("""
                         UPDATE commercial.tenant_billing
-                           SET payment_method = :method, card_token_reference = :cardTokenReference,
+                           SET payment_method = :method,
+                               card_last4 = CASE WHEN :method = 'CARD' AND :cardTokenReference::text IS NOT NULL
+                                                  AND :cardTokenReference::text IS DISTINCT FROM card_token_reference
+                                                 THEN NULL ELSE card_last4 END,
+                               card_brand = CASE WHEN :method = 'CARD' AND :cardTokenReference::text IS NOT NULL
+                                                  AND :cardTokenReference::text IS DISTINCT FROM card_token_reference
+                                                 THEN NULL ELSE card_brand END,
+                               card_expiry_month = CASE WHEN :method = 'CARD' AND :cardTokenReference::text IS NOT NULL
+                                                         AND :cardTokenReference::text IS DISTINCT FROM card_token_reference
+                                                        THEN NULL ELSE card_expiry_month END,
+                               card_expiry_year = CASE WHEN :method = 'CARD' AND :cardTokenReference::text IS NOT NULL
+                                                        AND :cardTokenReference::text IS DISTINCT FROM card_token_reference
+                                                       THEN NULL ELSE card_expiry_year END,
+                               card_bound_at = CASE WHEN :method = 'CARD' AND :cardTokenReference::text IS NOT NULL
+                                                     AND :cardTokenReference::text IS DISTINCT FROM card_token_reference
+                                                    THEN NULL ELSE card_bound_at END,
+                               card_bound_by = CASE WHEN :method = 'CARD' AND :cardTokenReference::text IS NOT NULL
+                                                     AND :cardTokenReference::text IS DISTINCT FROM card_token_reference
+                                                    THEN NULL ELSE card_bound_by END,
+                               card_token_reference = CASE WHEN :method = 'CARD'
+                                                           THEN COALESCE(:cardTokenReference::text, card_token_reference)
+                                                           ELSE card_token_reference END,
                                updated_by = :updatedBy, updated_at = :now
                          WHERE tenant_id = :tenantId
                         """)
@@ -106,8 +134,114 @@ public class JdbcWalletStore {
                 .update();
     }
 
+    /** What is safe to say about the card on file; empty when there is no token at all. */
+    public Optional<CardOnFile> findCardOnFile(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT card_token_reference, card_last4, card_brand, card_expiry_month, card_expiry_year,
+                               card_bound_at, card_bound_by
+                          FROM commercial.tenant_billing
+                         WHERE tenant_id = :tenantId AND card_token_reference IS NOT NULL
+                        """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> new CardOnFile(
+                        row.getString("card_last4"),
+                        row.getString("card_brand"),
+                        (Integer) row.getObject("card_expiry_month", Integer.class),
+                        (Integer) row.getObject("card_expiry_year", Integer.class),
+                        instant(row, "card_bound_at"),
+                        row.getString("card_bound_by")))
+                .optional();
+    }
+
+    /** Puts a card the tenant itself bound on file, replacing any other. The caller holds the billing lock. */
+    public void bindCard(
+            UUID tenantId,
+            String cardTokenReference,
+            String last4,
+            @Nullable String brand,
+            int expiryMonth,
+            int expiryYear,
+            String boundBy,
+            Instant now) {
+        jdbc.sql("""
+                        UPDATE commercial.tenant_billing
+                           SET card_token_reference = :token, card_last4 = :last4, card_brand = :brand,
+                               card_expiry_month = :month, card_expiry_year = :year,
+                               card_bound_at = :now, card_bound_by = :boundBy,
+                               updated_by = :boundBy, updated_at = :now
+                         WHERE tenant_id = :tenantId
+                        """)
+                .param("tenantId", tenantId)
+                .param("token", cardTokenReference)
+                .param("last4", last4)
+                .param("brand", brand)
+                .param("month", expiryMonth)
+                .param("year", expiryYear)
+                .param("boundBy", boundBy)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /**
+     * Takes the card off file. A tenant whose method was CARD becomes INVOICE in the same statement,
+     * because CARD with nothing to charge is a promise nothing can keep. The caller holds the billing lock.
+     */
+    public void clearCard(UUID tenantId, String updatedBy, Instant now) {
+        jdbc.sql("""
+                        UPDATE commercial.tenant_billing
+                           SET card_token_reference = NULL, card_last4 = NULL, card_brand = NULL,
+                               card_expiry_month = NULL, card_expiry_year = NULL,
+                               card_bound_at = NULL, card_bound_by = NULL,
+                               payment_method = CASE WHEN payment_method = 'CARD' THEN 'INVOICE' ELSE payment_method END,
+                               updated_by = :updatedBy, updated_at = :now
+                         WHERE tenant_id = :tenantId
+                        """)
+                .param("tenantId", tenantId)
+                .param("updatedBy", updatedBy)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /**
+     * What each of these tenants still owes on its issued statements, in its own currency, and how
+     * many statements that is. A tenant owing nothing is absent. One query for the whole board.
+     */
+    public Map<UUID, OpenDue> openDueByTenant(java.util.Collection<UUID> tenantIds) {
+        if (tenantIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, OpenDue> byTenant = new HashMap<>();
+        jdbc.sql("""
+                        SELECT s.tenant_id, COUNT(*) AS statements, SUM(s.total_minor - paid.paid_minor) AS due_minor,
+                               MIN(s.currency) AS currency
+                          FROM commercial.statements s
+                          CROSS JOIN LATERAL (
+                              SELECT COALESCE(-SUM(w.amount_minor), 0) AS paid_minor
+                                FROM commercial.wallet_entries w
+                               WHERE w.tenant_id = s.tenant_id AND w.statement_id = s.id
+                                 AND w.entry_type IN ('STATEMENT_PAYMENT', 'STATEMENT_REVERSAL')) paid
+                         WHERE s.tenant_id IN (:tenantIds) AND s.status = 'ISSUED' AND s.total_minor > paid.paid_minor
+                         GROUP BY s.tenant_id
+                        """)
+                .param("tenantIds", tenantIds)
+                .query((row, number) -> Map.entry(
+                        row.getObject("tenant_id", UUID.class),
+                        new OpenDue(row.getInt("statements"), row.getLong("due_minor"), row.getString("currency"))))
+                .list()
+                .forEach(entry -> byTenant.put(entry.getKey(), entry.getValue()));
+        return byTenant;
+    }
+
+    /** The statements a tenant still owes something on, and the sum, in the statements' own currency. */
+    public record OpenDue(int statements, long dueMinor, String currency) {}
+
     /** Appends one wallet entry. The only write this store ever performs against the ledger itself. */
     public void append(WalletEntry entry) {
+        append(entry, null);
+    }
+
+    /** Appends an entry, optionally naming the prepayment invoice it pays (V0506); only a TOP_UP may. */
+    public void append(WalletEntry entry, @Nullable UUID prepaymentInvoiceId) {
         Map<String, Object> params = new HashMap<>();
         params.put("id", entry.id());
         params.put("tenantId", entry.tenantId());
@@ -125,16 +259,17 @@ public class JdbcWalletStore {
         params.put("approvedBy", entry.approvedBy());
         params.put("approvalRequestId", entry.approvalRequestId());
         params.put("now", utc(entry.createdAt()));
+        params.put("prepaymentInvoiceId", prepaymentInvoiceId);
 
         jdbc.sql("""
                         INSERT INTO commercial.wallet_entries (
                             id, tenant_id, money_kind, entry_type, amount_minor, currency, statement_id,
                             grant_id, subscription_id, expires_at, external_reference, reason, recorded_by,
-                            approved_by, approval_request_id, created_at)
+                            approved_by, approval_request_id, created_at, prepayment_invoice_id)
                         VALUES (
                             :id, :tenantId, :moneyKind, :entryType, :amount, :currency, :statementId,
                             :grantId, :subscriptionId, :expiresAt, :externalReference, :reason, :recordedBy,
-                            :approvedBy, :approvalRequestId, :now)
+                            :approvedBy, :approvalRequestId, :now, :prepaymentInvoiceId)
                         """).params(params).update();
     }
 
@@ -285,9 +420,19 @@ public class JdbcWalletStore {
         return statementPayments(tenantId, currency);
     }
 
+    /** When this statement was issued, which is when the tenant came to owe it. */
+    public Instant statementIssuedAt(UUID tenantId, UUID statementId) {
+        return jdbc.sql("SELECT issued_at FROM commercial.statements WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", statementId)
+                .query(OffsetDateTime.class)
+                .single()
+                .toInstant();
+    }
+
     private List<StatementPayment> statementPayments(UUID tenantId, @Nullable String openInCurrency) {
         String sql = """
-                SELECT s.id, s.number, s.period_key, s.currency, s.total_minor,
+                SELECT s.id, s.number, s.period_key, s.currency, s.total_minor, s.issued_at,
                        COALESCE(-SUM(w.amount_minor), 0) AS paid_minor
                   FROM commercial.statements s
                   LEFT JOIN commercial.wallet_entries w
@@ -297,7 +442,7 @@ public class JdbcWalletStore {
                 """
                 + (openInCurrency == null ? "" : " AND s.currency = :currency")
                 + """
-                 GROUP BY s.id, s.number, s.period_key, s.currency, s.total_minor
+                 GROUP BY s.id, s.number, s.period_key, s.currency, s.total_minor, s.issued_at
                 """
                 + (openInCurrency == null
                         ? " ORDER BY s.period_key DESC"
@@ -316,7 +461,8 @@ public class JdbcWalletStore {
                             row.getString("currency"),
                             total,
                             paid,
-                            total - paid);
+                            total - paid,
+                            row.getObject("issued_at", OffsetDateTime.class).toInstant());
                 })
                 .list();
     }

@@ -17,10 +17,17 @@
       [value]="reason()"
       (input)="reason.set($any($event.target).value)"
     />
-    <button type="button" class="confirmChange" [disabled]="busy() || reason().trim().length === 0" (click)="confirm()">
+    <button
+      type="button"
+      class="confirmChange"
+      [disabled]="busy() || reason().trim().length === 0"
+      (click)="confirm()"
+    >
       {{ i18n.t('featureFlags.confirm') }}
     </button>
-    <button type="button" class="secondary" (click)="pending.set(null)">{{ i18n.t('common.cancel') }}</button>
+    <button type="button" class="secondary" (click)="pending.set(null)">
+      {{ i18n.t('common.cancel') }}
+    </button>
   </div>
 </ng-template>
 
@@ -45,14 +52,20 @@
       <div class="row">
         <span class="q-body-sm">
           {{ i18n.t('featureFlags.platform') }}:
-          <strong>{{ i18n.t(platformOn(flag) ? 'featureFlags.tenant.on' : 'featureFlags.tenant.off') }}</strong>
+          <strong>{{
+            i18n.t(platformOn(flag) ? 'featureFlags.tenant.on' : 'featureFlags.tenant.off')
+          }}</strong>
         </span>
         <button
           type="button"
           class="secondary platformToggle"
           (click)="ask({ kind: 'platform', flag: flag, value: !platformOn(flag) })"
         >
-          {{ i18n.t(platformOn(flag) ? 'featureFlags.platform.turnOff' : 'featureFlags.platform.turnOn') }}
+          {{
+            i18n.t(
+              platformOn(flag) ? 'featureFlags.platform.turnOff' : 'featureFlags.platform.turnOn'
+            )
+          }}
         </button>
       </div>
       @if (isPending(flag, null)) {
@@ -67,19 +80,57 @@
           @for (setting of flag.tenants; track setting.tenantId) {
             <li class="q-body-sm">
               <span class="name">{{ tenantName(setting) }}</span>
-              <span class="chip q-caption" [class.on]="setting.value === true">{{ settingLabel(setting) }}</span>
+              <span class="chip q-caption" [class.on]="setting.value === true">{{
+                settingLabel(setting)
+              }}</span>
               @if (setting.value !== true) {
-                <button type="button" class="secondary" (click)="ask({ kind: 'tenant', flag: flag, tenantId: setting.tenantId, value: true, version: setting.version })">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="
+                    ask({
+                      kind: 'tenant',
+                      flag: flag,
+                      tenantId: setting.tenantId,
+                      value: true,
+                      version: setting.version,
+                    })
+                  "
+                >
                   {{ i18n.t('featureFlags.tenant.turnOn') }}
                 </button>
               }
               @if (setting.value !== false) {
-                <button type="button" class="secondary" (click)="ask({ kind: 'tenant', flag: flag, tenantId: setting.tenantId, value: false, version: setting.version })">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="
+                    ask({
+                      kind: 'tenant',
+                      flag: flag,
+                      tenantId: setting.tenantId,
+                      value: false,
+                      version: setting.version,
+                    })
+                  "
+                >
                   {{ i18n.t('featureFlags.tenant.holdBack') }}
                 </button>
               }
               @if (setting.value !== null) {
-                <button type="button" class="secondary handBack" (click)="ask({ kind: 'tenant', flag: flag, tenantId: setting.tenantId, value: null, version: setting.version })">
+                <button
+                  type="button"
+                  class="secondary handBack"
+                  (click)="
+                    ask({
+                      kind: 'tenant',
+                      flag: flag,
+                      tenantId: setting.tenantId,
+                      value: null,
+                      version: setting.version,
+                    })
+                  "
+                >
                   {{ i18n.t('featureFlags.tenant.handBack') }}
                 </button>
               }
@@ -98,19 +149,38 @@
         <div class="add">
           <app-tenant-picker [value]="addTenantId()" (tenantChange)="addTenantId.set($event)" />
           <label class="q-body-sm choice">
-            <input type="radio" [name]="'addValue-' + flag.code" [checked]="addValue()" (change)="addValue.set(true)" />
+            <input
+              type="radio"
+              [name]="'addValue-' + flag.code"
+              [checked]="addValue()"
+              (change)="addValue.set(true)"
+            />
             {{ i18n.t('featureFlags.tenant.turnOn') }}
           </label>
           <label class="q-body-sm choice">
-            <input type="radio" [name]="'addValue-' + flag.code" [checked]="!addValue()" (change)="addValue.set(false)" />
+            <input
+              type="radio"
+              [name]="'addValue-' + flag.code"
+              [checked]="!addValue()"
+              (change)="addValue.set(false)"
+            />
             {{ i18n.t('featureFlags.tenant.holdBack') }}
           </label>
-          <button type="button" class="secondary addAsk" [disabled]="addTenantId() === ''" (click)="askAdd(flag)">
+          <button
+            type="button"
+            class="secondary addAsk"
+            [disabled]="addTenantId() === ''"
+            (click)="askAdd(flag)"
+          >
             {{ i18n.t('featureFlags.add.next') }}
           </button>
         </div>
         @if (pending(); as change) {
-          @if (change.kind === 'tenant' && change.flag.code === flag.code && !isListed(flag, change.tenantId)) {
+          @if (
+            change.kind === 'tenant' &&
+            change.flag.code === flag.code &&
+            !isListed(flag, change.tenantId)
+          ) {
             <ng-container *ngTemplateOutlet="confirmForm" />
           }
         }

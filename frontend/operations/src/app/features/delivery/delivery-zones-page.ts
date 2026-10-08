@@ -13,6 +13,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import {
   LabelsByLocale,
   labelDrafts,
@@ -24,6 +25,9 @@ import {
 import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { RingProblem } from '../../shared/ui/map/geometry';
+import { LatLng, MapBounds } from '../../shared/ui/map/map-provider';
+import { PolygonEditor } from '../../shared/ui/map/polygon-editor';
 import { describeApiError } from '../orders/order-errors';
 import {
   DeliveryZonesApi,
@@ -33,7 +37,10 @@ import {
 } from './delivery-zones-api';
 import { DeliveryTariffsApi, TariffSummaryResponse } from './delivery-tariffs-api';
 import { localisedName } from './localised-name';
+import { FALLBACK_MAP_CENTRE, boundsOfRegion, centreOfRegion } from './map-region';
 import { RegionResponse, RegionsApi } from './regions-api';
+import { ZoneOutlineReview } from './zone-outline-review';
+import { editableRing, toGeoJsonPolygon } from './zone-geometry';
 
 /**
  * Enum-to-catalogue lookups.
@@ -96,16 +103,26 @@ interface TariffOption {
  *    `submitDraft`, so a mis-typed radius went live and stayed live. There is
  *    now a version list, a deactivate and an unbind.
  *
- * **Still reduced, and honestly.** No `MapCanvas`/`PolygonEditor` exists (IA
- * Part 4's pilot blockers; ADR 0015 owes the provider decision ADR 0037
- * inherited), so this authors circles around a branch. Bulk geozone upload
- * (`3.6c`) has its own page now — `geozone-batch-import-page.ts`, linked from
- * this toolbar — with a batch endpoint and a dry-run report; it stops short
- * of activation, which ADR 0037 gates behind the same missing map.
+ * **Drawn on a map (ADR 0145, rows `3.6` and `3.6c`).** A zone is no longer only a radius around a
+ * branch. The draft form offers a second shape, a polygon drawn corner by corner (`q-polygon-editor`,
+ * with the region's box on the map and a corner table that works without one), and a stored version
+ * can be opened in that editor to draft its successor (versions are immutable: an edit is a new
+ * draft, and the one it started from is left alone). Neither shape governs anything when saved.
+ * **Activation passes through a review** (`q-zone-outline-review`): the stored outline on the map
+ * beside the region it must sit in, a verdict that names the likeliest mistake (coordinates written
+ * the wrong way round), the corners as numbers, the bound tariff, and a confirmation that is the
+ * gate. ADR 0037 asks for exactly that look before geometry governs a fee, because a swapped pair is
+ * valid geometry that lands somewhere else and no containment test complains. Bulk geozone upload
+ * (`3.6c`) has its own page, `geozone-batch-import-page.ts`, which opens the same review for the
+ * versions it drafted.
+ *
+ * **With no map provider** (no key has been obtained in this environment) the editor and the review
+ * say so in words and keep working from their coordinate tables; the review's confirmation then says
+ * that coordinates, not a map, were checked.
  */
 @Component({
   selector: 'q-delivery-zones-page',
-  imports: [TPipe, RouterLink],
+  imports: [TPipe, RouterLink, PolygonEditor, ZoneOutlineReview],
   templateUrl: './delivery-zones-page.html',
   styleUrl: './delivery-zones-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -118,6 +135,7 @@ export class DeliveryZonesPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly localeSet = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -162,6 +180,54 @@ export class DeliveryZonesPage implements OnInit {
   protected readonly draftTariffId = signal<string>('');
   protected readonly draftFreeFromMinor = signal<number | null>(null);
   protected readonly draftMinBasketMinor = signal<number | null>(null);
+
+  // ---------------------------------------------------- ADR 0145: drawn zones
+  /** `CIRCLE` is the original radius around a branch; `POLYGON` is drawn on the map. */
+  protected readonly draftShape = signal<'CIRCLE' | 'POLYGON'>('CIRCLE');
+  protected readonly draftRing = signal<readonly LatLng[]>([]);
+  protected readonly draftRingProblems = signal<readonly RingProblem[]>([]);
+  /** The version whose outline the polygon editor started from, if it did. */
+  protected readonly draftFromVersion = signal<number | null>(null);
+
+  /** The version being looked at on the map, and whether looking is all that is being done. */
+  protected readonly reviewing = signal<{
+    readonly zone: ZoneSummaryResponse;
+    readonly version: number;
+    readonly mode: 'view' | 'activate';
+    readonly regionId: string | null;
+    /**
+     * The tariff bound to **this version**, which is what the review must disclose. The zone
+     * summary's `deliveryTariffId` is the *active* version's, and a draft that changes the tariff
+     * (or a zone with no active version at all) would otherwise be reviewed under the wrong fee.
+     */
+    readonly tariffId: string | null;
+  } | null>(null);
+
+  protected readonly brandScope = computed(() => this.brand.scope());
+
+  /** The box the polygon editor opens on and checks against: the chosen region's, else the first. */
+  protected readonly draftRegionBounds = computed<MapBounds | null>(() => {
+    const region = this.regionById(this.draftRegionId());
+    return region === null ? null : boundsOfRegion(region);
+  });
+  protected readonly draftCentre = computed<LatLng>(() => {
+    const region = this.regionById(this.draftRegionId());
+    return region === null ? FALLBACK_MAP_CENTRE : centreOfRegion(region);
+  });
+
+  protected readonly reviewRegionBounds = computed<MapBounds | null>(() => {
+    const review = this.reviewing();
+    const region = review === null ? null : this.regionById(review.regionId ?? '');
+    return region === null ? null : boundsOfRegion(region);
+  });
+  protected readonly reviewTariff = computed<string | null>(() => {
+    const review = this.reviewing();
+    if (review === null) {
+      return null;
+    }
+    const label = this.tariffLabelOf(review.tariffId);
+    return label === '—' ? null : label;
+  });
 
   protected readonly bindingZoneId = signal<string | null>(null);
   protected readonly bindLocationId = signal<string>('');
@@ -256,7 +322,11 @@ export class DeliveryZonesPage implements OnInit {
   // ---------------------------------------------------------------- reading
 
   protected tariffLabel(zone: ZoneSummaryResponse): string {
-    const id = zone.deliveryTariffId;
+    return this.tariffLabelOf(zone.deliveryTariffId);
+  }
+
+  /** The tariff's name, its id when the brand's list does not carry it, and a dash when there is none. */
+  private tariffLabelOf(id: string | null | undefined): string {
     if (!id) {
       return '—';
     }
@@ -285,7 +355,7 @@ export class DeliveryZonesPage implements OnInit {
 
   /** The zone's name in the operator's own locale — the point of authoring three. */
   protected zoneName(zone: ZoneSummaryResponse): string {
-    return localisedName(this.i18n.locale(), zone);
+    return localisedName(this.i18n.locale(), zone, this.registry.fallbackOrder());
   }
 
   protected roleKey(role: string): MessageKey {
@@ -478,7 +548,72 @@ export class DeliveryZonesPage implements OnInit {
     this.draftMinBasketMinor.set(zone.minBasketMinor ?? null);
     this.draftError.set(null);
     this.draftProblems.set([]);
+    this.draftShape.set('CIRCLE');
+    this.draftRing.set([]);
+    this.draftRingProblems.set([]);
+    this.draftFromVersion.set(null);
     this.draftingZone.set(zone);
+  }
+
+  /**
+   * Opens the draft form on a polygon, starting from a stored version's outline (row `3.6`).
+   * Versions are immutable (ADR 0037), so "edit" is always "draft the next one from this one";
+   * what the editor would silently flatten (holes, several parts) is refused up front rather than
+   * saved as something the operator did not draw.
+   */
+  protected async editOutline(
+    zone: ZoneSummaryResponse,
+    version: ZoneVersionResponse,
+  ): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope) {
+      return;
+    }
+    this.rowError.set(null);
+    let ring: readonly LatLng[] | null;
+    try {
+      ring = editableRing(await this.api.outline(scope, zone.zoneId, version.version));
+    } catch {
+      this.rowError.set(this.i18n.t('delivery.zones.map.outlineFailed'));
+      return;
+    }
+    if (ring === null) {
+      this.rowError.set(this.i18n.t('delivery.zones.map.notEditable'));
+      return;
+    }
+    this.openDraftForm(zone);
+    this.draftShape.set('POLYGON');
+    this.draftRing.set(ring);
+    this.draftFromVersion.set(version.version);
+    this.draftPriority.set(version.priority);
+    this.draftCurrency.set(version.currency);
+    this.draftRegionId.set(version.regionId ?? '');
+    this.draftTariffId.set(version.deliveryTariffId ?? '');
+    this.draftFreeFromMinor.set(version.freeDeliveryFromMinor ?? null);
+    this.draftMinBasketMinor.set(version.minBasketMinor ?? null);
+  }
+
+  protected setDraftShape(shape: 'CIRCLE' | 'POLYGON'): void {
+    this.draftShape.set(shape);
+    if (shape === 'CIRCLE') {
+      this.draftFromVersion.set(null);
+    }
+  }
+
+  protected onRingChange(ring: readonly LatLng[]): void {
+    this.draftRing.set(ring);
+  }
+
+  protected onRingProblems(problems: readonly RingProblem[]): void {
+    this.draftRingProblems.set(problems);
+  }
+
+  /** The region by id, or the first one when none is chosen; `null` when the tenant has no region to read. */
+  private regionById(regionId: string): RegionResponse | null {
+    const all = this.regions();
+    return (
+      (regionId ? all.find((region) => region.regionId === regionId) : undefined) ?? all[0] ?? null
+    );
   }
 
   protected closeDraftForm(): void {
@@ -486,11 +621,16 @@ export class DeliveryZonesPage implements OnInit {
   }
 
   protected canDraft(): boolean {
-    return (
-      !this.draftSubmitting() &&
-      this.draftRadiusMeters() > 0 &&
-      this.draftOriginLocationId().length > 0
-    );
+    if (this.draftSubmitting()) {
+      return false;
+    }
+    if (this.draftShape() === 'POLYGON') {
+      // The editor reports what is wrong with the outline (too few corners, a crossing, a corner
+      // outside the region); an outline with any of it is not saved, so the round trip that
+      // would come back with the same list is skipped. The server still decides.
+      return this.draftRing().length >= 3 && this.draftRingProblems().length === 0;
+    }
+    return this.draftRadiusMeters() > 0 && this.draftOriginLocationId().length > 0;
   }
 
   /**
@@ -511,16 +651,26 @@ export class DeliveryZonesPage implements OnInit {
     this.draftError.set(null);
     this.draftProblems.set([]);
     try {
-      await this.api.draftCircleVersion(scope, zone.zoneId, {
-        originLocationId: this.draftOriginLocationId(),
-        radiusMeters: this.draftRadiusMeters(),
+      const terms = {
         regionId: this.draftRegionId() || null,
         priority: this.draftPriority(),
         currency: this.draftCurrency(),
         deliveryTariffId: priced ? this.draftTariffId() || null : null,
         freeDeliveryFromMinor: priced ? this.draftFreeFromMinor() : null,
         minBasketMinor: priced ? this.draftMinBasketMinor() : null,
-      });
+      };
+      if (this.draftShape() === 'POLYGON') {
+        await this.api.draftPolygonVersion(scope, zone.zoneId, {
+          ...terms,
+          geoJson: toGeoJsonPolygon(this.draftRing()),
+        });
+      } else {
+        await this.api.draftCircleVersion(scope, zone.zoneId, {
+          ...terms,
+          originLocationId: this.draftOriginLocationId(),
+          radiusMeters: this.draftRadiusMeters(),
+        });
+      }
       this.draftingZone.set(null);
       this.expandedZoneId.set(zone.zoneId);
       await this.refreshRow(zone.zoneId);
@@ -535,8 +685,46 @@ export class DeliveryZonesPage implements OnInit {
 
   // ------------------------------------------------------------ lifecycle
 
-  protected async activate(zone: ZoneSummaryResponse, version: number): Promise<void> {
-    await this.runOnRow(zone.zoneId, (scope) => this.api.activate(scope, zone.zoneId, version));
+  /**
+   * Opens a version's review: on the map beside its region (`view`), or as the gate in front of
+   * activation (`activate`). Activation is never one click from the version list any more — see
+   * the class doc for why.
+   */
+  protected openReview(
+    zone: ZoneSummaryResponse,
+    version: ZoneVersionResponse,
+    mode: 'view' | 'activate',
+  ): void {
+    this.rowError.set(null);
+    this.reviewing.set({
+      zone,
+      version: version.version,
+      mode,
+      regionId: version.regionId ?? null,
+      tariffId: version.deliveryTariffId ?? null,
+    });
+  }
+
+  protected closeReview(): void {
+    if (this.busyZoneId() === null) {
+      this.reviewing.set(null);
+    }
+  }
+
+  /** The reviewer confirmed: activate the version that was looked at, and not another. */
+  protected async confirmActivation(): Promise<void> {
+    const review = this.reviewing();
+    if (review === null || review.mode !== 'activate') {
+      return;
+    }
+    const done = await this.runOnRow(review.zone.zoneId, (scope) =>
+      this.api.activate(scope, review.zone.zoneId, review.version),
+    );
+    if (done) {
+      this.reviewing.set(null);
+    }
+    // A refusal (the region's box, the area ceiling, a self-intersection) stays on screen beside
+    // the review, with the version still open to be looked at again.
   }
 
   protected async deactivate(zone: ZoneSummaryResponse, version: number): Promise<void> {
@@ -569,13 +757,14 @@ export class DeliveryZonesPage implements OnInit {
     );
   }
 
+  /** @returns whether the action went through; a refusal is shown in {@link rowError} and answers `false` */
   private async runOnRow(
     zoneId: string,
     action: (scope: { tenantId: string; brandId: string }) => Promise<unknown>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const scope = this.brand.scope();
     if (!scope || this.busyZoneId()) {
-      return;
+      return false;
     }
     this.busyZoneId.set(zoneId);
     this.rowError.set(null);
@@ -584,8 +773,10 @@ export class DeliveryZonesPage implements OnInit {
       await this.refreshRow(zoneId);
       this.zones.set(await this.api.list(scope));
       await this.loadTariffOptions();
+      return true;
     } catch (error) {
       this.rowError.set(this.describe(error));
+      return false;
     } finally {
       this.busyZoneId.set(null);
     }

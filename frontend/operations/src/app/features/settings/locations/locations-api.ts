@@ -9,9 +9,12 @@ import { settingsPaths } from '../../../core/api/settings-paths';
 
 export type CoordinateSource = 'NOT_GEOCODED' | 'GEOCODER' | 'MERCHANT_PIN' | 'OPERATOR_PIN';
 
-/** `uz.horecaos.platform.tenancy.domain.BrandProfile.KNOWN_LOCALES`, mirrored — same closed set brand-profile.locale editing uses. */
-export type LocationLocaleCode = 'ru' | 'uz-Latn' | 'en';
-export const LOCATION_KNOWN_LOCALES: readonly LocationLocaleCode[] = ['ru', 'uz-Latn', 'en'];
+/**
+ * A BCP 47 tag of a language a branch's content can be in: the same registry content tier brand
+ * profile editing uses (ADR 0149), narrowed by the brand's own supported set. Not a closed union;
+ * the list of languages is the backend registry's, read through `PlatformLocales`.
+ */
+export type LocationLocaleCode = string;
 
 /** One locale's own localized content for a branch (10.2b). Mirrors ...TenantControlPlaneService.LocationLocaleView. */
 export interface LocationLocaleView {

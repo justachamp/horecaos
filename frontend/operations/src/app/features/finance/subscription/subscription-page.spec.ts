@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
@@ -15,6 +16,7 @@ import {
   TenantModuleView,
   UsageView,
 } from '../commercial-api';
+import { StatementPaymentView, TenantWalletView, WalletApi } from '../wallet/wallet-api';
 import { SubscriptionPage } from './subscription-page';
 
 const TENANT_ID = 'tenant-1';
@@ -179,6 +181,8 @@ const ARREARS_HEALTHY: TenantArrearsView = {
   daysInStatus: 14,
   suspensionReason: null,
   latestStatement: null,
+  owed: null,
+  waysToPay: { cardOnFile: false, cardPaymentsAvailable: false, bankTransferAvailable: true },
 };
 
 const ARREARS_RESTRICTED: TenantArrearsView = {
@@ -196,6 +200,33 @@ const ARREARS_RESTRICTED: TenantArrearsView = {
     total: { amountMinor: 1_500_000, currency: 'UZS' },
     issuedAt: '2026-09-01T05:00:00Z',
   },
+  owed: { due: { amountMinor: 1_500_000, currency: 'UZS' }, openStatements: 1 },
+  waysToPay: { cardOnFile: false, cardPaymentsAvailable: false, bankTransferAvailable: true },
+};
+
+/** What the wallet says of the two statements above: the August one part paid, the July one void (absent). */
+const STATEMENT_PAYMENTS: readonly StatementPaymentView[] = [
+  {
+    statementId: 'st-2',
+    number: 'S-2026-08-000001',
+    periodKey: '2026-08',
+    total: { amountMinor: 1_500_000, currency: 'UZS' },
+    paid: { amountMinor: 1_000_000, currency: 'UZS' },
+    due: { amountMinor: 500_000, currency: 'UZS' },
+  },
+];
+
+/** The wallet at a glance: money in it, nothing about to lapse. */
+const WALLET_OVERVIEW: TenantWalletView = {
+  paidBalance: { amountMinor: 2_000_000, currency: 'UZS' },
+  bonusBalance: { amountMinor: 300_000, currency: 'UZS' },
+  bonusSpendableBalance: { amountMinor: 300_000, currency: 'UZS' },
+  paymentMethod: 'WALLET',
+  card: null,
+  lapsingGrants: [],
+  pendingTopUp: null,
+  cardPaymentsAvailable: false,
+  bankTransferAvailable: true,
 };
 
 class FakeCurrentTenant {
@@ -224,6 +255,10 @@ describe('SubscriptionPage', () => {
     endModule: ReturnType<typeof vi.fn>;
     arrears: ReturnType<typeof vi.fn>;
   };
+  let wallet: {
+    statementPayments: ReturnType<typeof vi.fn>;
+    overview: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     api = {
@@ -245,11 +280,17 @@ describe('SubscriptionPage', () => {
       }),
       arrears: vi.fn().mockResolvedValue(ARREARS_HEALTHY),
     };
+    wallet = {
+      statementPayments: vi.fn().mockResolvedValue(STATEMENT_PAYMENTS),
+      overview: vi.fn().mockResolvedValue(WALLET_OVERVIEW),
+    };
 
     await TestBed.configureTestingModule({
       imports: [SubscriptionPage],
       providers: [
+        provideRouter([]),
         { provide: CommercialApi, useValue: api },
+        { provide: WalletApi, useValue: wallet },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
       ],
     }).compileComponents();
@@ -689,6 +730,182 @@ describe('SubscriptionPage', () => {
     expect(host.textContent).toContain('Account standing');
     expect(host.textContent).toContain('Suspended');
     expect(host.textContent).toContain('5 days');
+    expect(host.textContent).toContain('S-2026-08-000001');
+  });
+
+  // ------------------------------------------- ADR 0095: the banner offers a way out
+
+  async function reopenWith(arrears: TenantArrearsView): Promise<HTMLElement> {
+    api.arrears.mockResolvedValue(arrears);
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return fixture.nativeElement;
+  }
+
+  const text = (host: HTMLElement, testid: string): string =>
+    (host.querySelector(`[data-testid="${testid}"]`)?.textContent ?? '').replace(/\u00a0/g, ' ');
+
+  it('says what is owed and offers bank transfer, with a link to the wallet, to a restricted tenant', async () => {
+    const host = await reopenWith(ARREARS_RESTRICTED);
+    expect(text(host, 'subscription-owed')).toContain('You owe 1 500 000');
+    expect(text(host, 'subscription-owed')).toContain('Statements with an amount due: 1');
+    expect(text(host, 'subscription-way-to-pay')).toContain('bank transfer');
+    expect(host.textContent).not.toContain('You can pay by card');
+    const link = host.querySelector(
+      '[data-testid="subscription-open-wallet"]',
+    ) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/finance/wallet');
+  });
+
+  it('offers the card too once the server says it is connected and a card is on file', async () => {
+    const host = await reopenWith({
+      ...ARREARS_RESTRICTED,
+      waysToPay: { cardOnFile: true, cardPaymentsAvailable: true, bankTransferAvailable: true },
+    });
+    expect(host.textContent).toContain('You can pay by card');
+    expect(host.textContent).toContain('You can pay by bank transfer');
+  });
+
+  it('does not offer a card that is not connected, even with a card on file', async () => {
+    const host = await reopenWith({
+      ...ARREARS_RESTRICTED,
+      waysToPay: { cardOnFile: true, cardPaymentsAvailable: false, bankTransferAvailable: true },
+    });
+    expect(host.textContent).not.toContain('You can pay by card');
+  });
+
+  it('says to contact HorecaOS when neither way of paying is available, rather than offering one that would be refused', async () => {
+    const host = await reopenWith({
+      ...ARREARS_RESTRICTED,
+      waysToPay: { cardOnFile: false, cardPaymentsAvailable: false, bankTransferAvailable: false },
+    });
+    expect(text(host, 'subscription-way-to-pay')).toContain('Contact HorecaOS to arrange payment');
+  });
+
+  it('shows a past-due tenant that nothing is restricted yet, instead of nothing at all', async () => {
+    const host = await reopenWith({
+      ...ARREARS_RESTRICTED,
+      status: 'PAST_DUE',
+      planEntitlementsApply: true,
+      additionsBlocked: false,
+    });
+    expect(text(host, 'subscription-standing')).toContain(
+      'Payment is late. Nothing is restricted yet',
+    );
+    expect(text(host, 'subscription-standing')).not.toContain('cannot be added');
+  });
+
+  it('shows a tenant in good standing that owes a statement what it owes, without calling it restricted', async () => {
+    const host = await reopenWith({ ...ARREARS_HEALTHY, owed: ARREARS_RESTRICTED.owed });
+    expect(text(host, 'subscription-owed')).toContain('You owe 1 500 000');
+    expect(text(host, 'subscription-standing')).not.toContain('cannot be added');
+    expect(host.querySelector('[data-testid="subscription-standing"]')?.getAttribute('role')).toBe(
+      'status',
+    );
+  });
+
+  it('never offers to restore the subscription: paying is a signal to staff, not a switch (ADR 0089)', async () => {
+    const host = await reopenWith(ARREARS_RESTRICTED);
+    const labels = [...host.querySelectorAll('[data-testid="subscription-standing"] button')];
+    expect(labels).toHaveLength(0);
+  });
+
+  it('keeps showing nothing extra for a tenant in good standing that owes nothing', async () => {
+    const host = await reopenWith(ARREARS_HEALTHY);
+    expect(host.querySelector('[data-testid="subscription-standing"]')).toBeNull();
+  });
+
+  // ------------------------------------------- statements: what the wallet has paid
+
+  it('shows what the wallet has paid of each statement and what is still due', () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(wallet.statementPayments).toHaveBeenCalledWith(TENANT_ID);
+    const augustRow = [...host.querySelectorAll('tr.statement-row')].find((row) =>
+      row.textContent?.includes('S-2026-08-000001'),
+    ) as HTMLElement;
+    expect(
+      augustRow
+        .querySelector('[data-testid="statement-paid"]')
+        ?.textContent?.replace(/\u00a0/g, ' '),
+    ).toContain('1 000 000');
+    expect(
+      augustRow
+        .querySelector('[data-testid="statement-due"]')
+        ?.textContent?.replace(/\u00a0/g, ' '),
+    ).toContain('500 000');
+    // A void statement is not in the wallet's list: a dash, not a made-up zero.
+    const julyRow = [...host.querySelectorAll('tr.statement-row')].find((row) =>
+      row.textContent?.includes('S-2026-07-000001'),
+    ) as HTMLElement;
+    expect(julyRow.querySelector('[data-testid="statement-due"]')?.textContent?.trim()).toBe('—');
+  });
+
+  it('shows dashes, not an error, when this role may not read the wallet', async () => {
+    wallet.statementPayments.mockRejectedValue(
+      new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null),
+    );
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('[data-testid="statement-due"]')?.textContent?.trim()).toBe('—');
+    expect(host.textContent).toContain('S-2026-08-000001');
+  });
+  // ------------------------------------------- the wallet at a glance (IA 8.6)
+
+  it('shows both balances and a link to the wallet, so this tab is not blind to the prepaid half', () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(wallet.overview).toHaveBeenCalledWith(TENANT_ID);
+    const balances = (
+      host.querySelector('[data-testid="subscription-wallet-balances"]')?.textContent ?? ''
+    ).replace(/\u00a0/g, ' ');
+    expect(balances).toContain('2 000 000');
+    expect(balances).toContain('300 000');
+    expect(
+      (
+        host.querySelector('[data-testid="subscription-wallet-link"]') as HTMLAnchorElement
+      ).getAttribute('href'),
+    ).toBe('/finance/wallet');
+    expect(host.querySelector('[data-testid="subscription-wallet-lapsing"]')).toBeNull();
+  });
+
+  it('warns here too about bonus credit that is about to lapse, with the amount and the day', async () => {
+    wallet.overview.mockResolvedValue({
+      ...WALLET_OVERVIEW,
+      lapsingGrants: [
+        {
+          grantId: 'g1',
+          remaining: { amountMinor: 200_000, currency: 'UZS' },
+          expiresAt: '2026-10-14T00:00:00Z',
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const warning = (
+      fixture.nativeElement.querySelector('[data-testid="subscription-wallet-lapsing"]')
+        ?.textContent ?? ''
+    ).replace(/\u00a0/g, ' ');
+    expect(warning).toContain('Bonus credit that is about to lapse');
+    expect(warning).toContain('200 000');
+    expect(warning).toContain('14.10.2026');
+  });
+
+  it('shows no wallet card, and no error, to a role that may not read the wallet', async () => {
+    wallet.overview.mockRejectedValue(
+      new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null),
+    );
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('[data-testid="subscription-wallet"]')).toBeNull();
     expect(host.textContent).toContain('S-2026-08-000001');
   });
 });

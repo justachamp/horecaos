@@ -30,16 +30,27 @@ export class SupportSessionsApi {
 
   async open(
     tenantId: string,
-    request: { readonly access: SupportAccess; readonly reason: string; readonly ticketReference?: string; readonly minutes: number },
+    request: {
+      readonly access: SupportAccess;
+      readonly reason: string;
+      readonly ticketReference?: string;
+      readonly minutes: number;
+    },
   ): Promise<SupportSessionView> {
     return firstValueFrom(
-      this.api.post<SupportSessionView>(`/api/v1/control-plane/tenants/${tenantId}/support-sessions`, request),
+      this.api.post<SupportSessionView>(
+        `/api/v1/control-plane/tenants/${tenantId}/support-sessions`,
+        request,
+      ),
     );
   }
 
   async list(tenantId: string, limit = 50): Promise<Page<SupportSessionView>> {
     return firstValueFrom(
-      this.api.getPage<SupportSessionView>(`/api/v1/control-plane/tenants/${tenantId}/support-sessions`, { limit }),
+      this.api.getPage<SupportSessionView>(
+        `/api/v1/control-plane/tenants/${tenantId}/support-sessions`,
+        { limit },
+      ),
     );
   }
 

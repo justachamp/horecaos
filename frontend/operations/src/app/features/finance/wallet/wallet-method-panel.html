@@ -1,0 +1,211 @@
+<section class="panel" data-testid="wallet-method-panel">
+  <h2 class="q-subhead">{{ 'finance.wallet.method.title' | t }}</h2>
+  <p class="q-body-sm panel-lead">{{ 'finance.wallet.method.lead' | t }}</p>
+
+  @if (error(); as message) {
+    <div class="band band--error" role="alert" data-testid="wallet-method-error">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+  @if (notice(); as message) {
+    <div class="band" role="status" data-testid="wallet-method-notice">
+      <span class="q-body-sm">{{ message }}</span>
+    </div>
+  }
+
+  <h3 class="q-caption section-caption">{{ 'finance.wallet.card.title' | t }}</h3>
+  @if (wallet().card; as card) {
+    <div class="band" data-testid="wallet-card-on-file">
+      <span class="q-body-sm q-tnum">{{ cardLabel() }}</span>
+      @if (expiry(); as text) {
+        <span class="q-caption muted">{{
+          'finance.wallet.card.expires' | t: { expiry: text }
+        }}</span>
+      }
+      @if (card.lapsed) {
+        <span class="status-badge status-badge--bad" data-testid="wallet-card-lapsed">{{
+          'finance.wallet.card.lapsed' | t
+        }}</span>
+      } @else if (card.lapsesSoon) {
+        <span class="status-badge status-badge--warn" data-testid="wallet-card-lapses-soon">{{
+          'finance.wallet.card.lapsesSoon' | t
+        }}</span>
+      }
+    </div>
+  } @else {
+    <p class="q-body-sm muted" data-testid="wallet-card-none">
+      {{ 'finance.wallet.card.none' | t }}
+    </p>
+  }
+
+  @if (enrolment() === null) {
+    <div class="form">
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="!wallet().cardPaymentsAvailable || busy() !== null"
+        (click)="startEnrolment()"
+        data-testid="wallet-card-add"
+      >
+        {{ (wallet().card ? 'finance.wallet.card.replace' : 'finance.wallet.card.add') | t }}
+      </button>
+      @if (wallet().card) {
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="busy() !== null || wallet().pendingTopUp !== null"
+          (click)="askRemove()"
+          data-testid="wallet-card-remove"
+        >
+          {{ 'finance.wallet.card.remove' | t }}
+        </button>
+      }
+    </div>
+    @if (!wallet().cardPaymentsAvailable) {
+      <p class="q-caption muted" data-testid="wallet-card-not-connected">
+        {{ 'finance.wallet.card.notConnected' | t }}
+      </p>
+    } @else if (wallet().card && wallet().pendingTopUp !== null) {
+      <p class="q-caption muted">{{ 'finance.wallet.card.inFlight' | t }}</p>
+    }
+  } @else {
+    <form
+      class="enrolment"
+      (submit)="$event.preventDefault(); confirmEnrolment()"
+      data-testid="wallet-enrolment"
+    >
+      <h4 class="q-body-sm enrolment-title">{{ 'finance.wallet.enrol.title' | t }}</h4>
+      <p class="q-body-sm muted">{{ 'finance.wallet.enrol.lead' | t }}</p>
+      @if (formUrl(); as url) {
+        <p class="q-body-sm">
+          <a
+            [href]="url"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="wallet-enrolment-form-link"
+            >{{ 'finance.wallet.enrol.openForm' | t }}</a
+          >
+        </p>
+      }
+      @if (testProvider()) {
+        <p class="q-caption muted" data-testid="wallet-enrolment-test-hint">
+          {{ 'finance.wallet.enrol.testHint' | t }}
+        </p>
+      }
+      <div class="form">
+        <label class="field q-caption">
+          {{ 'finance.wallet.enrol.token' | t }}
+          <input
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            name="providerToken"
+            [value]="providerToken()"
+            (input)="providerToken.set($any($event.target).value)"
+            data-testid="wallet-enrolment-token"
+          />
+        </label>
+        <label class="field q-caption">
+          {{ 'finance.wallet.enrol.code' | t }}
+          <input
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            name="verificationCode"
+            [value]="verificationCode()"
+            (input)="verificationCode.set($any($event.target).value)"
+            data-testid="wallet-enrolment-code"
+          />
+        </label>
+        <button
+          type="submit"
+          class="primary"
+          [disabled]="!canConfirm()"
+          data-testid="wallet-enrolment-confirm"
+        >
+          {{ 'finance.wallet.enrol.confirm' | t }}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="busy() === 'confirm'"
+          (click)="cancelEnrolment()"
+          data-testid="wallet-enrolment-cancel"
+        >
+          {{ 'finance.wallet.enrol.cancel' | t }}
+        </button>
+      </div>
+      <p class="q-caption muted">
+        {{ 'finance.wallet.enrol.expires' | t: { time: time(enrolment()!.expiresAt) } }}
+      </p>
+    </form>
+  }
+  <p class="q-caption muted">{{ 'finance.wallet.card.neverStored' | t }}</p>
+
+  <h3 class="q-caption section-caption">{{ 'finance.wallet.collect.title' | t }}</h3>
+  <fieldset class="methods">
+    <legend class="q-caption muted">{{ 'finance.wallet.collect.legend' | t }}</legend>
+    @for (method of methods; track method) {
+      <label class="method" [class.method--picked]="selected() === method">
+        <input
+          type="radio"
+          name="paymentMethod"
+          [value]="method"
+          [checked]="selected() === method"
+          [disabled]="busy() !== null || (method === 'CARD' && !wallet().card)"
+          (change)="pick(method)"
+          [attr.data-testid]="'wallet-method-' + method"
+        />
+        <span>
+          <span class="q-body-sm">{{ methodLabel(method) }}</span>
+          <span class="q-caption muted method__hint">{{ methodHint(method) }}</span>
+        </span>
+      </label>
+    }
+  </fieldset>
+  @if (!wallet().card) {
+    <p class="q-caption muted">{{ 'finance.wallet.collect.cardNeedsCard' | t }}</p>
+  }
+  @if (selected() === 'CARD' && !wallet().cardPaymentsAvailable) {
+    <p class="q-caption muted" data-testid="wallet-collect-not-connected">
+      {{ 'finance.wallet.collect.cardNotConnected' | t }}
+    </p>
+  }
+  <div class="form">
+    <button
+      type="button"
+      class="primary"
+      [disabled]="!dirty() || busy() !== null"
+      (click)="saveMethod()"
+      data-testid="wallet-method-save"
+    >
+      {{ 'finance.wallet.collect.save' | t }}
+    </button>
+  </div>
+
+  @switch (confirming()) {
+    @case ('remove') {
+      <q-confirm-dialog
+        [title]="'finance.wallet.card.remove.title' | t"
+        [body]="removeBody()"
+        [confirmLabel]="'finance.wallet.card.remove.confirm' | t"
+        [cancelLabel]="'finance.wallet.card.remove.cancel' | t"
+        tone="destructive"
+        [busy]="busy() === 'remove'"
+        (confirm)="removeCard()"
+        (cancel)="cancelConfirm()"
+      />
+    }
+    @case ('card') {
+      <q-confirm-dialog
+        [title]="'finance.wallet.collect.consent.title' | t"
+        [body]="consentBody()"
+        [confirmLabel]="'finance.wallet.collect.consent.confirm' | t"
+        [cancelLabel]="'finance.wallet.collect.consent.cancel' | t"
+        [busy]="busy() === 'method'"
+        (confirm)="applyMethod()"
+        (cancel)="cancelConfirm()"
+      />
+    }
+  }
+</section>

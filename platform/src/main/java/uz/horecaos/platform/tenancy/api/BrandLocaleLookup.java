@@ -35,6 +35,19 @@ public interface BrandLocaleLookup {
     TenantLocaleSet tenantLocaleSet(UUID tenantId);
 
     /**
+     * The languages <em>one brand</em> supports, with its default (ADR 0149, Decision 4): what
+     * "every locale this brand serves" means for a rule that used to say "every platform locale".
+     * A brand that has configured nothing supports the registry's content tier, the way every
+     * brand-scoped editor already reads it, and a brand that is not this tenant's answers the same.
+     *
+     * <p>The default implementation answers with the tenant's union, which is the broader and
+     * therefore the stricter reading; the database-backed lookup overrides it with the brand's own.
+     */
+    default TenantLocaleSet brandLocaleSet(UUID tenantId, UUID brandId) {
+        return tenantLocaleSet(tenantId);
+    }
+
+    /**
      * A lookup for callers that have no tenancy to ask -- a unit test, a tool: no
      * brand has a default of its own and every tenant sits on the platform
      * fallback ({@link TenantLocaleSet#platformFallback()}).

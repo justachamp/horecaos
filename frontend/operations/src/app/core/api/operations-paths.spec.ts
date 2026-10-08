@@ -208,3 +208,17 @@ describe('operationsPaths order board scopes (OperationsBrandOrderController)', 
     ).toBe('/api/v1/operations/tenants/a%2Fb/brands/c%2Fd/orders/board');
   });
 });
+
+describe('operationsPaths.assistantTurn (ADR 0069, AssistantTurnController)', () => {
+  it('is brand-scoped on the /operations prefix, beside the conversations and not under them', () => {
+    expect(operationsPaths.assistantTurn(SCOPE, 'turn-1')).toBe(
+      '/api/v1/operations/tenants/t1/brands/b1/assistant/turns/turn-1',
+    );
+  });
+
+  it('encodes every identifier, including a slash smuggled into one', () => {
+    expect(
+      operationsPaths.assistantTurn({ tenantId: 'a/b', brandId: 'c/d', locationId: 'l1' }, 'x/y'),
+    ).toBe('/api/v1/operations/tenants/a%2Fb/brands/c%2Fd/assistant/turns/x%2Fy');
+  });
+});

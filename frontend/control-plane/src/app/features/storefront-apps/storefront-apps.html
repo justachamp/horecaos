@@ -1,0 +1,352 @@
+<h1 class="q-title">{{ i18n.t('nav.storefrontApps') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('storefrontApps.lead') }}</p>
+
+@if (actionMessage(); as message) {
+  <p class="q-body-sm state ok" role="status">{{ message }}</p>
+}
+@if (actionError(); as message) {
+  <p class="q-body-sm state error" role="alert">{{ message }}</p>
+}
+
+@if (issuedSecret(); as secret) {
+  <section class="secret" role="alert" data-testid="issued-secret">
+    <h2 class="q-subhead">{{ i18n.t('storefrontApps.secret.title', { name: secret.appName }) }}</h2>
+    <p class="q-body-sm">{{ i18n.t('storefrontApps.secret.once') }}</p>
+    <code class="q-tnum secretValue">{{ secret.value }}</code>
+    <button type="button" class="confirmChange dismissSecret" (click)="dismissSecret()">
+      {{ i18n.t('storefrontApps.secret.stored') }}
+    </button>
+  </section>
+}
+
+@if (loading()) {
+  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm state error">{{ message }}</p>
+} @else {
+  <div class="toolbar">
+    <button type="button" class="registerToggle" (click)="toggleRegistration()">
+      {{ i18n.t('storefrontApps.register') }}
+    </button>
+  </div>
+
+  @if (registering()) {
+    <section class="panel registerForm" data-testid="register-form">
+      <h2 class="q-subhead">{{ i18n.t('storefrontApps.register') }}</h2>
+      <div class="changeForm stacked">
+        <input
+          class="q-body-sm"
+          name="appName"
+          [placeholder]="i18n.t('storefrontApps.field.name')"
+          [value]="newName()"
+          (input)="newName.set($any($event.target).value)"
+        />
+        <input
+          class="q-body-sm"
+          name="appVendor"
+          [placeholder]="i18n.t('storefrontApps.field.vendor')"
+          [value]="newVendor()"
+          (input)="newVendor.set($any($event.target).value)"
+        />
+        <select
+          class="q-body-sm"
+          name="appClientType"
+          (change)="newClientType.set($any($event.target).value)"
+        >
+          <option value="PUBLIC" [selected]="newClientType() === 'PUBLIC'">
+            {{ i18n.t('storefrontApps.clientType.PUBLIC') }}
+          </option>
+          <option value="CONFIDENTIAL" [selected]="newClientType() === 'CONFIDENTIAL'">
+            {{ i18n.t('storefrontApps.clientType.CONFIDENTIAL') }}
+          </option>
+        </select>
+        <p class="q-caption muted">
+          {{
+            i18n.t(
+              newClientType() === 'PUBLIC'
+                ? 'storefrontApps.clientType.PUBLIC.explain'
+                : 'storefrontApps.clientType.CONFIDENTIAL.explain'
+            )
+          }}
+        </p>
+        <textarea
+          class="q-body-sm"
+          name="appOrigins"
+          rows="3"
+          [placeholder]="i18n.t('storefrontApps.field.origins')"
+          [value]="newOrigins()"
+          (input)="newOrigins.set($any($event.target).value)"
+        ></textarea>
+        <label class="q-body-sm check">
+          <input
+            type="checkbox"
+            name="appFirstParty"
+            [checked]="newFirstParty()"
+            (change)="newFirstParty.set($any($event.target).checked)"
+          />
+          {{ i18n.t('storefrontApps.field.firstParty') }}
+        </label>
+        <input
+          class="q-body-sm"
+          name="appReason"
+          [placeholder]="i18n.t('common.reason')"
+          [value]="newReason()"
+          (input)="newReason.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          class="confirmChange confirmRegister"
+          [disabled]="!canRegister()"
+          (click)="register()"
+        >
+          {{ i18n.t('storefrontApps.register') }}
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (apps().length === 0) {
+    <p class="q-body-sm muted">{{ i18n.t('storefrontApps.none') }}</p>
+  } @else {
+    <div class="scroll">
+      <table class="table apps">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('storefrontApps.column.app') }}</th>
+            <th class="q-caption">{{ i18n.t('storefrontApps.column.clientType') }}</th>
+            <th class="q-caption">{{ i18n.t('storefrontApps.column.status') }}</th>
+            <th class="q-caption">{{ i18n.t('storefrontApps.column.conformance') }}</th>
+            <th class="q-caption">{{ i18n.t('storefrontApps.column.installed') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of apps(); track row.app.id) {
+            <tr [attr.data-app]="row.app.id" [attr.data-status]="row.app.status">
+              <td class="q-body-sm">
+                <strong>{{ row.app.name }}</strong>
+                <span class="q-caption muted"> · {{ row.app.vendor }}</span>
+                @if (row.app.firstParty) {
+                  <span class="chip q-caption">{{ i18n.t('storefrontApps.firstParty') }}</span>
+                }
+              </td>
+              <td class="q-body-sm">{{ i18n.t(clientTypeKey(row.app.clientType)) }}</td>
+              <td class="q-body-sm">{{ i18n.t(statusKey(row.app.status)) }}</td>
+              <td class="q-body-sm" [attr.data-conformance]="row.app.conformance.status">
+                {{ i18n.t(conformanceKey(row.app.conformance.status)) }}
+              </td>
+              <td class="q-body-sm q-tnum">
+                {{
+                  i18n.t('storefrontApps.installed', {
+                    brands: row.activeAuthorisations,
+                    tenants: row.activeTenants,
+                  })
+                }}
+              </td>
+              <td>
+                <button type="button" class="openApp" (click)="open(row.app.id)">
+                  {{ i18n.t('storefrontApps.open') }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+@if (selected(); as detail) {
+  <section class="panel detail" [attr.data-detail]="detail.app.id">
+    <header class="detailHead">
+      <h2 class="q-subhead">{{ detail.app.name }}</h2>
+      <button type="button" class="closeDetail" (click)="close()">
+        {{ i18n.t('common.cancel') }}
+      </button>
+    </header>
+
+    <dl class="facts q-body-sm">
+      <dt>{{ i18n.t('storefrontApps.column.clientType') }}</dt>
+      <dd>{{ i18n.t(clientTypeKey(detail.app.clientType)) }}</dd>
+      <dt>{{ i18n.t('storefrontApps.column.status') }}</dt>
+      <dd>{{ i18n.t(statusKey(detail.app.status)) }}</dd>
+      <dt>{{ i18n.t('storefrontApps.appId') }}</dt>
+      <dd class="q-tnum">{{ detail.app.id }}</dd>
+      @if (detail.app.clientType === 'CONFIDENTIAL') {
+        <dt>{{ i18n.t('storefrontApps.secretState') }}</dt>
+        <dd data-testid="secret-state">
+          {{
+            detail.app.secretRotatedAt
+              ? i18n.t('storefrontApps.secretRotatedAt', {
+                  when: i18n.dateTime(asDate(detail.app.secretRotatedAt)),
+                })
+              : i18n.t('storefrontApps.secretNone')
+          }}
+        </dd>
+      }
+      <dt>{{ i18n.t('storefrontApps.column.conformance') }}</dt>
+      <dd>
+        {{ i18n.t(conformanceKey(detail.app.conformance.status)) }}
+        @if (detail.app.conformance.contractVersion && detail.app.conformance.recordedAt) {
+          <span class="q-caption muted">
+            · {{ detail.app.conformance.contractVersion }} ·
+            {{ i18n.dateTime(asDate(detail.app.conformance.recordedAt)) }}</span
+          >
+        }
+      </dd>
+    </dl>
+
+    <h3 class="q-subhead section">{{ i18n.t('storefrontApps.installations') }}</h3>
+    @if (detail.authorisations.length === 0) {
+      <p class="q-body-sm muted">{{ i18n.t('storefrontApps.noInstallations') }}</p>
+    } @else {
+      <div class="scroll">
+        <table class="table installs">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ i18n.t('globalLookup.column.tenant') }}</th>
+              <th class="q-caption">{{ i18n.t('storefrontApps.column.brand') }}</th>
+              <th class="q-caption">{{ i18n.t('storefrontApps.column.status') }}</th>
+              <th class="q-caption">{{ i18n.t('storefrontApps.column.since') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of detail.authorisations; track row.id) {
+              <tr [attr.data-authorisation]="row.id" [attr.data-status]="row.status">
+                <td class="q-body-sm">
+                  <a [routerLink]="['/tenants', row.tenantId]">{{ row.tenantName }}</a>
+                </td>
+                <td class="q-body-sm">{{ row.brandName }}</td>
+                <td class="q-body-sm">
+                  {{
+                    i18n.t(
+                      row.status === 'ACTIVE'
+                        ? 'storefrontApps.authorisation.ACTIVE'
+                        : 'storefrontApps.authorisation.REVOKED'
+                    )
+                  }}
+                </td>
+                <td class="q-body-sm q-tnum">
+                  {{ i18n.dateTime(asDate(row.revokedAt ?? row.grantedAt)) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (detail.app.status !== 'RETIRED') {
+      <h3 class="q-subhead section">{{ i18n.t('storefrontApps.change') }}</h3>
+      <div class="changeForm stacked">
+        <input
+          class="q-body-sm"
+          name="editName"
+          [value]="editName()"
+          (input)="editName.set($any($event.target).value)"
+        />
+        <input
+          class="q-body-sm"
+          name="editVendor"
+          [value]="editVendor()"
+          (input)="editVendor.set($any($event.target).value)"
+        />
+        <textarea
+          class="q-body-sm"
+          name="editOrigins"
+          rows="3"
+          [placeholder]="i18n.t('storefrontApps.field.origins')"
+          [value]="editOrigins()"
+          (input)="editOrigins.set($any($event.target).value)"
+        ></textarea>
+        <input
+          class="q-body-sm"
+          name="actionReason"
+          [placeholder]="i18n.t('common.reason')"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+        />
+        <div class="actions">
+          <button
+            type="button"
+            class="confirmChange saveApp"
+            [disabled]="!canAct()"
+            (click)="save()"
+          >
+            {{ i18n.t('storefrontApps.save') }}
+          </button>
+          @if (detail.app.status === 'ACTIVE') {
+            <button
+              type="button"
+              class="confirmChange suspendApp"
+              [disabled]="!canAct()"
+              (click)="setStatus('SUSPENDED')"
+            >
+              {{ i18n.t('storefrontApps.suspend') }}
+            </button>
+          }
+          @if (detail.app.status === 'SUSPENDED') {
+            <button
+              type="button"
+              class="confirmChange reinstateApp"
+              [disabled]="!canAct()"
+              (click)="setStatus('ACTIVE')"
+            >
+              {{ i18n.t('storefrontApps.reinstate') }}
+            </button>
+          }
+          <button
+            type="button"
+            class="confirmChange retireApp"
+            [disabled]="!canAct()"
+            (click)="setStatus('RETIRED')"
+          >
+            {{ i18n.t('storefrontApps.retire') }}
+          </button>
+          @if (detail.app.clientType === 'CONFIDENTIAL') {
+            <button
+              type="button"
+              class="confirmChange rotateSecret"
+              [disabled]="!canAct()"
+              (click)="rotate()"
+            >
+              {{ i18n.t('storefrontApps.rotate') }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <h3 class="q-subhead section">{{ i18n.t('storefrontApps.conformance.record') }}</h3>
+      <p class="q-caption muted">{{ i18n.t('storefrontApps.conformance.note') }}</p>
+      <div class="changeForm">
+        <select
+          class="q-body-sm"
+          name="conformanceResult"
+          (change)="conformanceResult.set($any($event.target).value)"
+        >
+          <option value="PASSED" [selected]="conformanceResult() === 'PASSED'">
+            {{ i18n.t('storefrontApps.conformance.PASSED') }}
+          </option>
+          <option value="FAILED" [selected]="conformanceResult() === 'FAILED'">
+            {{ i18n.t('storefrontApps.conformance.FAILED') }}
+          </option>
+        </select>
+        <input
+          class="q-body-sm"
+          name="conformanceNote"
+          [placeholder]="i18n.t('storefrontApps.conformance.noteField')"
+          [value]="conformanceNote()"
+          (input)="conformanceNote.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          class="confirmChange recordConformance"
+          [disabled]="!canAct()"
+          (click)="recordConformance()"
+        >
+          {{ i18n.t('storefrontApps.conformance.recordButton') }}
+        </button>
+      </div>
+    }
+  </section>
+}

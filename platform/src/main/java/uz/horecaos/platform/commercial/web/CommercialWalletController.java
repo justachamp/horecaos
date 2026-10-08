@@ -7,11 +7,15 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Clock;
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,14 +24,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.commercial.application.CardTopUpService;
+import uz.horecaos.platform.commercial.application.PrepaymentInvoiceService;
 import uz.horecaos.platform.commercial.application.WalletService;
 import uz.horecaos.platform.commercial.application.WalletService.WalletChangeOutcome;
 import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
+import uz.horecaos.platform.commercial.domain.CardOnFile;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
+import uz.horecaos.platform.commercial.domain.PrepaymentInvoice;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
 import uz.horecaos.platform.commercial.domain.WalletBalances;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
+import uz.horecaos.platform.commercial.web.CommercialOperationsWalletController.CardOnFileView;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -63,11 +72,25 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CommercialWalletController {
 
     private final WalletService wallet;
+    private final PrepaymentInvoiceService invoices;
+    private final CardTopUpService topUps;
     private final CurrentActor currentActor;
+    private final Clock clock;
+    private final Duration expiryWarning;
 
-    public CommercialWalletController(WalletService wallet, CurrentActor currentActor) {
+    public CommercialWalletController(
+            WalletService wallet,
+            PrepaymentInvoiceService invoices,
+            CardTopUpService topUps,
+            CurrentActor currentActor,
+            Clock clock,
+            @Value("${horecaos.commercial.wallet.expiry-warning-days:14}") int expiryWarningDays) {
         this.wallet = wallet;
+        this.invoices = invoices;
+        this.topUps = topUps;
         this.currentActor = currentActor;
+        this.clock = clock;
+        this.expiryWarning = Duration.ofDays(expiryWarningDays);
     }
 
     // ------------------------------------------------------------------- reads
@@ -80,16 +103,23 @@ public class CommercialWalletController {
                     + "bonusSpendableBalance is the part of the bonus balance a statement could draw on now — "
                     + "the sum of the live grants' remainders. It is lower than bonusBalance between a grant's "
                     + "expiry and the hourly sweep that lapses it, and after a voided statement hands a draw "
-                    + "back to a grant that has already expired.")
+                    + "back to a grant that has already expired. The card on file is described by its last "
+                    + "four digits, brand and expiry only: its token reference, which for a card the tenant "
+                    + "bound itself carries the merchant installation and the provider's vault token, is "
+                    + "never returned, so cardTokenReference is always null (ADR 0028).")
     public ResponseEntity<WalletOverviewView> overview(@PathVariable UUID tenantId) {
+        Instant now = clock.instant();
         WalletBalances balances = wallet.balances(tenantId);
         TenantBilling billing = wallet.billing(tenantId);
+        Optional<CardOnFile> card = wallet.cardOnFile(tenantId);
         return ResponseEntity.ok(new WalletOverviewView(
                 ApiMoney.of(balances.paidMinor(), balances.currency()),
                 ApiMoney.of(balances.bonusMinor(), balances.currency()),
                 ApiMoney.of(wallet.spendableBonusMinor(tenantId), balances.currency()),
                 billing.paymentMethod().name(),
-                billing.cardTokenReference()));
+                null,
+                card.isPresent(),
+                card.map(found -> CardOnFileView.of(found, now, expiryWarning)).orElse(null)));
     }
 
     @GetMapping("/api/v1/control-plane/tenants/{tenantId}/wallet/ledger")
@@ -131,6 +161,34 @@ public class CommercialWalletController {
                 .toList());
     }
 
+    @GetMapping("/api/v1/control-plane/tenants/{tenantId}/wallet/invoices")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The tenant's prepayment invoices, newest first",
+            description = "What finance matches an incoming bank transfer against: each carries its number, "
+                    + "which is what the tenant quotes in the payment's purpose, and how much of it the ledger "
+                    + "has been paid.")
+    public ResponseEntity<List<CommercialOperationsWalletController.PrepaymentInvoiceView>> prepaymentInvoices(
+            @PathVariable UUID tenantId) {
+        Instant now = clock.instant();
+        return ResponseEntity.ok(invoices.list(tenantId).stream()
+                .map(invoice -> CommercialOperationsWalletController.PrepaymentInvoiceView.of(invoice, now))
+                .toList());
+    }
+
+    @GetMapping("/api/v1/control-plane/tenants/{tenantId}/wallet/top-ups")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The tenant's recent card top-ups, newest first",
+            description = "PENDING is a charge the provider has not answered yet; the platform resolves it by "
+                    + "asking the provider under the same key, so it is never charged twice.")
+    public ResponseEntity<List<CommercialOperationsWalletController.TopUpView>> cardTopUps(
+            @PathVariable UUID tenantId) {
+        return ResponseEntity.ok(topUps.recent(tenantId, 50).stream()
+                .map(CommercialOperationsWalletController.TopUpView::of)
+                .toList());
+    }
+
     // ------------------------------------------------------------- money in
 
     @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/transfers")
@@ -138,11 +196,21 @@ public class CommercialWalletController {
     @Operation(
             summary = "Record a bank transfer HorecaOS finance received",
             description = "One person's audited act, like issuing a statement — not a correction. Pays the "
-                    + "oldest open statement at once.")
+                    + "oldest open statement at once. Naming the prepayment invoice it pays makes the entry say "
+                    + "so, and the invoice's paid figure is then the ledger's own sum.")
     public ResponseEntity<WalletEntryRecorded> recordTransfer(
             @PathVariable UUID tenantId, @Valid @RequestBody RecordTransferRequest body) {
-        UUID id = wallet.recordTransfer(
-                tenantId, body.amountMinor(), body.bankReference(), actor(), body.reason(), correlationId());
+        UUID id = body.prepaymentInvoiceNumber() == null
+                ? wallet.recordTransfer(
+                        tenantId, body.amountMinor(), body.bankReference(), actor(), body.reason(), correlationId())
+                : invoices.recordTransfer(
+                        tenantId,
+                        body.prepaymentInvoiceNumber(),
+                        body.amountMinor(),
+                        body.bankReference(),
+                        actor(),
+                        body.reason(),
+                        correlationId());
         // Once the money is committed, and never inside its transaction: the
         // card provider is a third party, and asking it from inside the unit of
         // work that recorded this money would let a provider timeout roll that
@@ -167,6 +235,19 @@ public class CommercialWalletController {
         // money back (ADR 0095).
         wallet.settleCardRemainders(tenantId);
         return ResponseEntity.ok(new WalletEntryRecorded(id));
+    }
+
+    @PostMapping("/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/invoices/{invoiceId}/cancel")
+    @RequiresCapability(value = Capability.COMMERCIAL_WALLET_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Withdraw a prepayment invoice nothing has paid",
+            description = "Refused once any money has been recorded against it.")
+    public ResponseEntity<CommercialOperationsWalletController.PrepaymentInvoiceView> cancelPrepaymentInvoice(
+            @PathVariable UUID tenantId, @PathVariable UUID invoiceId, @Valid @RequestBody CancelInvoiceRequest body) {
+        PrepaymentInvoice cancelled = invoices.cancel(
+                tenantId, invoiceId, actor(), body.reason(), Capability.COMMERCIAL_WALLET_MANAGE, correlationId());
+        return ResponseEntity.ok(
+                CommercialOperationsWalletController.PrepaymentInvoiceView.of(cancelled, clock.instant()));
     }
 
     // -------------------------------------------------- manual changes: two people
@@ -293,13 +374,20 @@ public class CommercialWalletController {
     /**
      * @param bonusBalance          the ledger's own SUM of BONUS entries, which has no clock in it
      * @param bonusSpendableBalance what a statement could draw on right now: the live grants' remainders
+     * @param cardTokenReference    always null. The field stays so no client breaks (ADR 0031), but the
+     *                              reference is the adapter's alone (ADR 0028): a tenant-bound card's is the
+     *                              merchant installation id and the provider's vault token
+     * @param hasCard               whether a card is on file, which is all a card typed in by staff can say
+     * @param card                  which card, as the provider's form reported it, never which reference
      */
     public record WalletOverviewView(
             ApiMoney paidBalance,
             ApiMoney bonusBalance,
             ApiMoney bonusSpendableBalance,
             String paymentMethod,
-            @Nullable String cardTokenReference) {}
+            @Nullable String cardTokenReference,
+            boolean hasCard,
+            @Nullable CardOnFileView card) {}
 
     public record WalletEntryView(
             UUID entryId,
@@ -371,9 +459,14 @@ public class CommercialWalletController {
         return instant == null ? null : instant.toString();
     }
 
+    /** {@code prepaymentInvoiceNumber} names the invoice this transfer pays, when it pays one. */
     public record RecordTransferRequest(
             @Min(1) long amountMinor,
             @NotBlank @Size(max = 128) String bankReference,
+            @NotBlank @Size(max = 1000) String reason,
+            @Nullable @Size(max = 32) String prepaymentInvoiceNumber) {}
+
+    public record CancelInvoiceRequest(
             @NotBlank @Size(max = 1000) String reason) {}
 
     public record RecordDepositRequest(

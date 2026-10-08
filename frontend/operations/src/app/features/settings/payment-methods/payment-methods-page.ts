@@ -3,7 +3,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
-import { PLATFORM_LOCALE_SET } from '../../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
+import { platformLocaleSet } from '../../../core/i18n/locale-labels';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { LocalizedFieldGroup } from '../../../shared/ui/localized-field-group';
@@ -56,6 +57,7 @@ export class PaymentMethodsPage {
   private readonly integrations = inject(IntegrationsApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -69,7 +71,7 @@ export class PaymentMethodsPage {
    * as `GET .../payment-methods/locale-set` answers. The platform triple until it
    * loads, and when it cannot be read.
    */
-  private readonly tenantLocaleSet = signal(PLATFORM_LOCALE_SET);
+  private readonly tenantLocaleSet = signal(platformLocaleSet(this.registry));
   protected readonly locales = computed(() => this.tenantLocaleSet().locales);
   protected readonly defaultLocale = computed(() => this.tenantLocaleSet().defaultLocale);
 
@@ -88,7 +90,7 @@ export class PaymentMethodsPage {
   protected readonly editSortOrder = signal(0);
   protected readonly editInstallationId = signal('');
   protected readonly editContractReference = signal('');
-  protected readonly editLocale = signal<string>(PLATFORM_LOCALE_SET.defaultLocale);
+  protected readonly editLocale = signal<string>(this.registry.fallback());
   protected readonly editTranslations = signal<Record<string, string>>({});
   protected readonly rowSaving = signal(false);
   protected readonly rowError = signal<string | null>(null);
@@ -245,7 +247,7 @@ export class PaymentMethodsPage {
         this.integrations.listInstallations(scope),
         // A language set that cannot be read must not lose the registry: the
         // editor then offers the platform triple, as it did before the read existed.
-        this.api.localeSet(scope).catch(() => PLATFORM_LOCALE_SET),
+        this.api.localeSet(scope).catch(() => platformLocaleSet(this.registry)),
       ]);
       this.methods.set(methods);
       this.installations.set(installations);

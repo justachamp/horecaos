@@ -7,10 +7,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Keeps every active automation rule swept (gap-map row 6.5, ADR 0044
- * Triggers). One {@code @Scheduled} method for all three sweeps, the same
+ * Triggers). One {@code @Scheduled} method for every sweep, the same
  * shape {@code CampaignExpansionScheduler#sweepOnce} already gives one
  * concern's worth of work — each sweep is caught independently so one
- * trigger kind's failure does not stop the other two.
+ * trigger kind's failure does not stop the others.
  *
  * <p>Guard-key idempotency ({@code marketing.automation_runs}) is what makes
  * running this more often than the ADR's own "daily" cadence for BIRTHDAY and
@@ -52,6 +52,11 @@ public class AutomationTriggerScheduler {
             sweeps.sweepCartAbandonment();
         } catch (RuntimeException failure) {
             log.error("The CART_ABANDONMENT automation sweep could not run", failure);
+        }
+        try {
+            sweeps.sweepLateOrderApology();
+        } catch (RuntimeException failure) {
+            log.error("The LATE_ORDER_APOLOGY automation sweep could not run", failure);
         }
     }
 }

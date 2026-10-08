@@ -30,6 +30,12 @@ import org.jspecify.annotations.Nullable;
  * @param templateKey the semantic message key, which distinguishes two different
  *                     concerns about the same subject (a warning from a
  *                     confirmation) from two updates of the same one
+ * @param purpose what the message is for ({@link #PURPOSE_TRANSACTIONAL} or
+ *                {@link #PURPOSE_MARKETING}). ADR 0146: a gateway account may be
+ *                allowed to carry sign-in codes and order messages and not
+ *                promotions, and the adapter must be able to refuse a purpose
+ *                its account has not been cleared for without guessing from the
+ *                template key
  */
 public record NotificationDispatch(
         UUID notificationId,
@@ -45,7 +51,52 @@ public record NotificationDispatch(
         String correlationId,
         String subjectType,
         UUID subjectId,
-        String templateKey) {
+        String templateKey,
+        String purpose) {
+
+    /** An order message, a code, a receipt: anything the customer did not opt into receiving. */
+    public static final String PURPOSE_TRANSACTIONAL = "TRANSACTIONAL";
+
+    /** A campaign or an automation: anything that needs a marketing consent decision. */
+    public static final String PURPOSE_MARKETING = "MARKETING";
+
+    /**
+     * The shape every caller used before ADR 0146 named a purpose. A message that
+     * does not say what it is for is transactional, which is the purpose a gateway
+     * account is cleared for first.
+     */
+    public NotificationDispatch(
+            UUID notificationId,
+            UUID attemptId,
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String recipientValue,
+            @Nullable String subject,
+            String body,
+            String providerIdempotencyKey,
+            String correlationId,
+            String subjectType,
+            UUID subjectId,
+            String templateKey) {
+        this(
+                notificationId,
+                attemptId,
+                tenantId,
+                brandId,
+                locationId,
+                channel,
+                recipientValue,
+                subject,
+                body,
+                providerIdempotencyKey,
+                correlationId,
+                subjectType,
+                subjectId,
+                templateKey,
+                PURPOSE_TRANSACTIONAL);
+    }
 
     public NotificationDispatch {
         Objects.requireNonNull(notificationId, "A notification id is required");
@@ -53,6 +104,7 @@ public record NotificationDispatch(
         Objects.requireNonNull(tenantId, "A tenant id is required");
         Objects.requireNonNull(channel, "A channel is required");
         Objects.requireNonNull(providerIdempotencyKey, "A provider idempotency key is required");
+        Objects.requireNonNull(purpose, "A purpose is required");
         if (recipientValue == null || recipientValue.isBlank()) {
             throw new IllegalArgumentException("A dispatch without a recipient cannot be sent");
         }

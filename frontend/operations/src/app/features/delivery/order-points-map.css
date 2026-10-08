@@ -1,0 +1,55 @@
+.order-points {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.order-points__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.order-points__reveal {
+  padding: 6px 14px;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+  font-size: var(--q-type-caption);
+}
+
+.order-points__reveal:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.order-points__audit {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.order-points__error {
+  color: var(--q-error-text);
+}
+
+.order-points__legend {
+  margin: 0;
+}
+
+.order-points__swatch {
+  margin: 0 4px 0 12px;
+}
+
+.order-points__swatch--courier {
+  color: #2e8b57;
+}
+
+.order-points__swatch--order {
+  color: #d4351c;
+}
+
+.order-points__swatch--closed {
+  color: #8a8a8a;
+}

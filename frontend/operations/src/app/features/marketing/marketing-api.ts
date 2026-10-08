@@ -97,7 +97,16 @@ export interface ChannelView {
   readonly channel: string;
   readonly carriesMarginalCost: boolean;
   readonly isWired: boolean;
+  /**
+   * Why this channel cannot carry this brand's marketing, as a stable code
+   * (`SMS_PURPOSE_NOT_PERMITTED`, `NO_PROVIDER_BINDING`, `NO_DELIVERY_ADAPTER`, ...), or
+   * null when it is wired (ADR 0146 Decision 8). A console shows a sentence for it, never
+   * the bare code; see `channel-wiring.ts`.
+   */
+  readonly notWiredReason: string | null;
 }
+
+export type CampaignKind = 'BROADCAST' | 'SCENARIO';
 
 /** Mirrors `OperationsMarketingController.CampaignResponse` — the whole lifecycle state. */
 export interface CampaignView {
@@ -137,11 +146,19 @@ export interface CampaignView {
    * was still unwired, rather than retrying it forever.
    */
   readonly haltedReason: string | null;
-  /** Whether `channel` has a real ADR 0020 delivery path today (T18). */
+  /** Whether `channel` has a real ADR 0020 delivery path for this brand today (T18, ADR 0146). */
   readonly isWired: boolean;
+  /** Why not, as a stable code; null when wired. See {@link ChannelView.notWiredReason}. */
+  readonly notWiredReason: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly version: number;
+  /** `BROADCAST` (the one-off send) or `SCENARIO` (ADR 0112, per-guest steps). */
+  readonly kind: CampaignKind;
+  /** A scenario's withheld share, in percent; null for none (and for every broadcast). */
+  readonly controlGroupPercent: number | null;
+  /** The scenario version this one replaces, or null. */
+  readonly supersedesCampaignId: string | null;
 }
 
 /** Mirrors `OperationsMarketingController.EstimateResponse`. */
@@ -168,6 +185,17 @@ export interface RecipientView {
   readonly refusalReason: string | null;
   readonly deferredUntil: string | null;
   readonly terminalStatus: string | null;
+  /**
+   * What the delivery path knows about the message (ADR 0146): `DELIVERED`, `FAILED`,
+   * `REJECTED`, `NO_RECEIPT`, `HANDED_TO_OPERATOR` or `PENDING`. Evidence, not a promise: a
+   * gateway that accepted a message and reported nothing is `HANDED_TO_OPERATOR`, which is
+   * neither delivered nor failed. Null for a recipient with no message.
+   */
+  readonly deliveryState: string | null;
+  /** The gateway's own last word, when it sent one. */
+  readonly receiptState: string | null;
+  /** Segments the gateway billed, when it said. */
+  readonly segmentsBilled: number | null;
 }
 
 /** Row 7.9b/6.4. Mirrors `OperationsMarketingController.RecipientCountsResponse`. */

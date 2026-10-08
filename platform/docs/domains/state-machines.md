@@ -292,6 +292,40 @@ repriced under the definition version it was placed under, not the current one. 
 a markup, or a discount above the ADR 0030 thresholds, waits for a second person through the
 `pricing.promotion.activate` approval action.
 
+## Lead
+
+ADR 0111. A lead is a guest who has phoned in, asked for a callback or enquired about catering and
+is not yet an account with an order behind them. The six states are the ones a call centre uses; the
+record's arrows are the edges that matter, and three shortcuts an operator needs ride on them and add
+no state: conversion from any open state (the order or the reservation exists, whatever steps were
+logged), a callback scheduled from `NEW`, and a pending callback rescheduled.
+
+```mermaid
+stateDiagram-v2
+    [*] --> NEW: register
+    NEW --> CONTACTED: contacted
+    NEW --> CALLBACK_SCHEDULED: schedule a callback
+    CONTACTED --> CALLBACK_SCHEDULED: schedule a callback
+    CALLBACK_SCHEDULED --> CALLBACK_SCHEDULED: reschedule
+    CALLBACK_SCHEDULED --> CONTACTED: callback made
+    NEW --> CONVERTED: order or reservation
+    CONTACTED --> CONVERTED
+    CALLBACK_SCHEDULED --> CONVERTED
+    NEW --> DECLINED: reason
+    CONTACTED --> DECLINED
+    CALLBACK_SCHEDULED --> DECLINED
+    NEW --> LOST: reason
+    CONTACTED --> LOST
+    CALLBACK_SCHEDULED --> LOST
+```
+
+`CONVERTED` points at exactly one of `converted_order_id` and `converted_reservation_id`, each
+checked against the lead's own brand; `DECLINED` and `LOST` carry a coded reason, never free text.
+All three are terminal: the next contact with that guest is a new lead. A branch that cannot serve
+a lead declines it with a reason and does not hand it to another branch. Every transition is an
+ADR 0027 audit fact and an outbox event (`customers.events`); nothing in either holds a number, a
+name or a note.
+
 ## Planned state extensions
 
 The following ADRs contain lifecycles that must be copied into this canonical

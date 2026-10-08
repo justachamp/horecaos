@@ -397,6 +397,44 @@
 		import platform_app_upstream
 	}
 
+	# ADR 0146 Decision 4: an SMS gateway's delivery receipts. A gateway whose
+	# callback can carry nothing verifiable (VAS: the document's own example
+	# shows its `key` field empty) is authenticated here and only here, by
+	# source address, so the allowlist is the authentication and not an extra
+	# layer on one. HORECAOS_SMS_RECEIPT_ALLOWED_IPS is the provider's published
+	# list, and it defaults to 0.0.0.0/32 in deploy/compose.production.yml for the
+	# reason the Payme one does: an unset list must fail closed, every callback
+	# answered 403, rather than silently match everything. The application
+	# answers 404 for any provider type whose receipt endpoint is not enabled
+	# (horecaos.sms.receipts.enabled-provider-types, empty until a real callback
+	# has been captured), so this block is inert until both are set.
+	@sms_receipt_not_allowed not remote_ip {$HORECAOS_SMS_RECEIPT_ALLOWED_IPS}
+	@sms_receipts path /providers/sms/*/receipts
+
+	handle @sms_receipts {
+		# A receipt is a few hundred bytes. The ceiling is the same one the
+		# other provider callbacks have and for the same reason.
+		request_body {
+			max_size 65536
+		}
+
+		# Per installation: the path carries it, so one looping gateway account
+		# cannot take the endpoint from every other tenant. Receipts arrive one
+		# per message, so the ceiling is higher than a payment callback's; it
+		# still bounds a retry storm.
+		rate_limit {
+			zone sms_receipts_by_installation {
+				key {http.request.uri.path}
+				events 600
+				window 1m
+			}
+		}
+
+		respond @sms_receipt_not_allowed 403
+
+		import platform_app_upstream
+	}
+
 	import storefront_api
 
 	# ADR 0062's staff sign-in: a credential-guessing target the same way

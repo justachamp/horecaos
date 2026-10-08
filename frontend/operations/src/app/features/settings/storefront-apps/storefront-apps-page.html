@@ -1,0 +1,154 @@
+<h1 class="q-title">{{ 'settings.storefrontApps.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.storefrontApps.lead' | t }}</p>
+
+@switch (state()) {
+  @case ('loading') {
+    <p class="q-body-sm">{{ 'settings.storefrontApps.loading' | t }}</p>
+  }
+  @case ('denied') {
+    <p class="q-body-sm denied">{{ 'settings.storefrontApps.denied' | t }}</p>
+  }
+  @case ('error') {
+    <div class="error-band" role="alert">
+      <span class="q-body-sm">{{ loadErrorText() }}</span>
+      <button type="button" class="secondary" (click)="retry()">
+        {{ 'reports.error.retry' | t }}
+      </button>
+    </div>
+  }
+  @case ('ready') {
+    @if (brands().length > 1) {
+      <label class="q-caption" for="storefront-apps-brand">{{
+        'settings.storefrontApps.brandPicker.label' | t
+      }}</label>
+      <select
+        id="storefront-apps-brand"
+        class="q-body field brand-select"
+        [value]="selectedBrandId()"
+        [disabled]="listLoading() || submitting()"
+        (change)="selectBrand($any($event.target).value)"
+      >
+        @for (brand of brands(); track brand.id) {
+          <option [value]="brand.id">{{ brand.displayName }}</option>
+        }
+      </select>
+    }
+
+    @if (notice(); as message) {
+      <p class="q-body-sm success" role="status" data-testid="storefront-apps-notice">
+        {{ message }}
+      </p>
+    }
+
+    @if (listLoading()) {
+      <p class="q-body-sm" data-testid="storefront-apps-loading">
+        {{ 'settings.storefrontApps.loading' | t }}
+      </p>
+    } @else if (entries().length === 0) {
+      <p class="q-body-sm banner banner--info" data-testid="storefront-apps-empty">
+        {{ 'settings.storefrontApps.empty' | t }}
+      </p>
+    } @else {
+      <ul class="apps">
+        @for (entry of entries(); track entry.appId) {
+          <li class="card app" [attr.data-app]="entry.appId" [attr.data-standing]="entry.standing">
+            <header class="app-head">
+              <h2 class="q-subhead">{{ entry.name }}</h2>
+              <span class="chip q-caption" [attr.data-testid]="'standing-' + entry.appId">{{
+                standingKey(entry) | t
+              }}</span>
+            </header>
+            <p class="q-body-sm muted">
+              {{ 'settings.storefrontApps.by' | t: { vendor: entry.vendor } }}
+              @if (entry.firstParty) {
+                · {{ 'settings.storefrontApps.firstParty' | t }}
+              }
+            </p>
+            <p class="q-body-sm">
+              <strong>{{ clientTypeKey(entry) | t }}.</strong>
+              {{ clientTypeNoteKey(entry) | t }}
+            </p>
+            <p class="q-caption muted">
+              {{ 'settings.storefrontApps.conformance.label' | t }}:
+              {{ conformanceKey(entry) | t }}
+            </p>
+            @if (entry.appStatus !== 'ACTIVE') {
+              <p class="q-body-sm banner" data-testid="app-not-active">
+                {{ 'settings.storefrontApps.notActive' | t }}
+              </p>
+            }
+
+            @if (isPending(entry, 'authorise') || isPending(entry, 'revoke')) {
+              <div class="confirm">
+                <p class="q-body-sm">
+                  {{
+                    (isPending(entry, 'authorise')
+                      ? 'settings.storefrontApps.confirm.authorise'
+                      : 'settings.storefrontApps.confirm.revoke'
+                    ) | t
+                  }}
+                </p>
+                <label class="q-caption" [attr.for]="'reason-' + entry.appId">{{
+                  'settings.storefrontApps.reason' | t
+                }}</label>
+                <input
+                  [id]="'reason-' + entry.appId"
+                  class="q-body field"
+                  type="text"
+                  name="reason"
+                  [value]="reason()"
+                  [disabled]="submitting()"
+                  (input)="reason.set($any($event.target).value)"
+                />
+                @if (actionError(); as message) {
+                  <p class="q-body-sm error" role="alert">{{ message }}</p>
+                }
+                <div class="form__actions">
+                  <button
+                    type="button"
+                    class="primary confirm-action"
+                    [disabled]="!canConfirm()"
+                    (click)="confirm(entry)"
+                  >
+                    {{
+                      (isPending(entry, 'authorise')
+                        ? 'settings.storefrontApps.authorise'
+                        : 'settings.storefrontApps.revoke'
+                      ) | t
+                    }}
+                  </button>
+                  <button type="button" class="secondary" (click)="cancel()">
+                    {{ 'settings.storefrontApps.cancel' | t }}
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="form__actions">
+                @if (canAuthorise(entry)) {
+                  <button
+                    type="button"
+                    class="primary authorise"
+                    [disabled]="submitting()"
+                    (click)="begin(entry, 'authorise')"
+                  >
+                    {{ 'settings.storefrontApps.authorise' | t }}
+                  </button>
+                }
+                @if (entry.standing === 'AUTHORISED') {
+                  <button
+                    type="button"
+                    class="secondary revoke"
+                    [disabled]="submitting()"
+                    (click)="begin(entry, 'revoke')"
+                  >
+                    {{ 'settings.storefrontApps.revoke' | t }}
+                  </button>
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+}
