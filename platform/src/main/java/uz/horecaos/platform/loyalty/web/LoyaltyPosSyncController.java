@@ -74,24 +74,26 @@ public class LoyaltyPosSyncController {
     @GetMapping
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.BRAND)
     @Operation(
+            operationId = "loyaltyPosSyncOverview",
             summary = "Per point-of-sale binding: can it sync loyalty balances, and how is it doing",
             description = "Every POS binding of the brand with the state of LOYALTY_BALANCE_SYNC at its vendor "
                     + "(SUPPORTED, PARTIAL, UNSUPPORTED or UNASSESSED), whether it is enabled, its mode "
                     + "(REPORT_ONLY until somebody stages it up), how many accounts are matched, how many differences "
                     + "are open and the last pass. standingNotice is true when the tenant says this brand's till keeps "
                     + "a balance of its own and no binding carries the capability: the two can differ.")
-    public ResponseEntity<OverviewResponse> overview(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return ResponseEntity.ok(OverviewResponse.of(sync.overview(tenantId, brandId)));
+    public ResponseEntity<PosSyncOverviewResponse> overview(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok(PosSyncOverviewResponse.of(sync.overview(tenantId, brandId)));
     }
 
     @GetMapping("/runs")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.BRAND)
     @Operation(
+            operationId = "loyaltyPosSyncRuns",
             summary = "Reconciliation reports, newest first",
             description =
                     "Push, pull and reconcile passes over the brand's bindings with the counts each named: compared, "
                             + "matched, till higher, till lower, till-only, platform-only, ambiguous, imported, held, unverifiable.")
-    public ResponseEntity<List<RunResponse>> runs(
+    public ResponseEntity<List<PosSyncRunResponse>> runs(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate from,
@@ -106,24 +108,27 @@ public class LoyaltyPosSyncController {
         Instant fromInstant = start.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant toInstant = end.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         return ResponseEntity.ok(sync.runs(tenantId, brandId, fromInstant, toInstant, clamp(limit)).stream()
-                .map(RunResponse::of)
+                .map(PosSyncRunResponse::of)
                 .toList());
     }
 
     @GetMapping("/runs/{runId}")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.BRAND)
     @Operation(
+            operationId = "loyaltyPosSyncRun",
             summary = "One reconciliation report with the differences it found",
             description = "Each difference carries the two balances and the delta; none carries a name or a phone.")
-    public ResponseEntity<RunReportResponse> run(
+    public ResponseEntity<PosSyncRunReportResponse> run(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID runId) {
-        return ResponseEntity.ok(RunReportResponse.of(sync.report(tenantId, brandId, runId)));
+        return ResponseEntity.ok(PosSyncRunReportResponse.of(sync.report(tenantId, brandId, runId)));
     }
 
     @GetMapping("/discrepancies")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.BRAND)
-    @Operation(summary = "Differences between the ledger and a till, open first by default")
-    public ResponseEntity<List<DiscrepancyResponse>> discrepancies(
+    @Operation(
+            operationId = "loyaltyPosSyncDiscrepancies",
+            summary = "Differences between the ledger and a till, open first by default")
+    public ResponseEntity<List<PosSyncDiscrepancyResponse>> discrepancies(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam(required = false) @Nullable String status,
@@ -135,44 +140,46 @@ public class LoyaltyPosSyncController {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "status must be OPEN or RESOLVED");
         }
         return ResponseEntity.ok(sync.discrepancies(tenantId, brandId, normalised, clamp(limit)).stream()
-                .map(DiscrepancyResponse::of)
+                .map(PosSyncDiscrepancyResponse::of)
                 .toList());
     }
 
     @PostMapping("/discrepancies/{discrepancyId}/resolutions")
     @RequiresCapability(value = Capability.LOYALTY_SYNC_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
+            operationId = "loyaltyPosSyncResolve",
             summary = "Settle one difference",
             description =
                     "ACCEPT_TILL applies the till's number as an adjustment (above the manual-adjustment threshold it "
                             + "needs a second person's signature and answers approval PENDING, leaving the difference open); "
                             + "ACCEPT_PLATFORM pushes the platform's number again; ABSORB records that the brand carries it; "
                             + "SUSPEND stops syncing that customer. Requires If-Match with the discrepancy's version.")
-    public ResponseEntity<ResolutionResponse> resolve(
+    public ResponseEntity<PosSyncResolutionResponse> resolve(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID discrepancyId,
-            @Valid @RequestBody ResolveRequest body,
+            @Valid @RequestBody PosSyncResolveRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
         ResolutionResult result = sync.resolve(
                 tenantId, brandId, discrepancyId, body.resolution(), body.reason(), expected, actorSubject());
-        return ResponseEntity.ok(ResolutionResponse.of(result));
+        return ResponseEntity.ok(PosSyncResolutionResponse.of(result));
     }
 
     @PostMapping("/runs")
     @RequiresCapability(value = Capability.LOYALTY_SYNC_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
+            operationId = "loyaltyPosSyncReconcile",
             summary = "Reconcile one binding now",
             description =
                     "Matches new till customers, imports and pushes as the binding's mode allows, and compares every "
                             + "matched account with a fresh read of the till's balance. Answers with the report row. A binding "
                             + "that cannot sync (an unassessed vendor, a capability not enabled, a suspended binding) answers 422.")
-    public ResponseEntity<RunResponse> reconcileNow(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody ReconcileRequest body) {
-        return ResponseEntity.ok(
-                RunResponse.of(sync.run(tenantId, brandId, body.bindingId(), RunKind.RECONCILE, actorSubject())));
+    public ResponseEntity<PosSyncRunResponse> reconcileNow(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody PosSyncReconcileRequest body) {
+        return ResponseEntity.ok(PosSyncRunResponse.of(
+                sync.run(tenantId, brandId, body.bindingId(), RunKind.RECONCILE, actorSubject())));
     }
 
     private String actorSubject() {
@@ -185,29 +192,29 @@ public class LoyaltyPosSyncController {
 
     // ---------------------------------------------------------------- requests
 
-    public record ResolveRequest(
+    public record PosSyncResolveRequest(
             @NotNull Resolution resolution,
             @NotBlank @Size(max = 500) String reason) {}
 
-    public record ReconcileRequest(@NotNull UUID bindingId) {}
+    public record PosSyncReconcileRequest(@NotNull UUID bindingId) {}
 
     // --------------------------------------------------------------- responses
 
-    public record RunSummary(
+    public record PosSyncRunSummary(
             UUID runId,
             String kind,
             String status,
             Instant startedAt,
             @Nullable Instant finishedAt) {
 
-        static @Nullable RunSummary of(@Nullable RunRow run) {
+        static @Nullable PosSyncRunSummary of(@Nullable RunRow run) {
             return run == null
                     ? null
-                    : new RunSummary(run.id(), run.kind(), run.status(), run.startedAt(), run.finishedAt());
+                    : new PosSyncRunSummary(run.id(), run.kind(), run.status(), run.startedAt(), run.finishedAt());
         }
     }
 
-    public record BindingResponse(
+    public record PosSyncBindingResponse(
             UUID bindingId,
             UUID installationId,
             String providerType,
@@ -220,11 +227,11 @@ public class LoyaltyPosSyncController {
             Map<String, Object> limits,
             long matchedAccounts,
             long openDiscrepancies,
-            @Nullable RunSummary lastRun) {
+            @Nullable PosSyncRunSummary lastRun) {
 
-        static BindingResponse of(BindingView view) {
+        static PosSyncBindingResponse of(BindingView view) {
             SyncBinding binding = view.binding();
-            return new BindingResponse(
+            return new PosSyncBindingResponse(
                     binding.bindingId(),
                     binding.installationId(),
                     binding.providerType(),
@@ -237,23 +244,26 @@ public class LoyaltyPosSyncController {
                     binding.limits(),
                     view.matchedAccounts(),
                     view.openDiscrepancies(),
-                    RunSummary.of(view.lastRun()));
+                    PosSyncRunSummary.of(view.lastRun()));
         }
     }
 
-    public record OverviewResponse(
-            boolean tillKeepsBalance, boolean standingNotice, long openDiscrepancies, List<BindingResponse> bindings) {
+    public record PosSyncOverviewResponse(
+            boolean tillKeepsBalance,
+            boolean standingNotice,
+            long openDiscrepancies,
+            List<PosSyncBindingResponse> bindings) {
 
-        static OverviewResponse of(Overview overview) {
-            return new OverviewResponse(
+        static PosSyncOverviewResponse of(Overview overview) {
+            return new PosSyncOverviewResponse(
                     overview.tillKeepsBalance(),
                     overview.standingNotice(),
                     overview.openDiscrepancies(),
-                    overview.bindings().stream().map(BindingResponse::of).toList());
+                    overview.bindings().stream().map(PosSyncBindingResponse::of).toList());
         }
     }
 
-    public record RunResponse(
+    public record PosSyncRunResponse(
             UUID runId,
             UUID bindingId,
             String kind,
@@ -273,8 +283,8 @@ public class LoyaltyPosSyncController {
             int unverifiable,
             int pushed) {
 
-        static RunResponse of(RunRow run) {
-            return new RunResponse(
+        static PosSyncRunResponse of(RunRow run) {
+            return new PosSyncRunResponse(
                     run.id(),
                     run.bindingId(),
                     run.kind(),
@@ -300,7 +310,7 @@ public class LoyaltyPosSyncController {
      * One difference. {@code accountId} is the points account (an opaque id), {@code externalCustomerId} the till's own
      * customer id, classified INTERNAL like every external id in the mapping table. Neither is a name or a phone.
      */
-    public record DiscrepancyResponse(
+    public record PosSyncDiscrepancyResponse(
             UUID discrepancyId,
             UUID bindingId,
             @Nullable UUID accountId,
@@ -317,8 +327,8 @@ public class LoyaltyPosSyncController {
             Instant observedAt,
             int version) {
 
-        static DiscrepancyResponse of(DiscrepancyRow row) {
-            return new DiscrepancyResponse(
+        static PosSyncDiscrepancyResponse of(DiscrepancyRow row) {
+            return new PosSyncDiscrepancyResponse(
                     row.id(),
                     row.bindingId(),
                     row.accountId(),
@@ -337,12 +347,14 @@ public class LoyaltyPosSyncController {
         }
     }
 
-    public record RunReportResponse(RunResponse run, List<DiscrepancyResponse> discrepancies) {
+    public record PosSyncRunReportResponse(PosSyncRunResponse run, List<PosSyncDiscrepancyResponse> discrepancies) {
 
-        static RunReportResponse of(RunReport report) {
-            return new RunReportResponse(
-                    RunResponse.of(report.run()),
-                    report.discrepancies().stream().map(DiscrepancyResponse::of).toList());
+        static PosSyncRunReportResponse of(RunReport report) {
+            return new PosSyncRunReportResponse(
+                    PosSyncRunResponse.of(report.run()),
+                    report.discrepancies().stream()
+                            .map(PosSyncDiscrepancyResponse::of)
+                            .toList());
         }
     }
 
@@ -350,15 +362,15 @@ public class LoyaltyPosSyncController {
      * @param applied  whether the difference is now resolved; false when a second signature is awaited
      * @param approval NOT_REQUIRED, PENDING, APPROVED or DECLINED (ADR 0027)
      */
-    public record ResolutionResponse(
-            DiscrepancyResponse discrepancy,
+    public record PosSyncResolutionResponse(
+            PosSyncDiscrepancyResponse discrepancy,
             boolean applied,
             String approval,
             @Nullable UUID approvalRequestId) {
 
-        static ResolutionResponse of(ResolutionResult result) {
-            return new ResolutionResponse(
-                    DiscrepancyResponse.of(result.discrepancy()),
+        static PosSyncResolutionResponse of(ResolutionResult result) {
+            return new PosSyncResolutionResponse(
+                    PosSyncDiscrepancyResponse.of(result.discrepancy()),
                     result.applied(),
                     result.approval(),
                     result.approvalRequestId());
