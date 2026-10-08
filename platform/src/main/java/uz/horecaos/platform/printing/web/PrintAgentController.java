@@ -71,6 +71,7 @@ public class PrintAgentController {
     @PostMapping("/claims")
     @RequiresCapability(value = Capability.PRINT_JOB_CLAIM, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printClaimJobs",
             summary = "Claim print jobs",
             description = "Says which printers the agent can reach, by the alias it chose locally, and what "
                     + "each last reported (ONLINE, OFFLINE, OUT_OF_PAPER, COVER_OPEN, ERROR, UNKNOWN); a "
@@ -80,24 +81,26 @@ public class PrintAgentController {
                     + "claimable job of each idle printer, one at a time per printer in the order they were "
                     + "queued. A reply holds identifiers and 60-second lease tokens, never the paper. "
                     + "Requires an Idempotency-Key.")
-    public ResponseEntity<ClaimResponse> claim(
+    public ResponseEntity<PrintClaimResponse> claim(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @Valid @RequestBody ClaimRequest body) {
+            @Valid @RequestBody PrintClaimRequest body) {
         AgentIdentity agent = agents.requireAgent(currentActor.get().subject(), tenantId, brandId, locationId);
         List<ReportedPrinter> printers = body.printers() == null
                 ? List.of()
-                : body.printers().stream().map(ReportedPrinterBody::toReported).toList();
+                : body.printers().stream().map(PrintReportedPrinter::toReported).toList();
         List<ClaimedJob> jobs = claims.claim(agent, printers, body.agentBuild(), body.maxJobs(), body.waitSeconds());
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(new ClaimResponse(jobs.stream().map(ClaimedJobBody::of).toList()));
+                .body(new PrintClaimResponse(
+                        jobs.stream().map(PrintClaimedJob::of).toList()));
     }
 
     @GetMapping(value = "/jobs/{jobId}/artifact", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     @RequiresCapability(value = Capability.PRINT_JOB_CLAIM, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printJobArtifact",
             summary = "The bytes of a claimed job",
             description = "The ESC/POS for the bound printer's width, rendered now from the stored document. "
                     + "Readable only with the job's live lease token (the lease query parameter) and only by "
@@ -128,18 +131,19 @@ public class PrintAgentController {
     @PostMapping("/jobs/{jobId}/results")
     @RequiresCapability(value = Capability.PRINT_JOB_REPORT, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printReportResult",
             summary = "Report what happened to a claimed job",
             description = "PRINTED ends the job. FAILED, with a failureCode (PRINTER_OFFLINE, OUT_OF_PAPER, "
                     + "COVER_OPEN, TRANSPORT, RENDER), returns it to the queue after a backoff (5 s, 15 s, "
                     + "45 s, 2 min, 5 min) or ends it DEAD on the sixth attempt. A stale or foreign lease "
                     + "token is 409 and changes nothing; the same PRINTED repeated is recognised and answered "
                     + "200 REPLAYED. Requires an Idempotency-Key.")
-    public ResponseEntity<ResultResponse> result(
+    public ResponseEntity<PrintResultResponse> result(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID jobId,
-            @Valid @RequestBody ResultRequest body) {
+            @Valid @RequestBody PrintResultRequest body) {
         AgentIdentity agent = agents.requireAgent(currentActor.get().subject(), tenantId, brandId, locationId);
         FailureCode code = null;
         if (body.failureCode() != null) {
@@ -147,12 +151,12 @@ public class PrintAgentController {
                     .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown failureCode"));
         }
         Recorded recorded = queue.report(agent, jobId, body.leaseToken(), body.outcome(), code);
-        return ResponseEntity.ok(new ResultResponse(recorded.name()));
+        return ResponseEntity.ok(new PrintResultResponse(recorded.name()));
     }
 
     // ================================================================ messages
 
-    public record ReportedPrinterBody(
+    public record PrintReportedPrinter(
             @NotBlank @Size(max = 64) String key, @NotBlank String status) {
 
         ReportedPrinter toReported() {
@@ -169,27 +173,27 @@ public class PrintAgentController {
      * @param waitSeconds how long to wait for work; default 0, at most 20
      * @param agentBuild  the agent's own build string, which a test page prints
      */
-    public record ClaimRequest(
-            @Nullable @Size(max = 32) List<@Valid ReportedPrinterBody> printers,
+    public record PrintClaimRequest(
+            @Nullable @Size(max = 32) List<@Valid PrintReportedPrinter> printers,
             @Nullable Integer maxJobs,
             @Nullable Integer waitSeconds,
             @Nullable @Size(max = 64) String agentBuild) {}
 
-    public record ClaimedJobBody(
+    public record PrintClaimedJob(
             UUID jobId, String printerKey, String documentType, UUID leaseToken, Instant leaseExpiresAt) {
 
-        static ClaimedJobBody of(ClaimedJob job) {
-            return new ClaimedJobBody(
+        static PrintClaimedJob of(ClaimedJob job) {
+            return new PrintClaimedJob(
                     job.jobId(), job.printerKey(), job.documentType(), job.leaseToken(), job.leaseExpiresAt());
         }
     }
 
-    public record ClaimResponse(List<ClaimedJobBody> jobs) {}
+    public record PrintClaimResponse(List<PrintClaimedJob> jobs) {}
 
-    public record ResultRequest(
+    public record PrintResultRequest(
             @NotNull UUID leaseToken,
             @NotNull ReportedOutcome outcome,
             @Nullable String failureCode) {}
 
-    public record ResultResponse(String recorded) {}
+    public record PrintResultResponse(String recorded) {}
 }

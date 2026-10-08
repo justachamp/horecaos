@@ -49,6 +49,7 @@ public class PrintProfileController {
     @GetMapping
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.BRAND)
     @Operation(
+            operationId = "printGetReceiptProfile",
             summary = "The brand's receipt profile",
             description = "Whether the logo prints and the footer lines per language. A brand that never saved"
                     + " one has the default (logo off, no footer) at version 0.")
@@ -62,6 +63,7 @@ public class PrintProfileController {
     @PutMapping
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
+            operationId = "printSaveReceiptProfile",
             summary = "Save the brand's receipt profile",
             description = "Under If-Match: 0 for a brand that has never saved one, otherwise the version the"
                     + " form was opened at. A footer is up to three lines per language (ru, uz-Latn, en),"

@@ -95,6 +95,7 @@ public class PrintConsoleController {
     @GetMapping("/print/printers")
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printListPrinters",
             summary = "The branch's printers",
             description = "Active and retired, with the roll, how each is reached and what its agent last "
                     + "reported. Never an address: the platform cannot make a branch machine dial one.")
@@ -108,6 +109,7 @@ public class PrintConsoleController {
     @PostMapping("/print/printers")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printRegisterPrinter",
             summary = "Register a printer",
             description = "An agent printer names the agent (agentDeviceId) and the alias that agent "
                     + "advertises (agentPrinterKey); a browser printer names neither. A roll is 58 or 80 mm. "
@@ -126,6 +128,7 @@ public class PrintConsoleController {
     @PutMapping("/print/printers/{printerId}")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printUpdatePrinter",
             summary = "Change or retire a printer",
             description = "The version the form was opened at is If-Match; a second manager's save in "
                     + "between is STALE_VERSION. status RETIRED retires the printer: its routes stop "
@@ -155,6 +158,7 @@ public class PrintConsoleController {
     @PostMapping("/print/printers/{printerId}/test-page")
     @RequiresCapability(value = Capability.PRINT_REPRINT, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printTestPage",
             summary = "Print a test page",
             description = "The roll's width, a ruler, every glyph the three languages use, a QR and the "
                     + "printer's name. A browser printer's job is recorded HANDED_OFF and its bitmap is the "
@@ -173,6 +177,7 @@ public class PrintConsoleController {
     @GetMapping("/print/routes")
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printListRoutes",
             summary = "What prints where at the branch",
             description = "(Document type, optional station) to printer, with copies and auto_print. A "
                     + "branch with no routes prints nothing.")
@@ -186,6 +191,7 @@ public class PrintConsoleController {
     @PostMapping("/print/routes")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printCreateRoute",
             summary = "Create a route",
             description = "A station applies to a KITCHEN_TICKET only; a ticket for a station with no route "
                     + "of its own goes to the route with no station. autoPrint needs an agent printer.")
@@ -202,7 +208,10 @@ public class PrintConsoleController {
 
     @PutMapping("/print/routes/{routeId}")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
-    @Operation(summary = "Change a route", description = "Under If-Match. A route's document type does not change.")
+    @Operation(
+            operationId = "printUpdateRoute",
+            summary = "Change a route",
+            description = "Under If-Match. A route's document type does not change.")
     public ResponseEntity<PrintRouteResponse> updateRoute(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -219,7 +228,10 @@ public class PrintConsoleController {
 
     @DeleteMapping("/print/routes/{routeId}")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
-    @Operation(summary = "Delete a route", description = "Under If-Match. Jobs already made from it stay.")
+    @Operation(
+            operationId = "printDeleteRoute",
+            summary = "Delete a route",
+            description = "Under If-Match. Jobs already made from it stay.")
     public ResponseEntity<Void> deleteRoute(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -235,6 +247,7 @@ public class PrintConsoleController {
     @GetMapping("/print/jobs")
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printListJobs",
             summary = "The print queue",
             description = "Newest first, optionally one state (QUEUED, CLAIMED, PRINTED, HANDED_OFF, DEAD, "
                     + "CANCELLED, EXPIRED). The stored document is never returned: a list needs identifiers "
@@ -279,7 +292,10 @@ public class PrintConsoleController {
 
     @GetMapping("/print/jobs/{jobId}")
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
-    @Operation(summary = "One print job", description = "Its state, attempts and failure, never its document.")
+    @Operation(
+            operationId = "printGetJob",
+            summary = "One print job",
+            description = "Its state, attempts and failure, never its document.")
     public ResponseEntity<PrintJobResponse> job(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -292,6 +308,7 @@ public class PrintConsoleController {
     @PostMapping("/print/jobs/{jobId}/cancel")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printCancelJob",
             summary = "Cancel a queued job",
             description = "Only a queued one: a claimed job is already on its way to paper (422 otherwise).")
     public ResponseEntity<PrintJobResponse> cancel(
@@ -305,6 +322,7 @@ public class PrintConsoleController {
     @PostMapping("/orders/{orderId}/print-jobs")
     @RequiresCapability(value = Capability.PRINT_REPRINT, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printReprintOrderDocument",
             summary = "Print an order's document again",
             description = "documentType is KITCHEN_TICKET, ORDER_SLIP or FISCAL_RECEIPT. A reprint is a new "
                     + "job, regenerated from the current facts, marked as a copy, linked to the first and "
@@ -317,7 +335,7 @@ public class PrintConsoleController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID orderId,
-            @Valid @RequestBody ReprintRequest body) {
+            @Valid @RequestBody PrintReprintRequest body) {
         List<JobRow> made = onDemand.reprint(
                 tenantId,
                 brandId,
@@ -334,6 +352,7 @@ public class PrintConsoleController {
     @PostMapping(value = "/print/documents/preview", produces = MediaType.IMAGE_PNG_VALUE)
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printPreviewDocument",
             summary = "The picture of what a job would print",
             description = "A PNG of the same 1-bit bitmap the browser prints and an agent receives as raster, "
                     + "for a stored job (jobId) or for a document built the way a job would be (documentType "
@@ -344,7 +363,7 @@ public class PrintConsoleController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @Valid @RequestBody PreviewBody body) {
+            @Valid @RequestBody PrintPreviewRequest body) {
         byte[] png = onDemand.preview(
                 tenantId,
                 brandId,
@@ -367,6 +386,7 @@ public class PrintConsoleController {
     @GetMapping("/print/agents")
     @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printListAgents",
             summary = "The branch's print agents",
             description = "Device principals of class PRINT_AGENT, active and revoked alike, the printers each "
                     + "advertises (alias and last status) and the printer rows bound to it.")
@@ -380,16 +400,17 @@ public class PrintConsoleController {
     @GetMapping("/print/agents/enrolments/{userCode}")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "printPendingEnrolment",
             summary = "What a pending code claims",
             description = "The class the device asked for, shown to the approver before approving. An "
                     + "unknown, spent or expired code is the same 404.")
-    public ResponseEntity<PendingAgentResponse> pending(
+    public ResponseEntity<PrintPendingAgentResponse> pending(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable String userCode) {
         return ResponseEntity.ok(agents.pending(userCode)
-                .map(found -> new PendingAgentResponse(
+                .map(found -> new PrintPendingAgentResponse(
                         found.requestedClass().name(), found.requestedLabel(), found.expiresAt()))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No pending enrolment")));
     }
@@ -397,6 +418,7 @@ public class PrintConsoleController {
     @PostMapping("/print/agents/enrolments/{userCode}/approve")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printApproveAgent",
             summary = "Approve a pending print agent",
             description = "The userCode is read off the agent's own screen or log. The agent is granted "
                     + "exactly print.job.claim and print.job.report at this branch, never more; a code that "
@@ -407,7 +429,7 @@ public class PrintConsoleController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable String userCode,
-            @Valid @RequestBody ApproveAgentRequest body) {
+            @Valid @RequestBody PrintApproveAgentRequest body) {
         return ResponseEntity.ok(PrintAgentDeviceResponse.of(
                 agents.approve(tenantId, brandId, locationId, userCode, body.displayName(), actor())));
     }
@@ -415,18 +437,19 @@ public class PrintConsoleController {
     @PostMapping("/print/agents/{deviceId}/revoke")
     @RequiresCapability(value = Capability.PRINT_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "printRevokeAgent",
             summary = "Revoke a print agent",
             description = "Its grant is revoked first, cache-evicted at once, so the agent is refused on its "
                     + "very next request whatever its token's remaining life. A second press on a revoked "
                     + "agent is not an error.")
-    public ResponseEntity<RevokeResponse> revoke(
+    public ResponseEntity<PrintRevokeAgentResponse> revoke(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID deviceId,
-            @Valid @RequestBody RevokeAgentRequest body) {
-        return ResponseEntity.ok(
-                new RevokeResponse(agents.revoke(tenantId, brandId, locationId, deviceId, body.reason(), actor())));
+            @Valid @RequestBody PrintRevokeAgentRequest body) {
+        return ResponseEntity.ok(new PrintRevokeAgentResponse(
+                agents.revoke(tenantId, brandId, locationId, deviceId, body.reason(), actor())));
     }
 
     // ================================================================= helpers
@@ -595,7 +618,7 @@ public class PrintConsoleController {
         }
     }
 
-    public record ReprintRequest(
+    public record PrintReprintRequest(
             @NotNull PrintDocumentType documentType,
             @Nullable UUID printerId,
             @NotNull PrintOnDemandService.Reason reasonCode) {}
@@ -604,7 +627,7 @@ public class PrintConsoleController {
      * @param jobId        a stored job's picture; or build one from {@code documentType} with {@code orderId}
      * @param tapeWidthMm  58 or 80 when no printer is named; default 80
      */
-    public record PreviewBody(
+    public record PrintPreviewRequest(
             @Nullable UUID jobId,
             @Nullable PrintDocumentType documentType,
             @Nullable UUID orderId,
@@ -612,16 +635,16 @@ public class PrintConsoleController {
             @Nullable UUID printerId,
             @Nullable Integer tapeWidthMm) {}
 
-    public record PendingAgentResponse(
+    public record PrintPendingAgentResponse(
             String requestedClass, @Nullable String requestedLabel, Instant expiresAt) {}
 
-    public record ApproveAgentRequest(
+    public record PrintApproveAgentRequest(
             @NotBlank @Size(max = 120) String displayName) {}
 
-    public record RevokeAgentRequest(
+    public record PrintRevokeAgentRequest(
             @NotBlank @Size(max = 500) String reason) {}
 
-    public record RevokeResponse(boolean revoked) {}
+    public record PrintRevokeAgentResponse(boolean revoked) {}
 
     public record PrintAgentDeviceResponse(
             UUID deviceId,
@@ -648,11 +671,11 @@ public class PrintConsoleController {
         }
     }
 
-    public record AdvertisedPrinter(
+    public record PrintAdvertisedPrinter(
             String key, String status, @Nullable String agentBuild, Instant seenAt) {}
 
     public record PrintAgentResponse(
-            PrintAgentDeviceResponse device, List<AdvertisedPrinter> advertised, List<UUID> boundPrinterIds) {
+            PrintAgentDeviceResponse device, List<PrintAdvertisedPrinter> advertised, List<UUID> boundPrinterIds) {
 
         static PrintAgentResponse of(AgentView view) {
             return new PrintAgentResponse(
@@ -661,8 +684,8 @@ public class PrintConsoleController {
                     view.boundPrinters().stream().map(PrinterRow::id).toList());
         }
 
-        private static AdvertisedPrinter advert(AdvertRow row) {
-            return new AdvertisedPrinter(row.printerKey(), row.status().name(), row.agentBuild(), row.seenAt());
+        private static PrintAdvertisedPrinter advert(AdvertRow row) {
+            return new PrintAdvertisedPrinter(row.printerKey(), row.status().name(), row.agentBuild(), row.seenAt());
         }
     }
 }
