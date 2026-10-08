@@ -611,9 +611,14 @@ class DayCloseAndMetricLayerTests {
         // per-refund" category this assertion already tolerates for every
         // other source read derive() runs, not the N+1 this test exists to
         // catch.
+        //
+        // ADR 0156: the budget moved from 57 to 58 when close() gained one fixed, once-per-close
+        // read of the day's staff-hours totals (the fact_staff_shift aggregate it compares the
+        // recut against). The staff shifts themselves are read, written and compared as sets,
+        // never per refund, which is the property this assertion exists to protect.
         assertThat(used)
                 .as("a busy Saturday's close should not spend a round-trip per refund")
-                .isLessThanOrEqualTo(57);
+                .isLessThanOrEqualTo(58);
     }
 
     // ----------------------------------------------------- the settle recut
