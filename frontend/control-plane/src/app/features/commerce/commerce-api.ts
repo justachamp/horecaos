@@ -579,9 +579,17 @@ export interface ArrearView {
    */
   readonly owed: { readonly due: Money; readonly openStatements: number } | null;
   /**
-   * True when the tenant owes nothing: the cue that whoever restores it can
-   * now do so. Nothing moves a subscription by itself (ADR 0089), so this is
-   * only a signal.
+   * The activation deposit the tenant still owes beside its statements, which is
+   * on none of them, or null when none is due.
+   */
+  readonly depositDue: Money | null;
+  /**
+   * True when the tenant owes neither a statement nor its deposit. For a
+   * PAST_DUE tenant, whose stage is about money by definition, that is the cue
+   * that whoever restores it can now do so. For a SUSPENDED one it is a fact and
+   * not a cue: the suspension's reason is free text, so nothing can say whether
+   * paying addressed it. Nothing moves a subscription by itself (ADR 0089), so
+   * this is only a signal.
    */
   readonly paidInFull: boolean;
 }

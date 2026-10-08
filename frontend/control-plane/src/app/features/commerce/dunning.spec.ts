@@ -46,6 +46,7 @@ const BOARD: ArrearsBoardView = {
         issuedAt: '2026-09-01T05:00:00Z',
       },
       owed: { due: { amountMinor: 300_000, currency: 'UZS' }, openStatements: 1 },
+      depositDue: null,
       paidInFull: false,
     },
   ],
@@ -55,6 +56,34 @@ const BOARD: ArrearsBoardView = {
 const PAID_BOARD: ArrearsBoardView = {
   ...BOARD,
   subscriptions: [{ ...BOARD.subscriptions[0], owed: null, paidInFull: true }],
+};
+
+/** Late for money and paid, but the activation deposit is still owed beside the statements. */
+const DEPOSIT_BOARD: ArrearsBoardView = {
+  ...BOARD,
+  subscriptions: [
+    {
+      ...BOARD.subscriptions[0],
+      owed: null,
+      depositDue: { amountMinor: 500_000, currency: 'UZS' },
+      paidInFull: false,
+    },
+  ],
+};
+
+/** Suspended, owing nothing: the platform cannot tell whether the suspension was about money. */
+const SUSPENDED_PAID_BOARD: ArrearsBoardView = {
+  ...BOARD,
+  subscriptions: [
+    {
+      ...BOARD.subscriptions[0],
+      status: 'SUSPENDED',
+      allowedNext: ['ACTIVE', 'TERMINATED'],
+      suspensionReason: 'compliance hold',
+      owed: null,
+      paidInFull: true,
+    },
+  ],
 };
 
 describe('Dunning', () => {
@@ -163,5 +192,23 @@ describe('Dunning', () => {
     expect(row.getAttribute('data-status')).toBe('PAST_DUE');
     expect(row.querySelector('[data-to="ACTIVE"]')).not.toBeNull();
     expect(api.transitionSubscription).not.toHaveBeenCalled();
+  });
+  it('does not call a tenant paid in full while its activation deposit is still due, and says what is due', async () => {
+    await create(DEPOSIT_BOARD);
+    const row = el('[data-tenant="tenant-1"]');
+
+    expect(row.querySelector('.paidInFull')).toBeNull();
+    expect(row.querySelector('.nothingOwed')).toBeNull();
+    expect(row.querySelector('.depositDue')?.textContent).toContain('500 000');
+  });
+
+  it('states that a suspended tenant owes nothing without telling anyone to restore it', async () => {
+    await create(SUSPENDED_PAID_BOARD);
+    const row = el('[data-tenant="tenant-1"]');
+
+    expect(row.querySelector('.paidInFull')).toBeNull();
+    expect(row.querySelector('.nothingOwed')?.textContent).toContain(ru['dunning.nothingOwed']);
+    expect(row.textContent).toContain('compliance hold');
+    expect(row.textContent).toContain(ru['dunning.nothingOwed.hint']);
   });
 });

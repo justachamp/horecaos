@@ -1997,6 +1997,10 @@ export const en = {
   'dunning.paidInFull': 'Paid in full: ready to restore',
   'dunning.paidInFull.hint':
     'Nothing moves a tenant by itself: paying clears what it owes and leaves its stage as it was, for a person to decide.',
+  'dunning.nothingOwed': 'Nothing owed',
+  'dunning.nothingOwed.hint':
+    'A suspension can be about something other than money. Read its reason before restoring this tenant.',
+  'dunning.depositDue': 'Activation deposit due: {amount}',
   'platformApprovals.action.commercial_billing_bank-details': 'Bank details on invoices',
   'platformApprovals.subject.field.beneficiary': 'Beneficiary',
   'platformApprovals.subject.field.bankName': 'Bank',

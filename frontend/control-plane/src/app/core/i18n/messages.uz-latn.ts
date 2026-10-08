@@ -2014,6 +2014,10 @@ export const uzLatn: Messages = {
   'dunning.paidInFull': 'To‘liq to‘langan: tiklash mumkin',
   'dunning.paidInFull.hint':
     'Mijozni hech narsa o‘zi o‘tkazmaydi: to‘lov qarzni yopadi, bosqichi esa avvalgicha qoladi — qarorni odam qabul qiladi.',
+  'dunning.nothingOwed': 'Qarzi yo‘q',
+  'dunning.nothingOwed.hint':
+    'To‘xtatish pul bilan bog‘liq bo‘lmasligi mumkin. Mijozni tiklashdan oldin uning sababini o‘qing.',
+  'dunning.depositDue': 'Faollashtirish depoziti kutilmoqda: {amount}',
   'platformApprovals.action.commercial_billing_bank-details':
     'Hisob-fakturalardagi bank rekvizitlari',
   'platformApprovals.subject.field.beneficiary': 'Oluvchi',

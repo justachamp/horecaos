@@ -1997,6 +1997,10 @@ export const ru: Messages = {
   'dunning.paidInFull': 'Оплачено полностью: можно вернуть',
   'dunning.paidInFull.hint':
     'Клиента ничто не переводит само: оплата снимает долг, а этап остаётся прежним — решает человек.',
+  'dunning.nothingOwed': 'Ничего не должен',
+  'dunning.nothingOwed.hint':
+    'Приостановка может быть не из-за денег. Прочитайте её причину, прежде чем возвращать клиента.',
+  'dunning.depositDue': 'Ожидается активационный депозит: {amount}',
   'platformApprovals.action.commercial_billing_bank-details': 'Банковские реквизиты на счетах',
   'platformApprovals.subject.field.beneficiary': 'Получатель',
   'platformApprovals.subject.field.bankName': 'Банк',
