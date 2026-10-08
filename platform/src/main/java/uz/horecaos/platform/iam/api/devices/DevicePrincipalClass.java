@@ -33,7 +33,18 @@ public enum DevicePrincipalClass {
      * recall a line. Its station is a server-side configuration of the device,
      * not a parameter of the request.
      */
-    KITCHEN_VDU;
+    KITCHEN_VDU,
+
+    /**
+     * A print agent (ADR 0154): a small always-on program at a branch that claims print jobs from the
+     * platform over outbound HTTPS and hands the bytes to a printer it can reach on the branch's own
+     * network. Granted exactly {@code PlatformRole.PRINT_AGENT} -- {@code print.job.claim} and {@code
+     * print.job.report} -- and no read of any order, ticket or receipt: it is a byte pipe. Approved
+     * from the Printing screen by a holder of {@code print.manage} at the branch, never as a kitchen
+     * class and never from one: an enrolment that asked to be an agent cannot be approved as a
+     * display, and a display's cannot be approved as an agent.
+     */
+    PRINT_AGENT;
 
     /**
      * Whether an enrolment that asked to be this class may be approved as {@code approved}
@@ -47,6 +58,10 @@ public enum DevicePrincipalClass {
         return switch (this) {
             case KITCHEN_KDS -> approved == KITCHEN_KDS || approved == KITCHEN_VDU;
             case KITCHEN_VDU -> approved == KITCHEN_VDU;
+            // The class decides which role is granted; a print agent that could be approved as
+            // anything else, or a display approved as an agent, would hand the wrong bundle to a
+            // device on the strength of an approval click.
+            case PRINT_AGENT -> approved == PRINT_AGENT;
         };
     }
 }

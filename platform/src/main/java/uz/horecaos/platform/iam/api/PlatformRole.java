@@ -295,6 +295,10 @@ public enum PlatformRole {
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: printers, routes, the print queue and the receipt profile.
+                    PRINT_READ,
+                    PRINT_MANAGE,
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -528,6 +532,10 @@ public enum PlatformRole {
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: printers, routes, the print queue and the receipt profile.
+                    PRINT_READ,
+                    PRINT_MANAGE,
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -772,6 +780,10 @@ public enum PlatformRole {
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
                     REPORTING_READ,
+                    // ADR 0154: a brand manager sees its branches' printing and reprints; changing a printer is the
+                    // branch manager's and a brand's receipt profile is the tenant administrator's.
+                    PRINT_READ,
+                    PRINT_REPRINT,
                     // T14/ADR 0134: which products to promote, discount or take off
                     // the menu is exactly this role's own call (CATALOG_AUTHOR,
                     // PRICING_AUTHOR above), and the run's thresholds are what
@@ -837,6 +849,10 @@ public enum PlatformRole {
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: printers, routes, the print queue and the receipt profile.
+                    PRINT_READ,
+                    PRINT_MANAGE,
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -939,6 +955,9 @@ public enum PlatformRole {
                     // a kitchen cooks, so neither belongs on this bundle.
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: a cashier reprints a receipt, and that is the whole of what the floor does with a
+                    // printer.
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     // ADR 0047: the waiter and the host stand. Session manage stops
                     // short of closing a table that still owes money.
@@ -992,6 +1011,19 @@ public enum PlatformRole {
      * {@code KITCHEN_VDU}, and never to a staff member.
      */
     KITCHEN_VDU_DEVICE("kitchen-vdu-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_DISPLAY_READ)),
+
+    /**
+     * ADR 0154: the whole of what a print agent may do -- claim the jobs of the printers it advertises
+     * at its own branch, fetch the bytes of a job it holds the live lease of, and report what happened.
+     * Exactly two capabilities, {@code print.job.claim} and {@code print.job.report}, and no read of any
+     * order, ticket, receipt or printer record: the agent is a byte pipe that receives bytes and a
+     * printer alias and reports an outcome, and holds no template, no language and no business rule.
+     *
+     * <p>Not a person's bundle and not offered by {@link TenantRoleCatalog}: only {@code
+     * PrintAgentService.approve} grants it, as the fixed consequence of approving an enrolment as
+     * {@code PRINT_AGENT}, and never to a staff member.
+     */
+    PRINT_AGENT("print-agent", ScopeType.LOCATION, EnumSet.of(PRINT_JOB_CLAIM, PRINT_JOB_REPORT)),
 
     /**
      * ADR 0081: what a HorecaOS support person may see inside one tenant during

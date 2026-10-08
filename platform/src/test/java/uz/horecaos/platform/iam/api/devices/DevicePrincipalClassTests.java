@@ -22,6 +22,25 @@ class DevicePrincipalClassTests {
     }
 
     @Test
+    void aPrintAgentIsApprovedAsAPrintAgentAndAsNothingElseAndNothingIsApprovedAsOne() {
+        // ADR 0154: the class decides which role a device is granted. An approval click must never hand a
+        // display the agent's bundle, or an agent a display's.
+        assertThat(DevicePrincipalClass.PRINT_AGENT.mayBeApprovedAs(DevicePrincipalClass.PRINT_AGENT))
+                .isTrue();
+        for (DevicePrincipalClass other : DevicePrincipalClass.values()) {
+            if (other == DevicePrincipalClass.PRINT_AGENT) {
+                continue;
+            }
+            assertThat(DevicePrincipalClass.PRINT_AGENT.mayBeApprovedAs(other))
+                    .as("an agent cannot be approved as " + other)
+                    .isFalse();
+            assertThat(other.mayBeApprovedAs(DevicePrincipalClass.PRINT_AGENT))
+                    .as(other + " cannot be approved as an agent")
+                    .isFalse();
+        }
+    }
+
+    @Test
     void everyClassMayBeApprovedAsItself() {
         for (DevicePrincipalClass deviceClass : DevicePrincipalClass.values()) {
             assertThat(deviceClass.mayBeApprovedAs(deviceClass))

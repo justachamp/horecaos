@@ -474,6 +474,67 @@ class PlatformRoleTests {
                         Capability.KITCHEN_TICKET_ADVANCE);
     }
 
+    // ----------------------------------------------------------- ADR 0154: printing
+
+    @Test
+    void aPrintAgentHoldsExactlyTheTwoCapabilitiesOfAByteAndReadsNothing() {
+        assertThat(PlatformRole.PRINT_AGENT.capabilities())
+                .as("claim and report, and no read of any order, ticket, receipt or printer record")
+                .containsExactlyInAnyOrder(Capability.PRINT_JOB_CLAIM, Capability.PRINT_JOB_REPORT);
+        assertThat(PlatformRole.PRINT_AGENT.scopeType()).isEqualTo(ResourceScope.ScopeType.LOCATION);
+        assertThat(PlatformRole.PRINT_AGENT.code()).isEqualTo("print-agent");
+    }
+
+    @Test
+    void theAgentCapabilitiesAreHeldByTheAgentAndNoPerson() {
+        for (PlatformRole role : PlatformRole.values()) {
+            if (role == PlatformRole.PRINT_AGENT || role == PlatformRole.PLATFORM_ADMIN) {
+                continue;
+            }
+            assertThat(role.capabilities())
+                    .as("%s must not be able to claim or report a print job", role)
+                    .doesNotContain(Capability.PRINT_JOB_CLAIM, Capability.PRINT_JOB_REPORT);
+        }
+    }
+
+    @Test
+    void theConsoleCapabilitiesFollowTheRecord() {
+        // print.read: location, brand and tenant managers. print.manage: the location manager, the tenant
+        // administrator and the owner -- not a brand manager, so the brand-scoped profile is the
+        // administrator's. print.reprint is wider: a cashier reprints a receipt, and so does a brand manager.
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities())
+                .contains(Capability.PRINT_READ, Capability.PRINT_MANAGE, Capability.PRINT_REPRINT);
+        assertThat(PlatformRole.TENANT_ADMIN.capabilities())
+                .contains(Capability.PRINT_READ, Capability.PRINT_MANAGE, Capability.PRINT_REPRINT);
+        assertThat(PlatformRole.TENANT_OWNER.capabilities())
+                .contains(Capability.PRINT_READ, Capability.PRINT_MANAGE, Capability.PRINT_REPRINT);
+        assertThat(PlatformRole.BRAND_MANAGER.capabilities())
+                .contains(Capability.PRINT_READ, Capability.PRINT_REPRINT)
+                .doesNotContain(Capability.PRINT_MANAGE);
+        assertThat(PlatformRole.LOCATION_STAFF.capabilities())
+                .contains(Capability.PRINT_REPRINT)
+                .doesNotContain(Capability.PRINT_READ, Capability.PRINT_MANAGE);
+        assertThat(PlatformRole.TENANT_FINANCE.capabilities())
+                .doesNotContain(Capability.PRINT_READ, Capability.PRINT_MANAGE, Capability.PRINT_REPRINT);
+    }
+
+    @Test
+    void theFiveCapabilitiesAreDeclaredWithTheirCodes() {
+        assertThat(Capability.PRINT_READ.code()).isEqualTo("print.read");
+        assertThat(Capability.PRINT_MANAGE.code()).isEqualTo("print.manage");
+        assertThat(Capability.PRINT_REPRINT.code()).isEqualTo("print.reprint");
+        assertThat(Capability.PRINT_JOB_CLAIM.code()).isEqualTo("print.job.claim");
+        assertThat(Capability.PRINT_JOB_REPORT.code()).isEqualTo("print.job.report");
+        assertThat(Capability.PRINT_READ.isRead()).isTrue();
+        assertThat(java.util.List.of(
+                        Capability.PRINT_MANAGE,
+                        Capability.PRINT_REPRINT,
+                        Capability.PRINT_JOB_CLAIM,
+                        Capability.PRINT_JOB_REPORT))
+                .as("everything but looking is a write, which a suspended tenant may not do (ADR 0078)")
+                .noneMatch(Capability::isRead);
+    }
+
     @Test
     void rolesAndCapabilitiesResolveByCode() {
         assertThat(PlatformRole.find("location-manager")).contains(PlatformRole.LOCATION_MANAGER);

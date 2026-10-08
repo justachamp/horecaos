@@ -856,8 +856,10 @@ class StaffMemberServiceTests {
     @DisplayName("a machine job is not a colleague: a device grant is neither revoked nor counted as access")
     void aDeviceGrantIsNotAStaffJob() {
         // The touch KDS (ADR 0079) and the wall display (ADR 0151) are both machines: a role added to
-        // the closed device set that StaffMembers.MACHINE_ROLE_CODES forgot would make a TV a colleague.
-        for (PlatformRole device : List.of(PlatformRole.KITCHEN_DEVICE, PlatformRole.KITCHEN_VDU_DEVICE)) {
+        // the closed device set that StaffMembers.MACHINE_ROLE_CODES forgot would make a TV a colleague (and ADR 0154's
+        // print agent a third).
+        for (PlatformRole device :
+                List.of(PlatformRole.KITCHEN_DEVICE, PlatformRole.KITCHEN_VDU_DEVICE, PlatformRole.PRINT_AGENT)) {
             String subject = "device-ish-" + device.code();
             UUID id = kit.activeMember(StaffKit.TENANT_A, subject, "Not", "ADevice", null);
             kit.grant(StaffKit.TENANT_A, subject, device, "LOCATION", StaffKit.LOCATION_1);

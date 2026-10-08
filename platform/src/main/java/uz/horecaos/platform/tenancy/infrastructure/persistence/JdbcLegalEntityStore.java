@@ -116,7 +116,7 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
         }
         return jdbc.sql("""
                 SELECT e.id, e.tenant_id, e.code, e.legal_name, e.tin, e.vat_registered,
-                       e.tax_profile_id, e.status,
+                       e.tax_profile_id, e.status, e.registered_address, e.contact_phone,
                        a.id AS assignment_id, a.version AS assignment_version,
                        a.effective_from, a.effective_until
                 FROM tenant.location_fiscal_assignments a
@@ -153,7 +153,7 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
         jdbc.sql("""
                 SELECT l.id AS location_id,
                        e.id, e.tenant_id, e.code, e.legal_name, e.tin, e.vat_registered,
-                       e.tax_profile_id, e.status,
+                       e.tax_profile_id, e.status, e.registered_address, e.contact_phone,
                        a.id AS assignment_id, a.version AS assignment_version,
                        a.effective_from, a.effective_until
                   FROM tenant.locations l
@@ -439,7 +439,9 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                 row.getObject("assignment_id", UUID.class),
                 row.getInt("assignment_version"),
                 row.getObject("effective_from", LocalDate.class),
-                row.getObject("effective_until", LocalDate.class));
+                row.getObject("effective_until", LocalDate.class),
+                row.getString("registered_address"),
+                row.getString("contact_phone"));
     }
 
     private static LegalEntity toEntity(ResultSet row, int number) throws SQLException {

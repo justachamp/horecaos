@@ -46,11 +46,14 @@ class TenantRoleCatalogTests {
     }
 
     @Test
-    void neverOffersEitherDeviceBundleBecauseNoPersonIsEverGrantedOne() {
+    void neverOffersAnyDeviceBundleBecauseNoPersonIsEverGrantedOne() {
         assertThat(TenantRoleCatalog.tenantVisible())
                 .as(
-                        "a device is not a colleague (ADR 0079, ADR 0151): its role is granted only by an approved enrolment")
+                        "a device is not a colleague (ADR 0079, ADR 0151, ADR 0154): its role is granted only by an approved enrolment")
                 .extracting(TenantRoleCatalog.RoleDescriptor::code)
-                .doesNotContain(PlatformRole.KITCHEN_DEVICE.code(), PlatformRole.KITCHEN_VDU_DEVICE.code());
+                .doesNotContain(
+                        PlatformRole.KITCHEN_DEVICE.code(),
+                        PlatformRole.KITCHEN_VDU_DEVICE.code(),
+                        PlatformRole.PRINT_AGENT.code());
     }
 }

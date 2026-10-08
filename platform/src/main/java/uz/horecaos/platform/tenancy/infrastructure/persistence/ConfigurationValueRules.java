@@ -42,15 +42,35 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
-    private static final Map<String, Consumer<Object>> RULES = Map.of(
-            "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode,
-            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
-            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes,
-            "assistant.disclosure_text_en", value -> requirePlainShortText("assistant.disclosure_text_en", value),
-            "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
-            "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
+    /**
+     * The languages a printed document can be written in (ADR 0154). Restated from {@code
+     * printing.api.PrintingConfigurationKeys#DOCUMENT_LOCALES}, which this module may not import;
+     * {@code PrintingConfigurationKeyTests} holds the two lists together.
+     */
+    static final java.util.List<String> PRINT_DOCUMENT_LOCALES = java.util.List.of("ru", "uz-Latn", "en");
+
+    private static final Map<String, Consumer<Object>> RULES = Map.ofEntries(
+            Map.entry("ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour),
+            Map.entry("ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay),
+            Map.entry("iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode),
+            Map.entry("ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold),
+            Map.entry("kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes),
+            Map.entry(
+                    "assistant.disclosure_text_en",
+                    value -> requirePlainShortText("assistant.disclosure_text_en", value)),
+            Map.entry(
+                    "assistant.disclosure_text_ru",
+                    value -> requirePlainShortText("assistant.disclosure_text_ru", value)),
+            Map.entry(
+                    "assistant.disclosure_text_uz",
+                    value -> requirePlainShortText("assistant.disclosure_text_uz", value)),
+            Map.entry("printing.document_locale", ConfigurationValueRules::requirePrintDocumentLocale),
+            Map.entry(
+                    "printing.kitchen_ticket.expire_minutes",
+                    value -> requireWholeMinutes("printing.kitchen_ticket.expire_minutes", value, 5, 240)),
+            Map.entry(
+                    "printing.late_marker_minutes",
+                    value -> requireWholeMinutes("printing.late_marker_minutes", value, 1, MAXIMUM_MINUTES)));
 
     private ConfigurationValueRules() {}
 
@@ -132,6 +152,23 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     "ordering.late_order_threshold_minutes must be between 1 and "
                             + MAXIMUM_LATE_ORDER_THRESHOLD_MINUTES);
+        }
+    }
+
+    /** ADR 0154: a mistyped language is refused, never printed as a half-translated slip. */
+    private static void requirePrintDocumentLocale(Object value) {
+        if (!PRINT_DOCUMENT_LOCALES.contains(String.valueOf(value))) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "printing.document_locale must be one of " + PRINT_DOCUMENT_LOCALES);
+        }
+    }
+
+    /** ADR 0154: a window that is a typo (zero, or a week) is a control that does nothing or everything. */
+    private static void requireWholeMinutes(String code, Object value, int minimum, int maximum) {
+        int minutes = ((Number) value).intValue();
+        if (minutes < minimum || minutes > maximum) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "%s must be between %d and %d".formatted(code, minimum, maximum));
         }
     }
 

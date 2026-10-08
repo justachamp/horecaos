@@ -388,6 +388,10 @@ class JdbcAuthorizationServiceTests {
                 // reads, through the same projection, so a suspended tenant's wall keeps showing the
                 // kitchen exactly as its staff's board does; it takes nothing out.
                 Capability.KITCHEN_DISPLAY_READ,
+                // ADR 0154: the printers, routes, queue and previews of a branch. Looking at the paper a
+                // job would produce takes nothing out, so a suspended tenant still sees why its tickets
+                // did not print; every way of asking for paper is a write.
+                Capability.PRINT_READ,
                 Capability.RESERVATION_READ,
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,

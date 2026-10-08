@@ -37,6 +37,7 @@ class ModularArchitectureTests {
             "ordering",
             "payments",
             "pricing",
+            "printing",
             "referral",
             "reporting",
             "reviews",
@@ -48,6 +49,26 @@ class ModularArchitectureTests {
     @Test
     void verifiesModuleBoundaries() {
         ApplicationModules.of(HorecaOSPlatformApplication.class).verify();
+    }
+
+    @Test
+    @DisplayName("nothing depends on printing: events flow into it and never out (ADR 0154, Decision 1)")
+    void noModuleDependsOnPrinting() {
+        var modules = ApplicationModules.of(HorecaOSPlatformApplication.class);
+        assertThat(modules.getModuleByName("printing"))
+                .as("the printing module exists")
+                .isPresent();
+
+        List<String> dependents = modules.stream()
+                .filter(module -> !module.getIdentifier().toString().equals("printing"))
+                .filter(module -> module.getDirectDependencies(modules).containsModuleNamed("printing"))
+                .map(module -> module.getIdentifier().toString())
+                .toList();
+
+        assertThat(dependents)
+                .as("a module that reads printing would make a defect in paper a defect in an order, a"
+                        + " ticket or a fiscal receipt")
+                .isEmpty();
     }
 
     @Test

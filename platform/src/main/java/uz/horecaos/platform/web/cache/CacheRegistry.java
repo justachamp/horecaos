@@ -171,7 +171,23 @@ public enum CacheRegistry {
             "assistant.grounded_replies",
             Duration.ofMinutes(5),
             5_000,
-            "None needed: the key carries a digest of the retrieved facts, so changed facts miss");
+            "None needed: the key carries a digest of the retrieved facts, so changed facts miss"),
+
+    /**
+     * ADR 0154: a brand's logo thresholded to one bit at a roll's width, keyed by tenant, media asset id
+     * and width in dots.
+     *
+     * <p>Twenty-four hours and no invalidation event, because an asset is immutable (ADR 0010: a new logo
+     * is a new asset id, so the old key simply stops being asked for) and the entry is derived data an
+     * eviction or a restart rebuilds from the object store. Only consulted when the brand's receipt profile
+     * asks for the logo; the profile is read from the database on every render, so turning the logo off
+     * takes effect at once rather than a TTL later. A few hundred bytes to a few kilobytes an entry.
+     */
+    PRINTING_LOGO_BITMAPS(
+            "printing.logo_bitmaps",
+            Duration.ofHours(24),
+            500,
+            "none: the key carries the immutable asset id and the roll width");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

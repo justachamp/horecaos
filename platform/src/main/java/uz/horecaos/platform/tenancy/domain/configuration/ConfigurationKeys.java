@@ -523,6 +523,50 @@ public final class ConfigurationKeys {
             .describedAs("Minutes without a read after which a kitchen wall display is shown as not seen.")
             .build();
 
+    /**
+     * ADR 0154, ADR 0082: declared identically in {@code printing.api.PrintingConfigurationKeys}, where it
+     * is consumed (this registry is internal to tenancy and a reference the other way would make the
+     * modules cyclic; {@code PrintingConfigurationKeyTests} holds the two together).
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_PRINTING = ConfigurationKey.of(
+                    "feature.printing", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("printing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Lets a tenant's branches print kitchen tickets, order slips and fiscal receipts "
+                    + "through a print agent or a browser.")
+            .build();
+
+    /** ADR 0154: see {@link #FEATURE_PRINTING}. */
+    public static final ConfigurationKey<String> PRINTING_DOCUMENT_LOCALE = ConfigurationKey.of(
+                    "printing.document_locale", String.class)
+            .defaultValue("ru")
+            .ownedBy("printing")
+            .tenantVisible()
+            .describedAs("The language printed documents are written in at a branch: ru, uz-Latn or en.")
+            .build();
+
+    /** ADR 0154: see {@link #FEATURE_PRINTING}. */
+    public static final ConfigurationKey<Integer> PRINTING_KITCHEN_TICKET_EXPIRE_MINUTES = ConfigurationKey.of(
+                    "printing.kitchen_ticket.expire_minutes", Integer.class)
+            .defaultValue(30)
+            .ownedBy("printing")
+            .tenantVisible()
+            .describedAs("Minutes after which a kitchen ticket still waiting for its printer is dropped "
+                    + "instead of printing stale (5 to 240).")
+            .build();
+
+    /** ADR 0154: see {@link #FEATURE_PRINTING}. */
+    public static final ConfigurationKey<Integer> PRINTING_LATE_MARKER_MINUTES = ConfigurationKey.of(
+                    "printing.late_marker_minutes", Integer.class)
+            .defaultValue(5)
+            .ownedBy("printing")
+            .tenantVisible()
+            .describedAs(
+                    "Minutes after being queued beyond which a printed document is marked delayed " + "(1 to 1440).")
+            .build();
+
     public static final ConfigurationKey<Integer> ORDERING_AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
                     "ordering.at_risk_before_minutes", Integer.class)
             .defaultValue(5)
@@ -877,6 +921,10 @@ public final class ConfigurationKeys {
             ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
             KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES,
+            FEATURE_PRINTING,
+            PRINTING_DOCUMENT_LOCALE,
+            PRINTING_KITCHEN_TICKET_EXPIRE_MINUTES,
+            PRINTING_LATE_MARKER_MINUTES,
             ORDERING_AT_RISK_BEFORE_MINUTES,
             ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,

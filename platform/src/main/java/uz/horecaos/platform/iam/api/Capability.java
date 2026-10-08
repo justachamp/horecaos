@@ -670,6 +670,51 @@ public enum Capability {
     KITCHEN_TICKET_HANDOVER("kitchen.ticket.handover", "kitchen", "ticket.handover"),
 
     /**
+     * ADR 0154: reading a branch's printers, print routes, print queue and printer-facing agents, a
+     * brand's receipt profile, and the preview bitmap of a document. Nothing here prints; the preview
+     * is a picture of what a job would put on paper.
+     *
+     * <p>Held by the location, brand and tenant managers and nobody on the floor: the queue lists
+     * failed and dead jobs of the branch, and a preview of a slip is an order's lines.
+     */
+    PRINT_READ("print.read", "print", "read"),
+
+    /**
+     * ADR 0154: registering and retiring a printer, binding it to an agent's advertised alias, creating
+     * and changing a print route, approving and revoking a print agent, cancelling a queued job, and
+     * (at {@code BRAND} scope) changing a brand's receipt profile.
+     *
+     * <p>The profile endpoints are brand-scoped, which a location manager does not hold: a footer and
+     * a logo are the brand's face on every branch's paper. A location manager manages the printers and
+     * routes of her own branch.
+     */
+    PRINT_MANAGE("print.manage", "print", "manage"),
+
+    /**
+     * ADR 0154: asking for paper on demand -- a test page, a reprint of an order slip, a receipt or a
+     * kitchen ticket. Every reprint is a new job, linked to the first, naming the person and a reason
+     * code in an ADR 0027 fact.
+     *
+     * <p>Wider than {@link #PRINT_MANAGE} on purpose: a cashier reprints a receipt a customer lost, and
+     * that is the whole of what the floor may do with a printer.
+     */
+    PRINT_REPRINT("print.reprint", "print", "reprint"),
+
+    /**
+     * ADR 0154: a print agent claiming jobs for the printers it advertises, and fetching the bytes of a
+     * job it holds the live lease of. Held by the {@code print-agent} device role and nobody else; the
+     * agent is a byte pipe and this is the whole of its read side.
+     */
+    PRINT_JOB_CLAIM("print.job.claim", "print", "job.claim"),
+
+    /**
+     * ADR 0154: a print agent reporting what happened to a job it holds the lease of. Separate from
+     * {@link #PRINT_JOB_CLAIM} so that the day a transport that only reports exists (a printer-side
+     * polling protocol behind the same service) it can be given one without the other.
+     */
+    PRINT_JOB_REPORT("print.job.report", "print", "job.report"),
+
+    /**
      * ADR 0047: authoring a branch's sections and tables, and configuring what a
      * scanned code does there.
      *

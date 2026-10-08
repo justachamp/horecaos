@@ -271,7 +271,8 @@ class EndpointCapabilityDeclarationTests {
                     || isDeliveryFeePreviewEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
-                    || isGeocodeLookupEndpoint(handler)) {
+                    || isGeocodeLookupEndpoint(handler)
+                    || isPrintPreviewEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -790,6 +791,52 @@ class EndpointCapabilityDeclarationTests {
         assertThat(found)
                 .as("the six lookups the exemption names must all exist, or the exemption outlived them")
                 .hasSize(GEOCODE_LOOKUP_PATHS.size());
+        assertThat(wrong).isEmpty();
+    }
+
+    /**
+     * Whether this endpoint is the print preview (ADR 0154): a POST only because its input is a small
+     * document description in a body, and the answer is a PNG.
+     *
+     * <p>It creates nothing, stores nothing and sends nothing to any printer: the same bitmap the browser would
+     * print, returned. There is no effect for an {@code Idempotency-Key} to guard, and a stored replay of a
+     * quarter-megabyte picture would be the only thing the key bought. Exempt from replay protection
+     * <em>only</em>: {@link #thePrintPreviewStillDeclaresItsCapability} holds the other half, so this is not a
+     * way to leave it unauthorized. Matched on the exact path, the discipline every exemption here keeps.
+     */
+    private static boolean isPrintPreviewEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/documents/preview");
+    }
+
+    @Test
+    void thePrintPreviewStillDeclaresItsCapability() {
+        List<String> found = new ArrayList<>();
+        List<String> wrong = new ArrayList<>();
+
+        for (Method handler : allControllerMethods()) {
+            if (!isPrintPreviewEndpoint(handler)) {
+                continue;
+            }
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            found.add(where);
+            RequiresCapability declaration = handler.getAnnotation(RequiresCapability.class);
+            if (declaration == null) {
+                wrong.add(where + " declares no capability");
+                continue;
+            }
+            if (declaration.value() != uz.horecaos.platform.iam.api.Capability.PRINT_READ) {
+                wrong.add(where + " requires " + declaration.value() + ", not print.read");
+            }
+            if (declaration.mutating()) {
+                wrong.add(where + " is marked mutating, which would demand an Idempotency-Key it does not need");
+            }
+            if (declaration.scope() != ScopeType.LOCATION) {
+                wrong.add(where + " requires " + declaration.scope() + " but its path supports LOCATION");
+            }
+        }
+
+        assertThat(found).as("the exemption must name an endpoint that exists").hasSize(1);
         assertThat(wrong).isEmpty();
     }
 

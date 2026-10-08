@@ -890,6 +890,72 @@ public class JdbcKitchenStore {
                 .list();
     }
 
+    /**
+     * The ticket's items still to be made or made, in the order they were routed: a struck item
+     * (cancelled by an amendment) is not on paper (ADR 0154).
+     */
+    public List<TicketItemRow> liveItemsOf(UUID tenantId, UUID ticketId) {
+        return jdbc.sql(SELECT_ITEM + """
+                 WHERE tenant_id = :tenantId AND ticket_id = :ticketId AND status <> 'CANCELLED'
+                 ORDER BY created_at, id
+                """)
+                .param("tenantId", tenantId)
+                .param("ticketId", ticketId)
+                .query(JdbcKitchenStore::mapItem)
+                .list();
+    }
+
+    /** How many amendments changed this ticket after it was created (V0523). Zero for a ticket that never was. */
+    public int amendmentRevisionOf(UUID tenantId, UUID ticketId) {
+        return jdbc.sql("SELECT amendment_revision FROM kitchen.tickets WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
+                .query(Integer.class)
+                .optional()
+                .orElse(0);
+    }
+
+    /** Counts one more amendment on the ticket and answers the new count. */
+    public int bumpAmendmentRevision(UUID tenantId, UUID ticketId) {
+        return jdbc.sql("""
+                UPDATE kitchen.tickets
+                   SET amendment_revision = amendment_revision + 1
+                 WHERE tenant_id = :tenantId AND id = :id
+                RETURNING amendment_revision
+                """)
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** Tickets of one location released in {@code [from, to)}, oldest first (ADR 0154's reconciling sweep). */
+    public List<ReleasedTicketRow> releasedBetween(
+            UUID tenantId, UUID locationId, Instant from, Instant to, int limit) {
+        return jdbc.sql("""
+                SELECT id, order_id, amendment_revision, released_at
+                  FROM kitchen.tickets
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND released_at IS NOT NULL AND released_at >= :from AND released_at < :to
+                 ORDER BY released_at, id
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .param("limit", limit)
+                .query((row, number) -> new ReleasedTicketRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        row.getInt("amendment_revision"),
+                        row.getObject("released_at", java.time.OffsetDateTime.class)
+                                .toInstant()))
+                .list();
+    }
+
+    public record ReleasedTicketRow(UUID ticketId, UUID orderId, int amendmentRevision, Instant releasedAt) {}
+
     public Optional<TicketItemRow> findItem(UUID tenantId, UUID itemId) {
         return jdbc.sql(SELECT_ITEM + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)

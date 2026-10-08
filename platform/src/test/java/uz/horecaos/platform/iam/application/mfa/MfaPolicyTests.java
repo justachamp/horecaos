@@ -144,7 +144,10 @@ class MfaPolicyTests {
         assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.REQUIRED);
 
         for (PlatformRole machine : new PlatformRole[] {
-            PlatformRole.KITCHEN_DEVICE, PlatformRole.SUPPORT_SESSION_VIEW, PlatformRole.SUPPORT_SESSION_ASSIST
+            PlatformRole.KITCHEN_DEVICE,
+            PlatformRole.PRINT_AGENT,
+            PlatformRole.SUPPORT_SESSION_VIEW,
+            PlatformRole.SUPPORT_SESSION_ASSIST
         }) {
             tenantRoles.put(TENANT, Set.of(code(machine)));
             assertThat(policy("OFF").requirementFor(PERSON, false))

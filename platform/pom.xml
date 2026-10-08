@@ -58,6 +58,14 @@
              which does not reach this module's classpath). Verified current
              on Maven Central as of this change. -->
         <fastexcel.version>0.20.2</fastexcel.version>
+        <!-- ADR 0154: the QR encoder for the receipt URL, and the decoder the rendering tests read
+             the bitmap back with. 3.5.4 (2025-11-11) is the current release on Maven Central: Apache-2.0,
+             pure Java, no runtime dependency (the parent's only dependency is JUnit, test-scoped), a
+             610 KB jar. The TypeScript encoder in the operations console (ADR 0119, capped at 106 bytes)
+             cannot run in a Java renderer, and a hand-written QR encoder is the kind of subtle,
+             silently-wrong code (a mask choice, a Reed-Solomon table) a fiscal receipt must not carry.
+             Not managed by spring-boot-starter-parent, so pinned explicitly. -->
+        <zxing.version>3.5.4</zxing.version>
         <java-uuid-generator.version>5.2.0</java-uuid-generator.version>
         <!-- Row 10.5's DNS-TXT ownership challenge (ChannelSetupService,
              DnsjavaTxtResolver's own doc explains why not JNDI): a pure-Java
@@ -284,6 +292,14 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-csv</artifactId>
             <version>${commons-csv.version}</version>
+        </dependency>
+        <dependency>
+            <!-- ADR 0154: encodes the stored fiscal receipt URL as the QR on a printed receipt. The
+                 same artifact's reader half is what PrintingRenderingTests decode the bitmap with, so
+                 "the QR is the stored URL" is proved by a decoder and not by a second encoder. -->
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
         </dependency>
         <dependency>
             <!-- Row 4.5b: writes CatalogImportParser#templateWorkbook, the

@@ -22,8 +22,8 @@ import java.util.stream.Collectors;
  * this is the "never listed" half, held at the one place that would otherwise
  * have to remember it on every caller's behalf.
  *
- * <p>{@link PlatformRole#KITCHEN_DEVICE} and {@link PlatformRole#KITCHEN_VDU_DEVICE} join the
- * exclusion for a different
+ * <p>{@link PlatformRole#KITCHEN_DEVICE}, {@link PlatformRole#KITCHEN_VDU_DEVICE} and {@link
+ * PlatformRole#PRINT_AGENT} (ADR 0154) join the exclusion for a different
  * reason (ADR 0079): this catalogue answers "what job could I hand a
  * colleague", and a device is not a colleague. The bundle is real and is
  * granted through the ordinary {@code iam.grants} path like any other, but
@@ -51,6 +51,7 @@ public final class TenantRoleCatalog {
                         && role != PlatformRole.PLATFORM_SUPPORT
                         && role != PlatformRole.KITCHEN_DEVICE
                         && role != PlatformRole.KITCHEN_VDU_DEVICE
+                        && role != PlatformRole.PRINT_AGENT
                         && !role.supportSessionOnly())
                 .map(RoleDescriptor::of)
                 .toList();

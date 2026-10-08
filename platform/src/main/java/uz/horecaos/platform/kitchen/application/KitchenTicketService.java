@@ -18,6 +18,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +31,12 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort.OrderProgress;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.kitchen.api.KitchenTicketAmended;
+import uz.horecaos.platform.kitchen.api.KitchenTicketReleased;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderForKitchen;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderLineForKitchen;
@@ -93,7 +98,9 @@ public class KitchenTicketService {
     private final Clock clock;
     private final TransactionTemplate independently;
     private final RealtimeSignalPublisher realtime;
+    private final ApplicationEventPublisher events;
 
+    /** As every caller built this before ADR 0154: nothing listens for a release or an amendment. */
     public KitchenTicketService(
             JdbcKitchenStore kitchen,
             KitchenOrderSource orders,
@@ -102,6 +109,20 @@ public class KitchenTicketService {
             Clock clock,
             TransactionTemplate unitOfWork,
             RealtimeSignalPublisher realtime) {
+        this(kitchen, orders, orderProgress, audit, clock, unitOfWork, realtime, event -> {});
+    }
+
+    @Autowired
+    public KitchenTicketService(
+            JdbcKitchenStore kitchen,
+            KitchenOrderSource orders,
+            OrderProgressPort orderProgress,
+            AuditRecorder audit,
+            Clock clock,
+            TransactionTemplate unitOfWork,
+            RealtimeSignalPublisher realtime,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.kitchen = kitchen;
         this.orders = orders;
         this.orderProgress = orderProgress;
@@ -630,6 +651,14 @@ public class KitchenTicketService {
         }
         TicketRow after = rollUp(tenantId, ticket, "SERVICE", "kitchen", orderId.toString(), now);
         signalBoardChanged(tenantId, after.locationId(), after.id(), after.version(), now);
+        if (ticket.status() != TicketStatus.HELD) {
+            // ADR 0154: an amendment to a ticket that has already been released is a fact the kitchen
+            // counts (V0523) and tells the branch's printing about. One still on hold is not: nothing
+            // was cooked or printed from the old version, and its release prints the order as it is.
+            int revision = kitchen.bumpAmendmentRevision(tenantId, ticket.id());
+            events.publishEvent(new KitchenTicketAmended(
+                    Ids.newId(), tenantId, after.brandId(), after.locationId(), after.id(), orderId, revision, now));
+        }
     }
 
     /**
@@ -813,7 +842,13 @@ public class KitchenTicketService {
                 correlationId,
                 now);
         Optional<TicketRow> fired = kitchen.findTicket(tenantId, ticketId);
-        fired.ifPresent(ticket -> signalBoardChanged(tenantId, ticket.locationId(), ticketId, ticket.version(), now));
+        fired.ifPresent(ticket -> {
+            signalBoardChanged(tenantId, ticket.locationId(), ticketId, ticket.version(), now);
+            // ADR 0154: the ticket reached its stations. An in-process signal inside this transaction;
+            // a printing listener runs after commit and cannot roll the release back.
+            events.publishEvent(new KitchenTicketReleased(
+                    Ids.newId(), tenantId, ticket.brandId(), ticket.locationId(), ticketId, ticket.orderId(), now));
+        });
         return fired;
     }
 

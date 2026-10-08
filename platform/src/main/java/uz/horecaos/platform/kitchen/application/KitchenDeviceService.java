@@ -68,6 +68,12 @@ public class KitchenDeviceService {
         return switch (deviceClass) {
             case KITCHEN_KDS -> PlatformRole.KITCHEN_DEVICE;
             case KITCHEN_VDU -> PlatformRole.KITCHEN_VDU_DEVICE;
+            // ADR 0154: a print agent is approved from the Printing screen, by print.manage, and
+            // granted its own role there. The kitchen's capability opens the kitchen's classes only.
+            case PRINT_AGENT ->
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "A print agent is approved from the Printing screen, not from Kitchen devices");
         };
     }
 

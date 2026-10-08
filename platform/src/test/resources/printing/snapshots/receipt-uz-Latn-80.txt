@@ -1,0 +1,16 @@
+ |                 FISCAL RECEIPT                 | [B]
+ |2× Lagman                                 90 000|
+ |------------------------------------------------
+ |TOTAL                                90 000 soʻm| [B]
+F|================================================
+F|Receipt No.                              1234567|
+F|Fiscal sign                         987654321098|
+F|Terminal                          EP000000000000|
+F|Registered                      08.10.2026 12:05|
+F|Seller                                Sinov MCHJ|
+F|TIN                                    123456789|
+F|            Verify the receipt by QR            |
+F|[QR 37x37 modules, 8 dots each]
+F|================================================
+ |[GAP 1]
+ |[CUT]
