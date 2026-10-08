@@ -9,6 +9,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
 import { environment } from '../environments/environment';
 import { routes } from './app.routes';
+import { AttributionLanding } from './core/attribution/attribution-landing';
 import { TranslateService } from './services/translate.service';
 import { ThemeService } from './services/theme.service';
 import { provideYaConfig, YaConfig } from 'angular8-yandex-maps';
@@ -41,6 +42,11 @@ export const appConfig: ApplicationConfig = {
       } catch {
         console.error('Error initializing translations');
       }
+    }),
+    provideAppInitializer(() => {
+      // ADR 0167: a ?ref= landing counts one click on its attribution link. Not awaited -- nothing
+      // renders on the answer -- and the service swallows its own failures.
+      void inject(AttributionLanding).recordLanding();
     }),
     provideYaConfig(yaConfig),
     provideBrowserGlobalErrorListeners(),

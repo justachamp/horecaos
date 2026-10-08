@@ -234,22 +234,27 @@ class CustomerFunnelCaptureTests {
     void aRecordedCountSurvivesAReCloseAfterTheSweep() {
         insertCart(webChannel, ACCOUNT_SELF, null, "ACTIVE", tashkent(DAY, 12, 0));
         insertCart(webChannel, null, "guest-hash-c", "ACTIVE", tashkent(DAY, 13, 0));
+        // One basket became an order. The order keeps the day's row alive after the sweep, which is what
+        // makes this a test of the count and not of whether anything is written at all: a day whose
+        // carts are all swept and which has no order writes no row, and so could never overwrite one.
+        UUID converted = insertCart(webChannel, ACCOUNT_SELF, null, "CONVERTED", tashkent(DAY, 14, 0));
+        insertOrder("SURVIVES", converted, webChannel, "WEB", ACCOUNT_SELF, tashkent(DAY, 14, 10));
         close.close(TENANT, DAY);
-        assertThat(funnelRow(DAY, BRAND, "WEB").get("basket_started")).isEqualTo(2);
+        assertThat(funnelRow(DAY, BRAND, "WEB").get("basket_started")).isEqualTo(3);
 
         clock.advance(Duration.ofDays(100));
         new CartRetentionSweeper(new JdbcCartStore(jdbc), jdbc, clock, 90, 500).runOnce();
-        assertThat(jdbc.sql("SELECT count(*) FROM ordering.carts")
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.carts WHERE status <> 'CONVERTED'")
                         .query(Long.class)
                         .single())
-                .as("the sweep really deleted the carts this test is about")
+                .as("the sweep really deleted the abandoned carts this test is about")
                 .isZero();
         close.close(TENANT, DAY);
 
         assertThat(funnelRow(DAY, BRAND, "WEB").get("basket_started"))
                 .as("recomputing a day whose carts are gone must not turn yesterday's good number into 'not"
                         + " recorded' or into zero")
-                .isEqualTo(2);
+                .isEqualTo(3);
     }
 
     @Test

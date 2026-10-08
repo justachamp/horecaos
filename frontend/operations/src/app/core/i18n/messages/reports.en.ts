@@ -432,6 +432,39 @@ export const reportsEn = {
   'reports.customers.rfm.frequency.F2_FEW': '2–3 orders',
   'reports.customers.rfm.frequency.F3_FREQUENT': '4+ orders',
 
+  // ---------------------------------------------------------------- reports 7.6c customer funnel and acquisition source (ADR 0167)
+  'reports.customers.funnel.title': 'Customer funnel',
+  'reports.customers.funnel.intro':
+    'Daily counts, taken by the platform from registrations, baskets, checkouts and orders. They are counts of distinct events on each day and not a cohort: a ratio between two stages is a rate of activity, not the probability that one person converts.',
+  'reports.customers.funnel.stage.VISITS': 'Visits',
+  'reports.customers.funnel.stage.REGISTERED': 'Registered',
+  'reports.customers.funnel.stage.BASKET_STARTED': 'Started a basket',
+  'reports.customers.funnel.stage.CHECKOUT_STARTED': 'Reached checkout',
+  'reports.customers.funnel.stage.ORDERED': 'Ordered',
+  'reports.customers.funnel.visits.notMeasured':
+    'Visits: not measured. Nothing is collected from a browser, an app or a bot for this report, so visits are neither shown as zero nor estimated. A restaurant that wants visits can read them from its own Google Analytics.',
+  'reports.customers.funnel.reason.NOT_BY_CHANNEL':
+    'Registrations have no sales channel, so a channel cut leaves them out.',
+  'reports.customers.funnel.unrecorded':
+    '{stage}: {days} days not recorded. Their baskets were already deleted when the counts were taken, so this total is partial.',
+  'reports.customers.funnel.empty': 'No funnel counts have been recorded for this period yet.',
+  'reports.customers.funnel.error': 'The funnel could not be loaded.',
+  'reports.customers.acquisition.title': 'Acquisition source',
+  'reports.customers.acquisition.intro':
+    'Registrations by how the account was created, clicks on this restaurant’s attribution links, and orders by sales channel, side by side.',
+  'reports.customers.acquisition.noAttribution':
+    'This does not attribute a customer or an order to a link: how many people opened a link and how many registered are shown next to each other, not joined.',
+  'reports.customers.acquisition.registrations': 'Registrations by origin',
+  'reports.customers.acquisition.clicks': 'Clicks by attribution link',
+  'reports.customers.acquisition.orders': 'Orders by sales channel',
+  'reports.customers.acquisition.empty': 'Nothing to show in this period.',
+  'reports.customers.acquisition.archivedLink': '{label} (archived)',
+  'reports.customers.acquisition.origin.SELF_SERVICE': 'Signed up themselves',
+  'reports.customers.acquisition.origin.OPERATOR': 'Created by staff',
+  'reports.customers.acquisition.origin.IMPORT': 'Imported',
+  'reports.customers.acquisition.origin.AGGREGATOR': 'Marketplace',
+  'reports.customers.acquisition.origin.MIGRATION': 'Migrated',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Staff reports',
   'reports.staff.loading': 'Loading…',

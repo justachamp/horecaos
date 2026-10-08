@@ -48,6 +48,124 @@
         }
       </div>
 
+      <!-- 7.6c (ADR 0167): the customer funnel, daily counts from server-side facts; visits are never drawn as zero -->
+      <section class="band" data-testid="customer-funnel">
+        <div class="band-header">
+          <h2 class="q-subhead">{{ 'reports.customers.funnel.title' | t }}</h2>
+          @if (funnelFormula(); as formula) {
+            <details class="formula-note">
+              <summary class="q-caption">{{ 'reports.overview.formula.ariaLabel' | t }}</summary>
+              <p class="q-caption">{{ formula.definition }}</p>
+            </details>
+          }
+        </div>
+        <p class="q-caption intro" data-testid="funnel-activity-note">
+          {{ 'reports.customers.funnel.intro' | t }}
+        </p>
+        @if (funnelFailed()) {
+          <p class="q-body-sm empty" role="alert" data-testid="funnel-error">
+            {{ 'reports.customers.funnel.error' | t }}
+          </p>
+        } @else {
+          @if (visitsNotMeasured()) {
+            <p class="q-body-sm not-measured" data-testid="funnel-visits-not-measured">
+              {{ 'reports.customers.funnel.visits.notMeasured' | t }}
+            </p>
+          }
+          @if (!funnelHasCounts()) {
+            <p class="q-body-sm empty" data-testid="funnel-empty">
+              {{ 'reports.customers.funnel.empty' | t }}
+            </p>
+          } @else {
+            <q-funnel-chart
+              [stages]="funnelChartStages()"
+              [showShare]="false"
+              [ariaLabel]="'reports.customers.funnel.title' | t"
+              [valueFormatter]="formatCountValue"
+            />
+          }
+          @for (gap of funnelGaps(); track gap.stage) {
+            <p class="q-caption gap-note" data-testid="funnel-unrecorded">
+              {{ 'reports.customers.funnel.unrecorded' | t: { stage: gap.label, days: gap.days } }}
+            </p>
+          }
+          @for (other of funnelOtherReasons(); track other.stage) {
+            <p class="q-caption gap-note" data-testid="funnel-stage-reason">
+              {{ other.reasonKey | t }}
+            </p>
+          }
+        }
+      </section>
+
+      <!-- 7.6c (ADR 0167): acquisition source — three counts side by side, none attributed to another -->
+      <section class="band" data-testid="customer-acquisition">
+        <div class="band-header">
+          <h2 class="q-subhead">{{ 'reports.customers.acquisition.title' | t }}</h2>
+          @if (acquisitionFormula(); as formula) {
+            <details class="formula-note">
+              <summary class="q-caption">{{ 'reports.overview.formula.ariaLabel' | t }}</summary>
+              <p class="q-caption">{{ formula.definition }}</p>
+            </details>
+          }
+        </div>
+        <p class="q-caption intro">{{ 'reports.customers.acquisition.intro' | t }}</p>
+        @if (!acquisitionAttributesCustomer()) {
+          <p class="q-body-sm not-measured" data-testid="acquisition-no-attribution">
+            {{ 'reports.customers.acquisition.noAttribution' | t }}
+          </p>
+        }
+        @if (acquisitionFailed()) {
+          <p class="q-body-sm empty" role="alert" data-testid="acquisition-error">
+            {{ 'reports.customers.funnel.error' | t }}
+          </p>
+        } @else {
+          <div class="acquisition-grid">
+            <div class="acquisition-column" data-testid="acquisition-registrations">
+              <h3 class="q-caption acquisition-column__title">
+                {{ 'reports.customers.acquisition.registrations' | t }}
+              </h3>
+              @if (registrationsByOrigin().length === 0) {
+                <p class="q-body-sm empty">{{ 'reports.customers.acquisition.empty' | t }}</p>
+              } @else {
+                <q-bar-chart
+                  [items]="registrationsByOrigin()"
+                  [ariaLabel]="'reports.customers.acquisition.registrations' | t"
+                  [valueFormatter]="formatCountValue"
+                />
+              }
+            </div>
+            <div class="acquisition-column" data-testid="acquisition-clicks">
+              <h3 class="q-caption acquisition-column__title">
+                {{ 'reports.customers.acquisition.clicks' | t }}
+              </h3>
+              @if (clicksByLink().length === 0) {
+                <p class="q-body-sm empty">{{ 'reports.customers.acquisition.empty' | t }}</p>
+              } @else {
+                <q-bar-chart
+                  [items]="clicksByLink()"
+                  [ariaLabel]="'reports.customers.acquisition.clicks' | t"
+                  [valueFormatter]="formatCountValue"
+                />
+              }
+            </div>
+            <div class="acquisition-column" data-testid="acquisition-orders">
+              <h3 class="q-caption acquisition-column__title">
+                {{ 'reports.customers.acquisition.orders' | t }}
+              </h3>
+              @if (ordersByChannel().length === 0) {
+                <p class="q-body-sm empty">{{ 'reports.customers.acquisition.empty' | t }}</p>
+              } @else {
+                <q-bar-chart
+                  [items]="ordersByChannel()"
+                  [ariaLabel]="'reports.customers.acquisition.orders' | t"
+                  [valueFormatter]="formatCountValue"
+                />
+              }
+            </div>
+          </div>
+        }
+      </section>
+
       <!-- 7.6a: new-vs-returning revenue, revenue.new_vs_returning.v1 through GET .../queries -->
       <section class="band">
         <div class="band-header">
