@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { FiscalizationApi, LegalEntityView } from '../settings/fiscalization/fiscalization-api';
 import { LocationsApi } from '../settings/locations/locations-api';
 import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { PaymentMethodsApi } from '../settings/payment-methods/payment-methods-api';
@@ -180,6 +181,49 @@ function paymentMixResponse(): PaymentMixResponse {
   };
 }
 
+function legalEntity(id: string, shortName: string): LegalEntityView {
+  return {
+    id,
+    code: id.toUpperCase(),
+    legalName: `${shortName} LLC`,
+    shortName,
+    tin: '123456789',
+    vatRegistered: false,
+    vatCertificateReference: null,
+    taxProfileId: null,
+    registeredAddress: null,
+    contactPhone: null,
+    status: 'ACTIVE',
+    version: 1,
+  };
+}
+
+/** ADR 0038: one tenant, two taxpayers, and both take cash. */
+function twoTaxpayerPaymentMix(): PaymentMixResponse {
+  return {
+    overview: [
+      {
+        locationId: null,
+        legalEntityId: 'e1',
+        paymentMethodCode: 'CASH',
+        settlesFromBalance: false,
+        tenderCount: 6,
+        amountSom: 600_000,
+      },
+      {
+        locationId: null,
+        legalEntityId: 'e2',
+        paymentMethodCode: 'CASH',
+        settlesFromBalance: false,
+        tenderCount: 4,
+        amountSom: 400_000,
+      },
+    ],
+    byLocation: [],
+    provenance: provenance(),
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -199,7 +243,11 @@ describe('BusinessOverviewPage', () => {
   async function render(
     configure?: (filters: ReportsFilterState) => void,
     lateCounts?: readonly [number, number],
-    overrides?: { readonly paymentMix?: PaymentMixResponse; readonly metrics?: readonly unknown[] },
+    overrides?: {
+      readonly paymentMix?: PaymentMixResponse;
+      readonly metrics?: readonly unknown[];
+      readonly legalEntities?: readonly LegalEntityView[];
+    },
   ): Promise<void> {
     TestBed.resetTestingModule();
     // ReportsFilterState (wave P27) reads its initial state from the URL on
@@ -248,6 +296,12 @@ describe('BusinessOverviewPage', () => {
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: PaymentMethodsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: FiscalizationApi,
+          useValue: {
+            listLegalEntities: vi.fn().mockResolvedValue(overrides?.legalEntities ?? []),
+          },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -327,6 +381,10 @@ describe('BusinessOverviewPage', () => {
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: PaymentMethodsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: FiscalizationApi,
+          useValue: { listLegalEntities: vi.fn().mockResolvedValue([]) },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -430,6 +488,41 @@ describe('BusinessOverviewPage', () => {
       SCOPE.tenantId,
       expect.objectContaining({ legalEntityId: ['e1'] }),
     );
+  });
+
+  it('keeps two taxpayers’ identical payment codes as two slices, each naming its own taxpayer (ADR 0038)', async () => {
+    await render(undefined, undefined, {
+      paymentMix: twoTaxpayerPaymentMix(),
+      legalEntities: [legalEntity('e1', 'Alpha'), legalEntity('e2', 'Beta')],
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    const legend = Array.from(
+      host.querySelectorAll('[data-testid="q-donut-chart-legend"]'),
+    ).flatMap((list) => Array.from(list.querySelectorAll('li')).map((item) => item.textContent));
+    // The channel donut beside it has its own legend; this card's two entries are the CASH ones.
+    const cash = legend.filter((text) => text?.includes('CASH'));
+    expect(cash.length).toBe(2);
+    expect(cash.join('|')).toContain('CASH · Alpha');
+    expect(cash.join('|')).toContain('CASH · Beta');
+    expect(cash.join('|')).toContain('60%');
+    expect(cash.join('|')).toContain('40%');
+
+    const segments = (
+      fixture.componentInstance as unknown as {
+        paymentMixSegments(): readonly { key: string; value: number }[];
+      }
+    ).paymentMixSegments();
+    expect(segments.map((segment) => segment.value)).toEqual([600_000, 400_000]);
+    expect(new Set(segments.map((segment) => segment.key)).size).toBe(2);
+  });
+
+  it('does not name a taxpayer on the payment slices of a single-taxpayer tenant', async () => {
+    await render(undefined, undefined, { legalEntities: [legalEntity('e1', 'Alpha')] });
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('CASH');
+    expect(text).not.toContain('CASH · Alpha');
   });
 
   it('says the payment split is not cut by channel when a channel filter narrows the cards beside it', async () => {

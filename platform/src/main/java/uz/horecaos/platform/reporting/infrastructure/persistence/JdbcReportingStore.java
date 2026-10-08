@@ -1029,6 +1029,11 @@ public class JdbcReportingStore {
      * as well — rather than trusting a column written by a different module —
      * keeps this read correct even if a future write path gets the stamp
      * wrong again.
+     *
+     * <p>The earning's {@code business_date} is also not the day this read files it under, on
+     * purpose: an earning accrued after its tap's day closed is booked on the first open day
+     * (its cost line with it), while {@code delivered_at} stays the tap. This read therefore
+     * still finds it under the closed day, which is how the recut sees what that day is missing.
      */
     public List<SourceDelivery> readSourceDeliveries(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
@@ -1075,6 +1080,29 @@ public class JdbcReportingStore {
             String onTimeOutcome,
             Instant acceptedAt,
             Instant deliveredAt) {}
+
+    /** One branch's stored delivery facts for a day, counted: what a recut compares against. */
+    public record DeliveryDayCount(UUID locationId, long deliveries) {}
+
+    /**
+     * The deliveries the close stored for a day, per branch. The recut's side of the comparison
+     * with {@link #readSourceDeliveries}: an earning written after its day closed (the accrual is
+     * dated on the courier's tap, an operator may complete the order after the close) is in the
+     * source and not in this count.
+     */
+    public List<DeliveryDayCount> readDeliveryDayCounts(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT location_id, count(*) AS deliveries
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new DeliveryDayCount(
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)), row.getLong("deliveries")))
+                .list();
+    }
 
     public void insertDeliveryFact(ReportingFacts.DeliveryFact fact) {
         Map<String, Object> params = new HashMap<>();
