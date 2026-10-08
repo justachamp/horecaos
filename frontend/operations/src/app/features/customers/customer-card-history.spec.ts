@@ -33,6 +33,7 @@ function card(overrides: Partial<CustomerCard> = {}): CustomerCard {
     leads: [],
     history: [entry()],
     nextBefore: null,
+    nextBeforeId: null,
     ...overrides,
   };
 }
@@ -157,7 +158,9 @@ describe('CustomerCardHistory', () => {
   it('emits a request for older entries when there are some', () => {
     let requested = 0;
     fixture.componentInstance.olderRequested.subscribe(() => requested++);
-    const host = render({ card: card({ nextBefore: '2026-09-01T00:00:00Z' }) });
+    const host = render({
+      card: card({ nextBefore: '2026-09-01T00:00:00Z', nextBeforeId: 'n-0' }),
+    });
 
     (host.querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
 

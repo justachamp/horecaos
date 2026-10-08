@@ -200,8 +200,13 @@ export interface CustomerCard {
   readonly blacklisted: boolean;
   readonly leads: readonly Lead[];
   readonly history: readonly HistoryEntry[];
-  /** Pass as `before` for the next older page; null at the end. */
+  /** Pass as `before`, with {@link nextBeforeId}, for the next older page; null at the end. */
   readonly nextBefore: string | null;
+  /**
+   * Pass as `beforeId` with {@link nextBefore}. The pair is one position: entries that share the last
+   * one's instant and did not fit are on the next page, and an instant alone would skip them.
+   */
+  readonly nextBeforeId: string | null;
 }
 
 export interface LeadFilters {
@@ -339,10 +344,11 @@ export class LeadsApi {
     accountId: string,
     purpose: string,
     before?: string,
+    beforeId?: string,
   ): Promise<CustomerCard> {
     const result = await firstValueFrom(
       this.api.get<CustomerCard>(leadPaths.card(tenantId, accountId), {
-        params: { purpose, before },
+        params: { purpose, before, beforeId },
       }),
     );
     return result.value;

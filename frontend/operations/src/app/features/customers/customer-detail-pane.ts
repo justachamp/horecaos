@@ -357,6 +357,7 @@ export class CustomerDetailPane {
         current.customerAccountId,
         REVEAL_PURPOSE.openCard,
         current.nextBefore,
+        current.nextBeforeId ?? undefined,
       );
       if (epoch !== this.cardEpoch) {
         return;
@@ -370,6 +371,7 @@ export class CustomerDetailPane {
               ...latest,
               history: [...latest.history, ...older.history],
               nextBefore: older.nextBefore,
+              nextBeforeId: older.nextBeforeId,
             },
       );
     } catch (error) {

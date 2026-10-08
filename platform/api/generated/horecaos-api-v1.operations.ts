@@ -1990,6 +1990,7 @@ export interface CustomerCard {
   history?: Array<CustomerHistoryEntry>;
   leads?: Array<LeadView>;
   nextBefore?: string;
+  nextBeforeId?: string;
   preferredLocale?: string;
   status?: string;
   version?: number;
@@ -8255,10 +8256,10 @@ export interface Operations {
   "addBlacklistEntry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/blacklist-entries"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: AddBlacklistRequest }; responses: { "200": CustomerControllerIdResponse } };
   "liftBlacklistEntry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/blacklist-entries/lift"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: LiftBlacklistRequest }; responses: { "200": unknown } };
   "blacklistStatus": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/blacklist-status"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": BlacklistStatusResponse } };
-  "card": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/card"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { before?: string; limit?: number; purpose?: string } } }; responses: { "200": CustomerCard } };
+  "card": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/card"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { before?: string; beforeId?: string; limit?: number; purpose?: string } } }; responses: { "200": CustomerCard } };
   "consentHistory": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/consent-decisions"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<unknown> } };
   "recordConsent": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/consent-decisions"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: ConsentRequest }; responses: { "200": CustomerControllerIdResponse } };
-  "attempts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-attempts"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { before?: string; limit?: number } } }; responses: { "200": Array<ContactAttemptView> } };
+  "attempts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-attempts"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { before?: string; beforeId?: string; limit?: number } } }; responses: { "200": Array<ContactAttemptView> } };
   "record": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-attempts"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: RecordAttemptRequest }; responses: { "200": ContactAttemptView } };
   "contacts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points"; request: { parameters: { path: { accountId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": Array<RevealedContact> } };
   "addContact": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-points"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: AddContactRequest }; responses: { "200": CustomerControllerIdResponse } };

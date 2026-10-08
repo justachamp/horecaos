@@ -1077,6 +1077,93 @@ class LeadControllerEndpointTests {
     }
 
     @Test
+    @DisplayName(
+            "the card pages through entries that share one instant, whichever module wrote them: none lost, none repeated")
+    void theCardPagesThroughEntriesThatShareAnInstant() throws Exception {
+        UUID accountId = account("Regular Guest");
+        // Ids that straddle the sign bit of both halves: the database orders a uuid as unsigned bytes,
+        // and the merge across modules must order them the same way or a cursor cut by one is wrong for the other.
+        List<UUID> sms = List.of(
+                UUID.fromString("ffffffff-ffff-4fff-bfff-fffffffffffe"),
+                UUID.fromString("00000000-0000-4000-8000-000000000001"),
+                UUID.fromString("7fffffff-ffff-4fff-bfff-ffffffffffff"));
+        List<UUID> reviews = List.of(
+                UUID.fromString("80000000-0000-4000-8000-000000000000"),
+                UUID.fromString("40000000-0000-4000-8000-000000000002"));
+        UUID older = UUID.fromString("123e4567-e89b-42d3-a456-426614174000");
+        Instant tie = Instant.now().minus(Duration.ofHours(5)).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        UUID orderId =
+                fixtures.insertOrder(OrderBoardFixtures.order("tie-order").at(TENANT, BRAND, CHILONZOR));
+        for (UUID id : sms) {
+            seedNotification(id, accountId, orderId, "SMS", "DELIVERED", "tie", tie);
+        }
+        for (int i = 0; i < reviews.size(); i++) {
+            UUID reviewed = fixtures.insertOrder(
+                    OrderBoardFixtures.order("tie-rev-" + i).at(TENANT, BRAND, CHILONZOR));
+            seedReview(reviews.get(i), accountId, reviewed, 5, tie);
+        }
+        seedNotification(older, accountId, orderId, "SMS", "DELIVERED", "older", tie.minusSeconds(60));
+        // By unsigned id descending, written out by hand: the order is not computed by the code under test.
+        List<UUID> expected = new java.util.ArrayList<>(List.of(
+                UUID.fromString("ffffffff-ffff-4fff-bfff-fffffffffffe"),
+                UUID.fromString("80000000-0000-4000-8000-000000000000"),
+                UUID.fromString("7fffffff-ffff-4fff-bfff-ffffffffffff"),
+                UUID.fromString("40000000-0000-4000-8000-000000000002"),
+                UUID.fromString("00000000-0000-4000-8000-000000000001")));
+        expected.add(older);
+
+        List<UUID> seen = new java.util.ArrayList<>();
+        String before = null;
+        String beforeId = null;
+        int pages = 0;
+        do {
+            var request = get(card(accountId)).param("limit", "2").with(token(OWNER));
+            if (before != null) {
+                request = request.param("before", before).param("beforeId", Objects.requireNonNull(beforeId));
+            }
+            JsonNode page =
+                    JSON.readTree(mvc.perform(request).andReturn().getResponse().getContentAsString());
+            page.path("history")
+                    .forEach(entry ->
+                            seen.add(UUID.fromString(entry.path("referenceId").asText())));
+            before = page.path("nextBefore").isNull()
+                    ? null
+                    : page.path("nextBefore").asText();
+            beforeId = page.path("nextBeforeId").isNull()
+                    ? null
+                    : page.path("nextBeforeId").asText();
+            assertThat(before == null)
+                    .as("a cursor is an instant and an id together")
+                    .isEqualTo(beforeId == null);
+            pages++;
+        } while (before != null && pages < 10);
+
+        assertThat(seen)
+                .as("each of the six entries once, in the order the database and the merge agree on")
+                .containsExactlyElementsOf(expected);
+        assertThat(pages).isEqualTo(3);
+
+        JsonNode strictlyOlder = JSON.readTree(mvc.perform(get(card(accountId))
+                        .param("limit", "10")
+                        .param("before", tie.toString())
+                        .with(token(OWNER)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        assertThat(strictlyOlder.path("history").size())
+                .as("a bare `before`, as an older client sends it, still means strictly older")
+                .isEqualTo(1);
+        assertThat(mvc.perform(get(card(accountId))
+                                .param("beforeId", older.toString())
+                                .with(token(OWNER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("an id with no instant names no position")
+                .isEqualTo(400);
+    }
+
+    @Test
     @DisplayName("a call about an account holder is recorded and read from the card, tenant-wide")
     void aCallAboutAnAccountHolderIsPartOfTheirCard() throws Exception {
         UUID accountId = account("Regular Guest");
@@ -1661,6 +1748,11 @@ class LeadControllerEndpointTests {
 
     private void seedNotification(
             UUID accountId, UUID orderId, String channel, String status, String template, Instant createdAt) {
+        seedNotification(UUID.randomUUID(), accountId, orderId, channel, status, template, createdAt);
+    }
+
+    private void seedNotification(
+            UUID id, UUID accountId, UUID orderId, String channel, String status, String template, Instant createdAt) {
         jdbc.sql("""
                 INSERT INTO notifications.notifications (
                     id, tenant_id, brand_id, notification_class, channel, template_key, subject_type, subject_id,
@@ -1668,7 +1760,7 @@ class LeadControllerEndpointTests {
                 VALUES (:id, :t, :brand, 'TRANSACTIONAL_REQUIRED', :channel, :template, 'Order', :orderId,
                         :accountId, :key, :status, :suppression, :createdAt)
                 """)
-                .param("id", UUID.randomUUID())
+                .param("id", id)
                 .param("t", TENANT)
                 .param("brand", BRAND)
                 .param("channel", channel)
@@ -1683,12 +1775,16 @@ class LeadControllerEndpointTests {
     }
 
     private void seedReview(UUID accountId, UUID orderId, int rating, Instant submittedAt) {
+        seedReview(UUID.randomUUID(), accountId, orderId, rating, submittedAt);
+    }
+
+    private void seedReview(UUID id, UUID accountId, UUID orderId, int rating, Instant submittedAt) {
         jdbc.sql("""
                 INSERT INTO reviews.order_reviews (
                     id, tenant_id, brand_id, location_id, order_id, customer_account_id, rating, submitted_at)
                 VALUES (:id, :t, :brand, :location, :orderId, :accountId, :rating, :submittedAt)
                 """)
-                .param("id", UUID.randomUUID())
+                .param("id", id)
                 .param("t", TENANT)
                 .param("brand", BRAND)
                 .param("location", CHILONZOR)

@@ -1,6 +1,5 @@
 package uz.horecaos.platform.customers.api;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -20,13 +19,16 @@ import org.jspecify.annotations.Nullable;
  * implements this and answers from its own tables, and the card service collects every bean of the
  * type without importing any of them.
  *
- * <p>Implementations answer for one guest in one tenant, newest first, at most {@code limit}
- * entries older than {@code before}; they never decrypt and never return free text.
+ * <p>Implementations answer for one guest in one tenant, newest first -- by instant, then by entry id,
+ * both descending, which is {@link HistoryCursor#newestFirst()} -- at most {@code limit} entries after
+ * {@code before} in that order; they never decrypt and never return free text. A page that ends between
+ * two entries of one instant must lose neither, which is why the cursor carries the id as well.
  */
 public interface CustomerHistorySource {
 
     /** A stable name for this source, shown by the card when the source could not answer. */
     String name();
 
-    List<CustomerHistoryEntry> history(UUID tenantId, UUID customerAccountId, @Nullable Instant before, int limit);
+    List<CustomerHistoryEntry> history(
+            UUID tenantId, UUID customerAccountId, @Nullable HistoryCursor before, int limit);
 }

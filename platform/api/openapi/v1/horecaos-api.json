@@ -9773,6 +9773,10 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "nextBeforeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "preferredLocale" : {
             "type" : "string"
           },
@@ -87436,7 +87440,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/card" : {
       "get" : {
-        "description" : "The guest's status, whether she is blacklisted right now, her leads, and a history merged by time from the messages sent to her, the campaigns that reached her, the promotions she redeemed, the reviews she left and the calls an operator made or took -- each owned and read from the module that holds it. Writes one audit fact per call. `before` pages further back: pass the previous page's nextBefore.",
+        "description" : "The guest's status, whether she is blacklisted right now, her leads, and a history merged by time from the messages sent to her, the campaigns that reached her, the promotions she redeemed, the reviews she left and the calls an operator made or took -- each owned and read from the module that holds it. Writes one audit fact per call. `before` and `beforeId` page further back: pass the previous page's nextBefore and nextBeforeId together, so entries that share the last one's instant are not lost. `before` alone means strictly older.",
         "operationId" : "card",
         "parameters" : [ {
           "in" : "path",
@@ -87460,6 +87464,14 @@
           "required" : false,
           "schema" : {
             "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "beforeId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }, {
@@ -87581,7 +87593,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-attempts" : {
       "get" : {
-        "description" : "Against the account itself and against any lead linked to it. Ids, codes and instants only.",
+        "description" : "Against the account itself and against any lead linked to it. Ids, codes and instants only. `before` and `beforeId` page further back from the last row of the previous page; `before` alone means strictly older.",
         "operationId" : "attempts",
         "parameters" : [ {
           "in" : "path",
@@ -87605,6 +87617,14 @@
           "required" : false,
           "schema" : {
             "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "beforeId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }, {

@@ -97,6 +97,7 @@ const CARD: CustomerCard = {
     },
   ],
   nextBefore: null,
+  nextBeforeId: null,
 };
 
 const FAKE_LEADS_API = {
@@ -128,6 +129,7 @@ function cardOf(
     ...CARD,
     customerAccountId: accountId,
     nextBefore,
+    nextBeforeId: nextBefore === null ? null : `cursor-${detailCode}`,
     history: [{ ...CARD.history[0], detailCode, referenceId: `n-${detailCode}` }],
   };
 }
@@ -1008,13 +1010,15 @@ describe('CustomerDetailPane', () => {
       expect(host().querySelector('[data-testid="card-older"]')).toBeNull();
     });
 
-    it('asks for the older page of the guest whose card is on show, with the cursor that card handed out', async () => {
+    it('asks for the older page with the instant and the id the card handed out, and moves both on', async () => {
       FAKE_LEADS_API.openCard.mockResolvedValueOnce(
         cardOf('guest-a', 'newest-of-a', '2026-08-01T00:00:00Z'),
       );
       await openHistoryTab();
       await showGuest('guest-a');
-      FAKE_LEADS_API.openCard.mockResolvedValueOnce(cardOf('guest-a', 'older-of-a'));
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(
+        cardOf('guest-a', 'older-of-a', '2026-07-01T00:00:00Z'),
+      );
 
       (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -1025,9 +1029,24 @@ describe('CustomerDetailPane', () => {
         'guest-a',
         'Operations console: open customer card',
         '2026-08-01T00:00:00Z',
+        'cursor-newest-of-a',
       );
       expect(timeline()).toContain('newest-of-a');
       expect(timeline()).toContain('older-of-a');
+
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(cardOf('guest-a', 'oldest-of-a'));
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      expect(FAKE_LEADS_API.openCard).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'guest-a',
+        'Operations console: open customer card',
+        '2026-07-01T00:00:00Z',
+        'cursor-older-of-a',
+      );
+      expect(host().querySelector('[data-testid="card-older"]')).toBeNull();
     });
 
     async function submitCall(): Promise<void> {

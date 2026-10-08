@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry.Kind;
 import uz.horecaos.platform.customers.api.CustomerHistorySource;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 import uz.horecaos.platform.pricing.api.CustomerDiscountHistoryPort;
 import uz.horecaos.platform.pricing.api.CustomerDiscountHistoryPort.Redemption;
 
@@ -51,11 +52,11 @@ public class JdbcCustomerEngagementHistory implements CustomerHistorySource {
     @Override
     @Transactional(readOnly = true)
     public List<CustomerHistoryEntry> history(
-            UUID tenantId, UUID customerAccountId, @Nullable Instant before, int limit) {
+            UUID tenantId, UUID customerAccountId, @Nullable HistoryCursor before, int limit) {
         List<CustomerHistoryEntry> entries = new ArrayList<>(receipts(tenantId, customerAccountId, before, limit));
         for (Redemption redemption : discounts.history(tenantId, customerAccountId)) {
             Instant when = redemption.redeemedAt() != null ? redemption.redeemedAt() : redemption.reservedAt();
-            if (before != null && !when.isBefore(before)) {
+            if (before != null && !before.admits(when, redemption.redemptionId())) {
                 continue;
             }
             entries.add(new CustomerHistoryEntry(
@@ -72,7 +73,8 @@ public class JdbcCustomerEngagementHistory implements CustomerHistorySource {
         return entries;
     }
 
-    private List<CustomerHistoryEntry> receipts(UUID tenantId, UUID accountId, @Nullable Instant before, int limit) {
+    private List<CustomerHistoryEntry> receipts(
+            UUID tenantId, UUID accountId, @Nullable HistoryCursor before, int limit) {
         return jdbc.sql("""
                 SELECT r.campaign_id, c.name, c.channel, r.status, r.refusal_reason, r.terminal_status,
                        COALESCE(r.terminal_at, r.created_at) AS happened_at
@@ -80,13 +82,15 @@ public class JdbcCustomerEngagementHistory implements CustomerHistorySource {
                   JOIN marketing.campaigns c ON c.id = r.campaign_id AND c.tenant_id = r.tenant_id
                  WHERE r.tenant_id = :tenantId AND r.customer_account_id = :accountId
                    AND (CAST(:before AS timestamptz) IS NULL
-                        OR COALESCE(r.terminal_at, r.created_at) < CAST(:before AS timestamptz))
+                        OR (COALESCE(r.terminal_at, r.created_at), r.campaign_id)
+                           < (CAST(:before AS timestamptz), CAST(:beforeId AS uuid)))
                  ORDER BY happened_at DESC, r.campaign_id DESC
                  LIMIT :limit
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
-                .param("before", before == null ? null : before.atOffset(ZoneOffset.UTC))
+                .param("before", before == null ? null : before.occurredAt().atOffset(ZoneOffset.UTC))
+                .param("beforeId", before == null ? null : before.referenceId().toString())
                 .param("limit", limit)
                 .query((rs, n) -> new CustomerHistoryEntry(
                         Kind.CAMPAIGN_RECEIPT,
