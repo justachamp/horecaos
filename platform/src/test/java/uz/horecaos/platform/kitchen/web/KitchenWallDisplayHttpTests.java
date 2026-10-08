@@ -492,6 +492,38 @@ class KitchenWallDisplayHttpTests {
     }
 
     @Test
+    @DisplayName("saving a wall's station reports whether the wall has been seen, as the list does: a wall gone "
+            + "quiet does not read as seen the moment a manager saves it")
+    void theConfigureResponseSaysWhetherTheWallIsStillReading() throws Exception {
+        Enrolled neverRead = enrol("KITCHEN_VDU", "KITCHEN_VDU");
+        Enrolled quiet = enrol("KITCHEN_VDU", "KITCHEN_VDU");
+        Enrolled reading = enrol("KITCHEN_VDU", "KITCHEN_VDU");
+        // Enrolled half an hour ago and never read: powered off, or never switched on.
+        jdbc.sql("UPDATE iam.device_principals SET enrolled_at = :old WHERE id = :id")
+                .param("old", Instant.now().minus(Duration.ofMinutes(30)).atOffset(ZoneOffset.UTC))
+                .param("id", neverRead.deviceId())
+                .update();
+        // Read once, half an hour ago, and has not read since.
+        readAt(quiet, Instant.now().minus(Duration.ofMinutes(30)));
+        readAt(reading, Instant.now().minus(Duration.ofSeconds(20)));
+
+        for (Enrolled wall : List.of(neverRead, quiet, reading)) {
+            boolean expected = !wall.deviceId().equals(reading.deviceId());
+            Configured saved = configure(wall, GRILL, 1);
+            saved.andExpectOk();
+            JsonNode response = JSON.readTree(saved.result().getResponse().getContentAsString());
+
+            assertThat(response.get("notSeen").asBoolean())
+                    .as("the PUT response for a wall that %s", expected ? "has gone quiet" : "is reading")
+                    .isEqualTo(expected);
+            assertThat(response.get("notSeen").asBoolean())
+                    .as("and it says what the device list says of the same wall")
+                    .isEqualTo(deviceRow(wall).get("display").get("notSeen").asBoolean());
+            assertThat(response.get("notSeenAfterMinutes").asLong()).isEqualTo(5L);
+        }
+    }
+
+    @Test
     @DisplayName("the display read is counted by outcome only: a wall's and a person's, never a branch or a device")
     void theReadsAreCountedByOutcomeAlone() throws Exception {
         Enrolled wall = enrol("KITCHEN_VDU", "KITCHEN_VDU");
@@ -757,6 +789,13 @@ class KitchenWallDisplayHttpTests {
                     lines.add(code + ":" + item.get("quantity").asString());
                 }));
         return lines;
+    }
+
+    private void readAt(Enrolled wall, Instant at) {
+        jdbc.sql("UPDATE kitchen.device_displays SET last_read_at = :at WHERE device_id = :id")
+                .param("at", at.atOffset(ZoneOffset.UTC))
+                .param("id", wall.deviceId())
+                .update();
     }
 
     private JsonNode deviceRow(Enrolled wall) throws Exception {

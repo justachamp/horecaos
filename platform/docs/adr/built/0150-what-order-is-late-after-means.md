@@ -11,7 +11,10 @@
   is never read as a choice, and an unusable value (under a minute, over ten hours) is ignored.
   The order board's «Только опаздывающие», `GET .../{orderId}/lateness`, the kitchen queue, both
   VDUs and the wallboard agree on one order at one instant
-  (`OrderLatenessScalarSurfacesHttpTests`), acceptance starts and shortens nothing
+  (`OrderLatenessScalarSurfacesHttpTests`; the kitchen's surfaces colour a ticket by the order's own
+  clock, `orderCreatedAt`, `orderPromisedAt` and `orderTerminal` on the ticket and VDU projections, read
+  by `ticketSeverityInput`, and no longer by the ticket's `created_at` or `target_ready_at`, which is
+  what the Context's note on the kitchen's own severity described before this was built), acceptance starts and shortens nothing
   (`OrderLatenessPolicyTests`: awaiting-approval and scheduled orders), a scalar write drops the
   cached resolutions beneath its scope (`ConfigurationValueCacheEvictor`; this was not true of a
   scalar before), and the write is validated server-side to 1–600. The authored read reports

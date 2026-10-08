@@ -23,7 +23,41 @@ const PROFILE_KEY = 'horecaos.kds.profile';
 /** Refresh this far before the access token actually expires. */
 const REFRESH_MARGIN_MS = 30_000;
 
+/**
+ * The device's credential is refused: Keycloak (or the platform) said no to this client, and asking
+ * again will not change the answer. Revoked, most likely (ADR 0079). The shell treats it as the end of
+ * the session and goes back to pairing.
+ */
 export class DeviceAuthError extends Error {}
+
+/**
+ * Keycloak could not answer right now: a 5xx, a throttle, a timeout, a dropped connection or a reply
+ * that is not a token. **Nothing is wrong with the credential**, so this is deliberately not a
+ * {@link DeviceAuthError}: the session is kept, the wall keeps its last rows, and the next poll asks
+ * again. Treating an identity-provider outage as a revoked device would log every wall in the building
+ * out at once, during exactly the minutes nobody can re-pair them.
+ */
+export class DeviceTokenUnavailableError extends Error {
+  constructor(
+    /** The HTTP status Keycloak answered, or null when it could not be reached at all. */
+    readonly status: number | null,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * How long a token request waits before trying again after a transient failure, and so how many
+ * times it tries: one more per entry. Bounded on purpose: a wall polls every ten seconds anyway, so
+ * the retry only has to ride out a blip, not an outage.
+ */
+export const DEVICE_TOKEN_RETRY_DELAYS_MS: readonly number[] = [500, 1500];
+
+/** A status that says "not now", as opposed to "no": the server failed, was busy or timed out. */
+function isTransientTokenStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 425 || status === 429;
+}
 
 /**
  * ADR 0079's device principal, held by the frontend (ADR 0119).
@@ -184,20 +218,49 @@ export class DeviceSession {
   }
 
   private async mint(): Promise<string> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.mintOnce();
+      } catch (error) {
+        const delay = DEVICE_TOKEN_RETRY_DELAYS_MS[attempt];
+        if (!(error instanceof DeviceTokenUnavailableError) || delay === undefined) {
+          throw error;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  private async mintOnce(): Promise<string> {
     const credential = this.credentialState();
     if (!credential) {
       throw new DeviceAuthError('Device is not enrolled');
     }
-    const response = await fetch(credential.tokenEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: credential.clientId,
-        client_secret: credential.clientSecret,
-      }).toString(),
-    });
+    let response: Response;
+    try {
+      response = await fetch(credential.tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: credential.clientId,
+          client_secret: credential.clientSecret,
+        }).toString(),
+      });
+    } catch {
+      // The request never got an answer (offline, DNS, a reset): the credential has not been judged.
+      throw new DeviceTokenUnavailableError(
+        null,
+        'Keycloak could not be reached for a device token',
+      );
+    }
     if (!response.ok) {
+      if (isTransientTokenStatus(response.status)) {
+        throw new DeviceTokenUnavailableError(
+          response.status,
+          `Keycloak could not answer the device's token request (HTTP ${response.status})`,
+        );
+      }
       // A 401/403 here means Keycloak refused this client — most likely
       // revoked (ADR 0079's disable-the-client half of revocation). Forget
       // the credential locally so the shell falls back to its enrolment
@@ -209,7 +272,16 @@ export class DeviceSession {
         `Keycloak refused the device's token request (HTTP ${response.status})`,
       );
     }
-    const body: { access_token: string; expires_in: number } = await response.json();
+    let body: { access_token: string; expires_in: number };
+    try {
+      body = await response.json();
+    } catch {
+      // A 200 that is not a token (a proxy's error page, a truncated body) is a failed answer, not a refusal.
+      throw new DeviceTokenUnavailableError(
+        response.status,
+        'Keycloak answered with something that is not a token',
+      );
+    }
     this.cachedToken = { value: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
     return body.access_token;
   }

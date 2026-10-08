@@ -7150,7 +7150,10 @@ export interface TicketResponse {
   externalReference?: string;
   fulfilmentMode?: string;
   items?: Array<ItemView>;
+  orderCreatedAt?: string;
   orderId?: string;
+  orderPromisedAt?: string;
+  orderTerminal?: boolean;
   prepEstimateSeconds?: number;
   readyAt?: string;
   releaseAt?: string;
@@ -7475,6 +7478,9 @@ export interface VduTicketResponse {
   externalReference?: string;
   fulfilmentMode?: string;
   items?: Array<VduItemView>;
+  orderCreatedAt?: string;
+  orderPromisedAt?: string;
+  orderTerminal?: boolean;
   sequenceLabel?: string;
   status?: string;
   targetReadyAt?: string;

@@ -33,6 +33,7 @@ import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort.OrderProgress;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
+import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderClock;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderForKitchen;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderLineForKitchen;
 import uz.horecaos.platform.kitchen.domain.KitchenStateMachine;
@@ -1354,6 +1355,14 @@ public class KitchenTicketService {
     /** The provider-assigned identifier for each of these orders, where one exists (gap map row 2.4, VDU). */
     public Map<UUID, String> externalReferencesByOrder(UUID tenantId, Set<UUID> orderIds) {
         return orders.externalReferences(tenantId, orderIds);
+    }
+
+    /**
+     * The order's own lateness inputs (ADR 0150): where the board measures an order from, which is
+     * neither the later instant the kitchen opened its ticket nor the promise less the road.
+     */
+    public Map<UUID, OrderClock> orderClocksByOrder(UUID tenantId, Set<UUID> orderIds) {
+        return orders.clocksByOrders(tenantId, orderIds);
     }
 
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {

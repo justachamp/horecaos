@@ -159,7 +159,7 @@ public class KitchenDeviceController {
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
-        atThisBranch(tenantId, locationId, deviceId);
+        DevicePrincipalView device = atThisBranch(tenantId, locationId, deviceId);
         Display display = displays.configure(
                 tenantId,
                 brandId,
@@ -170,7 +170,10 @@ public class KitchenDeviceController {
                 currentActor.get().subject());
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(display.version()))
-                .body(DisplayResponse.of(display, null, clock.instant()));
+                // The same "not seen" the list reports, from the wall's own last read (or, before one,
+                // its enrolment): this response replaces the console's row, so a wall that has gone
+                // quiet must not read as seen the moment a manager saves its station.
+                .body(DisplayResponse.of(display, sinceOf(device), clock.instant()));
     }
 
     @PostMapping("/{deviceId}/revoke")
@@ -205,12 +208,19 @@ public class KitchenDeviceController {
      * already applies to a ticket: confirming that a device of that id exists
      * somewhere is information the caller was not entitled to.
      */
-    private void atThisBranch(UUID tenantId, UUID locationId, UUID deviceId) {
-        boolean present = devices.list(tenantId, locationId).stream()
-                .anyMatch(device -> device.id().equals(deviceId));
-        if (!present) {
-            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such device");
-        }
+    private DevicePrincipalView atThisBranch(UUID tenantId, UUID locationId, UUID deviceId) {
+        return devices.list(tenantId, locationId).stream()
+                .filter(device -> device.id().equals(deviceId))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such device"));
+    }
+
+    /**
+     * Where "not seen" starts counting for a wall that has never read: its enrolment. Null for a revoked
+     * device, which is not "not seen" but gone.
+     */
+    private static @Nullable Instant sinceOf(DevicePrincipalView device) {
+        return "ACTIVE".equals(device.status()) ? device.enrolledAt() : null;
     }
 
     /**
@@ -306,10 +316,7 @@ public class KitchenDeviceController {
                     device.revokedBy(),
                     device.revokedAt(),
                     device.revokedReason(),
-                    display == null
-                            ? null
-                            : DisplayResponse.of(
-                                    display, "ACTIVE".equals(device.status()) ? device.enrolledAt() : null, now));
+                    display == null ? null : DisplayResponse.of(display, sinceOf(device), now));
         }
     }
 }

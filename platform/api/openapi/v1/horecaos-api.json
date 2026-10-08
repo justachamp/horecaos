@@ -34641,9 +34641,20 @@
             },
             "type" : "array"
           },
+          "orderCreatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
           "orderId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "orderPromisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderTerminal" : {
+            "type" : "boolean"
           },
           "prepEstimateSeconds" : {
             "format" : "int32",
@@ -36204,6 +36215,17 @@
               "$ref" : "#/components/schemas/VduItemView"
             },
             "type" : "array"
+          },
+          "orderCreatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderPromisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderTerminal" : {
+            "type" : "boolean"
           },
           "sequenceLabel" : {
             "type" : "string"

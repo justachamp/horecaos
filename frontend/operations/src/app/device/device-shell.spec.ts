@@ -7,7 +7,12 @@ import { I18n } from '../core/i18n/i18n';
 import { DeviceBoardApi, DeviceBoardError } from './device-board-api';
 import { DeviceProfile } from './device-profile';
 import { DeviceShell } from './device-shell';
-import { DeviceCredential, DeviceSession } from './device-session';
+import {
+  DeviceAuthError,
+  DeviceCredential,
+  DeviceSession,
+  DeviceTokenUnavailableError,
+} from './device-session';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -560,6 +565,79 @@ describe('DeviceShell', () => {
     await vi.advanceTimersByTimeAsync(11_000);
 
     expect(session.forgetCredential).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps its session and its last rows through an identity-provider outage, and recovers on the next poll', async () => {
+    vi.useFakeTimers();
+    const vdu = vi
+      .fn()
+      .mockResolvedValueOnce({ tickets: [vduTicket()], lateness: WIRE_POLICY() })
+      .mockRejectedValueOnce(new DeviceTokenUnavailableError(503, 'keycloak is down'))
+      .mockRejectedValueOnce(new DeviceTokenUnavailableError(null, 'keycloak is unreachable'))
+      .mockResolvedValue({ tickets: [vduTicket()], lateness: WIRE_POLICY() });
+    const session = makeSession({ enrolled: true });
+    await TestBed.configureTestingModule({
+      imports: [DeviceShell],
+      providers: [
+        { provide: DeviceSession, useValue: session },
+        { provide: DeviceBoardApi, useValue: { me: vi.fn().mockResolvedValue(WALL), vdu } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(DeviceShell);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelectorAll('[data-testid="wallboard-vdu-card"]')).toHaveLength(1);
+
+    // Two polls while Keycloak is down: the wall is not logged out, and still shows what it knew.
+    await vi.advanceTimersByTimeAsync(21_000);
+    fixture.detectChanges();
+    expect(vdu.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="device-wall"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="wallboard-vdu-card"]')).toHaveLength(1);
+
+    // It asks again and is back.
+    await vi.advanceTimersByTimeAsync(11_000);
+    fixture.detectChanges();
+    expect(vdu.mock.calls.length).toBeGreaterThanOrEqual(4);
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="device-wall"]')).not.toBeNull();
+  });
+
+  it('keeps a touch board’s session through the same outage, and says the read failed rather than pairing again', async () => {
+    const board = vi
+      .fn()
+      .mockRejectedValue(new DeviceTokenUnavailableError(502, 'keycloak is failing'));
+    const session = makeSession({ enrolled: true });
+    await render(session, { me: vi.fn().mockResolvedValue(TOUCH), board });
+
+    expect(board).toHaveBeenCalled();
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="device-board"]'),
+    ).not.toBeNull();
+  });
+
+  it('keeps the profile it holds when its own record cannot be read for the same reason', async () => {
+    const me = vi.fn().mockRejectedValue(new DeviceTokenUnavailableError(503, 'keycloak is down'));
+    const session = makeSession({ enrolled: true, profile: WALL });
+    await render(session, { me, vdu: vi.fn().mockResolvedValue({ tickets: [] }) });
+
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="device-wall"]'),
+    ).not.toBeNull();
+  });
+
+  it('still falls back to pairing when Keycloak really refuses the client', async () => {
+    const me = vi.fn().mockRejectedValue(new DeviceAuthError('refused'));
+    const session = makeSession({ enrolled: true });
+    await render(session, { me });
+
+    expect(session.forgetCredential).toHaveBeenCalled();
   });
 
   it('re-reads its own record about once a minute, so a station a manager changes shows its new name', async () => {

@@ -5,7 +5,7 @@ import { I18n } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { LatenessPolicy } from '../core/lateness-policy';
 import { VduTicketResponse } from '../features/kitchen/kitchen-api';
-import { computeTicketSeverity } from '../features/kitchen/kitchen-ticket';
+import { computeTicketSeverity, ticketSeverityInput } from '../features/kitchen/kitchen-ticket';
 
 export type WallboardVduFreshness = 'loading' | 'fresh' | 'aging' | 'stale';
 
@@ -71,14 +71,7 @@ export class VduWall {
   }
 
   protected severityTone(ticket: VduTicketResponse): 'danger' | 'warning' | 'none' {
-    return computeTicketSeverity(
-      {
-        targetReadyAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
-        createdAt: new Date(ticket.createdAt),
-        fulfilmentMode: ticket.fulfilmentMode,
-      },
-      new Date(this.now()),
-      this.policy(),
-    ).tone;
+    return computeTicketSeverity(ticketSeverityInput(ticket), new Date(this.now()), this.policy())
+      .tone;
   }
 }

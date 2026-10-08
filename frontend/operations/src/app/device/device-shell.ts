@@ -459,6 +459,13 @@ export class DeviceShell implements OnInit {
     }
   }
 
+  /**
+   * Whether the device's credential has been refused, and the session is therefore over. Only a real
+   * refusal counts: a {@link DeviceAuthError} (Keycloak said no to this client) or a 401/403 from the
+   * platform. A {@link DeviceTokenUnavailableError} (Keycloak failed, was throttled or could not be
+   * reached) is deliberately not one: the credential is fine, the wall keeps its session and its last
+   * rows, and the next poll asks again.
+   */
   private isAuthRejection(error: unknown): boolean {
     if (error instanceof DeviceAuthError) {
       return true;
