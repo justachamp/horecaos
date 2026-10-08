@@ -1,0 +1,17 @@
+# ADR 0156 Decision 1: the three-line arithmetic (worked, paid, variance) pinned by one vector file shared by
+# the staff-shift tests (workforce.domain.ShiftArithmeticTests) and the courier-shift tests
+# (CourierShiftArithmeticVectorTests, worked/break/paid columns only: courier variance is a different record).
+#
+# Columns: case, started_at, ended_at, break_seconds, planned_start, planned_end, planned_break_minutes, worked, paid, planned, variance
+# planned and variance are blank when there is no roster entry: null is not zero.
+# A day of 24 hours is not a shift (the schema bounds a shift at sixteen hours), so no vector exceeds it.
+plain_eight_hours,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,0,,,,28800,28800,,
+the_09_04_to_18_22_day,2026-10-08T04:04:00Z,2026-10-08T13:22:00Z,1800,,,,33480,31680,,
+on_plan_to_the_minute,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,1800,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,30,28800,27000,27000,0
+ran_over_by_forty_minutes,2026-10-08T05:00:00Z,2026-10-08T13:40:00Z,1800,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,30,31200,29400,27000,2400
+left_early_by_fifteen_minutes,2026-10-08T05:00:00Z,2026-10-08T12:45:00Z,1800,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,30,27900,26100,27000,-900
+came_for_a_planned_break_but_took_none,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,0,2026-10-08T05:00:00Z,2026-10-08T13:00:00Z,60,28800,28800,25200,3600
+short_cover_shift,2026-10-08T10:00:00Z,2026-10-08T12:30:00Z,0,,,,9000,9000,,
+sixteen_hours_exactly,2026-10-08T00:00:00Z,2026-10-08T16:00:00Z,3600,,,,57600,54000,,
+break_equals_the_whole_shift,2026-10-08T05:00:00Z,2026-10-08T06:00:00Z,3600,,,,3600,0,,
+one_second,2026-10-08T05:00:00Z,2026-10-08T05:00:01Z,0,,,,1,1,,

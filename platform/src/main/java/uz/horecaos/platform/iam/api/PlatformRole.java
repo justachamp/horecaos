@@ -107,6 +107,14 @@ public enum PlatformRole {
                     IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: staff hours. Rota and timesheet (read, manage, approve) and the payroll export with its
+                    // identity group. The clock is held so the owner can confer location-manager and
+                    // location-staff, which hold it, without the grant escalation rule refusing.
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_EXPORT,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0027: which of this tenant's actions need a second signature,
                     // and above what. Held here alone among the tenant bundles, and
                     // deliberately not by finance or the administrator: both execute
@@ -405,6 +413,12 @@ public enum PlatformRole {
                     IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: staff hours, as the owner holds them (see there for the clock).
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_EXPORT,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0044: authoring campaigns and reading audiences. Export is
                     // not here — an unrestricted download of the customer base is how a
                     // tenant's list reaches a competitor, so it sits with the owner.
@@ -616,6 +630,11 @@ public enum PlatformRole {
                     // changes her own phone too). Checked at any scope in the tenant, not by
                     // coverage -- see StaffSelfAuthorized.
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: finance reads hours and receives the payroll file. staff.shift.export makes
+                    // finance a reader of names and employee numbers inside an audited export file and
+                    // nowhere else: it still holds neither staff.profile.read nor .manage.
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_EXPORT,
                     // ADR 0042: what delivery cost, what is owed to each courier, and
                     // closing a settlement period. Authorising the payout is the owner's,
                     // so closing and releasing are never the same pair of hands.
@@ -707,6 +726,11 @@ public enum PlatformRole {
                     // them -- changing a person is the branch manager's and above.
                     STAFF_PROFILE_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: the brand's rota and timesheet (the clock is held to confer location jobs).
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0044: a brand markets itself, and needs to see who it would
                     // be reaching before it does.
                     AUDIENCE_READ,
@@ -797,6 +821,11 @@ public enum PlatformRole {
                     STAFF_PROFILE_MANAGE,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: the branch's rota and timesheet, and the manager's own clock.
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0042: the branch end of a shift. Closing and approving hours
                     // are a manager's, and opening is deliberately absent — a manager who
                     // can create shift state can create paid hours for somebody who was
@@ -912,6 +941,9 @@ public enum PlatformRole {
                     // changes her own phone too). Checked at any scope in the tenant, not by
                     // coverage -- see StaffSelfAuthorized.
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: a person starting and ending their own shift from the console. A timesheet,
+                    // never a permission: nothing refuses work for want of an open shift.
+                    STAFF_SHIFT_CLOCK,
                     LOCATION_READ,
                     CATALOG_READ,
                     INVENTORY_READ,

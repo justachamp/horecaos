@@ -3,8 +3,14 @@ package uz.horecaos.platform.reporting.application;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.ordering.api.OrderCrmLogExportPort;
 import uz.horecaos.platform.reporting.domain.ReportExportColumn;
 import uz.horecaos.platform.reporting.domain.ReportExportDefinition;
+import uz.horecaos.platform.reporting.domain.ReportExportDefinition.OverQuota;
 
 /**
  * The code-owned catalogue of exportable reports (ADR 0043, wave P28's own export centre).
@@ -63,6 +69,19 @@ final class ReportExportRegistry {
      */
     static final String ORDER_REPORT_SUMMARY = "ORDER_REPORT_SUMMARY";
 
+    /**
+     * ADR 0156: the payroll export -- one row per closed staff shift, hours and never pay, read through
+     * {@code workforce.api.StaffAttendanceExportPort} so the identity group is resolved in {@code
+     * workforce} and never here. {@code employeeNumber} and {@code staffName} are the PII group, gated
+     * by {@code staff.shift.export} and not by {@code customer.pii.export}. The ceiling is 20,000 rows
+     * with or without the group, and a range over it is <em>refused</em> with the count and never
+     * truncated: a payroll file whose total quietly stops short is worse than no file.
+     */
+    static final String STAFF_ATTENDANCE = "STAFF_ATTENDANCE";
+
+    /** ADR 0156, Open inputs: about nine months of a 100-person tenant in one file. A tenant-settable ceiling is not built. */
+    static final int STAFF_ATTENDANCE_ROW_CEILING = 20_000;
+
     private static final Map<String, ReportExportDefinition> DEFINITIONS = Map.of(
             CUSTOMER_DIRECTORY,
             new ReportExportDefinition(
@@ -71,7 +90,11 @@ final class ReportExportRegistry {
                             new ReportExportColumn("accountId", false),
                             new ReportExportColumn("status", false),
                             new ReportExportColumn("displayName", false),
-                            new ReportExportColumn("phone", true))),
+                            new ReportExportColumn("phone", true)),
+                    Capability.CUSTOMER_PII_EXPORT,
+                    ReportExportDefinition.DEFAULT_ROW_QUOTA,
+                    CustomerDirectoryExportPort.PII_ROW_LIMIT,
+                    OverQuota.TRUNCATE),
             ORDER_CRM_LOG,
             new ReportExportDefinition(
                     ORDER_CRM_LOG,
@@ -83,7 +106,11 @@ final class ReportExportRegistry {
                             new ReportExportColumn("customerName", true),
                             new ReportExportColumn("customerPhone", true),
                             new ReportExportColumn("operatorPrincipalId", false),
-                            new ReportExportColumn("courierDisplayReference", false))),
+                            new ReportExportColumn("courierDisplayReference", false)),
+                    Capability.CUSTOMER_PII_EXPORT,
+                    ReportExportDefinition.DEFAULT_ROW_QUOTA,
+                    OrderCrmLogExportPort.PII_ROW_LIMIT,
+                    OverQuota.TRUNCATE),
             ORDER_REPORT_LOG,
             new ReportExportDefinition(
                     ORDER_REPORT_LOG,
@@ -99,7 +126,11 @@ final class ReportExportRegistry {
                             new ReportExportColumn("discountSom", false),
                             new ReportExportColumn("deliveryFeeSom", false),
                             new ReportExportColumn("netRevenueSom", false),
-                            new ReportExportColumn("itemCount", false))),
+                            new ReportExportColumn("itemCount", false)),
+                    Capability.CUSTOMER_PII_EXPORT,
+                    ReportExportDefinition.DEFAULT_ROW_QUOTA,
+                    CustomerDirectoryExportPort.PII_ROW_LIMIT,
+                    OverQuota.TRUNCATE),
             ORDER_REPORT_SUMMARY,
             new ReportExportDefinition(
                     ORDER_REPORT_SUMMARY,
@@ -110,11 +141,48 @@ final class ReportExportRegistry {
                             new ReportExportColumn("orderCount", false),
                             new ReportExportColumn("grossSom", false),
                             new ReportExportColumn("deliveryFeeSom", false),
-                            new ReportExportColumn("netSom", false))));
+                            new ReportExportColumn("netSom", false)),
+                    Capability.CUSTOMER_PII_EXPORT,
+                    ReportExportDefinition.DEFAULT_ROW_QUOTA,
+                    CustomerDirectoryExportPort.PII_ROW_LIMIT,
+                    OverQuota.TRUNCATE),
+            STAFF_ATTENDANCE,
+            new ReportExportDefinition(
+                    STAFF_ATTENDANCE,
+                    List.of(
+                            new ReportExportColumn("staffDisplayReference", false),
+                            new ReportExportColumn("businessDate", false),
+                            new ReportExportColumn("locationId", false),
+                            new ReportExportColumn("plannedSeconds", false),
+                            new ReportExportColumn("workedSeconds", false),
+                            new ReportExportColumn("breakSeconds", false),
+                            new ReportExportColumn("paidSeconds", false),
+                            new ReportExportColumn("varianceSeconds", false),
+                            new ReportExportColumn("approvalStatus", false),
+                            new ReportExportColumn("startedAt", false),
+                            new ReportExportColumn("endedAt", false),
+                            new ReportExportColumn("timezone", false),
+                            new ReportExportColumn("employeeNumber", true),
+                            new ReportExportColumn("staffName", true)),
+                    Capability.STAFF_SHIFT_EXPORT,
+                    STAFF_ATTENDANCE_ROW_CEILING,
+                    STAFF_ATTENDANCE_ROW_CEILING,
+                    OverQuota.REFUSE));
 
     private ReportExportRegistry() {}
 
     static Optional<ReportExportDefinition> find(String reportKey) {
         return Optional.ofNullable(DEFINITIONS.get(reportKey));
+    }
+
+    /**
+     * Every distinct capability that gates a report's PII group: two today, {@code customer.pii.export}
+     * and {@code staff.shift.export}. The controller asks the caller about each once (one {@code
+     * authorization.has} each) and the service asks, per row, about <em>that row's report</em>.
+     */
+    static Set<Capability> piiCapabilities() {
+        return DEFINITIONS.values().stream()
+                .map(ReportExportDefinition::piiCapability)
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

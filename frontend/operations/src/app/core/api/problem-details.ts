@@ -86,6 +86,10 @@ export const ApiErrorCode = {
   MFA_CONFIRMATION_CODE_INVALID: 'MFA_CONFIRMATION_CODE_INVALID',
   /** ADR 0176: the sign-in service could not be asked, so a session the person asked to end was not ended. */
   IDENTITY_PROVIDER_UNAVAILABLE: 'IDENTITY_PROVIDER_UNAVAILABLE',
+  /** ADR 0156: a payroll export range holds a shift that is open or awaiting approval; the answer carries a `count`. */
+  ATTENDANCE_UNRESOLVED_SHIFTS: 'ATTENDANCE_UNRESOLVED_SHIFTS',
+  /** ADR 0156: a payroll export range is over the report's row ceiling; the answer carries `rowCount` and `rowCeiling`. */
+  ATTENDANCE_EXPORT_TOO_LARGE: 'ATTENDANCE_EXPORT_TOO_LARGE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   /** Not from the server. The request never reached it. */
   NETWORK_UNREACHABLE: 'NETWORK_UNREACHABLE',

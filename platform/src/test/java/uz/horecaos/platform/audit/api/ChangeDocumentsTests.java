@@ -171,7 +171,14 @@ class ChangeDocumentsTests {
     @Test
     void everyProtectedStaffFieldKeyIsRedacted() {
         for (String key : new String[] {
-            "firstName", "lastName", "phone", "employeeNumber", "emergencyContacts", "emergencyContactName"
+            "firstName",
+            "lastName",
+            "phone",
+            "employeeNumber",
+            "emergencyContacts",
+            "emergencyContactName",
+            // ADR 0156: the payroll export's two identity columns.
+            "staffName"
         }) {
             assertThat(ChangeDocuments.isProtected(key)).as(key).isTrue();
             assertThat(asMap(ChangeDocuments.sanitize(ChangeDocuments.created(Map.of(key, "a value")))
@@ -191,7 +198,21 @@ class ChangeDocumentsTests {
             "spokenLanguages",
             "contactCount",
             "relationships",
-            "photo"
+            "photo",
+            // ADR 0156: the keys the staff-hours facts use are readable; only identity is not.
+            "staffRef",
+            "startedAt",
+            "endedAt",
+            "breakSeconds",
+            "workedSeconds",
+            "paidSeconds",
+            "plannedStart",
+            "plannedEnd",
+            "plannedBreakMinutes",
+            "varianceSeconds",
+            "reasonCode",
+            "entryCount",
+            "source"
         }) {
             assertThat(ChangeDocuments.isProtected(key)).as(key).isFalse();
         }

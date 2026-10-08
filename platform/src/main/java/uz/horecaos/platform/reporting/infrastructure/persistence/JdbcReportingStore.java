@@ -664,7 +664,9 @@ public class JdbcReportingStore {
                 "fact_external_delivery_cost",
                 // ADR 0140 (7.9): the promotion redemption fact, cleared and rewritten
                 // with the day like every other fact beside it.
-                "fact_promotion_redemption")) {
+                "fact_promotion_redemption",
+                // ADR 0156: closed staff shifts, cleared and rewritten with the day.
+                "fact_staff_shift")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
@@ -1234,6 +1236,98 @@ public class JdbcReportingStore {
                     :brandId, :promotionId, :promotionCode, :definitionVersion, :sourceKind, :couponId,
                     :orderId, :subjectHash, :discount, :markup, :currency, :redeemedAt)
                 """).params(params).update();
+    }
+
+    /** ADR 0156. One row per closed staff shift; see {@code ReportingFacts.StaffShiftFact}. */
+    public void insertStaffShiftFact(ReportingFacts.StaffShiftFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_staff_shift (
+                    tenant_id, business_date, shift_id, boundary_version, metric_calculation_version,
+                    brand_id, location_id, staff_member_id, staff_display_reference,
+                    planned_seconds, worked_seconds, break_seconds, paid_seconds, variance_seconds,
+                    approval_status, had_roster_entry, started_at, ended_at)
+                VALUES (
+                    :tenantId, :businessDate, :shiftId, :boundaryVersion, :calculationVersion,
+                    :brandId, :locationId, :memberId, :reference,
+                    :planned, :worked, :break, :paid, :variance,
+                    :approval, :hadEntry, :startedAt, :endedAt)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("businessDate", fact.businessDate())
+                .param("shiftId", fact.shiftId())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("memberId", fact.staffMemberId())
+                .param("reference", fact.staffDisplayReference())
+                .param("planned", fact.plannedSeconds())
+                .param("worked", fact.workedSeconds())
+                .param("break", fact.breakSeconds())
+                .param("paid", fact.paidSeconds())
+                .param("variance", fact.varianceSeconds())
+                .param("approval", fact.approvalStatus())
+                .param("hadEntry", fact.hadRosterEntry())
+                .param("startedAt", utc(fact.startedAt()))
+                .param("endedAt", utc(fact.endedAt()))
+                .update();
+    }
+
+    /**
+     * Removes this fact's rows for these shifts that are filed under another day. A shift whose start
+     * was corrected onto another business date must leave the day it was filed under, or the next close
+     * would count its hours twice -- the job {@link #clearMisfiledPromotionRedemptions} does for the
+     * promotion fact, on this fact's own key.
+     */
+    public void clearMisfiledStaffShifts(UUID tenantId, List<UUID> shiftIds, LocalDate keep) {
+        if (shiftIds.isEmpty()) {
+            return;
+        }
+        jdbc.sql("""
+                DELETE FROM reporting.fact_staff_shift
+                 WHERE tenant_id = :tenantId AND shift_id IN (:shiftIds) AND business_date <> :keep
+                """)
+                .param("tenantId", tenantId)
+                .param("shiftIds", shiftIds)
+                .param("keep", keep)
+                .update();
+    }
+
+    /** One branch's stored staff-shift facts for a day, summed: what a recut compares against. */
+    public record StaffShiftDayTotal(UUID locationId, long shifts, long workedSeconds, long paidSeconds) {}
+
+    public List<StaffShiftDayTotal> readStaffShiftDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT location_id, count(*) AS shifts,
+                       COALESCE(sum(worked_seconds), 0) AS worked, COALESCE(sum(paid_seconds), 0) AS paid
+                  FROM reporting.fact_staff_shift
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((row, n) -> new StaffShiftDayTotal(
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("shifts"),
+                        row.getLong("worked"),
+                        row.getLong("paid")))
+                .list();
+    }
+
+    /** The total paid seconds of a range's stored staff-shift facts: the figure a payroll file must equal. */
+    public long readStaffShiftPaidSeconds(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        return jdbc.sql("""
+                        SELECT COALESCE(sum(paid_seconds), 0) FROM reporting.fact_staff_shift
+                         WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                           AND (:allLocations OR location_id IN (:locationIds))
+                        """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("allLocations", locationIds.isEmpty())
+                .param("locationIds", locationIds.isEmpty() ? List.of(new UUID(0, 0)) : locationIds)
+                .query(Long.class)
+                .single();
     }
 
     /** ORDER STATUSES that never became a sale: counted in the redemption log, excluded from the summary. */

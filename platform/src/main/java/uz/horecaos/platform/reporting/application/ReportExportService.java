@@ -39,6 +39,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
+import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -54,6 +55,7 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExpor
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.workforce.api.StaffAttendanceExportPort;
 
 /**
  * The export centre's own job (ADR 0043's export line, ADR 0029's egress checklist; wave P28).
@@ -101,6 +103,14 @@ public class ReportExportService {
     private final JdbcReportExportStore store;
     private final CustomerDirectoryExportPort customerDirectory;
     private final OrderCrmLogExportPort orderCrmLog;
+
+    /**
+     * {@link ReportExportRegistry#STAFF_ATTENDANCE}'s source (ADR 0156): the payroll file's rows and the
+     * counts that let this class refuse before queueing. Null in a wiring with no workforce module, in
+     * which case the report is simply unknown.
+     */
+    private final @Nullable StaffAttendanceExportPort staffAttendance;
+
     /**
      * {@link #ORDER_REPORT_LOG}/{@link #ORDER_REPORT_SUMMARY}'s own source — a same-module
      * dependency, not a port: both reports are plain reads of this module's own {@code
@@ -129,10 +139,40 @@ public class ReportExportService {
             TransactionTemplate transactions,
             ObjectMapper objectMapper,
             Clock clock,
-            @Value("${horecaos.reporting.exports.bucket:${horecaos.media.bucket:horecaos-media}}") String bucket) {
+            String bucket) {
+        this(
+                store,
+                customerDirectory,
+                orderCrmLog,
+                reportQueries,
+                protection,
+                audit,
+                storage,
+                transactions,
+                objectMapper,
+                clock,
+                bucket,
+                null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ReportExportService(
+            JdbcReportExportStore store,
+            CustomerDirectoryExportPort customerDirectory,
+            OrderCrmLogExportPort orderCrmLog,
+            ReportQueryService reportQueries,
+            FieldProtection protection,
+            AuditRecorder audit,
+            ObjectStorage storage,
+            TransactionTemplate transactions,
+            ObjectMapper objectMapper,
+            Clock clock,
+            @Value("${horecaos.reporting.exports.bucket:${horecaos.media.bucket:horecaos-media}}") String bucket,
+            @Nullable StaffAttendanceExportPort staffAttendance) {
         this.store = store;
         this.customerDirectory = customerDirectory;
         this.orderCrmLog = orderCrmLog;
+        this.staffAttendance = staffAttendance;
         this.reportQueries = reportQueries;
         this.protection = protection;
         this.audit = audit;
@@ -202,9 +242,61 @@ public class ReportExportService {
             String purpose,
             String requestedBySubject,
             boolean holdsPiiCapability) {
+        return requestExport(
+                tenantId,
+                reportKey,
+                requestedColumns,
+                status,
+                query,
+                from,
+                to,
+                locationIds,
+                purpose,
+                requestedBySubject,
+                holdsPiiCapability ? Set.of(Capability.CUSTOMER_PII_EXPORT) : Set.of(),
+                null);
+    }
+
+    /**
+     * Queues an export, deciding which report's PII group the caller may have from the capabilities
+     * they hold (ADR 0156 / ADR 0131): the group of a report is gated by <em>that report's own</em>
+     * {@code piiCapability}, not by a single capability for every report.
+     *
+     * <p>For {@link ReportExportRegistry#STAFF_ATTENDANCE} three refusals are made here, on the request
+     * thread, before the {@code 202} and before a job row exists: the report is unknown while the tenant
+     * has not switched attendance on; {@code ATTENDANCE_UNRESOLVED_SHIFTS} (with the count) while a shift
+     * in range is still open or awaiting approval, unless the caller asked to include unresolved shifts;
+     * and {@code ATTENDANCE_EXPORT_TOO_LARGE} (with the count and the ceiling) for a range over the
+     * report's row ceiling. A payroll file that will be refused is refused at the door and not found
+     * {@code FAILED} in the history a minute later.
+     *
+     * @param heldPiiCapabilities the PII-group capabilities the caller holds, from {@link
+     *     #piiCapabilities()}
+     * @param includeUnresolved payroll only: include shifts still open or awaiting approval, with their
+     *     status and null paid seconds; null or false refuses a range that holds one
+     */
+    @Transactional
+    public UUID requestExport(
+            UUID tenantId,
+            String reportKey,
+            List<String> requestedColumns,
+            @Nullable String status,
+            @Nullable String query,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            List<UUID> locationIds,
+            String purpose,
+            String requestedBySubject,
+            Set<Capability> heldPiiCapabilities,
+            @Nullable Boolean includeUnresolved) {
 
         ReportExportDefinition definition = ReportExportRegistry.find(reportKey)
                 .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown report key"));
+        if (ReportExportRegistry.STAFF_ATTENDANCE.equals(reportKey)
+                && (staffAttendance == null || !staffAttendance.attendanceEnabled(tenantId))) {
+            // Off for this tenant: indistinguishable from a key nobody defined.
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown report key");
+        }
         for (String column : requestedColumns) {
             if (!definition.isKnownColumn(column)) {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown export column: " + column);
@@ -214,9 +306,19 @@ public class ReportExportService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, reportKey + " requires both from and to");
         }
 
-        List<String> effectiveColumns = definition.effectiveColumns(requestedColumns, holdsPiiCapability);
+        List<String> effectiveColumns =
+                definition.effectiveColumns(requestedColumns, heldPiiCapabilities.contains(definition.piiCapability()));
         boolean includesPii = effectiveColumns.stream().anyMatch(definition::isPiiColumn);
-        int rowQuota = rowQuotaFor(reportKey, includesPii);
+        int rowQuota = definition.rowQuotaFor(includesPii);
+        if (ReportExportRegistry.STAFF_ATTENDANCE.equals(reportKey)) {
+            refuseUnsettledOrOversizedPayroll(
+                    tenantId,
+                    utcDate(Objects.requireNonNull(from)),
+                    utcDate(Objects.requireNonNull(to)),
+                    locationIds,
+                    Boolean.TRUE.equals(includeUnresolved),
+                    rowQuota);
+        }
 
         UUID id = Ids.newId();
         Instant now = clock.instant();
@@ -245,6 +347,9 @@ public class ReportExportService {
         if (!locationIds.isEmpty()) {
             filters.put("locationIds", locationIds.stream().map(UUID::toString).toList());
         }
+        if (Boolean.TRUE.equals(includeUnresolved)) {
+            filters.put("includeUnresolved", true);
+        }
 
         store.insertQueued(
                 id,
@@ -263,20 +368,54 @@ public class ReportExportService {
         return id;
     }
 
-    /** {@code ORDER_CRM_LOG}, {@code ORDER_REPORT_LOG} and {@code ORDER_REPORT_SUMMARY} all bound an order-grain or day-grain read — none of them has a sensible "every date this tenant ever had" default the way {@code CUSTOMER_DIRECTORY}'s snapshot does. */
+    /** {@code ORDER_CRM_LOG}, {@code ORDER_REPORT_LOG}, {@code ORDER_REPORT_SUMMARY} and {@code STAFF_ATTENDANCE} all bound an order-grain, day-grain or shift-grain read -- none of them has a sensible "every date this tenant ever had" default the way {@code CUSTOMER_DIRECTORY}'s snapshot does. */
     private static boolean requiresRange(String reportKey) {
         return ReportExportRegistry.ORDER_CRM_LOG.equals(reportKey)
                 || ReportExportRegistry.ORDER_REPORT_LOG.equals(reportKey)
-                || ReportExportRegistry.ORDER_REPORT_SUMMARY.equals(reportKey);
+                || ReportExportRegistry.ORDER_REPORT_SUMMARY.equals(reportKey)
+                || ReportExportRegistry.STAFF_ATTENDANCE.equals(reportKey);
     }
 
-    private static int rowQuotaFor(String reportKey, boolean includesPii) {
-        if (!includesPii) {
-            return DEFAULT_ROW_QUOTA;
+    /**
+     * The PII-group capabilities across the registry (ADR 0131 as amended by ADR 0156): the controller
+     * asks the caller about each once and hands back the ones they hold.
+     */
+    public static Set<Capability> piiCapabilities() {
+        return ReportExportRegistry.piiCapabilities();
+    }
+
+    private static LocalDate utcDate(Instant instant) {
+        return instant.atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    /**
+     * The payroll file's two refusals, raised on the request thread (ADR 0156, Decision 9). Both read a
+     * count from {@link StaffAttendanceExportPort}; neither writes anything.
+     */
+    private void refuseUnsettledOrOversizedPayroll(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            boolean includeUnresolved,
+            int rowCeiling) {
+        StaffAttendanceExportPort port = Objects.requireNonNull(staffAttendance);
+        if (!includeUnresolved) {
+            int unresolved = port.unresolvedShifts(tenantId, from, to, locationIds);
+            if (unresolved > 0) {
+                throw new ApiException(
+                        ErrorCode.ATTENDANCE_UNRESOLVED_SHIFTS,
+                        "The range holds shifts that are still open or waiting for approval",
+                        Map.of("count", unresolved));
+            }
         }
-        return ReportExportRegistry.ORDER_CRM_LOG.equals(reportKey)
-                ? OrderCrmLogExportPort.PII_ROW_LIMIT
-                : CustomerDirectoryExportPort.PII_ROW_LIMIT;
+        int rows = port.exportableShifts(tenantId, from, to, locationIds, includeUnresolved);
+        if (rows > rowCeiling) {
+            throw new ApiException(
+                    ErrorCode.ATTENDANCE_EXPORT_TOO_LARGE,
+                    "The range holds more shifts than one payroll file may carry. Narrow the range or the branch.",
+                    Map.of("rowCount", rows, "rowCeiling", rowCeiling));
+        }
     }
 
     /**
@@ -297,11 +436,25 @@ public class ReportExportService {
         ClaimedExport job = claimed.get();
         try {
             run(job);
+        } catch (ApiException refused) {
+            // A payroll export that became unsettled or too large between the queueing and the run ends
+            // FAILED with the same stable code the request would have been refused with, and writes no
+            // object: the checks run before the object store is touched (ADR 0156).
+            log.warn("Report export {} refused at run time: {}", job.id(), refused.errorCode());
+            store.failExport(job.id(), failureReasonOf(refused), clock.instant());
         } catch (RuntimeException failure) {
             log.error("Report export {} failed while processing", job.id(), failure);
             store.failExport(job.id(), FAILURE_REASON, clock.instant());
         }
         return true;
+    }
+
+    private static String failureReasonOf(ApiException refused) {
+        return switch (refused.errorCode()) {
+            case ATTENDANCE_UNRESOLVED_SHIFTS, ATTENDANCE_EXPORT_TOO_LARGE ->
+                refused.errorCode().name();
+            default -> FAILURE_REASON;
+        };
     }
 
     private void run(ClaimedExport job) {
@@ -311,6 +464,7 @@ public class ReportExportService {
                     case ReportExportRegistry.ORDER_CRM_LOG -> runOrderCrmLog(job);
                     case ReportExportRegistry.ORDER_REPORT_LOG -> runOrderReportLog(job);
                     case ReportExportRegistry.ORDER_REPORT_SUMMARY -> runOrderReportSummary(job);
+                    case ReportExportRegistry.STAFF_ATTENDANCE -> runStaffAttendance(job);
                     default ->
                         throw new IllegalStateException(
                                 "No export source registered for report key " + job.reportKey());
@@ -520,6 +674,77 @@ public class ReportExportService {
         return new ExportOutcome(rows, truncated);
     }
 
+    /**
+     * ADR 0156: the payroll file. {@link #refuseUnsettledOrOversizedPayroll} is checked again here
+     * because a shift can change between the queueing and the run -- and before anything is read in
+     * full, so a range that grew past its ceiling ends the job {@code FAILED} with {@code
+     * ATTENDANCE_EXPORT_TOO_LARGE} and writes no object. The result is never truncated: it carries
+     * every row of the range or the job fails.
+     */
+    private ExportOutcome runStaffAttendance(ClaimedExport job) {
+        StaffAttendanceExportPort port =
+                Objects.requireNonNull(staffAttendance, "STAFF_ATTENDANCE queued with no workforce");
+        LocalDate from = instantFilterAsUtcDate(job, "from", "STAFF_ATTENDANCE");
+        LocalDate to = instantFilterAsUtcDate(job, "to", "STAFF_ATTENDANCE");
+        List<UUID> locationIds = storedLocationIds(job);
+        boolean includeUnresolved = Boolean.TRUE.equals(job.filters().get("includeUnresolved"));
+        if (!port.attendanceEnabled(job.tenantId())) {
+            throw new IllegalStateException("Attendance was switched off between the request and the run");
+        }
+        refuseUnsettledOrOversizedPayroll(job.tenantId(), from, to, locationIds, includeUnresolved, job.rowQuota());
+
+        StaffAttendanceExportPort.ExportBundle bundle = port.export(
+                job.tenantId(), from, to, locationIds, includeUnresolved, job.includesPiiColumns(), job.rowQuota());
+        if (bundle.totalRows() > job.rowQuota()) {
+            throw new ApiException(
+                    ErrorCode.ATTENDANCE_EXPORT_TOO_LARGE,
+                    "The range grew past the payroll file's row ceiling",
+                    Map.of("rowCount", bundle.totalRows(), "rowCeiling", job.rowQuota()));
+        }
+        List<Map<String, String>> rows = bundle.rows().stream()
+                .map(row -> staffAttendanceRowAsColumns(row, job.effectiveColumns()))
+                .toList();
+        return new ExportOutcome(rows, false);
+    }
+
+    private static Map<String, String> staffAttendanceRowAsColumns(
+            StaffAttendanceExportPort.ExportedRow row, List<String> effectiveColumns) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String column : effectiveColumns) {
+            values.put(
+                    column,
+                    switch (column) {
+                        case "staffDisplayReference" -> row.staffDisplayReference();
+                        case "businessDate" -> row.businessDate().toString();
+                        case "locationId" -> row.locationId().toString();
+                        case "plannedSeconds" ->
+                            row.plannedSeconds() == null
+                                    ? ""
+                                    : row.plannedSeconds().toString();
+                        case "workedSeconds" ->
+                            row.workedSeconds() == null
+                                    ? ""
+                                    : row.workedSeconds().toString();
+                        case "breakSeconds" -> Integer.toString(row.breakSeconds());
+                        case "paidSeconds" ->
+                            row.paidSeconds() == null ? "" : row.paidSeconds().toString();
+                        case "varianceSeconds" ->
+                            row.varianceSeconds() == null
+                                    ? ""
+                                    : row.varianceSeconds().toString();
+                        case "approvalStatus" -> row.approvalStatus();
+                        case "startedAt" -> row.startedAt().toString();
+                        case "endedAt" ->
+                            row.endedAt() == null ? "" : row.endedAt().toString();
+                        case "timezone" -> row.timezone();
+                        case "employeeNumber" -> row.employeeNumber() == null ? "" : row.employeeNumber();
+                        case "staffName" -> row.staffName() == null ? "" : row.staffName();
+                        default -> "";
+                    });
+        }
+        return values;
+    }
+
     /** {@code job.filters()} stores an {@code ORDER_CRM_LOG}/{@code ORDER_REPORT_LOG}/{@code ORDER_REPORT_SUMMARY} boundary as an ISO {@code Instant} string — see {@link #requestExport}. */
     private static LocalDate instantFilterAsUtcDate(ClaimedExport job, String key, String reportKey) {
         String raw = (String) Objects.requireNonNull(job.filters().get(key), reportKey + " queued with no " + key);
@@ -711,39 +936,62 @@ public class ReportExportService {
     }
 
     /**
-     * @param viewerHoldsPiiCapability the polling principal's own {@code customer.pii.export}
-     *     grant (not the exporter's, which is already baked into the row) — see {@link
-     *     #toView} for why a second principal's grant has to be re-checked on every read
+     * @param viewerHoldsPiiCapability the polling principal's own {@code customer.pii.export} grant (not
+     *     the exporter's, which is already baked into the row) -- see {@link #toView} for why a second
+     *     principal's grant has to be re-checked on every read. Equivalent to {@link
+     *     #status(UUID, UUID, Set)} with that one capability.
      */
     @Transactional(readOnly = true)
     public Optional<ExportStatusView> status(UUID tenantId, UUID id, boolean viewerHoldsPiiCapability) {
-        return store.find(tenantId, id).map(row -> toView(row, viewerHoldsPiiCapability));
+        return status(tenantId, id, asSet(viewerHoldsPiiCapability));
     }
 
-    /** @param viewerHoldsPiiCapability see {@link #status}'s own doc */
+    /** @param viewerCapabilities the PII-group capabilities the polling principal holds -- see {@link #toView} */
+    @Transactional(readOnly = true)
+    public Optional<ExportStatusView> status(UUID tenantId, UUID id, Set<Capability> viewerCapabilities) {
+        return store.find(tenantId, id).map(row -> toView(row, viewerCapabilities));
+    }
+
+    /** @param viewerHoldsPiiCapability see {@link #status(UUID, UUID, boolean)}'s own doc */
     @Transactional(readOnly = true)
     public List<ExportStatusView> recentExports(UUID tenantId, int limit, boolean viewerHoldsPiiCapability) {
+        return recentExports(tenantId, limit, asSet(viewerHoldsPiiCapability));
+    }
+
+    /** @param viewerCapabilities see {@link #status(UUID, UUID, Set)}'s own doc */
+    @Transactional(readOnly = true)
+    public List<ExportStatusView> recentExports(UUID tenantId, int limit, Set<Capability> viewerCapabilities) {
         return store.listRecent(tenantId, limit).stream()
-                .map(row -> toView(row, viewerHoldsPiiCapability))
+                .map(row -> toView(row, viewerCapabilities))
                 .toList();
     }
 
+    private static Set<Capability> asSet(boolean holdsCustomerPiiExport) {
+        return holdsCustomerPiiExport ? Set.of(Capability.CUSTOMER_PII_EXPORT) : Set.of();
+    }
+
     /**
-     * A stored row's {@code includesPiiColumns}/{@code effectiveColumns} were decided once, at
-     * queue time, from the <em>requester's</em> own {@code customer.pii.export} grant ({@link
-     * #requestExport}'s own doc). Every {@code REPORT_EXPORT} holder in the tenant can poll or
-     * list that same row (P28's export-centre history), so the PII group is re-redacted here,
-     * per read, against the <em>viewer's</em> own grant: a row whose PII columns the viewer is
-     * not entitled to see reports {@code includesPiiColumns = false}, strips the PII columns out
-     * of {@code effectiveColumns}, and never presigns a download URL.
+     * A stored row's {@code includesPiiColumns}/{@code effectiveColumns} were decided once, at queue
+     * time, from the <em>requester's</em> grant of the report's own {@code piiCapability} ({@link
+     * #requestExport}'s own doc). Every {@code REPORT_EXPORT} holder in the tenant can poll or list that
+     * same row (P28's export-centre history), so the PII group is re-redacted here, per read, against the
+     * <em>viewer's</em> grant of <em>that report's</em> capability (ADR 0156): a finance clerk holding
+     * {@code staff.shift.export} and not {@code customer.pii.export} sees her payroll export whole, and a
+     * holder of {@code customer.pii.export} alone is not shown a payroll file's identity group or download
+     * URL. A row whose PII columns the viewer is not entitled to see reports {@code includesPiiColumns =
+     * false}, strips the PII columns out of {@code effectiveColumns}, and never presigns a download URL.
      */
-    private ExportStatusView toView(ExportRow row, boolean viewerHoldsPiiCapability) {
-        boolean redact = row.includesPiiColumns() && !viewerHoldsPiiCapability;
+    private ExportStatusView toView(ExportRow row, Set<Capability> viewerCapabilities) {
+        Optional<ReportExportDefinition> definition = ReportExportRegistry.find(row.reportKey());
+        // An unknown report key can't tell which capability gates it: redact rather than guess and leak.
+        boolean entitled = definition
+                .map(def -> viewerCapabilities.contains(def.piiCapability()))
+                .orElse(false);
+        boolean redact = row.includesPiiColumns() && !entitled;
 
         List<String> storedColumns = row.effectiveColumns();
         List<String> effectiveColumns = storedColumns;
         if (redact) {
-            Optional<ReportExportDefinition> definition = ReportExportRegistry.find(row.reportKey());
             effectiveColumns = definition
                     .map(def -> storedColumns.stream()
                             .filter(column -> !def.isPiiColumn(column))

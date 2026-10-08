@@ -1443,6 +1443,35 @@ public class JdbcOrderStore {
     }
 
     /**
+     * The staff subjects that created or accepted an order at this branch in the window (ADR 0156,
+     * {@code OperatorActivity}). Only a {@code USER} actor is a person: an order a bot or a website
+     * placed names a customer or a channel in those columns. Bounded -- a branch's people are
+     * hundreds at most, and the caller only compares this set against its own roster.
+     */
+    public java.util.Set<String> operatorSubjectsAt(UUID tenantId, UUID locationId, Instant from, Instant to) {
+        return new java.util.LinkedHashSet<>(jdbc.sql("""
+                        SELECT created_by_actor_id
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND location_id = :locationId
+                           AND created_by_actor_type = 'USER' AND created_by_actor_id IS NOT NULL
+                           AND created_at >= :from AND created_at < :to
+                        UNION
+                        SELECT accepted_by_actor_id
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND location_id = :locationId
+                           AND accepted_by_actor_type = 'USER' AND accepted_by_actor_id IS NOT NULL
+                           AND accepted_at >= :from AND accepted_at < :to
+                        LIMIT 1000
+                        """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(String.class)
+                .list());
+    }
+
+    /**
      * Every staff member who took or accepted an order in this brand (or one of
      * its branches) inside the window, with the two counts {@link
      * #operatorTodayCounts} gives for one -- the live operator band (gap map
