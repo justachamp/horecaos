@@ -969,6 +969,15 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0175 (7.5b): whether the branch has a live telephony provider and what
+   * its closed call history covers, so the Telephony tab can stay out of sight
+   * for a branch with neither (`CallStatsController.coverage`).
+   */
+  voiceCallStatsCoverage(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-stats/coverage`;
+  },
+
+  /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
    * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}
    * beside it. `LocationScope.brandId`/`locationId` are unused here; the

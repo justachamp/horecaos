@@ -471,12 +471,20 @@ export const reportsEn = {
   'reports.staff.telephony.column.answerRate': 'Answer rate',
   'reports.staff.telephony.column.missed': 'Missed',
   'reports.staff.telephony.column.transferred': 'Transferred',
-  'reports.staff.telephony.column.talkTime': 'Talk time',
+  'reports.staff.telephony.column.answerSpeed': 'Answer speed',
+  'reports.staff.telephony.column.conversion': 'Conversion',
+  'reports.staff.telephony.column.callLength': 'Call length',
   'reports.staff.telephony.rangeCapped': 'Showing the first {days} days of a longer range.',
-  'reports.staff.telephony.answerSpeedNotBuilt':
-    'Answer speed is not shown: there is no ring/wait time column yet (V0149).',
-  'reports.staff.telephony.conversionNotBuilt':
-    'Call-to-order conversion is not shown: it needs the call-provenance wiring that 1.6 supplies (not built yet).',
+  'reports.staff.telephony.help':
+    "Answer speed is the time from a call arriving to its first answer, so any IVR and queue time is inside it. Conversion is the share of answered calls that have an order placed from them, in any status; it is a lower bound, because an order linked after its day closed is counted only when the day is rebuilt. Call length runs from a call's first event to its end, ring time included. A figure that was not measured is shown as a dash, never as zero.",
+  'reports.staff.telephony.notMeasured': 'not measured',
+  'reports.staff.telephony.measuredOn': 'measured on {n} of {m} answered calls',
+  'reports.staff.telephony.convertedOf': '{n} of {m} answered calls',
+  'reports.staff.telephony.speedValue': '{avg} s (max {max} s)',
+  'reports.staff.telephony.unattributed': 'Not attributed',
+  'reports.staff.telephony.branchTotal': 'Branch total',
+  'reports.staff.telephony.nextClose':
+    "Today's calls appear after the business day closes, about {time}.",
 
   // ---------------------------------------------------------------- reports 7.9 marketing (T15)
   'reports.marketing.title': 'Marketing reports',

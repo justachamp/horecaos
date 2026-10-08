@@ -22,6 +22,7 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
+import uz.horecaos.platform.integration.provider.voice.FakePbxCall;
 import uz.horecaos.platform.integration.provider.voice.VoiceInstallationLookup.VoiceInstallation;
 import uz.horecaos.platform.integration.provider.voice.VoiceProcessedEventStore;
 import uz.horecaos.platform.support.TestDatabase;
@@ -147,17 +148,68 @@ class AsteriskAmiSocketClientEndToEndTests {
         assertThat(ingestion.ingested).isEmpty();
     }
 
+    @Test
+    void aRingDelayOnTheWireArrivesAsTheGapBetweenOfferedAndAnswered() throws Exception {
+        // ADR 0175: the day close derives answer speed from the instants the client stamps on receipt.
+        // The fake PBX rings for seven seconds (on a clock the test steps, so nothing sleeps) and the
+        // call is answered, transferred and answered again -- the figure is still seven seconds, and
+        // the second answer is a second ANSWERED event the close will not count as another call.
+        server = FakeAsteriskAmiServer.start(USERNAME, SECRET);
+        RecordingIngestion ingestion = new RecordingIngestion();
+        SteppingClock clock = new SteppingClock(Instant.parse("2026-09-05T10:00:00Z"));
+        clientThread = startClient(ingestion, server.port(), clock);
+        server.awaitLogin(5);
+
+        FakePbxCall call = FakePbxCall.call("1.700", clock.instant())
+                .ivrLegFor(Duration.ofSeconds(2))
+                .ringsThenAnswered(Duration.ofSeconds(7))
+                .transferredAfter(Duration.ofSeconds(30), "1002", Duration.ofSeconds(11))
+                .endsAfter(Duration.ofSeconds(60));
+        int expectedIngested = 0;
+        for (FakePbxCall.AmiBlock block : call.asAmiBlocks()) {
+            clock.set(block.receivedAt());
+            boolean reportsAnEvent = AsteriskAmiEventMapper.toInboundCallEvent(
+                            block.fields(), FakePbxCall.scopedInstallation("ASTERISK_AMI"), block.receivedAt())
+                    .isPresent();
+            server.pushEvent(block.fields());
+            if (reportsAnEvent) {
+                int expected = ++expectedIngested;
+                waitUntil(Duration.ofSeconds(5), () -> ingestion.ingested.size() >= expected);
+            }
+        }
+
+        assertThat(ingestion.ingested)
+                .extracting(InboundCallEvent::type)
+                .containsExactly(
+                        CallEventTypeCode.OFFERED,
+                        CallEventTypeCode.ANSWERED,
+                        CallEventTypeCode.TRANSFERRED,
+                        CallEventTypeCode.ANSWERED,
+                        CallEventTypeCode.ENDED);
+        InboundCallEvent offered = ingestion.ingested.get(0);
+        InboundCallEvent firstAnswer = ingestion.ingested.get(1);
+        assertThat(Duration.between(offered.occurredAt(), firstAnswer.occurredAt()))
+                .as("ringing 2 s in the IVR and 7 s on the operator, answered by a person")
+                .isEqualTo(Duration.ofSeconds(9));
+        assertThat(ingestion.ingested)
+                .extracting(InboundCallEvent::providerCallId)
+                .containsOnly("1.700");
+    }
+
     private Thread startClient(RecordingIngestion ingestion, int port) {
+        return startClient(ingestion, port, Clock.systemUTC());
+    }
+
+    private Thread startClient(RecordingIngestion ingestion, int port, Clock clock) {
         var installation = installation(port);
         var client = new AsteriskAmiSocketClient(
                 installation,
                 new EnvironmentSecretResolver(
-                        Map.of("horecaos.secrets.provider_voice.tenant-x.ami-secret-1", SECRET)::get,
-                        Clock.systemUTC()),
-                new VoiceProcessedEventStore(jdbc, Clock.systemUTC()),
+                        Map.of("horecaos.secrets.provider_voice.tenant-x.ami-secret-1", SECRET)::get, clock),
+                new VoiceProcessedEventStore(jdbc, clock),
                 ingestion,
                 objectMapper(),
-                Clock.systemUTC());
+                clock);
         Thread thread = new Thread(client, "test-asterisk-client");
         thread.setDaemon(true);
         thread.start();
@@ -191,6 +243,34 @@ class AsteriskAmiSocketClientEndToEndTests {
                 throw new AssertionError("Condition did not become true within " + timeout);
             }
             Thread.sleep(50);
+        }
+    }
+
+    /** A clock the test moves by hand; the client stamps each event with whatever it says on receipt. */
+    private static final class SteppingClock extends Clock {
+        private volatile Instant now;
+
+        SteppingClock(Instant start) {
+            this.now = start;
+        }
+
+        void set(Instant instant) {
+            this.now = instant;
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return java.time.ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
         }
     }
 

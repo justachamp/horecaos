@@ -52,6 +52,14 @@ public final class ConfigurationValueRules {
             "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
             "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
 
+    /**
+     * A second table beside {@link #RULES} (which is a {@code Map.of} at its ten-entry limit):
+     * the rules ADR 0175 and ADR 0161 added, kept apart so neither edits the other's lines.
+     */
+    private static final Map<String, Consumer<Object>> TELEPHONY_AND_MARKING_RULES = Map.of(
+            "voice.ring_time_ceiling_seconds", ConfigurationValueRules::requireRingTimeCeiling,
+            "fiscal.marking.structure_check", ConfigurationValueRules::requireMarkingStructureCheck);
+
     private ConfigurationValueRules() {}
 
     /**
@@ -62,6 +70,9 @@ public final class ConfigurationValueRules {
             return;
         }
         Consumer<Object> rule = RULES.get(key.code());
+        if (rule == null) {
+            rule = TELEPHONY_AND_MARKING_RULES.get(key.code());
+        }
         if (rule != null) {
             rule.accept(value);
         }
@@ -70,6 +81,23 @@ public final class ConfigurationValueRules {
     /** Whether {@code candidate} is a colour that may be served to a stylesheet. */
     public static boolean isHexColour(@Nullable String candidate) {
         return candidate != null && HEX_COLOUR.matcher(candidate).matches();
+    }
+
+    /** ADR 0175: a ceiling of zero would reject every ring sample, and past a day it is not a ceiling. */
+    private static void requireRingTimeCeiling(Object value) {
+        int seconds = ((Number) value).intValue();
+        if (seconds < 1 || seconds > 86_400) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "voice.ring_time_ceiling_seconds must be between 1 and 86400");
+        }
+    }
+
+    /** ADR 0161: a mistyped check mode must be refused, never quietly read as the strict or the lax one. */
+    private static void requireMarkingStructureCheck(Object value) {
+        String mode = String.valueOf(value);
+        if (!mode.equals("GS1") && !mode.equals("NONE")) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "fiscal.marking.structure_check must be GS1 or NONE");
+        }
     }
 
     /** ADR 0148: a mistyped mode must be refused, never quietly read as "OFF". */

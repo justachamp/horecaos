@@ -475,6 +475,18 @@ public final class ReportingFacts {
      *                            our own screen-pop acknowledgment could
      *                            name) is still a real call for the location,
      *                            and a primary key cannot hold a null column
+     * @param talkDurationSeconds ADR 0175: despite the name, the call's length -- the first
+     *                            event to {@code ENDED}, ring and queue time inside it
+     * @param answeredCallCount   ADR 0175: calls first answered in this hour by this operator;
+     *                            {@code null} means the row was closed before the measure
+     *                            existed ("not measured"), never zero
+     * @param ringSecondsTotal    ADR 0175: whole seconds from {@code OFFERED} to the first
+     *                            {@code ANSWERED}, over the sampled calls; null with the count
+     * @param ringSampleCount     ADR 0175: calls with a sane offered-to-answered pair
+     * @param ringSecondsMax      ADR 0175: the longest sampled interval; null exactly when
+     *                            there is no sample
+     * @param convertedCount      ADR 0175: answered calls with an order placed from them, in
+     *                            any status
      */
     public record CallHourFact(
             UUID tenantId,
@@ -489,7 +501,12 @@ public final class ReportingFacts {
             int answeredCount,
             int missedCount,
             int transferredCount,
-            long talkDurationSeconds) {
+            long talkDurationSeconds,
+            @Nullable Integer answeredCallCount,
+            @Nullable Long ringSecondsTotal,
+            @Nullable Integer ringSampleCount,
+            @Nullable Integer ringSecondsMax,
+            @Nullable Integer convertedCount) {
 
         public CallHourFact {
             Objects.requireNonNull(tenantId, "A fact is tenant-owned");
@@ -500,6 +517,55 @@ public final class ReportingFacts {
             // No answered-vs-offered check here: those two counts share a
             // location-hour, not a row — see fact_call_hour's own migration
             // comment for why that invariant is a rollup, not a per-row one.
+            boolean measured = answeredCallCount != null;
+            if (measured != (ringSecondsTotal != null)
+                    || measured != (ringSampleCount != null)
+                    || measured != (convertedCount != null)) {
+                throw new IllegalArgumentException(
+                        "The call KPI columns are measured together or not at all (ck_fact_call_hour_kpi)");
+            }
+            if (ringSampleCount != null && (ringSampleCount > 0) != (ringSecondsMax != null)) {
+                throw new IllegalArgumentException("ringSecondsMax is set exactly when there is a ring sample");
+            }
+            if (!measured && ringSecondsMax != null) {
+                throw new IllegalArgumentException("A row that was not measured has no ring maximum");
+            }
+        }
+
+        /** A row of the pre-ADR 0175 shape: every call KPI is "not measured". */
+        public CallHourFact(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                LocalDate businessDate,
+                int hourOfDay,
+                String operatorPrincipalId,
+                int boundaryVersion,
+                int metricCalculationVersion,
+                int offeredCount,
+                int answeredCount,
+                int missedCount,
+                int transferredCount,
+                long talkDurationSeconds) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    businessDate,
+                    hourOfDay,
+                    operatorPrincipalId,
+                    boundaryVersion,
+                    metricCalculationVersion,
+                    offeredCount,
+                    answeredCount,
+                    missedCount,
+                    transferredCount,
+                    talkDurationSeconds,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
     }
 

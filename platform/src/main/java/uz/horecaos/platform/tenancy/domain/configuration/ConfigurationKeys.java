@@ -126,6 +126,23 @@ public final class ConfigurationKeys {
                     + "their name is erased and the application archived.")
             .build();
 
+    /**
+     * ADR 0175: the longest offered-to-answered interval the day close still believes as one
+     * call's ring time. Declared here so a stored row for it passes the startup validator, and
+     * declared identically in {@code voice.api.VoiceConfigurationKeys} where it is consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> VOICE_RING_TIME_CEILING_SECONDS = ConfigurationKey.of(
+                    "voice.ring_time_ceiling_seconds", Integer.class)
+            .defaultValue(1800)
+            .ownedBy("voice")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The longest interval, in seconds, from a call's arrival to its first answer "
+                    + "that still counts as one call's answer speed; a longer pair is treated as two "
+                    + "calls and left out of the average.")
+            .build();
+
     public static final ConfigurationKey<Integer> INVENTORY_RESERVATION_TTL_SECONDS = ConfigurationKey.of(
                     "inventory.reservation_ttl_seconds", Integer.class)
             .defaultValue(900)
@@ -848,6 +865,7 @@ public final class ConfigurationKeys {
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
             COURIER_APPLICANT_RETENTION_MONTHS,
+            VOICE_RING_TIME_CEILING_SECONDS,
             QUOTE_TTL_SECONDS,
             PROMOTION_APPROVAL_PERCENTAGE_OVER_BP,
             PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,

@@ -479,15 +479,19 @@ public class JdbcReportingStore {
      * grain {@link #readSourceOrders} already uses for orders — a business day
      * is defined once, by {@link BusinessDayBoundary}, and every fact this
      * store derives is windowed by it the same way.
+     *
+     * <p>ADR 0175: an {@code ANSWERED} row also carries four values derived from
+     * the call it belongs to, so the close can pair the answer with the call's
+     * {@code OFFERED} event without the Java record ever holding a provider call
+     * id: whether it is the first answer of its call, the call's earliest offered
+     * time (even on the previous business day), the operator it resolves to (its
+     * own, else the one on the call's {@code ENDED} event) and whether an order
+     * placed from the call exists. The statement selects neither caller-number
+     * column, no customer reference and no order id; the order is only tested for
+     * existence.
      */
     public List<SourceCallEvent> readSourceCallEvents(UUID tenantId, Instant from, Instant to) {
-        return jdbc.sql("""
-                SELECT brand_id, location_id, event_type, operator_principal_id, duration_seconds, occurred_at
-                  FROM voice.call_events
-                 WHERE tenant_id = :tenantId
-                   AND occurred_at >= :from AND occurred_at < :to
-                 ORDER BY occurred_at
-                """)
+        return jdbc.sql(CALL_EVENTS_SQL)
                 .param("tenantId", tenantId)
                 .param("from", utc(from))
                 .param("to", utc(to))
@@ -497,8 +501,53 @@ public class JdbcReportingStore {
                         row.getString("event_type"),
                         row.getString("operator_principal_id"),
                         row.getObject("duration_seconds", Integer.class),
-                        row.getObject("occurred_at", OffsetDateTime.class).toInstant()))
+                        row.getObject("occurred_at", OffsetDateTime.class).toInstant(),
+                        row.getBoolean("first_answer_of_call"),
+                        optionalInstant(row.getObject("offered_at", OffsetDateTime.class)),
+                        row.getString("resolved_operator"),
+                        row.getBoolean("has_order")))
                 .list();
+    }
+
+    /**
+     * The call-event read, public so a test can prove what its select list does not name
+     * (ADR 0175: no caller number, no customer reference, no order id).
+     */
+    public static final String CALL_EVENTS_SQL = """
+            SELECT e.brand_id, e.location_id, e.event_type, e.operator_principal_id,
+                   e.duration_seconds, e.occurred_at,
+                   (e.event_type = 'ANSWERED' AND NOT EXISTS (
+                        SELECT 1 FROM voice.call_events a
+                         WHERE a.tenant_id = e.tenant_id AND a.installation_id = e.installation_id
+                           AND a.provider_call_id = e.provider_call_id AND a.event_type = 'ANSWERED'
+                           AND (a.occurred_at, a.id) < (e.occurred_at, e.id))) AS first_answer_of_call,
+                   ofr.occurred_at AS offered_at,
+                   CASE WHEN e.event_type = 'ANSWERED' THEN
+                        COALESCE(NULLIF(e.operator_principal_id, ''),
+                                 (SELECT l.operator_principal_id FROM voice.call_events l
+                                   WHERE l.tenant_id = e.tenant_id AND l.installation_id = e.installation_id
+                                     AND l.provider_call_id = e.provider_call_id
+                                     AND l.event_type = 'ENDED' AND l.operator_principal_id IS NOT NULL
+                                     AND l.operator_principal_id <> ''
+                                   ORDER BY l.occurred_at, l.id LIMIT 1))
+                   END AS resolved_operator,
+                   COALESCE(ofr.id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM ordering.orders o
+                         WHERE o.tenant_id = e.tenant_id AND o.source_call_id = ofr.id
+                           AND o.created_at >= ofr.occurred_at), false) AS has_order
+              FROM voice.call_events e
+              LEFT JOIN LATERAL (
+                    SELECT f.id, f.occurred_at FROM voice.call_events f
+                     WHERE e.event_type = 'ANSWERED'
+                       AND f.tenant_id = e.tenant_id AND f.installation_id = e.installation_id
+                       AND f.provider_call_id = e.provider_call_id AND f.event_type = 'OFFERED'
+                     ORDER BY f.occurred_at, f.id LIMIT 1) ofr ON true
+             WHERE e.tenant_id = :tenantId AND e.occurred_at >= :from AND e.occurred_at < :to
+             ORDER BY e.occurred_at, e.id
+            """;
+
+    private static @Nullable Instant optionalInstant(@Nullable OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
     }
 
     /**
@@ -630,14 +679,50 @@ public class JdbcReportingStore {
     public record RefundedOrder(
             UUID locationId, UUID legalEntityId, String channelCode, String fulfilmentMode, Instant createdAt) {}
 
-    /** ADR 0064: one row of {@link #readSourceCallEvents}. */
+    /**
+     * ADR 0064: one row of {@link #readSourceCallEvents}.
+     *
+     * <p>ADR 0175: the last four values are derived for an {@code ANSWERED} row and are
+     * {@code false}/{@code null} for every other event type. {@code firstAnswerOfCall}
+     * is true for exactly one answer per call, so a transfer's second answer adds no ring
+     * sample and no conversion; {@code offeredAt} is the call's earliest {@code OFFERED}
+     * time, which may fall on the previous business day; {@code resolvedOperator} is the
+     * answer's own operator, else the one on the call's {@code ENDED} event; {@code hasOrder}
+     * is whether an order placed from the call exists, in any status.
+     */
     public record SourceCallEvent(
             UUID brandId,
             UUID locationId,
             String eventType,
             @Nullable String operatorPrincipalId,
             @Nullable Integer durationSeconds,
-            Instant occurredAt) {}
+            Instant occurredAt,
+            boolean firstAnswerOfCall,
+            @Nullable Instant offeredAt,
+            @Nullable String resolvedOperator,
+            boolean hasOrder) {
+
+        /** An event with no call-level derivation, which is every event but an answer. */
+        public SourceCallEvent(
+                UUID brandId,
+                UUID locationId,
+                String eventType,
+                @Nullable String operatorPrincipalId,
+                @Nullable Integer durationSeconds,
+                Instant occurredAt) {
+            this(
+                    brandId,
+                    locationId,
+                    eventType,
+                    operatorPrincipalId,
+                    durationSeconds,
+                    occurredAt,
+                    false,
+                    null,
+                    null,
+                    false);
+        }
+    }
 
     // ---------------------------------------------------------- fact writes
 
@@ -678,9 +763,11 @@ public class JdbcReportingStore {
                 INSERT INTO reporting.fact_call_hour
                     (tenant_id, business_date, hour_of_day, location_id, brand_id, operator_principal_id,
                      boundary_version, metric_calculation_version, offered_count, answered_count,
-                     missed_count, transferred_count, talk_duration_seconds)
+                     missed_count, transferred_count, talk_duration_seconds,
+                     answered_call_count, ring_seconds_total, ring_sample_count, ring_seconds_max, converted_count)
                 VALUES (:tenantId, :businessDate, :hourOfDay, :locationId, :brandId, :operatorPrincipalId,
-                        :boundaryVersion, :calculationVersion, :offered, :answered, :missed, :transferred, :talk)
+                        :boundaryVersion, :calculationVersion, :offered, :answered, :missed, :transferred, :talk,
+                        :answeredCalls, :ringTotal, :ringSamples, :ringMax, :converted)
                 """)
                 .param("tenantId", fact.tenantId())
                 .param("businessDate", fact.businessDate())
@@ -695,37 +782,122 @@ public class JdbcReportingStore {
                 .param("missed", fact.missedCount())
                 .param("transferred", fact.transferredCount())
                 .param("talk", fact.talkDurationSeconds())
+                .param("answeredCalls", fact.answeredCallCount())
+                .param("ringTotal", fact.ringSecondsTotal())
+                .param("ringSamples", fact.ringSampleCount())
+                .param("ringMax", fact.ringSecondsMax())
+                .param("converted", fact.convertedCount())
                 .update();
     }
 
     /** ADR 0064: one branch's call-stats hours for one business date, for the owner-facing read. */
     public List<CallHourFact> readCallHourFacts(UUID tenantId, UUID locationId, LocalDate businessDate) {
-        return jdbc.sql("""
-                SELECT tenant_id, brand_id, location_id, business_date, hour_of_day, operator_principal_id,
-                       boundary_version, metric_calculation_version, offered_count, answered_count,
-                       missed_count, transferred_count, talk_duration_seconds
-                FROM reporting.fact_call_hour
+        return jdbc.sql(CALL_HOUR_SELECT + """
                 WHERE tenant_id = :tenantId AND location_id = :locationId AND business_date = :businessDate
                 ORDER BY hour_of_day, operator_principal_id
                 """)
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .param("businessDate", businessDate)
-                .query((ResultSet row, int number) -> new CallHourFact(
-                        row.getObject("tenant_id", UUID.class),
-                        row.getObject("brand_id", UUID.class),
-                        row.getObject("location_id", UUID.class),
-                        row.getObject("business_date", LocalDate.class),
-                        row.getInt("hour_of_day"),
-                        row.getString("operator_principal_id"),
-                        row.getInt("boundary_version"),
-                        row.getInt("metric_calculation_version"),
-                        row.getInt("offered_count"),
-                        row.getInt("answered_count"),
-                        row.getInt("missed_count"),
-                        row.getInt("transferred_count"),
-                        row.getLong("talk_duration_seconds")))
+                .query(JdbcReportingStore::toCallHourFact)
                 .list();
+    }
+
+    /** ADR 0175: every location's call hours for one business date, for the recut's comparison. */
+    public List<CallHourFact> readCallHourFactsForDay(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql(CALL_HOUR_SELECT + """
+                WHERE tenant_id = :tenantId AND business_date = :businessDate
+                ORDER BY location_id, hour_of_day, operator_principal_id
+                """)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .query(JdbcReportingStore::toCallHourFact)
+                .list();
+    }
+
+    /**
+     * ADR 0175: how many closed days in a range hold at least one call fact for a branch, with the
+     * first and last hour of one, so the coverage read can tell "connected, nothing closed yet"
+     * from "measured". Counts and dates only; no operator, no number.
+     */
+    public CallFactSpan callFactSpan(UUID tenantId, UUID locationId, LocalDate from, LocalDate toInclusive) {
+        return jdbc.sql("""
+                SELECT count(DISTINCT business_date) AS days, min(business_date) AS first_day,
+                       max(business_date) AS last_day
+                FROM reporting.fact_call_hour
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                  AND business_date >= :from AND business_date <= :to
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", from)
+                .param("to", toInclusive)
+                .query((ResultSet row, int number) -> new CallFactSpan(
+                        row.getInt("days"),
+                        row.getObject("first_day", LocalDate.class),
+                        row.getObject("last_day", LocalDate.class)))
+                .single();
+    }
+
+    /** ADR 0175: closed days with call facts in a range; the dates are null when there are none. */
+    public record CallFactSpan(
+            int closedDaysWithCalls,
+            @Nullable LocalDate firstDay,
+            @Nullable LocalDate lastDay) {}
+
+    /**
+     * ADR 0175: the earliest and latest call event a branch recorded in a window, as instants. Reads
+     * only {@code occurred_at}: never a caller number, a customer reference or a call id.
+     */
+    public CallEventSpan callEventSpan(UUID tenantId, UUID locationId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT min(occurred_at) AS first_at, max(occurred_at) AS last_at
+                FROM voice.call_events
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                  AND occurred_at >= :from AND occurred_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new CallEventSpan(
+                        optionalInstant(row.getObject("first_at", OffsetDateTime.class)),
+                        optionalInstant(row.getObject("last_at", OffsetDateTime.class))))
+                .single();
+    }
+
+    public record CallEventSpan(
+            @Nullable Instant firstAt, @Nullable Instant lastAt) {}
+
+    private static final String CALL_HOUR_SELECT = """
+            SELECT tenant_id, brand_id, location_id, business_date, hour_of_day, operator_principal_id,
+                   boundary_version, metric_calculation_version, offered_count, answered_count,
+                   missed_count, transferred_count, talk_duration_seconds,
+                   answered_call_count, ring_seconds_total, ring_sample_count, ring_seconds_max,
+                   converted_count
+            FROM reporting.fact_call_hour
+            """;
+
+    private static CallHourFact toCallHourFact(ResultSet row, int number) throws java.sql.SQLException {
+        return new CallHourFact(
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("business_date", LocalDate.class),
+                row.getInt("hour_of_day"),
+                row.getString("operator_principal_id"),
+                row.getInt("boundary_version"),
+                row.getInt("metric_calculation_version"),
+                row.getInt("offered_count"),
+                row.getInt("answered_count"),
+                row.getInt("missed_count"),
+                row.getInt("transferred_count"),
+                row.getLong("talk_duration_seconds"),
+                row.getObject("answered_call_count", Integer.class),
+                row.getObject("ring_seconds_total", Long.class),
+                row.getObject("ring_sample_count", Integer.class),
+                row.getObject("ring_seconds_max", Integer.class),
+                row.getObject("converted_count", Integer.class));
     }
 
     /**

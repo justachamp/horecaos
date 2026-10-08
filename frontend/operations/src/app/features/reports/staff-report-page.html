@@ -5,7 +5,7 @@
   </div>
 
   <div class="staff-reports__tabs" role="tablist">
-    @for (tab of tabs; track tab.id) {
+    @for (tab of tabs(); track tab.id) {
       <button
         type="button"
         role="tab"
@@ -183,6 +183,9 @@
     }
     @case ('telephony') {
       <p class="q-body-sm muted">{{ 'reports.staff.telephony.intro' | t }}</p>
+      <p class="q-caption muted" data-testid="staff-report-telephony-help">
+        {{ 'reports.staff.telephony.help' | t }}
+      </p>
       @switch (telephonyState()) {
         @case ('loading') {
           <p class="q-body-sm">{{ 'reports.staff.loading' | t }}</p>
@@ -205,8 +208,63 @@
             </p>
           }
           @if (telephonyRows().length === 0) {
-            <p class="q-body-sm muted">{{ 'reports.staff.telephony.empty' | t }}</p>
+            <p class="q-body-sm muted" data-testid="staff-report-telephony-empty">
+              {{ 'reports.staff.telephony.empty' | t }}
+            </p>
+            @if (coverage()?.connection === 'CONNECTED') {
+              <p class="q-caption muted" data-testid="staff-report-telephony-next-close">
+                {{ 'reports.staff.telephony.nextClose' | t: { time: nextCloseLabel() } }}
+              </p>
+            }
           } @else {
+            @if (telephonyTotal(); as total) {
+              <dl class="totals" data-testid="staff-report-telephony-total">
+                <div>
+                  <dt class="q-caption">{{ 'reports.staff.telephony.branchTotal' | t }}</dt>
+                  <dd class="q-body-sm q-tnum">
+                    {{ 'reports.staff.telephony.column.offered' | t }}:
+                    {{ formatCountValue(total.offeredCount) }} ·
+                    {{ 'reports.staff.telephony.column.answered' | t }}:
+                    {{ formatCountValue(total.answeredCount) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'reports.staff.telephony.column.answerRate' | t }}</dt>
+                  <dd class="q-body-sm q-tnum" data-testid="staff-report-telephony-answer-rate">
+                    {{ answerRate(total) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'reports.staff.telephony.column.answerSpeed' | t }}</dt>
+                  <dd class="q-body-sm q-tnum" data-testid="staff-report-telephony-total-speed">
+                    {{ answerSpeed(total) }}
+                    @if (total.ringSampleCount === 0) {
+                      <span class="q-caption muted">{{
+                        'reports.staff.telephony.notMeasured' | t
+                      }}</span>
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'reports.staff.telephony.column.conversion' | t }}</dt>
+                  <dd
+                    class="q-body-sm q-tnum"
+                    data-testid="staff-report-telephony-total-conversion"
+                  >
+                    {{ conversion(total) }}
+                    @if (total.measuredAnsweredCalls === 0) {
+                      <span class="q-caption muted">{{
+                        'reports.staff.telephony.notMeasured' | t
+                      }}</span>
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt class="q-caption">{{ 'reports.staff.telephony.column.callLength' | t }}</dt>
+                  <dd class="q-body-sm q-tnum">{{ formatDuration(total.callLengthSeconds) }}</dd>
+                </div>
+              </dl>
+            }
             <table class="table">
               <thead>
                 <tr>
@@ -214,42 +272,69 @@
                   <th class="q-caption num">{{ 'reports.staff.telephony.column.offered' | t }}</th>
                   <th class="q-caption num">{{ 'reports.staff.telephony.column.answered' | t }}</th>
                   <th class="q-caption num">
-                    {{ 'reports.staff.telephony.column.answerRate' | t }}
+                    {{ 'reports.staff.telephony.column.answerSpeed' | t }}
+                  </th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.telephony.column.conversion' | t }}
                   </th>
                   <th class="q-caption num">{{ 'reports.staff.telephony.column.missed' | t }}</th>
                   <th class="q-caption num">
                     {{ 'reports.staff.telephony.column.transferred' | t }}
                   </th>
-                  <th class="q-caption num">{{ 'reports.staff.telephony.column.talkTime' | t }}</th>
+                  <th class="q-caption num">
+                    {{ 'reports.staff.telephony.column.callLength' | t }}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 @for (row of telephonyRows(); track row.operatorPrincipalId) {
                   <tr>
                     <td class="q-body-sm" data-testid="staff-report-telephony-operator">
-                      {{ telephonyOperator(row.operatorPrincipalId) }}
+                      {{ telephonyOperatorLabel(row.operatorPrincipalId) }}
                     </td>
                     <td class="q-body-sm q-tnum num">{{ formatCountValue(row.offeredCount) }}</td>
                     <td class="q-body-sm q-tnum num">{{ formatCountValue(row.answeredCount) }}</td>
-                    <td class="q-body-sm q-tnum num">{{ answerRate(row) }}</td>
+                    <td class="q-body-sm q-tnum num" data-testid="staff-report-telephony-speed">
+                      {{ answerSpeed(row) }}
+                      <span class="q-caption muted caption">
+                        @if (row.ringSampleCount > 0) {
+                          {{
+                            'reports.staff.telephony.measuredOn'
+                              | t: { n: row.ringSampleCount, m: row.measuredAnsweredCalls }
+                          }}
+                        } @else {
+                          {{ 'reports.staff.telephony.notMeasured' | t }}
+                        }
+                      </span>
+                    </td>
+                    <td
+                      class="q-body-sm q-tnum num"
+                      data-testid="staff-report-telephony-conversion"
+                    >
+                      {{ conversion(row) }}
+                      <span class="q-caption muted caption">
+                        @if (row.measuredAnsweredCalls > 0) {
+                          {{
+                            'reports.staff.telephony.convertedOf'
+                              | t: { n: row.convertedCount, m: row.measuredAnsweredCalls }
+                          }}
+                        } @else {
+                          {{ 'reports.staff.telephony.notMeasured' | t }}
+                        }
+                      </span>
+                    </td>
                     <td class="q-body-sm q-tnum num">{{ formatCountValue(row.missedCount) }}</td>
                     <td class="q-body-sm q-tnum num">
                       {{ formatCountValue(row.transferredCount) }}
                     </td>
                     <td class="q-body-sm q-tnum num">
-                      {{ formatDuration(row.talkDurationSeconds) }}
+                      {{ formatDuration(row.callLengthSeconds) }}
                     </td>
                   </tr>
                 }
               </tbody>
             </table>
           }
-          <p class="q-caption muted not-built">
-            {{ 'reports.staff.telephony.answerSpeedNotBuilt' | t }}
-          </p>
-          <p class="q-caption muted not-built">
-            {{ 'reports.staff.telephony.conversionNotBuilt' | t }}
-          </p>
         }
       }
     }

@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionSource;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
@@ -33,6 +34,8 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceOrder;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.voice.api.VoiceConfigurationKeys;
 import uz.horecaos.platform.web.api.Quantities;
 
 /**
@@ -64,16 +67,28 @@ public class DayCloseService {
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
     private final @Nullable PromotionRedemptionSource promotionRedemptions;
+    private final @Nullable ConfigurationResolver configuration;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
-        this(store, businessDays, pseudonym, clock, null);
+        this(store, businessDays, pseudonym, clock, null, null);
+    }
+
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null);
     }
 
     /**
      * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
      *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
      *        null builds no promotion facts, which is what a close with no pricing wired does
+     * @param configuration ADR 0175: where the tenant's {@code voice.ring_time_ceiling_seconds}
+     *        comes from, read once per close; null uses the declared default
      */
     @Autowired
     public DayCloseService(
@@ -81,12 +96,14 @@ public class DayCloseService {
             BusinessDayService businessDays,
             SubjectPseudonym pseudonym,
             Clock clock,
-            @Nullable PromotionRedemptionSource promotionRedemptions) {
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable ConfigurationResolver configuration) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
         this.promotionRedemptions = promotionRedemptions;
+        this.configuration = configuration;
     }
 
     /**
@@ -250,6 +267,7 @@ public class DayCloseService {
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
+        compareCallFacts(divergences, tenantId, businessDate, derived.callHours());
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(
@@ -265,7 +283,10 @@ public class DayCloseService {
         }
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), divergences.size(), clock.instant());
 
-        if (!divergences.isEmpty()) {
+        long unexpected = divergences.stream()
+                .filter(divergence -> !isExpectedLateProvenanceDrift(divergence))
+                .count();
+        if (unexpected > 0) {
             // Logged at warn and not error: the stored figure is still what every
             // surface shows, deliberately, so this is something a person has to
             // decide about rather than an outage.
@@ -274,7 +295,15 @@ public class DayCloseService {
                             + "the stored figures were left alone (ADR 0043)",
                     businessDate,
                     tenantId,
-                    divergences.size());
+                    unexpected);
+        }
+        if (divergences.size() > unexpected) {
+            log.info(
+                    "Recut of {} for tenant {} found {} higher call-to-order conversion count(s): provenance "
+                            + "written after the day closed, which ADR 0175 expects",
+                    businessDate,
+                    tenantId,
+                    divergences.size() - unexpected);
         }
         return new CloseResult(
                 runId,
@@ -283,6 +312,20 @@ public class DayCloseService {
                 derived.refunds().size(),
                 derived.callHours().size(),
                 divergences);
+    }
+
+    /**
+     * ADR 0175: the tenant's {@code voice.ring_time_ceiling_seconds}, read once per close through the
+     * ADR 0030 resolver. A close wired without the resolver, or a stored value that is not a positive
+     * number, uses the declared default rather than failing the day.
+     */
+    private int ringTimeCeilingSeconds(UUID tenantId) {
+        if (configuration == null) {
+            return DayAggregator.DEFAULT_RING_TIME_CEILING_SECONDS;
+        }
+        Integer seconds =
+                configuration.value(VoiceConfigurationKeys.RING_TIME_CEILING_SECONDS, ResourceScope.tenant(tenantId));
+        return seconds == null || seconds < 1 ? DayAggregator.DEFAULT_RING_TIME_CEILING_SECONDS : seconds;
     }
 
     // ------------------------------------------------------------ derivation
@@ -353,7 +396,8 @@ public class DayCloseService {
                 boundary.zone(),
                 sourceCallEvents,
                 boundary.version(),
-                MetricRegistry.CALCULATION_VERSION);
+                MetricRegistry.CALCULATION_VERSION,
+                ringTimeCeilingSeconds(tenantId));
 
         // T11 / ADR 0125. Read by the same [from, to) instant range every
         // order-side source above uses, against the earning's own
@@ -737,6 +781,70 @@ public class DayCloseService {
         }
     }
 
+    /** The metric name of a call-to-order conversion divergence; see {@link #compareCallFacts}. */
+    static final String CALL_CONVERTED_METRIC = "call.converted";
+
+    /** The metric name of a ring-sample divergence; see {@link #compareCallFacts}. */
+    static final String CALL_RING_SAMPLES_METRIC = "call.ring_samples";
+
+    /**
+     * ADR 0175: converted calls and ring samples per (branch, hour, operator), against the rows the
+     * close stored. Rows closed before the measure existed (a {@code NULL} count) are skipped: they
+     * are "not measured", so there is nothing stored to disagree with.
+     *
+     * <p>A conversion is an order whose provenance was written after the day closed (the console
+     * writes it within seconds of placing the order, but a day can close in between), so a recut
+     * finding more conversions than stored is the expected shape of drift and is reported as
+     * information, not as a warning; see {@link #isExpectedLateProvenanceDrift}.
+     */
+    private void compareCallFacts(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<CallHourFact> derived) {
+        Map<String, CallHourFact> storedByKey = new LinkedHashMap<>();
+        for (CallHourFact stored : store.readCallHourFactsForDay(tenantId, businessDate)) {
+            storedByKey.put(callHourDimension(stored), stored);
+        }
+        Map<String, CallHourFact> freshByKey = new LinkedHashMap<>();
+        derived.forEach(fact -> freshByKey.put(callHourDimension(fact), fact));
+
+        java.util.Set<String> slices = new java.util.LinkedHashSet<>(storedByKey.keySet());
+        slices.addAll(freshByKey.keySet());
+        for (String slice : slices) {
+            CallHourFact before = storedByKey.get(slice);
+            CallHourFact after = freshByKey.get(slice);
+            if (before != null && before.answeredCallCount() == null) {
+                continue;
+            }
+            compare(
+                    into,
+                    slice,
+                    CALL_CONVERTED_METRIC,
+                    1,
+                    before == null ? 0 : orZero(before.convertedCount()),
+                    after == null ? 0 : orZero(after.convertedCount()));
+            compare(
+                    into,
+                    slice,
+                    CALL_RING_SAMPLES_METRIC,
+                    1,
+                    before == null ? 0 : orZero(before.ringSampleCount()),
+                    after == null ? 0 : orZero(after.ringSampleCount()));
+        }
+    }
+
+    private static long orZero(@Nullable Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private static String callHourDimension(CallHourFact fact) {
+        return "location=%s;hour=%d;operator=%s"
+                .formatted(fact.locationId(), fact.hourOfDay(), fact.operatorPrincipalId());
+    }
+
+    /** ADR 0175: a higher recut conversion count is late provenance, which the record expects. */
+    public static boolean isExpectedLateProvenanceDrift(Divergence divergence) {
+        return CALL_CONVERTED_METRIC.equals(divergence.metricName()) && divergence.difference() > 0;
+    }
+
     /** {@code payment_mix.amount.v1}'s inclusion rule, {@code SETTLED_OR_REVERSED_TENDERS}. */
     private static boolean countsInPaymentMix(String tenderStatus) {
         return "SETTLED".equals(tenderStatus) || "REVERSED".equals(tenderStatus);
@@ -799,5 +907,16 @@ public class DayCloseService {
             int linesWritten,
             int refundsWritten,
             int callsWritten,
-            List<Divergence> divergences) {}
+            List<Divergence> divergences) {
+
+        /**
+         * The divergences that are not the late-provenance drift ADR 0175 expects: what an alert
+         * on the recut should count.
+         */
+        public long unexpectedDivergenceCount() {
+            return divergences.stream()
+                    .filter(divergence -> !isExpectedLateProvenanceDrift(divergence))
+                    .count();
+        }
+    }
 }

@@ -122,6 +122,31 @@ class HostedPbxWebhookControllerTests {
         assertThat(ingestion.ingested).isEmpty();
     }
 
+    @Test
+    void theIngestedEventCarriesTheProvidersOwnEventTimeAndNotTheTimeOfDelivery() {
+        // ADR 0175: answer speed is the gap between two events' occurredAt, so a webhook delivered late
+        // (a retry, a queue) must still say when the provider says the call arrived. The controller's
+        // clock reads 10:00; the provider's event is from 07:00.
+        Instant providerTime = Instant.parse("2026-09-05T07:00:00Z");
+        var payload = new HostedPbxWebhookPayload(
+                "evt-late",
+                "OFFERED",
+                "call-late",
+                "INBOUND",
+                "+998712001234",
+                "+998901234567",
+                null,
+                null,
+                providerTime);
+
+        controller.webhook(INSTALLATION, SECRET_VALUE, payload);
+
+        assertThat(ingestion.ingested).singleElement().satisfies(event -> {
+            assertThat(event.occurredAt()).isEqualTo(providerTime);
+            assertThat(event.occurredAt()).isNotEqualTo(Instant.parse("2026-09-05T10:00:00Z"));
+        });
+    }
+
     private static HostedPbxWebhookPayload payload(String eventId, String eventType) {
         return new HostedPbxWebhookPayload(
                 eventId,
