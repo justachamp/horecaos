@@ -192,4 +192,112 @@ describe('CustomerCardHistory', () => {
       },
     ]);
   });
+
+  describe('the call form after a submit (ADR 0111 §8)', () => {
+    function openForm(host: HTMLElement): void {
+      (host.querySelector('[data-testid="card-record-call"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+    }
+
+    function submit(host: HTMLElement): void {
+      (host.querySelector('[data-testid="recorder-submit"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+    }
+
+    function recorder(host: HTMLElement): Element | null {
+      return host.querySelector('[data-testid="call-recorder"]');
+    }
+
+    it('stays open, with what the operator chose, until the pane says the call was written', () => {
+      const host = render({ card: card(), canRecord: true });
+      openForm(host);
+      const outcome = host.querySelector('[data-testid="recorder-outcome"]') as HTMLSelectElement;
+      outcome.value = 'NO_ANSWER';
+      outcome.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      submit(host);
+
+      expect(recorder(host)).not.toBeNull();
+      expect(
+        (host.querySelector('[data-testid="recorder-outcome"]') as HTMLSelectElement).value,
+      ).toBe('NO_ANSWER');
+    });
+
+    it('shows why the last submit was refused under the form that stays open', () => {
+      const host = render({ card: card(), canRecord: true });
+      openForm(host);
+      submit(host);
+
+      render({ recordError: 'The guest is blacklisted.' });
+
+      expect(host.querySelector('[data-testid="card-record-error"]')!.textContent).toContain(
+        'blacklisted',
+      );
+      expect(recorder(host)).not.toBeNull();
+    });
+
+    it('sends the same attempt id on a retry, so the journal keeps one row for one call', () => {
+      const sent: { attemptId?: string }[] = [];
+      fixture.componentInstance.callRecorded.subscribe((request) => sent.push(request));
+      const host = render({ card: card(), canRecord: true });
+      openForm(host);
+
+      submit(host);
+      submit(host);
+
+      expect(sent).toHaveLength(2);
+      expect(sent[0].attemptId).toBeTruthy();
+      expect(sent[1].attemptId).toBe(sent[0].attemptId);
+    });
+
+    it('closes when the pane has recorded the call, and offers the button again', () => {
+      const host = render({ card: card(), canRecord: true, recordedCount: 0 });
+      openForm(host);
+      submit(host);
+
+      render({ recordedCount: 1 });
+
+      expect(recorder(host)).toBeNull();
+      expect(host.querySelector('[data-testid="card-record-call"]')).not.toBeNull();
+    });
+
+    it('a form opened after a recorded call starts fresh, with an attempt id of its own', () => {
+      const sent: { attemptId?: string }[] = [];
+      fixture.componentInstance.callRecorded.subscribe((request) => sent.push(request));
+      const host = render({ card: card(), canRecord: true, recordedCount: 0 });
+      openForm(host);
+      submit(host);
+      render({ recordedCount: 1 });
+
+      openForm(host);
+      submit(host);
+
+      expect(recorder(host)).not.toBeNull();
+      expect(sent[1].attemptId).not.toBe(sent[0].attemptId);
+    });
+
+    it('does not carry a half-filled form to the next guest, nor back to the first one', () => {
+      const host = render({ card: card({ customerAccountId: 'customer-1' }), canRecord: true });
+      openForm(host);
+      expect(recorder(host)).not.toBeNull();
+
+      render({ card: null });
+      render({ card: card({ customerAccountId: 'customer-2' }) });
+      expect(recorder(host)).toBeNull();
+
+      render({ card: null });
+      render({ card: card({ customerAccountId: 'customer-1' }) });
+      expect(recorder(host)).toBeNull();
+    });
+
+    it('keeps the form open while the same guest’s card gains an entry or an older page', () => {
+      const host = render({ card: card(), canRecord: true });
+      openForm(host);
+
+      render({ card: card({ history: [entry(), entry({ referenceId: 'n-2' })] }) });
+
+      expect(recorder(host)).not.toBeNull();
+    });
+  });
 });

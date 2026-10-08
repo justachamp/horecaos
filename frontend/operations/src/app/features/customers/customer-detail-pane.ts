@@ -244,7 +244,13 @@ export class CustomerDetailPane {
     this.loading.set(true);
     this.loadError.set(null);
     this.resetTabState();
+    // This showing's number, taken *here* and carried down: reading `cardEpoch` later, after an await,
+    // would read the number of whichever account is on show by then.
+    const epoch = this.cardEpoch;
     await this.baseLocation.ensureLoaded();
+    if (epoch !== this.cardEpoch) {
+      return;
+    }
     const scope = this.scope();
     if (!scope) {
       this.denied.set(this.baseLocation.denied());
@@ -253,17 +259,26 @@ export class CustomerDetailPane {
     }
     this.denied.set(false);
     try {
-      this.profile.set(await this.api.profile(scope, accountId));
-      void this.openCard(scope.tenantId, accountId);
+      const profile = await this.api.profile(scope, accountId);
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      this.profile.set(profile);
+      void this.openCard(epoch, scope.tenantId, accountId);
       this.loadTabData(this.activeTab());
     } catch (error) {
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.loadError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
         throw error;
       }
     } finally {
-      this.loading.set(false);
+      if (epoch === this.cardEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -303,13 +318,12 @@ export class CustomerDetailPane {
 
   // ------------------------------------------------------------------ the card (ADR 0111)
 
-  private async openCard(tenantId: string, accountId: string): Promise<void> {
-    const epoch = this.cardEpoch;
+  private async openCard(epoch: number, tenantId: string, accountId: string): Promise<void> {
     this.cardLoading.set(true);
     this.cardError.set(null);
     try {
       const opened = await this.leadsApi.openCard(tenantId, accountId, REVEAL_PURPOSE.openCard);
-      // The pane may have moved to another account while the card was loading.
+      // The pane may have moved to another account while the card was loading, or back to this one.
       if (epoch === this.cardEpoch) {
         this.card.set(opened);
       }

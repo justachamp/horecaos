@@ -4,6 +4,7 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
 } from '@angular/core';
@@ -108,7 +109,17 @@ export class CustomerCardHistory {
   readonly olderRequested = output<void>();
   readonly callRecorded = output<RecordContactAttemptRequest>();
 
-  private readonly formOpen = signal(false);
+  private readonly accountOnShow = computed(() => this.card()?.customerAccountId ?? null);
+  /**
+   * Whether the call form is open. It falls shut whenever the guest on show changes, because this
+   * component outlives a change of account (the pane keeps the tab and swaps the card) and a
+   * half-filled form of one guest's call must not be there, with its attempt id, under the next
+   * guest's name -- not even when the operator comes back to the first one.
+   */
+  private readonly formOpen = linkedSignal<string | null, boolean>({
+    source: this.accountOnShow,
+    computation: () => false,
+  });
   private readonly openedAtCount = signal(0);
   protected readonly recording = computed(
     () => this.formOpen() && this.recordedCount() === this.openedAtCount(),
